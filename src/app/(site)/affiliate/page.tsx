@@ -17,6 +17,7 @@ interface AffiliateDashboard {
     upsell: { count: number; totalSales: number; totalCommissions: number };
     membershipFirst: { count: number; totalSales: number; totalCommissions: number };
     membershipRecurring: { count: number; totalSales: number; totalCommissions: number };
+    miniDrawPackage: { count: number; totalSales: number; totalCommissions: number };
   };
   recentCommissions: Array<{
     id: string;
@@ -356,7 +357,8 @@ export default function AffiliateDashboardPage() {
               </button>
             </div>
             <p className="text-sm text-gray-600 mt-3">
-              Share this link to earn 30% commission on referrals. Commissions are only granted on successful payments.
+              Share this link to earn commission on each successful purchase from your referrals (subscriptions, renewals,
+              add-ons, and eligible products). Payments must complete successfully.
             </p>
           </div>
 

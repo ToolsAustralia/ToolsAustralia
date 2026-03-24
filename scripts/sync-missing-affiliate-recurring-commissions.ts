@@ -38,6 +38,9 @@ async function main() {
   const AffiliateCommission = (await import("../src/models/AffiliateCommission")).default;
   const User = (await import("../src/models/User")).default;
   const { stripe } = await import("../src/lib/stripe");
+  const { listAllPaidInvoicesForSubscription } = await import(
+    "../src/utils/affiliate/affiliate-recurring-invoice"
+  );
   const { processMembershipRecurringCommission } = await import(
     "../src/utils/affiliate/commission-processing"
   );
@@ -69,14 +72,7 @@ async function main() {
     }
 
     const subId = user.stripeSubscriptionId;
-    const invoices = await stripe.invoices.list({
-      subscription: subId,
-      limit: 100,
-    });
-
-    const paid = invoices.data
-      .filter((inv) => inv.status === "paid" && (inv.amount_paid ?? 0) > 0)
-      .sort((a, b) => a.created - b.created);
+    const paid = await listAllPaidInvoicesForSubscription(stripe, subId);
 
     // Index 0 = first paid invoice (membership-first / initial); later indices = renewals
     for (let i = 1; i < paid.length; i++) {

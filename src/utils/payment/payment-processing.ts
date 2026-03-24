@@ -150,7 +150,9 @@ export async function processPaymentBenefits(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
-  sessionAttribution?: AttributionParams // Optional attribution from Stripe metadata (session) - takes priority over signup
+  sessionAttribution?: AttributionParams, // Optional attribution from Stripe metadata (session) - takes priority over signup
+  /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -197,7 +199,8 @@ export async function processPaymentBenefits(
     paymentMetadata,
     requestContext,
     billingReason,
-    sessionAttribution
+    sessionAttribution,
+    affiliateOptions
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -230,7 +233,8 @@ async function processPaymentBenefitsInternal(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
-  sessionAttribution?: AttributionParams
+  sessionAttribution?: AttributionParams,
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -474,7 +478,15 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
-      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext, billingReason);
+      await grantBenefits(
+        user as UserDocument,
+        packageData,
+        finalPaymentMetadata,
+        paymentIntentId,
+        requestContext,
+        billingReason,
+        affiliateOptions
+      );
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
@@ -899,7 +911,8 @@ async function grantBenefits(
     fbp?: string;
     event_source_url?: string;
   },
-  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
+  billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<void> {
   // ✅ DEBUG: Log function call with all parameters
   // console.log(`🎯 grantBenefits called with:`, {
@@ -1307,8 +1320,12 @@ async function grantBenefits(
   if (paymentIntentId) {
     try {
       // Import commission processing functions dynamically to avoid circular dependencies
-      const { processOneTimePackageCommission, processUpsellCommission, processMembershipFirstCommission } =
-        await import("@/utils/affiliate/commission-processing");
+      const {
+        processOneTimePackageCommission,
+        processUpsellCommission,
+        processMembershipFirstCommission,
+        processMiniDrawPackageCommission,
+      } = await import("@/utils/affiliate/commission-processing");
 
       if (packageData.packageType === "one-time") {
         await processOneTimePackageCommission({
@@ -1327,15 +1344,25 @@ async function grantBenefits(
           paymentIntentId: paymentIntentId,
         });
       } else if (packageData.packageType === "membership") {
-        // Get subscription ID from user
-        const subscriptionId = user.stripeSubscriptionId || "";
-        await processMembershipFirstCommission({
+        if (!affiliateOptions?.skipMembershipFirstCommission) {
+          // Get subscription ID from user
+          const subscriptionId = user.stripeSubscriptionId || "";
+          await processMembershipFirstCommission({
+            userId: user._id.toString(),
+            packageId: packageData.packageId || "",
+            packageName: packageData.packageName || "",
+            purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+            paymentIntentId: paymentIntentId,
+            subscriptionId,
+          });
+        }
+      } else if (packageData.packageType === "mini-draw") {
+        await processMiniDrawPackageCommission({
           userId: user._id.toString(),
           packageId: packageData.packageId || "",
           packageName: packageData.packageName || "",
-          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          purchaseAmount: Math.round(packageData.price * 100),
           paymentIntentId: paymentIntentId,
-          subscriptionId,
         });
       }
     } catch (_commissionError) {

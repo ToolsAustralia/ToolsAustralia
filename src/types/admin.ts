@@ -304,6 +304,8 @@ export interface AdminUserDetail {
     packageName?: string;
     price?: number;
     status?: string;
+    /** Stripe invoice `billing_reason` when stored (e.g. subscription_cycle, subscription_create) */
+    billingReason?: string;
   }>;
   oneTimePackageHistory: Array<Record<string, unknown>>;
   miniDrawHistory: Array<Record<string, unknown>>;
@@ -340,12 +342,27 @@ export interface AdminUserDetail {
     totalAmount?: number;
     status?: string;
   }>;
+  /** Preview of recent events; full history via GET .../payment-events (paginated) */
   paymentEvents: Array<{
+    _id?: string;
     eventType?: string;
     timestamp?: string;
     packageType?: string;
+    packageId?: string;
+    packageName?: string;
     data?: Record<string, unknown>;
   }>;
+  /** Total count of payment events for this user (matches paginated API total) */
+  paymentEventsTotal: number;
+}
+
+/** Paginated payment events response for admin user activity */
+export interface AdminUserPaymentEventsPage {
+  events: AdminUserDetail["paymentEvents"];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface UserFilters {

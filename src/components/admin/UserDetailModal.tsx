@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   XCircle,
@@ -41,6 +41,7 @@ import {
   useAdminUpdateUser,
   useAdminUserActions,
   useAdminUserDetail,
+  useAdminUserPaymentEventsInfinite,
 } from "@/hooks/queries/useAdminQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
@@ -53,6 +54,10 @@ import Checkbox from "@/components/modals/ui/Checkbox";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import {
+  getAdminPaymentKindLabel,
+  resolveAdminPaymentEventTitle,
+} from "@/utils/admin/adminPaymentEventDisplay";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -61,6 +66,7 @@ interface SubscriptionHistoryItem {
   timestamp?: string;
   status?: string;
   price?: number;
+  billingReason?: string;
 }
 
 interface OrderItem {
@@ -104,14 +110,63 @@ interface MajorDrawParticipationItem {
 }
 
 interface PaymentEventItem {
+  _id?: string;
   eventType?: string;
   timestamp?: string;
   price?: number;
   status?: string;
   packageType?: string;
+  packageId?: string;
+  packageName?: string;
   data?: {
     price?: number;
   };
+}
+
+const SCROLL_CHUNK_SIZE = 8;
+
+/**
+ * Expand a list in chunks when the sentinel scrolls into view (modal body scroll).
+ */
+function useScrollChunk<T>(items: readonly T[] | undefined, resetKey: string | undefined, enabled: boolean) {
+  const total = items?.length ?? 0;
+  const [visible, setVisible] = useState(SCROLL_CHUNK_SIZE);
+
+  useEffect(() => {
+    setVisible(SCROLL_CHUNK_SIZE);
+  }, [resetKey, total]);
+
+  const slice = useMemo(() => (items ?? []).slice(0, visible), [items, visible]);
+  const hasMore = total > visible;
+
+  const loadMore = useCallback(() => {
+    setVisible((v) => Math.min(v + SCROLL_CHUNK_SIZE, total));
+  }, [total]);
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const lastFireRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled || !hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        const now = Date.now();
+        if (now - lastFireRef.current < 180) return;
+        lastFireRef.current = now;
+        loadMore();
+      },
+      { root: null, rootMargin: "160px 0px", threshold: 0 }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [enabled, hasMore, loadMore, total]);
+
+  return { slice, sentinelRef, hasMore, total };
 }
 
 interface UserDetailModalProps {
@@ -120,7 +175,8 @@ interface UserDetailModalProps {
   onCloseAction: () => void;
 }
 
-type TabType = "overview" | "subscription" | "purchases" | "activity";
+type TabType = "overview" | "subscription" | "activity";
+type EditTabType = TabType | "purchases";
 
 const overviewFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -259,35 +315,6 @@ const getPackageIconImage = (packageName?: string | null): StaticImageData | nul
   return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
 };
 
-// Helper function to format activity event with detailed description
-const formatActivityEvent = (event: PaymentEventItem, formatCurrency: (amount: number) => string) => {
-  const eventData = event.data as Record<string, unknown> | undefined;
-  const packageName = (eventData?.packageName as string) || (eventData?.offerTitle as string) || "Package";
-  const packageType = event.packageType || "unknown";
-  const price = (eventData?.price as number) || event.price || 0;
-  const entries = (eventData?.entries as number) || 0;
-
-  let description = "";
-  if (packageType === "membership") {
-    description = `${packageName} Subscription - ${formatCurrency(price)}/month`;
-  } else if (packageType === "one-time") {
-    description = `${packageName} Package - ${formatCurrency(price)}`;
-  } else if (packageType === "mini-draw") {
-    description = `${packageName} Mini Draw Package - ${formatCurrency(price)}`;
-  } else if (packageType === "upsell") {
-    const eventData = event.data as Record<string, unknown> | undefined;
-    description = `${(eventData?.offerTitle as string) || "Upsell"} - ${formatCurrency(price)}`;
-  } else {
-    description = `${event.eventType || "Payment event"}`;
-  }
-
-  if (entries > 0) {
-    description += ` - ${entries} entries granted`;
-  }
-
-  return description;
-};
-
 /**
  * Comprehensive user detail modal with tabbed interface
  * Shows complete user profile, subscription details, purchase history, and activity
@@ -326,7 +353,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
   const cancelSubscriptionMutation = useAdminCancelSubscription();
-  const [activeEditTab, setActiveEditTab] = useState<TabType | null>(null);
+  const [activeEditTab, setActiveEditTab] = useState<EditTabType | null>(null);
+  const isEditing = (tab: EditTabType) => activeEditTab === tab;
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
@@ -337,6 +365,65 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
   const referralHistory = user?.referral?.history ?? [];
+
+  const paymentEventsInfinite = useAdminUserPaymentEventsInfinite(
+    userId,
+    isOpen && activeTab === "activity"
+  );
+
+  const activityEvents = useMemo(() => {
+    const pages = paymentEventsInfinite.data?.pages;
+    if (pages && pages.length > 0) return pages.flatMap((p) => p.events);
+    return user?.paymentEvents ?? [];
+  }, [paymentEventsInfinite.data, user?.paymentEvents]);
+
+  const activityPaymentTotal =
+    paymentEventsInfinite.data?.pages[0]?.total ?? user?.paymentEventsTotal ?? activityEvents.length;
+
+  const ordersScroll = useScrollChunk(
+    user?.orders,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const oneTimeScroll = useScrollChunk(
+    user?.oneTimePackages,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const miniDrawPackagesScroll = useScrollChunk(
+    user?.miniDrawPackages,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const subscriptionHistoryScroll = useScrollChunk(
+    user?.subscriptionHistory,
+    userId ?? undefined,
+    activeTab === "overview"
+  );
+
+  const paymentActivitySentinelRef = useRef<HTMLDivElement>(null);
+  const paymentEventsInfiniteRef = useRef(paymentEventsInfinite);
+  paymentEventsInfiniteRef.current = paymentEventsInfinite;
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "activity") return;
+    const el = paymentActivitySentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        const inf = paymentEventsInfiniteRef.current;
+        if (inf.hasNextPage && !inf.isFetchingNextPage) {
+          void inf.fetchNextPage();
+        }
+      },
+      { root: null, rootMargin: "200px 0px", threshold: 0 }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [isOpen, activeTab, userId, activityEvents.length, paymentEventsInfinite.hasNextPage]);
 
   const overviewDefaults = useMemo<OverviewFormValues>(
     () => ({
@@ -511,7 +598,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   }, [activityDefaults, activityForm]);
 
   useEffect(() => {
-    setActiveEditTab((current) => (current === activeTab ? current : null));
+    setActiveEditTab((current) => {
+      if (!current) return null;
+      if (current === activeTab) return current;
+      // Package grants edit lives on Activity tab (not a main tab id)
+      if (current === "purchases" && activeTab === "activity") return current;
+      return null;
+    });
   }, [activeTab]);
 
   const {
@@ -558,7 +651,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const tabs = [
     { id: "overview" as TabType, label: "Overview", icon: User },
     { id: "subscription" as TabType, label: "Subscription", icon: CreditCard },
-    { id: "purchases" as TabType, label: "Purchases", icon: Package },
     { id: "activity" as TabType, label: "Activity", icon: Activity },
   ];
 
@@ -747,9 +839,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
   };
 
-  const isEditing = (tab: TabType) => activeEditTab === tab;
-
-  const handleCancelEdit = (tab: TabType) => {
+  const handleCancelEdit = (tab: EditTabType) => {
     switch (tab) {
       case "overview":
         overviewForm.reset(overviewDefaults);
@@ -2058,18 +2148,28 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 {/* Subscription History */}
                 {user.subscriptionHistory.length > 0 && (
                   <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Subscription History
-                    </h3>
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Subscription History</h3>
+                      {subscriptionHistoryScroll.total > 0 && (
+                        <p className="text-xs text-gray-500">
+                          Showing {subscriptionHistoryScroll.slice.length} of {subscriptionHistoryScroll.total}
+                          {subscriptionHistoryScroll.hasMore ? " · scroll for more" : ""}
+                        </p>
+                      )}
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.subscriptionHistory.slice(0, 10).map((sub: SubscriptionHistoryItem, index: number) => {
+                      {subscriptionHistoryScroll.slice.map((sub: SubscriptionHistoryItem, index: number) => {
                         // Resolve package name from packageId if packageName is not available
                         const resolvedPackageName =
                           sub.packageName || (sub.packageId ? getPackageById(sub.packageId)?.name : null);
                         const packageIcon = getPackageIconImage(resolvedPackageName);
+                        const billingKind = getAdminPaymentKindLabel({
+                          packageType: "membership",
+                          data: { billingReason: sub.billingReason },
+                        });
                         return (
                           <div
-                            key={index}
+                            key={`${sub.timestamp ?? ""}-${sub.packageId ?? ""}-${index}`}
                             className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white border border-gray-200 p-2 sm:p-3 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -2122,6 +2222,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="font-medium text-xs sm:text-sm text-gray-900">
                                   {resolvedPackageName || sub.packageId || "Package"}
                                 </p>
+                                <p className="text-[10px] sm:text-xs text-slate-600 mt-0.5">{billingKind}</p>
+                                {sub.timestamp && (
+                                  <p className="text-[10px] text-gray-500 mt-0.5">
+                                    {formatDate(
+                                      typeof sub.timestamp === "string" ? sub.timestamp : String(sub.timestamp)
+                                    )}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
@@ -2129,26 +2237,36 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 {formatCurrency(sub.price || 0)}
                               </p>
                               <span
-                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
+                                className={`inline-block mt-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
                                   sub.status === "BenefitsGranted"
                                     ? "bg-green-100 text-green-800"
                                     : "bg-yellow-100 text-yellow-800"
                                 }`}
                               >
-                                {sub.status || "Status not provided"}
+                                {sub.status || "—"}
                               </span>
                             </div>
                           </div>
                         );
                       })}
+                      {subscriptionHistoryScroll.hasMore && (
+                        <div ref={subscriptionHistoryScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === "purchases" && (
+            {activeTab === "activity" && (
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 sm:px-4 sm:py-3">
+                  <p className="text-xs sm:text-sm text-slate-700">
+                    <span className="font-semibold text-slate-900">Activity</span> combines shop orders, package grants,
+                    draw participation, and the full payment event log. Use{" "}
+                    <span className="font-medium">Edit package grants</span> to adjust one-time and mini draw packages.
+                  </p>
+                </div>
                 {/* Purchase Summary - Elevated Design with Darker Icon Backgrounds - 3 cards in 1 row on mobile */}
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:gap-4">
                   {(() => {
@@ -2600,11 +2718,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 {/* Recent Orders */}
                 {!isEditing("purchases") && user.orders.length > 0 && (
                   <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Recent Orders
-                    </h3>
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Orders</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {ordersScroll.slice.length} of {ordersScroll.total}
+                        {ordersScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.orders.slice(0, 5).map((order: OrderItem, index: number) => (
+                      {ordersScroll.slice.map((order: OrderItem, index: number) => (
                         <div
                           key={order._id || `order-${index}`}
                           className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
@@ -2638,6 +2760,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         </div>
                       ))}
+                      {ordersScroll.hasMore && (
+                        <div ref={ordersScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
@@ -2645,15 +2770,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 {/* One-time Packages */}
                 {!isEditing("purchases") && user.oneTimePackages.length > 0 && (
                   <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      One-time Packages
-                    </h3>
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">One-time Packages</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {oneTimeScroll.slice.length} of {oneTimeScroll.total}
+                        {oneTimeScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.oneTimePackages.slice(0, 5).map((pkg: OneTimePackageItem, index: number) => {
+                      {oneTimeScroll.slice.map((pkg: OneTimePackageItem, index: number) => {
                         const packageIcon = getPackageIconImage(pkg.packageName);
                         return (
                           <div
-                            key={index}
+                            key={`${pkg.packageId ?? ""}-${pkg.purchaseDate ?? ""}-${index}`}
                             className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -2733,14 +2862,76 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                         );
                       })}
+                      {oneTimeScroll.hasMore && (
+                        <div ref={oneTimeScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {activeTab === "activity" && (
-              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                {/* Mini Draw Packages (read-only) */}
+                {!isEditing("purchases") && user.miniDrawPackages.length > 0 && (
+                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mini Draw Packages</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {miniDrawPackagesScroll.slice.length} of {miniDrawPackagesScroll.total}
+                        {miniDrawPackagesScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
+                    <div className="space-y-2 sm:space-y-3">
+                      {miniDrawPackagesScroll.slice.map((pkg, index: number) => {
+                        const md = pkg as OneTimePackageItem & {
+                          miniDrawId?: string;
+                          packageName?: string;
+                          stripePaymentIntentId?: string;
+                        };
+                        const packageIcon = getPackageIconImage(md.packageName);
+                        return (
+                          <div
+                            key={`${md.miniDrawId ?? ""}-${md.stripePaymentIntentId ?? ""}-${index}`}
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                          >
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 border border-amber-200">
+                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                  {md.packageName || md.packageId || "Mini draw package"}
+                                </p>
+                                <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                                  {formatDate(md.purchaseDate || new Date().toISOString())}
+                                  {md.miniDrawId ? ` · Draw ${md.miniDrawId}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                                {md.entriesGranted || 0} entries
+                              </p>
+                              {md.price != null && (
+                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 mt-0.5">
+                                  {formatCurrency(Number(md.price))}
+                                </p>
+                              )}
+                              <span
+                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
+                                  md.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {md.isActive ? "Active" : "Expired"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {miniDrawPackagesScroll.hasMore && (
+                        <div ref={miniDrawPackagesScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
                   {isEditing("activity") ? (
                     <form
@@ -3089,79 +3280,134 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </div>
                 )}
 
-                {/* Recent Payment Events */}
-                {user.paymentEvents.length > 0 && (
+                {/* Payment events — paginated via infinite scroll */}
+                {(activityPaymentTotal > 0 || activityEvents.length > 0) && (
                   <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Recent Activity
-                    </h3>
-                    <div className="space-y-2 sm:space-y-3">
-                      {user.paymentEvents.slice(0, 10).map((event: PaymentEventItem, index: number) => {
-                        const eventDescription = formatActivityEvent(event, formatCurrency);
-                        const eventIcon =
-                          event.packageType === "membership"
-                            ? CreditCard
-                            : event.packageType === "one-time"
-                            ? Package
-                            : event.packageType === "mini-draw"
-                            ? Trophy
-                            : event.packageType === "upsell"
-                            ? Gift
-                            : Activity;
-                        const Icon = eventIcon;
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment activity</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Newest first. Scroll down to load older events.
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 tabular-nums">
+                        Showing {activityEvents.length} of {activityPaymentTotal}
+                        {paymentEventsInfinite.hasNextPage ? " · more below" : ""}
+                      </p>
+                    </div>
+                    {paymentEventsInfinite.isPending && activityEvents.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-6 text-center">Loading activity…</p>
+                    ) : (
+                      <div className="space-y-2 sm:space-y-3">
+                        {activityEvents.map((event: PaymentEventItem, index: number) => {
+                          const title = resolveAdminPaymentEventTitle(event);
+                          const kind = getAdminPaymentKindLabel(event);
+                          const eventData = event.data as Record<string, unknown> | undefined;
+                          const entries =
+                            typeof eventData?.entries === "number" ? eventData.entries : 0;
+                          const priceRaw = eventData?.price;
+                          const price =
+                            typeof priceRaw === "number"
+                              ? priceRaw
+                              : typeof priceRaw === "string"
+                              ? Number.parseFloat(priceRaw)
+                              : NaN;
+                          const fallbackIcon =
+                            event.packageType === "membership"
+                              ? CreditCard
+                              : event.packageType === "one-time"
+                              ? Package
+                              : event.packageType === "mini-draw"
+                              ? Trophy
+                              : event.packageType === "upsell"
+                              ? Gift
+                              : Activity;
+                          const FallbackIcon = fallbackIcon;
+                          const packageImg =
+                            event.packageType === "upsell"
+                              ? null
+                              : getPackageIconImage(title);
 
-                        return (
-                          <div
-                            key={index}
-                            className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border-2 border-slate-200/50 hover:shadow-md hover:border-slate-300 transition-all"
-                          >
-                            <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <div
-                                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
-                                    event.packageType === "membership"
-                                      ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
-                                      : event.packageType === "one-time"
-                                      ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"
-                                      : event.packageType === "mini-draw"
-                                      ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600"
-                                      : event.packageType === "upsell"
-                                      ? "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600"
-                                      : "bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700"
-                                  } shadow-md`}
-                                >
-                                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                          return (
+                            <div
+                              key={event._id ?? `${event.timestamp ?? ""}-${index}`}
+                              className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border-2 border-slate-200/50 hover:shadow-md hover:border-slate-300 transition-all"
+                            >
+                              <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {packageImg ? (
+                                    <span
+                                      className="inline-flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                                    >
+                                      <Image
+                                        src={packageImg}
+                                        alt={title}
+                                        className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                                        width={28}
+                                        height={28}
+                                      />
+                                    </span>
+                                  ) : (
+                                    <div
+                                      className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-md ${
+                                        event.packageType === "membership"
+                                          ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
+                                          : event.packageType === "one-time"
+                                          ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"
+                                          : event.packageType === "mini-draw"
+                                          ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600"
+                                          : event.packageType === "upsell"
+                                          ? "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600"
+                                          : "bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700"
+                                      }`}
+                                    >
+                                      <FallbackIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-xs sm:text-sm text-gray-900 break-words">
+                                    {title}
+                                  </p>
+                                  <p className="text-[9px] sm:text-[10px] text-slate-600 mt-0.5">{kind}</p>
+                                  <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
+                                    {formatDate(event.timestamp || new Date().toISOString())}
+                                  </p>
+                                  {entries > 0 && (
+                                    <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">
+                                      +{entries} entries
+                                    </p>
+                                  )}
                                 </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">
-                                  {eventDescription}
-                                </p>
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
-                                  {formatDate(event.timestamp || new Date().toISOString())}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              {(() => {
-                                const eventData = event.data as Record<string, unknown> | undefined;
-                                const price = eventData?.price;
-                                return price != null && typeof price === "number" ? (
+                              <div className="text-right flex-shrink-0 max-w-[40%]">
+                                {!Number.isNaN(price) && (
                                   <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
                                     {formatCurrency(price)}
                                   </p>
-                                ) : null;
-                              })()}
-                              {event.packageType && (
-                                <span className="inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium bg-gray-100 text-gray-600 capitalize">
-                                  {event.packageType.replace("-", " ")}
+                                )}
+                                <span className="inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium bg-slate-100 text-slate-700">
+                                  {kind}
                                 </span>
-                              )}
+                              </div>
                             </div>
+                          );
+                        })}
+                        {paymentEventsInfinite.hasNextPage && (
+                          <div
+                            ref={paymentActivitySentinelRef}
+                            className="flex min-h-[48px] items-center justify-center py-2"
+                            aria-hidden
+                          >
+                            {paymentEventsInfinite.isFetchingNextPage ? (
+                              <span className="text-xs text-gray-500">Loading more…</span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">Scroll for more</span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

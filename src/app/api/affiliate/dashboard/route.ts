@@ -53,6 +53,11 @@ export async function GET() {
         totalSales: 0,
         totalCommissions: 0,
       },
+      miniDrawPackage: {
+        count: 0,
+        totalSales: 0,
+        totalCommissions: 0,
+      },
     };
 
     const commissionTypeToBreakdownKey: Record<
@@ -63,6 +68,7 @@ export async function GET() {
       upsell: "upsell",
       "membership-first": "membershipFirst",
       "membership-recurring": "membershipRecurring",
+      "mini-draw-package": "miniDrawPackage",
     };
 
     unpaidCommissions.forEach((commission) => {

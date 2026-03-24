@@ -374,24 +374,33 @@ async function buildAdminUserProfile(userId: string) {
   const subscriptionHistory = paymentEvents
     .filter((event) => event.packageType === "membership")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
+      const billingReason =
+        typeof event.data?.billingReason === "string" ? event.data.billingReason : undefined;
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         status: event.eventType,
+        billingReason,
       };
     });
 
   const oneTimePackageHistory = paymentEvents
     .filter((event) => event.packageType === "one-time")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -410,11 +419,14 @@ async function buildAdminUserProfile(userId: string) {
   const miniDrawHistory = paymentEvents
     .filter((event) => event.packageType === "mini-draw")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMiniPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMiniPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -587,7 +599,16 @@ async function buildAdminUserProfile(userId: string) {
       };
     }),
     orders,
-    paymentEvents: paymentEvents.slice(0, 50),
+    paymentEventsTotal: paymentEvents.length,
+    paymentEvents: paymentEvents.slice(0, 25).map((event) => ({
+      _id: event._id,
+      eventType: event.eventType,
+      timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
+      packageType: event.packageType,
+      packageId: event.packageId != null ? String(event.packageId) : undefined,
+      packageName: typeof event.packageName === "string" ? event.packageName : undefined,
+      data: event.data,
+    })),
     referral: referralSummary,
     savedPaymentMethods: savedPaymentMethodsSummary,
   };

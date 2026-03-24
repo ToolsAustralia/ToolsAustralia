@@ -1,6 +1,33 @@
 import type Stripe from "stripe";
 
 /**
+ * List all paid invoices for a subscription (amount_paid > 0), oldest first.
+ * Paginates past Stripe's default page size for long-lived subscriptions.
+ */
+export async function listAllPaidInvoicesForSubscription(
+  stripe: Stripe,
+  subscriptionId: string
+): Promise<Stripe.Invoice[]> {
+  const all: Stripe.Invoice[] = [];
+  let startingAfter: string | undefined;
+
+  for (;;) {
+    const page = await stripe.invoices.list({
+      subscription: subscriptionId,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    all.push(...page.data);
+    if (!page.has_more || page.data.length === 0) break;
+    startingAfter = page.data[page.data.length - 1].id;
+  }
+
+  return all
+    .filter((inv) => inv.status === "paid" && (inv.amount_paid ?? 0) > 0)
+    .sort((a, b) => a.created - b.created);
+}
+
+/**
  * True if this invoice is the first paid invoice (amount_paid > 0) on the subscription,
  * ordered by Stripe `created` time.
  */
@@ -9,14 +36,7 @@ export async function isFirstPaidSubscriptionInvoice(
   subscriptionId: string,
   currentInvoiceId: string
 ): Promise<boolean> {
-  const list = await stripe.invoices.list({
-    subscription: subscriptionId,
-    limit: 100,
-  });
-
-  const paid = list.data
-    .filter((inv) => inv.status === "paid" && (inv.amount_paid ?? 0) > 0)
-    .sort((a, b) => a.created - b.created);
+  const paid = await listAllPaidInvoicesForSubscription(stripe, subscriptionId);
 
   if (paid.length === 0) return true;
   return paid[0].id === currentInvoiceId;

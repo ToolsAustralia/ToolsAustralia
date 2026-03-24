@@ -3508,6 +3508,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       (subscription?.metadata ? extractAttributionFromMetadata(subscription.metadata) : undefined) ??
       (expandedInvoice.metadata ? extractAttributionFromMetadata(expandedInvoice.metadata) : undefined);
 
+    const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
+      stripe,
+      expandedInvoice,
+      subscriptionId
+    );
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -3535,13 +3541,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
       expandedInvoice.billing_reason || undefined, // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")
-      sessionAttribution
-    );
-
-    const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
-      stripe,
-      expandedInvoice,
-      subscriptionId
+      sessionAttribution,
+      {
+        skipMembershipFirstCommission: recordMembershipRecurringAffiliate,
+      }
     );
     webhookLog("info", `Affiliate recurring eligibility`, {
       invoiceId: expandedInvoice.id,
