@@ -2260,13 +2260,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
             {activeTab === "activity" && (
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 sm:px-4 sm:py-3">
-                  <p className="text-xs sm:text-sm text-slate-700">
-                    <span className="font-semibold text-slate-900">Activity</span> combines shop orders, package grants,
-                    draw participation, and the full payment event log. Use{" "}
-                    <span className="font-medium">Edit package grants</span> to adjust one-time and mini draw packages.
-                  </p>
-                </div>
+                
                 {/* Purchase Summary - Elevated Design with Darker Icon Backgrounds - 3 cards in 1 row on mobile */}
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:gap-4">
                   {(() => {

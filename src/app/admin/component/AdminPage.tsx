@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import AdminSidebar from "./AdminSidebar";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
@@ -20,7 +19,6 @@ import { AdminDashboardProps } from "@/types/admin";
 import {
   useAdminDashboardStats,
   useRecentActivities,
-  useRevenueBreakdown,
   useMembershipByPackage,
   useUpcomingRenewals,
   useMajorDrawsForDateRange,
@@ -77,8 +75,6 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const queryClient = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isClosingMobileSidebar, setIsClosingMobileSidebar] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -290,9 +286,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     refetch: refetchActivities,
   } = useRecentActivities();
 
-  // RevenueOverview now manages its own data fetching
-  // We still need refetchRevenue for the refresh button
-  const { refetch: refetchRevenue } = useRevenueBreakdown();
+  // RevenueOverview manages its own data fetching
 
   // Fetch membership by package (card + breakdown section use this)
   const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
@@ -472,38 +466,6 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     };
   }, [isMobileSidebarOpen]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      // Refresh data based on current tab
-      if (selectedTab === "overview") {
-        // Refresh overview tab data
-        await Promise.all([refetchStats(), refetchActivities(), refetchRevenue()]);
-      } else if (selectedTab === "facebook-ads") {
-        // Invalidate and refetch Facebook Ads + hourly breakdown so both update
-        await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
-        await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "insights"] });
-        await queryClient.invalidateQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
-        await queryClient.refetchQueries({ queryKey: ["admin", "facebook-ads", "hourly-insights"] });
-        await queryClient.invalidateQueries({ queryKey: ["admin", "analytics", "spend-by-url"] });
-      } else if (selectedTab === "promo-analytics") {
-        await queryClient.invalidateQueries({ queryKey: ["admin", "promo-analytics"] });
-        await queryClient.refetchQueries({ queryKey: ["admin", "promo-analytics"] });
-      } else if (selectedTab === "users") {
-        // Invalidate and refetch Users data
-        await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
-        await queryClient.refetchQueries({ queryKey: ["admin", "users", "list"] });
-      } else {
-        // For other tabs, refresh stats as fallback
-        await refetchStats();
-      }
-    } catch (error) {
-      console.error("Failed to refresh data:", error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   // Handle major draw export
   const handleExportMajorDraw = async (format: "csv" | "excel") => {
     setIsExporting(true);
@@ -619,7 +581,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-64">
+      <div className="hidden lg:block w-[17.5rem] shrink-0">
         <AdminSidebar
           selectedTab={selectedTab}
           onNavigateToSite={() => navigateTo("home")}
@@ -632,8 +594,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <div className="bg-white border-b-2 border-red-100 px-3 sm:px-6 py-3 shadow-sm flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center">
+            <div className="flex items-center gap-3 min-w-0">
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -662,26 +624,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="flex items-center space-x-1.5 bg-gradient-to-r from-green-600 to-green-700 text-white px-2 sm:px-3 py-1 rounded-md">
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-xs sm:text-sm font-medium text-white hidden sm:inline">System Online</span>
-                <span className="text-xs font-medium text-white sm:hidden">Online</span>
-              </div>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center space-x-1.5 px-2 sm:px-3 py-1.5 border-2 border-red-600 text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-md transition-all duration-200 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                <span className="text-xs sm:text-sm hidden sm:inline">Refresh</span>
-              </button>
-            </div>
           </div>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-gray-50 min-h-0">
+        <div className="flex-1 overflow-y-auto admin-scrollbar p-3 sm:p-6 bg-gray-50 min-h-0">
           {/* OVERVIEW TAB */}
           {selectedTab === "overview" && (
             <div className="space-y-4 sm:space-y-6">
