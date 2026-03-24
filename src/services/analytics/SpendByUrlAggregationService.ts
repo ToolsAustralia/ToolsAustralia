@@ -25,12 +25,24 @@ export class SpendByUrlAggregationService {
   async recomputeForDateRange(
     adAccountId: string,
     since: string,
-    until: string
+    until: string,
+    options?: { onProgress?: (message: string) => void }
   ): Promise<RecomputeResult> {
+    const log = options?.onProgress;
     const dates = enumerateDatesInclusive(since, until);
+    const totalDates = dates.length;
     let rowsWritten = 0;
 
-    for (const date of dates) {
+    for (let di = 0; di < dates.length; di++) {
+      const date = dates[di];
+      const logThis =
+        totalDates <= 31 ||
+        di === 0 ||
+        di === dates.length - 1 ||
+        (di + 1) % 10 === 0;
+      if (logThis) {
+        log?.(`[aggregate] Day ${di + 1}/${totalDates} (${date})…`);
+      }
       const insights = await MetaAdInsightsDaily.find({ adAccountId, date }).lean();
       if (insights.length === 0) {
         await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
@@ -79,23 +91,27 @@ export class SpendByUrlAggregationService {
 
       await LandingPageMetricsDaily.deleteMany({ adAccountId, date });
 
-      for (const [canonicalUrl, v] of agg) {
-        await LandingPageMetricsDaily.create({
-          adAccountId,
-          date,
-          canonicalUrl,
-          spendCents: v.spendCents,
-          impressions: v.impressions,
-          clicks: v.clicks,
-          conversions: v.conversions,
-          revenueCents: v.revenueCents,
-          adIds: [...v.adIds],
-          computedAt: new Date(),
-        });
-        rowsWritten++;
+      const computedAt = new Date();
+      const docs = [...agg.entries()].map(([canonicalUrl, v]) => ({
+        adAccountId,
+        date,
+        canonicalUrl,
+        spendCents: v.spendCents,
+        impressions: v.impressions,
+        clicks: v.clicks,
+        conversions: v.conversions,
+        revenueCents: v.revenueCents,
+        adIds: [...v.adIds],
+        computedAt,
+      }));
+
+      if (docs.length > 0) {
+        await LandingPageMetricsDaily.insertMany(docs, { ordered: false });
+        rowsWritten += docs.length;
       }
     }
 
+    log?.(`[aggregate] Finished ${totalDates} calendar days, ${rowsWritten} URL×day rows written.`);
     return { datesProcessed: dates.length, rowsWritten };
   }
 
@@ -170,6 +186,13 @@ export class SpendByUrlAggregationService {
   /**
    * Per-ad totals for one canonical URL (drill-down).
    */
+  /**
+   * Placeholder when no website URL was resolved; embeds the Meta ad id.
+   * @see MetaAdDestinationService — if Graph API errors on the ad, no destination doc exists,
+   * but aggregation still buckets spend under this string, so drill-down must not rely on MetaAdDestination alone.
+   */
+  private static readonly UNKNOWN_META_AD_RE = /^unknown:\/\/meta-ad\/(\d+)$/;
+
   async getSpendByUrlDetail(
     adAccountId: string,
     canonicalUrl: string,
@@ -189,7 +212,22 @@ export class SpendByUrlAggregationService {
   > {
     const dests = await MetaAdDestination.find({ adAccountId, canonicalUrl }).lean();
     const destByAd = new Map(dests.map((d) => [d.adId, d]));
-    const adIds = dests.map((d) => d.adId);
+    let adIds = dests.map((d) => d.adId);
+
+    if (adIds.length === 0) {
+      const parsed = canonicalUrl.match(SpendByUrlAggregationService.UNKNOWN_META_AD_RE);
+      if (parsed) {
+        adIds = [parsed[1]];
+      } else {
+        const fromDistinct = await LandingPageMetricsDaily.distinct("adIds", {
+          adAccountId,
+          canonicalUrl,
+          date: { $gte: since, $lte: until },
+        });
+        adIds = [...new Set((fromDistinct as string[]).filter(Boolean))];
+      }
+    }
+
     if (adIds.length === 0) {
       return [];
     }

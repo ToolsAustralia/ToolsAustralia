@@ -10,6 +10,14 @@ interface FacebookApiError {
 
 type AdFormat = "video" | "static" | "carousel" | "unknown";
 
+/** Pull destination links from Meta call_to_action objects (shape varies by placement). */
+function pushUrlsFromCallToAction(cta: unknown, urls: string[]) {
+  if (!cta || typeof cta !== "object") return;
+  const c = cta as { value?: { link?: string }; link?: string };
+  if (c.value?.link) urls.push(c.value.link);
+  if (typeof c.link === "string") urls.push(c.link);
+}
+
 function inferAdFormatFromStorySpec(spec: unknown): AdFormat {
   if (!spec || typeof spec !== "object") return "unknown";
   const s = spec as Record<string, unknown>;
@@ -33,42 +41,44 @@ function extractLinksFromObjectStorySpec(spec: unknown): string[] {
   if (s.video_data && typeof s.video_data === "object") {
     const vd = s.video_data as Record<string, unknown>;
     if (typeof vd.link === "string") urls.push(vd.link);
-    const cta = vd.call_to_action;
-    if (cta && typeof cta === "object") {
-      const c = cta as { value?: { link?: string }; link?: string };
-      if (c.value?.link) urls.push(c.value.link);
-      if (typeof c.link === "string") urls.push(c.link);
-    }
+    pushUrlsFromCallToAction(vd.call_to_action, urls);
   }
 
   if (s.link_data && typeof s.link_data === "object") {
     const ld = s.link_data as Record<string, unknown>;
     if (typeof ld.link === "string") urls.push(ld.link);
+    /** Some link ads expose destination only on `website_url` or CTA, not `link`. */
+    if (typeof ld.website_url === "string") urls.push(ld.website_url);
+    pushUrlsFromCallToAction(ld.call_to_action, urls);
     if (Array.isArray(ld.child_attachments)) {
       for (const child of ld.child_attachments) {
         if (child && typeof child === "object") {
-          const link = (child as { link?: string }).link;
-          if (typeof link === "string") urls.push(link);
+          const ch = child as { link?: string; call_to_action?: unknown };
+          if (typeof ch.link === "string") urls.push(ch.link);
+          pushUrlsFromCallToAction(ch.call_to_action, urls);
         }
       }
     }
+  }
+
+  /** Text-only / some static formats use text_data with optional link. */
+  if (s.text_data && typeof s.text_data === "object") {
+    const td = s.text_data as Record<string, unknown>;
+    if (typeof td.link === "string") urls.push(td.link);
+    pushUrlsFromCallToAction(td.call_to_action, urls);
   }
 
   /** Photo / static image creatives: destination link is often under photo_data. */
   if (s.photo_data && typeof s.photo_data === "object") {
     const pd = s.photo_data as Record<string, unknown>;
     if (typeof pd.link === "string") urls.push(pd.link);
-    const cta = pd.call_to_action;
-    if (cta && typeof cta === "object") {
-      const c = cta as { value?: { link?: string }; link?: string };
-      if (c.value?.link) urls.push(c.value.link);
-      if (typeof c.link === "string") urls.push(c.link);
-    }
+    pushUrlsFromCallToAction(pd.call_to_action, urls);
   }
 
   if (s.template_data && typeof s.template_data === "object") {
     const td = s.template_data as Record<string, unknown>;
     if (typeof td.link === "string") urls.push(td.link);
+    pushUrlsFromCallToAction(td.call_to_action, urls);
   }
 
   return [...new Set(urls.filter(Boolean))];
@@ -127,18 +137,41 @@ function extractUrlsFromCreative(creative: unknown): {
     return { urls: urlsFromStory, creativeType: "object_story", adFormat: formatFromStory };
   }
 
-  if (c.asset_feed_spec && typeof c.asset_feed_spec === "object") {
-    const afs = c.asset_feed_spec;
-    const urlsFromFeed = extractLinksFromAssetFeedSpec(afs);
-    const formatFromFeed = inferAdFormatFromAssetFeed(afs);
-    const adFormat = formatFromFeed !== "unknown" ? formatFromFeed : formatFromStory;
-    if (urlsFromFeed.length > 0) {
-      return { urls: urlsFromFeed, creativeType: "asset_feed", adFormat };
-    }
-    return { urls: [], creativeType: "asset_feed", adFormat };
+  const afs = c.asset_feed_spec && typeof c.asset_feed_spec === "object" ? c.asset_feed_spec : null;
+  const fromFeed = afs ? extractLinksFromAssetFeedSpec(afs) : [];
+  const formatFromFeed = afs ? inferAdFormatFromAssetFeed(afs) : "unknown";
+  const adFormatFromFeed =
+    formatFromFeed !== "unknown" ? formatFromFeed : formatFromStory !== "unknown" ? formatFromStory : "static";
+
+  const fromTop: string[] = [];
+  if (typeof c.object_url === "string") fromTop.push(c.object_url);
+  if (typeof c.link_url === "string") fromTop.push(c.link_url);
+
+  /** Prefer asset_feed URLs, then creative-level link_url / object_url (often set for DC / Advantage+). */
+  const merged = [...new Set([...fromFeed, ...fromTop].filter(Boolean))];
+
+  if (merged.length === 0) {
+    return {
+      urls: [],
+      creativeType: afs ? "asset_feed" : "unknown",
+      adFormat: afs ? adFormatFromFeed : formatFromStory,
+    };
   }
 
-  return { urls: [], creativeType: "unknown", adFormat: formatFromStory };
+  let creativeType: string;
+  if (fromFeed.length > 0) {
+    creativeType = "asset_feed";
+  } else if (fromTop.length > 0) {
+    creativeType = "creative_fields";
+  } else {
+    creativeType = "unknown";
+  }
+
+  return {
+    urls: merged,
+    creativeType,
+    adFormat: fromFeed.length > 0 ? adFormatFromFeed : formatFromStory !== "unknown" ? formatFromStory : "static",
+  };
 }
 
 export interface SyncDestinationsResult {
@@ -154,17 +187,25 @@ export class MetaAdDestinationService {
   async syncDestinationsForAdIds(
     adAccountId: string,
     accessToken: string,
-    adIds: string[]
+    adIds: string[],
+    options?: { onProgress?: (message: string) => void }
   ): Promise<SyncDestinationsResult> {
+    const log = options?.onProgress;
     const unique = [...new Set(adIds.filter(Boolean))];
     const missingUrlAds: string[] = [];
     let upserted = 0;
+    const totalChunks = Math.max(1, Math.ceil(unique.length / BATCH_SIZE));
 
     for (let i = 0; i < unique.length; i += BATCH_SIZE) {
       const chunk = unique.slice(i, i + BATCH_SIZE);
+      const chunkIndex = Math.floor(i / BATCH_SIZE) + 1;
+      log?.(`[destinations] Graph batch ${chunkIndex}/${totalChunks} (${chunk.length} ads)…`);
       const u = new URL(`https://graph.facebook.com/${API_VERSION}/`);
       u.searchParams.set("ids", chunk.join(","));
-      u.searchParams.set("fields", "creative{object_story_spec,asset_feed_spec,url_tags}");
+      u.searchParams.set(
+        "fields",
+        "creative{object_story_spec,asset_feed_spec,url_tags,object_url,link_url}"
+      );
       u.searchParams.set("access_token", accessToken);
 
       const res = await fetch(u.toString(), { method: "GET", headers: { "Content-Type": "application/json" } });
@@ -177,6 +218,14 @@ export class MetaAdDestinationService {
         string,
         { creative?: unknown; id?: string; error?: { message?: string } }
       >;
+
+      const bulkOps: Array<{
+        updateOne: {
+          filter: { adId: string };
+          update: { $set: Record<string, unknown> };
+          upsert: boolean;
+        };
+      }> = [];
 
       for (const adId of chunk) {
         const node = data[adId];
@@ -194,21 +243,29 @@ export class MetaAdDestinationService {
         const canonicalUrl = canonicalizeLandingUrl(primary);
         const multiUrl = rawUrls.length > 1;
 
-        await MetaAdDestination.findOneAndUpdate(
-          { adId },
-          {
-            adAccountId,
-            adId,
-            canonicalUrl,
-            rawUrls: rawUrls.length ? rawUrls : [primary],
-            multiUrl,
-            creativeType,
-            adFormat,
-            fetchedAt: new Date(),
+        bulkOps.push({
+          updateOne: {
+            filter: { adId },
+            update: {
+              $set: {
+                adAccountId,
+                adId,
+                canonicalUrl,
+                rawUrls: rawUrls.length ? rawUrls : [primary],
+                multiUrl,
+                creativeType,
+                adFormat,
+                fetchedAt: new Date(),
+              },
+            },
+            upsert: true,
           },
-          { upsert: true, new: true }
-        );
+        });
         upserted++;
+      }
+
+      if (bulkOps.length > 0) {
+        await MetaAdDestination.bulkWrite(bulkOps, { ordered: false });
       }
     }
 
