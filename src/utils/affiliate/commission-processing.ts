@@ -16,12 +16,15 @@ export async function processOneTimePackageCommission({
   packageName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   packageId: string;
   packageName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  /** When the payment happened (Stripe / webhook time); defaults to now */
+  earnedAt?: Date;
 }) {
   await connectDB();
 
@@ -42,6 +45,7 @@ export async function processOneTimePackageCommission({
     stripePaymentIntentId: paymentIntentId,
     isFirstTimePurchase: false,
     isRecurringPayment: false,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
   if (commission) {
@@ -63,12 +67,14 @@ export async function processUpsellCommission({
   offerName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   offerId: string;
   offerName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  earnedAt?: Date;
 }) {
   await connectDB();
 
@@ -89,6 +95,7 @@ export async function processUpsellCommission({
     stripePaymentIntentId: paymentIntentId,
     isFirstTimePurchase: false,
     isRecurringPayment: false,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 }
 
@@ -101,12 +108,14 @@ export async function processMiniDrawPackageCommission({
   packageName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   packageId: string;
   packageName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  earnedAt?: Date;
 }) {
   await connectDB();
 
@@ -127,6 +136,7 @@ export async function processMiniDrawPackageCommission({
     stripePaymentIntentId: paymentIntentId,
     isFirstTimePurchase: false,
     isRecurringPayment: false,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
   if (commission) {
@@ -151,6 +161,7 @@ export async function processMembershipFirstCommission({
   purchaseAmount,
   paymentIntentId,
   subscriptionId,
+  earnedAt,
 }: {
   userId: string;
   packageId: string;
@@ -158,6 +169,7 @@ export async function processMembershipFirstCommission({
   purchaseAmount: number;
   paymentIntentId: string;
   subscriptionId: string;
+  earnedAt?: Date;
 }) {
   await connectDB();
 
@@ -179,6 +191,7 @@ export async function processMembershipFirstCommission({
     stripeSubscriptionId: subscriptionId,
     isFirstTimePurchase: true,
     isRecurringPayment: false,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
   if (commission) {
@@ -202,12 +215,14 @@ export async function processMembershipUpsellCommission({
   offerName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   offerId: string;
   offerName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  earnedAt?: Date;
 }) {
   return await processUpsellCommission({
     userId,
@@ -215,12 +230,15 @@ export async function processMembershipUpsellCommission({
     offerName,
     purchaseAmount,
     paymentIntentId,
+    earnedAt,
   });
 }
 
 /**
  * Process commission for recurring membership payment.
- * Eligible when affiliate referral exists and (membershipTied OR legacy self-heal via membership-first commission).
+ * Uses the affiliate on the existing `membership-first` row as canonical (same referred user).
+ * Self-heal previously required `user.affiliateReferral.affiliateId` to match that row; if it drifted,
+ * the lookup missed and recurring was skipped — we now resolve affiliate from membership-first first.
  */
 export async function processMembershipRecurringCommission({
   userId,
@@ -229,6 +247,7 @@ export async function processMembershipRecurringCommission({
   purchaseAmount,
   packageId,
   packageName,
+  earnedAt,
 }: {
   userId: string;
   invoiceId: string;
@@ -236,6 +255,8 @@ export async function processMembershipRecurringCommission({
   purchaseAmount: number;
   packageId?: string;
   packageName?: string;
+  /** Invoice paid time (Stripe); defaults to now if omitted */
+  earnedAt?: Date;
 }) {
   await connectDB();
 
@@ -248,31 +269,47 @@ export async function processMembershipRecurringCommission({
   }
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
-    console.error(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
+  if (!user) {
+    console.error(`[AffiliateCommission] skip recurring: no_user`, JSON.stringify({ invoiceId, userId }));
     return null;
   }
 
-  const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  if (!user.affiliateReferral.membershipTied) {
-    const hadFirstMembership = await AffiliateCommission.findOne({
-      affiliateId,
-      referredUserId,
-      commissionType: "membership-first",
-    })
-      .select("_id")
-      .lean();
-    if (hadFirstMembership) {
+  const membershipFirstRow = await AffiliateCommission.findOne({
+    referredUserId,
+    commissionType: "membership-first",
+  })
+    .select("affiliateId")
+    .lean();
+
+  let affiliateId: mongoose.Types.ObjectId | undefined;
+
+  if (membershipFirstRow?.affiliateId) {
+    affiliateId = new mongoose.Types.ObjectId(String(membershipFirstRow.affiliateId));
+    const userAffStr = user.affiliateReferral?.affiliateId
+      ? String(user.affiliateReferral.affiliateId)
+      : "";
+    const needsSync = !user.affiliateReferral?.membershipTied || userAffStr !== affiliateId.toString();
+    if (needsSync) {
       await User.findByIdAndUpdate(userId, {
-        $set: { "affiliateReferral.membershipTied": true },
+        $set: {
+          "affiliateReferral.affiliateId": affiliateId,
+          "affiliateReferral.membershipTied": true,
+        },
       });
       console.log(
-        `[AffiliateCommission] self-healed membershipTied`,
+        `[AffiliateCommission] recurring: aligned affiliate from membership-first`,
         JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
       );
-    } else {
+    }
+  } else {
+    if (!user.affiliateReferral?.affiliateId) {
+      console.error(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
+      return null;
+    }
+    affiliateId = new mongoose.Types.ObjectId(String(user.affiliateReferral.affiliateId));
+    if (!user.affiliateReferral.membershipTied) {
       console.error(
         `[AffiliateCommission] skip recurring: not_membership_tied`,
         JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
@@ -282,7 +319,7 @@ export async function processMembershipRecurringCommission({
   }
 
   const commission = await recordAffiliateCommission({
-    affiliateId,
+    affiliateId: affiliateId!,
     referredUserId,
     commissionType: "membership-recurring",
     purchaseType: "membership",
@@ -293,14 +330,21 @@ export async function processMembershipRecurringCommission({
     stripeSubscriptionId: subscriptionId,
     isFirstTimePurchase: false,
     isRecurringPayment: true,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
-  if (commission) {
-    console.log(
-      `[AffiliateCommission] recurring commission`,
-      JSON.stringify({ invoiceId, userId, commissionId: commission._id?.toString() })
+  if (!commission) {
+    console.error(
+      `[AffiliateCommission] skip recurring: record_failed`,
+      JSON.stringify({ invoiceId, userId, affiliateId: affiliateId!.toString() })
     );
+    return null;
   }
+
+  console.log(
+    `[AffiliateCommission] recurring commission`,
+    JSON.stringify({ invoiceId, userId, commissionId: commission._id?.toString() })
+  );
 
   return commission;
 }

@@ -32,6 +32,20 @@ export function normalizeStripePaymentIntentKeyForCommission(raw: string): strin
   return id;
 }
 
+/** Stripe invoice ids may be stored as `in_xxx` or legacy `invoice_in_xxx` — treat as equivalent for lookups. */
+export function stripeInvoiceIdLookupVariants(raw: string | undefined): string[] {
+  const id = raw?.trim();
+  if (!id) return [];
+  const set = new Set<string>([id]);
+  if (id.startsWith("invoice_")) {
+    const rest = id.slice("invoice_".length);
+    if (rest) set.add(rest);
+  } else if (id.startsWith("in_")) {
+    set.add(`invoice_${id}`);
+  }
+  return [...set];
+}
+
 export async function getAffiliateCommissionRate(affiliateId: mongoose.Types.ObjectId): Promise<number> {
   const affiliate = await Affiliate.findById(affiliateId).select("commissionRate").lean();
   return affiliate?.commissionRate ?? COMMISSION_RATE;
@@ -52,6 +66,8 @@ export type RecordAffiliateCommissionInput = {
   stripeSubscriptionId?: string;
   isFirstTimePurchase: boolean;
   isRecurringPayment: boolean;
+  /** When the purchase actually happened (defaults to now if omitted). */
+  earnedAt?: Date;
 };
 
 /**
@@ -80,20 +96,29 @@ export async function recordAffiliateCommission(
   if (stripePaymentIntentId) {
     stripePaymentIntentId = normalizeStripePaymentIntentKeyForCommission(stripePaymentIntentId);
   }
-  const stripeInvoiceId = input.stripeInvoiceId?.trim() || undefined;
+  const rawInvoiceId = input.stripeInvoiceId?.trim() || undefined;
+  const invoiceVariants = rawInvoiceId ? stripeInvoiceIdLookupVariants(rawInvoiceId) : [];
+  /** Prefer raw `in_` for new docs so we match Stripe’s invoice id string. */
+  const canonicalStripeInvoiceId =
+    rawInvoiceId && invoiceVariants.length > 0
+      ? invoiceVariants.find((v) => v.startsWith("in_")) ?? invoiceVariants[0]
+      : undefined;
 
-  if (!stripePaymentIntentId && !stripeInvoiceId) {
-    console.error("[AffiliateAttribution] recordAffiliateCommission: missing stripe ids");
+  if (!stripePaymentIntentId && !canonicalStripeInvoiceId) {
+    console.error("[AffiliateAttribution] recordAffiliateCommission: missing stripe ids", {
+      hasPaymentIntent: !!input.stripePaymentIntentId,
+      hasInvoice: !!input.stripeInvoiceId,
+    });
     return null;
   }
 
   const existing =
-    stripeInvoiceId != null
+    canonicalStripeInvoiceId != null
       ? await AffiliateCommission.findOne({
           affiliateId,
           referredUserId,
-          stripeInvoiceId,
           commissionType,
+          stripeInvoiceId: { $in: invoiceVariants },
         })
       : await AffiliateCommission.findOne({
           affiliateId,
@@ -108,6 +133,7 @@ export async function recordAffiliateCommission(
 
   const commissionRate = await getAffiliateCommissionRate(affiliateId);
   const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
+  const earnedAt = input.earnedAt ?? new Date();
 
   const doc = new AffiliateCommission({
     affiliateId,
@@ -121,11 +147,11 @@ export async function recordAffiliateCommission(
     commissionRate,
     commissionAmount,
     ...(stripePaymentIntentId ? { stripePaymentIntentId } : {}),
-    ...(stripeInvoiceId ? { stripeInvoiceId } : {}),
+    ...(canonicalStripeInvoiceId ? { stripeInvoiceId: canonicalStripeInvoiceId } : {}),
     ...(stripeSubscriptionId ? { stripeSubscriptionId } : {}),
     isFirstTimePurchase,
     isRecurringPayment,
-    earnedAt: new Date(),
+    earnedAt,
   });
 
   try {
@@ -134,12 +160,12 @@ export async function recordAffiliateCommission(
     const code = err && typeof err === "object" && "code" in err ? (err as { code?: number }).code : undefined;
     if (code === 11000) {
       const dup =
-        stripeInvoiceId != null
+        canonicalStripeInvoiceId != null
           ? await AffiliateCommission.findOne({
               affiliateId,
               referredUserId,
-              stripeInvoiceId,
               commissionType,
+              stripeInvoiceId: { $in: invoiceVariants },
             })
           : await AffiliateCommission.findOne({
               affiliateId,
@@ -147,7 +173,37 @@ export async function recordAffiliateCommission(
               stripePaymentIntentId,
               commissionType,
             });
-      return dup;
+      if (dup) {
+        return dup;
+      }
+      const dupByInvoice =
+        canonicalStripeInvoiceId != null
+          ? await AffiliateCommission.findOne({
+              referredUserId,
+              commissionType,
+              stripeInvoiceId: { $in: invoiceVariants },
+            })
+          : null;
+      if (dupByInvoice) {
+        console.warn(
+          "[AffiliateAttribution] recordAffiliateCommission: duplicate key recovered (invoice id variants / affiliate mismatch)",
+          {
+            referredUserId: referredUserId.toString(),
+            commissionType,
+            stripeInvoiceId: canonicalStripeInvoiceId,
+          }
+        );
+        return dupByInvoice;
+      }
+      const msg = err && typeof err === "object" && "message" in err ? String((err as Error).message) : String(err);
+      console.error("[AffiliateAttribution] recordAffiliateCommission: duplicate key but no recovery match", {
+        message: msg,
+        affiliateId: affiliateId.toString(),
+        referredUserId: referredUserId.toString(),
+        commissionType,
+        invoiceVariants,
+      });
+      return null;
     }
     throw err;
   }
