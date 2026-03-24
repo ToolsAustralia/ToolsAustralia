@@ -1327,6 +1327,9 @@ async function grantBenefits(
         processMiniDrawPackageCommission,
       } = await import("@/utils/affiliate/commission-processing");
 
+      const commissionEarnedAt =
+        paymentMetadata?.created != null ? new Date(paymentMetadata.created) : undefined;
+
       if (packageData.packageType === "one-time") {
         await processOneTimePackageCommission({
           userId: user._id.toString(),
@@ -1334,6 +1337,7 @@ async function grantBenefits(
           packageName: packageData.packageName || "",
           purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
           paymentIntentId: paymentIntentId,
+          earnedAt: commissionEarnedAt,
         });
       } else if (packageData.packageType === "upsell") {
         await processUpsellCommission({
@@ -1342,6 +1346,7 @@ async function grantBenefits(
           offerName: packageData.packageName || "",
           purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
           paymentIntentId: paymentIntentId,
+          earnedAt: commissionEarnedAt,
         });
       } else if (packageData.packageType === "membership") {
         if (!affiliateOptions?.skipMembershipFirstCommission) {
@@ -1354,6 +1359,7 @@ async function grantBenefits(
             purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
             paymentIntentId: paymentIntentId,
             subscriptionId,
+            earnedAt: commissionEarnedAt,
           });
         }
       } else if (packageData.packageType === "mini-draw") {
@@ -1363,6 +1369,7 @@ async function grantBenefits(
           packageName: packageData.packageName || "",
           purchaseAmount: Math.round(packageData.price * 100),
           paymentIntentId: paymentIntentId,
+          earnedAt: commissionEarnedAt,
         });
       }
     } catch (_commissionError) {

@@ -1,6 +1,18 @@
 import type Stripe from "stripe";
 
 /**
+ * When the payment actually settled (for affiliate `earnedAt` / reporting).
+ * Prefer Stripe’s paid_at; fall back to invoice `created`.
+ */
+export function paidAtDateFromStripeInvoice(invoice: Stripe.Invoice): Date {
+  const paid = invoice.status_transitions?.paid_at;
+  if (paid != null && paid > 0) {
+    return new Date(paid * 1000);
+  }
+  return new Date(invoice.created * 1000);
+}
+
+/**
  * List all paid invoices for a subscription (amount_paid > 0), oldest first.
  * Paginates past Stripe's default page size for long-lived subscriptions.
  */
