@@ -283,12 +283,13 @@ export async function processMembershipFirstCommission({
     },
   });
 
-  // Mark membership as permanently tied to affiliate
-  if (user.affiliateReferral) {
-    user.affiliateReferral.membershipTied = true;
-    user.affiliateReferral.firstPurchaseCompleted = true;
-    await user.save();
-  }
+  // Mark membership as permanently tied to affiliate (atomic to avoid __v conflicts)
+  await User.findByIdAndUpdate(userId, {
+    $set: {
+      "affiliateReferral.membershipTied": true,
+      "affiliateReferral.firstPurchaseCompleted": true,
+    },
+  });
 
   return commission;
 }
@@ -368,8 +369,14 @@ export async function processMembershipRecurringCommission({
       .select("_id")
       .lean();
     if (hadFirstMembership) {
-      user.affiliateReferral.membershipTied = true;
-      await user.save();
+      // Atomic update avoids __v version conflicts from the pre-save hook
+      await User.findByIdAndUpdate(userId, {
+        $set: { "affiliateReferral.membershipTied": true },
+      });
+      console.log(
+        `[AffiliateCommission] self-healed membershipTied`,
+        JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
+      );
     } else {
       console.error(
         `[AffiliateCommission] skip recurring: not_membership_tied`,
@@ -387,11 +394,20 @@ export async function processMembershipRecurringCommission({
   });
 
   if (existingCommission) {
+    console.log(
+      `[AffiliateCommission] recurring already exists (idempotent)`,
+      JSON.stringify({ invoiceId, userId, commissionId: existingCommission._id?.toString() })
+    );
     return existingCommission;
   }
 
   const commissionRate = await getAffiliateCommissionRate(affiliateId);
   const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
+
+  console.log(
+    `[AffiliateCommission] creating recurring commission`,
+    JSON.stringify({ invoiceId, userId, purchaseAmount, commissionRate, commissionAmount, packageId, packageName })
+  );
 
   const commission = new AffiliateCommission({
     affiliateId,
@@ -422,8 +438,8 @@ export async function processMembershipRecurringCommission({
         stripeInvoiceId: invoiceId,
         commissionType: "membership-recurring",
       });
-      console.error(
-        `[AffiliateCommission] recurring duplicate invoice (idempotent): duplicate`,
+      console.log(
+        `[AffiliateCommission] recurring duplicate key (idempotent)`,
         JSON.stringify({ invoiceId, userId })
       );
       return existing;
@@ -437,6 +453,11 @@ export async function processMembershipRecurringCommission({
       totalCommissions: commissionAmount,
     },
   });
+
+  console.log(
+    `[AffiliateCommission] ✅ recurring commission saved`,
+    JSON.stringify({ invoiceId, userId, commissionId: commission._id?.toString(), commissionAmount })
+  );
 
   return commission;
 }

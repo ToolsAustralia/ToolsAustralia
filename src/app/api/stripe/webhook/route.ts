@@ -3956,31 +3956,56 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog("error", `Failed to process subscription benefits: ${result.error}`);
     }
 
-    // Recurring affiliate commission: align with money collected (invoice.payment_succeeded), independent of benefit grant success
+    // Recurring affiliate commission: align with money collected, independent of benefit grant success
     if (recordMembershipRecurringAffiliate) {
       const amountPaid = expandedInvoice.amount_paid ?? 0;
       if (amountPaid > 0) {
-        try {
-          const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
-          const safeInvoiceId =
-            expandedInvoice.id ?? expandedInvoice.number ?? `invoice_${expandedInvoice.created}`;
-          const commissionRecord = await processMembershipRecurringCommission({
-            userId: user._id.toString(),
-            invoiceId: safeInvoiceId,
-            subscriptionId: subscriptionId,
-            purchaseAmount: amountPaid,
-            packageId,
-            packageName: membershipPackage.name,
-          });
-          if (commissionRecord) {
-            webhookLog("info", `✅ Recurring membership commission recorded`, {
-              invoiceId: safeInvoiceId,
-              userId: user._id.toString(),
-              commissionId: commissionRecord._id?.toString?.(),
-            });
+        const safeInvoiceId =
+          expandedInvoice.id ?? expandedInvoice.number ?? `invoice_${expandedInvoice.created}`;
+        const commissionParams = {
+          userId: user._id.toString(),
+          invoiceId: safeInvoiceId,
+          subscriptionId: subscriptionId,
+          purchaseAmount: amountPaid,
+          packageId,
+          packageName: membershipPackage.name,
+        };
+
+        // Retry up to 2 times on transient failures (e.g. DB contention)
+        const MAX_COMMISSION_RETRIES = 2;
+        let commissionRecord = null;
+        for (let attempt = 0; attempt <= MAX_COMMISSION_RETRIES; attempt++) {
+          try {
+            const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
+            commissionRecord = await processMembershipRecurringCommission(commissionParams);
+            break;
+          } catch (commErr) {
+            if (attempt < MAX_COMMISSION_RETRIES) {
+              webhookLog("warn", `Recurring commission attempt ${attempt + 1} failed, retrying...`, {
+                invoiceId: safeInvoiceId,
+                error: String(commErr),
+              });
+              await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+            } else {
+              webhookLog("error", `Recurring membership commission failed after ${MAX_COMMISSION_RETRIES + 1} attempts`, {
+                invoiceId: safeInvoiceId,
+                userId: user._id.toString(),
+                error: String(commErr),
+              });
+            }
           }
-        } catch (commErr) {
-          webhookLog("error", `Recurring membership commission failed: ${commErr}`);
+        }
+        if (commissionRecord) {
+          webhookLog("info", `Recurring membership commission recorded`, {
+            invoiceId: safeInvoiceId,
+            userId: user._id.toString(),
+            commissionId: commissionRecord._id?.toString?.(),
+          });
+        } else {
+          webhookLog("warn", `Recurring commission returned null (no affiliate or already exists)`, {
+            invoiceId: safeInvoiceId,
+            userId: user._id.toString(),
+          });
         }
       } else {
         webhookLog("info", `[AffiliateCommission] skip recurring: zero_amount`, {
@@ -4435,13 +4460,14 @@ export async function POST(request: NextRequest) {
 
               if (user && user.processedPayments) {
                 const hasDuplicateInvoice = user.processedPayments.some((processedPayment) => {
-                  // Check for invoice ID in any format (with or without timestamp)
-                  if (processedPayment.includes(invoiceId)) return true;
+                  // Exact match on the full key
+                  if (processedPayment === `invoice_${invoiceId}`) return true;
 
-                  // Check for invoice payments with different prefixes
+                  // Strip timestamp suffix and compare base invoice IDs exactly
                   if (processedPayment.startsWith("invoice_")) {
-                    const existingBaseId = processedPayment.replace("invoice_", "").split("_")[0];
-                    return invoiceId === existingBaseId;
+                    const storedBase = processedPayment.replace("invoice_", "").split("_ts_")[0];
+                    const incomingBase = invoiceId.split("_ts_")[0];
+                    return storedBase === incomingBase;
                   }
 
                   return false;
