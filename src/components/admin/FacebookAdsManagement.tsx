@@ -1219,40 +1219,19 @@ export default function FacebookAdsManagement() {
 
   return (
     <div className="space-y-4 sm:space-y-6 min-w-0">
-      {/* Header with Controls - View Level on top for easier toggling */}
-      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <h2 className="hidden sm:block text-sm sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
+      {/* Header with Controls — Ads / Spend toggle full width on mobile so it stays visible */}
+      <div className="flex flex-col gap-2 sm:gap-4 min-w-0">
+        <div className="hidden sm:block min-w-0">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 truncate">
             Facebook Ads Performance
           </h2>
-         
         </div>
-        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 min-w-0 max-w-full flex-wrap">
-          {/* View Level - Top for easier toggling, default Campaign */}
-          {viewMode === "ads" && (
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
-                View Level:
-              </label>
-              <Dropdown
-                options={[
-                  { value: "account", label: "Account", icon: Layers },
-                  { value: "campaign", label: "Campaign", icon: BarChart2 },
-                  { value: "adset", label: "Ad Set", icon: LayoutList },
-                  { value: "ad", label: "Ad", icon: Image },
-                ]}
-                value={level}
-                onChange={(value) => setLevel(value as InsightLevel)}
-                placeholder="View Level"
-                compact
-              />
-            </div>
-          )}
-          {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
-          <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-gray-100 rounded-lg p-1 w-full sm:w-auto flex-shrink-0 min-w-0">
             <button
+              type="button"
               onClick={() => handleViewModeChange("ads")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                 viewMode === "ads"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
@@ -1261,8 +1240,9 @@ export default function FacebookAdsManagement() {
               Ads
             </button>
             <button
+              type="button"
               onClick={() => handleViewModeChange("spend-by-url")}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
                 viewMode === "spend-by-url"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
@@ -1271,19 +1251,40 @@ export default function FacebookAdsManagement() {
               Spend by URL
             </button>
           </div>
-          {/* Date Range Toggle - Ads + Spend by URL */}
-          {(viewMode === "ads" || viewMode === "spend-by-url") && (
-            <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
-              <DateRangeToggle
-                selectedRange={dateRange}
-                onRangeChange={handleDateRangeChange}
-                onCustomClick={() => setIsCustomDateModalOpen(true)}
-                collapsed={false}
-                displayDate={displayDate || undefined}
-                onExpand={() => {}}
-              />
-            </div>
-          )}
+          <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-4 min-w-0 sm:justify-end">
+            {/* View Level — Ads only */}
+            {viewMode === "ads" && (
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-w-[200px] sm:min-w-[240px]">
+                <label className="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
+                  View Level:
+                </label>
+                <Dropdown
+                  options={[
+                    { value: "account", label: "Account", icon: Layers },
+                    { value: "campaign", label: "Campaign", icon: BarChart2 },
+                    { value: "adset", label: "Ad Set", icon: LayoutList },
+                    { value: "ad", label: "Ad", icon: Image },
+                  ]}
+                  value={level}
+                  onChange={(value) => setLevel(value as InsightLevel)}
+                  placeholder="View Level"
+                  compact
+                />
+              </div>
+            )}
+            {(viewMode === "ads" || viewMode === "spend-by-url") && (
+              <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
+                <DateRangeToggle
+                  selectedRange={dateRange}
+                  onRangeChange={handleDateRangeChange}
+                  onCustomClick={() => setIsCustomDateModalOpen(true)}
+                  collapsed={false}
+                  displayDate={displayDate || undefined}
+                  onExpand={() => {}}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

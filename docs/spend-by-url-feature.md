@@ -95,6 +95,7 @@ Returns a structured result: insights rows upserted, destination upserts + `miss
 
 - Endpoint: `{adAccountId}/insights`
 - **`level: ad`**, **`time_increment: 1`** → one row per ad per calendar day.
+- **`limit`** (default **500** in code; Meta’s default is **25**) → fewer paginated HTTP requests for the same data.
 - **`action_attribution_windows: ["7d_click"]`**
 - Fields include spend, impressions, clicks, actions, action_values, hierarchy names, `ad_id`, `date_start`, etc.
 - Paginates until **`paging.next`** is empty.
@@ -102,6 +103,7 @@ Returns a structured result: insights rows upserted, destination upserts + `miss
 **`src/services/meta/MetaInsightsSyncService.ts`**
 
 - Maps each API row to **`MetaAdInsightsDaily`** with **`processInsightData`** (purchase actions / values → conversions & revenue cents).
+- Persists rows using **`bulkWrite`** in batches (`INSIGHTS_BULK_BATCH`, e.g. 800 ops per round-trip) with `updateOne` + `upsert` and **`ordered: false`** for throughput. Same filters as the unique index: `(adAccountId, date, adId)`.
 
 ### 4.3 Destinations (Graph API)
 
@@ -109,10 +111,12 @@ Returns a structured result: insights rows upserted, destination upserts + `miss
 
 - Batch request: `GET /v21.0/?ids={adId1,adId2,...}&fields=creative{object_story_spec,asset_feed_spec,url_tags}`
 - **`extractUrlsFromCreative`** walks:
-  - **`object_story_spec`** — `video_data`, **`link_data`**, **`photo_data`**, **`template_data`** (links and CTAs where present).
-  - If still no URL: **`asset_feed_spec.link_urls`** — `website_url` (and `deeplink_url` as secondary), required for Dynamic Creative / Advantage+ style creatives where the link is **not** on `object_story_spec`.
+  - **`object_story_spec`** — `video_data`, **`link_data`** (including **`link`**, **`website_url`**, **`call_to_action`** — many static link ads only expose the destination on the CTA), **`photo_data`**, **`text_data`**, **`template_data`** (links and CTAs where present), carousel **`child_attachments`** CTAs.
+  - **`asset_feed_spec.link_urls`** — `website_url` and `deeplink_url` when the feed has no usable `object_story_spec` links.
+  - **Creative-level** — Graph fields **`object_url`** and **`link_url`** on the creative (requested in the sync query), merged after asset-feed URLs when story spec is empty.
 - **`inferAdFormatFromStorySpec` / `inferAdFormatFromAssetFeed`** — UI grouping (video / static / carousel / unknown).
-- If no URL is found: **`primary = unknown://meta-ad/{adId}`** (and `missingUrlAds` records that ad).
+- If no URL is found: **`primary = unknown://meta-ad/{adId}`** (and `missingUrlAds` records that ad). Some ads only use **Shop / onsite** destinations with no website URL; Meta may also omit the creative on permission errors.
+- After each Graph batch, destination documents are upserted with **`MetaAdDestination.bulkWrite`** (`ordered: false`), not one `findOneAndUpdate` per ad.
 
 **`src/utils/meta/canonicalize-landing-url.ts`**
 
@@ -126,7 +130,7 @@ Returns a structured result: insights rows upserted, destination upserts + `miss
 
 **`src/services/analytics/SpendByUrlAggregationService.ts`**
 
-- **`recomputeForDateRange`** — For each date in `[since, until]`, load all `MetaAdInsightsDaily` for that day, map each `adId` → `MetaAdDestination.canonicalUrl` (fallback `unknown://meta-ad/{adId}`), sum into buckets, replace `LandingPageMetricsDaily` rows for that account+date.
+- **`recomputeForDateRange`** — For each date in `[since, until]`, load all `MetaAdInsightsDaily` for that day, map each `adId` → `MetaAdDestination.canonicalUrl` (fallback `unknown://meta-ad/{adId}`), sum into buckets, **`deleteMany`** then **`insertMany`** for that day’s URL rows (`ordered: false`), replacing per-document `create` loops.
 - **`getAggregatedSpendByUrl`** — Sums **daily** rows across the requested window; merges `adIds`; sorts by spend descending (API layer does not depend on sort order for correctness).
 - **`getSpendByUrlDetail`** — Given one `canonicalUrl`, finds all `MetaAdDestination` docs with that URL, loads insights in range, aggregates **per ad**, sorts by format then spend.
 
@@ -147,7 +151,7 @@ Implementation files:
 ### 5.3 Cron & CLI
 
 - **Cron:** `vercel.json` schedules **`GET /api/cron/sync-meta-spend-by-url`** (daily). Implementation: `src/app/api/cron/sync-meta-spend-by-url/route.ts` (uses env + a default date range; read that file when changing behavior).
-- **Script:** `npm run sync:meta-spend-by-url` → `scripts/sync-meta-spend-by-url.ts` (optional `--since` / `--until`).
+- **Script:** `npm run sync:meta-spend-by-url` → `scripts/sync-meta-spend-by-url.ts` (optional `--since` / `--until`). Prints **timestamped progress** (Insights pagination, rate-limit waits, Mongo bulk upserts, Graph destination batches, per-day aggregation).
 
 ---
 
@@ -192,10 +196,37 @@ Invalidation: after sync, queries with key **`["admin", "analytics", "spend-by-u
 | Spend by URL doesn’t match Ads Manager totals | Different attribution window, date timezone boundaries, or aggregation across URL buckets vs account-level API. |
 | Stale numbers after editing ads | Run **Sync from Meta** for the relevant range so insights + destinations + **`LandingPageMetricsDaily`** refresh. |
 | Empty table | No sync for range, or env not set; check API errors in network tab and server logs. |
+| Expand row shows **“No per-ad rows (destinations may be missing)”** | Drill-down used to require a **`MetaAdDestination`** row for that `canonicalUrl`. If the Graph API **errored** on that ad, no destination document exists even though spend is bucketed under `unknown://meta-ad/{adId}`. **Resolved in code** by parsing that placeholder or reading **`adIds`** from **`LandingPageMetricsDaily`**. Re-sync destinations if you still see gaps. |
+| **“Application request limit reached”** during sync | Meta **Marketing API app-level** throttling (often after many paginated insights requests). **`fetchFacebookAdInsightsDaily`** retries with backoff and spaces pagination requests; if it still fails, use a **shorter date range**, wait a few minutes, and sync again (or use the CLI). |
 
 ---
 
-## 10. File index (quick reference)
+## 10. Performance & comparison (why Ads tab feels faster)
+
+### 10.1 Facebook Ads tab vs spend-by-url sync (different Meta workload)
+
+The admin **Facebook Ads** breakdown uses **`fetchFacebookInsights`** (`src/lib/facebook-marketing.ts`) with `level` = account / campaign / ad set / ad and **no `time_increment`**. Meta returns **one aggregated row per entity for the whole date range** (e.g. one row per ad for Nov–Mar). The API returns JSON to the browser; it does **not** write one Mongo document per insight row.
+
+Spend-by-url **must** call **`fetchFacebookAdInsightsDaily`** with **`level=ad`** and **`time_increment=1`**, producing roughly **ads × days** insight rows so daily materialization (`MetaAdInsightsDaily` → `LandingPageMetricsDaily`) can answer **arbitrary** date ranges from stored data. That is **more Meta rows** and **more persistence** than the Ads tab for the same calendar span—so wall time is not comparable 1:1.
+
+### 10.2 MongoDB bulk writes (implementation)
+
+| Step | Strategy |
+|------|----------|
+| Insights → `MetaAdInsightsDaily` | Batched **`bulkWrite`** (`updateOne` + `$set` + `upsert: true`), `ordered: false` |
+| Destinations → `MetaAdDestination` | **`bulkWrite`** per Graph `ids` chunk |
+| Aggregation → `LandingPageMetricsDaily` | **`insertMany`** per day after `deleteMany` |
+
+Unique indexes must stay aligned with upsert filters (`MetaAdInsightsDaily` compound key, `MetaAdDestination.adId`).
+
+### 10.3 HTTP timeout and long date ranges
+
+- **`POST /api/admin/analytics/spend-by-url/sync`** sets **`maxDuration = 300`** (5 minutes) in `src/app/api/admin/analytics/spend-by-url/sync/route.ts`. Very long ranges or large accounts may still approach this limit after optimization.
+- For **multi-month** backfills, prefer **`npm run sync:meta-spend-by-url`** (`scripts/sync-meta-spend-by-url.ts`) so work is not tied to a browser request timeout, or run **smaller date windows** sequentially from the admin UI.
+
+---
+
+## 11. File index (quick reference)
 
 | Area | Path |
 |------|------|
