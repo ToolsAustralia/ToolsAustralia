@@ -138,10 +138,18 @@ AffiliateCommissionSchema.index({ stripePaymentIntentId: 1 }, { sparse: true });
 AffiliateCommissionSchema.index({ stripeInvoiceId: 1 }, { sparse: true });
 AffiliateCommissionSchema.index({ stripeSubscriptionId: 1 }, { sparse: true });
 AffiliateCommissionSchema.index({ payoutId: 1 }, { sparse: true });
-// Prevent duplicate commissions for same payment
+// Prevent duplicate commissions for the same payment *intent* (one-time / first / upsell).
+// IMPORTANT: membership-recurring rows use stripeInvoiceId only — they must NOT participate in this
+// unique key, or every recurring row with no PI collides on stripePaymentIntentId: null (E11000).
 AffiliateCommissionSchema.index(
   { affiliateId: 1, referredUserId: 1, stripePaymentIntentId: 1, commissionType: 1 },
-  { unique: true, sparse: true }
+  {
+    unique: true,
+    name: "uniq_affiliate_referred_pi_commission_partial",
+    partialFilterExpression: {
+      stripePaymentIntentId: { $exists: true, $type: "string" },
+    },
+  }
 );
 // Prevent duplicate recurring commissions
 AffiliateCommissionSchema.index(

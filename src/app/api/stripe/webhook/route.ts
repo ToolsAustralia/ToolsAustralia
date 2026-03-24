@@ -37,7 +37,10 @@ import {
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
-import { shouldRecordMembershipRecurringAffiliateCharge } from "@/utils/affiliate/affiliate-recurring-invoice";
+import {
+  paidAtDateFromStripeInvoice,
+  shouldRecordMembershipRecurringAffiliateCharge,
+} from "@/utils/affiliate/affiliate-recurring-invoice";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -3972,6 +3975,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           purchaseAmount: amountPaid,
           packageId,
           packageName: membershipPackage.name,
+          earnedAt: paidAtDateFromStripeInvoice(expandedInvoice),
         };
 
         // Retry up to 2 times on transient failures (e.g. DB contention)
