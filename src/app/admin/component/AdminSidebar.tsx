@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -24,7 +25,14 @@ import {
   ScrollText,
   ChevronDown,
   ChevronRight,
+  LayoutDashboard,
+  LineChart,
+  Megaphone,
+  ClipboardList,
+  AlertCircle,
 } from "lucide-react";
+
+const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 
 interface AdminSidebarProps {
   selectedTab: string;
@@ -45,10 +53,16 @@ type AdminTab = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-const adminTabGroups: Array<{ id: string; label: string; tabs: AdminTab[] }> = [
+const adminTabGroups: Array<{
+  id: string;
+  label: string;
+  groupIcon: React.ComponentType<{ className?: string }>;
+  tabs: AdminTab[];
+}> = [
   {
     id: "core",
     label: "Core",
+    groupIcon: LayoutDashboard,
     tabs: [
       { id: "overview", label: "Overview", icon: BarChart3 },
       { id: "users", label: "Users", icon: Users },
@@ -58,6 +72,7 @@ const adminTabGroups: Array<{ id: string; label: string; tabs: AdminTab[] }> = [
   {
     id: "analytics",
     label: "Analytics",
+    groupIcon: LineChart,
     tabs: [
       { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
       { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
@@ -67,11 +82,13 @@ const adminTabGroups: Array<{ id: string; label: string; tabs: AdminTab[] }> = [
   {
     id: "promos",
     label: "Promos",
+    groupIcon: Megaphone,
     tabs: [{ id: "promos", label: "Promos", icon: Zap }],
   },
   {
     id: "draws",
     label: "Draws",
+    groupIcon: Trophy,
     tabs: [
       { id: "major-draw", label: "Major Draw", icon: Gift },
       { id: "mini-draws", label: "Mini Draws", icon: Trophy },
@@ -82,6 +99,7 @@ const adminTabGroups: Array<{ id: string; label: string; tabs: AdminTab[] }> = [
   {
     id: "operations",
     label: "Operations",
+    groupIcon: ClipboardList,
     tabs: [
       { id: "submissions", label: "Submissions", icon: FileTextIcon },
       { id: "error-reports", label: "Error Reports", icon: Bug },
@@ -271,45 +289,76 @@ export default function AdminSidebar({
           )}
         </div>
 
-        {/* Quick Actions - Side by side layout */}
-        <div className="flex justify-between gap-2">
-          <button
-            onClick={onNavigateToSite}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
-          >
-            <Home className="w-4 h-4" />
-            View Site
-          </button>
-          <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200">
-            <Activity className="w-4 h-4" />
-            Live Activity
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onNavigateToSite}
+          className="group w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-gray-800 rounded-lg border border-gray-200 bg-gray-50/80 hover:border-red-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white transition-all duration-200"
+        >
+          <Home className="w-3.5 h-3.5 shrink-0 text-red-600 group-hover:text-white transition-colors" />
+          <span className="group-hover:text-white">View Site</span>
+        </button>
       </div>
 
       {/* Navigation */}
-      <div ref={navScrollRef} className="flex-1 overflow-y-auto">
-        <nav className="p-4 space-y-4">
+      <div ref={navScrollRef} className="flex-1 overflow-y-auto admin-scrollbar">
+        <nav className="px-2 py-3 sm:px-3 space-y-4">
           {adminTabGroups.map((group) => {
             const isExpanded = expandedGroups.has(group.id);
+            const GroupIcon = group.groupIcon;
+            const operationsNeedsAttention = group.id === "operations" && unviewedCount > 0;
+            const drawsNeedsAttention = group.id === "draws" && fullCapacityCount > 0;
             return (
               <div key={group.id} className="space-y-1">
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center justify-between gap-2 px-2 py-2 text-left rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-expanded={isExpanded}
+                  title={
+                    operationsNeedsAttention
+                      ? `${unviewedCount} unviewed submission${unviewedCount === 1 ? "" : "s"}`
+                      : drawsNeedsAttention
+                        ? `${fullCapacityCount} mini draw${fullCapacityCount === 1 ? "" : "s"} at capacity — select winner`
+                        : undefined
+                  }
+                  aria-label={
+                    operationsNeedsAttention
+                      ? `Operations, ${unviewedCount} unviewed submission${unviewedCount === 1 ? "" : "s"}`
+                      : drawsNeedsAttention
+                        ? `Draws, ${fullCapacityCount} mini draw${fullCapacityCount === 1 ? "" : "s"} ready to complete`
+                        : `${group.label} section`
+                  }
+                  className="group w-full flex items-center justify-between gap-2 py-2 pl-1 pr-1 text-left rounded-md text-gray-600 hover:text-gray-900 hover:bg-red-50/70 transition-colors"
                 >
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                    {group.label}
+                  <span className="flex items-center gap-2 min-w-0">
+                    <GroupIcon className="w-4 h-4 shrink-0 text-red-600" aria-hidden />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 group-hover:text-gray-800 truncate">
+                      {group.label}
+                    </span>
                   </span>
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                  )}
+                  <span className="flex items-center gap-1 shrink-0">
+                    {operationsNeedsAttention && (
+                      <AlertCircle
+                        className="w-4 h-4 text-red-600"
+                        aria-hidden
+                        strokeWidth={2.5}
+                      />
+                    )}
+                    {drawsNeedsAttention && (
+                      <AlertCircle
+                        className="w-4 h-4 text-amber-500"
+                        aria-hidden
+                        strokeWidth={2.5}
+                      />
+                    )}
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                  </span>
                 </button>
                 {isExpanded && (
-                  <div className="space-y-1 pl-1">
+                  <div className="ml-1.5 pl-2.5 border-l border-red-100 space-y-0.5">
                     {group.tabs.map((tab) => {
                       const Icon = tab.icon;
                       const isActive =
@@ -323,15 +372,25 @@ export default function AdminSidebar({
                         tabButtonRefs.current[tab.id] = element;
                       }}
                       onClick={() => handleTabChange(tab.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all duration-200 ${
+                      className={`group w-full flex items-center gap-2 px-2 py-2 text-left text-sm rounded-lg transition-all duration-200 ${
                         isActive
-                          ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-lg"
-                          : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white"
+                          ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-md"
+                          : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                       }`}
                     >
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-500"}`} />
+                      <Icon
+                        className={`w-4 h-4 flex-shrink-0 ${
+                          isActive ? "text-white" : "text-gray-500 group-hover:text-white"
+                        }`}
+                      />
                       <div className="flex-1 min-w-0">
-                        <div className={`font-medium ${isActive ? "text-white" : "text-gray-900"}`}>{tab.label}</div>
+                        <div
+                          className={`font-medium leading-snug ${
+                            isActive ? "text-white" : "text-gray-900 group-hover:text-white"
+                          }`}
+                        >
+                          {tab.label}
+                        </div>
                       </div>
                       {tab.id === "submissions" && unviewedCount > 0 && (
                         <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
@@ -360,8 +419,14 @@ export default function AdminSidebar({
       {/* User Profile */}
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full flex items-center justify-center text-white font-bold">
-            {user.name.charAt(0).toUpperCase()}
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-red-100 shadow-sm">
+            <Image
+              src={ADMIN_CIRCULAR_LOGO}
+              alt="Tools Australia"
+              width={40}
+              height={40}
+              className="h-full w-full object-cover"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-gray-900 truncate">{user.name}</div>
