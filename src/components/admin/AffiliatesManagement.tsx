@@ -12,7 +12,12 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import AffiliateDetailModal from "./AffiliateDetailModal";
@@ -45,6 +50,16 @@ interface AffiliatesResponse {
   };
 }
 
+type AffiliateListSort =
+  | "name"
+  | "email"
+  | "affiliateCode"
+  | "totalSignups"
+  | "totalSales"
+  | "unpaidAmount"
+  | "isActive"
+  | "createdAt";
+
 /**
  * Main Affiliates Management component
  */
@@ -55,6 +70,8 @@ export default function AffiliatesManagement() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<AffiliateListSort>("createdAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -67,7 +84,7 @@ export default function AffiliatesManagement() {
   React.useEffect(() => {
     fetchAffiliates();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAffiliates is defined below, adding would cause circular dep
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, sortField, sortOrder]);
 
   const fetchAffiliates = async () => {
     setIsLoading(true);
@@ -76,6 +93,8 @@ export default function AffiliatesManagement() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: "25",
+        sort: sortField,
+        order: sortOrder,
         ...(debouncedSearch && { search: debouncedSearch }),
       });
       const response = await fetch(`/api/admin/affiliate/list?${params}`);
@@ -135,77 +154,103 @@ export default function AffiliatesManagement() {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
+  const handleSortHeaderClick = (field: AffiliateListSort) => {
+    setPage(1);
+    if (sortField === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder(
+        field === "name" || field === "email" || field === "affiliateCode" ? "asc" : "desc"
+      );
+    }
+  };
+
+  const SortHeaderIcon = ({ field }: { field: AffiliateListSort }) => {
+    const active = sortField === field;
+    if (!active) {
+      return <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+    ) : (
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+    );
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Affiliates Management</h1>
-          <p className="text-gray-600 mt-1">Manage affiliate accounts and track commissions</p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header — aligned with Users Management (compact on mobile) */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 truncate">Affiliates Management</h1>
+          <p className="text-[11px] sm:text-sm text-gray-600 mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
+            Manage affiliate accounts and track commissions
+          </p>
         </div>
         <button
+          type="button"
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+          className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white text-xs sm:text-sm font-medium hover:from-[#cc0000] hover:to-[#e60000] transition-all shadow-sm hover:shadow-md"
         >
-          <Plus className="w-4 h-4" />
-          Create Affiliate
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="sm:hidden">Create</span>
+          <span className="hidden sm:inline">Create Affiliate</span>
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+      {/* Search — same density as Users Management filter bar */}
+      <div className="relative z-20 bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 backdrop-blur-sm">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search affiliates by name, email, code, or username..."
+            placeholder="Search name, email, code, username…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+            className="w-full pl-8 sm:pl-10 pr-3 py-1.5 sm:py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all placeholder:text-gray-400"
           />
         </div>
       </div>
 
       {/* Results Summary */}
       {affiliatesData && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600">
           <p>
-            Showing {(affiliatesData.pagination.page - 1) * affiliatesData.pagination.limit + 1} to{" "}
+            Showing {(affiliatesData.pagination.page - 1) * affiliatesData.pagination.limit + 1}–
             {Math.min(
               affiliatesData.pagination.page * affiliatesData.pagination.limit,
               affiliatesData.pagination.total
             )}{" "}
-            of {affiliatesData.pagination.total} affiliates
+            of {affiliatesData.pagination.total}
           </p>
           <button
+            type="button"
             onClick={() => fetchAffiliates()}
-            className="text-[#ee0000] hover:text-[#cc0000] transition-colors flex items-center gap-1"
+            className="text-[#ee0000] hover:text-[#cc0000] transition-colors flex items-center gap-1 font-medium"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Refresh
           </button>
         </div>
       )}
 
-      {/* Affiliates Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+      {/* Affiliates list */}
+      <div className="relative z-10 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
         {isLoading ? (
-          // Loading skeleton
-          <div className="p-6">
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4 animate-pulse">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+          <div className="p-3 sm:p-6">
+            <div className="space-y-3 sm:space-y-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-2 sm:gap-4 animate-pulse">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-200 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="h-3.5 bg-gray-200 rounded w-2/3" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2" />
                   </div>
-                  <div className="h-6 bg-gray-200 rounded w-20"></div>
-                  <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  <div className="h-8 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 rounded w-14 hidden sm:block" />
                 </div>
               ))}
             </div>
@@ -241,126 +286,210 @@ export default function AffiliatesManagement() {
             )}
           </div>
         ) : (
-          // Affiliates Table
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Affiliate
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stats
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Unpaid
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {affiliateList.map((affiliate) => (
-                  <tr
-                    key={affiliate.id}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleAffiliateClick(affiliate)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{affiliate.name}</div>
-                        <div className="text-sm text-gray-500">{affiliate.email}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-mono text-gray-900">{affiliate.affiliateCode}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        <div>Signups: {affiliate.totalSignups}</div>
-                        <div>Sales: {formatCurrency(affiliate.totalSales)}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">
-                        <div className="font-semibold text-green-600">{formatCurrency(affiliate.unpaidAmount)}</div>
-                        <div className="text-gray-500">{affiliate.unpaidCommissions} commissions</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {affiliate.isActive ? (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleAffiliateClick(affiliate)}
-                          className="text-[#ee0000] hover:text-[#cc0000] flex items-center gap-1 transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                        <button
-                          onClick={() => copyLink(affiliate.affiliateLink)}
-                          className="text-gray-600 hover:text-gray-900 flex items-center gap-1 transition-colors"
-                          title="Copy affiliate link"
-                        >
-                          {copiedLink === affiliate.affiliateLink ? (
-                            <Check className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Single responsive table — column layout on all breakpoints (like Users Management) */}
+            <div className="overflow-x-auto relative touch-pan-x">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="sticky top-0 z-[1] bg-gray-50 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("name")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Affiliate
+                        <SortHeaderIcon field="name" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] hidden bg-gray-50 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] lg:table-cell">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("affiliateCode")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Code
+                        <SortHeaderIcon field="affiliateCode" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("totalSignups")}
+                        title="Sort by signups"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Stats
+                        <SortHeaderIcon field="totalSignups" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] hidden bg-gray-50 p-0 text-right shadow-[0_1px_0_0_rgba(0,0,0,0.05)] md:table-cell">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("totalSales")}
+                        title="Sort by sales"
+                        className="flex w-full items-center justify-end gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Sales
+                        <SortHeaderIcon field="totalSales" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("unpaidAmount")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Unpaid
+                        <SortHeaderIcon field="unpaidAmount" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("isActive")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-100/90 transition-colors"
+                      >
+                        Status
+                        <SortHeaderIcon field="isActive" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-700 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {affiliateList.map((affiliate) => (
+                    <tr
+                      key={affiliate.id}
+                      className="cursor-pointer transition-colors hover:bg-gray-50 even:bg-gray-50/30"
+                      onClick={() => handleAffiliateClick(affiliate)}
+                    >
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
+                        <div>
+                          <div className="text-[10px] sm:text-xs font-semibold text-gray-900">{affiliate.name}</div>
+                          <div className="truncate text-[9px] sm:text-xs text-gray-500">{affiliate.email}</div>
+                        </div>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:table-cell">
+                        <div className="font-mono text-[10px] sm:text-xs text-gray-900">{affiliate.affiliateCode}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 md:hidden">
+                        <div className="text-[10px] sm:text-xs text-gray-900">
+                          <div>Signups: {affiliate.totalSignups}</div>
+                          <div>Sales: {formatCurrency(affiliate.totalSales)}</div>
+                        </div>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-gray-900 md:table-cell">
+                        <span className="text-[10px] sm:text-xs">{affiliate.totalSignups}</span>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-right text-gray-900 md:table-cell">
+                        <span className="text-[10px] sm:text-xs">{formatCurrency(affiliate.totalSales)}</span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
+                        <div>
+                          <div className="text-[10px] sm:text-xs font-semibold text-green-600">
+                            {formatCurrency(affiliate.unpaidAmount)}
+                          </div>
+                          <div className="text-[9px] sm:text-xs text-gray-500">{affiliate.unpaidCommissions} comm.</div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
+                        {affiliate.isActive ? (
+                          <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[9px] sm:text-xs font-medium text-green-800">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[9px] sm:text-xs font-medium text-red-800">
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-[10px] sm:text-xs font-medium">
+                        <div className="flex items-center gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => handleAffiliateClick(affiliate)}
+                            className="flex items-center gap-1 text-[#ee0000] transition-colors hover:text-[#cc0000]"
+                          >
+                            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <span className="hidden lg:inline">View</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyLink(affiliate.affiliateLink)}
+                            className="text-gray-600 transition-colors hover:text-gray-900"
+                            title="Copy affiliate link"
+                          >
+                            {copiedLink === affiliate.affiliateLink ? (
+                              <Check className="h-3.5 w-3.5 text-green-600 sm:h-4 sm:w-4" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {affiliatesData && affiliatesData.pagination.totalPages > 1 && (
+              <div className="border-t-2 border-gray-200 bg-gray-50 px-3 py-3 sm:px-6 sm:py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage(1)}
+                      disabled={page === 1}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
+                      aria-label="First page"
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <span className="text-xs font-medium text-gray-700 sm:text-sm">
+                    Page {affiliatesData.pagination.page} of {affiliatesData.pagination.totalPages}
+                  </span>
+
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(affiliatesData.pagination.totalPages, p + 1))}
+                      disabled={page === affiliatesData.pagination.totalPages}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage(affiliatesData.pagination.totalPages)}
+                      disabled={page === affiliatesData.pagination.totalPages}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
+                      aria-label="Last page"
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Pagination */}
-      {affiliatesData && affiliatesData.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Page {affiliatesData.pagination.page} of {affiliatesData.pagination.totalPages}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(affiliatesData.pagination.totalPages, p + 1))}
-              disabled={page === affiliatesData.pagination.totalPages}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Create Affiliate Modal */}
       {isCreateModalOpen && (
@@ -438,14 +567,17 @@ function CreateAffiliateModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900">Create Affiliate</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 max-w-md w-full flex max-h-[90dvh] flex-col overflow-hidden">
+        <div className="flex-shrink-0 border-b border-gray-200 bg-white px-6 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-gray-900">Create Affiliate</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
             <input
@@ -515,17 +647,18 @@ function CreateAffiliateModal({
             <p className="text-xs text-gray-500 mt-1">Enter commission rate as percentage (0-100%). Default: 30%</p>
             {errors.commissionRate && <p className="text-red-600 text-xs mt-1">{errors.commissionRate}</p>}
           </div>
-          <div className="flex gap-2 justify-end pt-4">
+          </div>
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="min-h-[44px] rounded-lg border border-gray-300 px-4 py-2 transition-colors hover:bg-gray-100 sm:min-h-0"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="min-h-[44px] rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-white transition-all hover:from-[#cc0000] hover:to-[#e60000] sm:min-h-0"
             >
               Create
             </button>
