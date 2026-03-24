@@ -20,6 +20,7 @@ function resolveCommissionPackageDisplay(
     if (pkg?.name) return pkg.name;
   }
   if (commissionType === "membership-recurring") return "Subscription renewal";
+  if (commissionType === "mini-draw-package") return "Mini draw package";
   return "N/A";
 }
 

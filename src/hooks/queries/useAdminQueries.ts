@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
   AdminUserDetail,
   AdminUserDetailResponse,
+  AdminUserPaymentEventsPage,
   AdminUserUpdatePayload,
   AdminUsersResponse,
   UserActionRequest,
@@ -639,6 +640,44 @@ export function useAdminUsers(
 /**
  * Hook to fetch detailed user profile
  */
+export const ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE = 25;
+
+/**
+ * Paginated payment events for admin user detail Activity tab (infinite scroll).
+ */
+export function useAdminUserPaymentEventsInfinite(userId: string | null, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["admin", "users", userId, "payment-events", ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE],
+    queryFn: async ({ pageParam }): Promise<AdminUserPaymentEventsPage> => {
+      const page = typeof pageParam === "number" ? pageParam : 1;
+      const response = await fetch(
+        `/api/admin/users/${userId}/payment-events?page=${page}&limit=${ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payment events: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch payment events");
+      }
+
+      return result.data as AdminUserPaymentEventsPage;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    enabled: !!userId && enabled,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch detailed user profile
+ */
 export function useAdminUserDetail(userId: string) {
   return useQuery<AdminUserDetail>({
     queryKey: ["admin", "users", "detail", userId],
@@ -761,6 +800,10 @@ export function useAdminUpdateUser() {
       // Refresh the detail view with the latest data
       queryClient.invalidateQueries({
         queryKey: ["admin", "users", "detail", variables.userId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "users", variables.userId, "payment-events"],
       });
 
       // Update the list so summary information stays in sync

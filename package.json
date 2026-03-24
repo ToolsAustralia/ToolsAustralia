@@ -22,7 +22,9 @@
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
     "sync:meta-spend-by-url": "tsx scripts/sync-meta-spend-by-url.ts",
     "backfill:affiliate-membership-tied": "tsx scripts/backfill-affiliate-membership-tied.ts",
-    "backfill:affiliate-recurring-commissions": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts"
+    "backfill:affiliate-recurring-commissions": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts",
+    "reconcile:affiliate-payment-events": "tsx scripts/reconcile-affiliate-membership-from-payment-events.ts",
+    "test:affiliate-attribution": "tsx src/utils/affiliate/__tests__/affiliate-attribution.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
