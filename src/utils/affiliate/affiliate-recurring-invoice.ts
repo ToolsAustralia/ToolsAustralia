@@ -35,6 +35,9 @@ export async function shouldRecordMembershipRecurringAffiliateCharge(
   const amountPaid = invoice.amount_paid ?? 0;
   if (amountPaid <= 0) return false;
 
+  const invoiceId = invoice.id;
+  if (!invoiceId) return false;
+
   const br = invoice.billing_reason;
 
   if (br === "subscription_cycle" || br === "subscription_threshold") {
@@ -43,7 +46,7 @@ export async function shouldRecordMembershipRecurringAffiliateCharge(
 
   // Second or later paid invoice on the same subscription (renewal / follow-on charge)
   if (br === "subscription_create" || br === "subscription_update") {
-    const isFirst = await isFirstPaidSubscriptionInvoice(stripe, subscriptionId, invoice.id);
+    const isFirst = await isFirstPaidSubscriptionInvoice(stripe, subscriptionId, invoiceId);
     return !isFirst;
   }
 

@@ -82,11 +82,16 @@ async function main() {
     for (let i = 1; i < paid.length; i++) {
       if (processed >= LIMIT) break;
       const inv = paid[i];
+      if (!inv.id) {
+        console.warn(`Skipping invoice without id (created=${inv.created})`);
+        continue;
+      }
+      const invoiceId = inv.id;
 
       const existing = await AffiliateCommission.findOne({
         referredUserId: row.referredUserId,
         commissionType: "membership-recurring",
-        stripeInvoiceId: inv.id,
+        stripeInvoiceId: invoiceId,
       }).lean();
       if (existing) continue;
 
@@ -95,13 +100,13 @@ async function main() {
 
       processed++;
       console.log(
-        `[${LIVE ? "LIVE" : "DRY"}] Missing recurring for ${(user as { email?: string }).email} invoice ${inv.id} amount_paid=${inv.amount_paid}`
+        `[${LIVE ? "LIVE" : "DRY"}] Missing recurring for ${(user as { email?: string }).email} invoice ${invoiceId} amount_paid=${inv.amount_paid}`
       );
 
       if (LIVE) {
         const rec = await processMembershipRecurringCommission({
           userId: uid,
-          invoiceId: inv.id,
+          invoiceId,
           subscriptionId: subId,
           purchaseAmount: inv.amount_paid ?? 0,
           packageId: pkgId,
