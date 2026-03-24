@@ -37,6 +37,7 @@ import {
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { shouldRecordMembershipRecurringAffiliateCharge } from "@/utils/affiliate/affiliate-recurring-invoice";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -3280,12 +3281,23 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Get current accumulated entries for upgrade calculation
     const currentAccumulatedEntries = user.accumulatedEntries || 0;
 
+    // Normalize for entry math: subscription_update / subscription_threshold behave like renewals (cycle)
+    const rawBillingReason = expandedInvoice.billing_reason;
+    const billingReasonForEntries: "subscription_create" | "subscription_cycle" =
+      rawBillingReason === "subscription_create"
+        ? "subscription_create"
+        : rawBillingReason === "subscription_cycle" ||
+            rawBillingReason === "subscription_update" ||
+            rawBillingReason === "subscription_threshold"
+          ? "subscription_cycle"
+          : "subscription_create";
+
     // Calculate entries using the new system
     // ✅ NOTE: For downgrades, lastMonthAccumulatedEntries is preserved during downgrade
     // Renewals after downgrade will correctly use: lastMonthAccumulatedEntries + newBaseEntries
     // (e.g., if user had 500 accumulated, downgrades to package with 40 base, next renewal = 500 + 40 = 540)
     const entryCalculation = calculateSubscriptionEntries({
-      billingReason: invoice.billing_reason as "subscription_create" | "subscription_cycle",
+      billingReason: billingReasonForEntries,
       baseEntries,
       lastMonthAccumulatedEntries: user.subscription?.lastMonthAccumulatedEntries,
       isResubscribe,
@@ -3340,6 +3352,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     } else if (expandedInvoice.billing_reason === "subscription_create") {
       webhookLog("info", `Processing new subscription for package ${packageId} - granting full benefits`);
       // Grant full benefits for new subscription
+    } else if (
+      expandedInvoice.billing_reason === "subscription_update" ||
+      expandedInvoice.billing_reason === "subscription_threshold"
+    ) {
+      webhookLog(
+        "info",
+        `Processing subscription invoice (${expandedInvoice.billing_reason}) for package ${packageId} - granting benefits`
+      );
     } else {
       webhookLog(
         "warn",
@@ -3518,6 +3538,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       sessionAttribution
     );
 
+    const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
+      stripe,
+      expandedInvoice,
+      subscriptionId
+    );
+    webhookLog("info", `Affiliate recurring eligibility`, {
+      invoiceId: expandedInvoice.id,
+      billingReason: expandedInvoice.billing_reason,
+      recordMembershipRecurringAffiliate,
+    });
+
     // ✅ ADD: Log if experiment assignment was passed to processPaymentBenefits
     if (experimentId && variantId) {
       webhookLog("info", `✅ Passed experiment assignment to processPaymentBenefits for subscription:`, {
@@ -3537,7 +3568,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     if (result.success) {
       // Resume normal recurring invoices after a successful renewal (clears pause from failed renewal)
-      if (expandedInvoice.billing_reason === "subscription_cycle") {
+      if (recordMembershipRecurringAffiliate) {
         try {
           await resumeAfterSuccessfulRenewalPayment(subscription.id);
           webhookLog("info", `Cleared pause_collection after successful renewal for subscription ${subscription.id}`);
@@ -3816,7 +3847,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       }
 
       // ✅ Track in Klaviyo - Use appropriate event based on billing reason
-      if (invoice.billing_reason === "subscription_cycle") {
+      if (recordMembershipRecurringAffiliate) {
         // Track "Subscription Renewed" event for renewals
         klaviyo.trackEventBackground(
           createSubscriptionRenewedEvent(user as never, {
@@ -3849,7 +3880,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       // ✅ NON-CRITICAL: Track subscription renewal to TikTok/Klaviyo (if this is a renewal) (fire-and-forget)
       // NOTE: Renewals are NOT sent to Facebook as Purchase events per best practices
       // Facebook should only receive new purchase events, not renewals
-      if (invoice.billing_reason === "subscription_cycle") {
+      if (recordMembershipRecurringAffiliate) {
         executeBackgroundJob("TikTok/Klaviyo subscription renewal tracking", async () => {
           await trackPixelSubscriptionRenewal({
             value: membershipPackage.price,
@@ -3884,24 +3915,6 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           webhookLog("warn", `⚠️ Could not fetch fresh user data, synced with original user object`);
         }
       });
-
-      // ✅ NON-CRITICAL: Process recurring membership commission (fire-and-forget)
-      // Only process for subscription_cycle (recurring payments), not initial subscription_create
-      if (invoice.billing_reason === "subscription_cycle") {
-        executeBackgroundJob("Recurring membership commission processing", async () => {
-          const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
-          const invoiceAmount = invoice.amount_paid; // Already in cents
-          const safeInvoiceId = invoice.id ?? invoice.number ?? `invoice_${invoice.created}`;
-
-          await processMembershipRecurringCommission({
-            userId: user._id.toString(),
-            invoiceId: safeInvoiceId,
-            subscriptionId: subscriptionId,
-            purchaseAmount: invoiceAmount,
-          });
-          webhookLog("info", `✅ Recurring membership commission processed for affiliate`);
-        });
-      }
 
       // ✅ NEW: Add invoice event for upgrades
       if (isUpgrade) {
@@ -3943,10 +3956,44 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog("error", `Failed to process subscription benefits: ${result.error}`);
     }
 
+    // Recurring affiliate commission: align with money collected (invoice.payment_succeeded), independent of benefit grant success
+    if (recordMembershipRecurringAffiliate) {
+      const amountPaid = expandedInvoice.amount_paid ?? 0;
+      if (amountPaid > 0) {
+        try {
+          const { processMembershipRecurringCommission } = await import("@/utils/affiliate/commission-processing");
+          const safeInvoiceId =
+            expandedInvoice.id ?? expandedInvoice.number ?? `invoice_${expandedInvoice.created}`;
+          const commissionRecord = await processMembershipRecurringCommission({
+            userId: user._id.toString(),
+            invoiceId: safeInvoiceId,
+            subscriptionId: subscriptionId,
+            purchaseAmount: amountPaid,
+            packageId,
+            packageName: membershipPackage.name,
+          });
+          if (commissionRecord) {
+            webhookLog("info", `✅ Recurring membership commission recorded`, {
+              invoiceId: safeInvoiceId,
+              userId: user._id.toString(),
+              commissionId: commissionRecord._id?.toString?.(),
+            });
+          }
+        } catch (commErr) {
+          webhookLog("error", `Recurring membership commission failed: ${commErr}`);
+        }
+      } else {
+        webhookLog("info", `[AffiliateCommission] skip recurring: zero_amount`, {
+          invoiceId: expandedInvoice.id,
+          userId: user._id.toString(),
+        });
+      }
+    }
+
     // Always sync endDate for renewals, regardless of processPaymentBenefits result.
     // The user was charged — their access period must be updated even if benefit
     // processing failed or the subscription.updated webhook was missed/skipped.
-    if (expandedInvoice.billing_reason === "subscription_cycle") {
+    if (recordMembershipRecurringAffiliate) {
       try {
         const freshSubscription = await stripe.subscriptions.retrieve(subscriptionId);
         const periodEnd = getSubscriptionPeriodEnd(freshSubscription);

@@ -55,8 +55,19 @@ export async function GET() {
       },
     };
 
+    const commissionTypeToBreakdownKey: Record<
+      IAffiliateCommission["commissionType"],
+      keyof typeof breakdown
+    > = {
+      "one-time-package": "oneTimePackage",
+      upsell: "upsell",
+      "membership-first": "membershipFirst",
+      "membership-recurring": "membershipRecurring",
+    };
+
     unpaidCommissions.forEach((commission) => {
-      const stats = breakdown[commission.commissionType as keyof typeof breakdown];
+      const key = commissionTypeToBreakdownKey[commission.commissionType];
+      const stats = key ? breakdown[key] : undefined;
       if (stats) {
         stats.count++;
         stats.totalSales += commission.purchaseAmount;
