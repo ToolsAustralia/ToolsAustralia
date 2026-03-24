@@ -1051,15 +1051,25 @@ UserSchema.pre("save", function (next) {
     this.redemptionHistory = [];
   }
 
-  // Clean up any null redemptionId entries
+  // Clean up null redemptionId entries in-place to avoid marking the array dirty
+  // when nothing actually changed (which would trigger __v version conflicts)
   if (this.redemptionHistory && Array.isArray(this.redemptionHistory)) {
-    this.redemptionHistory = this.redemptionHistory.map((redemption) => {
-      if (redemption.redemptionId === null || redemption.redemptionId === undefined) {
-        const { redemptionId: _redemptionId, ...rest } = redemption;
-        return rest;
+    let hasNullIds = false;
+    for (const r of this.redemptionHistory) {
+      if (r.redemptionId === null || r.redemptionId === undefined) {
+        hasNullIds = true;
+        break;
       }
-      return redemption;
-    });
+    }
+    if (hasNullIds) {
+      for (let i = 0; i < this.redemptionHistory.length; i++) {
+        const r = this.redemptionHistory[i];
+        if (r.redemptionId === null || r.redemptionId === undefined) {
+          delete r.redemptionId;
+        }
+      }
+      this.markModified("redemptionHistory");
+    }
   }
 
   next();

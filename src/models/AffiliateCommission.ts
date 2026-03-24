@@ -1,6 +1,11 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export type CommissionType = "one-time-package" | "upsell" | "membership-first" | "membership-recurring";
+export type CommissionType =
+  | "one-time-package"
+  | "upsell"
+  | "membership-first"
+  | "membership-recurring"
+  | "mini-draw-package";
 export type CommissionStatus = "pending" | "paid" | "cancelled";
 
 export interface IAffiliateCommission extends Document {
@@ -10,7 +15,7 @@ export interface IAffiliateCommission extends Document {
   status: CommissionStatus;
 
   // Purchase details
-  purchaseType: "one-time" | "upsell" | "membership";
+  purchaseType: "one-time" | "upsell" | "membership" | "mini-draw";
   packageId?: string;
   packageName?: string;
   purchaseAmount: number; // Amount in cents
@@ -23,7 +28,7 @@ export interface IAffiliateCommission extends Document {
   stripeSubscriptionId?: string; // For membership tracking
 
   // Flags to prevent duplicate commissions
-  isFirstTimePurchase: boolean; // Only first-time purchases count for one-time/upsell
+  isFirstTimePurchase: boolean; // Legacy: membership-first uses true; lifetime commissions use false for repeat purchases
   isRecurringPayment: boolean; // For membership recurring payments
 
   // Payout tracking
@@ -50,7 +55,7 @@ const AffiliateCommissionSchema = new Schema<IAffiliateCommission>(
     },
     commissionType: {
       type: String,
-      enum: ["one-time-package", "upsell", "membership-first", "membership-recurring"],
+      enum: ["one-time-package", "upsell", "membership-first", "membership-recurring", "mini-draw-package"],
       required: true,
     },
     status: {
@@ -60,7 +65,7 @@ const AffiliateCommissionSchema = new Schema<IAffiliateCommission>(
     },
     purchaseType: {
       type: String,
-      enum: ["one-time", "upsell", "membership"],
+      enum: ["one-time", "upsell", "membership", "mini-draw"],
       required: true,
     },
     packageId: {

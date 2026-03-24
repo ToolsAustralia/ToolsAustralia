@@ -150,7 +150,9 @@ export async function processPaymentBenefits(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
-  sessionAttribution?: AttributionParams // Optional attribution from Stripe metadata (session) - takes priority over signup
+  sessionAttribution?: AttributionParams, // Optional attribution from Stripe metadata (session) - takes priority over signup
+  /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -197,7 +199,8 @@ export async function processPaymentBenefits(
     paymentMetadata,
     requestContext,
     billingReason,
-    sessionAttribution
+    sessionAttribution,
+    affiliateOptions
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -230,7 +233,8 @@ async function processPaymentBenefitsInternal(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
-  sessionAttribution?: AttributionParams
+  sessionAttribution?: AttributionParams,
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -443,18 +447,19 @@ async function processPaymentBenefitsInternal(
         await user.save();
       }
 
-      // ✅ CRITICAL: Additional check for invoice payments with different ID formats
-      // Check if any processed payment contains the same invoice ID (handles timestamp variations)
+      // Additional check for invoice payments — exact matching only
+      // to prevent false-positive dedup from substring collisions (e.g. in_1X vs in_1XY)
       if (paymentIntentId.startsWith("invoice_")) {
         const invoiceId = paymentIntentId.replace("invoice_", "");
         const duplicateInvoicePayment = user.processedPayments?.find((processedPayment) => {
           if (!processedPayment) return false;
-          // Direct match
           if (processedPayment === paymentIntentId) return true;
-          // Match with invoice_ prefix
           if (processedPayment === `invoice_${invoiceId}`) return true;
-          // Match if processedPayment is invoice_ prefixed and contains the invoice ID
-          if (processedPayment.startsWith("invoice_") && processedPayment.includes(invoiceId)) return true;
+          // Extract the invoice ID from the stored value and compare exactly
+          if (processedPayment.startsWith("invoice_")) {
+            const storedInvoiceId = processedPayment.replace("invoice_", "").split("_ts_")[0];
+            return storedInvoiceId === invoiceId || storedInvoiceId === invoiceId.split("_ts_")[0];
+          }
           return false;
         });
 
@@ -473,7 +478,15 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
-      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext, billingReason);
+      await grantBenefits(
+        user as UserDocument,
+        packageData,
+        finalPaymentMetadata,
+        paymentIntentId,
+        requestContext,
+        billingReason,
+        affiliateOptions
+      );
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
@@ -898,7 +911,8 @@ async function grantBenefits(
     fbp?: string;
     event_source_url?: string;
   },
-  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
+  billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<void> {
   // ✅ DEBUG: Log function call with all parameters
   // console.log(`🎯 grantBenefits called with:`, {
@@ -1306,8 +1320,12 @@ async function grantBenefits(
   if (paymentIntentId) {
     try {
       // Import commission processing functions dynamically to avoid circular dependencies
-      const { processOneTimePackageCommission, processUpsellCommission, processMembershipFirstCommission } =
-        await import("@/utils/affiliate/commission-processing");
+      const {
+        processOneTimePackageCommission,
+        processUpsellCommission,
+        processMembershipFirstCommission,
+        processMiniDrawPackageCommission,
+      } = await import("@/utils/affiliate/commission-processing");
 
       if (packageData.packageType === "one-time") {
         await processOneTimePackageCommission({
@@ -1326,15 +1344,25 @@ async function grantBenefits(
           paymentIntentId: paymentIntentId,
         });
       } else if (packageData.packageType === "membership") {
-        // Get subscription ID from user
-        const subscriptionId = user.stripeSubscriptionId || "";
-        await processMembershipFirstCommission({
+        if (!affiliateOptions?.skipMembershipFirstCommission) {
+          // Get subscription ID from user
+          const subscriptionId = user.stripeSubscriptionId || "";
+          await processMembershipFirstCommission({
+            userId: user._id.toString(),
+            packageId: packageData.packageId || "",
+            packageName: packageData.packageName || "",
+            purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+            paymentIntentId: paymentIntentId,
+            subscriptionId,
+          });
+        }
+      } else if (packageData.packageType === "mini-draw") {
+        await processMiniDrawPackageCommission({
           userId: user._id.toString(),
           packageId: packageData.packageId || "",
           packageName: packageData.packageName || "",
-          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          purchaseAmount: Math.round(packageData.price * 100),
           paymentIntentId: paymentIntentId,
-          subscriptionId,
         });
       }
     } catch (_commissionError) {
@@ -1343,9 +1371,32 @@ async function grantBenefits(
     }
   }
 
-  // Save user
-  await user.save();
-  // console.log(`💾 User ${user.email} saved with new benefits`);
+  // Save remaining in-memory mutations (e.g. partnerDiscountQueue changes).
+  // accumulatedEntries/rewardsPoints already persisted via $inc above.
+  // Subscription core fields persisted atomically in handleSubscriptionPackage.
+  // Commission processing uses atomic updates, so no __v conflict from that path.
+  // The pre-save hook fix ensures redemptionHistory doesn't falsely dirty the array.
+  try {
+    await user.save();
+  } catch (saveErr: unknown) {
+    const errName = saveErr && typeof saveErr === "object" && "name" in saveErr ? (saveErr as { name: string }).name : "";
+    if (errName === "VersionError") {
+      console.warn(`[grantBenefits] VersionError on user.save() — retrying with fresh document`, {
+        userId: user._id?.toString(),
+      });
+      const freshUser = await User.findById(user._id);
+      if (freshUser) {
+        // Re-apply partnerDiscountQueue from the in-memory user
+        if (user.partnerDiscountQueue && user.partnerDiscountQueue.length > 0) {
+          freshUser.partnerDiscountQueue = user.partnerDiscountQueue;
+          freshUser.markModified("partnerDiscountQueue");
+        }
+        await freshUser.save();
+      }
+    } else {
+      throw saveErr;
+    }
+  }
 }
 
 /**
@@ -1559,65 +1610,60 @@ async function handleSubscriptionPackage(
 ): Promise<void> {
   if (!packageData.packageId) return;
 
-  if (user.subscription) {
-    const wasActive = user.subscription.isActive;
-    const wasStatus = user.subscription.status;
+  // 🚨 CRITICAL FIX: Don't update packageId if there's a pending downgrade
+  const userSub = user.subscription as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const hasPendingDowngrade =
+    userSub?.pendingChange &&
+    userSub.pendingChange.changeType === "downgrade" &&
+    userSub.pendingChange.effectiveDate &&
+    new Date() < new Date(userSub.pendingChange.effectiveDate);
 
-    // ✅ CRITICAL: If benefits are being granted, subscription must be active
-    // This overrides any incorrect Stripe status that might still show "incomplete"
-    user.subscription.isActive = true;
-    user.subscription.status = "active";
-    user.subscription.cancelledAt = undefined;
+  // Build the atomic $set for subscription fields
+  const subscriptionSet: Record<string, unknown> = {
+    "subscription.isActive": true,
+    "subscription.status": "active",
+  };
+  if (!hasPendingDowngrade) {
+    subscriptionSet["subscription.packageId"] = packageData.packageId;
+  }
+  if (!user.subscription) {
+    subscriptionSet["subscription.startDate"] = new Date();
+    subscriptionSet["subscription.autoRenew"] = true;
+  }
 
-    // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved here and only updated in webhook handler
+  // Persist subscription state atomically (bypasses pre-save hook / __v conflicts)
+  await User.findByIdAndUpdate(user._id, {
+    $set: subscriptionSet,
+    $unset: { "subscription.cancelledAt": 1 },
+  });
 
-    // 🚨 CRITICAL FIX: Don't update packageId if there's a pending downgrade
-    // This prevents scheduled downgrades from being processed immediately
-    const userSub = user.subscription as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const hasPendingDowngrade =
-      userSub.pendingChange &&
-      userSub.pendingChange.changeType === "downgrade" &&
-      userSub.pendingChange.effectiveDate &&
-      new Date() < new Date(userSub.pendingChange.effectiveDate);
-
-    if (hasPendingDowngrade) {
-      // console.log(
-      //   `🚨 SCHEDULED DOWNGRADE PROTECTION: Not updating packageId from ${user.subscription.packageId} to ${packageData.packageId} - downgrade scheduled for ${userSub.pendingChange.effectiveDate}`
-      // );
-    } else {
-      user.subscription.packageId = packageData.packageId; // Use string directly
-      // console.log(`📦 Package ID updated to: ${packageData.packageId}`);
-    }
-
-    // Log status changes for debugging
-    if (!wasActive || wasStatus !== "active") {
-      // console.log(`📊 Subscription activated during benefit processing: ${packageData.packageName}`);
-      // console.log(`📊 Status changed: ${wasStatus} → active, isActive: ${wasActive} → true`);
-    }
-  } else {
+  // Keep local object in sync for downstream code in the same request
+  if (!user.subscription) {
     user.subscription = {
-      packageId: packageData.packageId, // Use string directly
+      packageId: packageData.packageId,
       startDate: new Date(),
       isActive: true,
       autoRenew: true,
       status: "active",
     };
-    // console.log(`📊 New subscription created during benefit processing: ${packageData.packageName}`);
+  } else {
+    user.subscription.isActive = true;
+    user.subscription.status = "active";
+    user.subscription.cancelledAt = undefined;
+    if (!hasPendingDowngrade) {
+      user.subscription.packageId = packageData.packageId;
+    }
   }
-
-  // console.log(`🔄 Updated subscription: ${packageData.packageName} (isActive: true, status: active)`);
 
   // Add subscription to partner discount queue (subscriptions always have 30 days recurring access)
   const packageInfo = getPackageById(packageData.packageId);
   if (packageInfo && user.subscription?.endDate) {
-    // console.log(`🎁 Adding subscription to partner discount queue: 30 days recurring access`);
     await handleSubscriptionQueueUpdate(user as unknown as IUser, "start", {
       packageId: packageData.packageId,
       packageName: packageData.packageName || packageInfo.name,
       endDate: user.subscription!.endDate,
     });
 
-    // Dispatch purchase event for optimistic updates
     dispatchPackagePurchase(packageData.packageId, "membership");
   }
 }
