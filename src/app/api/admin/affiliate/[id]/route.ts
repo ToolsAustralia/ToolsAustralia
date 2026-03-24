@@ -7,10 +7,26 @@ import AffiliateCommission from "@/models/AffiliateCommission";
 import AffiliatePayout from "@/models/AffiliatePayout";
 import User from "@/models/User";
 import mongoose from "mongoose";
+import { getPackageById } from "@/data/membershipPackages";
+
+function resolveCommissionPackageDisplay(
+  packageId: string | undefined,
+  packageName: string | undefined,
+  commissionType: string
+): string {
+  if (packageName?.trim()) return packageName.trim();
+  if (packageId) {
+    const pkg = getPackageById(packageId);
+    if (pkg?.name) return pkg.name;
+  }
+  if (commissionType === "membership-recurring") return "Subscription renewal";
+  return "N/A";
+}
 
 /**
  * GET /api/admin/affiliate/[id]
- * Get affiliate details with commissions
+ * Get affiliate details with commissions (paginated commissions via query params)
+ * Query: page, pageSize, sort (earnedAt|commissionAmount|user), order (asc|desc), q (search referred user)
  * Admin only
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -34,17 +50,155 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Affiliate not found" }, { status: 404 });
     }
 
-    // Get all commissions (paid and unpaid)
-    const allCommissions = await AffiliateCommission.find({
-      affiliateId: new mongoose.Types.ObjectId(id),
-    })
-      .sort({ earnedAt: -1 })
-      .populate("referredUserId", "firstName lastName email")
-      .lean();
+    const searchParams = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20", 10) || 20));
+    const sortParam = (searchParams.get("sort") || "earnedAt").toLowerCase();
+    const orderParam = (searchParams.get("order") || "desc").toLowerCase();
+    const order: 1 | -1 = orderParam === "asc" ? 1 : -1;
+    const q = (searchParams.get("q") || "").trim();
+
+    const sortField =
+      sortParam === "commissionamount" || sortParam === "earnings"
+        ? "commissionAmount"
+        : sortParam === "user" || sortParam === "referreduser"
+          ? "user"
+          : "earnedAt";
+
+    const affiliateObjectId = new mongoose.Types.ObjectId(id);
+    const usersCollection = User.collection.name;
+
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const pipeline: mongoose.PipelineStage[] = [
+      { $match: { affiliateId: affiliateObjectId } },
+      {
+        $lookup: {
+          from: usersCollection,
+          localField: "referredUserId",
+          foreignField: "_id",
+          as: "refUserArr",
+        },
+      },
+      { $unwind: { path: "$refUserArr", preserveNullAndEmptyArrays: true } },
+    ];
+
+    if (q.length > 0) {
+      const rx = escapeRegex(q);
+      pipeline.push({
+        $match: {
+          $or: [
+            { "refUserArr.email": { $regex: rx, $options: "i" } },
+            { "refUserArr.firstName": { $regex: rx, $options: "i" } },
+            { "refUserArr.lastName": { $regex: rx, $options: "i" } },
+          ],
+        },
+      });
+    }
+
+    if (sortField === "user") {
+      pipeline.push({
+        $addFields: {
+          _sortUserName: {
+            $toLower: {
+              $trim: {
+                input: {
+                  $concat: [
+                    { $ifNull: ["$refUserArr.firstName", ""] },
+                    " ",
+                    { $ifNull: ["$refUserArr.lastName", ""] },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    const sortKey =
+      sortField === "commissionAmount" ? "commissionAmount" : sortField === "user" ? "_sortUserName" : "earnedAt";
+
+    pipeline.push({ $sort: { [sortKey]: order } as Record<string, 1 | -1> });
+
+    pipeline.push({
+      $facet: {
+        pageDocs: [{ $skip: (page - 1) * pageSize }, { $limit: pageSize }],
+        totalCount: [{ $count: "count" }],
+      },
+    });
+
+    const aggResult = await AffiliateCommission.aggregate(pipeline);
+    const facet = aggResult[0] as {
+      pageDocs: Array<Record<string, unknown>>;
+      totalCount: Array<{ count: number }>;
+    };
+
+    const total = facet?.totalCount?.[0]?.count ?? 0;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+
+    const pageDocs = facet?.pageDocs ?? [];
+
+    const commissions = pageDocs.map((raw) => {
+      const c = raw as {
+        _id: mongoose.Types.ObjectId;
+        commissionType: string;
+        packageId?: string;
+        packageName?: string;
+        purchaseAmount: number;
+        commissionAmount: number;
+        status: string;
+        earnedAt: Date;
+        paidAt?: Date;
+        refUserArr?: {
+          _id: mongoose.Types.ObjectId;
+          firstName?: string;
+          lastName?: string;
+          email?: string;
+        };
+      };
+      const ref = c.refUserArr;
+      return {
+        id: c._id.toString(),
+        type: c.commissionType,
+        packageName: resolveCommissionPackageDisplay(c.packageId, c.packageName, c.commissionType),
+        purchaseAmount: c.purchaseAmount,
+        commissionAmount: c.commissionAmount,
+        status: c.status,
+        earnedAt: c.earnedAt,
+        paidAt: c.paidAt,
+        referredUser: ref
+          ? {
+              id: ref._id.toString(),
+              name: `${ref.firstName || ""} ${ref.lastName || ""}`.trim(),
+              email: ref.email,
+            }
+          : null,
+      };
+    });
+
+    const [pendingAgg] = await AffiliateCommission.aggregate<{
+      count: number;
+      totalAmount: number;
+    }>([
+      { $match: { affiliateId: affiliateObjectId, status: "pending" } },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 },
+          totalAmount: { $sum: "$commissionAmount" },
+        },
+      },
+    ]);
+
+    const pendingCommissionsSummary = {
+      count: pendingAgg?.count ?? 0,
+      totalAmount: pendingAgg?.totalAmount ?? 0,
+    };
 
     // Get payout history
     const payouts = await AffiliatePayout.find({
-      affiliateId: new mongoose.Types.ObjectId(id),
+      affiliateId: affiliateObjectId,
     })
       .sort({ paidAt: -1 })
       .populate("processedBy", "firstName lastName email")
@@ -52,7 +206,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Get referred users (users who have this affiliate in their affiliateReferral)
     const referredUsers = await User.find({
-      "affiliateReferral.affiliateId": new mongoose.Types.ObjectId(id),
+      "affiliateReferral.affiliateId": affiliateObjectId,
     })
       .select("firstName lastName email mobile affiliateReferral.referredAt")
       .sort({ "affiliateReferral.referredAt": -1 })
@@ -86,25 +240,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           phone: user.mobile || null,
           referredAt: (user.affiliateReferral as { referredAt?: Date })?.referredAt || user.createdAt,
         })),
-        commissions: allCommissions.map((c) => ({
-          id: c._id.toString(),
-          type: c.commissionType,
-          packageName: c.packageName,
-          purchaseAmount: c.purchaseAmount,
-          commissionAmount: c.commissionAmount,
-          status: c.status,
-          earnedAt: c.earnedAt,
-          paidAt: c.paidAt,
-          referredUser: c.referredUserId
-            ? {
-                id: (c.referredUserId as { _id: { toString: () => string } })._id.toString(),
-                name: `${(c.referredUserId as { firstName?: string; lastName?: string }).firstName || ""} ${
-                  (c.referredUserId as { firstName?: string; lastName?: string }).lastName || ""
-                }`.trim(),
-                email: (c.referredUserId as { email?: string }).email,
-              }
-            : null,
-        })),
+        commissions,
+        commissionsPagination: {
+          total,
+          page,
+          pageSize,
+          totalPages,
+          sort: sortField,
+          order: orderParam,
+          q: q || undefined,
+        },
+        pendingCommissionsSummary,
         payouts: payouts.map((p) => ({
           id: p._id.toString(),
           totalAmount: p.totalAmount,

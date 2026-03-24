@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { X, Copy, Check, Edit2, Trash2, Save, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useLayoutEffect, useCallback } from "react";
+import { X, Copy, Check, Edit2, Trash2, Save, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ClickableUserDisplay from "./ClickableUserDisplay";
 import { formatDisplayName } from "@/utils/display-name";
@@ -63,6 +63,19 @@ interface AffiliateDetail {
     } | null;
     notes?: string;
   }>;
+  commissionsPagination?: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+    sort: string;
+    order: string;
+    q?: string;
+  };
+  pendingCommissionsSummary?: {
+    count: number;
+    totalAmount: number;
+  };
 }
 
 interface AffiliateDetailModalProps {
@@ -98,13 +111,74 @@ export default function AffiliateDetailModal({
     commissionRate: "30", // Default 30% as percentage string for display
   });
 
-  useEffect(() => {
-    if (isOpen && affiliateId) {
-      fetchAffiliateDetails();
-      setIsEditing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const [commissionPage, setCommissionPage] = useState(1);
+  const [commissionSort, setCommissionSort] = useState<"earnedAt" | "commissionAmount" | "user">("earnedAt");
+  const [commissionOrder, setCommissionOrder] = useState<"asc" | "desc">("desc");
+  const [commissionSearchInput, setCommissionSearchInput] = useState("");
+  const [commissionSearch, setCommissionSearch] = useState("");
+
+  const fetchAffiliateDetails = useCallback(
+    async (
+      page: number,
+      sort: "earnedAt" | "commissionAmount" | "user",
+      order: "asc" | "desc",
+      q: string
+    ) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: "20",
+          sort,
+          order,
+        });
+        if (q) params.set("q", q);
+        const response = await fetch(`/api/admin/affiliate/${affiliateId}?${params.toString()}`);
+        const result = await response.json();
+        if (result.success) {
+          setData(result.data);
+        } else {
+          setError(result.error || "Failed to load affiliate details");
+        }
+      } catch (err) {
+        setError("Failed to load affiliate details");
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [affiliateId]
+  );
+
+  useLayoutEffect(() => {
+    if (!isOpen || !affiliateId) return;
+    setCommissionPage(1);
+    setCommissionSort("earnedAt");
+    setCommissionOrder("desc");
+    setCommissionSearchInput("");
+    setCommissionSearch("");
+    setIsEditing(false);
   }, [isOpen, affiliateId]);
+
+  useEffect(() => {
+    if (!isOpen || !affiliateId) return;
+    const t = window.setTimeout(() => setCommissionSearch(commissionSearchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [commissionSearchInput, isOpen, affiliateId]);
+
+  useEffect(() => {
+    if (!isOpen || !affiliateId) return;
+    fetchAffiliateDetails(commissionPage, commissionSort, commissionOrder, commissionSearch);
+  }, [
+    isOpen,
+    affiliateId,
+    commissionPage,
+    commissionSort,
+    commissionOrder,
+    commissionSearch,
+    fetchAffiliateDetails,
+  ]);
 
   // Initialize edit form when data loads
   useEffect(() => {
@@ -122,25 +196,6 @@ export default function AffiliateDetailModal({
     }
   }, [data]);
 
-  const fetchAffiliateDetails = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/admin/affiliate/${affiliateId}`);
-      const result = await response.json();
-      if (result.success) {
-        setData(result.data);
-      } else {
-        setError(result.error || "Failed to load affiliate details");
-      }
-    } catch (err) {
-      setError("Failed to load affiliate details");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleProcessPayout = async () => {
     if (!confirm("Are you sure you want to process this payout? This will mark all pending commissions as paid.")) {
       return;
@@ -157,7 +212,7 @@ export default function AffiliateDetailModal({
       if (result.success) {
         alert(`Payout processed successfully! ${result.data.payout.commissionCount} commissions marked as paid.`);
         setPayoutNotes("");
-        fetchAffiliateDetails();
+        fetchAffiliateDetails(commissionPage, commissionSort, commissionOrder, commissionSearch);
         onUpdate();
       } else {
         alert(result.error || "Failed to process payout");
@@ -209,7 +264,7 @@ export default function AffiliateDetailModal({
       if (result.success) {
         setIsEditing(false);
         setEditForm({ ...editForm, password: "" }); // Clear password field
-        fetchAffiliateDetails();
+        fetchAffiliateDetails(commissionPage, commissionSort, commissionOrder, commissionSearch);
         onUpdate();
       } else {
         setError(result.error || "Failed to update affiliate");
@@ -278,8 +333,13 @@ export default function AffiliateDetailModal({
     });
   };
 
-  const unpaidCommissions = data?.commissions.filter((c) => c.status === "pending") || [];
-  const unpaidAmount = unpaidCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
+  const formatCommissionTypeLabel = (t: string) => t.replace(/-/g, " ");
+
+  const pendingCount = data?.pendingCommissionsSummary?.count ?? 0;
+  const unpaidAmount = data?.pendingCommissionsSummary?.totalAmount ?? 0;
+  const commPagination = data?.commissionsPagination;
+  const commissionTotal = commPagination?.total ?? data?.commissions.length ?? 0;
+  const commissionTotalPages = commPagination?.totalPages ?? 1;
 
   if (!isOpen) return null;
 
@@ -512,7 +572,7 @@ export default function AffiliateDetailModal({
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <div className="text-sm text-gray-600 mb-1">Pending Count</div>
-                  <div className="text-2xl font-bold text-gray-900">{unpaidCommissions.length}</div>
+                  <div className="text-2xl font-bold text-gray-900">{pendingCount}</div>
                 </div>
               </div>
 
@@ -555,11 +615,11 @@ export default function AffiliateDetailModal({
               </div>
 
               {/* Process Payout */}
-              {unpaidCommissions.length > 0 && (
+              {pendingCount > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
                   <h3 className="font-semibold mb-2 text-gray-900">Process Payout</h3>
                   <p className="text-sm text-gray-600 mb-3">
-                    {unpaidCommissions.length} unpaid commissions totaling {formatCurrency(unpaidAmount)}
+                    {pendingCount} unpaid commissions totaling {formatCurrency(unpaidAmount)}
                   </p>
                   <div className="space-y-2">
                     <textarea
@@ -635,55 +695,173 @@ export default function AffiliateDetailModal({
               </div>
 
               {/* Commissions */}
-              <div>
-                <h3 className="font-semibold mb-3 text-gray-900">All Commissions ({data.commissions.length})</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+              <div className="space-y-3">
+                <h3 className="font-semibold text-gray-900">All Commissions ({commissionTotal})</h3>
+                {/* Single horizontal row on mobile (scroll): search + sort + order */}
+                <div className="flex flex-nowrap items-end gap-2 overflow-x-auto overflow-y-visible pb-1 -mx-1 px-1 scroll-smooth">
+                  <div className="flex shrink-0 flex-col gap-0.5 min-w-[min(52vw,220px)] sm:min-w-[200px]">
+                    <label className="text-[10px] sm:text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Search
+                    </label>
+                    <input
+                      type="search"
+                      value={commissionSearchInput}
+                      onChange={(e) => {
+                        setCommissionSearchInput(e.target.value);
+                        setCommissionPage(1);
+                      }}
+                      placeholder="Email or name"
+                      className="h-9 w-full px-2.5 sm:px-3 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-0.5 w-[min(42vw,10rem)] sm:w-44">
+                    <label className="text-[10px] sm:text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Sort
+                    </label>
+                    <select
+                      value={commissionSort}
+                      onChange={(e) => {
+                        setCommissionSort(e.target.value as "earnedAt" | "commissionAmount" | "user");
+                        setCommissionPage(1);
+                      }}
+                      className="h-9 w-full px-2.5 sm:px-3 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                    >
+                      <option value="earnedAt">Date earned</option>
+                      <option value="commissionAmount">Commission amount</option>
+                      <option value="user">Referred user</option>
+                    </select>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-0.5 w-[min(34vw,8.5rem)] sm:w-32">
+                    <label className="text-[10px] sm:text-xs font-medium text-gray-500 whitespace-nowrap">
+                      Order
+                    </label>
+                    <select
+                      value={commissionOrder}
+                      onChange={(e) => {
+                        setCommissionOrder(e.target.value as "asc" | "desc");
+                        setCommissionPage(1);
+                      }}
+                      className="h-9 w-full px-2.5 sm:px-3 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                    >
+                      <option value="desc">Newest first</option>
+                      <option value="asc">Oldest first</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Table (horizontal scroll on narrow viewports) */}
+                <div className="-mx-1 sm:mx-0 overflow-x-auto rounded-lg border border-gray-200 touch-pan-x">
+                  <table className="w-full min-w-[640px] text-xs sm:text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Package</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          User
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Package
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-right font-medium text-gray-500 uppercase tracking-wider">
+                          Purchase
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-right font-medium text-gray-500 uppercase tracking-wider">
+                          Commission
+                        </th>
+                        <th className="px-2 py-2 sm:px-4 sm:py-3 text-left font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {data.commissions.map((commission) => (
-                        <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {commission.referredUser ? (
-                              <ClickableUserDisplay
-                                displayText={commission.referredUser.name || "N/A"}
-                                subtext={commission.referredUser.email}
-                                userId={commission.referredUser.id ?? null}
-                                className="text-sm"
-                              />
-                            ) : (
-                              <span className="text-gray-400">N/A</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">{formatDate(commission.earnedAt)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap capitalize text-gray-600">{commission.type.replace("-", " ")}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">{commission.packageName || "N/A"}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-gray-600">{formatCurrency(commission.purchaseAmount)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right font-semibold text-green-600">
-                            {formatCurrency(commission.commissionAmount)}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {commission.status === "paid" ? (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Paid</span>
-                            ) : (
-                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
-                            )}
+                      {data.commissions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-gray-500 text-sm">
+                            No commissions match your filters.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        data.commissions.map((commission) => (
+                          <tr key={commission.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap">
+                              {commission.referredUser ? (
+                                <ClickableUserDisplay
+                                  displayText={commission.referredUser.name || "N/A"}
+                                  subtext={commission.referredUser.email}
+                                  userId={commission.referredUser.id ?? null}
+                                  className="text-xs sm:text-sm"
+                                />
+                              ) : (
+                                <span className="text-gray-400">N/A</span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600">
+                              {formatDate(commission.earnedAt)}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap capitalize text-gray-600">
+                              {formatCommissionTypeLabel(commission.type)}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600">
+                              {commission.packageName}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-right text-gray-600">
+                              {formatCurrency(commission.purchaseAmount)}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-right font-semibold text-green-600">
+                              {formatCurrency(commission.commissionAmount)}
+                            </td>
+                            <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap">
+                              {commission.status === "paid" ? (
+                                <span className="px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium bg-green-100 text-green-800">
+                                  Paid
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  Pending
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
+
+                {commissionTotal > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">
+                      Page {commPagination?.page ?? commissionPage} of {Math.max(1, commissionTotalPages)} · {commissionTotal}{" "}
+                      total
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={commissionPage <= 1 || isLoading}
+                        onClick={() => setCommissionPage((p) => Math.max(1, p - 1))}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          commissionPage >= commissionTotalPages || commissionTotalPages === 0 || isLoading
+                        }
+                        onClick={() => setCommissionPage((p) => p + 1)}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Payout History */}

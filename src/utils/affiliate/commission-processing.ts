@@ -322,36 +322,63 @@ export async function processMembershipUpsellCommission({
 }
 
 /**
- * Process commission for recurring membership payment
- * Only processes if membership is tied to affiliate
+ * Process commission for recurring membership payment.
+ * Eligible when affiliate referral exists and (membershipTied OR legacy self-heal via membership-first commission).
  */
 export async function processMembershipRecurringCommission({
   userId,
   invoiceId,
   subscriptionId,
   purchaseAmount,
+  packageId,
+  packageName,
 }: {
   userId: string;
   invoiceId: string;
   subscriptionId: string;
   purchaseAmount: number;
+  packageId?: string;
+  packageName?: string;
 }) {
   await connectDB();
 
-  const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
+  if (purchaseAmount <= 0) {
+    console.error(
+      `[AffiliateCommission] skip recurring: zero_amount`,
+      JSON.stringify({ invoiceId, userId, subscriptionId })
+    );
     return null;
   }
 
-  // Only process if membership is tied to affiliate
-  if (!user.affiliateReferral.membershipTied) {
+  const user = await User.findById(userId);
+  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
+    console.error(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
     return null;
   }
 
   const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if commission already exists for this invoice
+  if (!user.affiliateReferral.membershipTied) {
+    const hadFirstMembership = await AffiliateCommission.findOne({
+      affiliateId,
+      referredUserId,
+      commissionType: "membership-first",
+    })
+      .select("_id")
+      .lean();
+    if (hadFirstMembership) {
+      user.affiliateReferral.membershipTied = true;
+      await user.save();
+    } else {
+      console.error(
+        `[AffiliateCommission] skip recurring: not_membership_tied`,
+        JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
+      );
+      return null;
+    }
+  }
+
   const existingCommission = await AffiliateCommission.findOne({
     affiliateId,
     referredUserId,
@@ -363,9 +390,7 @@ export async function processMembershipRecurringCommission({
     return existingCommission;
   }
 
-  // Get affiliate's commission rate
   const commissionRate = await getAffiliateCommissionRate(affiliateId);
-
   const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
 
   const commission = new AffiliateCommission({
@@ -374,6 +399,8 @@ export async function processMembershipRecurringCommission({
     commissionType: "membership-recurring",
     status: "pending",
     purchaseType: "membership",
+    packageId,
+    packageName,
     purchaseAmount,
     commissionRate: commissionRate,
     commissionAmount,
@@ -384,7 +411,25 @@ export async function processMembershipRecurringCommission({
     earnedAt: new Date(),
   });
 
-  await commission.save();
+  try {
+    await commission.save();
+  } catch (err: unknown) {
+    const code = err && typeof err === "object" && "code" in err ? (err as { code?: number }).code : undefined;
+    if (code === 11000) {
+      const existing = await AffiliateCommission.findOne({
+        affiliateId,
+        referredUserId,
+        stripeInvoiceId: invoiceId,
+        commissionType: "membership-recurring",
+      });
+      console.error(
+        `[AffiliateCommission] recurring duplicate invoice (idempotent): duplicate`,
+        JSON.stringify({ invoiceId, userId })
+      );
+      return existing;
+    }
+    throw err;
+  }
 
   await Affiliate.findByIdAndUpdate(affiliateId, {
     $inc: {
