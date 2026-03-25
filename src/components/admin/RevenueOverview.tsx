@@ -323,13 +323,13 @@ export default function RevenueOverview() {
 
           {/* Period Toggle - Matching MembershipPackagesChart style */}
           <div className="flex-shrink-0">
-            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30">
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30">
               <div className="flex items-center gap-1 sm:gap-2">
                 {(["days", "months", "years", "major-draws"] as Period[]).map((period) => (
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none font-['Poppins'] ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none font-['Poppins'] ${
                       selectedPeriod === period
                         ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"

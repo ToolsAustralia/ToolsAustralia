@@ -703,7 +703,7 @@ export default function DrawResults() {
                               }
                               userId={draw.winner.userId}
                               subtext={`Entry #${draw.winner.entryNumber} • ${formatDate(draw.winner.selectedDate)} • ${draw.winner.selectionMethod === "manual" ? "Manual" : "Government App"}`}
-                              className="text-green-700 hover:text-green-800"
+                              className="text-sm text-green-700 hover:text-green-800"
                             />
                           </div>
                         </div>

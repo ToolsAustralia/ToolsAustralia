@@ -35,9 +35,10 @@ export interface RecentActivity {
 
 /**
  * GET /api/admin/dashboard/recent-activities
- * Get recent activities for admin dashboard
+ * Get recent activities for admin dashboard with pagination
+ * Query params: page (default 1), limit (default 20)
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await connectDB();
 
@@ -47,7 +48,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("📊 Fetching recent activities...");
+    // Parse pagination params
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const skip = (page - 1) * limit;
+
+    console.log(`📊 Fetching recent activities (page ${page}, limit ${limit})...`);
 
     const activities: RecentActivity[] = [];
     const now = new Date();
@@ -57,11 +64,10 @@ export async function GET() {
     // RECENT USER SIGNUPS
     // ========================================
     const recentSignups = await User.find({
-      createdAt: { $gte: oneWeekAgo },
       isActive: true,
     })
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(50)
       .select("firstName lastName email createdAt _id affiliateReferral");
 
     // Batch query referral events for all signups to check if they were referred by someone else
@@ -120,10 +126,9 @@ export async function GET() {
     // .lean() returns plain JavaScript objects where Mixed types are directly accessible
     const recentPayments = await PaymentEvent.find({
       eventType: "BenefitsGranted",
-      timestamp: { $gte: oneWeekAgo },
     })
       .sort({ timestamp: -1 })
-      .limit(15)
+      .limit(100)
       .lean(); // ✅ Use .lean() to get plain objects - Mixed types are now properly accessible
 
     // ✅ Populate users separately in batch for better performance
@@ -264,13 +269,13 @@ export async function GET() {
     // ========================================
     // SUBSCRIPTION CHANGES (Upgrades, Downgrades, Cancellations)
     // ========================================
-    // Find users with recent subscription changes
+    // Find users with subscription changes
     const usersWithSubscriptionChanges = await User.find({
       $or: [
-        { "subscription.lastUpgradeDate": { $gte: oneWeekAgo } },
-        { "subscription.lastDowngradeDate": { $gte: oneWeekAgo } },
-        { "subscription.cancelledAt": { $gte: oneWeekAgo } },
-        { "subscription.pastDueAt": { $gte: oneWeekAgo } },
+        { "subscription.lastUpgradeDate": { $exists: true } },
+        { "subscription.lastDowngradeDate": { $exists: true } },
+        { "subscription.cancelledAt": { $exists: true } },
+        { "subscription.pastDueAt": { $exists: true } },
       ],
       isActive: true,
     })
@@ -280,14 +285,14 @@ export async function GET() {
         "subscription.cancelledAt": -1,
         "subscription.pastDueAt": -1,
       })
-      .limit(30)
+      .limit(50)
       .select("firstName lastName email subscription");
 
     usersWithSubscriptionChanges.forEach((user) => {
       if (!user.subscription) return;
 
       // Check for upgrades
-      if (user.subscription.lastUpgradeDate && user.subscription.lastUpgradeDate >= oneWeekAgo) {
+      if (user.subscription.lastUpgradeDate) {
         const timeAgo = getTimeAgo(user.subscription.lastUpgradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
@@ -310,7 +315,7 @@ export async function GET() {
       }
 
       // Check for downgrades
-      if (user.subscription.lastDowngradeDate && user.subscription.lastDowngradeDate >= oneWeekAgo) {
+      if (user.subscription.lastDowngradeDate) {
         const timeAgo = getTimeAgo(user.subscription.lastDowngradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
@@ -334,7 +339,6 @@ export async function GET() {
       // Check for cancellations - use cancelledAt (when cancellation was triggered) instead of endDate (future period end)
       if (
         user.subscription.cancelledAt &&
-        user.subscription.cancelledAt >= oneWeekAgo &&
         (!user.subscription.lastDowngradeDate ||
           user.subscription.cancelledAt.getTime() !== user.subscription.lastDowngradeDate.getTime())
       ) {
@@ -353,7 +357,7 @@ export async function GET() {
         });
       }
 
-      if (user.subscription.pastDueAt && user.subscription.pastDueAt >= oneWeekAgo) {
+      if (user.subscription.pastDueAt) {
         const timeAgo = getTimeAgo(user.subscription.pastDueAt);
         const packageName = getPackageName(user.subscription.packageId || "Unknown");
 
@@ -375,10 +379,9 @@ export async function GET() {
     // ========================================
     const recentCompletedDraws = await MajorDraw.find({
       status: "completed",
-      updatedAt: { $gte: oneWeekAgo },
     })
       .sort({ updatedAt: -1 })
-      .limit(5)
+      .limit(20)
       .select("name updatedAt _id")
       .lean();
 
@@ -418,11 +421,10 @@ export async function GET() {
     // RECENT HIGH-VALUE ORDERS
     // ========================================
     const recentOrders = await Order.find({
-      createdAt: { $gte: oneWeekAgo },
       totalAmount: { $gte: 200 },
     })
       .sort({ createdAt: -1 })
-      .limit(5)
+      .limit(30)
       .populate("user", "firstName lastName");
 
     recentOrders.forEach((order) => {
@@ -455,14 +457,22 @@ export async function GET() {
     // Sort all activities by timestamp (most recent first)
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    // Return top 20 most recent activities
-    const recentActivities = activities.slice(0, 20);
+    // Apply pagination
+    const totalActivities = activities.length;
+    const paginatedActivities = activities.slice(skip, skip + limit);
+    const hasMore = skip + limit < totalActivities;
 
-    console.log(`✅ Found ${recentActivities.length} recent activities`);
+    console.log(`✅ Found ${paginatedActivities.length} activities (page ${page}/${Math.ceil(totalActivities / limit)})`);
 
     return NextResponse.json({
       success: true,
-      data: recentActivities,
+      data: paginatedActivities,
+      pagination: {
+        page,
+        limit,
+        total: totalActivities,
+        hasMore,
+      },
     });
   } catch (error) {
     console.error("❌ Error fetching recent activities:", error);

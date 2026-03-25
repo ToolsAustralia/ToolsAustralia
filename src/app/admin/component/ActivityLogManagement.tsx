@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from "react";
 import {
   Activity,
   UserCheck,
@@ -10,75 +9,48 @@ import {
   AlertTriangle,
   Crown,
   Search,
-  ChevronLeft,
-  ChevronRight,
+  Loader2,
 } from "lucide-react";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
-
-interface ActivityLogItem {
-  id: string;
-  type:
-    | "user_signup"
-    | "membership_purchase"
-    | "one_time_purchase"
-    | "draw_complete"
-    | "high_value_order"
-    | "system_alert"
-    | "membership_upgrade"
-    | "subscription_past_due";
-  user: string;
-  userId?: string;
-  action: string;
-  time: string;
-  status: "success" | "info" | "warning" | "error";
-  amount?: number;
-  timestamp: Date;
-  miniDrawId?: string;
-}
-
-interface ActivityLogResponse {
-  activities: ActivityLogItem[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
+import { useActivityLogInfinite } from "@/hooks/queries/useAdminQueries";
 
 export default function ActivityLogManagement() {
-  const [currentPage, setCurrentPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
+  const observerTarget = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading, error } = useQuery<ActivityLogResponse>({
-    queryKey: ["admin", "activity-log", currentPage, typeFilter, searchTerm],
-    queryFn: async (): Promise<ActivityLogResponse> => {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: "25",
-      });
-      if (typeFilter) params.append("type", typeFilter);
-      if (searchTerm) params.append("search", searchTerm);
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useActivityLogInfinite(
+    25,
+    typeFilter || undefined,
+    searchTerm || undefined
+  );
 
-      const response = await fetch(`/api/admin/activity-log?${params.toString()}`);
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch activity log: ${response.statusText}`);
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
       }
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error("Failed to fetch activity log");
-      }
-
-      return result.data;
-    },
-    staleTime: 1 * 60 * 1000, // 1 minute
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
-  });
+  // Flatten all pages into a single array
+  const allActivities = data?.pages.flatMap((page) => page.activities) ?? [];
+  const totalActivities = data?.pages[0]?.pagination.total ?? 0;
 
   const getActivityIcon = (type: string) => {
     switch (type) {
@@ -102,46 +74,40 @@ export default function ActivityLogManagement() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
-        return "text-white bg-gradient-to-br from-green-600 to-green-700";
+        return "bg-emerald-500";
       case "warning":
-        return "text-black bg-gradient-to-br from-yellow-500 to-yellow-600";
+        return "bg-amber-500";
       case "error":
-        return "text-white bg-gradient-to-br from-red-600 to-red-700";
+        return "bg-red-500";
       case "info":
-        return "text-white bg-gradient-to-br from-blue-600 to-blue-700";
+        return "bg-blue-500";
       default:
-        return "text-white bg-gradient-to-br from-gray-600 to-gray-700";
+        return "bg-gray-500";
     }
   };
 
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <input
                 type="text"
                 placeholder="Search activities..."
                 value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
           </div>
           <div className="sm:w-48">
             <select
               value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
             >
               <option value="">All Types</option>
               <option value="user_signup">User Signups</option>
@@ -157,111 +123,111 @@ export default function ActivityLogManagement() {
       </div>
 
       {/* Activity List */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading activities...</p>
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center">
-            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-700 font-medium">Failed to load activities</p>
-            <p className="text-red-600 text-sm mt-1">
-              {error instanceof Error ? error.message : "Unknown error occurred"}
-            </p>
-          </div>
-        ) : data && data.activities.length > 0 ? (
-          <>
-            <div className="divide-y divide-gray-200">
-              {data.activities.map((activity) => (
-                <div key={activity.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start space-x-3 sm:space-x-4">
-                    <div
-                      className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${getStatusColor(
-                        activity.status
-                      )}`}
-                    >
-                      <div className="scale-75 sm:scale-100">{getActivityIcon(activity.type)}</div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm sm:text-base font-medium text-gray-900 leading-tight">
-                        {activity.miniDrawId && activity.action.includes('"') ? (
-                          <>
-                            {activity.action.split('"')[0]}
-                            <a
-                              href={`/mini-draws/${activity.miniDrawId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-red-600 hover:text-red-700 underline font-semibold"
-                            >
-                              {activity.action.split('"')[1]}
-                            </a>
-                            {activity.action.split('"')[2] ?? ""}
-                          </>
-                        ) : (
-                          activity.action
-                        )}
-                      </p>
-                      <div className="flex items-center space-x-2 mt-1.5 flex-wrap">
-                        <ClickableUserDisplay
-                          displayText={activity.user}
-                          userId={activity.userId ?? null}
-                          className="text-xs sm:text-sm text-gray-600 font-medium"
-                        />
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs sm:text-sm text-gray-500">{activity.time}</span>
-                        {activity.amount && (
-                          <>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs sm:text-sm font-semibold text-green-600">
-                              ${activity.amount.toLocaleString()}
-                            </span>
-                          </>
-                        )}
-                      </div>
+      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-3 sm:p-4 lg:p-5 border-b border-gray-200">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900">
+            Activity Timeline {totalActivities > 0 && `(${totalActivities.toLocaleString()} total)`}
+          </h3>
+        </div>
+
+        {/* Fixed height scrollable container */}
+        <div className="relative max-h-[600px] overflow-y-auto admin-scrollbar p-3 sm:p-4 lg:p-5">
+          {isLoading && (
+            <div className="flex items-center justify-center py-8 text-gray-500">
+              <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin mr-2" />
+              <span className="text-xs sm:text-sm">Loading activities…</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="text-center py-8">
+              <AlertTriangle className="w-8 h-8 sm:w-12 sm:h-12 text-red-500 mx-auto mb-4" />
+              <p className="text-sm sm:text-base text-red-700 font-medium">Failed to load activities</p>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">
+                {error instanceof Error ? error.message : "Unknown error occurred"}
+              </p>
+            </div>
+          )}
+
+          {!isLoading && !error && allActivities.length === 0 && (
+            <div className="text-center py-8">
+              <Activity className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-sm sm:text-base text-gray-700 font-medium">No activities found</p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">Try adjusting your filters or search term</p>
+            </div>
+          )}
+
+          {!isLoading && !error && allActivities.length > 0 && (
+            <div className="space-y-3 sm:space-y-4">
+              {allActivities.map((activity, index) => (
+                <div key={activity.id} className="flex items-start gap-3 relative">
+                  {/* Timeline Dot and Line */}
+                  <div className="relative flex flex-col items-center">
+                    <div className={`w-2 h-2 rounded-full ${getStatusColor(activity.status)} flex-shrink-0 mt-1.5`} />
+                    {index < allActivities.length - 1 && <div className="w-px h-full bg-gray-200 absolute top-3" />}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0 pb-1">
+                    <p className="text-xs sm:text-sm font-medium text-gray-900 leading-tight">
+                      {activity.miniDrawId && activity.action.includes('"') ? (
+                        <>
+                          {activity.action.split('"')[0]}
+                          <a
+                            href={`/mini-draws/${activity.miniDrawId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-red-600 hover:text-red-700 underline font-semibold"
+                          >
+                            {activity.action.split('"')[1]}
+                          </a>
+                          {activity.action.split('"')[2] ?? ""}
+                        </>
+                      ) : (
+                        activity.action
+                      )}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <ClickableUserDisplay
+                        displayText={activity.user}
+                        userId={activity.userId ?? null}
+                        className="text-[10px] sm:text-xs text-gray-500"
+                      />
+                      <span className="text-[10px] sm:text-xs text-gray-400">•</span>
+                      <span className="text-[10px] sm:text-xs text-gray-500">{activity.time}</span>
+                      {activity.amount && (
+                        <>
+                          <span className="text-[10px] sm:text-xs text-gray-400">•</span>
+                          <span className="text-[10px] sm:text-xs font-semibold text-emerald-600">
+                            ${activity.amount.toLocaleString()}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
-            </div>
 
-            {data.pagination.totalPages > 1 && (
-              <div className="bg-gray-50 px-4 sm:px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Showing {(data.pagination.page - 1) * data.pagination.limit + 1} to{" "}
-                  {Math.min(data.pagination.page * data.pagination.limit, data.pagination.total)} of{" "}
-                  {data.pagination.total} activities
+              {/* Intersection observer target for infinite scroll */}
+              <div ref={observerTarget} className="h-4" />
+
+              {/* Loading more indicator */}
+              {isFetchingNextPage && (
+                <div className="flex items-center justify-center py-4 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  <span className="text-xs sm:text-sm">Loading more activities…</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={data.pagination.page === 1}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm text-gray-700">
-                    Page {data.pagination.page} of {data.pagination.totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(data.pagination.totalPages, p + 1))}
-                    disabled={data.pagination.page === data.pagination.totalPages}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+              )}
+
+              {/* End of list indicator */}
+              {!hasNextPage && allActivities.length > 25 && (
+                <div className="text-center py-4 text-xs text-gray-400 border-t border-gray-100 mt-2">
+                  End of activity log
                 </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="p-8 text-center">
-            <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-700 font-medium">No activities found</p>
-            <p className="text-gray-500 text-sm mt-1">Try adjusting your filters or search term</p>
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

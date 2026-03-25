@@ -22,6 +22,12 @@ export default function ClickableUserDisplay({
 }: ClickableUserDisplayProps) {
   const { openUserModal } = useAdminUserModal();
 
+  // When callers pass text size (e.g. text-[10px] sm:text-xs), use it as the full typography
+  // token set — do not merge a default text-sm or Tailwind may pick the wrong winner.
+  const typographyClasses = className.trim()
+    ? className
+    : "text-sm font-medium text-gray-900";
+
   if (userId) {
     return (
       <button
@@ -30,7 +36,7 @@ export default function ClickableUserDisplay({
           e.stopPropagation();
           openUserModal(userId);
         }}
-        className={`text-left text-sm font-medium text-gray-900 hover:text-red-600 hover:underline cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded ${className}`}
+        className={`text-left font-medium hover:text-red-600 hover:underline cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded ${typographyClasses}`}
       >
         {displayText}
         {subtext && <span className="block text-xs text-gray-500 font-normal">{subtext}</span>}
@@ -39,7 +45,7 @@ export default function ClickableUserDisplay({
   }
 
   return (
-    <span className={`text-sm text-gray-900 ${className}`}>
+    <span className={typographyClasses}>
       {displayText}
       {subtext && <span className="block text-xs text-gray-500">{subtext}</span>}
     </span>

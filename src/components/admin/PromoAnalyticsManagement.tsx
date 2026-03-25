@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -23,6 +24,8 @@ import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPrizeLabel } from "@/config/prizes";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
+import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { useCurrentAndLastDrawDates, useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
@@ -88,6 +91,7 @@ export default function PromoAnalyticsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -310,28 +314,38 @@ export default function PromoAnalyticsManagement() {
   const _signupToConversionPct = data?.totalSignups ? (data.totalConversions / data.totalSignups) * 100 : 0;
   const _overallPct = data?.totalVisits ? (data.totalConversions / data.totalVisits) * 100 : 0;
 
+  const promoDateRangeToggle = (
+    <DateRangeToggle
+      selectedRange={dateRange}
+      onRangeChange={(range) => {
+        if (range === "custom") {
+          setIsCustomDateModalOpen(true);
+        } else {
+          updateDateFilter(range);
+        }
+      }}
+      onCustomClick={() => setIsCustomDateModalOpen(true)}
+      collapsed={false}
+      displayDate={displayDate || undefined}
+      onExpand={() => {}}
+      className={isLgUp ? undefined : "w-full"}
+    />
+  );
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-lg font-bold text-gray-900">Promo Page Analytics</h2>
-        <div className="flex items-center gap-2">
-          <DateRangeToggle
-            selectedRange={dateRange}
-            onRangeChange={(range) => {
-              if (range === "custom") {
-                setIsCustomDateModalOpen(true);
-              } else {
-                updateDateFilter(range);
-              }
-            }}
-            onCustomClick={() => setIsCustomDateModalOpen(true)}
-            collapsed={false}
-            displayDate={displayDate || undefined}
-            onExpand={() => {}}
-          />
-         
-        </div>
+        {isLgUp ? <div className="flex items-center gap-2">{promoDateRangeToggle}</div> : null}
       </div>
+      {!isLgUp && slotEl
+        ? createPortal(<AdminMobileLayoutDateRangeShell>{promoDateRangeToggle}</AdminMobileLayoutDateRangeShell>, slotEl)
+        : null}
+      {!isLgUp && !slotEl ? (
+        <div className="lg:hidden">
+          <AdminMobileLayoutDateRangeShell>{promoDateRangeToggle}</AdminMobileLayoutDateRangeShell>
+        </div>
+      ) : null}
 
       <CustomDateRangeModal
         isOpen={isCustomDateModalOpen}
