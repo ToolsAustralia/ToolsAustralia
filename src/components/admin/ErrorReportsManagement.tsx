@@ -181,7 +181,7 @@ function ErrorReportDetailModal({
                         : report.userEmail || "Unknown"
                     }
                     userId={typeof report.userId === "string" ? report.userId : null}
-                    className="text-sm"
+                    className="text-sm font-medium text-gray-900"
                   />
                 ) : (
                   <span className="text-sm text-gray-500">

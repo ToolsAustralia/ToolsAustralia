@@ -1146,7 +1146,7 @@ export default function AffiliateDetailModal({
                                       displayText={item.commission.referredUser.name || "N/A"}
                                       subtext={item.commission.referredUser.email}
                                       userId={item.commission.referredUser.id ?? null}
-                                      className="text-[10px] sm:text-xs lg:text-sm"
+                                      className="text-[10px] sm:text-xs lg:text-sm text-gray-900"
                                     />
                                   ) : (
                                     <span className="text-gray-400">N/A</span>

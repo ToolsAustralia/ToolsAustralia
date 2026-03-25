@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { format, subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
@@ -30,6 +31,8 @@ import Dropdown from "@/components/modals/ui/Dropdown";
 import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFacebookAdsInsights";
 import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/types/facebook-ads";
 import DateRangeToggle, { DateRange } from "@/components/admin/DateRangeToggle";
+import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
+import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
@@ -61,6 +64,7 @@ export default function FacebookAdsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
 
   // State management - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -1273,16 +1277,51 @@ export default function FacebookAdsManagement() {
               </div>
             )}
             {(viewMode === "ads" || viewMode === "spend-by-url") && (
-              <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
-                <DateRangeToggle
-                  selectedRange={dateRange}
-                  onRangeChange={handleDateRangeChange}
-                  onCustomClick={() => setIsCustomDateModalOpen(true)}
-                  collapsed={false}
-                  displayDate={displayDate || undefined}
-                  onExpand={() => {}}
-                />
-              </div>
+              <>
+                {!isLgUp && slotEl
+                  ? createPortal(
+                      <AdminMobileLayoutDateRangeShell>
+                        <DateRangeToggle
+                          selectedRange={dateRange}
+                          onRangeChange={handleDateRangeChange}
+                          onCustomClick={() => setIsCustomDateModalOpen(true)}
+                          collapsed={false}
+                          displayDate={displayDate || undefined}
+                          onExpand={() => {}}
+                          className="w-full"
+                        />
+                      </AdminMobileLayoutDateRangeShell>,
+                      slotEl
+                    )
+                  : null}
+                {!isLgUp && !slotEl ? (
+                  <div className="flex-shrink-0 min-w-0 w-full max-w-full">
+                    <AdminMobileLayoutDateRangeShell>
+                      <DateRangeToggle
+                        selectedRange={dateRange}
+                        onRangeChange={handleDateRangeChange}
+                        onCustomClick={() => setIsCustomDateModalOpen(true)}
+                        collapsed={false}
+                        displayDate={displayDate || undefined}
+                        onExpand={() => {}}
+                        className="w-full"
+                      />
+                    </AdminMobileLayoutDateRangeShell>
+                  </div>
+                ) : null}
+                {isLgUp ? (
+                  <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
+                    <DateRangeToggle
+                      selectedRange={dateRange}
+                      onRangeChange={handleDateRangeChange}
+                      onCustomClick={() => setIsCustomDateModalOpen(true)}
+                      collapsed={false}
+                      displayDate={displayDate || undefined}
+                      onExpand={() => {}}
+                    />
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
         </div>
