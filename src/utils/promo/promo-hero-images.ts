@@ -3,12 +3,12 @@
  * 
  * Centralized logic for resolving promotional hero image paths based on:
  * - Active promo multiplier (2x, 3x, 5x, 10x, or no-badge)
- * - Draw date status (today/tomorrow)
+ * - Major draw urgency (final-hours / drawn-tonight from time until draw)
  * - A/B testing variant config overrides
  * 
  * Priority order:
  * 1. Variant config override (A/B testing)
- * 2. Draw date status (today/tomorrow)
+ * 2. Major draw urgency (mar-final-hours / mar-drawn-tonight)
  * 3. Multiplier-based selection (2x, 3x, 5x, 10x)
  * 4. Default fallback (no-badge)
  * 
@@ -17,7 +17,7 @@
 
 import type { 
   PromoImagePaths, 
-  DrawDateStatus, 
+  MajorDrawHeroUrgency, 
   VariantImageOverride,
   PromoImageResolutionParams 
 } from "./promo-hero-types";
@@ -80,20 +80,14 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
 }
 
 /**
- * Maps draw date status to image variant name.
- * Assets used:
- * - Drawn tomorrow: feb-drawn-tomorrow.webp (desktop), feb-drawn-tomorrow-mobile.webp (mobile)
- * - Drawn tonight:  feb-drawn-tonight.webp (desktop), feb-drawn-tonight-mobile.webp (mobile)
- *
- * @param status - Draw date status ("today", "tomorrow", or null)
- * @returns Image variant name (e.g., "feb-drawn-tonight", "feb-drawn-tomorrow")
+ * Maps major-draw countdown tier to root promo image variant (mar-* assets).
  */
-export function getDrawDateImageVariant(status: DrawDateStatus): string | null {
-  switch (status) {
-    case "tomorrow":
-      return "feb-drawn-tomorrow";
-    case "today":
-      return "feb-drawn-tonight";
+export function getMajorDrawUrgencyImageVariant(urgency: MajorDrawHeroUrgency | null | undefined): string | null {
+  switch (urgency) {
+    case "final-hours":
+      return "mar-final-hours";
+    case "drawn-tonight":
+      return "mar-drawn-tonight";
     default:
       return null;
   }
@@ -117,7 +111,7 @@ export function buildImagePaths(variant: string): PromoImagePaths {
 
 /**
  * Main function to resolve promo hero image paths
- * Implements the priority logic: Variant config > Draw date > Multiplier > Default
+ * Implements the priority logic: Variant config > Major draw urgency > Multiplier > Default
  * 
  * @param params - Parameters for image resolution
  * @returns PromoImagePaths object with desktop and mobile image paths
@@ -128,9 +122,8 @@ export function buildImagePaths(variant: string): PromoImagePaths {
  * const paths = getPromoImagePaths({ multiplier: 10 });
  * // Returns: { desktop: "/images/background/promo/mar-x10.webp", mobile: "/images/background/promo/mar-x10-mobile.webp" }
  * 
- * // Draw date override
- * const paths = getPromoImagePaths({ multiplier: 10, drawDateStatus: "tomorrow" });
- * // Returns: { desktop: "/images/background/promo/feb-drawn-tomorrow.webp", mobile: "/images/background/promo/feb-drawn-tomorrow-mobile.webp" }
+ * // Major draw urgency
+ * const paths = getPromoImagePaths({ multiplier: 10, majorDrawUrgency: "final-hours" });
  * 
  * // Variant config override
  * const paths = getPromoImagePaths({ 
@@ -143,7 +136,7 @@ export function buildImagePaths(variant: string): PromoImagePaths {
 export function getPromoImagePaths(
   params: PromoImageResolutionParams
 ): PromoImagePaths {
-  const { multiplier, drawDateStatus, variantImageOverride } = params;
+  const { multiplier, majorDrawUrgency, variantImageOverride } = params;
 
   // Priority 1: Variant config override (A/B testing)
   // This takes highest priority and overrides everything else
@@ -151,17 +144,32 @@ export function getPromoImagePaths(
     return resolveVariantImageOverride(variantImageOverride);
   }
 
-  // Priority 2: Draw date status (today/tomorrow)
-  // If draw is happening today or tomorrow, use date-based images
-  if (drawDateStatus) {
-    const drawDateVariant = getDrawDateImageVariant(drawDateStatus);
-    if (drawDateVariant) {
-      return buildImagePaths(drawDateVariant);
-    }
+  // Priority 2: Major draw urgency (time until draw)
+  const urgencyVariant = getMajorDrawUrgencyImageVariant(majorDrawUrgency ?? null);
+  if (urgencyVariant) {
+    return buildImagePaths(urgencyVariant);
   }
 
   // Priority 3: Multiplier-based selection
   // Map multiplier to image variant and build paths
   const multiplierVariant = getMultiplierImageVariant(multiplier ?? null);
   return buildImagePaths(multiplierVariant);
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Time-until-draw → hero urgency (standard + landing suffixes).
+ * - Under 24h remaining: drawn-tonight
+ * - 24h or more, up to and including 72h: final-hours
+ */
+export function getMajorDrawHeroUrgencyFromDrawDate(
+  drawDate: string | Date | null | undefined
+): MajorDrawHeroUrgency | null {
+  if (drawDate == null) return null;
+  const msUntil = new Date(drawDate).getTime() - Date.now();
+  if (msUntil <= 0) return null;
+  if (msUntil < 24 * HOUR_MS) return "drawn-tonight";
+  if (msUntil <= 72 * HOUR_MS) return "final-hours";
+  return null;
 }

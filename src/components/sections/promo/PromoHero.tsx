@@ -5,15 +5,13 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoByType, useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
-import { convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
-import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
-import type { DrawDateStatus } from "@/utils/promo/promo-hero-types";
+import { getMajorDrawHeroUrgencyFromDrawDate, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
-import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import { applyMajorDrawUrgencyToLandingPaths, getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 
 interface PromoHeroProps {
   initialPromo?: ServerPromo | null;
@@ -59,41 +57,22 @@ export default function PromoHero({
     openEntryFlow({ openLocalModal: false });
   };
 
-  // Helper function to check if draw date is today or tomorrow (in AEST)
-  const getDrawDateStatus = (): DrawDateStatus => {
-    if (!majorDraw?.drawDate) return null;
-
-    const drawDateUTC = new Date(majorDraw.drawDate);
-    const drawDateAEST = convertUTCToAEST(drawDateUTC);
-    const nowAEST = convertUTCToAEST(new Date());
-
-    // Compare calendar days (YYYY-MM-DD)
-    const drawDateStr = `${drawDateAEST.getFullYear()}-${String(drawDateAEST.getMonth() + 1).padStart(2, "0")}-${String(drawDateAEST.getDate()).padStart(2, "0")}`;
-    const todayStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
-
-    // Calculate tomorrow's date string
-    const tomorrowAEST = new Date(nowAEST);
-    tomorrowAEST.setDate(tomorrowAEST.getDate() + 1);
-    const tomorrowStr = `${tomorrowAEST.getFullYear()}-${String(tomorrowAEST.getMonth() + 1).padStart(2, "0")}-${String(tomorrowAEST.getDate()).padStart(2, "0")}`;
-
-    if (drawDateStr === todayStr) {
-      return "today";
-    } else if (drawDateStr === tomorrowStr) {
-      return "tomorrow";
-    }
-
-    return null;
-  };
-
   // Resolve hero image paths
   // Toolset landing: use landing hero if available for current prize slug
-  // Otherwise: Variant config > Draw date > multiplier-based images
+  // Otherwise: Variant config > time-until-draw urgency > multiplier-based images
   const currentSlug = usePromoThemeStore((s) => s.slug);
-  const drawDateStatus = getDrawDateStatus();
-  const landingHeroPaths = isToolsetLandingPage && currentSlug ? getLandingHeroImagePaths(currentSlug) : null;
+  const majorDrawUrgency = getMajorDrawHeroUrgencyFromDrawDate(majorDraw?.drawDate);
+  const landingHeroPaths =
+    isToolsetLandingPage && currentSlug
+      ? (() => {
+          const base = getLandingHeroImagePaths(currentSlug);
+          if (!base) return null;
+          return majorDrawUrgency ? applyMajorDrawUrgencyToLandingPaths(base, majorDrawUrgency) : base;
+        })()
+      : null;
   const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
-    drawDateStatus,
+    majorDrawUrgency,
     variantImageOverride: variantConfig?.hero?.imageSrc,
   });
   const heroImagePaths = landingHeroPaths ?? standardHeroPaths;

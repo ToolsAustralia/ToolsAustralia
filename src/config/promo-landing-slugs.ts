@@ -5,7 +5,7 @@
  */
 
 import type { PrizeSlug } from "./prizes";
-import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { MajorDrawHeroUrgency, PromoImagePaths } from "@/utils/promo/promo-hero-types";
 
 export const TOOLSET_LANDING_SLUGS = [
   "ryobi",
@@ -79,4 +79,16 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
  */
 export function getLandingHeroImagePaths(prizeSlug: string): PromoImagePaths | null {
   return LANDING_HERO_MAP[prizeSlug as PrizeSlug] ?? null;
+}
+
+/** e.g. milwaukeeTb-dewaltSet.webp → milwaukeeTb-dewaltSet-final-hours.webp */
+export function applyMajorDrawUrgencyToLandingPaths(
+  paths: PromoImagePaths,
+  urgency: MajorDrawHeroUrgency
+): PromoImagePaths {
+  const suffix = urgency;
+  return {
+    desktop: paths.desktop.replace(/\.webp$/, `-${suffix}.webp`),
+    mobile: paths.mobile.replace(/-mobile\.webp$/, `-${suffix}-mobile.webp`),
+  };
 }
