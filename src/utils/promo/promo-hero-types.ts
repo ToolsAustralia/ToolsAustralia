@@ -15,10 +15,16 @@ export interface PromoImagePaths {
 }
 
 /**
- * Draw date status for conditional image selection
- * Used to determine if the draw is happening today or tomorrow
+ * Draw date status for conditional image selection (e.g. promo banner countdown copy)
  */
 export type DrawDateStatus = "today" | "tomorrow" | null;
+
+/**
+ * Major draw countdown tier for promo hero backgrounds (matches assets under /images/background/promo).
+ * - final-hours: draw in (24h, 72h]
+ * - drawn-tonight: draw in (0, 24h)
+ */
+export type MajorDrawHeroUrgency = "final-hours" | "drawn-tonight";
 
 /**
  * Variant config image override - supports both single path (backward compatible)
@@ -38,8 +44,8 @@ export type VariantImageOverride =
 export interface PromoImageResolutionParams {
   /** Active promo multiplier (2, 3, 5, 10, or null for no-badge) */
   multiplier?: number | null;
-  /** Draw date status if draw is today or tomorrow */
-  drawDateStatus?: DrawDateStatus;
+  /** Major draw within 72h / 24h — selects final-hours or drawn-tonight hero art */
+  majorDrawUrgency?: MajorDrawHeroUrgency | null;
   /** Variant config override from A/B testing (optional) */
   variantImageOverride?: VariantImageOverride;
 }
