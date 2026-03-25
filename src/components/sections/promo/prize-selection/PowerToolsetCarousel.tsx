@@ -250,6 +250,9 @@ export function PowerToolsetCarousel({
             {activeImgSrc && (
             <motion.div
               layout
+              // Modal scroll-lock toggles body overflow → scrollbar width changes → flex reflow.
+              // Without this, `layout` animates on every reflow (e.g. membership modal open/close).
+              layoutDependency={activeSlug ?? ""}
               className="relative w-[220px] h-[155px] sm:w-[360px] sm:h-[250px] lg:w-[440px] lg:h-[305px]"
             >
               <AnimatePresence mode="wait">
