@@ -42,10 +42,10 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 }) {
   if (loading) {
     return (
-      <div className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-3 sm:p-4 lg:p-6 animate-pulse ${className}`}>
-        <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-        <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-        {subtitle && <div className="h-3 bg-gray-200 rounded w-1/2 mt-2"></div>}
+      <div className={`bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-200 p-2.5 sm:p-4 lg:p-6 animate-pulse ${className}`}>
+        <div className="h-3 sm:h-4 bg-gray-200 rounded w-1/2 mb-1.5 sm:mb-2"></div>
+        <div className="h-5 sm:h-7 lg:h-8 bg-gray-200 rounded w-3/4"></div>
+        {subtitle && <div className="h-2.5 sm:h-3 bg-gray-200 rounded w-1/2 mt-1.5 sm:mt-2"></div>}
       </div>
     );
   }
@@ -92,8 +92,8 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-3 sm:p-4 lg:p-6 ${
-        isClickable ? "cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" : ""
+      className={`bg-white rounded-lg sm:rounded-xl shadow-sm border ${colorClasses[normalizedColor]} p-2.5 sm:p-4 lg:p-6 ${
+        isClickable ? "cursor-pointer transition-all duration-200 hover:shadow-md hover:border-gray-300" : ""
       } ${className}`}
       aria-label={ariaLabel || `${titleString}: ${displayValue}`}
       onClick={onClick}
@@ -106,21 +106,28 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         }
       }}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-start justify-between gap-1.5 mb-1 sm:mb-2">
         {typeof title === "string" ? (
-          <h3 className="text-xs sm:text-sm font-semibold text-gray-600">{title}</h3>
+          <h3 className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 pr-1">{title}</h3>
         ) : (
-          <div className="text-xs sm:text-sm font-semibold text-gray-600">{title}</div>
+          <div className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 pr-1">{title}</div>
         )}
-        <div className={`p-1.5 sm:p-2 ${colorClasses[normalizedColor]} rounded-lg`}>
-          <Icon className={`w-3 h-3 sm:w-4 sm:h-4 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
+        <div className={`shrink-0 p-1.5 sm:p-2 ${colorClasses[normalizedColor]} rounded-md sm:rounded-lg`}>
+          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
         </div>
       </div>
-      <div className="flex items-baseline justify-between">
-        <p className={valueClassName ?? "text-xl sm:text-2xl font-bold text-gray-900"}>{displayValue}</p>
+      <div className="flex items-baseline justify-between gap-1.5 min-w-0">
+        <p
+          className={
+            valueClassName ??
+            "text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 tabular-nums tracking-tight break-words"
+          }
+        >
+          {displayValue}
+        </p>
         {trend && trendDirection && (
           <div
-            className={`text-xs font-semibold ${
+            className={`shrink-0 text-[10px] sm:text-xs font-semibold ${
               trendDirection === "up"
                 ? "text-emerald-600"
                 : trendDirection === "down"
@@ -133,17 +140,14 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         )}
       </div>
       {count !== undefined && count !== null && (
-        <div className="text-xs font-medium text-gray-600 mt-1">
+        <div className="text-[11px] sm:text-xs font-medium text-gray-600 mt-0.5 sm:mt-1">
           {count.toLocaleString()} {countLabel || "items"}
         </div>
       )}
       {subtitle && (
-        <div className="text-xs text-gray-500 mt-1" aria-label={`${titleString} subtitle`}>
+        <div className="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-snug" aria-label={`${titleString} subtitle`}>
           {subtitle}
         </div>
-      )}
-      {isClickable && (
-        <div className="text-xs text-gray-400 mt-2 italic">Click to view details</div>
       )}
     </div>
   );

@@ -303,13 +303,114 @@ export function useAdminDashboardStats(
 }
 
 /**
- * Hook to fetch recent activities for admin dashboard
+ * Hook to fetch recent activities for admin dashboard with infinite scroll
+ */
+export function useRecentActivitiesInfinite(limit = 20) {
+  return useInfiniteQuery<
+    { data: RecentActivity[]; pagination: { page: number; limit: number; total: number; hasMore: boolean } },
+    Error
+  >({
+    queryKey: ["admin", "dashboard", "recent-activities-infinite", limit],
+    queryFn: async ({ pageParam = 1 }): Promise<{ data: RecentActivity[]; pagination: { page: number; limit: number; total: number; hasMore: boolean } }> => {
+      const response = await fetch(`/api/admin/dashboard/recent-activities?page=${pageParam}&limit=${limit}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch recent activities: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch recent activities");
+      }
+
+      return { data: result.data, pagination: result.pagination };
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.pagination.hasMore ? lastPage.pagination.page + 1 : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch activity log (paginated, infinite scroll)
+ */
+export interface ActivityLogItem {
+  id: string;
+  type:
+    | "user_signup"
+    | "membership_purchase"
+    | "one_time_purchase"
+    | "draw_complete"
+    | "high_value_order"
+    | "system_alert"
+    | "membership_upgrade"
+    | "subscription_past_due";
+  user: string;
+  userId?: string;
+  action: string;
+  time: string;
+  status: "success" | "info" | "warning" | "error";
+  amount?: number;
+  timestamp: Date;
+  miniDrawId?: string;
+}
+
+export function useActivityLogInfinite(limit = 25, typeFilter?: string, searchTerm?: string) {
+  return useInfiniteQuery<
+    {
+      activities: ActivityLogItem[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    },
+    Error
+  >({
+    queryKey: ["admin", "activity-log-infinite", limit, typeFilter, searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limit),
+      });
+      if (typeFilter) params.append("type", typeFilter);
+      if (searchTerm) params.append("search", searchTerm);
+
+      const response = await fetch(`/api/admin/activity-log?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch activity log: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch activity log");
+      }
+
+      return result.data;
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.pagination.page < lastPage.pagination.totalPages
+        ? lastPage.pagination.page + 1
+        : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch recent activities for admin dashboard (legacy - non-paginated)
  */
 export function useRecentActivities() {
   return useQuery<RecentActivity[]>({
     queryKey: ["admin", "dashboard", "recent-activities"],
     queryFn: async (): Promise<RecentActivity[]> => {
-      const response = await fetch("/api/admin/dashboard/recent-activities");
+      const response = await fetch("/api/admin/dashboard/recent-activities?limit=20");
 
       if (!response.ok) {
         throw new Error(`Failed to fetch recent activities: ${response.statusText}`);
@@ -323,9 +424,9 @@ export function useRecentActivities() {
 
       return result.data;
     },
-    staleTime: 1 * 60 * 1000, // 1 minute - activities should be fresh
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 2 * 60 * 1000, // Auto-refresh every 2 minutes
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
     retry: 2,
   });
 }
@@ -509,9 +610,15 @@ export function useMembershipByPackage() {
 /**
  * Hook to fetch upcoming subscription renewals (DB-first, paginated)
  */
-export function useUpcomingRenewals(range: UpcomingRenewalsRange = 7, page: number = 1, limit: number = 50) {
+export function useUpcomingRenewals(
+  range: UpcomingRenewalsRange = 7,
+  page: number = 1,
+  limit: number = 50,
+  enabled: boolean = true
+) {
   return useQuery<UpcomingRenewalsData>({
     queryKey: ["admin", "upcoming-renewals", range, page, limit],
+    enabled,
     queryFn: async (): Promise<UpcomingRenewalsData> => {
       const params = new URLSearchParams({ range: String(range), page: String(page), limit: String(limit) });
       const response = await fetch(`/api/admin/dashboard/upcoming-renewals?${params.toString()}`);

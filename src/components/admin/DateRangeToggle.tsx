@@ -42,7 +42,7 @@ export default function DateRangeToggle({
   if (collapsed && displayDate) {
     return (
       <div
-        className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
+        className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
       >
         <button
           onClick={() => {
@@ -50,7 +50,7 @@ export default function DateRangeToggle({
               onExpand();
             }
           }}
-          className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center gap-1 sm:gap-1.5 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-700"
+          className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)] flex items-center gap-1 sm:gap-1.5 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-700"
         >
           <span className="sm:hidden">{displayDate.length > 12 ? displayDate.substring(0, 10) + "..." : displayDate}</span>
           <span className="hidden sm:inline">{displayDate}</span>
@@ -63,7 +63,7 @@ export default function DateRangeToggle({
   // Expanded view - show all filter buttons
   return (
     <div
-      className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 max-w-full sm:w-auto ${className}`}
+      className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 max-w-full lg:w-auto ${className}`}
     >
       <div className="overflow-x-auto scrollbar-hide w-full max-w-full" style={{ WebkitOverflowScrolling: "touch" }}>
         <div className="flex items-center gap-1 sm:gap-2 flex-nowrap min-w-max">
@@ -77,7 +77,7 @@ export default function DateRangeToggle({
                   onRangeChange(range.value);
                 }
               }}
-              className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none flex-shrink-0 ${
+              className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none flex-shrink-0 ${
                 selectedRange === range.value
                   ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
                   : "text-slate-300 hover:text-white hover:bg-slate-700/50"
