@@ -1,7 +1,7 @@
 import type { PromoBannerAssetBrand } from "./resolve-promo-banner-asset-brand";
 import { bannerMultiplierFileKey } from "./banner-multiplier-file-key";
 
-export type StaticPromoBannerFamily = "drawn-tonight" | "last-chance" | "ends-tonight";
+export type StaticPromoBannerFamily = "drawn-tonight" | "drawn-tomorrow" | "last-chance" | "ends-tonight";
 
 const DEFAULT_BRAND: PromoBannerAssetBrand = "Milwaukee";
 
@@ -9,6 +9,8 @@ function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFami
   switch (family) {
     case "drawn-tonight":
       return `/images/promoBanner/${brand}/DrawnTonight/drawn-tonight-${m}x.png`;
+    case "drawn-tomorrow":
+      return `/images/promoBanner/${brand}/DrawnTomorrow/drawn-tomorrow-${m}x.png`;
     case "last-chance":
       return `/images/promoBanner/${brand}/LastChance/last-chance-${m}x.png`;
     case "ends-tonight":
@@ -25,6 +27,8 @@ function legacyUnbrandedPath(family: StaticPromoBannerFamily, m: 2 | 3 | 5 | 10)
   switch (family) {
     case "drawn-tonight":
       return `/images/promoBanner/DrawnTonight/drawn-tonight-${m}x.png`;
+    case "drawn-tomorrow":
+      return `/images/promoBanner/DrawnTomorrow/drawn-tomorrow-${m}x.png`;
     case "last-chance":
       return `/images/promoBanner/LastChance/last-chance-${m}x.png`;
     case "ends-tonight":

@@ -131,6 +131,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     seconds: 0,
   });
 
+  /** Kept in sync with the freeze countdown tick so static left art can switch at the 48h boundary. */
+  const [within48HoursOfFreeze, setWithin48HoursOfFreeze] = useState(false);
+
   const [isScrolled, setIsScrolled] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   /** Pixel layout for fixed pill (FLIP enter/resize); unused when not scrolled. */
@@ -238,6 +241,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     const updateCountdown = () => {
       const now = Date.now();
       const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
+      const nextWithin48 =
+        !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
+      setWithin48HoursOfFreeze((prev) => (prev === nextWithin48 ? prev : nextWithin48));
 
       if (!targetDateMs || freezeMs > fortyEightHoursMs) {
         // Business-day loop to next midnight AEST
@@ -503,6 +509,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       slug,
       toolsetSlug,
       drawIsToday: drawStatus === "today",
+      within48HoursOfFreeze,
       scheduledPromoUrgent: scheduledPromoState.hasScheduledPromo && scheduledPromoState.isUrgent,
       hasScheduledPromo: scheduledPromoState.hasScheduledPromo,
       multiplier,
@@ -513,11 +520,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     activeBannerSchedule?.altText,
     slug,
     toolsetSlug,
+    within48HoursOfFreeze,
     scheduledPromoState.hasScheduledPromo,
     scheduledPromoState.isUrgent,
     multiplier,
     currentDraw?.drawDate,
   ]);
+
+  const isDrawnTomorrowLeftArt = leftVisual.staticFamily === "drawn-tomorrow";
 
   const leftVisualStaticUrls = useMemo(() => {
     if (leftVisual.srcFallbacks?.length) {
@@ -602,7 +612,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     // Also measure on resize to handle responsive changes
     window.addEventListener("resize", measureBanner);
     return () => window.removeEventListener("resize", measureBanner);
-  }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc]);
+  }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily]);
 
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
   if (!isPromoResolved) return null;
@@ -748,13 +758,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       alt={leftVisual.alt}
                       onError={handleLeftImageError}
                       className={`w-auto object-contain object-center lg:object-left drop-shadow-md ${
-                        isScrolled
-                          ? showPromoCountdownStrip
-                            ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(520px,calc(100vw-11rem))] sm:max-w-[min(500px,calc(100vw-13rem))] lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,360px)]"
-                            : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
-                          : showPromoCountdownStrip
-                            ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(580px,calc(100vw-11rem))] sm:max-w-[min(580px,calc(100vw-13rem))] lg:max-w-[min(95vw,580px)]"
-                            : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
+                        isDrawnTomorrowLeftArt
+                          ? isScrolled
+                            ? showPromoCountdownStrip
+                              ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(310px,calc(100vw-11rem))] sm:max-w-[min(300px,calc(100vw-13rem))] lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,215px)]"
+                              : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
+                            : showPromoCountdownStrip
+                              ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(400px,calc(100vw-11rem))] sm:max-w-[min(400px,calc(100vw-13rem))] lg:max-w-[min(95vw,400px)]"
+                              : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
+                          : isScrolled
+                            ? showPromoCountdownStrip
+                              ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(520px,calc(100vw-11rem))] sm:max-w-[min(500px,calc(100vw-13rem))] lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,360px)]"
+                              : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
+                            : showPromoCountdownStrip
+                              ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(580px,calc(100vw-11rem))] sm:max-w-[min(580px,calc(100vw-13rem))] lg:max-w-[min(95vw,580px)]"
+                              : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
                       }`}
                     />
                   </motion.div>
@@ -762,8 +780,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div
                     className={`${
                       isScrolled
-                        ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
-                        : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
+                        ? isDrawnTomorrowLeftArt
+                          ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] w-[6.25rem] sm:w-[9.25rem]"
+                          : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
+                        : isDrawnTomorrowLeftArt
+                          ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
+                          : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
                     } shrink-0 rounded bg-white/10 animate-pulse max-sm:absolute max-sm:top-1/2 max-sm:-translate-y-1/2 sm:static sm:translate-x-0 sm:translate-y-0 ${
                       showPromoCountdownStrip
                         ? "max-sm:left-1/2 max-sm:-translate-x-1/2"
