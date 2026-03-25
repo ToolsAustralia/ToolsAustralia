@@ -597,21 +597,20 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return () => clearTimeout(timer);
   }, [isDrawLoading]);
 
-  // Measure banner height to prevent layout shift when it becomes fixed
-  useEffect(() => {
-    const measureBanner = () => {
-      if (bannerRef.current) {
-        const height = bannerRef.current.offsetHeight;
-        setBannerHeight(height);
-      }
+  // Reserve document flow height for the spacer using the **in-flow (relative)** banner only.
+  // Measuring after `position: fixed` captures the shorter pill and shrinks the spacer → content jumps.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const measureInFlowOnly = () => {
+      if (!bannerRef.current || isScrolled) return;
+      const height = bannerRef.current.getBoundingClientRect().height;
+      setBannerHeight((prev) => (Math.abs((prev ?? 0) - height) < 0.5 ? prev : height));
     };
 
-    // Measure on mount and when scrolled state changes
-    measureBanner();
-
-    // Also measure on resize to handle responsive changes
-    window.addEventListener("resize", measureBanner);
-    return () => window.removeEventListener("resize", measureBanner);
+    measureInFlowOnly();
+    window.addEventListener("resize", measureInFlowOnly);
+    return () => window.removeEventListener("resize", measureInFlowOnly);
   }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily]);
 
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
@@ -834,7 +833,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center"
                   >
-                    <div className={`${rightSectionLabelClass} font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider`}>
+                    <div
+                      className="font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider"
+                      style={{
+                        color: theme.primary,
+                        textShadow: "0 1px 3px rgba(0,0,0,0.65)",
+                      }}
+                    >
                       NEXT DRAW IN
                     </div>
                     <div className="flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2">

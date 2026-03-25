@@ -203,6 +203,10 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
             <PrizeShowcase slug={prize.slug} />
           </Suspense>
 
+          <Suspense fallback={null}>
+            <PartnerBenefitsPromoSectionClient />
+          </Suspense>
+
           <Suspense fallback={<div className="min-h-[400px]" />}>
             <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
           </Suspense>
@@ -213,10 +217,6 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
 
           <Suspense fallback={<div className="min-h-[300px]" />}>
             <GiveawayDetails />
-          </Suspense>
-
-          <Suspense fallback={null}>
-            <PartnerBenefitsPromoSectionClient />
           </Suspense>
 
           <Suspense fallback={<div className="min-h-[400px]" />}>

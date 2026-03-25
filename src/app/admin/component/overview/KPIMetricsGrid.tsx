@@ -193,6 +193,51 @@ export default function KPIMetricsGrid({
               clickable={true}
             />
           </div>
+
+          {/* Ad Spend (also shown under Advertising) */}
+          <MetricCard
+            title={
+              dateRange === "today"
+                ? "Ad Spend"
+                : dateRange === "yesterday"
+                  ? "Ad Spend"
+                  : dateRange === "all-time"
+                    ? "Total Ad Spend"
+                    : "Ad Spend"
+            }
+            value={
+              loading
+                ? "..."
+                : `$${(dashboardStats?.facebookAds?.spend || 0).toLocaleString("en-AU", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`
+            }
+            icon={BarChart3}
+            subtitle={
+              dateRange === "today"
+                ? "Facebook Ads spend"
+                : dateRange === "yesterday"
+                  ? "Facebook Ads spend"
+                  : dateRange === "all-time"
+                    ? "All-time Facebook Ads"
+                    : "Facebook Ads spend"
+            }
+            color="blue"
+            trend={dashboardStats?.facebookAds?.spendTrend}
+            loading={loading}
+          />
+
+          {/* ROAS (also shown under Advertising) */}
+          <MetricCard
+            title="ROAS"
+            value={loading ? "..." : `${(dashboardStats?.facebookAds?.roas || 0).toFixed(2)}x`}
+            icon={Target}
+            subtitle="Return on ad spend"
+            color="green"
+            trend={dashboardStats?.facebookAds?.roasTrend}
+            loading={loading}
+          />
         </div>
         
         {/* Revenue Breakdown Sections - Integrated within Revenue Group */}

@@ -36,9 +36,9 @@ export default function DashboardOverview() {
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
 
-  // Section expand/collapse state
-  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(true);
-  const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(true);
+  // Section expand/collapse state — mobile starts collapsed; desktop always shows breakdowns via isLgUp || …
+  const [isRevenueBreakdownExpanded, setIsRevenueBreakdownExpanded] = useState(false);
+  const [isMembershipByPackageExpanded, setIsMembershipByPackageExpanded] = useState(false);
   const [isUpcomingRenewalsExpanded, setIsUpcomingRenewalsExpanded] = useState(false);
   const [isAdvertisingBreakdownExpanded, setIsAdvertisingBreakdownExpanded] = useState(true);
   const [isUsersPerformanceExpanded, setIsUsersPerformanceExpanded] = useState(true);

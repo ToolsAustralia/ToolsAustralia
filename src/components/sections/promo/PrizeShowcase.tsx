@@ -36,6 +36,7 @@ import FullscreenImageViewer, {
   FullscreenTriggerButton,
   type FullscreenImageItem,
 } from "@/components/ui/FullscreenImageViewer";
+import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
 
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -244,31 +245,6 @@ const _getFormattedLabel = (label: string, slug?: string, isMobile?: boolean) =>
 };
 
 
-// Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
-const getOrdinalSuffix = (day: number): string => {
-  if (day > 3 && day < 21) return "th";
-  switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-};
-
-// Helper function to format time without AM/PM suffix (e.g., "5:30pm")
-const formatTimeWithoutPeriod = (date: Date): string => {
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const hour12 = hours % 12 || 12;
-  const period = hours >= 12 ? "pm" : "am";
-  const minutesStr = minutes.toString().padStart(2, "0");
-  return `${hour12}:${minutesStr}${period}`;
-};
-
 export default function PrizeShowcase({
   slug: slugProp,
   toolsetMode = false,
@@ -289,8 +265,6 @@ export default function PrizeShowcase({
   const [isNavigating, _setIsNavigating] = useState(false);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
   const { openEntryFlow } = useMajorDrawEntryCta();
   const router = useRouter();
@@ -448,66 +422,10 @@ export default function PrizeShowcase({
     }
   };
   
-  // Check if draw is completed or queued (gap state)
-  const isCompleted = currentMajorDraw?.status === "completed";
-  const isQueued = currentMajorDraw?.status === "queued";
-  const _isGapState = isCompleted || isQueued;
-  const drawDateObj = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate) : null;
-  const msUntilDraw = isMounted && drawDateObj ? drawDateObj.getTime() - Date.now() : null;
-  const daysUntilDraw = msUntilDraw !== null ? msUntilDraw / (1000 * 60 * 60 * 24) : null;
-  const shouldShowCountdown =
-    !isCompleted && msUntilDraw !== null && msUntilDraw > 0 && daysUntilDraw !== null && daysUntilDraw <= 3;
-
   // Set mounted state after component mounts to prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  // Format draw date label after mount to prevent hydration mismatch
-  useEffect(() => {
-    if (currentMajorDraw?.drawDate) {
-      const drawDateObj = new Date(currentMajorDraw.drawDate);
-      const weekday = drawDateObj.toLocaleDateString("en-AU", { weekday: "long" });
-      const day = drawDateObj.getDate();
-      const month = drawDateObj.toLocaleDateString("en-AU", { month: "long" });
-      const time = formatTimeWithoutPeriod(drawDateObj);
-      const ordinal = getOrdinalSuffix(day);
-      const formatted = `${weekday}, ${day}${ordinal} ${month} ${time}`;
-      setDrawDateLabel(formatted);
-    } else {
-      setDrawDateLabel("Draw date TBA");
-    }
-  }, [currentMajorDraw]);
-
-  // Countdown timer logic - align with MajorDrawSection (countdown to drawDate)
-  useEffect(() => {
-    const drawDate = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate).getTime() : null;
-
-    if (!drawDate || Number.isNaN(drawDate)) {
-      setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      return;
-    }
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const difference = drawDate - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
-  }, [currentMajorDraw?.freezeEntriesAt, currentMajorDraw?.drawDate]);
 
   const handleEnterNow = () => openEntryFlow({ openLocalModal: false });
 
@@ -670,6 +588,12 @@ export default function PrizeShowcase({
               priority
             />
           </div>
+
+          {/* World-Class Giveaway Countdown Timer */}
+          <div className="mt-4 sm:mt-6 max-w-3xl mx-auto px-2 sm:px-3">
+            <GiveawayCountdownTimer activeSlug={activeSlug} />
+          </div>
+
           {/* Prize description section - hidden for now */}
           <div className="hidden">
             <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
@@ -1156,58 +1080,6 @@ export default function PrizeShowcase({
           </div>
 
           <div className="relative order-3 space-y-3 sm:space-y-4">
-            {shouldShowCountdown ? (
-              <div
-                className={`rounded-3xl p-3 sm:p-4 shadow-2xl border-2 border-white/20 ${
-                  currentMajorDraw?.status === "frozen"
-                    ? "bg-gradient-to-br from-gray-900 via-gray-800 to-black"
-                    : ""
-                }`}
-                style={currentMajorDraw?.status !== "frozen" ? { background: theme.gradientSolid } : undefined}
-              >
-                {/* Frozen notice for consistency with MajorDrawSection */}
-                {currentMajorDraw?.status === "frozen" && (
-                  <div className="mb-3 text-center">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
-                      <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
-                        Entry Period Closed
-                      </div>
-                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
-                        No new entries accepted for this draw. Entries will go to the next draw.
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                  {[
-                    { label: "Days", value: timeLeft.days },
-                    { label: "Hours", value: timeLeft.hours },
-                    { label: "Mins", value: timeLeft.minutes },
-                    { label: "Secs", value: timeLeft.seconds },
-                  ].map((unit) => (
-                    <div
-                      key={unit.label}
-                      className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
-                    >
-                      <div className="text-lg sm:text-2xl font-bold text-white">
-                        {String(unit.value).padStart(2, "0")}
-                      </div>
-                      <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{unit.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-               
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-4 shadow-2xl border-2 border-white/20 text-center">
-                <p className="font-agency text-white text-xs sm:text-sm font-semibold uppercase tracking-[0.2em]">Draw Date</p>
-                <p className="font-agency text-white text-lg sm:text-2xl font-bold mt-1">{drawDateLabel}</p>
-                
-              </div>
-            )}
-
             <button
               onClick={handleEnterNow}
               suppressHydrationWarning
