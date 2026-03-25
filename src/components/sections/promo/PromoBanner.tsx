@@ -833,7 +833,13 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center"
                   >
-                    <div className={`${rightSectionLabelClass} font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider`}>
+                    <div
+                      className="font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider"
+                      style={{
+                        color: theme.primary,
+                        textShadow: "0 1px 3px rgba(0,0,0,0.65)",
+                      }}
+                    >
                       NEXT DRAW IN
                     </div>
                     <div className="flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2">
