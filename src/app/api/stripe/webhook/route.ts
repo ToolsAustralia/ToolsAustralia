@@ -3095,7 +3095,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       typeof invoiceSubscription === "string" ? invoiceSubscription : (invoiceSubscription as Stripe.Subscription)?.id;
 
     /** Canonical ID for this payment: invoice first, then DB fallback (e.g. rare missing expand). */
-    let subscriptionId: string | undefined = invoiceSubscriptionId ?? user.stripeSubscriptionId ?? undefined;
+    const subscriptionId: string | undefined = invoiceSubscriptionId ?? user.stripeSubscriptionId ?? undefined;
 
     // Observability for upgrade flows (subscriptionId already matches invoice when invoice has a subscription)
     if (user.subscription?.pendingChange?.stripeSubscriptionId && invoiceSubscriptionId) {
