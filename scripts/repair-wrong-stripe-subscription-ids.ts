@@ -6,9 +6,7 @@
  *
  * Scenario: Race condition during checkout creates two subscriptions. The DB
  * ends up with the ID of the one that went incomplete_expired, while the
- * actually-paid subscription has a different ID. This causes the app to think
- * the user is expired because the repair-expired-enddates script (correctly)
- * skips dead subscriptions.
+ * actually-paid subscription has a different ID.
  *
  * This script:
  *   1. Finds users where stripeSubscriptionId exists and the stored sub is
@@ -72,11 +70,10 @@ function getRetryAfterMs(err: unknown, attempt: number): number {
 // Use base Stripe.Subscription so we can assign from both retrieve() and list().data
 type StripeSubscription = import("stripe").Stripe.Subscription;
 
-function buildCandidateFilter(now: Date) {
+function buildCandidateFilter() {
   return {
     stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
     stripeCustomerId: { $exists: true, $nin: [null, ""] },
-    "subscription.endDate": { $lte: now },
     "subscription.packageId": { $exists: true, $ne: null },
     "processedPayments.0": { $exists: true },
     "subscription.status": { $ne: "incomplete" },
@@ -141,7 +138,7 @@ async function main() {
   const { getSubscriptionPeriodEnd } = await import("../src/utils/payment/stripe/subscription-period");
 
   const now = new Date();
-  const candidateFilter = buildCandidateFilter(now);
+  const candidateFilter = buildCandidateFilter();
 
   console.log("\n🔧 Repair stripeSubscriptionId for users pointing to dead subscriptions");
   console.log(`   Mode: ${DRY_RUN ? "DRY RUN (no DB writes)" : "LIVE"}`);
@@ -173,7 +170,7 @@ async function main() {
 
     let candidateQuery = User.find(candidateFilter)
       .select("_id email stripeSubscriptionId stripeCustomerId subscription")
-      .sort({ "subscription.endDate": 1 });
+      .sort({ _id: 1 });
 
     if (LIMIT !== undefined) {
       candidateQuery = candidateQuery.limit(LIMIT);
