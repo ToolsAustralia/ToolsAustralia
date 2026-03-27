@@ -3086,35 +3086,27 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       lineItems: expandedInvoice.lines?.data?.length || 0,
     });
 
-    // Get subscription ID - check if this is an upgrade scenario
-    let subscriptionId = user.stripeSubscriptionId;
-
-    // Resolve subscription ID from invoice when expanded (for new subscriptions user may not have stripeSubscriptionId yet)
+    // Resolve subscription from invoice (expanded). For invoice.payment_succeeded, Stripe's invoice.subscription
+    // is the source of truth for which subscription was billed — not Mongo stripeSubscriptionId (can be stale
+    // after duplicate incomplete subs / checkout races).
     const invoiceSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
       .subscription;
     const invoiceSubscriptionId =
       typeof invoiceSubscription === "string" ? invoiceSubscription : (invoiceSubscription as Stripe.Subscription)?.id;
 
-    // For upgrades, check if the invoice is for a new subscription with pending change
-    // This handles BOTH old pattern (create new subscription) and new pattern (update subscription)
-    if (user.subscription?.pendingChange?.stripeSubscriptionId) {
-      // If this invoice is for the pending change subscription OR current subscription with proration, use that
+    /** Canonical ID for this payment: invoice first, then DB fallback (e.g. rare missing expand). */
+    let subscriptionId: string | undefined = invoiceSubscriptionId ?? user.stripeSubscriptionId ?? undefined;
+
+    // Observability for upgrade flows (subscriptionId already matches invoice when invoice has a subscription)
+    if (user.subscription?.pendingChange?.stripeSubscriptionId && invoiceSubscriptionId) {
       if (invoiceSubscriptionId === user.subscription.pendingChange.stripeSubscriptionId) {
-        subscriptionId = invoiceSubscriptionId;
         webhookLog(
           "info",
           `Processing upgrade payment for subscription: ${subscriptionId} (proration: ${hasProrationItems})`
         );
       } else if (invoiceSubscriptionId === user.stripeSubscriptionId && isProrationInvoice) {
-        subscriptionId = invoiceSubscriptionId;
         webhookLog("info", `Processing proration charge on existing subscription: ${subscriptionId}`);
       }
-    }
-
-    // For subscription_create, user may not have stripeSubscriptionId saved yet; use invoice's subscription
-    if (!subscriptionId && invoiceSubscriptionId) {
-      subscriptionId = invoiceSubscriptionId;
-      webhookLog("info", `Using subscription ID from invoice: ${subscriptionId}`);
     }
 
     if (!subscriptionId) {
@@ -3122,10 +3114,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       return;
     }
 
-    // Use expanded subscription from invoice when available (includes CAPI metadata set at creation)
+    if (invoiceSubscriptionId && invoiceSubscriptionId !== user.stripeSubscriptionId) {
+      webhookLog("info", `Invoice subscription ${invoiceSubscriptionId} (canonical) vs DB stripeSubscriptionId ${user.stripeSubscriptionId ?? "(none)"} — processing payment for invoice subscription`);
+    }
+
+    // Use expanded subscription from invoice when it matches subscriptionId (metadata + fewer round trips)
     let subscription: Stripe.Subscription;
     try {
-      if (typeof invoiceSubscription === "object" && invoiceSubscription !== null && "metadata" in invoiceSubscription) {
+      if (
+        typeof invoiceSubscription === "object" &&
+        invoiceSubscription !== null &&
+        "id" in invoiceSubscription &&
+        (invoiceSubscription as Stripe.Subscription).id === subscriptionId
+      ) {
         subscription = invoiceSubscription as Stripe.Subscription;
       } else {
         subscription = await stripe.subscriptions.retrieve(subscriptionId);
@@ -3155,13 +3156,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       throw stripeError;
     }
 
-    // Auto-correct stripeSubscriptionId when it points to a dead subscription.
-    // Race conditions during checkout can leave the DB pointing to an incomplete/expired sub
-    // while the actual active sub (which just paid) has a different ID.
+    const paidSubscriptionId = subscription.id;
+
+    // Auto-correct stripeSubscriptionId when DB points at a different subscription than the one this invoice paid for,
+    // and the stored subscription is dead (incomplete / incomplete_expired / canceled) or missing (404).
+    // Compare against subscription.id (paid sub), not a local variable seeded only from DB — that made the old check a no-op.
     if (
-      subscriptionId &&
+      paidSubscriptionId &&
       user.stripeSubscriptionId &&
-      user.stripeSubscriptionId !== subscriptionId &&
+      user.stripeSubscriptionId !== paidSubscriptionId &&
       (subscription.status === "active" || subscription.status === "trialing")
     ) {
       try {
@@ -3173,28 +3176,28 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           storedStatus === "canceled";
         if (isStoredDead) {
           await User.findByIdAndUpdate(user._id, {
-            $set: { stripeSubscriptionId: subscriptionId },
+            $set: { stripeSubscriptionId: paidSubscriptionId },
           });
-          user.stripeSubscriptionId = subscriptionId;
+          user.stripeSubscriptionId = paidSubscriptionId;
           webhookLog(
             "info",
-            `Auto-corrected stripeSubscriptionId: ${storedSub.id} (${storedStatus}) → ${subscriptionId} (${subscription.status}) for ${user.email}`
+            `Auto-corrected stripeSubscriptionId: ${storedSub.id} (${storedStatus}) → ${paidSubscriptionId} (${subscription.status}) for ${user.email}`
           );
         }
       } catch (correctErr) {
-        // If the stored sub is 404/deleted, it's definitely dead — correct it
+        // If the stored sub is 404/deleted, it's definitely dead — align DB with the subscription that just paid
         const statusCode =
           correctErr && typeof correctErr === "object" && "statusCode" in correctErr
             ? (correctErr as { statusCode?: number }).statusCode
             : undefined;
         if (statusCode === 404) {
           await User.findByIdAndUpdate(user._id, {
-            $set: { stripeSubscriptionId: subscriptionId },
+            $set: { stripeSubscriptionId: paidSubscriptionId },
           });
-          user.stripeSubscriptionId = subscriptionId;
+          user.stripeSubscriptionId = paidSubscriptionId;
           webhookLog(
             "info",
-            `Auto-corrected stripeSubscriptionId (stored was 404/deleted) → ${subscriptionId} for ${user.email}`
+            `Auto-corrected stripeSubscriptionId (stored was 404/deleted) → ${paidSubscriptionId} for ${user.email}`
           );
         } else {
           webhookLog("warn", `Non-critical: could not verify stored stripeSubscriptionId: ${correctErr}`);
