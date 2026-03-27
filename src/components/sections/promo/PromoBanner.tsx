@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
@@ -9,9 +9,6 @@ import { useMajorDrawCountdown, useCurrentMajorDraw, useNextDraw } from "@/hooks
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
 import { getNextMidnightAEST, convertUTCToAEST } from "@/utils/common/timezone";
-
-// AEST/AEDT timezone identifier (matches timezone.ts)
-const AEST_TIMEZONE = "Australia/Sydney";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
 import { resolvePromoBannerLeftVisual } from "@/utils/promo-banner/resolve-promo-banner-left-visual";
@@ -342,43 +339,62 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
+  const applyScrollThreshold = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const scrollY = window.scrollY;
+    const isMobile = window.innerWidth < 1024;
+    const scrollThreshold = isMobile ? 100 : 200;
+    const nextScrolled = scrollY > scrollThreshold;
+
+    setIsScrolled((prev) => {
+      // FLIP: capture in-flow rect before switching to fixed so we can animate (no teleport to top-4).
+      if (nextScrolled && !prev && bannerRef.current) {
+        const r = bannerRef.current.getBoundingClientRect();
+        floatTop.set(r.top);
+        floatLeft.set(r.left);
+        floatWidth.set(r.width);
+        shouldAnimateFloatEnter.current = true;
+      }
+      return nextScrolled;
+    });
+  }, [floatTop, floatLeft, floatWidth]);
+
   // Handle scroll detection - show fixed banner when user scrolls past threshold, revert when back to top
   useEffect(() => {
     let ticking = false;
 
     const handleScroll = () => {
       if (!ticking) {
+        ticking = true;
         window.requestAnimationFrame(() => {
-          const scrollY = window.scrollY;
-          const isMobile = window.innerWidth < 1024;
-          const scrollThreshold = isMobile ? 100 : 200;
-          const nextScrolled = scrollY > scrollThreshold;
-
-          setIsScrolled((prev) => {
-            // FLIP: capture in-flow rect before switching to fixed so we can animate (no teleport to top-4).
-            if (nextScrolled && !prev && bannerRef.current) {
-              const r = bannerRef.current.getBoundingClientRect();
-              floatTop.set(r.top);
-              floatLeft.set(r.left);
-              floatWidth.set(r.width);
-              shouldAnimateFloatEnter.current = true;
-            }
-            return nextScrolled;
-          });
-
+          applyScrollThreshold();
           ticking = false;
         });
-        ticking = true;
       }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Initial check
+    handleScroll();
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [floatTop, floatLeft, floatWidth]);
+  }, [applyScrollThreshold]);
+
+  // After paint / route change: re-sync scroll state so bar mode geometry isn’t wrong for one frame (full-bleed + sticky FLIP).
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) applyScrollThreshold();
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [pathname, applyScrollThreshold]);
 
   // Leaving fixed mode: stop all FLIP/resize animations and reset motion values so nothing stays "inset" on the bar.
   useLayoutEffect(() => {
@@ -463,31 +479,30 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   const isNoPromo = multiplier === null && variantConfig?.banner?.multiplier === undefined;
 
-  // Helper function to determine if draw is today or tomorrow (in AEST)
-  const getDrawDateStatus = (): "today" | "tomorrow" | null => {
+  // Helper: draw is today or tomorrow (in AEST)
+  const getDrawDateStatus = useCallback((): "today" | "tomorrow" | null => {
     if (!currentDraw?.drawDate) return null;
 
     const drawDateUTC = new Date(currentDraw.drawDate);
     const drawDateAEST = convertUTCToAEST(drawDateUTC);
     const nowAEST = convertUTCToAEST(new Date());
 
-    // Compare calendar days (YYYY-MM-DD)
     const drawDateStr = `${drawDateAEST.getFullYear()}-${String(drawDateAEST.getMonth() + 1).padStart(2, "0")}-${String(drawDateAEST.getDate()).padStart(2, "0")}`;
     const todayStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
 
-    // Calculate tomorrow's date string
     const tomorrowAEST = new Date(nowAEST);
     tomorrowAEST.setDate(tomorrowAEST.getDate() + 1);
     const tomorrowStr = `${tomorrowAEST.getFullYear()}-${String(tomorrowAEST.getMonth() + 1).padStart(2, "0")}-${String(tomorrowAEST.getDate()).padStart(2, "0")}`;
 
     if (drawDateStr === todayStr) {
       return "today";
-    } else if (drawDateStr === tomorrowStr) {
+    }
+    if (drawDateStr === tomorrowStr) {
       return "tomorrow";
     }
 
     return null;
-  };
+  }, [currentDraw?.drawDate]);
 
   // Scheduled promo state: badge "LAST CHANCE"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
   // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
@@ -524,7 +539,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     scheduledPromoState.hasScheduledPromo,
     scheduledPromoState.isUrgent,
     multiplier,
-    currentDraw?.drawDate,
+    getDrawDateStatus,
   ]);
 
   const isDrawnTomorrowLeftArt = leftVisual.staticFamily === "drawn-tomorrow";
@@ -538,9 +553,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   const [leftImageUrlIndex, setLeftImageUrlIndex] = useState(0);
 
+  const leftVisualStaticUrlsKey = leftVisualStaticUrls.join("\0");
   useEffect(() => {
     setLeftImageUrlIndex(0);
-  }, [leftVisualStaticUrls.join("\0")]);
+  }, [leftVisualStaticUrlsKey]);
 
   const displayLeftSrc =
     leftVisualStaticUrls[Math.min(leftImageUrlIndex, leftVisualStaticUrls.length - 1)] ?? leftVisual.src;
@@ -562,15 +578,14 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       drawStatus,
       countdownLabel: variantConfig?.banner?.countdownLabel ?? undefined,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; effectiveEntryForCountdown via source/dates
   }, [
+    getDrawDateStatus,
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
     variantConfig?.banner?.countdownLabel,
     effectiveEntryForCountdown?.source,
     effectiveEntryForCountdown?.scheduledEndDate,
     effectiveEntryForCountdown?.durationMs,
-    currentDraw?.drawDate,
     activeTab,
   ]);
 
@@ -667,20 +682,22 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 width: floatWidth,
                 maxWidth: "100vw",
               }
-            : {
+             : {
                 position: "relative",
-                top: "auto",
+                top: 0,
                 left: "auto",
                 right: "auto",
-                width: "100%",
-                maxWidth: "none",
+                width: "100vw",
+                maxWidth: "100vw",
+                marginLeft: "calc(50% - 50vw)",
+                marginRight: "calc(50% - 50vw)",
               }
         }
         animate={{
           opacity: 1,
         }}
         className={`cursor-pointer select-none ${
-          isScrolled ? "fixed z-50" : "relative z-30 mt-0 w-full max-w-none shrink-0"
+          isScrolled ? "fixed z-50" : "relative top-0 z-30 mt-0 w-full max-w-none shrink-0"
         }`}
         transition={{
           opacity: { duration: 0.35, ease: "easeOut" },

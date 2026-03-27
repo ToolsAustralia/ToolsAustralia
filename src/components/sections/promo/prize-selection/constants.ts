@@ -28,7 +28,7 @@ export const POWERSET_LABELS: Record<string, string> = {
   makita: "MAKITA 15PC KIT",
   dewalt: "DEWALT 14PC KIT",
   milwaukee: "MILWAUKEE 13PC KIT",
-  ryobi: "RYOBI 12PC KIT",
+  ryobi: "RYOBI 19PC KIT",
 };
 
 /** Toolbox display labels - shown as bottom overlay */

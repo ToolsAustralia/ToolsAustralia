@@ -4,7 +4,6 @@ import AffiliateCommission, {
   type CommissionType,
   type IAffiliateCommission,
 } from "@/models/AffiliateCommission";
-import User from "@/models/User";
 import { calculateCommission, COMMISSION_RATE } from "@/lib/affiliate";
 import mongoose from "mongoose";
 

@@ -12,7 +12,7 @@ export interface ModalFooterProps {
 
 const ModalFooter: React.FC<ModalFooterProps> = ({ onClose, brandColors, className = "" }) => {
   return (
-    <div className={`hidden sm:flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 ${className}`}>
+    <div className={`hidden sm:flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-neutral-700 ${className}`}>
       <button
         onClick={onClose}
         type="button"

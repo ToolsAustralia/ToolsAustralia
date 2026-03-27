@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, ReactNode } from "react";
 import { useThemeStore } from "@/stores/useThemeStore";
+import { useAutoTheme } from "@/hooks/useAutoTheme";
 
 type Theme = "light" | "dark";
 
@@ -20,6 +21,9 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, scoped = false }) => {
   const { theme, setTheme, toggleTheme } = useThemeStore();
+  
+  // Enable auto-theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light)
+  useAutoTheme();
 
   useEffect(() => {
     if (typeof window === "undefined") return;

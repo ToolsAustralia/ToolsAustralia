@@ -54,6 +54,7 @@ import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignm
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
 import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -144,9 +145,11 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Determine hero image paths for preloading (will be overridden by variant config if present)
-  // Note: Draw date status is determined client-side, so we only use multiplier here
-  const heroImagePaths = getHeroImagePaths(membershipPromo?.multiplier);
+  // Preload: prefer configured landing PNGs (e.g. cash-prize → all-prizes mobile), else multiplier webps
+  const landingForPreload = getLandingHeroImagePaths(prize.slug);
+  const heroImagePaths: PromoImagePaths = landingForPreload
+    ? { desktop: landingForPreload.desktop, mobile: landingForPreload.mobile }
+    : getHeroImagePaths(membershipPromo?.multiplier);
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -190,7 +193,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
           <main className="w-full overflow-hidden ">
             {/* Ensure hero + brands share the first mobile viewport for better context */}
             <div className="flex flex-col  lg:min-h-0 w-full ">
-              <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} />
+              <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} prizeSlug={prize.slug} />
            
             </div>
 

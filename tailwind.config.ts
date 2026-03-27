@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { BRAND_THEMES } from "./src/config/brand-theme";
 
 const config: Config = {
   darkMode: "class",
@@ -51,6 +52,29 @@ const config: Config = {
           dark: "#065255",
         },
         "premium-gold": "#D4AF37",
+        // Brand theme colors - centralized brand palettes
+        brand: {
+          dewalt: {
+            primary: BRAND_THEMES.dewalt.light.primary,
+            secondary: BRAND_THEMES.dewalt.light.secondary,
+            accent: BRAND_THEMES.dewalt.light.accent,
+          },
+          makita: {
+            primary: BRAND_THEMES.makita.light.primary,
+            secondary: BRAND_THEMES.makita.light.secondary,
+            accent: BRAND_THEMES.makita.light.accent,
+          },
+          milwaukee: {
+            primary: BRAND_THEMES.milwaukee.light.primary,
+            secondary: BRAND_THEMES.milwaukee.light.secondary,
+            accent: BRAND_THEMES.milwaukee.light.accent,
+          },
+          ryobi: {
+            primary: BRAND_THEMES.ryobi.light.primary,
+            secondary: BRAND_THEMES.ryobi.light.secondary,
+            accent: BRAND_THEMES.ryobi.light.accent,
+          },
+        },
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "sans-serif"],
