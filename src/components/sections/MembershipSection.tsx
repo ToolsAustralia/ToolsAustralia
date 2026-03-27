@@ -13,20 +13,21 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
-import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
   getPackageColorSchemeForPromo,
-  getMembershipSectionGlowColor,
+  getMembershipSectionInnerSheenClassNames,
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
 
 /** Uniform Enter Now CTA style: slate gradient, border, shadow, shimmer. Text is white; package color only on hover/active. */
 const UNIFORM_CTA_CLASS =
@@ -57,6 +58,8 @@ export default function MembershipSection({
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
+  /** Must be top-level — image onError fallback for multiplier banner */
+  const [multiplierBannerLoadFailed, setMultiplierBannerLoadFailed] = useState(false);
 
   // Handle client-side mounting to prevent hydration mismatch
   useEffect(() => {
@@ -69,9 +72,7 @@ export default function MembershipSection({
   // Fetch user data to check membership status
   const { userData, loading: userLoading } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
-  const { requestModal } = useModalPriorityStore();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
@@ -87,21 +88,12 @@ export default function MembershipSection({
       const detail = event.detail ?? {};
       const plan = detail.plan as LocalMembershipPlan | undefined;
 
-      // Check if gates are closed (freeze period or gap period)
-      const gatesClosed = currentMajorDraw?.status !== "active";
-      if (gatesClosed) {
-        // Show gate-closed modal instead of opening payment modals
-        requestModal("gate-closed", true, {
-          nextActivationDate: nextDraw?.activationDate ?? null,
-          nextDrawName: nextDraw?.name,
-        });
-        return;
-      }
-
-      if (plan) {
-        membershipModal.setSelectedPlan(plan);
-      }
-      membershipModal.openModal();
+      whenGatesOpenElseGateModal(() => {
+        if (plan) {
+          membershipModal.setSelectedPlan(plan);
+        }
+        membershipModal.openModal();
+      });
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
@@ -109,7 +101,7 @@ export default function MembershipSection({
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal, currentMajorDraw, nextDraw, requestModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal]);
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
@@ -121,6 +113,17 @@ export default function MembershipSection({
 
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+
+  const effectivePromoMultiplier =
+    activeTab === "membership"
+      ? resolvedMembershipMultiplier
+      : hasAccessToAdditionalPackages && hasActiveSubscription
+        ? resolvedMembershipMultiplier
+        : resolvedOneTimeMultiplier;
+
+  useEffect(() => {
+    setMultiplierBannerLoadFailed(false);
+  }, [effectivePromoMultiplier, activeTab]);
 
   // Update default tab: no active subscription → membership tab; with subscription and access → one-time
   useEffect(() => {
@@ -205,50 +208,41 @@ export default function MembershipSection({
 
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
-    // Check if gates are closed (freeze period or gap period)
-    const gatesClosed = currentMajorDraw?.status !== "active";
-    if (gatesClosed) {
-      // Show gate-closed modal instead of opening payment modals
-      requestModal("gate-closed", true, {
-        nextActivationDate: nextDraw?.activationDate ?? null,
-        nextDrawName: nextDraw?.name,
-      });
-      return;
-    }
+    whenGatesOpenElseGateModal(() => {
+      const hierarchy = getPlanHierarchy(plan);
 
-    const hierarchy = getPlanHierarchy(plan);
+      // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
+      if (hasBlockingSub && isPastDue) {
+        router.push("/my-account");
+        return;
+      }
 
-    // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
-    if (hasBlockingSub && isPastDue) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is a downgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isDowngrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is a downgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isDowngrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is an upgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isUpgrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is an upgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isUpgrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is the current plan, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isCurrent) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is the current plan, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isCurrent) {
-      router.push("/my-account");
-      return;
-    }
+      // For new subscriptions (no active subscription), use the modal
+      membershipModal.openModal(plan);
 
-    // For new subscriptions (no active subscription), use the modal
-    membershipModal.openModal(plan);
-
-    // Call the original onPlanSelect if provided
-    if (onPlanSelect) {
-      onPlanSelect(plan);
-    }
+      // Call the original onPlanSelect if provided
+      if (onPlanSelect) {
+        onPlanSelect(plan);
+      }
+    });
   };
 
   // Get membership plans from API data and convert to local format
@@ -409,29 +403,38 @@ export default function MembershipSection({
     return variantConfig?.highlightPackage === planId;
   };
 
+  const promoHeaderBannerPath =
+    effectivePromoMultiplier !== null && effectivePromoMultiplier > 1
+      ? getMultiplierBannerPath(effectivePromoMultiplier)
+      : null;
+
   return (
     <section id="membership" className={`${padding} w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10`}>
   
-        {/* Section Header - Promo-based: only show title when active promo */}
-        {(() => {
-          const effectiveMultiplier =
-            activeTab === "membership"
-              ? resolvedMembershipMultiplier
-              : hasAccessToAdditionalPackages && hasActiveSubscription
-                ? resolvedMembershipMultiplier
-                : resolvedOneTimeMultiplier;
-          const hasActivePromo = effectiveMultiplier !== null && effectiveMultiplier > 1;
-          if (!hasActivePromo) return null;
-          return (
-            <div className="text-center">
+        {/* Section Header - Promo-based: show banner image when active promo */}
+        {effectivePromoMultiplier !== null && effectivePromoMultiplier > 1 && (
+          <div className="text-center mb-2 sm:mb-3 lg:mb-4">
+            {promoHeaderBannerPath && !multiplierBannerLoadFailed ? (
+              <div className="flex justify-center">
+                <Image
+                  src={promoHeaderBannerPath}
+                  alt={`${effectivePromoMultiplier}X Promo Activated`}
+                  width={BANNER_DIMENSIONS.width}
+                  height={BANNER_DIMENSIONS.height}
+                  className="w-full max-w-2xl lg:max-w-md h-auto object-contain"
+                  priority
+                  onError={() => setMultiplierBannerLoadFailed(true)}
+                />
+              </div>
+            ) : (
               <h2
-                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white mb-2 sm:mb-3 lg:mb-4`}
+                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white`}
               >
-                <span style={{ color: theme.primary }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
+                <span style={{ color: theme.primary }}>{effectivePromoMultiplier}X PROMO</span> ACTIVATED
               </h2>
-            </div>
-          );
-        })()}
+            )}
+          </div>
+        )}
 
         {/* Toggle - Always show One-Time and Membership Packs so user can switch between both */}
         <div className="flex justify-center mb-4 ">
@@ -562,9 +565,10 @@ export default function MembershipSection({
                         >
                           {/* Inside Glow - Whole Card with Margin */}
                           <div
-                            className={`absolute inset-2 sm:inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
+                            className={`absolute inset-2 sm:inset-0.5 ${getMembershipSectionInnerSheenClassNames(
                               plan.id,
-                              activeTab === "membership"
+                              activeTab === "membership",
+                              contextVariantConfig
                             )} pointer-events-none rounded-2xl z-0`}
                           ></div>
 
@@ -856,10 +860,11 @@ export default function MembershipSection({
                     <div className="h-full flex flex-col pt-10 relative px-4 py-2 uppercase">
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
-                        className={`absolute inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
-                          plan.id,
-                          activeTab === "membership"
-                        )} pointer-events-none rounded-2xl z-0`}
+                        className={`absolute inset-0.5 ${getMembershipSectionInnerSheenClassNames(
+                              plan.id,
+                              activeTab === "membership",
+                              contextVariantConfig
+                            )} pointer-events-none rounded-2xl z-0`}
                       ></div>
                       {/* Plan Header - Centered */}
                       <div className="text-center ">

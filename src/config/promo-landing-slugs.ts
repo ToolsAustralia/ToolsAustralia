@@ -5,7 +5,12 @@
  */
 
 import type { PrizeSlug } from "./prizes";
-import type { MajorDrawHeroUrgency, PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { MajorDrawHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
+import {
+  resolveLandingHeroImages,
+  resolveEvergreenHeroImages,
+} from "@/utils/promo/landing-image-resolver";
+import { slugToBrandKey } from "@/config/brand-theme";
 
 export const TOOLSET_LANDING_SLUGS = [
   "ryobi",
@@ -24,28 +29,30 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug]>
   makita: ["makita-sidchrome", "makita-milwaukee"],
 };
 
-const LANDING_IMAGE_BASE = "/images/background/promo/landing";
+/**
+ * Prize slug -> landing hero image paths with light/dark support.
+ * Uses the new .png assets with brand-specific folders.
+ * null = use standard promo hero.
+ */
+const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
+  /** Collage hero under `all-prizes/` (desktop/mobile × light/dark). */
+  "cash-prize": resolveEvergreenHeroImages(),
 
-/** Prize slug -> landing hero image paths. null = use standard promo hero. */
-const LANDING_HERO_MAP: Partial<Record<PrizeSlug, PromoImagePaths>> = {
-  // Ryobi: Sidchrome TB images (default for ryobi)
-  "ryobi-sidchrome": {
-    desktop: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet-mobile.webp`,
-  },
-  // Milwaukee, DeWalt, Makita: Milwaukee TB images (default until Sidchrome TB variants are ready)
-  "milwaukee-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet-mobile.webp`,
-  },
-  "dewalt-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet-mobile.webp`,
-  },
-  "makita-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet-mobile.webp`,
-  },
+  // Ryobi prizes
+  "ryobi-sidchrome": resolveLandingHeroImages("ryobi"),
+  "ryobi-milwaukee": resolveLandingHeroImages("ryobi"),
+  
+  // Milwaukee prizes
+  "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee"),
+  "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee"),
+  
+  // DeWalt prizes
+  "dewalt-sidchrome": resolveLandingHeroImages("dewalt"),
+  "dewalt-milwaukee": resolveLandingHeroImages("dewalt"),
+  
+  // Makita prizes
+  "makita-sidchrome": resolveLandingHeroImages("makita"),
+  "makita-milwaukee": resolveLandingHeroImages("makita"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
@@ -76,19 +83,29 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
 
 /**
  * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
+ * Returns extended paths with light/dark variants.
  */
-export function getLandingHeroImagePaths(prizeSlug: string): PromoImagePaths | null {
-  return LANDING_HERO_MAP[prizeSlug as PrizeSlug] ?? null;
+export function getLandingHeroImagePaths(prizeSlug: string): ExtendedPromoImagePaths | null {
+  const mapped = LANDING_HERO_MAP[prizeSlug as PrizeSlug];
+  if (mapped) return mapped;
+  
+  // Fallback: try to extract brand from slug
+  const brand = slugToBrandKey(prizeSlug);
+  if (brand) return resolveLandingHeroImages(brand);
+  
+  return null;
 }
 
-/** e.g. milwaukeeTb-dewaltSet.webp → milwaukeeTb-dewaltSet-final-hours.webp */
+/**
+ * Apply major draw urgency to landing paths
+ * Note: Currently returns the same paths since multiplier assets don't exist yet.
+ * This is a placeholder for future urgency variants.
+ */
 export function applyMajorDrawUrgencyToLandingPaths(
-  paths: PromoImagePaths,
-  urgency: MajorDrawHeroUrgency
-): PromoImagePaths {
-  const suffix = urgency;
-  return {
-    desktop: paths.desktop.replace(/\.webp$/, `-${suffix}.webp`),
-    mobile: paths.mobile.replace(/-mobile\.webp$/, `-${suffix}-mobile.webp`),
-  };
+  paths: ExtendedPromoImagePaths,
+  _urgency: MajorDrawHeroUrgency
+): ExtendedPromoImagePaths {
+  // For now, return the same paths since we're using "no-promo" images as fallback
+  // When urgency variants are available, update this to insert urgency suffix
+  return paths;
 }

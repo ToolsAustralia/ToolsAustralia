@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 // Extended Stripe subscription interface with period fields
 interface StripeSubscriptionWithPeriods extends Stripe.Subscription {
@@ -70,6 +71,9 @@ export async function POST(request: NextRequest) {
       // console.log(`❌ No active subscription found for user: ${user.email}`);
       return NextResponse.json({ error: "No active subscription found to upgrade" }, { status: 400 });
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // ✅ FIX: Get current package from Stripe subscription metadata (source of truth)
     let currentStripeSubscription;

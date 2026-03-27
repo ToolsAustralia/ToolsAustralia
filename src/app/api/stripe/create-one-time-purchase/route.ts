@@ -24,6 +24,7 @@ import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 const createOneTimePurchaseSchema = z.object({
   userEmail: z.string().email("Invalid email address"),
@@ -150,6 +151,11 @@ export async function POST(request: NextRequest) {
 
     if (membershipPackage.type !== "one-time") {
       return NextResponse.json({ error: "Package must be a one-time type" }, { status: 400 });
+    }
+
+    if (!isMiniDrawPackage) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
     }
 
     // Check if user already exists (from registration)

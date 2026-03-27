@@ -7,6 +7,8 @@ export type LucideIconName = keyof typeof import("lucide-react");
 export interface PrizeMedia {
   src: string;
   alt: string;
+  /** Optional art-directed URL (e.g. landing `-mobile` assets in promo gallery). */
+  mobileSrc?: string;
 }
 
 export interface PrizeHighlight {
@@ -1031,6 +1033,383 @@ export const RYOBI_POWER_SYSTEM: PrizeSpecItem[] = [
   },
 ];
 
+// ============================================================================
+// MODULAR STORAGE SYSTEMS
+// ============================================================================
+
+export const MILWAUKEE_PACKOUT_STORAGE: PrizeSpecItem[] = [
+  {
+    name: "MILWAUKEE PACKOUT™ 500MM Tool Bag",
+    model: "48228322",
+    description:
+      "Durable 500mm tool bag with impact-resistant molded base and 1680D ballistic material construction. Features open storage, two exterior pockets, and cushioned shoulder strap for comfortable transport.",
+    specifications: [
+      "Tear-resistant 1680D ballistic material with all-metal hardware",
+      "Impact resistant polymer base connects to all PACKOUT™ components",
+      "2 exterior pockets for quick access to tools and accessories",
+      "Spacious storage compartment with 6 interior pockets",
+      "Included shoulder strap, top handles and side handles",
+      "Daisy chains for additional storage options",
+    ],
+  },
+  {
+    name: "MILWAUKEE PACKOUT™ Organiser",
+    model: "48228430",
+    description:
+      "Secure organiser with removable bins that mount to jobsite materials. IP65 rated seal protects contents from water and debris, with No-Travel Bin seals preventing small item migration.",
+    specifications: [
+      "IP65 rated seal protects against water and jobsite debris",
+      "No-Travel Bin seals prevent contents shifting between bins",
+      "Removable bins mount to jobsite material with screws or nails",
+      "Impact resistant polymer construction",
+      "Connects to all Milwaukee PACKOUT™ modular storage",
+    ],
+  },
+  {
+    name: "MILWAUKEE PACKOUT™ Low Profile Organiser",
+    model: "48228431",
+    description:
+      "Compact low-profile organiser with 5 removable storage bins and dividers. Transparent lid with IP65 weather seal keeps small parts organized and protected during transport.",
+    specifications: [
+      "Slim design ideal for organization of small items",
+      "IP65 rated weather seal protects tools and small parts",
+      "Includes 8 small and 2 large removable bins with dividers",
+      "No-Travel Bins seal prevents small part migration",
+      "Integrated center slot for long bits and blades",
+      "Clear top for easy identification of contents",
+      "Heavy duty latches and reinforced hinges",
+    ],
+  },
+  {
+    name: "MILWAUKEE PACKOUT™ Tool Box",
+    model: "48228424",
+    description:
+      "Mid-size tool box with internal organisation tray for hand tools and accessories. Features impact resistant polymer construction with IP65 rated seals and metal reinforced corners.",
+    specifications: [
+      "34kg weight capacity for heavy-duty use",
+      "Impact resistant polymer construction",
+      "IP65 rated seal prevents water and debris damage",
+      "Internal organisation trays for small parts and accessories",
+      "Metal reinforced corners for durability",
+      "Connects to all PACKOUT™ modular storage",
+    ],
+  },
+  {
+    name: "MILWAUKEE PACKOUT™ Large Tool Box",
+    model: "48228425",
+    description:
+      "Large capacity tool box with 45kg weight capacity and metal top handle. Internal organisation tray keeps hand tools accessible while the IP65 seal protects against harsh jobsite conditions.",
+    specifications: [
+      "45kg weight capacity for maximum storage",
+      "Metal top handle more durable than competitive units",
+      "IP65 rated seal protects against water and debris",
+      "Internal organisation tray for hand tools and accessories",
+      "Impact resistant polymer construction",
+      "Connects to all Milwaukee PACKOUT™ modular storage",
+    ],
+  },
+  {
+    name: "MILWAUKEE PACKOUT™ Low Profile Rolling Tool Box",
+    model: "48228427",
+    description:
+      "Heavy-duty rolling tool box with 113kg weight capacity and 9-inch all-terrain wheels. Features fully collapsible 50cm handle, IP65 weather seal, and interior organiser tray for maximum versatility.",
+    specifications: [
+      "113kg (250lbs) weight capacity for tools and materials",
+      "9-inch all-terrain wheels for any jobsite surface",
+      "Fully collapsible 50cm handle fits under truck bed covers",
+      "IP65 rated protection against water and debris",
+      "Interior organisation tray for equipment storage",
+      "Metal reinforced corners and locking points",
+      "Impact resistant body with reinforced hinges",
+      "Modular connectivity with all PACKOUT™ components",
+    ],
+  },
+];
+
+export const DEWALT_TOUGHSYSTEM_STORAGE: PrizeSpecItem[] = [
+  {
+    name: "DEWALT TOUGHSYSTEM® 2.0 DS165 Shallow Box",
+    model: "DWST83293-1",
+    description:
+      "Shallow storage box with detachable handle for convenient storage and use in pick-up trucks. Features IP65 dust and water jet resistance with easy-close metal wire front latches.",
+    specifications: [
+      "Detachable handle for more convenient storage",
+      "IP65 dust tight and water jet resistant seal",
+      "Easy-close metal wire front latches for one-handed operation",
+      "Metal reinforced padlock eye for superior security",
+      "Fully backwards compatible with TOUGHSYSTEM® 1 modules",
+      "DEWALT® Tracker ready with built-in fixing point",
+    ],
+  },
+  {
+    name: "DEWALT TOUGHSYSTEM® 2.0 DS300 Mid Box",
+    model: "DWST83294-1",
+    description:
+      "Mid-size storage box offering balanced capacity and portability. High performance seal ensures dust tight and water jet resistant protection in severe weather conditions.",
+    specifications: [
+      "IP65 rated for dust and water jet resistance",
+      "Easy-close metal wire latches for quick access",
+      "Half module compatibility for future expansion",
+      "Name panel insert for easy content identification",
+      "Metal reinforced padlock eye for security",
+      "Compatible with TOUGHSYSTEM® 1 modules",
+    ],
+  },
+  {
+    name: "DEWALT TOUGHSYSTEM® 2.0 DS450 Mobile Storage Box",
+    model: "DWST83295-1",
+    description:
+      "Mobile storage solution with wheels and telescopic handle for easy transport. Combines maximum capacity with portability for demanding jobsite environments.",
+    specifications: [
+      "Mobile design with wheels and telescopic handle",
+      "IP65 dust tight and water jet resistant",
+      "High performance seal withstands severe weather",
+      "Easy-close metal wire front latches",
+      "DEWALT® Tracker ready for tool tracking",
+      "Fully backwards compatible to TOUGHSYSTEM® 1",
+    ],
+  },
+  {
+    name: "DEWALT TOUGHSYSTEM® 2.0 Organiser",
+    description:
+      "Versatile organiser with removable compartments for small parts and accessories. Clear lid allows quick identification of contents while maintaining IP65 protection.",
+    specifications: [
+      "Removable compartments for flexible organization",
+      "Clear lid for easy content identification",
+      "IP65 rated seal protects small parts",
+      "Compatible with TOUGHSYSTEM® modules",
+      "Ideal for fasteners, bits, and accessories",
+    ],
+  },
+  {
+    name: "DEWALT TOUGHSYSTEM® Open Storage Box with Handle",
+    description:
+      "Spacious open tote with side handles and folding heavy-duty bar for transportation. Can transport up to 29.5kg of equipment with easy access to contents.",
+    specifications: [
+      "29.5kg weight capacity for heavy equipment",
+      "Side grab handles for easy carrying",
+      "Folding heavy-duty bar for secure transport",
+      "Stacking latches for modular system compatibility",
+      "Internal slots for dividers to maximize organization",
+      "Compatible with TOUGHSYSTEM® carrier and modules",
+    ],
+  },
+  {
+    name: "DEWALT DWST82990-1 Soft Tote Tool Bag",
+    model: "DWST82990-1",
+    description:
+      "Heavy-duty 1200 denier soft tote with injected plastic base for water protection. Features 30kg weight capacity with padded shoulder strap and multiple storage compartments.",
+    specifications: [
+      "1200 denier material for durability and tear resistance",
+      "Injected plastic base provides water ingress protection",
+      "30kg weight capacity with rivet reinforced construction",
+      "TSTAK system compatible via side stacking latches",
+      "Aluminium handle for durability and comfort",
+      "Padded shoulder strap for heavy tool transportation",
+      "Close zip compartment for storing valuables securely",
+      "Dimensions: 35cm x 45cm x 25cm",
+    ],
+  },
+  {
+    name: "DEWALT TOUGHSYSTEM® 2.0 Adapter",
+    description:
+      "Cross-platform adapter enabling connectivity between TOUGHSYSTEM® 2.0, TSTAK, and TOUGHCASE® storage solutions. Integrated power tool holder stores drills via belt hook.",
+    specifications: [
+      "Connects TOUGHSYSTEM® 2.0 to TSTAK and TOUGHCASE® sets",
+      "Integrated power tool holder for drills and accessories",
+      "Slots on both sides for hanging tools via belt hook",
+      "Maximum accessibility and flexibility",
+      "Creates highly flexible modular storage system",
+    ],
+  },
+];
+
+export const MAKITA_MAKTRAK_STORAGE: PrizeSpecItem[] = [
+  {
+    name: "MAKITA MAKTRAK™ Rolling Tool Chest Storage",
+    model: "T-90009",
+    description:
+      "Next generation rolling tool chest with Trak Mount Lid system and one-hand latch release. Features 113.4kg max weight capacity, Gecko Grip rubberized handle, and all-terrain rugged wheels.",
+    specifications: [
+      "113.4kg maximum weight capacity",
+      "Horizontal design for maximum accessibility and storage",
+      "Gecko Grip™ rubberized handle for easy loading/unloading",
+      "All-terrain jobsite rugged wheels (229mm diameter)",
+      "Dual hinged removable lid for easy access without unstacking",
+      "Impact resistant copolymer resin for durability",
+      "81.9L holding capacity with 387.4mm extended handle",
+    ],
+    includes: ["1 x 455.6mm x 233.4mm x 85.8mm Storage Tray", "1 x 254mm Molle Panel Divider"],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Extra Large Tool Box Storage",
+    model: "T-90021",
+    description:
+      "Extra large extension tool box with dual-hinged removable lid for access from both sides. Cleat mount on either side allows easy mounting to Rolling Tool Chest for transportation.",
+    specifications: [
+      "45.4kg weight capacity with impact resistant copolymer",
+      "Dual-hinged removable lid allows access from both sides",
+      "Fits oversized tools and accessories",
+      "Cleat mount for easy attachment to Rolling Tool Chest",
+      "58.5L holding capacity",
+      "Trak Mount Lid system with one-hand latch release",
+    ],
+    includes: ["1 x 462.8mm x 310.4mm x 85.8mm Storage Tray"],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Medium Tool Box Storage",
+    model: "T-90037",
+    description:
+      "Medium tool box ideal for smaller tool storage combined with accessories. Features shallow and deep trays with multiple dividers for organizing small parts and hand tools.",
+    specifications: [
+      "34kg weight capacity with impact resistant copolymer",
+      "Single hinge lid with positive locking latches",
+      "18.4L holding capacity",
+      "Fits tools, accessories, batteries, chargers and small parts",
+      "Trak Mount Lid system stacks from either direction",
+    ],
+    includes: [
+      "2 x 310.5mm x 110.7mm x 74.4mm Deep Storage Trays",
+      "2 x 310.5mm x 110.7mm x 47.2mm Shallow Storage Trays",
+    ],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Large Tool Box Storage",
+    model: "T-90015",
+    description:
+      "Large horizontal tool box with dual hinged removable lid for easy access without unstacking. Fits long tools with impact resistant copolymer construction for durability.",
+    specifications: [
+      "45.4kg maximum weight capacity",
+      "63.2L holding capacity for long tools",
+      "Dual hinged removable lid for easy access",
+      "Horizontal design for maximum accessibility",
+      "One-Touch latch release for quick stacking/unstacking",
+      "Impact resistant copolymer for durability",
+    ],
+    includes: ["1 x 455.6mm x 233.4mm x 85.8mm Storage Tray", "1 x 205mm Molle Panel Divider"],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Deep Medium Organiser Storage",
+    model: "T-90043",
+    description:
+      "Deep medium organiser with clear lid and 11 removable bins in 3 different sizes. Able to hold up to 125mm longer fasteners with rib design securing items in place.",
+    specifications: [
+      "22.68kg maximum weight capacity",
+      "18.4L holding capacity",
+      "Clear lid for easy visibility with rib design security",
+      "11 removable organizer bins (3 different sizes)",
+      "Holds up to 125mm longer fasteners",
+      "Bins can mount on wall or outside of lid for easy access",
+    ],
+    includes: [
+      "8 x 85mm x 85mm Organizer Bins",
+      "2 x 91mm x 184mm Organizer Bins",
+      "1 x 290mm x 68mm x 128.5mm Deep Organizer Bin",
+    ],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Low Medium Organiser Storage",
+    model: "T-90059",
+    description:
+      "Low-profile medium organiser with clear lid and 11 removable bins. Features 8 small bin dividers for compartment space suitable for small fasteners or components.",
+    specifications: [
+      "8.14L holding capacity",
+      "Clear lid for easy visibility with rib design security",
+      "11 removable organizer bins in 3 different sizes",
+      "8 x Small Bin Dividers for additional compartments",
+      "Up to 50% more holding capacity vs leading competitors",
+      "Bins can mount on wall or outside of lid",
+    ],
+    includes: [
+      "8 x 85mm x 85mm Organizer Bins",
+      "2 x 91mm x 184mm Organizer Bins",
+      "1 x 290mm x 68mm x 63.5mm Shallow Organizer Bin",
+      "4 x Dividers",
+    ],
+  },
+  {
+    name: "MAKITA MAKTRAK™ Deep Compact Organiser Storage",
+    model: "T-90065",
+    description:
+      "Deep compact organiser with 5 removable bins for versatile storage. Able to hold up to 125mm longer fasteners with clear lid for easy identification of contents.",
+    specifications: [
+      "8.5L holding capacity",
+      "Clear lid for easy visibility with rib design security",
+      "5 removable organizer bins for versatile storage",
+      "Holds up to 125mm longer fasteners",
+      "Up to 25% more holding capacity vs leading competitors",
+      "Bins can mount on wall or outside of lid for easy access",
+    ],
+    includes: ["4 x 85mm x 85mm Organizer Bins", "1 x 91mm x 184mm / 128.5mm Deep Organizer Bin"],
+  },
+];
+
+export const RYOBI_LINK_STORAGE: PrizeSpecItem[] = [
+  {
+    name: "RYOBI LINK™ 3 Piece Rolling Storage Set",
+    description:
+      "Complete rolling storage solution including Standard Toolbox, Medium Toolbox, and Rolling Tool Box. IP65-rated water and dust resistant with impact-resistant materials and integrated bit storage.",
+    specifications: [
+      "IP65-rated water and dust resistant construction",
+      "Made from impact-resistant materials for durability",
+      "Integrated bit storage on lids for quick access",
+      "Double Organiser Tub (Rolling and Medium Tool Boxes)",
+      "Double and Single Organiser Tubs (Standard Tool Box)",
+      "36kg weight capacity when mounted on LINK Wall Rails",
+      "9 inch all-terrain wheels with removable telescopic handle",
+      "90kg weight capacity for Rolling Tool Box with LINK products",
+      "Unique LINK design for secure stacking and locking",
+      "Compatible with LINK Crates, Organisers and Wall Rails",
+    ],
+    includes: [
+      "1 x LINK Standard Toolbox",
+      "1 x LINK Medium Toolbox",
+      "1 x LINK Rolling Tool Box with telescopic handle",
+    ],
+  },
+  {
+    name: "RYOBI LINK™ Wall Mountable Cabinet",
+    description:
+      "Versatile wall-mounted cabinet with 21Ga steel construction. Mounts onto LINK Wall Rails or wall studs with integrated cord access for charging power tool batteries inside.",
+    specifications: [
+      "Durable 21Ga steel construction for secure storage",
+      "Mounts onto LINK Wall Rails or wall studs",
+      "Integrated cord access for powering items inside",
+      "Internal shelf adjusts to six positions",
+      "Magnetic closure keeps doors shut securely",
+      "Locking point on doors for enhanced security",
+      "Dedicated mounting holes for additional LINK products",
+      "Compatible with LINK Hooks and Half Wall Rails",
+    ],
+  },
+  {
+    name: "RYOBI LINK™ 15-Piece Wall Storage Kit",
+    description:
+      "Complete wall storage system with 5 Wall Rails, hooks, holders, crates and tubs. Create a modular wall storage system to eliminate clutter and maximize storage space in garage, shed, or laundry.",
+    specifications: [
+      "5 x Wall Rails (838mm wide, supports up to 94kg)",
+      "High strength polymer material (31kg per 280mm section)",
+      "Visible mounting points and channels for easy installation",
+      "Metal hooks with non-slip coating for extra grip",
+      "Reversible hooks mount in multiple positions",
+      "Double Organiser Tub clips into LINK mobile storage",
+      "Ideal for power tools, garden equipment, camping and sports gear",
+      "Complete system compatibility with all LINK products",
+    ],
+    includes: [
+      "5 x LINK Wall Rails (838mm each)",
+      "1 x Double Organiser Tub",
+      "2 x Reversible Hooks",
+      "2 x Reversible J Hooks",
+      "1 x Large Multi Purpose Hook",
+      "1 x Double Hook",
+      "1 x S Hook",
+      "1 x Large Standard Hook",
+      "Mounting screws and wall plugs included",
+    ],
+  },
+];
+
 /**
  * Prize catalog entries are the single source of truth for prize imagery/copy.
  * Add new prize packs here – frontend components resolve everything dynamically.
@@ -1038,14 +1417,14 @@ export const RYOBI_POWER_SYSTEM: PrizeSpecItem[] = [
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then transport and organise everything with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/sidchrome-milwaukee-toggle.png",
     gallery: [
@@ -1071,8 +1450,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       {
         icon: "Package",
-        title: "Sidchrome 356pc Kit",
-        description: "Complete hand-tool cabinet for workshop builds.",
+        title: "PACKOUT™ Modular Storage",
+        description: "6-piece modular storage system with rolling tool box and organisers.",
       },
       {
         icon: "Battery",
@@ -1081,8 +1460,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       },
       {
         icon: "Wrench",
-        title: "Workshop Ready",
-        description: "Organised storage, lighting, and accessories for any task.",
+        title: "Sidchrome 356pc Kit",
+        description: "Complete hand-tool cabinet for workshop builds.",
       },
     ],
     specSections: [
@@ -1099,6 +1478,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: MILWAUKEE_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "PACKOUT™ Modular Storage",
+        summary: "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+        items: MILWAUKEE_PACKOUT_STORAGE,
+      },
+      {
         id: "storage",
         label: "Workshop Storage & Hand Tools",
         summary: "Sidchrome SCMT11402 roller cabinet loaded with 356 precision hand tools and foam inlays.",
@@ -1108,14 +1493,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-sidchrome",
-    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
     heroSubheading:
-      "Heavy-duty DeWalt FlexVolt and XR cordless range with Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
     summary:
-      "Heavy-duty DeWalt FlexVolt cordless lineup, premium storage, and a 356-piece Sidchrome toolkit plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and a 356-piece Sidchrome toolkit plus $5000 cash.",
     detailedDescription:
-      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using TSTAK storage, wheeled tool bags, and the Sidchrome 356-piece professional hand-tool kit.",
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
       { src: "/images/majordraws/dewalt-set/dewaltSet-sidchromeTb.webp", alt: "DeWalt set with Sidchrome toolbox" },
@@ -1143,13 +1528,13 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "FlexVolt Muscle",
         description: "54V tools for circular, rotary, and reciprocating power.",
       },
-      { icon: "Package", title: "Sidchrome 356pc Kit", description: "Complete hand-tool cabinet for workshop builds." },
+      { icon: "Package", title: "TOUGHSYSTEM® 2.0 Storage", description: "7-piece mobile storage with IP65 protection and cross-platform adapter." },
       {
         icon: "Battery",
         title: "High-Capacity Power",
         description: "FlexVolt + XR batteries with twin-port fast charging.",
       },
-      { icon: "Package", title: "Storage Sorted", description: "TSTAK storage, wheeled tool bag, and pro cabinet." },
+      { icon: "Wrench", title: "Sidchrome 356pc Kit", description: "Complete hand-tool cabinet for workshop builds." },
     ],
     specSections: [
       {
@@ -1165,6 +1550,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: DEWALT_SIDCHROME_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "TOUGHSYSTEM® 2.0 Mobile Storage",
+        summary: "DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system with IP65 rated protection, rolling boxes, organisers, soft tote bag, and cross-platform adapter for complete jobsite flexibility.",
+        items: DEWALT_TOUGHSYSTEM_STORAGE,
+      },
+      {
         id: "storage",
         label: "Storage & Hand Tools",
         summary: "Heavy-duty transport, organisation, and comprehensive Sidchrome hand-tool coverage.",
@@ -1174,14 +1565,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-sidchrome",
-    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
+    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
     heroSubheading:
-      "Complete Makita 18V LXT brushless professional toolkit with Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
     summary:
-      "Makita 18V LXT brushless power tools, advanced battery ecosystem, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
       { src: "/images/majordraws/makita-set/makitaSet-sidchromeTb.webp", alt: "Makita set with Sidchrome toolbox" },
@@ -1204,8 +1595,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
       {
         icon: "Package",
-        title: "Sidchrome 356pc Kit",
-        description: "Complete hand-tool cabinet for workshop builds.",
+        title: "MAKTRAK™ Mobile Storage",
+        description: "7-piece mobile storage with rolling chest and organisers.",
       },
       {
         icon: "Battery",
@@ -1213,9 +1604,9 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
       },
       {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
+        icon: "Wrench",
+        title: "Sidchrome 356pc Kit",
+        description: "Complete hand-tool cabinet for workshop builds.",
       },
     ],
     specSections: [
@@ -1233,6 +1624,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: MAKITA_SIDCHROME_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "MAKTRAK™ Mobile Storage",
+        summary: "Makita MAKTRAK™ 7-piece mobile storage system with 113.4kg capacity rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers for complete jobsite organization.",
+        items: MAKITA_MAKTRAK_STORAGE,
+      },
+      {
         id: "storage",
         label: "Storage & Hand Tools",
         summary: "Heavy-duty transport bags, organisation, and comprehensive Sidchrome hand-tool coverage.",
@@ -1242,14 +1639,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "milwaukee-milwaukee",
-    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit, $5000 cash",
+    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$35,000+ Value",
     gallery: [
       { src: "/images/majordraws/milwaukee-set/milwaukeeSet-milwaukeeTb.webp", alt: "Milwaukee set with Milwaukee toolbox" },
@@ -1274,8 +1671,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       {
         icon: "Package",
-        title: "Milwaukee 56\" Toolbox",
-        description: "High capacity combination tool storage with electronic lock.",
+        title: "PACKOUT™ + 56\" Toolbox",
+        description: "6-piece modular storage plus high capacity combination tool storage.",
       },
       {
         icon: "Battery",
@@ -1302,6 +1699,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: MILWAUKEE_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "PACKOUT™ Modular Storage",
+        summary: "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+        items: MILWAUKEE_PACKOUT_STORAGE,
+      },
+      {
         id: "storage",
         label: "Tool Storage",
         summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
@@ -1311,14 +1714,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-milwaukee",
-    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit, $5000 cash",
+    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
     heroSubheading:
-      "Heavy-duty DeWalt FlexVolt and XR cordless range with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     summary:
-      "Heavy-duty DeWalt FlexVolt cordless lineup, premium Milwaukee tool storage, and comprehensive power tool collection plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, premium Milwaukee tool storage, and comprehensive power tool collection plus $5000 cash.",
     detailedDescription:
-      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries, dual-port charging, and secure transport using the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
       { src: "/images/majordraws/dewalt-set/dewaltSet-milwaukeeTb.webp", alt: "DeWalt set with Milwaukee toolbox" },
@@ -1346,7 +1749,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "FlexVolt Muscle",
         description: "54V tools for circular, rotary, and reciprocating power.",
       },
-      { icon: "Package", title: "Milwaukee 56\" Toolbox", description: "High capacity combination tool storage with electronic lock." },
+      { icon: "Package", title: "TOUGHSYSTEM® 2.0 + Toolbox", description: "7-piece mobile storage plus Milwaukee 56\" combination tool storage." },
       {
         icon: "Battery",
         title: "High-Capacity Power",
@@ -1372,6 +1775,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: DEWALT_SIDCHROME_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "TOUGHSYSTEM® 2.0 Mobile Storage",
+        summary: "DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system with IP65 rated protection, rolling boxes, organisers, soft tote bag, and cross-platform adapter for complete jobsite flexibility.",
+        items: DEWALT_TOUGHSYSTEM_STORAGE,
+      },
+      {
         id: "storage",
         label: "Tool Storage",
         summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
@@ -1381,14 +1790,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-milwaukee",
-    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit, $5000 cash",
+    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
     heroSubheading:
-      "Complete Makita 18V LXT brushless professional toolkit with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     summary:
-      "Makita 18V LXT brushless power tools, advanced battery ecosystem, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
     detailedDescription:
-      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging, then organise the lot inside the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
     prizeValueLabel: "$30,000+ Value",
     gallery: [
       { src: "/images/majordraws/makita-set/makitaSet-milwaukeeTb.webp", alt: "Makita set with Milwaukee toolbox" },
@@ -1411,8 +1820,8 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
       {
         icon: "Package",
-        title: "Milwaukee 56\" Toolbox",
-        description: "High capacity combination tool storage with electronic lock.",
+        title: "MAKTRAK™ + Toolbox",
+        description: "7-piece mobile storage plus Milwaukee 56\" combination tool storage.",
       },
       {
         icon: "Battery",
@@ -1440,6 +1849,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: MAKITA_SIDCHROME_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "MAKTRAK™ Mobile Storage",
+        summary: "Makita MAKTRAK™ 7-piece mobile storage system with 113.4kg capacity rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers for complete jobsite organization.",
+        items: MAKITA_MAKTRAK_STORAGE,
+      },
+      {
         id: "storage",
         label: "Tool Storage",
         summary: "Milwaukee 56\" High Capacity Combination tool storage with premium features.",
@@ -1449,14 +1864,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-sidchrome",
-    label: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
-    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Sidchrome Toolbox, $5000 cash)`,
+    label: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
+    heroHeading: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
     heroSubheading:
-      `${RYOBI_PRIZE_STRICT_NAME} and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.`,
+      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.`,
     summary:
-      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.`,
+      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.`,
     detailedDescription:
-      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.`,
+      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-sidchromeTb.webp",
     gallery: [
@@ -1485,11 +1900,11 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg", alt: "Ryobi toolset" },
     ],
     highlights: [
-      { icon: "Zap", title: "12+ Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
       {
         icon: "Package",
-        title: "Sidchrome 356pc Kit",
-        description: "Complete hand-tool cabinet for workshop builds.",
+        title: "LINK™ Modular Storage",
+        description: "3-piece rolling storage, wall cabinet, and 15-piece wall kit.",
       },
       {
         icon: "Battery",
@@ -1497,9 +1912,9 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         description: "18V ONE+ batteries power 200+ tools across the range.",
       },
       {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
+        icon: "Wrench",
+        title: "Sidchrome 356pc Kit",
+        description: "Complete hand-tool cabinet for workshop builds.",
       },
     ],
     specSections: [
@@ -1516,6 +1931,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         items: RYOBI_POWER_SYSTEM,
       },
       {
+        id: "modular-storage",
+        label: "LINK™ Modular Storage",
+        summary: "Ryobi LINK™ modular storage system with 3-piece rolling storage set (IP65 rated), wall mountable cabinet, and 15-piece wall storage kit for complete workshop and jobsite organization.",
+        items: RYOBI_LINK_STORAGE,
+      },
+      {
         id: "storage",
         label: "Workshop Storage & Hand Tools",
         summary: "Sidchrome SCMT11402 roller cabinet loaded with 356 precision hand tools and foam inlays.",
@@ -1525,14 +1946,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-milwaukee",
-    label: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
-    heroHeading: `${RYOBI_PRIZE_STRICT_NAME} (Milwaukee Toolbox, $5000 cash)`,
+    label: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
+    heroHeading: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
     heroSubheading:
-      `${RYOBI_PRIZE_STRICT_NAME} with Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
     summary:
-      `${RYOBI_PRIZE_STRICT_NAME}, garden equipment and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
     detailedDescription:
-      `Win the ${RYOBI_PRIZE_STRICT_NAME} featuring the 18V ONE+ 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer. Power everything with ONE+ HP 5Ah batteries and organise it all in the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.`,
+      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobiSet-milwaukeeTb.webp",
     gallery: [
@@ -1561,11 +1982,11 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
       { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg", alt: "Ryobi toolset" },
     ],
     highlights: [
-      { icon: "Zap", title: "12+ Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
       {
         icon: "Package",
-        title: "Milwaukee 56\" Toolbox",
-        description: "High capacity combination tool storage with electronic lock.",
+        title: "LINK™ + Toolbox",
+        description: "Modular storage system plus Milwaukee 56\" combination tool storage.",
       },
       {
         icon: "Battery",
@@ -1590,6 +2011,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         label: "Power System",
         summary: "ONE+ HP 5Ah batteries and 2A charger keep every tool ready.",
         items: RYOBI_POWER_SYSTEM,
+      },
+      {
+        id: "modular-storage",
+        label: "LINK™ Modular Storage",
+        summary: "Ryobi LINK™ modular storage system with 3-piece rolling storage set (IP65 rated), wall mountable cabinet, and 15-piece wall storage kit for complete workshop and jobsite organization.",
+        items: RYOBI_LINK_STORAGE,
       },
       {
         id: "storage",
@@ -1684,28 +2111,28 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
   
   // For tool prizes, extract the key brand names
   if (slug === "milwaukee-sidchrome") {
-    return "Sidchrome + Milwaukee + $5,000 Cash";
+    return "Sidchrome + Milwaukee 13pc + PACKOUT + $5,000 Cash";
   }
   if (slug === "dewalt-sidchrome") {
-    return "Sidchrome + DeWalt + $5,000 Cash";
+    return "Sidchrome + DeWalt 14pc + ToughSystem + $5,000 Cash";
   }
   if (slug === "makita-sidchrome") {
-    return "Sidchrome + Makita + $5,000 Cash";
+    return "Sidchrome + Makita 15pc + MAKTRAK + $5,000 Cash";
   }
   if (slug === "ryobi-sidchrome") {
-    return `Sidchrome + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
+    return "Sidchrome + Ryobi 19pc + LINK + $5,000 Cash";
   }
   if (slug === "milwaukee-milwaukee") {
-    return "Milwaukee Toolbox + Milwaukee + $5,000 Cash";
+    return "Milwaukee Toolbox + Milwaukee 13pc + PACKOUT + $5,000 Cash";
   }
   if (slug === "dewalt-milwaukee") {
-    return "Milwaukee Toolbox + DeWalt + $5,000 Cash";
+    return "Milwaukee Toolbox + DeWalt 14pc + ToughSystem + $5,000 Cash";
   }
   if (slug === "makita-milwaukee") {
-    return "Milwaukee Toolbox + Makita + $5,000 Cash";
+    return "Milwaukee Toolbox + Makita 15pc + MAKTRAK + $5,000 Cash";
   }
   if (slug === "ryobi-milwaukee") {
-    return `Milwaukee Toolbox + ${RYOBI_PRIZE_STRICT_NAME} + $5,000 Cash`;
+    return "Milwaukee Toolbox + Ryobi 19pc + LINK + $5,000 Cash";
   }
   
   // Fallback to full label

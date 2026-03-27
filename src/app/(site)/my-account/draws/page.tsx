@@ -5,21 +5,31 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
+import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMemberships } from "@/hooks/useMemberships";
+import MembershipModal from "@/components/modals/MembershipModal";
 import MembershipSection from "@/components/sections/MembershipSection";
 import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 import WinnerTestimonySection from "@/components/sections/WinnerTestimonySection";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
+import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
 import { CheckCircle, Sparkles, Trophy, ChevronRight, Ticket } from "lucide-react";
 import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniDrawCard";
 
 import DashboardHeader from "../components/DashboardHeader";
+import MajorDrawHeaderStrip from "../components/MajorDrawHeaderStrip";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 
 export default function DrawsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { data: accountData, isLoading: loading } = useMyAccountData(session?.user?.id);
+  const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
+  const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
+  useMemberships();
+  const { openEntryFlow, membershipModal } = useMajorDrawEntryCta();
 
   const { data: miniDrawsData, isLoading: miniDrawsLoading } = useMiniDraws({
     page: 1,
@@ -79,7 +89,7 @@ export default function DrawsPage() {
     }
   }, [session, status, router]);
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="text-center">
@@ -161,20 +171,45 @@ export default function DrawsPage() {
   const activeMiniDraws = [...participantMiniDraws, ...otherMiniDraws];
   const hasMiniPackEntries = userParticipatingMiniDrawIds.size > 0;
 
+  const isMajorDrawCompleted = currentMajorDraw?.status === "completed";
+  const isMajorDrawActive = currentMajorDraw?.status === "active";
+  const majorDrawEntryTotal = majorDrawStats?.currentDrawEntries ?? 0;
+  const userInMajorDrawContext = majorDrawEntryTotal > 0 || hasActiveMembership;
+  const showMajorDrawHeaderStrip =
+    Boolean(isMajorDrawActive) && !isMajorDrawCompleted && userInMajorDrawContext;
+
   return (
     <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950">
-      <DashboardHeader title="Draws" showRenewalAlert={hasFailedRenewal(user as unknown as import("@/models/User").IUser)} />
+      <DashboardHeader
+        title="Draws"
+        showRenewalAlert={hasFailedRenewal(user as unknown as import("@/models/User").IUser)}
+        subHeader={
+          showMajorDrawHeaderStrip ? (
+            <MajorDrawHeaderStrip
+              prizeSlug={DEFAULT_PRIZE_SLUG}
+              drawName={currentMajorDraw?.name || "Major Draw"}
+              entryCount={majorDrawEntryTotal}
+              drawDateIso={currentMajorDraw?.drawDate}
+              onBoostEntries={() => openEntryFlow()}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="max-w-7xl mx-auto">
-        <div>
-          <PrizeShowcase />
+        <div className={showMajorDrawHeaderStrip ? "-mt-0.5 sm:mt-0" : undefined}>
+          <PrizeShowcase firstBannerVariant="none" showCountdown={false} />
         </div>
 
         <div>
           <MembershipSection title="BOOST YOUR ODDS 50%" />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-6 sm:pb-8 space-y-6 sm:space-y-8">
+        <div
+          className={`relative max-w-7xl mx-auto px-4 sm:px-6 pb-6 sm:pb-8 space-y-6 sm:space-y-8 ${
+            showMajorDrawHeaderStrip ? "pt-4 sm:pt-6" : "pt-6 sm:pt-8"
+          }`}
+        >
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-9 h-9 xs:w-10 xs:h-10 rounded-xl bg-gradient-to-br from-[#ee0000] to-[#cc0000] dark:from-red-600 dark:to-red-700 flex items-center justify-center shadow-lg shadow-[#ee0000]/20">
@@ -315,6 +350,16 @@ export default function DrawsPage() {
           <WinnerTestimonySection winners={winners} className="mb-6 sm:mb-8" />
         )}
       </div>
+
+      <MembershipModal
+        isOpen={membershipModal.isModalOpen}
+        onClose={membershipModal.closeModal}
+        selectedPlan={membershipModal.selectedPlan}
+        onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
+        }
+      />
     </div>
   );
 }

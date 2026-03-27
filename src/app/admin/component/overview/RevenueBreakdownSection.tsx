@@ -7,7 +7,6 @@ import RevenueDetailModal from "@/components/modals/RevenueDetailModal";
 import { Package, RefreshCw, ShoppingCart, ShoppingBag, Trophy, TrendingUp } from "lucide-react";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import type { RevenueCategory, RevenueBreakdownItem } from "@/hooks/queries/useAdminQueries";
-import type { TrendData } from "@/types/admin/trend-types";
 
 interface RevenueBreakdownSectionProps {
   breakdown: {

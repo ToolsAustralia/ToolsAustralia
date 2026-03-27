@@ -118,7 +118,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               <PromoHero
                 initialPromo={membershipPromo}
                 initialMajorDraw={majorDraw}
-                isToolsetLandingPage
+                prizeSlug={defaultPrizeSlug}
               />
             </div>
 

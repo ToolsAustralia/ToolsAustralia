@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -14,12 +14,15 @@ import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
-import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors, getBrandGlowColor, getBrandBorderColor } from "@/utils/prize-brand-colors";
+import { getLandingPageThemeFromSlug } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useSearchParams, usePathname } from "next/navigation";
-import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import type { PrizeCatalogEntry, PrizeMedia, PrizeSlug } from "@/config/prizes";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import { getImageForMode } from "@/utils/promo/landing-image-resolver";
+import { useThemeStore } from "@/stores/useThemeStore";
 import {
   ToolboxSelector,
   PowerToolsetCarousel,
@@ -37,6 +40,8 @@ import FullscreenImageViewer, {
   type FullscreenImageItem,
 } from "@/components/ui/FullscreenImageViewer";
 import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
 
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -45,12 +50,81 @@ import "swiper/css/effect-fade";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
+/** Matches landing assets: desktop on lg+, dedicated `-mobile` files below `1024px` (see PromoHero). */
+const PRIZE_GALLERY_MOBILE_MEDIA = "(max-width: 1023px)";
+
+type GallerySlideImage = { src: string; alt?: string; mobileSrc?: string };
+
+/** Catalog `PrizeMedia` plus optional landing flag (first slide may be injected). */
+type EnhancedGalleryItem = PrizeMedia & { isLandingImage?: boolean };
+
+/**
+ * Responsive prize/gallery slide: uses `<picture>` when `mobileSrc` is set (landing hero),
+ * otherwise Next/Image only.
+ */
+function PrizeShowcaseResponsiveImage({
+  image,
+  index,
+  scaleClass,
+  translateClass,
+  objectPosition,
+  priority,
+  sizes,
+  alt: altOverride,
+}: {
+  image: GallerySlideImage;
+  index: number;
+  scaleClass: string;
+  translateClass: string;
+  objectPosition?: CSSProperties;
+  priority: boolean;
+  sizes: string;
+  /** When set (e.g. thumbnails), overrides default “Prize view” alt. */
+  alt?: string;
+}) {
+  const resolvedAlt = altOverride ?? image.alt ?? `Prize view ${index + 1}`;
+  const mobile = image.mobileSrc;
+  if (mobile && mobile !== image.src) {
+    return (
+      <picture className="absolute inset-0 block h-full w-full">
+        <source media={PRIZE_GALLERY_MOBILE_MEDIA} srcSet={mobile} />
+        <img
+          src={image.src}
+          alt={resolvedAlt}
+          className={`absolute inset-0 h-full w-full object-contain ${scaleClass} ${translateClass}`}
+          style={objectPosition}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
+        />
+      </picture>
+    );
+  }
+  return (
+    <Image
+      src={image.src}
+      alt={resolvedAlt}
+      fill
+      className={`object-contain ${scaleClass} ${translateClass}`}
+      style={objectPosition}
+      priority={priority}
+      sizes={sizes}
+    />
+  );
+}
+
 interface PrizeShowcaseProps {
   slug?: string;
   /** Toolset landing page mode - both toolboxes, fixed toolset, no navigation */
   toolsetMode?: boolean;
   /** Toolset slug (ryobi, milwaukee, dewalt, makita) when toolsetMode */
   toolsetSlug?: string;
+  /**
+   * Top hero strip: default branded “1st prize” art; `multiplier` uses `/images/banners/multiplier/*` from active promo (membership, then one-time); `none` hides both (countdown + rest unchanged).
+   */
+  firstBannerVariant?: "first-prize-text" | "multiplier" | "none";
+  /** When false, hides `GiveawayCountdownTimer` (e.g. `/my-account/draws`). */
+  showCountdown?: boolean;
 }
 
 const formatIconKey = (iconName: string) =>
@@ -249,9 +323,12 @@ export default function PrizeShowcase({
   slug: slugProp,
   toolsetMode = false,
   toolsetSlug,
+  firstBannerVariant = "first-prize-text",
+  showCountdown = true,
 }: PrizeShowcaseProps = {}) {
   const prizeRef = useScrollAnimation();
   const theme = usePromoTheme();
+  const themeMode = useThemeStore((s) => s.theme);
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const mainSwiperRef = useRef<SwiperType | null>(null);
@@ -266,6 +343,22 @@ export default function PrizeShowcase({
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
+  const [multiplierBannerLoadFailed, setMultiplierBannerLoadFailed] = useState(false);
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  const multiplierForFirstBanner =
+    firstBannerVariant === "multiplier"
+      ? resolvedMembershipMultiplier != null && resolvedMembershipMultiplier > 1
+        ? resolvedMembershipMultiplier
+        : resolvedOneTimeMultiplier != null && resolvedOneTimeMultiplier > 1
+          ? resolvedOneTimeMultiplier
+          : null
+      : null;
+  const multiplierBannerPath =
+    multiplierForFirstBanner != null ? getMultiplierBannerPath(multiplierForFirstBanner) : null;
+  useEffect(() => {
+    setMultiplierBannerLoadFailed(false);
+  }, [multiplierForFirstBanner, firstBannerVariant]);
   const { openEntryFlow } = useMajorDrawEntryCta();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -314,7 +407,6 @@ export default function PrizeShowcase({
   })();
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
 
   // Toolset mode: init effective slug from default (Sidchrome)
   useEffect(() => {
@@ -368,6 +460,13 @@ export default function PrizeShowcase({
   useEffect(() => {
     setActiveGalleryIndex(0);
   }, [activeSlug]);
+
+  // Evergreen (home, my-account, etc.): keep promo theme store in sync with the prize on screen —
+  // toolbox changes update `activeSlug` without always calling `setStoreSlug` (e.g. carousel-first slug).
+  useEffect(() => {
+    if (!activeSlug || toolsetMode || isPromotionsPage) return;
+    setStoreSlug(activeSlug);
+  }, [activeSlug, toolsetMode, isPromotionsPage, setStoreSlug]);
 
   useEffect(() => {
     if (!thumbsSwiper || thumbsSwiper.destroyed) return;
@@ -545,9 +644,32 @@ export default function PrizeShowcase({
   const brandColors = getPrizeBrandColors(activeSlug || "milwaukee-milwaukee");
   const activeBrandBorderColor = getBrandBorderColor(activeSlug || "milwaukee-milwaukee");
   const activeBrandGlowColor = getBrandGlowColor(activeSlug || "milwaukee-milwaukee");
+  /** Full CSS gradients (not Tailwind arbitrary classes) so JIT cannot strip Makita/cyan stops. */
+  const highlightTheme = getLandingPageThemeFromSlug(activeSlug || "milwaukee-milwaukee");
+  const highlightIconClassName = brandColors.textColor.includes("black")
+    ? `${brandColors.textColor} drop-shadow-sm`
+    : `${brandColors.textColor} drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)]`;
   const isRyobiOrDewaltTheme = (activeSlug || "").startsWith("ryobi-") || (activeSlug || "").startsWith("dewalt-");
   const highlights = activePrize.highlights ?? [];
-  const fullscreenImages: FullscreenImageItem[] = activePrize.gallery.map((image, index) => ({
+
+  // Insert landing image as first gallery item if available
+  const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug) : null;
+  const enhancedGallery = ((): EnhancedGalleryItem[] => {
+    if (!landingImagePaths) return activePrize.gallery;
+
+    const landingImageMobile = getImageForMode(landingImagePaths, themeMode, "mobile");
+
+    // First slide: use mobile landing art everywhere (desktop + mobile) per product request
+    const landingImage: EnhancedGalleryItem = {
+      src: landingImageMobile,
+      alt: `${activePrize.heroHeading} Landing Hero`,
+      isLandingImage: true,
+    };
+
+    return [landingImage, ...activePrize.gallery];
+  })();
+  
+  const fullscreenImages: FullscreenImageItem[] = enhancedGallery.map((image, index) => ({
     src: image.src,
     alt: image.alt || `Prize view ${index + 1}`,
   }));
@@ -576,23 +698,53 @@ export default function PrizeShowcase({
         }}
       />
       <div className={useParentContainer ? "relative z-10 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-10`}>
-        <div className="text-center mb-6 sm:mb-12">
-          {/* First Prize Image - Conditionally displayed based on selected prize; smaller on desktop */}
-          <div className="flex justify-center">
-            <Image
-              src={getFirstPrizeImagePath(activeSlug)}
-              alt="First Prize"
-              width={800}
-              height={200}
-              className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
-              priority
-            />
-          </div>
+        {(firstBannerVariant !== "none" || showCountdown) && (
+        <div
+          className={`text-center ${
+            firstBannerVariant !== "none" ? "mb-6 sm:mb-12" : "mb-3 sm:mb-6"
+          }`}
+        >
+          {firstBannerVariant === "multiplier" ? (
+            multiplierForFirstBanner != null &&
+            multiplierBannerPath && (
+              <div className="flex justify-center mb-1 sm:mb-2">
+                {!multiplierBannerLoadFailed ? (
+                  <Image
+                    src={multiplierBannerPath}
+                    alt={`${multiplierForFirstBanner}X promo entries`}
+                    width={BANNER_DIMENSIONS.width}
+                    height={BANNER_DIMENSIONS.height}
+                    className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
+                    priority
+                    onError={() => setMultiplierBannerLoadFailed(true)}
+                  />
+                ) : (
+                  <p className="font-agency font-black uppercase text-xl sm:text-2xl text-gray-900 dark:text-white">
+                    <span className="text-[#ee0000] dark:text-red-400">{multiplierForFirstBanner}X</span> promo active
+                  </p>
+                )}
+              </div>
+            )
+          ) : firstBannerVariant === "first-prize-text" ? (
+            <div className="flex justify-center">
+              <Image
+                src={getFirstPrizeImagePath(activeSlug)}
+                alt="First Prize"
+                width={800}
+                height={200}
+                className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
+                priority
+              />
+            </div>
+          ) : null}
 
-          {/* World-Class Giveaway Countdown Timer */}
+          {showCountdown ? (
           <div className="mt-4 sm:mt-6 max-w-3xl mx-auto px-2 sm:px-3">
             <GiveawayCountdownTimer activeSlug={activeSlug} />
           </div>
+          ) : null}
+        </div>
+        )}
 
           {/* Prize description section - hidden for now */}
           <div className="hidden">
@@ -618,7 +770,7 @@ export default function PrizeShowcase({
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="mt-6 sm:mt-8"
+              className="mt-6 sm:mt-8 mb-10 sm:mb-12 lg:mb-14"
             >
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -683,7 +835,7 @@ export default function PrizeShowcase({
                           : toolsetPrizeSlugs?.[1])
                       : activeSlug) ?? toolsetPrizeSlugs?.[0] ?? "milwaukee-milwaukee") as PrizeSlug
                   }
-                  className=""
+                  className="mb-8 sm:mb-10 lg:mb-12"
                 />
               ) : (
                 <PowerToolsetCarousel
@@ -698,13 +850,13 @@ export default function PrizeShowcase({
                           : null
                   }
                   onSelect={handleSelectPrize}
-                  className=""
+                  className="mb-8 sm:mb-10 lg:mb-12"
                 />
               )}
 
               {/* Cash option is a separate prize path (no toolbox/toolset) */}
-              <div className="mt-4 max-w-5xl mx-auto">
-                <div className="relative flex items-center justify-center my-6 sm:my-8">
+              <div className="mt-2 sm:mt-4 max-w-5xl mx-auto flex flex-col gap-6 sm:gap-8">
+                <div className="relative flex items-center justify-center py-1 sm:py-2">
                   <div className="h-px w-full bg-gray-300 dark:bg-neutral-700" />
                   <div className="absolute px-3 py-1 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-[10px] sm:text-xs font-bold tracking-[0.22em] text-gray-600 dark:text-neutral-400">
                     OR
@@ -733,7 +885,6 @@ export default function PrizeShowcase({
               </div>
             </motion.div>
           )}
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start">
           <div className="relative order-1 space-y-3 sm:space-y-4">
@@ -744,7 +895,7 @@ export default function PrizeShowcase({
                 boxShadow: `0 0 20px ${getBrandGlowColor(activeSlug || "milwaukee-milwaukee")}, 0 8px 32px rgba(0,0,0,0.4)`,
               }}
             >
-              {activePrize.gallery.length > 1 ? (
+              {enhancedGallery.length > 1 ? (
                 <Swiper
                   modules={[EffectFade]}
                   onSwiper={(swiper) => {
@@ -765,7 +916,7 @@ export default function PrizeShowcase({
                   effect="fade"
                   fadeEffect={{ crossFade: true }}
                 >
-                  {activePrize.gallery.map((image, index) => {
+                  {enhancedGallery.map((image, index) => {
                     const src = image.src.toLowerCase();
                     const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
                     const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
@@ -781,12 +932,12 @@ export default function PrizeShowcase({
                       <div
                         className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
                       >
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Prize view ${index + 1}`}
-                          fill
-                          className={`object-contain ${scaleClass} ${translateClass}`}
-                          style={objectPosition}
+                        <PrizeShowcaseResponsiveImage
+                          image={image}
+                          index={index}
+                          scaleClass={scaleClass}
+                          translateClass={translateClass}
+                          objectPosition={objectPosition}
                           priority={index === 0}
                           sizes="(max-width: 1024px) 100vw, 50vw"
                         />
@@ -796,7 +947,7 @@ export default function PrizeShowcase({
                 </Swiper>
               ) : (
                 (() => {
-                  const firstSrc = (activePrize.gallery[0]?.src ?? "").toLowerCase();
+                  const firstSrc = (enhancedGallery[0]?.src ?? "").toLowerCase();
                   const isMakitaSetHero = firstSrc.includes("makitaset-") && firstSrc.endsWith(".webp");
                   const isMilwaukeeSetHero = firstSrc.includes("milwaukeeset-") && firstSrc.endsWith(".webp");
                   const isMilwaukeeSetMilwaukeeTb = firstSrc.includes("milwaukeeset-milwaukeetb");
@@ -806,16 +957,21 @@ export default function PrizeShowcase({
                   const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp")) ? "scale-150" : "";
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
                   const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                  const firstSlide = enhancedGallery[0];
                   return (
                 <div
                   className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
                 >
-                  <Image
-                    src={activePrize.gallery[0]?.src || "/images/grand-draw.jpg"}
-                    alt={activePrize.gallery[0]?.alt || "Prize view"}
-                    fill
-                    className={`object-contain ${scaleClass} ${translateClass}`}
-                    style={objectPosition}
+                  <PrizeShowcaseResponsiveImage
+                    image={{
+                      src: firstSlide?.src || "/images/grand-draw.jpg",
+                      alt: firstSlide?.alt,
+                      mobileSrc: firstSlide?.mobileSrc,
+                    }}
+                    index={0}
+                    scaleClass={scaleClass}
+                    translateClass={translateClass}
+                    objectPosition={objectPosition}
                     priority
                     sizes="(max-width: 1024px) 100vw, 50vw"
                   />
@@ -825,12 +981,12 @@ export default function PrizeShowcase({
 
               <div className="absolute right-3 top-3 z-30">
                 <FullscreenTriggerButton
-                  onClick={() => openFullscreenAtIndex(activePrize.gallery.length > 1 ? activeGalleryIndex : 0)}
+                  onClick={() => openFullscreenAtIndex(enhancedGallery.length > 1 ? activeGalleryIndex : 0)}
                   label={`View prize image ${activeGalleryIndex + 1} in fullscreen`}
                 />
               </div>
 
-              {activePrize.gallery.length > 1 && mainCanSlidePrev && (
+              {enhancedGallery.length > 1 && mainCanSlidePrev && (
                 <button
                   type="button"
                   onClick={() => mainSwiperRef.current?.slidePrev()}
@@ -848,7 +1004,7 @@ export default function PrizeShowcase({
                 </button>
               )}
 
-              {activePrize.gallery.length > 1 && mainCanSlideNext && (
+              {enhancedGallery.length > 1 && mainCanSlideNext && (
                 <button
                   type="button"
                   onClick={() => mainSwiperRef.current?.slideNext()}
@@ -885,7 +1041,7 @@ export default function PrizeShowcase({
               </div> */}
             </div>
 
-            {activePrize.gallery.length > 1 && (
+            {enhancedGallery.length > 1 && (
               <div className="relative">
                 <Swiper
                   modules={[Grid]}
@@ -917,7 +1073,7 @@ export default function PrizeShowcase({
                   className="thumbs-swiper h-[120px] sm:h-[140px] lg:h-[156px]"
                   data-brand-slug={activeSlug}
                 >
-                  {activePrize.gallery.map((image, index) => {
+                  {enhancedGallery.map((image, index) => {
                     const src = image.src.toLowerCase();
                     const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
                     const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
@@ -948,13 +1104,15 @@ export default function PrizeShowcase({
                           : {}),
                         }}
                       >
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Prize thumbnail ${index + 1}`}
-                          fill
-                          className={`object-contain ${scaleClass} ${translateClass}`}
-                          style={objectPosition}
+                        <PrizeShowcaseResponsiveImage
+                          image={image}
+                          index={index}
+                          scaleClass={scaleClass}
+                          translateClass={translateClass}
+                          objectPosition={objectPosition}
+                          priority={false}
                           sizes="64px"
+                          alt={image.alt || `Prize thumbnail ${index + 1}`}
                         />
                         {activeGalleryIndex === index && (
                           <span
@@ -1021,9 +1179,19 @@ export default function PrizeShowcase({
                     className="relative flex items-center gap-2 sm:gap-3 p-2 sm:p-3 min-h-[40px] sm:min-h-[60px] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
-                    <div className={`relative w-7 h-7 sm:w-12 sm:h-12 flex-shrink-0 bg-gradient-to-br ${brandColors.gradient.replace('from-', 'from-').replace('via-', 'via-').replace('to-', 'to-')}/80 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} shadow-lg z-10`}>
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-lg sm:rounded-xl pointer-events-none"></div>
-                      <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${brandColors.textColor} relative z-10`} />
+                    <div
+                      className="relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 shadow-lg backdrop-blur-sm sm:h-12 sm:w-12 sm:rounded-xl"
+                      style={{
+                        backgroundImage: highlightTheme.gradientSolid,
+                        borderColor: activeBrandBorderColor,
+                        boxShadow: `0 2px 14px ${activeBrandGlowColor}`,
+                      }}
+                    >
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-br from-white/35 via-white/10 to-transparent sm:rounded-xl"
+                        aria-hidden
+                      />
+                      <Icon className={`relative z-10 w-3.5 h-3.5 sm:w-5 sm:h-5 ${highlightIconClassName}`} strokeWidth={2.25} />
                     </div>
                     <div className="flex-1 relative z-10 min-w-0 flex flex-col justify-center">
                       <h3 className="text-[11px] sm:text-lg font-bold text-white font-['Poppins'] mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">

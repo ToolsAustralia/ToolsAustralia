@@ -1,16 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import {
-  Activity,
-  UserCheck,
-  Trophy,
-  DollarSign,
-  AlertTriangle,
-  Crown,
-  Search,
-  Loader2,
-} from "lucide-react";
+import { Activity, AlertTriangle, Search, Loader2 } from "lucide-react";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import { useActivityLogInfinite } from "@/hooks/queries/useAdminQueries";
 
@@ -51,25 +42,6 @@ export default function ActivityLogManagement() {
   // Flatten all pages into a single array
   const allActivities = data?.pages.flatMap((page) => page.activities) ?? [];
   const totalActivities = data?.pages[0]?.pagination.total ?? 0;
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "user_signup":
-        return <UserCheck className="w-4 h-4" />;
-      case "draw_complete":
-        return <Trophy className="w-4 h-4" />;
-      case "high_value_order":
-        return <DollarSign className="w-4 h-4" />;
-      case "system_alert":
-        return <AlertTriangle className="w-4 h-4" />;
-      case "membership_upgrade":
-        return <Crown className="w-4 h-4" />;
-      case "subscription_past_due":
-        return <AlertTriangle className="w-4 h-4" />;
-      default:
-        return <Activity className="w-4 h-4" />;
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {

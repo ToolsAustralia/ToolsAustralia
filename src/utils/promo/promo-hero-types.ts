@@ -15,6 +15,17 @@ export interface PromoImagePaths {
 }
 
 /**
+ * Extended image paths with light/dark mode support
+ * Contains all 4 variants: desktop/mobile × light/dark
+ */
+export interface ExtendedPromoImagePaths {
+  desktop: string;
+  mobile: string;
+  desktopDark: string;
+  mobileDark: string;
+}
+
+/**
  * Draw date status for conditional image selection (e.g. promo banner countdown copy)
  */
 export type DrawDateStatus = "today" | "tomorrow" | null;

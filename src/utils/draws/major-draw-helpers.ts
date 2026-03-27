@@ -103,6 +103,56 @@ export async function getTargetMajorDraw(paymentMetadata?: PaymentMetadata): Pro
   return nextDraw;
 }
 
+/** API / client stable code when new entry purchases are blocked (gap, frozen, no active draw). */
+export const GATES_CLOSED_ERROR_CODE = "GATES_CLOSED" as const;
+
+export type MajorDrawGateClosedResult = {
+  ok: false;
+  code: typeof GATES_CLOSED_ERROR_CODE;
+  message: string;
+  nextActivationDate: string | null;
+  nextDrawName?: string;
+};
+
+export type MajorDrawGateOpenResult = { ok: true; draw: IMajorDraw };
+
+/**
+ * Authoritative "gates open" for NEW major-draw entry purchases (matches UI: status === "active").
+ * Subscription renewals use {@link getTargetMajorDraw} instead.
+ */
+export async function getActiveMajorDrawForNewEntryPurchases(): Promise<IMajorDraw | null> {
+  try {
+    const { transitionMajorDrawsIfNeeded } = await import("./major-draw-transition-service");
+    await transitionMajorDrawsIfNeeded();
+  } catch {
+    // non-blocking; cron may still transition
+  }
+
+  const now = new Date();
+  return await MajorDraw.findOne({
+    status: "active",
+    activationDate: { $lte: now },
+  }).sort({ activationDate: -1 });
+}
+
+export async function checkMajorDrawActiveForNewPurchases(): Promise<
+  MajorDrawGateOpenResult | MajorDrawGateClosedResult
+> {
+  const draw = await getActiveMajorDrawForNewEntryPurchases();
+  if (draw) {
+    return { ok: true, draw };
+  }
+
+  const next = await getNextQueuedDraw();
+  return {
+    ok: false,
+    code: GATES_CLOSED_ERROR_CODE,
+    message: "Major draw is not accepting new entries at this time.",
+    nextActivationDate: next?.activationDate ? new Date(next.activationDate).toISOString() : null,
+    nextDrawName: next?.name,
+  };
+}
+
 /**
  * Get the next queued major draw
  * @returns Next queued draw or null if none found

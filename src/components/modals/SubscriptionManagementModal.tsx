@@ -17,6 +17,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
 interface User {
   _id: string;
@@ -230,6 +231,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   // Use parent's membershipModal if provided, otherwise create a new instance
   const localMembershipModal = useMembershipModal();
   const membershipModal = parentMembershipModal || localMembershipModal;
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
 
@@ -1119,7 +1121,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose();
-                  membershipModal.openModalWithPackageSelectionFirst();
+                  whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
                 className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
@@ -1145,7 +1147,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose();
-                  membershipModal.openModalWithPackageSelectionFirst();
+                  whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
                 className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
@@ -1165,7 +1167,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               <Button
                 onClick={() => {
                   onClose();
-                  membershipModal.openModalWithPackageSelectionFirst();
+                  whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
                 className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"

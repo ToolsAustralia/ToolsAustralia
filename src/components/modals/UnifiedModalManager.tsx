@@ -21,6 +21,7 @@ import type { IUser } from "@/models/User";
 
 // Import data
 import { getMemberOnlyPackages } from "@/data/membershipPackages";
+import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 /**
  * Unified Modal Manager
@@ -43,6 +44,9 @@ const UnifiedModalManager: React.FC = () => {
   const { isAuthenticated, userData, loading } = useUserContext();
   const pathname = usePathname();
   const renewalFailedRequestedRef = useRef(false);
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
+  const { data: nextDraw } = useNextDraw();
+  const interceptedSpecialPackagesRef = useRef(false);
 
   // Modal store states
   // Modal states are now managed by the priority system
@@ -84,6 +88,25 @@ const UnifiedModalManager: React.FC = () => {
     renewalFailedRequestedRef.current = true;
     requestModal("renewal-failed", true);
   }, [isAuthenticated, userData, loading, pathname, requestModal]);
+
+  useEffect(() => {
+    if (activeModal !== "special-packages") {
+      if (activeModal !== "gate-closed") {
+        interceptedSpecialPackagesRef.current = false;
+      }
+      return;
+    }
+    if (currentMajorDraw?.status === "active") {
+      interceptedSpecialPackagesRef.current = false;
+      return;
+    }
+    if (interceptedSpecialPackagesRef.current) return;
+    interceptedSpecialPackagesRef.current = true;
+    requestModal("gate-closed", true, {
+      nextActivationDate: nextDraw?.activationDate ?? null,
+      nextDrawName: nextDraw?.name,
+    });
+  }, [activeModal, currentMajorDraw?.status, nextDraw?.activationDate, nextDraw?.name, requestModal]);
 
   /**
    * Handle modal close with proper cleanup and queue progression

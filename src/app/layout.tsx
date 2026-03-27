@@ -7,7 +7,6 @@ import PixelTracker from "@/components/PixelTracker";
 import KlaviyoScriptLoader from "@/components/KlaviyoScriptLoader";
 import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
 import GoogleTagManager from "@/components/GoogleTagManager";
-import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -119,7 +118,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <KlaviyoPageTracker />
         <Providers>{children}</Providers>
-        <MajorDrawTestControls />
         <Analytics />
         <SpeedInsights />
       </body>

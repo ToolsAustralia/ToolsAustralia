@@ -17,6 +17,7 @@ import "swiper/css/free-mode";
 import MembershipModal from "@/components/modals/MembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
@@ -78,6 +79,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const { userData: user } = useUserContext();
   const { membershipModal, openEntryFlow, getHeavyDutyPack, oneTimePackages } = useMajorDrawEntryCta();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   // The shared CTA hook keeps modal behaviour consistent with Promo pages.
 
   // Use React Query hooks for real-time data
@@ -256,14 +258,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   // Listen for upsell modal requests
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
-      // console.log("🎯 Received openMembershipModal event:", event.detail);
       const detail = event.detail ?? {};
       const plan = detail.plan;
 
-      if (plan) {
-        membershipModal.setSelectedPlan(plan);
-      }
-      membershipModal.openModal();
+      whenGatesOpenElseGateModal(() => {
+        if (plan) {
+          membershipModal.setSelectedPlan(plan);
+        }
+        membershipModal.openModal();
+      });
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
@@ -271,7 +274,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal]);
 
   // Use data if available, otherwise use defaults for static content
   const majorDraw = currentMajorDraw;
