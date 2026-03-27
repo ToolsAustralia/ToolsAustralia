@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import UpsellModal from "./UpsellModal";
 import FloatingGiftIcon from "../ui/FloatingGiftIcon";
 import { UpsellManagerProps, UpsellOffer, SAMPLE_UPSELL_OFFERS } from "@/types/upsell";
@@ -25,6 +25,7 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
   const [declinedOffer, setDeclinedOffer] = useState<UpsellOffer | null>(null);
   const [invoiceFinalized, setInvoiceFinalized] = useState(false);
   const [finalizationTimeoutId, setFinalizationTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const upsellPurchaseLockRef = useRef(false);
 
   /**
    * Select the most relevant offer for the user based on context
@@ -201,6 +202,9 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
    */
   const handleUpsellPurchase = useCallback(
     async (offer: UpsellOffer) => {
+      if (upsellPurchaseLockRef.current) return;
+      upsellPurchaseLockRef.current = true;
+
       // console.log("🛒 Starting upsell purchase:", {
       //   isAuthenticated: userContext.isAuthenticated,
       //   hasDefaultPayment: userContext.hasDefaultPayment,
@@ -215,9 +219,11 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
           const response = await fetch("/api/upsell/purchase", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
               offerId: offer.id,
               useDefaultPayment: userContext.hasDefaultPayment,
+              idempotencyKey: crypto.randomUUID(),
             }),
           });
 
@@ -254,6 +260,8 @@ const UpsellManager: React.FC<UpsellManagerProps> = ({
         console.error("Upsell purchase failed:", error);
         // Show error message instead of falling back to MembershipModal
         alert(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      } finally {
+        upsellPurchaseLockRef.current = false;
       }
     },
     [userContext, redirectToFullPaymentFlow]
