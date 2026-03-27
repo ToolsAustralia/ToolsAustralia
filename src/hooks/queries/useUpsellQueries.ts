@@ -200,11 +200,13 @@ export const usePurchaseUpsell = () => {
       offerId,
       useDefaultPayment,
       paymentMethodId,
+      idempotencyKey,
       originalPurchaseContext,
     }: {
       offerId: string;
       useDefaultPayment: boolean;
       paymentMethodId?: string;
+      idempotencyKey?: string;
       userId: string;
       originalPurchaseContext?: {
         paymentIntentId?: string;
@@ -233,6 +235,7 @@ export const usePurchaseUpsell = () => {
         offerId,
         useDefaultPayment,
         paymentMethodId,
+        idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
         ...(originalPurchaseContext && { originalPurchaseContext }),
         ...(attribution && { attribution }),
       });

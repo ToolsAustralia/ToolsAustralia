@@ -43,6 +43,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   // ✅ FIX: Track if finalization is in progress to prevent race conditions
   const isFinalizingRef = React.useRef<boolean>(false);
+  /** Ref updates synchronously so a second tap cannot start another charge before isProcessing re-renders. */
+  const upsellPurchaseLockRef = React.useRef(false);
   // ✅ Track polling state to show loading instead of "No Payment Method"
   const [isPollingPaymentMethods, setIsPollingPaymentMethods] = useState(false);
   const pollingStoppedRef = React.useRef<boolean>(false);
@@ -78,7 +80,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   );
 
   const { showLoading, hideLoading, showSuccess } = useLoading();
-  const { mutate: purchaseUpsell } = usePurchaseUpsell();
+  const purchaseUpsell = usePurchaseUpsell();
   const { showToast } = useToast();
 
   // Get default payment method
@@ -331,6 +333,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       // Reset payment processing state to prevent infinite polling
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
+      upsellPurchaseLockRef.current = false;
 
       // CRITICAL: Log context to help debug invoice finalization issues
       console.log("🔍 UpsellModal opened:", {
@@ -423,11 +426,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   }, [isOpen]);
 
   const handleAccept = async () => {
-    if (isProcessing) return;
+    if (isProcessing || upsellPurchaseLockRef.current) return;
 
+    upsellPurchaseLockRef.current = true;
     setIsProcessing(true);
 
-    // Show immediate loading feedback
     showLoading("Processing Purchase", "", [
       "Authorizing payment method",
       "Confirming transaction with Stripe",
@@ -437,76 +440,48 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     ]);
 
     try {
-      // Process payment immediately using default payment method
       if (!defaultPaymentMethod) {
         throw new Error("No default payment method found. Please select a payment method.");
       }
 
-      // console.log(
-      //   "🛒 Processing upsell purchase:",
-      //   offer.title,
-      //   "with default payment method:",
-      //   defaultPaymentMethod.paymentMethodId
-      // );
-
-      // Use optimistic upsell purchase hook
-      purchaseUpsell(
-        {
-          offerId: offer.id,
-          useDefaultPayment: true,
-          paymentMethodId: defaultPaymentMethod.paymentMethodId,
-          userId: userData?._id || "",
-          originalPurchaseContext: originalPurchaseContext
-            ? {
-                paymentIntentId: originalPurchaseContext.paymentIntentId,
-                packageId: originalPurchaseContext.packageId,
-                packageName: originalPurchaseContext.packageName,
-                packageType: originalPurchaseContext.packageType,
-                price: originalPurchaseContext.price,
-                entries: originalPurchaseContext.entries,
-                baseEntries: originalPurchaseContext.baseEntries,
-                promoMultiplier: originalPurchaseContext.promoMultiplier, // ✅ CRITICAL: Include multiplier for correct upsell calculation
-                miniDrawId: originalPurchaseContext.miniDrawId,
-                miniDrawName: originalPurchaseContext.miniDrawName,
-              }
-            : undefined,
-        },
-        {
-          onSuccess: (result) => {
-            // Handle both old and new response formats
-            const paymentIntentId =
-              (result as { data?: { paymentIntentId?: string } }).data?.paymentIntentId ||
-              (result as { paymentIntentId?: string }).paymentIntentId;
-
-            if (result.success && paymentIntentId) {
-              // Hide initial loading screen and show PaymentProcessingScreen
-              hideLoading();
-              setPaymentIntentId(paymentIntentId);
-              setShowPaymentProcessing(true);
-            } else {
-              throw new Error(result.message || "Upsell purchase failed");
+      const result = await purchaseUpsell.mutateAsync({
+        offerId: offer.id,
+        useDefaultPayment: true,
+        paymentMethodId: defaultPaymentMethod.paymentMethodId,
+        userId: userData?._id || "",
+        idempotencyKey: crypto.randomUUID(),
+        originalPurchaseContext: originalPurchaseContext
+          ? {
+              paymentIntentId: originalPurchaseContext.paymentIntentId,
+              packageId: originalPurchaseContext.packageId,
+              packageName: originalPurchaseContext.packageName,
+              packageType: originalPurchaseContext.packageType,
+              price: originalPurchaseContext.price,
+              entries: originalPurchaseContext.entries,
+              baseEntries: originalPurchaseContext.baseEntries,
+              promoMultiplier: originalPurchaseContext.promoMultiplier,
+              miniDrawId: originalPurchaseContext.miniDrawId,
+              miniDrawName: originalPurchaseContext.miniDrawName,
             }
-          },
-          onError: (error) => {
-            // Handle API errors (e.g., validation errors from entry limit checks)
-            hideLoading();
-            const errorMessage = error instanceof Error ? error.message : "Upsell purchase failed";
-            showToast({
-              type: "error",
-              title: "Purchase Failed",
-              message: errorMessage,
-              duration: 5000,
-            });
-            setIsProcessing(false);
-          },
-        }
-      );
+          : undefined,
+      });
+
+      const resolvedPaymentIntentId =
+        (result as { data?: { paymentIntentId?: string } }).data?.paymentIntentId ||
+        (result as { paymentIntentId?: string }).paymentIntentId;
+
+      if (result.success && resolvedPaymentIntentId) {
+        hideLoading();
+        setPaymentIntentId(resolvedPaymentIntentId);
+        setShowPaymentProcessing(true);
+      } else {
+        throw new Error(result.message || "Upsell purchase failed");
+      }
     } catch (error) {
       console.error("Upsell purchase failed:", error);
       console.error(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-      hideLoading(); // Hide loading screen on error (skip success animation)
+      hideLoading();
 
-      // Show error toast to user with the error message
       const errorMessage = error instanceof Error ? error.message : "Upsell purchase failed";
       showToast({
         type: "error",
@@ -515,6 +490,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         duration: 5000,
       });
     } finally {
+      upsellPurchaseLockRef.current = false;
       setIsProcessing(false);
     }
   };
