@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
  * POST /api/stripe/create-payment-intent
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Get authenticated user session (optional for guest users)
     const session = await getServerSession(authOptions);

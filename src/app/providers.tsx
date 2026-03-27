@@ -25,7 +25,7 @@ import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import ThemeToggle from "@/components/ui/ThemeToggle";
+import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 
 // Export loading components for global use
 export {
@@ -98,7 +98,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                         <UpgradeSuccessToast />
                         {children}
                         <FloatingPromoBanner />
-                        <ThemeToggle />
+                        {process.env.NODE_ENV === "development" ? <MajorDrawTestControls /> : null}
                       </ToastProvider>
                     </LoadingProvider>
                     {/* React Query DevTools - temporarily disabled */}

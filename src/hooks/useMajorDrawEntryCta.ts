@@ -5,9 +5,10 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
 interface UseMajorDrawEntryCtaResult {
   membershipModal: ReturnType<typeof useMembershipModal>;
@@ -32,8 +33,7 @@ interface UseMajorDrawEntryCtaResult {
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const membershipModal = useMembershipModal();
   const { requestModal, clearModalFromSession } = useModalPriorityStore();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
@@ -296,66 +296,55 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   ]);
 
   const openWithOneTimePlan = useCallback(() => {
-    // Always open MembershipModal (don't gate by draw status) so One-time card click reliably opens it
-    const oneTimePlan = getOneTimePlan();
-    if (oneTimePlan) {
-      membershipModal.setSelectedPlan(oneTimePlan);
-      membershipModal.openModal();
-    } else {
-      membershipModal.openModalWithPackageSelectionFirst();
-    }
-  }, [getOneTimePlan, membershipModal]);
+    whenGatesOpenElseGateModal(() => {
+      const oneTimePlan = getOneTimePlan();
+      if (oneTimePlan) {
+        membershipModal.setSelectedPlan(oneTimePlan);
+        membershipModal.openModal();
+      } else {
+        membershipModal.openModalWithPackageSelectionFirst();
+      }
+    });
+  }, [getOneTimePlan, membershipModal, whenGatesOpenElseGateModal]);
 
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
-      // Check if gates are closed (freeze period or gap period)
-      const gatesClosed = currentMajorDraw?.status !== "active";
-      
-      if (gatesClosed) {
-        // Show gate-closed modal instead of opening payment modals
-        requestModal("gate-closed", true, {
-          nextActivationDate: nextDraw?.activationDate ?? null,
-          nextDrawName: nextDraw?.name,
-        });
-        return;
-      }
-
-      // Check if user has access (subscription OR current draw entries)
-      const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
-      if (hasAccess) {
-        clearModalFromSession("special-packages");
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("specialPackagesModalShown");
+      whenGatesOpenElseGateModal(() => {
+        const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+        if (hasAccess) {
+          clearModalFromSession("special-packages");
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("specialPackagesModalShown");
+          }
+          requestModal("special-packages", true);
+          return;
         }
-        requestModal("special-packages", true);
-        return;
-      }
 
-      const correctPlan = getHeavyDutyPack();
+        const correctPlan = getHeavyDutyPack();
 
-      if (openLocalModal) {
-        membershipModal.setSelectedPlan(correctPlan);
-        membershipModal.openModal();
-        return;
-      }
+        if (openLocalModal) {
+          membershipModal.setSelectedPlan(correctPlan);
+          membershipModal.openModal();
+          return;
+        }
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("openMembershipModal", {
-            detail: { plan: correctPlan },
-          })
-        );
-      }
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("openMembershipModal", {
+              detail: { plan: correctPlan },
+            })
+          );
+        }
+      });
     },
     [
+      whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
       userData,
       userMajorDrawStats,
       membershipModal,
       requestModal,
-      currentMajorDraw,
-      nextDraw,
     ]
   );
 

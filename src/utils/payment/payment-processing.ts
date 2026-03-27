@@ -153,7 +153,7 @@ export async function processPaymentBenefits(
   sessionAttribution?: AttributionParams, // Optional attribution from Stripe metadata (session) - takes priority over signup
   /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
   affiliateOptions?: { skipMembershipFirstCommission?: boolean }
-): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
+): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
   //   paymentIntentId,
@@ -235,7 +235,7 @@ async function processPaymentBenefitsInternal(
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
   sessionAttribution?: AttributionParams,
   affiliateOptions?: { skipMembershipFirstCommission?: boolean }
-): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
+): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
 
@@ -251,6 +251,26 @@ async function processPaymentBenefitsInternal(
       let user = await User.findById(userId);
       if (!user) {
         throw new Error(`User ${userId} not found`);
+      }
+
+      const routesToMiniDrawOnly =
+        packageData.packageType === "mini-draw" ||
+        (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId);
+
+      const isSubscriptionRenewal =
+        packageData.packageType === "membership" && billingReason === "subscription_cycle";
+
+      if (!routesToMiniDrawOnly && !isSubscriptionRenewal) {
+        const { checkMajorDrawActiveForNewPurchases } = await import("@/utils/draws/major-draw-helpers");
+        const gate = await checkMajorDrawActiveForNewPurchases();
+        if (!gate.ok) {
+          return {
+            success: false,
+            alreadyProcessed: false,
+            error: gate.message,
+            code: gate.code,
+          };
+        }
       }
 
       const metadataAffiliateCode = paymentMetadata?.affiliateCode?.trim().toUpperCase();
@@ -914,6 +934,11 @@ async function grantBenefits(
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
   affiliateOptions?: { skipMembershipFirstCommission?: boolean }
 ): Promise<void> {
+  const majorDrawRoutingMode: "renewal" | "new_purchase" =
+    packageData.packageType === "membership" && billingReason === "subscription_cycle"
+      ? "renewal"
+      : "new_purchase";
+
   // ✅ DEBUG: Log function call with all parameters
   // console.log(`🎯 grantBenefits called with:`, {
   //   userId: user._id.toString(),
@@ -972,7 +997,7 @@ async function grantBenefits(
     await addToMiniDraw(user, packageData, paymentMetadata);
   } else {
     // Add to major draw entries with payment metadata for freeze period handling
-    await addToMajorDraw(user, packageData, paymentMetadata);
+    await addToMajorDraw(user, packageData, paymentMetadata, undefined, majorDrawRoutingMode);
   }
 
   // ✅ BONUS ENTRY PROMO: Check for active bonus entry promos and grant bonus entries
@@ -1033,7 +1058,7 @@ async function grantBenefits(
         await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", majorDrawRoutingMode);
       }
 
       console.log(`✅ [BONUS ENTRY PROMO] Successfully granted bonus entries:`, {
@@ -1129,7 +1154,7 @@ async function grantBenefits(
         await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMajorDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", majorDrawRoutingMode);
       }
 
       console.log(`✅ [PROMO LINK] Successfully granted bonus entries from promo link:`, {
@@ -1812,7 +1837,8 @@ async function addToMajorDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
   paymentMetadata?: PaymentMetadata,
-  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
+  sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
+  majorDrawRoutingMode: "renewal" | "new_purchase" = "new_purchase"
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -1824,19 +1850,22 @@ async function addToMajorDraw(
     // });
 
     // Import helper function dynamically to avoid circular dependencies
-    const { getTargetMajorDraw } = await import("../draws/major-draw-helpers");
+    const { getTargetMajorDraw, getActiveMajorDrawForNewEntryPurchases } = await import(
+      "../draws/major-draw-helpers"
+    );
 
-    // Get target major draw (handles freeze period, gap period, etc.)
-    const majorDrawResult = await getTargetMajorDraw(paymentMetadata);
+    const majorDrawResult =
+      majorDrawRoutingMode === "renewal"
+        ? await getTargetMajorDraw(paymentMetadata)
+        : await getActiveMajorDrawForNewEntryPurchases();
 
     if (!majorDrawResult) {
-      // console.error(`❌ No valid major draw found - skipping major draw entry allocation`);
-      // console.error(`❌ addToMajorDraw context:`, {
-      //   userId: user._id.toString(),
-      //   packageData,
-      //   paymentMetadata,
-      // });
-      return;
+      console.error(`❌ addToMajorDraw: no active major draw for new purchase allocation`, {
+        userId: user._id.toString(),
+        packageData,
+        majorDrawRoutingMode,
+      });
+      throw new Error("GATES_CLOSED: No active major draw for entry allocation");
     }
 
     // Type the major draw properly

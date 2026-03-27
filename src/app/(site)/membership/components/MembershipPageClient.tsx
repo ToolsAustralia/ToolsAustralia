@@ -12,6 +12,7 @@ import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/
 import MembershipSection from "@/components/sections/MembershipSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { SectionContainer } from "@/components/ui";
@@ -23,6 +24,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 export default function MembershipPageClient() {
   // Use the unified hook for consistent package selection across all entry points
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const membershipModal = useMembershipModal();
   const { userData } = useUserContext();
   const hasActiveSubscription = userData?.subscription?.isActive === true;
@@ -188,12 +190,12 @@ export default function MembershipPageClient() {
                 className="w-full sm:w-auto text-sm sm:text-base px-4 py-2 sm:px-6 sm:py-3"
                 onClick={() => {
                   if (!hasActiveSubscription) {
-                    // Get Tradie package directly (for non-subscribers, regardless of entries)
-                    const tradiePlan = getTradiePackage();
-                    membershipModal.setSelectedPlan(tradiePlan);
-                    membershipModal.openModal();
+                    whenGatesOpenElseGateModal(() => {
+                      const tradiePlan = getTradiePackage();
+                      membershipModal.setSelectedPlan(tradiePlan);
+                      membershipModal.openModal();
+                    });
                   } else {
-                    // User has subscription - show additional packages
                     openEntryFlow({ openLocalModal: false });
                   }
                 }}

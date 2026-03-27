@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
@@ -87,6 +88,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { requestModal } = useModalPriorityStore();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const router = useRouter();
   const { isAuthenticated: isAffiliateAuthenticated, affiliateData, loading: affiliateLoading } = useAffiliateAuth();
 
@@ -1644,7 +1646,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
           hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
           onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
-          onOpenSpecialPackages={() => requestModal("special-packages", true)}
+          onOpenSpecialPackages={() =>
+            whenGatesOpenElseGateModal(() => requestModal("special-packages", true))
+          }
         />
       )}
     </header>

@@ -48,6 +48,7 @@ import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import LatestWinnersBadge from "../ui/LatestWinnersBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -430,6 +431,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     return activePlan;
   }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, resolvedMiniMultiplier, isMemberForPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
+  const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { savePaymentMethod } = useSavedPaymentMethods();
@@ -489,6 +491,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     onClose();
   }, [onClose, paymentIntentId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const allowDuringClosedGates =
+      isAuthenticated && userData?.subscription?.status === "past_due";
+    if (!gatesClosed || allowDuringClosedGates) return;
+    void handleClose();
+    openGateClosedModal();
+  }, [
+    isOpen,
+    gatesClosed,
+    isAuthenticated,
+    userData?.subscription?.status,
+    handleClose,
+    openGateClosedModal,
+  ]);
 
   // Reset upsell trigger guard and payment processing state when modal reopens for a new purchase
   useEffect(() => {

@@ -206,6 +206,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid scenario" }, { status: 400 });
     }
 
+    /**
+     * getCurrentMajorDrawForDisplay + getActiveMajorDrawForNewEntryPurchases only match
+     * active/frozen draws when activationDate <= now. Without syncing this field, real DB
+     * values (e.g. future activation) hide the draw after toggling — gates look "stuck".
+     */
+    const activationInPast = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    if (currentStatus === "active" || currentStatus === "frozen") {
+      currentDraw.activationDate = activationInPast;
+    } else if (currentStatus === "completed") {
+      currentDraw.activationDate = new Date(currentDrawEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+
     // Update Current Draw
     currentDraw.status = currentStatus;
     currentDraw.isActive = currentIsActive;
@@ -228,32 +240,29 @@ export async function POST(request: NextRequest) {
     nextDrawTyped.lockedAt = undefined;
     await nextDrawTyped.save();
 
-    // Auto-trigger Klaviyo reset for scenarios with active draws (1, 2, 4)
-    // This helps with testing by automatically updating Klaviyo profiles
-    let klaviyoResetResult: Awaited<ReturnType<typeof resetDrawPropertiesForAllUsers>> | null = null;
-    let klaviyoResetError: string | null = null;
+    // Dev-only: avoid multiple active/frozen rows fighting transitions + confusing the UI
+    await MajorDraw.updateMany(
+      {
+        _id: { $nin: [currentDraw._id, nextDrawTyped._id] },
+        status: { $in: ["active", "frozen"] },
+      },
+      {
+        $set: {
+          status: "queued",
+          isActive: false,
+          activationDate: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+          configurationLocked: false,
+        },
+      }
+    );
+
+    // Klaviyo bulk sync can take minutes; never block the HTTP response or the UI will appear
+    // "stuck" until sync finishes. DB state is already saved above — sync runs in background.
     const shouldTriggerReset =
       (scenario === 1 && currentIsActive) || // Test Case 1: Active draw
       (scenario === 2 && currentStatus === "frozen") || // Test Case 2: Frozen draw
       (scenario === 4 && nextIsActive) || // Test Case 4: Next draw active
       (scenario === 5 && currentIsActive); // Test Case 5: Draw tomorrow (active)
-
-    if (shouldTriggerReset) {
-      try {
-        console.log(`🔄 [TEST] Auto-triggering Klaviyo reset for scenario ${scenario}...`);
-        const targetDraw = scenario === 4 ? nextDrawTyped : currentDraw;
-        klaviyoResetResult = await resetDrawPropertiesForAllUsers(targetDraw);
-        console.log(`✅ [TEST] Klaviyo reset completed:`, {
-          processed: klaviyoResetResult.processed,
-          synced: klaviyoResetResult.synced,
-          errors: klaviyoResetResult.errors,
-          duration: `${klaviyoResetResult.duration}ms`,
-        });
-      } catch (resetError) {
-        console.error(`❌ [TEST] Klaviyo reset failed for scenario ${scenario}:`, resetError);
-        klaviyoResetError = resetError instanceof Error ? resetError.message : "Unknown error";
-      }
-    }
 
     // Build response message
     const scenarioDescriptions = [
@@ -288,11 +297,6 @@ export async function POST(request: NextRequest) {
         };
       };
       klaviyoReset?: {
-        processed?: number;
-        synced?: number;
-        errors?: number;
-        duration?: string;
-        error?: string;
         note?: string;
       };
     } = {
@@ -319,25 +323,28 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Include Klaviyo reset results in response
     if (shouldTriggerReset) {
-      if (klaviyoResetError) {
-        response.klaviyoReset = {
-          error: klaviyoResetError,
-          note: "Reset failed - check server logs for details",
-        };
-      } else if (klaviyoResetResult) {
-        response.klaviyoReset = {
-          processed: klaviyoResetResult.processed,
-          synced: klaviyoResetResult.synced,
-          errors: klaviyoResetResult.errors,
-          duration: `${klaviyoResetResult.duration}ms`,
-          note: "Check your Klaviyo dashboard to verify profile updates",
-        };
-      }
+      const targetDraw = scenario === 4 ? nextDrawTyped : currentDraw;
+      response.klaviyoReset = {
+        note: "Klaviyo profile sync started in the background (does not block scenario load). Watch server logs for completion.",
+      };
+      void (async () => {
+        try {
+          console.log(`🔄 [TEST] Klaviyo reset (background) for scenario ${scenario}...`);
+          const result = await resetDrawPropertiesForAllUsers(targetDraw);
+          console.log(`✅ [TEST] Klaviyo reset completed:`, {
+            processed: result.processed,
+            synced: result.synced,
+            errors: result.errors,
+            durationMs: result.duration,
+          });
+        } catch (resetError) {
+          console.error(`❌ [TEST] Klaviyo reset failed for scenario ${scenario}:`, resetError);
+        }
+      })();
     } else {
       response.klaviyoReset = {
-        note: "Reset skipped - no active draw in this scenario",
+        note: "Klaviyo reset skipped — no active/frozen draw in this scenario (e.g. gap).",
       };
     }
 

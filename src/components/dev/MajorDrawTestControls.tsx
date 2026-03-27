@@ -12,8 +12,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Beaker, ChevronDown, ChevronUp, ArrowLeft, RotateCcw } from "lucide-react";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface DrawPair {
   currentDrawId: string;
@@ -23,7 +25,8 @@ interface DrawPair {
 }
 
 export default function MajorDrawTestControls() {
-  const pathname = usePathname();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string>("");
@@ -83,7 +86,9 @@ export default function MajorDrawTestControls() {
       const data = await response.json();
 
       if (data.success) {
-        setLastResult(`✅ Scenario ${scenario} loaded successfully!`);
+        const klaviyoNote =
+          data.klaviyoReset?.note != null ? ` Klaviyo: ${data.klaviyoReset.note}` : "";
+        setLastResult(`✅ Scenario ${scenario} loaded.${klaviyoNote}`);
         setCurrentScenario(scenario);
         
         // Extract draw IDs from response
@@ -107,9 +112,16 @@ export default function MajorDrawTestControls() {
           localStorage.setItem("dev-scenario-history", JSON.stringify(trimmed));
           return trimmed;
         });
-        
-        // Refresh the page to show updated data
-        setTimeout(() => window.location.reload(), 1000);
+
+        // DB + routes update before this response; Klaviyo runs in background. Refresh all major-draw caches + RSC.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.all }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-stats"] }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-completed"] }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-next"] }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.winners.majorDraws }),
+        ]);
+        router.refresh();
       } else {
         setLastResult(`❌ Error: ${data.error}`);
       }
@@ -146,13 +158,8 @@ export default function MajorDrawTestControls() {
     runTestScenario(1, currentDrawPair !== null);
   };
 
-  // Only show in development (check after all hooks are called)
-  // Hide on my-account pages to avoid cluttering the user dashboard
-  if (process.env.NODE_ENV !== "development" || pathname?.startsWith("/my-account")) {
-    return null;
-  }
-
-  // Bottom-left so we do not stack on ThemeToggle (fixed bottom-right inside Providers).
+  // Render only in dev — parent Providers also gates mount.
+  // Bottom-left so we do not stack on promotions guest theme FAB (bottom-right).
   return (
     <div className="fixed bottom-6 left-6 z-[9998]">
       {/* Floating Button */}

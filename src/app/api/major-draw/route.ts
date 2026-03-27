@@ -5,8 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
 import { getTimeUntilFreeze, getTimeUntilDraw } from "@/utils/common/timezone";
 
-// Next.js ISR configuration
-export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+// Draw status must reflect DB immediately (dev toggler + transitions). Do not cache the route.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // Interface for the MajorDraw document from database with new fields
 interface MajorDrawDocument {
@@ -145,7 +146,9 @@ export async function GET() {
       : Number.POSITIVE_INFINITY;
     const nearestMs = Math.min(msUntilFreeze, msUntilDraw);
 
-    if (nearestMs <= 60 * 60 * 1000) {
+    if (process.env.NODE_ENV === "development") {
+      headers.set("Cache-Control", "no-store, must-revalidate");
+    } else if (nearestMs <= 60 * 60 * 1000) {
       // Critical window: no cache to ensure real-time transitions
       headers.set("Cache-Control", "no-store, must-revalidate");
     } else if (nearestMs <= 6 * 60 * 60 * 1000) {

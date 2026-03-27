@@ -4,7 +4,8 @@ import { useEffect, useCallback, useRef } from "react";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { hasRecentPurchase } from "@/utils/tracking/purchase-tracking";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface UseMiniDrawTriggerProps {
@@ -37,8 +38,7 @@ export const useMiniDrawTrigger = ({
 }: UseMiniDrawTriggerProps = {}) => {
   const { isAuthenticated, userData } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
+  const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { requestModal, isModalActive } = useModalPriorityStore();
 
   // Track if modal has been shown in this session using sessionStorage
@@ -150,9 +150,6 @@ export const useMiniDrawTrigger = ({
       return;
     }
 
-    // Check if gates are closed (freeze period or gap period)
-    const gatesClosed = currentMajorDraw?.status !== "active";
-    
     // Mark that we've attempted to trigger
     triggerAttemptedRef.current = true;
 
@@ -160,11 +157,7 @@ export const useMiniDrawTrigger = ({
 
     const timer = setTimeout(() => {
       if (gatesClosed) {
-        // Show gate-closed modal instead of special-packages modal
-        requestModal("gate-closed", true, {
-          nextActivationDate: nextDraw?.activationDate ?? null,
-          nextDrawName: nextDraw?.name,
-        });
+        openGateClosedModal();
       } else {
         // console.log("🎯 Opening special packages modal via priority system");
         markModalAsShown(); // Mark as shown in session
@@ -182,8 +175,8 @@ export const useMiniDrawTrigger = ({
     showOncePerSession,
     hasModalBeenShown,
     markModalAsShown,
-    currentMajorDraw,
-    nextDraw,
+    gatesClosed,
+    openGateClosedModal,
   ]);
 
   /**

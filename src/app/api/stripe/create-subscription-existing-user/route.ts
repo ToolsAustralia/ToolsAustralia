@@ -17,6 +17,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -100,6 +101,9 @@ export async function POST(request: NextRequest) {
     if (!membershipPackage || !membershipPackage.isActive) {
       return NextResponse.json({ error: "Invalid or inactive package" }, { status: 400 });
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
