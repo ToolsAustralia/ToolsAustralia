@@ -42,6 +42,7 @@ const upsellPurchaseSchema = z.object({
   offerId: z.string().min(1, "Offer ID is required"),
   useDefaultPayment: z.boolean().optional().default(false),
   paymentMethodId: z.string().optional(),
+  idempotencyKey: z.string().optional(),
       originalPurchaseContext: z
         .object({
           paymentIntentId: z.string().optional(),
@@ -416,6 +417,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const stripeIdempotencyKey =
+      validatedData.idempotencyKey ??
+      `pi_upsell_${validatedData.offerId}_${session.user.id}_${Date.now()}`;
+
     if (validatedData.useDefaultPayment && validatedData.paymentMethodId) {
       // One-click purchase using the specific payment method provided
       return await handleOneClickPurchase(
@@ -427,7 +432,8 @@ export async function POST(request: NextRequest) {
         calculatedEntriesCount,
         validatedData.originalPurchaseContext,
         capiEventSourceUrl,
-        validatedData.attribution
+        validatedData.attribution,
+        stripeIdempotencyKey
       );
     } else {
       // Create payment intent for manual confirmation
@@ -441,7 +447,8 @@ export async function POST(request: NextRequest) {
         validatedData.originalPurchaseContext,
         request, // ✅ Pass request for error logging
         capiEventSourceUrl,
-        validatedData.attribution
+        validatedData.attribution,
+        stripeIdempotencyKey
       );
     }
   } catch (error) {
@@ -480,7 +487,8 @@ async function handleOneClickPurchase(
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   capiEventSourceUrl?: string,
-  attribution?: Parameters<typeof buildAttributionMetadata>[0]
+  attribution?: Parameters<typeof buildAttributionMetadata>[0],
+  stripeIdempotencyKey?: string
 ) {
   try {
     if (!paymentMethodId) {
@@ -616,7 +624,9 @@ async function handleOneClickPurchase(
         metadata: paymentMetadata,
       });
 
-      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig);
+      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig, {
+        idempotencyKey: stripeIdempotencyKey ?? `pi_upsell_oc_${offer.id}_${user._id}_${Date.now()}`,
+      });
     } catch (stripeError) {
       console.error("Stripe payment intent creation failed:", stripeError);
       return NextResponse.json(
@@ -717,7 +727,8 @@ async function handlePaymentIntentCreation(
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   request?: NextRequest, // ✅ Pass request for error logging
   capiEventSourceUrl?: string,
-  attribution?: Parameters<typeof buildAttributionMetadata>[0]
+  attribution?: Parameters<typeof buildAttributionMetadata>[0],
+  stripeIdempotencyKey?: string
 ) {
   try {
     // Derive event source URL for CAPI if not passed (e.g. from request)
@@ -762,8 +773,8 @@ async function handlePaymentIntentCreation(
       entriesCount: paymentMetadata.entriesCount,
     });
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-    const idempotencyKey = `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
+    const idempotencyKey =
+      stripeIdempotencyKey ?? `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
 
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
@@ -780,7 +791,7 @@ async function handlePaymentIntentCreation(
     const paymentIntent = await stripe.paymentIntents.create(
       paymentIntentConfig,
       {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+        idempotencyKey,
       }
     );
 

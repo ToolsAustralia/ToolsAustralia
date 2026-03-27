@@ -75,6 +75,8 @@ export interface OneTimeMembership {
 export interface MembershipPurchaseData {
   packageId: string;
   paymentMethodId?: string;
+  /** One per user checkout action; sent to Stripe for PaymentIntent idempotency (retries / duplicate requests). */
+  idempotencyKey?: string;
   referralCode?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
@@ -159,6 +161,7 @@ export const usePurchaseMembership = () => {
     mutationFn: async ({
       packageId,
       paymentMethodId,
+      idempotencyKey,
       referralCode,
       affiliateCode,
       promoLinkCode,
@@ -167,6 +170,7 @@ export const usePurchaseMembership = () => {
       const response = await apiPost<MembershipResponse>("/api/stripe/create-one-time-purchase-existing-user", {
         packageId,
         paymentMethodId,
+        idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
         referralCode,
         affiliateCode,
         promoLinkCode,

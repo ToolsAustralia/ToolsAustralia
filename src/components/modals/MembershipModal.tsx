@@ -208,6 +208,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
   // ✅ FIX: Track if SetupIntent creation is in progress to prevent concurrent creation
   const isCreatingSetupIntentRef = useRef<boolean>(false);
+  /** Synchronous guard so two rapid submits cannot both pass before React re-renders isSubmitting. */
+  const checkoutSubmitLockRef = useRef(false);
   const isCreatingSubscriptionRef = useRef<boolean>(false);
   const SUBSCRIPTION_CHECKOUT_STORAGE_KEY = "membership_subscription_checkout";
   const SUBSCRIPTION_CHECKOUT_STALE_MS = 60 * 60 * 1000; // 60 minutes
@@ -2744,8 +2746,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // handlePaymentError removed - errors now handled directly in handleSubmit
 
   const handleSubmit = async () => {
-    // ✅ CRITICAL FIX: Check isSubmitting BEFORE setting it to prevent race conditions
-    if (isSubmitting) {
+    // Ref + state: ref updates synchronously so a second click cannot slip through before re-render
+    if (isSubmitting || checkoutSubmitLockRef.current) {
       console.warn("⚠️ Payment already in progress, ignoring duplicate submission");
       return;
     }
@@ -2785,6 +2787,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
     }
 
+    checkoutSubmitLockRef.current = true;
     setIsSubmitting(true);
 
     // Track button click before processing purchase
@@ -2840,6 +2843,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           ),
           paymentMethodId: selectedPaymentMethod?.paymentMethodId || undefined,
           userId: userData?._id || "",
+          idempotencyKey: crypto.randomUUID(),
         });
 
         if (result.success) {
@@ -3387,6 +3391,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       let result;
 
+      const oneTimeCheckoutIdempotencyKey = crypto.randomUUID();
+
       // Handle mini draw package purchase
       if (isMiniDrawPackage) {
         // console.log("🎲 Processing mini draw package purchase:", activePlan.name);
@@ -3396,6 +3402,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           packageId: packageId,
           userId: userData?._id || "",
           paymentMethodId,
+          idempotencyKey: oneTimeCheckoutIdempotencyKey,
           referralCode: appliedCouponPayload.referralCode,
           affiliateCode: affiliateCode || undefined,
           promoLinkCode: appliedCouponPayload.promoLinkCode,
@@ -3565,6 +3572,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             packageId,
             userId: userData?._id || "",
             paymentMethodId,
+            idempotencyKey: oneTimeCheckoutIdempotencyKey,
             referralCode: appliedCouponPayload.referralCode,
             affiliateCode: affiliateCode || undefined,
             promoLinkCode: appliedCouponPayload.promoLinkCode,
@@ -4578,6 +4586,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       console.error(`${isAuthenticated ? "Purchase" : "Account creation"} failed: ${errorMessage}`);
     } finally {
+      checkoutSubmitLockRef.current = false;
       setIsSubmitting(false);
     }
   };

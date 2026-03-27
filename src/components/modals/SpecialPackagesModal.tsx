@@ -99,6 +99,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const [, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const lastAutoAppliedCodeRef = useRef<string | null>(null);
+  /** Ref updates synchronously so a second tap cannot start a second charge before isProcessing re-renders. */
+  const specialPackagePurchaseLockRef = useRef(false);
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
@@ -158,8 +160,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   );
 
   const { showLoading, hideLoading, showSuccess } = useLoading();
-  // Upsell functionality now handled through modal priority system
-  const { mutate: purchaseMembership } = usePurchaseMembership();
+  const purchaseMembership = usePurchaseMembership();
 
   // Get default payment method
   const defaultPaymentMethod = paymentMethods.find((pm) => pm.isDefault);
@@ -182,6 +183,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       setOriginalPurchaseContext(null);
       setUpsellTriggered(false);
       lastAutoAppliedCodeRef.current = null;
+      specialPackagePurchaseLockRef.current = false;
 
       const normalizedInitialCode = initialCouponCode?.trim().toUpperCase();
       if (normalizedInitialCode) {
@@ -295,11 +297,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   };
 
   const handlePurchase = async (pkg: StaticMembershipPackage) => {
-    if (isProcessing) return;
+    if (isProcessing || specialPackagePurchaseLockRef.current) return;
 
+    specialPackagePurchaseLockRef.current = true;
     setIsProcessing(true);
 
-    // Show global loading screen
     showLoading("Processing Purchase", "", [
       "Authorizing payment method",
       "Confirming transaction with Stripe",
@@ -309,91 +311,61 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     ]);
 
     try {
-      // Process payment immediately using default payment method
       if (!defaultPaymentMethod) {
         throw new Error("No default payment method found. Please select a payment method.");
       }
 
-      // console.log(
-      //   "🛒 Processing special package purchase:",
-      //   pkg.name,
-      //   "with default payment method:",
-      //   defaultPaymentMethod.paymentMethodId
-      // );
+      const result = await purchaseMembership.mutateAsync({
+        packageId: pkg._id,
+        userId: userData?._id || "",
+        idempotencyKey: crypto.randomUUID(),
+        referralCode: couponApplied && couponType === "referral" ? couponCode.trim().toUpperCase() : undefined,
+        promoLinkCode:
+          couponApplied && couponType === "promo"
+            ? couponCode.trim().toUpperCase()
+            : promoLinkCode || undefined,
+        campaignCode: couponApplied && couponType === "campaign" ? couponCode.trim().toUpperCase() : undefined,
+      });
 
-      // Use membership purchase hook (one-time package purchase)
-      purchaseMembership(
-        {
-          packageId: pkg._id,
-          userId: userData?._id || "",
-          referralCode: couponApplied && couponType === "referral" ? couponCode.trim().toUpperCase() : undefined,
-          promoLinkCode:
-            couponApplied && couponType === "promo"
-              ? couponCode.trim().toUpperCase()
-              : promoLinkCode || undefined,
-          campaignCode: couponApplied && couponType === "campaign" ? couponCode.trim().toUpperCase() : undefined,
-        },
-        {
-          onSuccess: (result) => {
-            // console.log("🔍 SpecialPackagesModal onSuccess called with result:", result);
-            if (result.success) {
-              // console.log("🔍 Purchase successful, setting up payment processing");
-              // Mark purchase as completed to prevent modal conflicts
-              markPurchaseCompleted();
+      if (!result.success) {
+        throw new Error("Package purchase failed");
+      }
 
-              // Hide loading and show PaymentProcessingScreen
-              hideLoading();
+      markPurchaseCompleted();
+      hideLoading();
 
-              // Set up payment processing screen
-              // API response has paymentIntent at root level, but type expects it in data
-              const paymentIntentId =
-                (result as { paymentIntent?: { id: string } }).paymentIntent?.id || result.data?.paymentIntent?.id;
-              if (paymentIntentId) {
-                setPaymentIntentId(paymentIntentId);
-                setProcessingPackageName(pkg.name);
-                setShowPaymentProcessing(true);
-                // Don't close modal yet - let PaymentProcessingScreen handle it
-              } else {
-                // Fallback to old success screen if no paymentIntentId
-                const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
-                  { text: `${pkg.totalEntries || 0} entries added to your wallet`, icon: "gift" },
-                ];
-                if (couponApplied && couponCode) {
-                  const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
-                  fallbackBenefits.push({
-                    text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
-                    icon: "tag",
-                    highlight: true,
-                  });
-                }
-                showSuccess(
-                  "Purchase Successful!",
-                  `${pkg.totalEntries || 0} entries added to your account`,
-                  fallbackBenefits,
-                  3000
-                );
-                // Close modal for fallback case
-                handleClose();
-              }
-
-              // Note: Upsell will be triggered after payment processing completes
-              // This prevents duplicate upsell triggers
-              
-            } else {
-              throw new Error("Package purchase failed");
-            }
-          },
-          onError: (error) => {
-            hideLoading();
-            throw new Error(error.message || "Package purchase failed");
-          },
+      const resolvedPaymentIntentId =
+        (result as { paymentIntent?: { id: string } }).paymentIntent?.id || result.data?.paymentIntent?.id;
+      if (resolvedPaymentIntentId) {
+        setPaymentIntentId(resolvedPaymentIntentId);
+        setProcessingPackageName(pkg.name);
+        setShowPaymentProcessing(true);
+      } else {
+        const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
+          { text: `${pkg.totalEntries || 0} entries added to your wallet`, icon: "gift" },
+        ];
+        if (couponApplied && couponCode) {
+          const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
+          fallbackBenefits.push({
+            text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
+            icon: "tag",
+            highlight: true,
+          });
         }
-      );
+        showSuccess(
+          "Purchase Successful!",
+          `${pkg.totalEntries || 0} entries added to your account`,
+          fallbackBenefits,
+          3000
+        );
+        handleClose();
+      }
     } catch (error) {
       console.error("Special package purchase failed:", error);
       hideLoading();
       console.error(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
+      specialPackagePurchaseLockRef.current = false;
       setIsProcessing(false);
     }
   };
