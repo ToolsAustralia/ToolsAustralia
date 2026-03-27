@@ -16,6 +16,11 @@
  *   2. Looks up the Stripe customer for an active/trialing subscription.
  *   3. Updates stripeSubscriptionId (and endDate/isActive/status) from the real sub.
  *
+ * Candidate filter (avoids never-paid / abandoned checkout noise):
+ *   - processedPayments must have at least one entry (Webhook-recorded purchase).
+ *   - subscription.status must not be "incomplete" (abandoned initial checkout in DB).
+ *   (Users with wrong sub but empty processedPayments — legacy — are excluded; fix manually or relax filters.)
+ *
  * Safety:
  * - Dry-run by default: no DB writes unless --live is passed.
  * - Optional --limit=N caps how many users are fetched (default: all matching candidates).
@@ -67,6 +72,29 @@ function getRetryAfterMs(err: unknown, attempt: number): number {
 // Use base Stripe.Subscription so we can assign from both retrieve() and list().data
 type StripeSubscription = import("stripe").Stripe.Subscription;
 
+function buildCandidateFilter(now: Date) {
+  return {
+    stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
+    stripeCustomerId: { $exists: true, $nin: [null, ""] },
+    "subscription.endDate": { $lte: now },
+    "subscription.packageId": { $exists: true, $ne: null },
+    "processedPayments.0": { $exists: true },
+    "subscription.status": { $ne: "incomplete" },
+  };
+}
+
+type FixPlanRow = {
+  email: string;
+  userId: string;
+  oldSubId: string;
+  oldStatus: string;
+  newSubId: string;
+  newStatus: string;
+  newEndDateStr: string;
+  newEndDate: Date | undefined;
+  activeSub: StripeSubscription;
+};
+
 async function retrieveWithRetry(
   stripe: typeof import("../src/lib/stripe").stripe,
   subId: string
@@ -113,17 +141,18 @@ async function main() {
   const { getSubscriptionPeriodEnd } = await import("../src/utils/payment/stripe/subscription-period");
 
   const now = new Date();
+  const candidateFilter = buildCandidateFilter(now);
+
   console.log("\n🔧 Repair stripeSubscriptionId for users pointing to dead subscriptions");
   console.log(`   Mode: ${DRY_RUN ? "DRY RUN (no DB writes)" : "LIVE"}`);
   console.log(`   Limit: ${LIMIT === undefined ? "none (all candidates)" : LIMIT}`);
   console.log(`   Now (UTC): ${now.toISOString()}`);
+  console.log("   Filters: processedPayments length ≥ 1, subscription.status ≠ incomplete");
   console.log("");
 
   let totalChecked = 0;
-  let corrected = 0;
   let skippedStoredActive = 0;
   let skippedNoActiveSub = 0;
-  let skippedError = 0;
   let errors = 0;
 
   const correctedUsers: {
@@ -138,16 +167,11 @@ async function main() {
 
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log("✅ Connected to MongoDB\n");
+    console.log("✅ Connected to MongoDB");
 
-    // Find users with expired endDate who have a stripeSubscriptionId
-    // These are the ones most likely to have the wrong sub ID
-    let candidateQuery = User.find({
-      stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
-      stripeCustomerId: { $exists: true, $nin: [null, ""] },
-      "subscription.endDate": { $lte: now },
-      "subscription.packageId": { $exists: true, $ne: null },
-    })
+    const totalInDatabase = await User.countDocuments(candidateFilter);
+
+    let candidateQuery = User.find(candidateFilter)
       .select("_id email stripeSubscriptionId stripeCustomerId subscription")
       .sort({ "subscription.endDate": 1 });
 
@@ -157,7 +181,13 @@ async function main() {
 
     const candidates = await candidateQuery.lean();
 
-    console.log(`📊 Found ${candidates.length} candidate(s) with expired endDate to check\n`);
+    console.log("\n📊 --- Run scope (before Stripe) ---");
+    console.log(`   Total users matching DB filters (full database): ${totalInDatabase}`);
+    console.log(
+      `   Users loaded & to be Stripe-scanned this run: ${candidates.length}` +
+        (LIMIT !== undefined ? ` (--limit=${LIMIT}; remaining in DB not loaded: ${Math.max(0, totalInDatabase - candidates.length)})` : "")
+    );
+    console.log("");
 
     if (candidates.length === 0) {
       console.log("✅ No candidates to process.");
@@ -165,19 +195,9 @@ async function main() {
       process.exit(0);
     }
 
-    if (!DRY_RUN) {
-      const isProd =
-        /production|mongodb\.net|\.mlab\.com/i.test(process.env.MONGODB_URI ?? "") &&
-        process.env.CONFIRM_BACKFILL_PRODUCTION !== "1";
-      if (isProd) {
-        console.log("⚠️  MONGODB_URI looks like production. Set CONFIRM_BACKFILL_PRODUCTION=1 to skip countdown.");
-        console.log("   Waiting 10s before any write. Press Ctrl+C to cancel...\n");
-        await sleep(10_000);
-      } else {
-        console.log("⚠️  LIVE mode: will update database. Press Ctrl+C within 5s to cancel...\n");
-        await sleep(5000);
-      }
-    }
+    const fixPlan: FixPlanRow[] = [];
+
+    console.log("🔍 Scanning Stripe for each candidate...\n");
 
     for (let i = 0; i < candidates.length; i++) {
       const u = candidates[i];
@@ -208,7 +228,6 @@ async function main() {
         storedStatus === "canceled";
 
       if (!isStoredDead) {
-        // Stored sub is still alive (active, trialing, past_due, etc.) — not our problem
         skippedStoredActive++;
         continue;
       }
@@ -226,7 +245,6 @@ async function main() {
         if (activeSubs.data.length > 0) {
           activeSub = activeSubs.data[0];
         } else {
-          // Try trialing
           const trialingSubs = await stripe.subscriptions.list({
             customer: customerId,
             status: "trialing",
@@ -254,37 +272,85 @@ async function main() {
       const newEndDate = periodEnd != null ? new Date(periodEnd * 1000) : undefined;
       const newEndDateStr = newEndDate?.toISOString() ?? "(unknown)";
 
+      fixPlan.push({
+        email,
+        userId,
+        oldSubId: storedSubId,
+        oldStatus: storedStatus,
+        newSubId: activeSub.id,
+        newStatus: activeSub.status,
+        newEndDateStr,
+        newEndDate,
+        activeSub,
+      });
+    }
+
+    const eligibleCount = fixPlan.length;
+    console.log("\n📊 --- After Stripe scan ---");
+    console.log(`   Stripe-checked users: ${totalChecked} (of ${candidates.length} loaded)`);
+    console.log(
+      `   Eligible for DB update (dead stored sub + active/trialing found): ${eligibleCount}` +
+        (eligibleCount > 0 ? ` — ${DRY_RUN ? "dry-run will list them below; " : ""}--live will write ${eligibleCount} user(s) if saves succeed` : "")
+    );
+    console.log("");
+
+    if (eligibleCount === 0) {
+      console.log("📊 Summary:");
+      console.log(`   Total checked: ${totalChecked}`);
+      console.log(`   Corrected: 0`);
+      console.log(`   Skipped (stored sub still alive): ${skippedStoredActive}`);
+      console.log(`   Skipped (no active sub found for customer): ${skippedNoActiveSub}`);
+      console.log(`   Errors: ${errors}`);
+      return;
+    }
+
+    if (!DRY_RUN) {
+      const isProd =
+        /production|mongodb\.net|\.mlab\.com/i.test(process.env.MONGODB_URI ?? "") &&
+        process.env.CONFIRM_BACKFILL_PRODUCTION !== "1";
+      if (isProd) {
+        console.log("⚠️  MONGODB_URI looks like production. Set CONFIRM_BACKFILL_PRODUCTION=1 to skip countdown.");
+        console.log(`   About to update ${eligibleCount} user(s). Waiting 10s — Press Ctrl+C to cancel...\n`);
+        await sleep(10_000);
+      } else {
+        console.log(`⚠️  LIVE mode: about to update ${eligibleCount} user(s). Press Ctrl+C within 5s to cancel...\n`);
+        await sleep(5000);
+      }
+    }
+
+    let corrected = 0;
+
+    for (const row of fixPlan) {
       if (DRY_RUN) {
         correctedUsers.push({
-          email,
-          userId,
-          oldSubId: storedSubId,
-          oldStatus: storedStatus,
-          newSubId: activeSub.id,
-          newStatus: activeSub.status,
-          newEndDate: newEndDateStr,
+          email: row.email,
+          userId: row.userId,
+          oldSubId: row.oldSubId,
+          oldStatus: row.oldStatus,
+          newSubId: row.newSubId,
+          newStatus: row.newStatus,
+          newEndDate: row.newEndDateStr,
         });
         console.log(
-          `   [WOULD FIX] ${email} (${userId}) – ${storedSubId} (${storedStatus}) → ${activeSub.id} (${activeSub.status}), endDate → ${newEndDateStr}`
+          `   [WOULD FIX] ${row.email} (${row.userId}) – ${row.oldSubId} (${row.oldStatus}) → ${row.newSubId} (${row.newStatus}), endDate → ${row.newEndDateStr}`
         );
         corrected++;
         continue;
       }
 
-      // Step 3: Update the user
       try {
-        const user = await User.findById(userId);
+        const user = await User.findById(row.userId);
         if (!user || !user.subscription) {
-          console.log(`   [SKIP] ${email} – user or subscription not found in DB`);
+          console.log(`   [SKIP] ${row.email} – user or subscription not found in DB`);
           continue;
         }
 
-        user.stripeSubscriptionId = activeSub.id;
+        user.stripeSubscriptionId = row.activeSub.id;
         user.subscription.isActive = true;
-        user.subscription.status = activeSub.status;
-        user.subscription.autoRenew = !activeSub.cancel_at_period_end;
-        if (newEndDate) {
-          user.subscription.endDate = newEndDate;
+        user.subscription.status = row.activeSub.status;
+        user.subscription.autoRenew = !row.activeSub.cancel_at_period_end;
+        if (row.newEndDate) {
+          user.subscription.endDate = row.newEndDate;
         }
         if (user.subscription.cancelledAt) {
           user.subscription.cancelledAt = undefined;
@@ -294,20 +360,23 @@ async function main() {
         await user.save();
 
         correctedUsers.push({
-          email,
-          userId,
-          oldSubId: storedSubId,
-          oldStatus: storedStatus,
-          newSubId: activeSub.id,
-          newStatus: activeSub.status,
-          newEndDate: newEndDateStr,
+          email: row.email,
+          userId: row.userId,
+          oldSubId: row.oldSubId,
+          oldStatus: row.oldStatus,
+          newSubId: row.newSubId,
+          newStatus: row.newStatus,
+          newEndDate: row.newEndDateStr,
         });
         console.log(
-          `   [FIXED] ${email} (${userId}) – ${storedSubId} (${storedStatus}) → ${activeSub.id} (${activeSub.status}), endDate → ${newEndDateStr}`
+          `   [FIXED] ${row.email} (${row.userId}) – ${row.oldSubId} (${row.oldStatus}) → ${row.newSubId} (${row.newStatus}), endDate → ${row.newEndDateStr}`
         );
         corrected++;
       } catch (saveErr) {
-        console.error(`   [ERROR] ${email} (${userId}) – save failed:`, saveErr instanceof Error ? saveErr.message : saveErr);
+        console.error(
+          `   [ERROR] ${row.email} (${row.userId}) – save failed:`,
+          saveErr instanceof Error ? saveErr.message : saveErr
+        );
         errors++;
       }
     }
