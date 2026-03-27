@@ -14,7 +14,11 @@ import { getMajorDrawHeroUrgencyFromDrawDate, getPromoImagePaths } from "@/utils
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { applyMajorDrawUrgencyToLandingPaths, getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { getImageForMode, getFallbackImagePath } from "@/utils/promo/landing-image-resolver";
+import {
+  getImageForMode,
+  getFallbackImagePath,
+  resolveEvergreenHeroImages,
+} from "@/utils/promo/landing-image-resolver";
 
 /**
  * Ellipse clip-path on `.main-banner-image` creates the arched / rounded bottom hero look.
@@ -27,12 +31,18 @@ interface PromoHeroProps {
   initialMajorDraw?: ServerMajorDraw | null;
   /** URL prize slug — same as store after `PromoThemeInitializer`; used so landing PNGs resolve on first paint (store is null during SSR). */
   prizeSlug?: string | null;
+  /**
+   * Evergreen `/promotions/[slug]` pages: always use `all-prizes` hero art; theme/CTA still follow the prize slug.
+   * Toolset landing pages omit this so brand-specific landing heroes stay unchanged.
+   */
+  useAllPrizesHero?: boolean;
 }
 
 export default function PromoHero({
   initialPromo,
   initialMajorDraw,
   prizeSlug = null,
+  useAllPrizesHero = false,
 }: PromoHeroProps) {
   // Use initial data if available, but allow refetching for real-time updates
   const { isLoading, data: currentDraw } = useCurrentMajorDraw();
@@ -74,13 +84,18 @@ export default function PromoHero({
   const storeSlug = usePromoThemeStore((s) => s.slug);
   const effectiveSlug = storeSlug ?? prizeSlug ?? null;
   const majorDrawUrgency = getMajorDrawHeroUrgencyFromDrawDate(majorDraw?.drawDate);
-  const landingHeroPaths = effectiveSlug
+  const landingHeroPaths = useAllPrizesHero
     ? (() => {
-        const base = getLandingHeroImagePaths(effectiveSlug);
-        if (!base) return null;
+        const base = resolveEvergreenHeroImages();
         return majorDrawUrgency ? applyMajorDrawUrgencyToLandingPaths(base, majorDrawUrgency) : base;
       })()
-    : null;
+    : effectiveSlug
+      ? (() => {
+          const base = getLandingHeroImagePaths(effectiveSlug);
+          if (!base) return null;
+          return majorDrawUrgency ? applyMajorDrawUrgencyToLandingPaths(base, majorDrawUrgency) : base;
+        })()
+      : null;
   const standardHeroPaths = getPromoImagePaths({
     multiplier: resolvedMultiplier,
     majorDrawUrgency,
