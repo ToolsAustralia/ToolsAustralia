@@ -52,9 +52,8 @@ import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
-import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
-import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -71,20 +70,6 @@ export function generateStaticParams() {
 const getCachedPrize = createCachedQuery(async (slug: string) => {
   return getPrizeBySlug(slug);
 });
-
-/**
- * Helper function to determine hero image paths based on promo multiplier
- * Used for preloading the correct hero images (responsive)
- * Note: Draw date status and variant config overrides are handled client-side
- * 
- * @param multiplier - Active promo multiplier
- * @returns PromoImagePaths object with desktop and mobile paths
- */
-function getHeroImagePaths(multiplier?: number): PromoImagePaths {
-  return getPromoImagePaths({
-    multiplier: multiplier ?? null,
-  });
-}
 
 export async function generateMetadata({ params }: PromotionsPageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -145,11 +130,12 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Preload: prefer configured landing PNGs (e.g. cash-prize → all-prizes mobile), else multiplier webps
-  const landingForPreload = getLandingHeroImagePaths(prize.slug);
-  const heroImagePaths: PromoImagePaths = landingForPreload
-    ? { desktop: landingForPreload.desktop, mobile: landingForPreload.mobile }
-    : getHeroImagePaths(membershipPromo?.multiplier);
+  // Preload: evergreen hero always uses all-prizes collage (matches PromoHero useAllPrizesHero)
+  const allPrizesHero = resolveEvergreenHeroImages();
+  const heroImagePaths: PromoImagePaths = {
+    desktop: allPrizesHero.desktop,
+    mobile: allPrizesHero.mobile,
+  };
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -193,7 +179,12 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
           <main className="w-full overflow-hidden ">
             {/* Ensure hero + brands share the first mobile viewport for better context */}
             <div className="flex flex-col  lg:min-h-0 w-full ">
-              <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} prizeSlug={prize.slug} />
+              <PromoHero
+                initialPromo={membershipPromo}
+                initialMajorDraw={majorDraw}
+                prizeSlug={prize.slug}
+                useAllPrizesHero
+              />
            
             </div>
 
