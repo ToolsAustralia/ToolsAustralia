@@ -134,8 +134,8 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               />
             </Suspense>
 
-            <Suspense fallback={null}>
-              <PartnerBenefitsPromoSectionClient />
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <GiveawayDetails />
             </Suspense>
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
@@ -146,8 +146,8 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               <WinnerTestimoniesClientLazy />
             </Suspense>
 
-            <Suspense fallback={<div className="min-h-[300px]" />}>
-              <GiveawayDetails />
+            <Suspense fallback={null}>
+              <PartnerBenefitsPromoSectionClient />
             </Suspense>
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
