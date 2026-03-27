@@ -18,7 +18,7 @@
  *
  * Safety:
  * - Dry-run by default: no DB writes unless --live is passed.
- * - --limit=N caps how many users are processed (default 100).
+ * - Optional --limit=N caps how many users are fetched (default: all matching candidates).
  * - Per-user try/catch; one failure does not abort the script.
  * - Rate-limit handling with retries on 429.
  *
@@ -28,7 +28,7 @@
  * Options:
  *   --dry-run   Log what would be updated; no DB writes (default).
  *   --live      Perform DB updates.
- *   --limit=N   Max users to process (default 100).
+ *   --limit=N   Max users to process (omit for no cap).
  *
  * Env: .env.local must have MONGODB_URI and STRIPE_SECRET_KEY.
  */
@@ -40,7 +40,8 @@ config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const DRY_RUN = !process.argv.includes("--live");
 const LIMIT_ARG = process.argv.find((a) => a.startsWith("--limit="));
-const LIMIT = LIMIT_ARG ? Math.max(1, parseInt(LIMIT_ARG.split("=")[1] || "100", 10)) : 100;
+/** When set, caps MongoDB candidate fetch; omit --limit= on CLI to process all matches. */
+const LIMIT = LIMIT_ARG ? Math.max(1, parseInt(LIMIT_ARG.split("=")[1] || "1", 10)) : undefined;
 
 const DELAY_BETWEEN_STRIPE_MS = 200;
 const MAX_RETRIES_429 = 3;
@@ -114,7 +115,7 @@ async function main() {
   const now = new Date();
   console.log("\n🔧 Repair stripeSubscriptionId for users pointing to dead subscriptions");
   console.log(`   Mode: ${DRY_RUN ? "DRY RUN (no DB writes)" : "LIVE"}`);
-  console.log(`   Limit: ${LIMIT}`);
+  console.log(`   Limit: ${LIMIT === undefined ? "none (all candidates)" : LIMIT}`);
   console.log(`   Now (UTC): ${now.toISOString()}`);
   console.log("");
 
@@ -141,16 +142,20 @@ async function main() {
 
     // Find users with expired endDate who have a stripeSubscriptionId
     // These are the ones most likely to have the wrong sub ID
-    const candidates = await User.find({
+    let candidateQuery = User.find({
       stripeSubscriptionId: { $exists: true, $nin: [null, ""] },
       stripeCustomerId: { $exists: true, $nin: [null, ""] },
       "subscription.endDate": { $lte: now },
       "subscription.packageId": { $exists: true, $ne: null },
     })
       .select("_id email stripeSubscriptionId stripeCustomerId subscription")
-      .sort({ "subscription.endDate": 1 })
-      .limit(LIMIT)
-      .lean();
+      .sort({ "subscription.endDate": 1 });
+
+    if (LIMIT !== undefined) {
+      candidateQuery = candidateQuery.limit(LIMIT);
+    }
+
+    const candidates = await candidateQuery.lean();
 
     console.log(`📊 Found ${candidates.length} candidate(s) with expired endDate to check\n`);
 
@@ -315,9 +320,25 @@ async function main() {
     console.log(`   Errors: ${errors}`);
 
     if (correctedUsers.length > 0) {
-      console.log(`\n--- ${DRY_RUN ? "Would-be-corrected" : "Corrected"} Users ---`);
+      const emailsHeader = DRY_RUN
+        ? "Emails that WOULD be updated (dry run) — run with --live to apply"
+        : "Emails UPDATED in database (--live)";
+      console.log(`\n--- ${emailsHeader} (${correctedUsers.length}) ---`);
+      correctedUsers.forEach((u, i) => {
+        console.log(`   ${i + 1}. ${u.email}`);
+      });
+
+      const uniqueEmails = [...new Set(correctedUsers.map((u) => u.email).filter((e) => e && e !== "(no email)"))];
+      if (uniqueEmails.length > 0) {
+        console.log(`\n   All updated emails (comma-separated, ${uniqueEmails.length}):`);
+        console.log(`   ${uniqueEmails.join(", ")}`);
+      }
+
+      console.log(`\n--- Detail: subscription id changes ---`);
       for (const u of correctedUsers) {
-        console.log(`   ${u.email} (${u.userId}): ${u.oldSubId} (${u.oldStatus}) → ${u.newSubId} (${u.newStatus}), endDate → ${u.newEndDate}`);
+        console.log(
+          `   ${u.email} | userId=${u.userId} | ${u.oldSubId} (${u.oldStatus}) → ${u.newSubId} (${u.newStatus}) | endDate=${u.newEndDate}`
+        );
       }
       console.log("");
     }
