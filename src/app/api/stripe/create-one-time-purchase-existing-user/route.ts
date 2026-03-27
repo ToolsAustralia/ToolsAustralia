@@ -19,6 +19,7 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
@@ -147,6 +148,11 @@ export async function POST(request: NextRequest) {
 
     if (!membershipPackage || !membershipPackage.isActive) {
       return NextResponse.json({ error: "Invalid or inactive package" }, { status: 400 });
+    }
+
+    if (!isMiniDrawPackage) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
     }
 
     // Create or retrieve Stripe customer

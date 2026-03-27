@@ -13,10 +13,10 @@ import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import BestChanceBadge from "@/components/ui/BestChanceBadge";
 import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
-import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
@@ -72,9 +72,7 @@ export default function MembershipSection({
   // Fetch user data to check membership status
   const { userData, loading: userLoading } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
-  const { requestModal } = useModalPriorityStore();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
@@ -90,21 +88,12 @@ export default function MembershipSection({
       const detail = event.detail ?? {};
       const plan = detail.plan as LocalMembershipPlan | undefined;
 
-      // Check if gates are closed (freeze period or gap period)
-      const gatesClosed = currentMajorDraw?.status !== "active";
-      if (gatesClosed) {
-        // Show gate-closed modal instead of opening payment modals
-        requestModal("gate-closed", true, {
-          nextActivationDate: nextDraw?.activationDate ?? null,
-          nextDrawName: nextDraw?.name,
-        });
-        return;
-      }
-
-      if (plan) {
-        membershipModal.setSelectedPlan(plan);
-      }
-      membershipModal.openModal();
+      whenGatesOpenElseGateModal(() => {
+        if (plan) {
+          membershipModal.setSelectedPlan(plan);
+        }
+        membershipModal.openModal();
+      });
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
@@ -112,7 +101,7 @@ export default function MembershipSection({
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal, currentMajorDraw, nextDraw, requestModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal]);
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
@@ -219,50 +208,41 @@ export default function MembershipSection({
 
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
-    // Check if gates are closed (freeze period or gap period)
-    const gatesClosed = currentMajorDraw?.status !== "active";
-    if (gatesClosed) {
-      // Show gate-closed modal instead of opening payment modals
-      requestModal("gate-closed", true, {
-        nextActivationDate: nextDraw?.activationDate ?? null,
-        nextDrawName: nextDraw?.name,
-      });
-      return;
-    }
+    whenGatesOpenElseGateModal(() => {
+      const hierarchy = getPlanHierarchy(plan);
 
-    const hierarchy = getPlanHierarchy(plan);
+      // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
+      if (hasBlockingSub && isPastDue) {
+        router.push("/my-account");
+        return;
+      }
 
-    // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
-    if (hasBlockingSub && isPastDue) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is a downgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isDowngrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is a downgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isDowngrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is an upgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isUpgrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is an upgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isUpgrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is the current plan, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isCurrent) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is the current plan, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isCurrent) {
-      router.push("/my-account");
-      return;
-    }
+      // For new subscriptions (no active subscription), use the modal
+      membershipModal.openModal(plan);
 
-    // For new subscriptions (no active subscription), use the modal
-    membershipModal.openModal(plan);
-
-    // Call the original onPlanSelect if provided
-    if (onPlanSelect) {
-      onPlanSelect(plan);
-    }
+      // Call the original onPlanSelect if provided
+      if (onPlanSelect) {
+        onPlanSelect(plan);
+      }
+    });
   };
 
   // Get membership plans from API data and convert to local format

@@ -17,6 +17,7 @@ import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
  * Get resolved promo multiplier for a package type (payment context)
@@ -227,6 +228,11 @@ export async function POST(request: NextRequest) {
       validatedData.offerId,
       validatedData.originalPurchaseContext
     );
+
+    if (!miniDrawInfo.miniDrawId) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
+    }
 
     // ✅ Calculate dynamic upsell entries based on original package and active promo
     let calculatedEntriesCount = offer.entriesCount; // Fallback to static value

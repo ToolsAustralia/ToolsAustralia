@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { usePromoPageTracking } from "@/hooks/usePromoPageTracking";
 import { isToolsetLandingSlug } from "@/config/promo-landing-slugs";
+import { PromotionsGuestThemeToggle } from "@/components/ui/ThemeToggle";
 
 /**
  * Wraps promotions layout content.
@@ -38,6 +39,7 @@ export default function PromotionsLayoutShell({
 
   return (
     <div className={isRyobiPage ? "dark" : ""}>
+      <PromotionsGuestThemeToggle />
       {children}
     </div>
   );

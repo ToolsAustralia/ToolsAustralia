@@ -6,6 +6,7 @@ import { ArrowUpRight, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Gift, 
 import { useToast } from "@/components/ui/Toast";
 import { useRedeemableRedemption, useRedeemablesWallet } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useSidebar } from "@/contexts/SidebarContext";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import {
@@ -46,6 +47,7 @@ export default function RewardsFloatingWidget({
   const { showToast } = useToast();
   const { isAnySidebarOpen } = useSidebar();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"claimable" | "past">("claimable");
   const [claimablePage, setClaimablePage] = useState(1);
@@ -75,22 +77,26 @@ export default function RewardsFloatingWidget({
   );
 
   const openSpecialPackagesModal = (code?: string) => {
-    const normalizedCode = code?.trim().toUpperCase();
-    requestModal("special-packages", true, normalizedCode ? { initialCouponCode: normalizedCode } : undefined);
-    setIsOpen(false);
+    whenGatesOpenElseGateModal(() => {
+      const normalizedCode = code?.trim().toUpperCase();
+      requestModal("special-packages", true, normalizedCode ? { initialCouponCode: normalizedCode } : undefined);
+      setIsOpen(false);
+    });
   };
 
   const openMembershipModalWithTradie = (code?: string) => {
-    const normalizedCode = code?.trim().toUpperCase();
-    window.dispatchEvent(
-      new CustomEvent("openMembershipModal", {
-        detail: {
-          referralCode: normalizedCode || undefined,
-          plan: DEFAULT_TRADIE_PLAN,
-        },
-      })
-    );
-    setIsOpen(false);
+    whenGatesOpenElseGateModal(() => {
+      const normalizedCode = code?.trim().toUpperCase();
+      window.dispatchEvent(
+        new CustomEvent("openMembershipModal", {
+          detail: {
+            referralCode: normalizedCode || undefined,
+            plan: DEFAULT_TRADIE_PLAN,
+          },
+        })
+      );
+      setIsOpen(false);
+    });
   };
 
   const onRedeem = async (issuanceId: string) => {

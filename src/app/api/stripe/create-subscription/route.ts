@@ -22,6 +22,7 @@ import { checkCanCreateSubscription } from "@/utils/payment/subscription-creatio
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 // Rate limit: 20 create-subscription requests per minute per IP
 const createSubscriptionRateLimiter = createRateLimiter("create-subscription", {
@@ -171,6 +172,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Check if user already exists (from registration)
     // console.log("👤 Checking if user already exists...");
