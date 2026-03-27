@@ -57,8 +57,6 @@ export async function GET(request: Request) {
     console.log(`📊 Fetching recent activities (page ${page}, limit ${limit})...`);
 
     const activities: RecentActivity[] = [];
-    const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // ========================================
     // RECENT USER SIGNUPS

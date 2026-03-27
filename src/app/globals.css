@@ -32,6 +32,13 @@
     }
   }
 
+  /* PromoHero opt-out: disable bottom arch (ellipse clip) without removing rules above.
+     Toggle via PROMO_HERO_ELLIPSE_CLIP_ENABLED in PromoHero.tsx */
+  .main-banner-image.promo-hero-banner--flat {
+    -webkit-clip-path: none !important;
+    clip-path: none !important;
+  }
+
   .pattern-dots-white {
     background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     background-size: 60px 60px;
@@ -267,40 +274,25 @@
   --foreground: #171717;
   /* Fire animation - grainy/noisy background image for glitter effect */
   --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
-  /* Force light mode so Android email/SMS browsers don't invert colors */
-  color-scheme: light;
 }
 
 /* Dark mode theme tokens - only active when .dark class is present */
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
-  color-scheme: dark;
 }
 
-/* Always stay in light mode even if device prefers dark (unless .dark class is present) */
+/* Respect system preference as fallback when no .dark class */
 @media (prefers-color-scheme: dark) {
   :root:not(.dark) {
     --background: #ffffff;
     --foreground: #171717;
-    color-scheme: light;
-  }
-
-  html:not(.dark) {
-    color-scheme: light;
-  }
-
-  body:not(.dark *) {
-    background: #ffffff !important;
-    color: #171717 !important;
   }
 }
 
 @layer base {
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
-    /* Lock the document in light mode for consistent branding */
-    color-scheme: light;
     overflow-x: hidden;
   }
   
@@ -318,9 +310,6 @@
     background: var(--background);
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Ensure body stays light even when browsers try to auto-darken */
-    background-color: #ffffff !important;
-    color: #171717 !important;
     overflow-x: hidden;
   }
 
@@ -1002,34 +991,34 @@
   color: #ca8a04;
 }
 
-/* Makita (Teal/Cyan) */
+/* Makita (cyan / sky blue — BRAND_THEMES.makita) */
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next,
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev {
-  color: #00a0aa;
+  color: #00c2ed;
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev:hover {
-  color: #0b7e88;
+  color: #5ca9ec;
 }
 
-/* Ryobi (Lime Green) */
+/* Ryobi (neon chartreuse) */
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next,
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev {
-  color: #b8e000;
+  color: #e0ff00;
 }
 
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev:hover,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev:hover {
-  color: #e0ff00;
+  color: #f5ff4a;
 }
 
 .main-swiper .swiper-button-next:active,
@@ -1066,28 +1055,28 @@
   box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
 }
 
-/* Makita Pagination (Teal/Cyan) */
+/* Makita Pagination */
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(0, 160, 170, 0.3);
+  border: 2px solid rgba(0, 194, 237, 0.35);
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet-active,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet-active {
-  background: #00a0aa;
-  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
+  background: #00c2ed;
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
 }
 
-/* Ryobi Pagination (Lime Green) */
+/* Ryobi pagination */
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(224, 255, 0, 0.3);
+  border: 2px solid rgba(224, 255, 0, 0.45);
 }
 
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet-active,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet-active {
-  background: #b8e000;
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+  background: #e0ff00;
+  box-shadow: 0 0 22px rgba(224, 255, 0, 0.85), 0 0 40px rgba(242, 255, 77, 0.35);
 }
 
 /* Thumbnail Swiper - Default/Milwaukee (Red) */
@@ -1103,18 +1092,18 @@
   box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
 }
 
-/* Makita Thumbnails (Teal/Cyan) */
+/* Makita thumbnails */
 .thumbs-swiper[data-brand-slug="makita-sidchrome"] .swiper-slide-thumb-active > div,
 .thumbs-swiper[data-brand-slug="makita-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #00a0aa !important;
-  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
+  border-color: #00c2ed !important;
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
 }
 
-/* Ryobi Thumbnails (Lime Green) */
+/* Ryobi thumbnails */
 .thumbs-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-slide-thumb-active > div,
 .thumbs-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #b8e000 !important;
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+  border-color: #e0ff00 !important;
+  box-shadow: 0 0 22px rgba(224, 255, 0, 0.75), 0 0 36px rgba(242, 255, 77, 0.35);
 }
 
 /* Brand-specific glow utilities */
@@ -1127,11 +1116,11 @@
 }
 
 .glow-makita {
-  box-shadow: 0 0 20px rgba(0, 197, 207, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .glow-ryobi {
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 24px rgba(224, 255, 0, 0.72), 0 0 40px rgba(242, 255, 77, 0.28), 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
 .glow-green {
@@ -1379,16 +1368,16 @@
 
 /* Brand-specific border glow animations */
 @keyframes border-glow-ryobi {
-  0%, 100% { box-shadow: 0 0 12px rgba(224, 255, 0, 0.45); }
-  50% { box-shadow: 0 0 22px rgba(224, 255, 0, 0.75); }
+  0%, 100% { box-shadow: 0 0 14px rgba(224, 255, 0, 0.55), 0 0 24px rgba(242, 255, 77, 0.2); }
+  50% { box-shadow: 0 0 28px rgba(224, 255, 0, 0.9), 0 0 42px rgba(242, 255, 77, 0.45); }
 }
 .animate-border-glow-ryobi {
   animation: border-glow-ryobi 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-makita {
-  0%, 100% { box-shadow: 0 0 16px rgba(0, 197, 207, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.4); }
-  50% { box-shadow: 0 0 32px rgba(0, 197, 207, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.7); }
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 194, 237, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 32px rgba(92, 169, 236, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.65); }
 }
 .animate-border-glow-makita {
   animation: border-glow-makita 2s ease-in-out infinite;
@@ -1495,12 +1484,13 @@
   border: none;
   border-radius: 1000px;
   overflow: hidden;
-  box-shadow: 0 18px 30px rgba(185, 28, 28, 0.4);
+  /* Neutral lift — brand tint comes from `background`; avoid global red shadow on Makita/cyan CTAs */
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.32);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .promo-hero-cta-button:focus-visible {
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 18px 30px rgba(185, 28, 28, 0.45);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 18px 30px rgba(0, 0, 0, 0.38);
 }
 
 .promo-hero-cta-button::before {
@@ -1528,7 +1518,7 @@
 @media (hover: hover) and (min-width: 1024px) {
   .promo-hero-cta-button:hover {
     transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 22px 34px rgba(185, 28, 28, 0.45);
+    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.38);
   }
 }
 

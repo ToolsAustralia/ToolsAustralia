@@ -97,7 +97,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
   useEffect(() => {
     const u = variant?.config?.banner?.leftImageUrl?.trim();
     setBannerLeftImages(u ? [u] : []);
-  }, [variant?._id]);
+  }, [variant?._id, variant?.config?.banner?.leftImageUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

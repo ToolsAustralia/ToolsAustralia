@@ -24,6 +24,8 @@ import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 // Export loading components for global use
 export {
@@ -80,31 +82,34 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ErrorBoundary>
-      <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
-        <QueryClientProvider client={queryClient}>
-          <ApiErrorBoundary>
-            <UserProvider>
-              <SidebarProvider>
-                <CartProvider>
-                  <LoadingProvider>
-                    <ToastProvider>
-                      <AffiliateTracker />
-                      <ReferralTracker />
-                      <PromoLinkTracker />
-                      <KlaviyoUserIdentifier />
-                      <UpgradeSuccessToast />
-                      {children}
-                      <FloatingPromoBanner />
-                    </ToastProvider>
-                  </LoadingProvider>
-                  {/* React Query DevTools - temporarily disabled */}
-                  {/* {process.env.NODE_ENV === "development" && <DevTools />} */}
-                </CartProvider>
-              </SidebarProvider>
-            </UserProvider>
-          </ApiErrorBoundary>
-        </QueryClientProvider>
-      </SessionProvider>
+      <ThemeProvider>
+        <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
+          <QueryClientProvider client={queryClient}>
+            <ApiErrorBoundary>
+              <UserProvider>
+                <SidebarProvider>
+                  <CartProvider>
+                    <LoadingProvider>
+                      <ToastProvider>
+                        <AffiliateTracker />
+                        <ReferralTracker />
+                        <PromoLinkTracker />
+                        <KlaviyoUserIdentifier />
+                        <UpgradeSuccessToast />
+                        {children}
+                        <FloatingPromoBanner />
+                        <ThemeToggle />
+                      </ToastProvider>
+                    </LoadingProvider>
+                    {/* React Query DevTools - temporarily disabled */}
+                    {/* {process.env.NODE_ENV === "development" && <DevTools />} */}
+                  </CartProvider>
+                </SidebarProvider>
+              </UserProvider>
+            </ApiErrorBoundary>
+          </QueryClientProvider>
+        </SessionProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

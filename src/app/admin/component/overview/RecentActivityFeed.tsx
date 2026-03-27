@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import DashboardSection from "./DashboardSection";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import { useActivityLogInfinite } from "@/hooks/queries/useAdminQueries";
-import { UserCheck, Trophy, DollarSign, AlertTriangle, Crown, Activity, RefreshCw, Loader2 } from "lucide-react";
+import { AlertTriangle, Activity, RefreshCw, Loader2 } from "lucide-react";
 
 export default function RecentActivityFeed() {
   const router = useRouter();
@@ -43,25 +43,6 @@ export default function RecentActivityFeed() {
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "user_signup":
-        return <UserCheck className="w-4 h-4" />;
-      case "draw_complete":
-        return <Trophy className="w-4 h-4" />;
-      case "high_value_order":
-        return <DollarSign className="w-4 h-4" />;
-      case "system_alert":
-        return <AlertTriangle className="w-4 h-4" />;
-      case "membership_upgrade":
-        return <Crown className="w-4 h-4" />;
-      case "subscription_past_due":
-        return <AlertTriangle className="w-4 h-4" />;
-      default:
-        return <Activity className="w-4 h-4" />;
-    }
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "success":
@@ -79,7 +60,6 @@ export default function RecentActivityFeed() {
 
   // Same source as Activity Log page (90-day window) — not the capped dashboard preview API
   const allActivities = data?.pages.flatMap((page) => page.activities) ?? [];
-  const totalInLog = data?.pages[0]?.pagination.total ?? 0;
 
   return (
     <DashboardSection

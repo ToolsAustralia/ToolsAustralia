@@ -20,8 +20,19 @@ export interface ModalHeaderProps {
   showCloseButton?: boolean; // Optional prop to control close button visibility (defaults to true for backward compatibility)
   /** When true (e.g. Ryobi theme), use dark text for better contrast on light backgrounds */
   preferDarkBackground?: boolean;
+  /**
+   * When set (e.g. package `scheme.text` / `scheme.textMuted`), overrides default header title & close color.
+   * Keeps contrast with the same rule as promos: dark text on light brand fills, light text on dark fills.
+   */
+  titleTextClassName?: string;
+  subtitleTextClassName?: string;
   /** Optional inline style (e.g. for theme gradient background) */
   style?: React.CSSProperties;
+  /**
+   * When true, skips metallic/gradient preset backgrounds so `style` / `className` fully control the fill
+   * (e.g. solid brand color for prize spec modal).
+   */
+  customBackground?: boolean;
 }
 
 const ModalHeader: React.FC<ModalHeaderProps> = ({
@@ -38,22 +49,39 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   logoSize = "md",
   showCloseButton = true, // Default to true to maintain backward compatibility
   preferDarkBackground = false,
+  titleTextClassName,
+  subtitleTextClassName,
   style: headerStyle,
+  customBackground = false,
 }) => {
   const resolvedVariant = variant === "auto" ? (showLogo ? "metallic" : "brand") : variant;
 
-  const headerBaseClass =
-    resolvedVariant === "brand"
+  const headerBaseClass = customBackground
+    ? ""
+    : resolvedVariant === "brand"
       ? "bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444]"
       : resolvedVariant === "metallic-red"
-      ? "metal-header-red"
-      : "metal-header";
+        ? "metal-header-red"
+        : "metal-header";
 
-  const accentClass = accent === "red" ? "metal-accent-red" : "";
+  const accentClass = customBackground ? "" : accent === "red" ? "metal-accent-red" : "";
 
   const logoHeightClass = logoSize === "sm" ? "h-6" : logoSize === "lg" ? "h-10" : "h-8";
-  const textClass = preferDarkBackground ? "!text-black" : "text-white";
-  const subtitleClass = preferDarkBackground ? "!text-gray-800" : "text-white/80";
+  const textClass =
+    titleTextClassName ?? (preferDarkBackground ? "!text-black" : "text-white");
+  const subtitleClass =
+    subtitleTextClassName ?? (preferDarkBackground ? "!text-gray-800" : "text-white/80");
+  const headerUsesDarkForeground =
+    !titleTextClassName && preferDarkBackground
+      ? true
+      : Boolean(
+          titleTextClassName &&
+            (titleTextClassName.includes("text-black") ||
+              titleTextClassName.includes("!text-black") ||
+              titleTextClassName.includes("black/") ||
+              titleTextClassName.includes("text-slate-9") ||
+              titleTextClassName.includes("text-gray-9"))
+        );
 
   return (
     <div className={`${headerBaseClass} ${accentClass} p-4 ${textClass} relative ${className}`} style={headerStyle}>
@@ -62,7 +90,11 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
         <button
           onClick={onClose}
           type="button"
-          className={`absolute top-4 right-4 ${textClass} transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 ${preferDarkBackground ? "hover:text-gray-700" : "hover:text-gray-200"}`}
+          className={`absolute top-4 right-4 ${textClass} transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full focus:outline-none focus:ring-2 ${
+            headerUsesDarkForeground
+              ? "hover:bg-black/15 hover:text-gray-900 focus:ring-black/20"
+              : "hover:bg-white/10 hover:text-white focus:ring-white/20"
+          }`}
           aria-label="Close modal"
         >
           <X size={20} />

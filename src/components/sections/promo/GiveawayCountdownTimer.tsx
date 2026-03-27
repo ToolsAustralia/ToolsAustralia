@@ -107,9 +107,9 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
     ? isRyobi
       ? {
           borderColor: "rgba(0,0,0,0.22)",
-          background: "linear-gradient(165deg, #f0ff99 0%, #dfff55 42%, #c8eb1a 100%)",
+          background: "linear-gradient(165deg, #f5ff8a 0%, #e8ff2e 38%, #e0ff00 72%, #c8eb00 100%)",
           boxShadow:
-            "0 5px 18px rgba(0,0,0,0.16), 0 1px 0 rgba(255,255,255,0.65) inset, inset 0 -2px 6px rgba(100,120,20,0.12)",
+            "0 5px 20px rgba(224,255,0,0.35), 0 1px 0 rgba(255,255,255,0.7) inset, inset 0 -2px 8px rgba(80,100,10,0.14)",
         }
       : isDewalt
         ? {
@@ -131,9 +131,9 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
       ? isRyobi
         ? {
             borderColor: "rgba(0,0,0,0.22)",
-            background: "linear-gradient(165deg, #f0ff95 0%, #e2ff40 38%, #c8eb14 100%)",
+            background: "linear-gradient(165deg, #f7ff99 0%, #eaff33 35%, #e0ff00 65%, #b8e000 100%)",
             boxShadow:
-              "0 6px 22px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.75) inset, inset 0 -3px 10px rgba(90,110,30,0.2)",
+              "0 6px 24px rgba(224,255,0,0.4), 0 1px 0 rgba(255,255,255,0.8) inset, inset 0 -3px 12px rgba(60,80,0,0.18)",
           }
         : isDewalt
           ? {

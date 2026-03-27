@@ -4,6 +4,31 @@
  */
 
 import type { CSSProperties } from "react";
+import {
+  BRAND_THEMES,
+  getBrandLandingPrimaryTriple,
+  getBrandMembershipSectionRow,
+  getBrandPackageGradientRow,
+  slugToBrandKey,
+} from "@/config/brand-theme";
+
+/** Package color keys that map to curated `BRAND_THEMES.gradient` (CTAs, countdowns, promo bar tiles). */
+const COLOR_KEY_TO_BRAND_GRADIENT: Partial<Record<COLOR_KEYS, keyof typeof BRAND_THEMES>> = {
+  "dewalt-yellow": "dewalt",
+  "makita-teal": "makita",
+  "milwaukee-red": "milwaukee",
+  "ryobi-green": "ryobi",
+};
+
+function brandCanvasGradientFromSlug(slug: string): string | null {
+  const bk = slugToBrandKey(slug);
+  return bk ? BRAND_THEMES[bk].gradient : null;
+}
+
+function brandCanvasGradientFromColorKey(colorKey: COLOR_KEYS): string | null {
+  const bk = COLOR_KEY_TO_BRAND_GRADIENT[colorKey];
+  return bk ? BRAND_THEMES[bk].gradient : null;
+}
 
 /** Elevated panel style (price badge + Enter Now). Reusable across components. */
 export type PanelStyle = CSSProperties;
@@ -145,34 +170,10 @@ const BRAND_GRADIENTS: Record<COLOR_KEYS, { bg: string; primary: string; primary
     primaryDark: "#0047BB",
     accent: "#000000",
   },
-  "ryobi-green": {
-    bg: "linear-gradient(135deg, #E0FF00 0%, #EBFF33 50%, #E0FF00 100%)",
-    primary: "#E0FF00",
-    primaryLight: "#EBFF33",
-    primaryDark: "#B8E000",
-    accent: "#000000",
-  },
-  "makita-teal": {
-    bg: "linear-gradient(135deg, #0B7E88 0%, #00A0AA 40%, #00C5CF 50%, #00A0AA 60%, #0B7E88 100%)",
-    primary: "#00A0AA",
-    primaryLight: "#00C5CF",
-    primaryDark: "#0B7E88",
-    accent: "#000000",
-  },
-  "dewalt-yellow": {
-    bg: "linear-gradient(135deg, #FDB813 0%, #FFC933 50%, #FDB813 100%)",
-    primary: "#FDB813",
-    primaryLight: "#FFC933",
-    primaryDark: "#E5A000",
-    accent: "#000000",
-  },
-  "milwaukee-red": {
-    bg: "linear-gradient(135deg, #C8102E 0%, #E02D42 50%, #C8102E 100%)",
-    primary: "#C8102E",
-    primaryLight: "#E02D42",
-    primaryDark: "#9a0c24",
-    accent: "#000000",
-  },
+  "ryobi-green": getBrandPackageGradientRow("ryobi"),
+  "makita-teal": getBrandPackageGradientRow("makita"),
+  "dewalt-yellow": getBrandPackageGradientRow("dewalt"),
+  "milwaukee-red": getBrandPackageGradientRow("milwaukee"),
   "boss-red": {
     bg: "linear-gradient(135deg, #ee0000 0%, #ff4444 50%, #ee0000 100%)",
     primary: "#ee0000",
@@ -214,42 +215,10 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
       border: "1px solid rgba(58, 110, 197, 0.95)",
     },
   },
-  "ryobi-green": {
-    bgGradient: "linear-gradient(135deg, #B8E000 0%, #E0FF00 40%, #EBFF33 50%, #E0FF00 60%, #B8E000 100%)",
-    gradient: "from-[#B8E000] via-[#EBFF33] to-[#B8E000]",
-    badgeStyle: {
-      background: "#D4F000",
-      boxShadow: "0 0 28px rgba(212, 240, 0, 0.6), 0 4px 16px rgba(212, 240, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
-      border: "1px solid rgba(212, 240, 0, 0.9)",
-    },
-  },
-  "makita-teal": {
-    bgGradient: "linear-gradient(135deg, #0A6B72 0%, #0B7E88 25%, #00A0AA 45%, #00C5CF 50%, #00A0AA 55%, #0B7E88 75%, #0A6B72 100%)",
-    gradient: "from-[#0A6B72] via-[#00C5CF] to-[#0A6B72]",
-    badgeStyle: {
-      background: "#00A0AA",
-      boxShadow: "0 0 40px rgba(0, 197, 207, 0.85), 0 4px 24px rgba(10, 126, 136, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35)",
-      border: "1px solid rgba(0, 197, 207, 0.7)",
-    },
-  },
-  "dewalt-yellow": {
-    bgGradient: "linear-gradient(135deg, #E5A000 0%, #FDB813 40%, #FFC933 50%, #FDB813 60%, #E5A000 100%)",
-    gradient: "from-[#E5A000] via-[#FFC933] to-[#E5A000]",
-    badgeStyle: {
-      background: "#FFC933",
-      boxShadow: "0 0 35px rgba(255, 201, 51, 0.8), 0 4px 20px rgba(229, 160, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
-      border: "1px solid rgba(255, 201, 51, 0.95)",
-    },
-  },
-  "milwaukee-red": {
-    bgGradient: "linear-gradient(135deg, #9a0c24 0%, #C8102E 40%, #E02D42 50%, #C8102E 60%, #9a0c24 100%)",
-    gradient: "from-[#9a0c24] via-[#E02D42] to-[#9a0c24]",
-    badgeStyle: {
-      background: "#C8102E",
-      boxShadow: "0 0 40px rgba(200, 16, 46, 0.85), 0 4px 20px rgba(200, 16, 46, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
-      border: "1px solid rgba(200, 16, 46, 0.95)",
-    },
-  },
+  "ryobi-green": getBrandMembershipSectionRow("ryobi"),
+  "makita-teal": getBrandMembershipSectionRow("makita"),
+  "dewalt-yellow": getBrandMembershipSectionRow("dewalt"),
+  "milwaukee-red": getBrandMembershipSectionRow("milwaukee"),
   "boss-red": {
     bgGradient: "linear-gradient(135deg, #d40000 0%, #ee0000 40%, #ff4444 50%, #ee0000 60%, #d40000 100%)",
     gradient: "from-[#d40000] via-[#ff4444] to-[#d40000]",
@@ -331,10 +300,10 @@ export function slugToPromoTierPlanId(slug: string): COLOR_KEYS {
 // Extracted from reference images - primary = main brand color from imagery
 const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: string; primaryDark: string }> = {
   "kincrome-blue": { primary: "#2A62B6", primaryLight: "#4A7ED4", primaryDark: "#0047BB" },
-  "ryobi-green": { primary: "#E0FF00", primaryLight: "#EBFF33", primaryDark: "#B8E000" },
-  "makita-teal": { primary: "#00A0AA", primaryLight: "#00C5CF", primaryDark: "#0B7E88" },
-  "dewalt-yellow": { primary: "#FDB813", primaryLight: "#FFC933", primaryDark: "#E5A000" },
-  "milwaukee-red": { primary: "#C8102E", primaryLight: "#E02D42", primaryDark: "#9a0c24" },
+  "ryobi-green": getBrandLandingPrimaryTriple("ryobi"),
+  "makita-teal": getBrandLandingPrimaryTriple("makita"),
+  "dewalt-yellow": getBrandLandingPrimaryTriple("dewalt"),
+  "milwaukee-red": getBrandLandingPrimaryTriple("milwaukee"),
   "boss-red": { primary: "#ee0000", primaryLight: "#ff4444", primaryDark: "#d40000" },
   black: { primary: "#D4AF37", primaryLight: "#E8C547", primaryDark: "#B8860B" },
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
@@ -392,13 +361,17 @@ export function getLandingPageThemeFromSlug(slug: string): {
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
   const preferDarkBackground = slug === "ryobi-sidchrome" || slug === "ryobi-milwaukee";
+  const brandGradient = brandCanvasGradientFromSlug(slug);
+  const fallbackGradient = `linear-gradient(90deg, ${primary} 0%, ${primaryLight} 50%, ${primary} 100%)`;
+  const fallbackSolid = `linear-gradient(90deg, ${primaryDark} 0%, ${primary} 50%, ${primaryDark} 100%)`;
+  const fallbackRich = `linear-gradient(135deg, ${primary} 0%, ${primaryLight} 25%, ${primary} 50%, ${primaryLight} 75%, ${primary} 100%)`;
   return {
     primary,
     primaryLight,
     primaryDark,
-    gradient: `linear-gradient(90deg, ${primary} 0%, ${primaryLight} 50%, ${primary} 100%)`,
-    gradientSolid: `linear-gradient(90deg, ${primaryDark} 0%, ${primary} 50%, ${primaryDark} 100%)`,
-    gradientRich: `linear-gradient(135deg, ${primary} 0%, ${primaryLight} 25%, ${primary} 50%, ${primaryLight} 75%, ${primary} 100%)`,
+    gradient: brandGradient ?? fallbackGradient,
+    gradientSolid: brandGradient ?? fallbackSolid,
+    gradientRich: brandGradient ?? fallbackRich,
     shadowRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.6)`,
     hoverShadowRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.8)`,
     borderRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.4)`,
@@ -498,15 +471,14 @@ function planIdToSlotKey(planId: string, isMembershipTab: boolean): string {
 }
 
 /**
- * Get package color scheme for promotions page, respecting A/B test variant overrides.
- * When variantConfig.packageColors has an override for the slot, uses that COLOR_KEY.
- * Otherwise falls back to getMembershipSectionColorScheme (default behavior).
+ * Resolved package color key for a plan (slot detection is case-insensitive on planId).
+ * Matches card theming in getPackageColorSchemeForPromo — use this for inner glow so overlays stay on-brand when A/B overrides swap slot colors.
  */
-export function getPackageColorSchemeForPromo(
+export function resolvePromoPackageColorKey(
   planId: string,
   isMembershipTab: boolean,
   variantConfig?: PackageColorsVariantConfig
-): PackageColorScheme {
+): COLOR_KEYS {
   const slot = planIdToSlotKey(planId, isMembershipTab);
   const override = variantConfig?.packageColors
     ? (isMembershipTab
@@ -514,13 +486,27 @@ export function getPackageColorSchemeForPromo(
         : variantConfig.packageColors.oneTime?.[slot])
     : undefined;
 
-  if (override) {
-    const base = getPackageColorScheme(override);
-    const overrides = MEMBERSHIP_SECTION_GRADIENTS[override as COLOR_KEYS];
-    return overrides ? { ...base, ...overrides } : base;
-  }
+  if (override) return override;
 
-  return getMembershipSectionColorScheme(planId, isMembershipTab);
+  return isMembershipTab
+    ? (MEMBERSHIP_TAB_COLOR_MAP[slot] ?? toColorKey(slot))
+    : (ONE_TIME_TAB_COLOR_MAP[slot] ?? toColorKey(slot));
+}
+
+/**
+ * Get package color scheme for promotions page, respecting A/B test variant overrides.
+ * When variantConfig.packageColors has an override for the slot, uses that COLOR_KEY.
+ * Otherwise falls back to default tab maps (same as getMembershipSectionColorScheme without overrides).
+ */
+export function getPackageColorSchemeForPromo(
+  planId: string,
+  isMembershipTab: boolean,
+  variantConfig?: PackageColorsVariantConfig
+): PackageColorScheme {
+  const colorKey = resolvePromoPackageColorKey(planId, isMembershipTab, variantConfig);
+  const base = getPackageColorScheme(colorKey);
+  const overrides = MEMBERSHIP_SECTION_GRADIENTS[colorKey];
+  return overrides ? { ...base, ...overrides } : base;
 }
 
 /**
@@ -529,19 +515,7 @@ export function getPackageColorSchemeForPromo(
  * - One-time tab: uses ONE_TIME_TAB_COLOR_MAP (kincrome, ryobi, makita, dewalt, milwaukee)
  */
 export function getMembershipSectionColorScheme(planId: string, isMembershipTab: boolean): PackageColorScheme {
-  const packKey =
-    planId.includes("apprentice") ? "apprentice-pack" :
-    planId.includes("tradie") ? "tradie-pack" :
-    planId.includes("foreman") ? "foreman-pack" :
-    planId.includes("boss") ? "boss-pack" :
-    planId.includes("power") ? "power-pack" : "power-pack";
-  const colorKey = isMembershipTab
-    ? (MEMBERSHIP_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey))
-    : (ONE_TIME_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey));
-  const base = getPackageColorScheme(colorKey);
-  const overrides = MEMBERSHIP_SECTION_GRADIENTS[colorKey];
-  if (!overrides) return base;
-  return { ...base, ...overrides };
+  return getPackageColorSchemeForPromo(planId, isMembershipTab, undefined);
 }
 
 /**
@@ -633,13 +607,17 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
   const brand = LANDING_PAGE_BRAND[colorKey] ?? LANDING_PAGE_BRAND["milwaukee-red"];
   const { primary, primaryLight, primaryDark } = brand;
   const preferDarkBackground = colorKey === "ryobi-green";
+  const brandGradient = brandCanvasGradientFromColorKey(colorKey);
+  const fallbackGradient = `linear-gradient(90deg, ${primary} 0%, ${primaryLight} 50%, ${primary} 100%)`;
+  const fallbackSolid = `linear-gradient(90deg, ${primaryDark} 0%, ${primary} 50%, ${primaryDark} 100%)`;
+  const fallbackRich = `linear-gradient(135deg, ${primary} 0%, ${primaryLight} 25%, ${primary} 50%, ${primaryLight} 75%, ${primary} 100%)`;
   return {
     primary,
     primaryLight,
     primaryDark,
-    gradient: `linear-gradient(90deg, ${primary} 0%, ${primaryLight} 50%, ${primary} 100%)`,
-    gradientSolid: `linear-gradient(90deg, ${primaryDark} 0%, ${primary} 50%, ${primaryDark} 100%)`,
-    gradientRich: `linear-gradient(135deg, ${primary} 0%, ${primaryLight} 25%, ${primary} 50%, ${primaryLight} 75%, ${primary} 100%)`,
+    gradient: brandGradient ?? fallbackGradient,
+    gradientSolid: brandGradient ?? fallbackSolid,
+    gradientRich: brandGradient ?? fallbackRich,
     shadowRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.6)`,
     hoverShadowRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.8)`,
     borderRgba: `rgba(${hexToRgbaValues(primary).join(",")}, 0.4)`,
@@ -650,21 +628,27 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
 }
 
 /**
- * Get glow color for MembershipSection cards.
- * - Membership tab: use MEMBERSHIP_TAB_COLOR_MAP
- * - One-time tab: use ONE_TIME_TAB_COLOR_MAP
+ * Tailwind classes for the inside-card top fade overlay. Must use the same color key as the card
+ * (including `variantConfig.packageColors` overrides) or a cyan overlay on a red variant reads pink.
  */
-export function getMembershipSectionGlowColor(planId: string, isMembershipTab: boolean): string {
-  const packKey =
-    planId.includes("apprentice") ? "apprentice-pack" :
-    planId.includes("tradie") ? "tradie-pack" :
-    planId.includes("foreman") ? "foreman-pack" :
-    planId.includes("boss") ? "boss-pack" :
-    planId.includes("power") ? "power-pack" : "power-pack";
-  const colorKey = isMembershipTab
-    ? (MEMBERSHIP_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey))
-    : (ONE_TIME_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey));
-  return getPackageGlowColor(colorKey);
+export function getMembershipSectionGlowColor(
+  planId: string,
+  isMembershipTab: boolean,
+  variantConfig?: PackageColorsVariantConfig
+): string {
+  return getPackageGlowColor(resolvePromoPackageColorKey(planId, isMembershipTab, variantConfig));
+}
+
+/**
+ * Inner sheen: same pattern for every tier — vertical wash (`to-t`) + brand `from-*` and subtle `via` (see getPackageGlowColor). Makita previously used a diagonal `to-bl` white/teal layer; that stacked oddly on the card’s 135° bg and read pink/magenta; Foreman/Boss use this unified treatment only.
+ */
+export function getMembershipSectionInnerSheenClassNames(
+  planId: string,
+  isMembershipTab: boolean,
+  variantConfig?: PackageColorsVariantConfig
+): string {
+  const key = resolvePromoPackageColorKey(planId, isMembershipTab, variantConfig);
+  return `bg-gradient-to-t ${getPackageGlowColor(key)}`;
 }
 
 /**
@@ -674,10 +658,10 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
   const key = toColorKey(planIdOrColorKey);
   switch (key) {
     case "kincrome-blue": return "from-[#2A62B6]/20 via-[#000000]/8 to-transparent";
-    case "ryobi-green": return "from-[#E0FF00]/18 via-[#000000]/8 to-transparent";
-    case "makita-teal": return "from-[#00A0AA]/22 via-[#000000]/8 to-transparent";
-    case "dewalt-yellow": return "from-[#FDB813]/20 via-[#000000]/8 to-transparent";
-    case "milwaukee-red": return "from-[#C8102E]/20 via-[#000000]/8 to-transparent";
+    case "ryobi-green": return "from-[#e0ff00]/26 via-[#000000]/8 to-transparent";
+    case "makita-teal": return "from-[#00c2ed]/22 via-[#000000]/8 to-transparent";
+    case "dewalt-yellow": return "from-[#ffd200]/20 via-[#000000]/8 to-transparent";
+    case "milwaukee-red": return "from-[#ce2b05]/20 via-[#000000]/8 to-transparent";
     case "boss-red": return "from-[#ee0000]/20 via-[#000000]/8 to-transparent";
     case "black": return "from-[#D4AF37]/15 via-[#000000]/8 to-transparent";
     case "mint-green": return "from-[#66DD99]/20 via-[#000000]/8 to-transparent";
@@ -745,27 +729,30 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
   },
   "ryobi-green": {
     bgGradient: BRAND_GRADIENTS["ryobi-green"].bg,
-    gradient: "from-[#E0FF00] via-[#EBFF33] to-[#E0FF00]",
+    gradient: "from-[#e0ff00] via-[#f2ff4d] to-[#c8eb00]",
     text: "text-black",
     textMuted: "text-black/80",
-    textOnLight: "text-[#3d4d1a]",
+    textOnLight: "text-[#2f3d0a]",
     featureOnLight: "text-gray-700",
     priceText: "text-black",
     priceBadgeBg: "bg-white/30 backdrop-blur-sm",
-    priceBadgeBorder: "border-2 border-[#E0FF00]",
-    buttonBg: "bg-[#E0FF00] hover:bg-[#B8E000] active:scale-[0.98] border-2 border-[#000000]",
-    buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_12px_rgba(224,255,0,0.35)]",
-    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,0,0,0.25),0_0_18px_rgba(224,255,0,0.5)]",
+    priceBadgeBorder: "border-2 border-[#e0ff00]",
+    buttonBg: "bg-[#e0ff00] hover:bg-[#eeff3d] active:scale-[0.98] border-2 border-[#000000]",
+    buttonShadow:
+      "shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_14px_rgba(224,255,0,0.55),0_0_24px_rgba(224,255,0,0.25)]",
+    buttonHoverShadow:
+      "hover:shadow-[0_4px_12px_rgba(0,0,0,0.22),0_0_22px_rgba(224,255,0,0.65),0_0_36px_rgba(242,255,77,0.35)]",
     buttonText: "text-black",
-    glow: "drop-shadow-[0_0_16px_rgba(224,255,0,0.6)]",
-    border: "border-[#E0FF00]/50",
-    shadow: "shadow-[#E0FF00]/40",
-    hoverShadow: "hover:shadow-[#E0FF00]/55",
+    glow: "drop-shadow-[0_0_20px_rgba(224,255,0,0.75)]",
+    border: "border-[#e0ff00]/55",
+    shadow: "shadow-[#e0ff00]/50",
+    hoverShadow: "hover:shadow-[#eeff3d]/60",
     borderGlow: "animate-border-glow-ryobi",
     badgeStyle: {
-      background: "#D4F000",
-      boxShadow: "0 0 28px rgba(212, 240, 0, 0.6), 0 4px 16px rgba(212, 240, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
-      border: "1px solid rgba(212, 240, 0, 0.9)",
+      background: "#e0ff00",
+      boxShadow:
+        "0 0 32px rgba(224, 255, 0, 0.75), 0 0 48px rgba(242, 255, 77, 0.45), 0 4px 18px rgba(200, 235, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.65)",
+      border: "1px solid rgba(0, 0, 0, 0.2)",
     },
     enterNowButtonStyle: createPanelStyle({ r: 224, g: 255, b: 0 }, 0.45),
     ctaGradientButtonBorder: "border border-gray-300",
@@ -774,59 +761,55 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     changeButtonTextWhite: true,
     entriesText: "text-black",
     cardBorderOpacity: "CC",
-    barColor: "bg-gradient-to-r from-[#E0FF00] via-[#EBFF33] to-[#E0FF00]",
-    barColorLight: "bg-gradient-to-r from-[#EBFF33] via-[#E0FF00] to-[#EBFF33]",
-    barColorVertical: "bg-gradient-to-t from-[#E0FF00] via-[#EBFF33] to-[#E0FF00]",
-    barColorLightVertical: "bg-gradient-to-t from-[#EBFF33] via-[#E0FF00] to-[#EBFF33]",
-    barGradientCss: "linear-gradient(to top, #E0FF00 0%, #EBFF33 50%, #E0FF00 100%)",
+    barColor: "bg-gradient-to-r from-[#e0ff00] via-[#f2ff4d] to-[#c8eb00]",
+    barColorLight: "bg-gradient-to-r from-[#f2ff4d] via-[#e0ff00] to-[#f2ff4d]",
+    barColorVertical: "bg-gradient-to-t from-[#e0ff00] via-[#f2ff4d] to-[#c8eb00]",
+    barColorLightVertical: "bg-gradient-to-t from-[#f2ff4d] via-[#e0ff00] to-[#f2ff4d]",
+    barGradientCss: "linear-gradient(to top, #c8eb00 0%, #e0ff00 45%, #f5ff5a 100%)",
   },
+  // Makita: align with BRAND_THEMES.makita (#5ca9ec / #00c2ed) — MembershipSection, modals, charts
   "makita-teal": {
     bgGradient: BRAND_GRADIENTS["makita-teal"].bg,
-    gradient: "from-[#0B7E88] via-[#00C5CF] to-[#0B7E88]",
+    gradient: "from-[#5ca9ec] via-[#00c2ed] to-[#5ca9ec]",
     text: "text-white",
-    textMuted: "text-white/90",
-    textOnLight: "text-[#006068]",
+    textMuted: "text-white",
+    textOnLight: "text-[#0a5f7a]",
     featureOnLight: "text-gray-700",
     priceText: "text-white",
     priceBadgeBg: "bg-white/15 backdrop-blur-sm",
-    buttonBg: "bg-[#0B7E88] hover:bg-[#00A0AA] active:scale-[0.98] border border-white/20",
+    buttonBg: "bg-[#00c2ed] hover:bg-[#5ca9ec] active:scale-[0.98] border border-white/20",
     buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
-    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,197,207,0.35)]",
+    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,194,237,0.45)]",
     buttonText: "text-white",
-    glow: "drop-shadow-[0_0_18px_rgba(0,197,207,0.65)]",
-    border: "border-[#00C5CF]/50",
-    shadow: "shadow-[#00C5CF]/35",
-    hoverShadow: "hover:shadow-[#00C5CF]/55",
+    glow: "drop-shadow-[0_0_18px_rgba(0,194,237,0.65)]",
+    border: "border-[#5ca9ec]/50",
+    shadow: "shadow-[#5ca9ec]/35",
+    hoverShadow: "hover:shadow-[#5ca9ec]/55",
     borderGlow: "animate-border-glow-makita",
     badgeStyle: {
-      background: "#00A0AA",
-      boxShadow: "0 0 40px rgba(0, 197, 207, 0.75), 0 0 60px rgba(0, 197, 207, 0.4), 0 4px 20px rgba(11, 126, 136, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
+      background: "#00c2ed",
+      boxShadow:
+        "0 0 40px rgba(0, 194, 237, 0.65), 0 0 55px rgba(92, 169, 236, 0.35), 0 4px 20px rgba(11, 126, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)",
       border: "1px solid rgba(255, 255, 255, 0.5)",
     },
-    enterNowButtonStyle: createPanelStyle({ r: 0, g: 197, b: 207 }),
+    enterNowButtonStyle: createPanelStyle({ r: 0, g: 194, b: 237 }),
     ctaGradientButtonBorder: "border border-white/30",
     accentHex: BRAND_GRADIENTS["makita-teal"].primaryLight,
     entriesText: "text-white",
     cardBorderOpacity: "CC",
-    textGradientStyle: {
-      backgroundImage: "linear-gradient(135deg, #FFFFFF 0%, #E8FFFF 20%, #C8F8FA 40%, #9EE8F0 60%, #7DDFE8 80%, #5DD4E0 100%)",
-      WebkitBackgroundClip: "text",
-      backgroundClip: "text",
-      WebkitTextFillColor: "transparent",
-      color: "transparent",
-    },
     packageInclusionTextStyle: {
-      backgroundImage: "linear-gradient(135deg, #5DD4E0 0%, #7DDFE8 25%, #9EE8F0 50%, #C8F8FA 75%, #E8FFFF 100%)",
+      backgroundImage:
+        "linear-gradient(135deg, #5CA9EC 0%, #47B8ED 22%, #00C2ED 48%, #66D2F5 72%, #A8E8FA 100%)",
       WebkitBackgroundClip: "text",
       backgroundClip: "text",
       WebkitTextFillColor: "transparent",
       color: "transparent",
     },
-    barColor: "bg-gradient-to-r from-[#0B7E88] via-[#00C5CF] to-[#0B7E88]",
-    barColorLight: "bg-gradient-to-r from-[#00A0AA] via-[#00C5CF] to-[#00A0AA]",
-    barColorVertical: "bg-gradient-to-t from-[#0B7E88] via-[#00C5CF] to-[#0B7E88]",
-    barColorLightVertical: "bg-gradient-to-t from-[#00A0AA] via-[#00C5CF] to-[#0B7E88]",
-    barGradientCss: "linear-gradient(to top, #0B7E88 0%, #00C5CF 50%, #00A0AA 100%)",
+    barColor: "bg-gradient-to-r from-[#5ca9ec] via-[#00c2ed] to-[#5ca9ec]",
+    barColorLight: "bg-gradient-to-r from-[#00c2ed] via-[#5ca9ec] to-[#00c2ed]",
+    barColorVertical: "bg-gradient-to-t from-[#5ca9ec] via-[#00c2ed] to-[#5ca9ec]",
+    barColorLightVertical: "bg-gradient-to-t from-[#00c2ed] via-[#5ca9ec] to-[#00c2ed]",
+    barGradientCss: "linear-gradient(to top, #5ca9ec 0%, #00c2ed 45%, #0B7E88 100%)",
   },
   "dewalt-yellow": {
     bgGradient: BRAND_GRADIENTS["dewalt-yellow"].bg,

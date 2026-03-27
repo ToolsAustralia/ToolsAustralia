@@ -7,7 +7,6 @@ import {
   useSpendByUrlAnalytics,
   useSpendByUrlDetail,
 } from "@/hooks/queries/useSpendByUrlAnalytics";
-import { META_ADS_UTM_TEMPLATE } from "@/lib/utm/meta-ads-utm";
 import type { SpendByUrlDetailRow } from "@/hooks/queries/useSpendByUrlAnalytics";
 
 function isUnresolvedLandingUrl(canonicalUrl: string): boolean {

@@ -2880,7 +2880,6 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           packageName?: string;
                           stripePaymentIntentId?: string;
                         };
-                        const packageIcon = getPackageIconImage(md.packageName);
                         return (
                           <div
                             key={`${md.miniDrawId ?? ""}-${md.stripePaymentIntentId ?? ""}-${index}`}

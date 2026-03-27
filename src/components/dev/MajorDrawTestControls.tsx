@@ -152,10 +152,11 @@ export default function MajorDrawTestControls() {
     return null;
   }
 
+  // Bottom-left so we do not stack on ThemeToggle (fixed bottom-right inside Providers).
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
+    <div className="fixed bottom-6 left-6 z-[9998]">
       {/* Floating Button */}
-      <div className="flex flex-col items-end gap-3">
+      <div className="flex flex-col items-start gap-3">
         {/* Expanded Menu */}
         {isOpen && (
           <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 p-4 w-80 animate-in slide-in-from-bottom-5 duration-200">
