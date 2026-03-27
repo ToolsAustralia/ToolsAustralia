@@ -586,7 +586,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     effectiveEntryForCountdown?.source,
     effectiveEntryForCountdown?.scheduledEndDate,
     effectiveEntryForCountdown?.durationMs,
-    activeTab,
   ]);
 
   // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")

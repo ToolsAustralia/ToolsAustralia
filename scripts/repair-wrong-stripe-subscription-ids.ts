@@ -11,7 +11,7 @@
  * This script:
  *   1. Finds users where stripeSubscriptionId exists and the stored sub is
  *      NOT active/trialing in Stripe (incomplete, incomplete_expired, canceled, or 404).
- *   2. Looks up the Stripe customer for an active/trialing subscription.
+ *   2. Looks up the Stripe customer for a recoverable subscription (active, trialing, past_due, unpaid).
  *   3. Updates stripeSubscriptionId (and endDate/isActive/status) from the real sub.
  *
  * Candidate filter (avoids never-paid / abandoned checkout noise):
@@ -229,26 +229,22 @@ async function main() {
         continue;
       }
 
-      // Step 2: Find active subscription for this customer
+      // Step 2: Find a recoverable subscription: active → trialing → past_due / unpaid (overdue)
       await sleep(DELAY_BETWEEN_STRIPE_MS);
 
       let activeSub: StripeSubscription | null = null;
       try {
-        const activeSubs = await stripe.subscriptions.list({
-          customer: customerId,
-          status: "active",
-          limit: 5,
-        });
-        if (activeSubs.data.length > 0) {
-          activeSub = activeSubs.data[0];
-        } else {
-          const trialingSubs = await stripe.subscriptions.list({
+        const statuses = ["active", "trialing", "past_due", "unpaid"] as const;
+        for (let i = 0; i < statuses.length; i++) {
+          if (i > 0) await sleep(DELAY_BETWEEN_STRIPE_MS);
+          const subs = await stripe.subscriptions.list({
             customer: customerId,
-            status: "trialing",
+            status: statuses[i],
             limit: 5,
           });
-          if (trialingSubs.data.length > 0) {
-            activeSub = trialingSubs.data[0];
+          if (subs.data.length > 0) {
+            activeSub = subs.data[0];
+            break;
           }
         }
       } catch (listErr) {
@@ -260,7 +256,7 @@ async function main() {
       if (!activeSub) {
         skippedNoActiveSub++;
         console.log(
-          `   [SKIP] ${email} (${userId}) – stored sub ${storedSubId} is ${storedStatus}, but no active/trialing sub found for customer`
+          `   [SKIP] ${email} (${userId}) – stored sub ${storedSubId} is ${storedStatus}, but no active/trialing/past_due/unpaid sub found for customer`
         );
         continue;
       }
@@ -286,7 +282,7 @@ async function main() {
     console.log("\n📊 --- After Stripe scan ---");
     console.log(`   Stripe-checked users: ${totalChecked} (of ${candidates.length} loaded)`);
     console.log(
-      `   Eligible for DB update (dead stored sub + active/trialing found): ${eligibleCount}` +
+      `   Eligible for DB update (dead stored sub + recoverable sub found): ${eligibleCount}` +
         (eligibleCount > 0 ? ` — ${DRY_RUN ? "dry-run will list them below; " : ""}--live will write ${eligibleCount} user(s) if saves succeed` : "")
     );
     console.log("");
@@ -296,7 +292,7 @@ async function main() {
       console.log(`   Total checked: ${totalChecked}`);
       console.log(`   Corrected: 0`);
       console.log(`   Skipped (stored sub still alive): ${skippedStoredActive}`);
-      console.log(`   Skipped (no active sub found for customer): ${skippedNoActiveSub}`);
+      console.log(`   Skipped (no recoverable sub on customer): ${skippedNoActiveSub}`);
       console.log(`   Errors: ${errors}`);
       return;
     }
@@ -342,9 +338,10 @@ async function main() {
           continue;
         }
 
+        const targetStatus = row.activeSub.status;
         user.stripeSubscriptionId = row.activeSub.id;
-        user.subscription.isActive = true;
-        user.subscription.status = row.activeSub.status;
+        user.subscription.status = targetStatus;
+        user.subscription.isActive = targetStatus === "active" || targetStatus === "trialing";
         user.subscription.autoRenew = !row.activeSub.cancel_at_period_end;
         if (row.newEndDate) {
           user.subscription.endDate = row.newEndDate;
@@ -382,7 +379,7 @@ async function main() {
     console.log(`   Total checked: ${totalChecked}`);
     console.log(`   Corrected: ${corrected}`);
     console.log(`   Skipped (stored sub still alive): ${skippedStoredActive}`);
-    console.log(`   Skipped (no active sub found for customer): ${skippedNoActiveSub}`);
+    console.log(`   Skipped (no recoverable sub on customer): ${skippedNoActiveSub}`);
     console.log(`   Errors: ${errors}`);
 
     if (correctedUsers.length > 0) {
