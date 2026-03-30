@@ -641,6 +641,27 @@ export interface ScheduledPromoConflict {
   message: string;
 }
 
+export type ScheduledPromoCalendarDayClient = {
+  dateKey: string;
+  multiplier: ScheduledPromoMultiplier | null;
+};
+
+export interface ApplyScheduledPromoMonthPayload {
+  type: ScheduledPromoType;
+  year: number;
+  month: number;
+  days: ScheduledPromoCalendarDayClient[];
+  name?: string;
+  description?: string;
+}
+
+export interface ApplyScheduledPromoMonthResponse {
+  success: boolean;
+  createdPromoIds: string[];
+  softDeletedCount: number;
+  adjustedCount: number;
+}
+
 // ========================================
 // PROMO LINK TYPES
 // ========================================

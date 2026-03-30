@@ -7,6 +7,7 @@ import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
 import AdminScheduledPromoModal from "@/components/modals/AdminScheduledPromoModal";
+import AdminScheduledPromoCalendarModal from "@/components/modals/AdminScheduledPromoCalendarModal";
 import ScheduledPromoList from "@/components/admin/ScheduledPromoList";
 import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import PromoLinkList from "@/components/admin/PromoLinkList";
@@ -24,6 +25,7 @@ import { formatDisplayName } from "@/utils/display-name";
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isScheduledModalOpen, setIsScheduledModalOpen] = useState(false);
+  const [isScheduledCalendarModalOpen, setIsScheduledCalendarModalOpen] = useState(false);
   const [editingScheduledPromo, setEditingScheduledPromo] = useState<ScheduledPromo | null>(null);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
   const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
@@ -101,16 +103,25 @@ export default function PromoManagement() {
                     Campaign phases with date ranges; apply automatically. Priority: Scheduled &gt; Toggle &gt; Alternating.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setEditingScheduledPromo(null);
-                    setIsScheduledModalOpen(true);
-                  }}
-                  className={primaryActionButtonClass}
-                >
-                  <Plus className="w-4 h-4" />
-                  Schedule Promo
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => setIsScheduledCalendarModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 text-red-700 bg-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 transition-all duration-200 w-full sm:w-auto"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Month grid
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingScheduledPromo(null);
+                      setIsScheduledModalOpen(true);
+                    }}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Schedule Promo
+                  </button>
+                </div>
               </div>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
                 <div className="p-3 sm:p-4 border-b border-gray-200">
@@ -300,6 +311,16 @@ export default function PromoManagement() {
           setEditingScheduledPromo(null);
         }}
         editingPromo={editingScheduledPromo}
+      />
+
+      <AdminScheduledPromoCalendarModal
+        isOpen={isScheduledCalendarModalOpen}
+        onClose={() => setIsScheduledCalendarModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["promos", "scheduled"] });
+          queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+          setIsScheduledCalendarModalOpen(false);
+        }}
       />
 
       {/* Bonus Entry Promo Modal */}
