@@ -281,7 +281,7 @@ This project is licensed under the MIT License.
 
 ## 🆘 Support
 
-For support, email hello@toolsaustralia.com.au or create an issue in the repository.
+For support, email support@toolsaustralia.com.au or create an issue in the repository.
 
 ## 🗺 Roadmap
 

@@ -10,6 +10,7 @@ import { Facebook, Instagram, Mail } from "lucide-react";
 import ContactForm from "@/components/features/ContactForm";
 import DashboardHeader from "../components/DashboardHeader";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 export default function SupportPage() {
   const { data: session, status } = useSession();
@@ -39,6 +40,7 @@ export default function SupportPage() {
   }
 
   const { user } = accountData;
+  const contactEmail = getContactEmail();
 
   return (
     <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950 pb-16 lg:pb-8">
@@ -81,10 +83,10 @@ export default function SupportPage() {
                         Email
                       </p>
                       <a
-                        href="mailto:hello@toolsaustralia.com.au"
+                        href={`mailto:${contactEmail}`}
                         className="font-normal text-[14px] sm:text-[16px] lg:text-[18px] font-['Poppins'] text-white hover:text-red-400 transition-colors"
                       >
-                        hello@toolsaustralia.com.au
+                        {contactEmail}
                       </a>
                     </div>
                   </div>

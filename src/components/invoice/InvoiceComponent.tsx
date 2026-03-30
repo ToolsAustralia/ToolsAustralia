@@ -9,6 +9,7 @@
 
 import React from "react";
 import { formatDisplayName } from "@/utils/display-name";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 interface InvoiceItem {
   description: string;
@@ -64,7 +65,7 @@ export const InvoiceComponent: React.FC<InvoiceComponentProps> = ({
     name: "Tools Australia",
     address: "Australia",
     phone: "+61 2 1234 5678",
-    email: "hello@toolsaustralia.com.au",
+    email: getContactEmail(),
     website: "www.toolsaustralia.com.au",
     logo: "/images/logo.png",
   },

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 export const metadata: Metadata = {
   title: "Terms and Conditions | Tools Australia",
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 
 export default async function TermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+  const contactEmail = getContactEmail();
 
   // Get CSP nonce from request headers (set by middleware in production)
   const nonce = await getNonce();
@@ -297,9 +299,9 @@ export default async function TermsPage() {
                     Requests for entry restoration must be made within 7 days of re-activation via{" "}
                     <a
                       className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                      href="mailto:info@toolsaustralia.com.au"
+                      href={`mailto:${contactEmail}`}
                     >
-                      info@toolsaustralia.com.au
+                      {contactEmail}
                     </a>
                   </li>
                   <li>

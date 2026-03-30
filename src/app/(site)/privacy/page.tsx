@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 // Metadata helps search engines understand this page.
 export const metadata: Metadata = {
@@ -11,6 +12,7 @@ export const metadata: Metadata = {
 
 export default async function PrivacyPolicyPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+  const contactEmail = getContactEmail();
 
   // Get CSP nonce from request headers (set by middleware in production)
   const nonce = await getNonce();
@@ -155,9 +157,9 @@ export default async function PrivacyPolicyPage() {
               &quot;STOP&quot; to SMS, or contacting us at{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
+                href={`mailto:${contactEmail}`}
               >
-                hello@toolsaustralia.com.au
+                {contactEmail}
               </a>
               .
             </p>
@@ -253,9 +255,9 @@ export default async function PrivacyPolicyPage() {
               To exercise these rights, contact us at{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
+                href={`mailto:${contactEmail}`}
               >
-                hello@toolsaustralia.com.au
+                {contactEmail}
               </a>{" "}
               with your request and verification details. We will respond within 30 days. We may charge a reasonable fee
               for access requests and may refuse requests in circumstances permitted by law.
@@ -305,9 +307,9 @@ export default async function PrivacyPolicyPage() {
               Parents who believe their child has provided information to us should contact{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
+                href={`mailto:${contactEmail}`}
               >
-                hello@toolsaustralia.com.au
+                {contactEmail}
               </a>
               .
             </p>
@@ -350,9 +352,9 @@ export default async function PrivacyPolicyPage() {
                 <strong>Contact us:</strong> Email{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href={`mailto:${contactEmail}`}
                 >
-                  hello@toolsaustralia.com.au
+                  {contactEmail}
                 </a>{" "}
                 with &quot;Privacy Complaint&quot; in subject line
               </li>
@@ -396,9 +398,9 @@ export default async function PrivacyPolicyPage() {
                 Email:{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href={`mailto:${contactEmail}`}
                 >
-                  hello@toolsaustralia.com.au
+                  {contactEmail}
                 </a>
               </p>
               <p>
