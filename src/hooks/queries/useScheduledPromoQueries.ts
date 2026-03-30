@@ -4,6 +4,8 @@ import type {
   CreateScheduledPromoPayload,
   UpdateScheduledPromoPayload,
   ScheduledPromoListResponse,
+  ApplyScheduledPromoMonthPayload,
+  ApplyScheduledPromoMonthResponse,
 } from "@/types/admin";
 
 export type ScheduledPromoFilters = {
@@ -90,6 +92,21 @@ const deleteScheduledPromo = async (id: string): Promise<void> => {
   }
 };
 
+const applyScheduledPromoMonth = async (
+  data: ApplyScheduledPromoMonthPayload
+): Promise<ApplyScheduledPromoMonthResponse> => {
+  const response = await fetch("/api/admin/promo/scheduled/apply-month", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error || "Failed to apply month calendar");
+  }
+  return result;
+};
+
 const fetchEffectiveMultipliers = async (): Promise<EffectiveMultipliersResponse> => {
   const response = await fetch("/api/admin/promo/effective");
 
@@ -141,6 +158,19 @@ export const useDeleteScheduledPromo = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["promos", "scheduled"] });
       queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+    },
+  });
+};
+
+export const useApplyScheduledPromoMonth = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: applyScheduledPromoMonth,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["promos", "scheduled"] });
+      queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+      queryClient.invalidateQueries({ queryKey: ["promos", "effective"] });
     },
   });
 };
