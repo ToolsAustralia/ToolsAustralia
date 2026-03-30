@@ -16,6 +16,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 interface CheckoutSuccessClientProps {
   orderId: string;
@@ -74,6 +75,7 @@ const mockOrderData = {
 export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClientProps) {
   // Use mock data for now
   const order = mockOrderData;
+  const contactEmail = getContactEmail();
 
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
@@ -272,11 +274,11 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               +61 4XX XXX XXX
             </a>
             <a
-              href="mailto:hello@toolsaustralia.com.au"
+              href={`mailto:${contactEmail}`}
               className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <Mail className="w-4 h-4" />
-              hello@toolsaustralia.com.au
+              {contactEmail}
             </a>
           </div>
           </div>

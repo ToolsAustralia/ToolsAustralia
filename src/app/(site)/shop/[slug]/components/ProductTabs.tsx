@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Star, Check, Truck, Shield, RotateCcw, Package, Award, Clock } from "lucide-react";
 import { ProductData } from "@/data";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 interface ProductTabsProps {
   product: ProductData;
@@ -10,6 +11,7 @@ interface ProductTabsProps {
 
 export default function ProductTabs({ product }: ProductTabsProps) {
   const [activeTab, setActiveTab] = useState<"specifications" | "reviews" | "shipping">("specifications");
+  const contactEmail = getContactEmail();
 
   return (
     <div className="mt-16 bg-gray-50 w-full">
@@ -363,7 +365,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     </div>
                     <div className="text-sm">
                       <span className="font-medium text-gray-900">Email:</span>
-                      <span className="text-gray-600 ml-2">hello@toolsaustralia.com.au</span>
+                      <span className="text-gray-600 ml-2">{contactEmail}</span>
                     </div>
                     <div className="text-sm">
                       <span className="font-medium text-gray-900">Hours:</span>
