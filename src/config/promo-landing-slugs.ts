@@ -9,6 +9,7 @@ import type { MajorDrawHeroUrgency, ExtendedPromoImagePaths } from "@/utils/prom
 import {
   resolveLandingHeroImages,
   resolveEvergreenHeroImages,
+  landingToolboxSuffixFromPrizeSlug,
 } from "@/utils/promo/landing-image-resolver";
 import { slugToBrandKey } from "@/config/brand-theme";
 
@@ -38,21 +39,21 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
   /** Collage hero under `all-prizes/` (desktop/mobile × light/dark). */
   "cash-prize": resolveEvergreenHeroImages(),
 
-  // Ryobi prizes
-  "ryobi-sidchrome": resolveLandingHeroImages("ryobi"),
-  "ryobi-milwaukee": resolveLandingHeroImages("ryobi"),
-  
+  // Ryobi prizes — Sidchrome TB vs Milwaukee TB assets (`sidTB` / `milTB`)
+  "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
+  "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
+
   // Milwaukee prizes
-  "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee"),
-  "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee"),
-  
+  "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee", "sidTB"),
+  "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee", "milTB"),
+
   // DeWalt prizes
-  "dewalt-sidchrome": resolveLandingHeroImages("dewalt"),
-  "dewalt-milwaukee": resolveLandingHeroImages("dewalt"),
-  
+  "dewalt-sidchrome": resolveLandingHeroImages("dewalt", "sidTB"),
+  "dewalt-milwaukee": resolveLandingHeroImages("dewalt", "milTB"),
+
   // Makita prizes
-  "makita-sidchrome": resolveLandingHeroImages("makita"),
-  "makita-milwaukee": resolveLandingHeroImages("makita"),
+  "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
+  "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
@@ -68,17 +69,15 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
 
 /**
  * Default prize slug for a toolset page.
- * Uses prize variant that has landing hero images available:
- * - Ryobi: Sidchrome TB (sidchromeTb-ryobiSet)
- * - Milwaukee, DeWalt, Makita: Milwaukee TB (milwaukeeTb-{toolset}Set) until Sidchrome TB variants are ready
+ * Prefers Sidchrome toolbox first (matches selector order and `sidTB` landing assets).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
   const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
-  if (hasMilwaukeeHero) return milwaukee;
   if (hasSidchromeHero) return sidchrome;
-  return sidchrome; // fallback to Sidchrome variant
+  if (hasMilwaukeeHero) return milwaukee;
+  return sidchrome;
 }
 
 /**
@@ -89,9 +88,9 @@ export function getLandingHeroImagePaths(prizeSlug: string): ExtendedPromoImageP
   const mapped = LANDING_HERO_MAP[prizeSlug as PrizeSlug];
   if (mapped) return mapped;
   
-  // Fallback: try to extract brand from slug
+  // Fallback: extract brand + toolbox from slug (e.g. future prize slugs)
   const brand = slugToBrandKey(prizeSlug);
-  if (brand) return resolveLandingHeroImages(brand);
+  if (brand) return resolveLandingHeroImages(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug));
   
   return null;
 }

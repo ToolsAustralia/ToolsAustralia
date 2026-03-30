@@ -925,8 +925,12 @@ export default function PrizeShowcase({
                     const isMakitaUpward = isMakitaSetHero || src.includes("makita.webp");
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                     const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp")) ? "scale-150" : "";
+                    /** Landing PNGs (`sidTB`/`milTB`) are pre-composed for the frame; no Y nudge (keeps vertical center with `object-contain`). */
                     const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[5%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
-                    const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                    const objectPosition =
+                      isMakitaSetHero || isMilwaukeeSetHero || image.isLandingImage
+                        ? { objectPosition: "center center" as const }
+                        : undefined;
                     return (
                     <SwiperSlide key={`${image.src}-${index}`}>
                       <div
@@ -947,7 +951,8 @@ export default function PrizeShowcase({
                 </Swiper>
               ) : (
                 (() => {
-                  const firstSrc = (enhancedGallery[0]?.src ?? "").toLowerCase();
+                  const firstSlide = enhancedGallery[0];
+                  const firstSrc = (firstSlide?.src ?? "").toLowerCase();
                   const isMakitaSetHero = firstSrc.includes("makitaset-") && firstSrc.endsWith(".webp");
                   const isMilwaukeeSetHero = firstSrc.includes("milwaukeeset-") && firstSrc.endsWith(".webp");
                   const isMilwaukeeSetMilwaukeeTb = firstSrc.includes("milwaukeeset-milwaukeetb");
@@ -956,8 +961,10 @@ export default function PrizeShowcase({
                   const isMilwaukeeUpward = (isMilwaukeeSetHero || firstSrc.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                   const scaleClass = firstSrc.includes("dewalt.webp") || firstSrc.includes("milwaukee.webp") ? "scale-125" : firstSrc.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((firstSrc.includes("dewalt-set") || firstSrc.includes("milwaukee-set")) && firstSrc.endsWith(".webp")) ? "scale-150" : "";
                   const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
-                  const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
-                  const firstSlide = enhancedGallery[0];
+                  const objectPosition =
+                    isMakitaSetHero || isMilwaukeeSetHero || firstSlide?.isLandingImage
+                      ? { objectPosition: "center center" as const }
+                      : undefined;
                   return (
                 <div
                   className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
@@ -1083,7 +1090,10 @@ export default function PrizeShowcase({
                     const isMilwaukeeUpward = (isMilwaukeeSetHero || src.includes("milwaukee.webp")) && !isMilwaukeeSetMilwaukeeTb;
                     const scaleClass = src.includes("dewalt.webp") || src.includes("milwaukee.webp") ? "scale-125" : src.includes("makita.webp") ? "scale-150" : isMakitaSetHero || isMilwaukeeSetHero ? "scale-[1.75]" : ((src.includes("dewalt-set") || src.includes("milwaukee-set")) && src.endsWith(".webp")) ? "scale-150" : "";
                     const translateClass = isMilwaukeeSetMilwaukeeTb ? "-translate-y-[6%]" : (isMakitaUpward || isMilwaukeeUpward || isDewaltSetSidchrome) ? "-translate-y-[8%]" : "";
-                    const objectPosition = isMakitaSetHero || isMilwaukeeSetHero ? { objectPosition: "center center" as const } : undefined;
+                    const objectPosition =
+                      isMakitaSetHero || isMilwaukeeSetHero || image.isLandingImage
+                        ? { objectPosition: "center center" as const }
+                        : undefined;
                     return (
                     <SwiperSlide key={`thumb-${image.src}-${index}`}>
                       <button
