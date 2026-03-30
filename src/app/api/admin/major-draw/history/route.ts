@@ -86,6 +86,7 @@ type ProcessedDraw = {
   } | null;
   totalEntries: number;
   winner: {
+    winnerId: string;
     userId: string;
     userDetails: {
       firstName: string;
@@ -269,6 +270,7 @@ export async function GET(request: NextRequest) {
         totalEntries: drawDoc.totalEntries,
         winner: winner
           ? {
+              winnerId: toIdString(winner._id),
               userId: isPopulatedUser(winner.userId) 
                 ? toIdString(winner.userId._id)
                 : toIdString(winner.userId),
