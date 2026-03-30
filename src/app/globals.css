@@ -1185,6 +1185,55 @@
   animation: shimmer-horizontal 2s ease-in-out infinite;
 }
 
+:root {
+  --winner-motion-quick: 150ms;
+  --winner-motion-base: 300ms;
+  --winner-motion-elevated: 500ms;
+  --winner-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.winner-motion-card {
+  transition-property: transform, box-shadow, border-color, background-color, opacity;
+  transition-duration: var(--winner-motion-elevated);
+  transition-timing-function: var(--winner-motion-ease);
+}
+
+.winner-motion-card:hover {
+  transform: translateY(-4px);
+}
+
+.winner-motion-button {
+  transition-property: transform, box-shadow, background-color, border-color, color, opacity;
+  transition-duration: var(--winner-motion-base);
+  transition-timing-function: var(--winner-motion-ease);
+}
+
+.winner-motion-button:hover {
+  transform: translateY(-1px);
+}
+
+.winner-motion-shimmer {
+  animation: shimmer-horizontal 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-motion-card,
+  .winner-motion-button {
+    transition-duration: 0.01ms !important;
+  }
+
+  .winner-motion-card:hover,
+  .winner-motion-button:hover {
+    transform: none !important;
+  }
+
+  .winner-motion-shimmer,
+  .animate-shimmer-horizontal,
+  .animate-shimmer-horizontal-fast {
+    animation: none !important;
+  }
+}
+
 /* Animated glow effect for package icons */
 @keyframes glow-pulse {
   0%,

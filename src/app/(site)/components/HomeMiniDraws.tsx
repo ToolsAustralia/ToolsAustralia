@@ -53,7 +53,7 @@ export default function HomeMiniDraws() {
 
   if (isLoading) {
     return (
-      <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
+      <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
         <SectionContainer>
           <div className="flex items-center justify-center gap-3 mb-6 sm:mb-8">
             <div className="w-9 h-9 rounded-xl bg-gray-100 animate-pulse" />
@@ -82,7 +82,7 @@ export default function HomeMiniDraws() {
   }
 
   return (
-    <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
+    <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
       <SectionContainer>
         {/* Section Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
