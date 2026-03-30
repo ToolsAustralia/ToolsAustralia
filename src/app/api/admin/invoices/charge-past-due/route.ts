@@ -4,169 +4,14 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
-import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import ChargeJobLock from "@/models/ChargeJobLock";
 import Stripe from "stripe";
 import mongoose from "mongoose";
-
-/**
- * Sanitize Stripe response to remove PCI-sensitive data
- */
-function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
-  if (!response || typeof response !== "object") {
-    return {};
-  }
-
-  const sanitized: Record<string, unknown> = {};
-  const obj = response as Record<string, unknown>;
-
-  for (const [key, value] of Object.entries(obj)) {
-    // Skip sensitive fields
-    if (
-      key.includes("card") ||
-      key.includes("payment_method") ||
-      key === "pan" ||
-      key === "number" ||
-      key === "cvc" ||
-      key === "exp_month" ||
-      key === "exp_year"
-    ) {
-      continue;
-    }
-
-    // Recursively sanitize nested objects
-    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      sanitized[key] = sanitizeStripeResponse(value);
-    } else {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized;
-}
-
-/**
- * Fetch customer with retry logic for rate limit errors
- * Follows Stripe best practices for handling rate limits
- */
-async function fetchCustomerWithRetry(
-  customerId: string,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<Stripe.Customer | null> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const customer = await stripe.customers.retrieve(customerId);
-      if (customer.deleted) {
-        return null;
-      }
-      return customer;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      // Check if it's a rate limit error
-      const isRateLimitError =
-        (error as Stripe.errors.StripeError).code === "rate_limit" ||
-        (error as Stripe.errors.StripeError).statusCode === 429 ||
-        lastError.message.toLowerCase().includes("rate limit");
-
-      // Don't retry non-rate-limit errors (invalid customer, etc.)
-      if (!isRateLimitError) {
-        return null;
-      }
-
-      // If we've exhausted retries, return null
-      if (attempt >= maxRetries) {
-        console.error(`Failed to fetch customer ${customerId} after ${maxRetries} retries:`, lastError.message);
-        return null;
-      }
-
-      // Calculate delay with exponential backoff
-      // Check for Retry-After header if available
-      const stripeError = error as Stripe.errors.StripeError;
-      let waitTime = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 1s, 2s, 4s
-      
-      // If Stripe provides Retry-After, use it (in seconds, convert to ms)
-      if (stripeError.headers?.["retry-after"]) {
-        const retryAfterSeconds = parseInt(stripeError.headers["retry-after"], 10);
-        if (!isNaN(retryAfterSeconds)) {
-          waitTime = (retryAfterSeconds + 1) * 1000; // Add 1 second buffer
-        }
-      }
-
-      // Cap maximum wait time at 10 seconds
-      waitTime = Math.min(waitTime, 10000);
-
-      console.warn(
-        `⚠️ Rate limit error fetching customer ${customerId} - Retrying in ${Math.round(waitTime)}ms (attempt ${attempt}/${maxRetries})`
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-  }
-
-  return null;
-}
-
-/**
- * Batch fetch customers with throttling to respect Stripe rate limits
- * Processes in batches with delays between batches
- */
-async function batchFetchCustomers(
-  customerIds: string[],
-  batchSize: number = 15,
-  batchDelay: number = 200
-): Promise<Map<string, string | null>> {
-  const customerPaymentMethodMap = new Map<string, string | null>();
-  const uniqueCustomerIds = [...new Set(customerIds)];
-
-  // Process customers in batches
-  for (let i = 0; i < uniqueCustomerIds.length; i += batchSize) {
-    const batch = uniqueCustomerIds.slice(i, i + batchSize);
-
-    // Fetch batch in parallel (but batches are sequential)
-    const batchResults = await Promise.allSettled(
-      batch.map(async (customerId) => {
-        const customer = await fetchCustomerWithRetry(customerId);
-        if (!customer) {
-          return { customerId, paymentMethodId: null };
-        }
-
-        const customerWithSettings = customer as Stripe.Customer & {
-          invoice_settings?: { default_payment_method?: string | Stripe.PaymentMethod };
-        };
-
-        const defaultPaymentMethod = customerWithSettings.invoice_settings?.default_payment_method;
-        const paymentMethodId = defaultPaymentMethod
-          ? typeof defaultPaymentMethod === "string"
-            ? defaultPaymentMethod
-            : defaultPaymentMethod.id
-          : null;
-
-        return { customerId, paymentMethodId };
-      })
-    );
-
-    // Process batch results
-    for (const result of batchResults) {
-      if (result.status === "fulfilled") {
-        customerPaymentMethodMap.set(result.value.customerId, result.value.paymentMethodId);
-      } else {
-        console.error(`Failed to fetch customer in batch:`, result.reason);
-        // Don't set anything - will remain undefined, which is handled as null
-      }
-    }
-
-    // Delay between batches to respect rate limits (except for last batch)
-    if (i + batchSize < uniqueCustomerIds.length) {
-      await new Promise((resolve) => setTimeout(resolve, batchDelay));
-    }
-  }
-
-  return customerPaymentMethodMap;
-}
+import {
+  batchFetchCustomers,
+  payOpenInvoiceAsPastDueAdmin,
+  resolveInvoicePaymentMethodId,
+} from "@/server/admin/chargePastDueShared";
 
 /**
  * GET /api/admin/invoices/charge-past-due
@@ -277,15 +122,8 @@ export async function GET(_request: NextRequest) {
         continue;
       }
 
-      // Check payment method: invoice first, then customer's default as fallback
-      const invoicePaymentMethod = invoice.default_payment_method
-        ? (typeof invoice.default_payment_method === "string"
-            ? invoice.default_payment_method
-            : invoice.default_payment_method?.id)
-        : null;
-      
       const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-      const hasPaymentMethod = !!(invoicePaymentMethod || customerPaymentMethod);
+      const hasPaymentMethod = !!resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
 
       if (!hasPaymentMethod) {
         filterStats.noPaymentMethod++;
@@ -500,17 +338,8 @@ export async function POST(request: NextRequest) {
           return false;
         }
 
-        // Check payment method: invoice first, then customer's default as fallback
-        const invoicePaymentMethod = invoice.default_payment_method
-          ? (typeof invoice.default_payment_method === "string"
-              ? invoice.default_payment_method
-              : invoice.default_payment_method?.id)
-          : null;
-        
         const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-        const hasPaymentMethod = !!(invoicePaymentMethod || customerPaymentMethod);
-
-        if (!hasPaymentMethod) {
+        if (!resolveInvoicePaymentMethodId(invoice, customerPaymentMethod)) {
           return false;
         }
 
@@ -570,15 +399,8 @@ export async function POST(request: NextRequest) {
               return;
             }
 
-            // Extract payment method: invoice first, then customer's default as fallback
-            const invoicePaymentMethod = invoice.default_payment_method
-              ? (typeof invoice.default_payment_method === "string"
-                  ? invoice.default_payment_method
-                  : invoice.default_payment_method?.id)
-              : null;
-            
             const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-            const paymentMethodId = invoicePaymentMethod || customerPaymentMethod;
+            const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
 
             if (!paymentMethodId) {
               skipped++;
@@ -594,135 +416,20 @@ export async function POST(request: NextRequest) {
               return;
             }
 
-            try {
-              // Attempt charge with explicit payment method
-              // Note: Idempotency is handled at database level (time-based) rather than Stripe level
-              // This is safer for business retries and allows legitimate retries after card updates
-              // off_session: true indicates this is an admin-initiated automatic charge without customer interaction
-              const paidInvoice = await stripe.invoices.pay(invoiceId, {
-                payment_method: paymentMethodId,
-                off_session: true, // Admin-initiated automatic charge (customer not present)
-              });
+            const row = await payOpenInvoiceAsPastDueAdmin({
+              invoice,
+              paymentMethodId,
+              customerId,
+              user: { _id: user._id, email: user.email },
+              adminId,
+            });
 
-              // Check if already paid (race condition)
-              if (paidInvoice.status === "paid") {
-                processed++;
-                succeeded++;
-                results.push({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: user._id.toString(),
-                  userEmail: userEmail,
-                  status: "success",
-                  amount: invoice.amount_remaining || 0,
-                });
+            processed++;
+            if (row.status === "success") succeeded++;
+            else if (row.status === "failed") failed++;
+            else skipped++;
 
-                // Log as success
-                await InvoiceChargeLog.create({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: new mongoose.Types.ObjectId(user._id),
-                  adminId: new mongoose.Types.ObjectId(adminId),
-                  status: "success",
-                  amount: invoice.amount_remaining || 0,
-                  attemptedAt: new Date(),
-                  result: sanitizeStripeResponse(paidInvoice),
-                  nextPaymentAttempt: paidInvoice.next_payment_attempt
-                    ? new Date(paidInvoice.next_payment_attempt * 1000)
-                    : undefined,
-                });
-                return;
-              }
-
-              // Success
-              processed++;
-              succeeded++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "success",
-                amount: invoice.amount_remaining || 0,
-              });
-
-              // Log success
-              await InvoiceChargeLog.create({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: new mongoose.Types.ObjectId(user._id),
-                adminId: new mongoose.Types.ObjectId(adminId),
-                status: "success",
-                amount: invoice.amount_remaining || 0,
-                attemptedAt: new Date(),
-                result: sanitizeStripeResponse(paidInvoice),
-                nextPaymentAttempt: paidInvoice.next_payment_attempt
-                  ? new Date(paidInvoice.next_payment_attempt * 1000)
-                  : undefined,
-              });
-            } catch (error) {
-              const stripeError = error as Stripe.errors.StripeError;
-
-              // Check if already paid (race condition)
-              if (
-                stripeError.code === "resource_already_exists" ||
-                stripeError.message?.includes("already paid") ||
-                stripeError.message?.includes("already_paid")
-              ) {
-                processed++;
-                skipped++;
-                results.push({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: user._id.toString(),
-                  userEmail: userEmail,
-                  status: "skipped",
-                  skipReason: "already_paid",
-                  amount: invoice.amount_remaining || 0,
-                });
-
-                // Log as skipped
-                await InvoiceChargeLog.create({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: new mongoose.Types.ObjectId(user._id),
-                  adminId: new mongoose.Types.ObjectId(adminId),
-                  status: "skipped",
-                  amount: invoice.amount_remaining || 0,
-                  attemptedAt: new Date(),
-                  errorCode: stripeError.code,
-                  errorMessage: "Invoice already paid",
-                  result: sanitizeStripeResponse(stripeError),
-                });
-                return;
-              }
-
-              processed++;
-              failed++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "failed",
-                error: stripeError.message || "Unknown error",
-                amount: invoice.amount_remaining || 0,
-              });
-
-              // Log failure
-              await InvoiceChargeLog.create({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: new mongoose.Types.ObjectId(user._id),
-                adminId: new mongoose.Types.ObjectId(adminId),
-                status: "failed",
-                errorCode: stripeError.code,
-                errorMessage: stripeError.message,
-                amount: invoice.amount_remaining || 0,
-                attemptedAt: new Date(),
-                result: sanitizeStripeResponse(stripeError),
-              });
-            }
+            results.push(row);
           })
         );
 
