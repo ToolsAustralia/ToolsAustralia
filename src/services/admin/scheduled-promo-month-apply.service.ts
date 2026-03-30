@@ -54,6 +54,9 @@ export function validateFullMonthDayGrid(
     return { ok: false, error: `Expected ${expected.length} day rows for this month, received ${days.length}.` };
   }
   const byKey = new Map(days.map((d) => [d.dateKey, d.multiplier]));
+  if (byKey.size !== days.length) {
+    return { ok: false, error: "Duplicate dateKey entries in payload." };
+  }
   for (const cell of expected) {
     if (!byKey.has(cell.dateKey)) {
       return { ok: false, error: `Missing calendar day ${cell.dateKey}.` };
