@@ -12,12 +12,15 @@ import type { PromoImagePaths, ExtendedPromoImagePaths } from "./promo-hero-type
 
 const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 
+/** Filename segment: Milwaukee stack toolbox vs Sidchrome toolbox (matches assets under `landing/{brand}/`). */
+export type LandingHeroToolboxSuffix = "milTB" | "sidTB";
+
 /**
  * Image naming conventions for landing pages:
- * - Desktop light: {brand}-milTB-no-promo.png
- * - Desktop dark: {brand}-milTB-no-promo-dark.png
- * - Mobile light: {brand}-milTB-no-promo-mobile.png
- * - Mobile dark: {brand}-milTB-no-promo-dark-mobile.png
+ * - Desktop light: {brand}-{milTB|sidTB}-no-promo.png
+ * - Desktop dark: {brand}-{milTB|sidTB}-no-promo-dark.png
+ * - Mobile light: {brand}-{milTB|sidTB}-no-promo-mobile.png
+ * - Mobile dark: {brand}-{milTB|sidTB}-no-promo-dark-mobile.png
  */
 
 /**
@@ -30,13 +33,14 @@ const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 export function resolveLandingHeroImage(
   brand: BrandKey,
   mode: "light" | "dark",
-  viewport: "desktop" | "mobile"
+  viewport: "desktop" | "mobile",
+  toolboxSuffix: LandingHeroToolboxSuffix = "milTB"
 ): string {
   const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
-  
+
   // For multiplier variants, we fallback to "no promo" images since multiplier assets don't exist yet
-  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-milTB-no-promo${darkSuffix}${mobileSuffix}.png`;
+  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}.png`;
 }
 
 /**
@@ -45,12 +49,15 @@ export function resolveLandingHeroImage(
  * @param brand - Brand identifier
  * @returns Extended promo image paths with all variants
  */
-export function resolveLandingHeroImages(brand: BrandKey): ExtendedPromoImagePaths {
+export function resolveLandingHeroImages(
+  brand: BrandKey,
+  toolboxSuffix: LandingHeroToolboxSuffix = "milTB"
+): ExtendedPromoImagePaths {
   return {
-    desktop: resolveLandingHeroImage(brand, "light", "desktop"),
-    mobile: resolveLandingHeroImage(brand, "light", "mobile"),
-    desktopDark: resolveLandingHeroImage(brand, "dark", "desktop"),
-    mobileDark: resolveLandingHeroImage(brand, "dark", "mobile"),
+    desktop: resolveLandingHeroImage(brand, "light", "desktop", toolboxSuffix),
+    mobile: resolveLandingHeroImage(brand, "light", "mobile", toolboxSuffix),
+    desktopDark: resolveLandingHeroImage(brand, "dark", "desktop", toolboxSuffix),
+    mobileDark: resolveLandingHeroImage(brand, "dark", "mobile", toolboxSuffix),
   };
 }
 
@@ -124,4 +131,11 @@ export function toBasicImagePaths(
  */
 export function getFallbackImagePath(): string {
   return resolveEvergreenHeroImage("light", "desktop");
+}
+
+/**
+ * Map prize slug to landing asset toolbox segment (`*-sidchrome` → sidTB, else milTB).
+ */
+export function landingToolboxSuffixFromPrizeSlug(prizeSlug: string): LandingHeroToolboxSuffix {
+  return prizeSlug.toLowerCase().endsWith("-sidchrome") ? "sidTB" : "milTB";
 }
