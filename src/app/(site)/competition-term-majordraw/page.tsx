@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 export const metadata: Metadata = {
   title: "Major Giveaway Competition Terms | Tools Australia",
@@ -46,6 +47,7 @@ function formatPromotionDate(date: Date | string | null | undefined): string {
 
 export default async function MajorGiveawayTermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+  const contactEmail = getContactEmail();
   const nonce = await getNonce();
 
   const eligibleStates = [
@@ -231,9 +233,9 @@ export default async function MajorGiveawayTermsPage() {
                     Genuine error claims must be emailed to{" "}
                     <a
                       className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                      href="mailto:hello@toolsaustralia.com.au"
+                      href={`mailto:${contactEmail}`}
                     >
-                      hello@toolsaustralia.com.au
+                      {contactEmail}
                     </a>{" "}
                     within 48 hours of purchase with the receipt or transaction ID.
                   </p>
@@ -316,8 +318,14 @@ export default async function MajorGiveawayTermsPage() {
                     availability.
                   </li>
                   <li>
-                    Technical discrepancies must be reported within 24 hours with supporting evidence to
-                    hello@toolsaustralia.com.au.
+                    Technical discrepancies must be reported within 24 hours with supporting evidence to{" "}
+                    <a
+                      className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                      href={`mailto:${contactEmail}`}
+                    >
+                      {contactEmail}
+                    </a>
+                    .
                   </li>
                   <li>
                     No adjustments, refunds, or bonus entries are provided based on claims lodged after the draw or
@@ -435,8 +443,14 @@ export default async function MajorGiveawayTermsPage() {
                   regulatory obligations. Data may be shared with third-party providers for draw administration, prize
                   fulfilment, or compliance, and is retained only as long as necessary before being securely destroyed
                   or de-identified. Entrants may access, correct, or request deletion of their data (subject to legal
-                  retention requirements) by emailing hello@toolsaustralia.com.au. The Privacy Policy is available at
-                  https://www.toolsaustralia.com.au.
+                  retention requirements) by emailing{" "}
+                  <a
+                    className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
+                    href={`mailto:${contactEmail}`}
+                  >
+                    {contactEmail}
+                  </a>
+                  . The Privacy Policy is available at https://www.toolsaustralia.com.au.
                 </p>
               </div>
               <div>
@@ -534,9 +548,9 @@ export default async function MajorGiveawayTermsPage() {
                   Queries can be directed to{" "}
                   <a
                     className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                    href="mailto:hello@toolsaustralia.com.au"
+                    href={`mailto:${contactEmail}`}
                   >
-                    hello@toolsaustralia.com.au
+                    {contactEmail}
                   </a>
                   .
                 </p>
