@@ -81,9 +81,7 @@ export default function AdminScheduledPromoCalendarModal({
   const { data: promos = [], isLoading: promosLoading } = useScheduledPromos({ isActive: true });
 
   const hydrateFromServer = useCallback(() => {
-    const list = promos.filter(
-      (p) => p.type === selectedType && p.isActive && !p.deletedAt
-    ) as Parameters<typeof buildPaintedDaysForMonthFromPromos>[2];
+    const list = promos.filter((p) => p.type === selectedType && p.isActive && !p.deletedAt);
     setDays(buildPaintedDaysForMonthFromPromos(year, month, list));
   }, [promos, selectedType, year, month]);
 

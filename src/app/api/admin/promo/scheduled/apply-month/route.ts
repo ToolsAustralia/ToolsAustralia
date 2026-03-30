@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import mongoose from "mongoose";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       year: body.year,
       month: body.month,
       days: body.days.map((d) => ({ dateKey: d.dateKey, multiplier: d.multiplier })),
-      createdBy: user._id,
+      createdBy: new mongoose.Types.ObjectId(String(user._id)),
       name: body.name,
       description: body.description,
     });
