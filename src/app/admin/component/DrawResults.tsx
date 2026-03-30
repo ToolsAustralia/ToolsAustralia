@@ -9,6 +9,7 @@ import {
   Search,
   Download,
   UserPlus,
+  UserX,
   CheckCircle,
   XCircle,
   Clock,
@@ -27,6 +28,7 @@ import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/mod
 import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ExportModal from "@/components/modals/ExportModal";
 import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 
 // Import MajorDrawData type from modal
@@ -82,6 +84,7 @@ interface DrawResult {
   };
   totalEntries: number;
   winner?: {
+    winnerId?: string;
     userId: string;
     userDetails?: {
       firstName: string;
@@ -212,6 +215,8 @@ export default function DrawResults() {
   const [editingDraw, setEditingDraw] = useState<DrawResult | null>(null);
   const [isEditDrawModalOpen, setIsEditDrawModalOpen] = useState(false);
   const [isSubmittingDraw, setIsSubmittingDraw] = useState(false);
+  const [removeWinnerTarget, setRemoveWinnerTarget] = useState<DrawResult | null>(null);
+  const [isRemovingWinner, setIsRemovingWinner] = useState(false);
 
   // Fetch draws
   const fetchDraws = useCallback(
@@ -388,6 +393,70 @@ export default function DrawResults() {
       });
 
       throw err;
+    }
+  };
+
+  const handleConfirmRemoveWinner = async () => {
+    const draw = removeWinnerTarget;
+    if (!draw?.winner?.userId) {
+      setRemoveWinnerTarget(null);
+      return;
+    }
+
+    let winnerId = draw.winner.winnerId;
+    if (!winnerId) {
+      try {
+        const res = await fetch(`/api/winners/all?drawType=major&limit=100`);
+        const data = await res.json();
+        if (data.success && data.winners) {
+          const found = data.winners.find(
+            (w: { drawId: string; drawType: string }) => w.drawId === draw._id && w.drawType === "major"
+          );
+          winnerId = found?.id;
+        }
+      } catch {
+        // handled below
+      }
+    }
+
+    if (!winnerId) {
+      showToast({
+        type: "error",
+        title: "Could not remove winner",
+        message: "Winner record ID not found. Refresh the page and try again.",
+        duration: 7000,
+      });
+      setRemoveWinnerTarget(null);
+      return;
+    }
+
+    setIsRemovingWinner(true);
+    try {
+      const response = await fetch(`/api/admin/winners/${winnerId}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+
+      setRemoveWinnerTarget(null);
+      await fetchDraws(pagination.currentPage);
+      showToast({
+        type: "success",
+        title: "Winner removed",
+        message: "You can select a new winner for this draw when ready.",
+        duration: 6000,
+      });
+    } catch (err) {
+      console.error("Error removing winner:", err);
+      showToast({
+        type: "error",
+        title: "Could not remove winner",
+        message: err instanceof Error ? err.message : "Please try again.",
+        duration: 7000,
+      });
+    } finally {
+      setIsRemovingWinner(false);
     }
   };
 
@@ -718,9 +787,20 @@ export default function DrawResults() {
                         </Button>
                       )}
                     {draw.winner && draw.winner.userId && (
-                      <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
-                        Edit Winner
-                      </Button>
+                      <>
+                        <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
+                          Edit Winner
+                        </Button>
+                        <Button
+                          onClick={() => setRemoveWinnerTarget(draw)}
+                          size="sm"
+                          variant="outline"
+                          icon={UserX}
+                          className="border-amber-200 text-amber-800 hover:bg-amber-50"
+                        >
+                          Remove winner
+                        </Button>
+                      </>
                     )}
                     <Button onClick={() => handleEditDraw(draw)} size="sm" variant="outline" icon={Edit}>
                       Edit Draw
@@ -846,6 +926,22 @@ export default function DrawResults() {
             }}
           />
         )}
+
+      <ConfirmationModal
+        isOpen={removeWinnerTarget !== null}
+        onClose={() => !isRemovingWinner && setRemoveWinnerTarget(null)}
+        onConfirm={handleConfirmRemoveWinner}
+        type="warning"
+        title="Remove major draw winner?"
+        message={
+          removeWinnerTarget
+            ? `This removes the published winner record for “${removeWinnerTarget.name}”. The draw stays completed; use Select Winner to record someone else (e.g. after eligibility checks). This does not delete the user or their entries.`
+            : ""
+        }
+        confirmText="Remove winner"
+        cancelText="Cancel"
+        isLoading={isRemovingWinner}
+      />
 
       {/* Edit Draw Modal */}
       {editingDraw && (
