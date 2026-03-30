@@ -36,6 +36,7 @@ import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { formatDisplayName } from "@/utils/display-name";
 import { membershipPackages, getPackageById } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useAdminCancelSubscription,
   useAdminUpdateUser,
@@ -45,6 +46,7 @@ import {
 } from "@/hooks/queries/useAdminQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import ChargePastDueUserModal from "@/components/admin/ChargePastDueUserModal";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { Z_INDEX } from "@/constants/z-index";
 import ModalContent from "@/components/modals/ui/ModalContent";
@@ -320,6 +322,7 @@ const getPackageIconImage = (packageName?: string | null): StaticImageData | nul
  * Shows complete user profile, subscription details, purchase history, and activity
  */
 export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserDetailModalProps) {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showActionModal, setShowActionModal] = useState<{
@@ -361,6 +364,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
   const [showCancelSubscriptionModal, setShowCancelSubscriptionModal] = useState(false);
+  const [showChargePastDueUserModal, setShowChargePastDueUserModal] = useState(false);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
@@ -2072,6 +2076,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               Cancel Subscription
                             </button>
                           )}
+                          {user.subscription?.status === "past_due" && userId && (
+                            <button
+                              type="button"
+                              onClick={() => setShowChargePastDueUserModal(true)}
+                              className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-amber-900 hover:bg-amber-100 transition-colors"
+                            >
+                              Retry past due charge
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setActiveEditTab("subscription")}
@@ -3544,6 +3557,33 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             </div>
           </div>
         </div>
+      )}
+
+      {showChargePastDueUserModal && userId && (
+        <ChargePastDueUserModal
+          isOpen={showChargePastDueUserModal}
+          onClose={() => setShowChargePastDueUserModal(false)}
+          targetUserId={userId}
+          memberLabel={
+            user
+              ? `${formatDisplayName(user.firstName, user.lastName) || user.email} · ${user.email}`
+              : undefined
+          }
+          onConfirm={async () => {
+            const response = await fetch(`/api/admin/users/${userId}/charge-past-due`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmation: "CHARGE" }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.message || data.error || "Failed to charge invoice");
+            }
+            await queryClient.invalidateQueries({ queryKey: ["admin", "users", "detail", userId] });
+            await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+            return data;
+          }}
+        />
       )}
 
       {/* Cancel Subscription Modal */}
