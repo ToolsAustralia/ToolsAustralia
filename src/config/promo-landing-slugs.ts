@@ -69,15 +69,15 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
 
 /**
  * Default prize slug for a toolset page.
- * Prefers Sidchrome toolbox first (matches selector order and `sidTB` landing assets).
+ * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
   const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
-  if (hasSidchromeHero) return sidchrome;
   if (hasMilwaukeeHero) return milwaukee;
-  return sidchrome;
+  if (hasSidchromeHero) return sidchrome;
+  return milwaukee;
 }
 
 /**

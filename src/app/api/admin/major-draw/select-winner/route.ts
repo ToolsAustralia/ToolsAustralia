@@ -26,6 +26,7 @@ const selectWinnerSchema = z.object({
   selectedPrize: z.string().trim().optional().nullable(),
   // Legacy field - kept for backward compatibility
   selectedPrizeSlug: z.string().optional().nullable(),
+  drawResultUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
 /**
@@ -115,6 +116,10 @@ export async function POST(request: NextRequest) {
         // Legacy support: migrate selectedPrizeSlug to selectedPrize
         existingWinner.selectedPrize = validatedData.selectedPrizeSlug || undefined;
       }
+      if (validatedData.drawResultUrl !== undefined) {
+        existingWinner.drawResultUrl =
+          validatedData.drawResultUrl && validatedData.drawResultUrl !== "" ? validatedData.drawResultUrl : undefined;
+      }
       // Update prize snapshot - use draw name/description fallback when prize is empty
       const snapshotName = (majorDraw.prize?.name || majorDraw.name || "Major Prize").trim() || "Major Prize";
       const snapshotDesc = (majorDraw.prize?.description || majorDraw.description || "").trim() || "Major draw prize";
@@ -192,6 +197,7 @@ export async function POST(request: NextRequest) {
         testimony?: string;
         selectedPrize?: string;
         selectedPrizeSlug?: string; // Legacy field
+        drawResultUrl?: string;
         cycle: number;
       } = {
         drawId: majorDraw._id,
@@ -353,7 +359,9 @@ export async function GET(request: NextRequest) {
           selectionMethod: winner.selectionMethod,
           imageUrl: winner.imageUrl,
           testimony: winner.testimony,
+          selectedPrize: winner.selectedPrize || winner.selectedPrizeSlug,
           selectedPrizeSlug: winner.selectedPrizeSlug,
+          drawResultUrl: winner.drawResultUrl,
         },
         majorDraw: {
           id: majorDraw._id,

@@ -26,6 +26,7 @@ import {
   Trash2,
   Loader2,
   Move,
+  Pencil,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
@@ -56,6 +57,7 @@ interface MiniDraw extends AdminMiniDrawSummary {
     entryNumber: number;
     selectedDate: string;
     imageUrl?: string;
+    drawResultUrl?: string;
     cycle: number;
   };
 }
@@ -81,6 +83,14 @@ export default function MiniDrawManagement() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MiniDraw | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [miniWinnerEditOpen, setMiniWinnerEditOpen] = useState(false);
+  const [miniWinnerEdit, setMiniWinnerEdit] = useState<{
+    winnerId: string;
+    winnerName: string;
+    drawName: string;
+    testimony: string | null;
+    drawResultUrl: string | null;
+  } | null>(null);
   // Configure sensors for both mouse and touch input to support mobile devices
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -276,6 +286,32 @@ export default function MiniDrawManagement() {
     if (deletingId) return;
     setIsDeleteModalOpen(false);
     setDeleteTarget(null);
+  };
+
+  const openMiniWinnerEdit = async (draw: MiniDraw) => {
+    const wid = draw.latestWinner?._id;
+    if (!wid) return;
+    try {
+      const res = await fetch(`/api/admin/winners/${wid}`);
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.winner) {
+        throw new Error(data.error || "Failed to load winner");
+      }
+      setMiniWinnerEdit({
+        winnerId: data.winner.id,
+        winnerName: `${data.winner.winnerFirstName} ${data.winner.winnerLastName}`.trim(),
+        drawName: draw.name,
+        testimony: data.winner.testimony ?? null,
+        drawResultUrl: data.winner.drawResultUrl ?? null,
+      });
+      setMiniWinnerEditOpen(true);
+    } catch (e) {
+      showToast({
+        type: "error",
+        title: "Could not open editor",
+        message: e instanceof Error ? e.message : "Try again.",
+      });
+    }
   };
 
   // Filter mini draws by status
@@ -475,6 +511,7 @@ export default function MiniDrawManagement() {
                       setIsWinnerModalOpen(true);
                     }}
                     onExportCsv={() => handleExport(draw._id, draw.name, "csv")}
+                    onEditLatestWinner={() => void openMiniWinnerEdit(draw)}
                     isSelectingWinner={isSelectingWinner}
                     isExporting={isExporting}
                     isDeleting={deletingId === draw._id}
@@ -568,11 +605,34 @@ export default function MiniDrawManagement() {
             ? {
                 userId: selectedDraw.latestWinner.userId,
                 imageUrl: selectedDraw.latestWinner.imageUrl,
+                drawResultUrl: selectedDraw.latestWinner.drawResultUrl,
               }
             : undefined
         }
         enableImageField
       />
+
+      {miniWinnerEdit && (
+        <WinnerEditModal
+          isOpen={miniWinnerEditOpen}
+          onClose={() => {
+            setMiniWinnerEditOpen(false);
+            setMiniWinnerEdit(null);
+          }}
+          winnerId={miniWinnerEdit.winnerId}
+          winnerName={miniWinnerEdit.winnerName}
+          drawName={miniWinnerEdit.drawName}
+          drawType="mini"
+          currentTestimony={miniWinnerEdit.testimony}
+          currentSelectedPrize={null}
+          currentImageUrl={null}
+          currentDrawResultUrl={miniWinnerEdit.drawResultUrl}
+          onUpdate={async () => {
+            await fetchMiniDraws();
+            window.dispatchEvent(new Event("admin-mini-draws-updated"));
+          }}
+        />
+      )}
 
       <MiniDrawEditModal
         isOpen={isEditModalOpen}
@@ -628,6 +688,7 @@ interface MiniDrawCardProps {
   onDelete: () => void;
   onSelectWinner: () => void;
   onExportCsv: () => void;
+  onEditLatestWinner: () => void;
   isSelectingWinner: boolean;
   isExporting: boolean;
   isDeleting: boolean;
@@ -641,6 +702,7 @@ function MiniDrawCard({
   onDelete,
   onSelectWinner,
   onExportCsv,
+  onEditLatestWinner,
   isSelectingWinner,
   isExporting,
   isDeleting,
@@ -747,6 +809,20 @@ function MiniDrawCard({
                 <Trophy className="w-3.5 h-3.5 shrink-0 text-red-600" />
                 <span className="hidden md:inline truncate">Winner</span>
               </button>
+              {draw.latestWinner ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditLatestWinner();
+                  }}
+                  className={iconBtn}
+                  title="Edit last winner (testimony & draw link)"
+                >
+                  <Pencil className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                  <span className="hidden md:inline truncate">Edit</span>
+                </button>
+              ) : null}
               <button
                 onClick={(e) => {
                   e.stopPropagation();

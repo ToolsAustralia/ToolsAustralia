@@ -26,6 +26,8 @@ export interface IWinner extends Document {
   selectedPrize?: string;
   // Legacy field - kept for backward compatibility, will be migrated to selectedPrize
   selectedPrizeSlug?: string;
+  /** External link (e.g. RandomDraws verification) shown on public draw results */
+  drawResultUrl?: string;
   cycle: number;
   createdAt: Date;
   updatedAt: Date;
@@ -95,6 +97,11 @@ const WinnerSchema = new Schema<IWinner>(
     // Legacy field - kept for backward compatibility
     selectedPrizeSlug: {
       type: String,
+    },
+    drawResultUrl: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
     },
     cycle: {
       type: Number,

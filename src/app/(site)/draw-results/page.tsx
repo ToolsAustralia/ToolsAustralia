@@ -2,18 +2,20 @@ import { Metadata } from "next";
 import MembershipSection from "@/components/sections/MembershipSection";
 import { Bell, Users, Zap } from "lucide-react";
 import CompletedDrawsSection from "./components/CompletedDrawsSection";
+import DrawResultCard from "./components/DrawResultCard";
+import DrawResultsHero from "./components/DrawResultsHero";
 import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanner";
 import connectDB from "@/lib/mongodb";
+import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
 import { WinnerSummary } from "@/types/winner";
-import DrawResultCard from "./components/DrawResultCard";
 import { Types } from "mongoose";
 
 export const metadata: Metadata = {
   title: "Draw Results | Tools Australia",
   description:
-    "View the results of completed mini draws and see who won amazing tools and equipment. Check if you're a winner!",
+    "View completed major draws and mini draw results — prize details, artwork, and verification links.",
 };
 
 async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
@@ -49,6 +51,7 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
         userId: Types.ObjectId | string | { firstName?: string; lastName?: string; state?: string };
         prizeSnapshot?: { name?: string; description?: string; value?: number; images?: string[] };
         imageUrl?: string;
+        drawResultUrl?: string;
         selectedDate: Date;
         entryNumber?: number;
         selectedBy?: Types.ObjectId | string;
@@ -86,6 +89,7 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
         entryNumber: w.entryNumber ?? 0,
         selectedDate: w.selectedDate.toISOString(),
         imageUrl: w.imageUrl,
+        drawResultUrl: w.drawResultUrl,
         selectedBy: w.selectedBy ? (w.selectedBy as Types.ObjectId).toString() : undefined,
         cycle: w.cycle ?? 1,
       } satisfies WinnerSummary;
@@ -96,32 +100,45 @@ async function getRecentMiniDrawWinners(limit = 8): Promise<WinnerSummary[]> {
   }
 }
 
+async function getDrawResultsHeroStats() {
+  try {
+    await connectDB();
+    const [majorCompleted, miniWins, allWinners] = await Promise.all([
+      MajorDraw.countDocuments({ status: "completed" }),
+      Winner.countDocuments({ drawType: "mini" }),
+      Winner.countDocuments({}),
+    ]);
+    return { majorCompleted, miniWins, allWinners };
+  } catch (error) {
+    console.error("Error loading draw results hero stats:", error);
+    return { majorCompleted: 0, miniWins: 0, allWinners: 0 };
+  }
+}
+
 export default async function DrawResultsPage() {
-  const recentWinners = await getRecentMiniDrawWinners();
+  const [recentWinners, heroStats] = await Promise.all([getRecentMiniDrawWinners(), getDrawResultsHeroStats()]);
 
   return (
-    <div className="min-h-screen-svh bg-white pt-[50px] sm:pt-[60px]">
-      <div className="bg-gray-50 ">
+    <div className="min-h-screen-svh bg-white pt-[60px] dark:bg-slate-950 sm:pt-[70px]">
+      <DrawResultsHero
+        majorCompleted={heroStats.majorCompleted}
+        miniWins={heroStats.miniWins}
+        allWinners={heroStats.allWinners}
+      />
+
+      <div className="bg-gray-50 dark:bg-slate-900/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-12 ">
-          {/* Completed Major Draws Section */}
           <CompletedDrawsSection className="mb-4 sm:mb-8" />
 
-          {/* Draw Results - Only show if there are completed draws */}
-          {recentWinners.length > 0 && (
-            <section className="relative">
-              {/* Header - matches Completed Major Draws styling */}
-              <div className="text-center sm:mb-12 mt-8 sm:mt-8 mb-6 sm:mb-8">
-                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-gray-900 via-red-600 to-gray-900 bg-clip-text text-transparent font-['Poppins'] mb-2 sm:mb-4">
-                  Completed Mini Draws
-                </h2>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 mb-8">
+          {recentWinners.length > 0 ? (
+            <section className="relative mb-8 sm:mb-12">
+              <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
                 {recentWinners.map((winner) => (
                   <DrawResultCard key={winner.id} winner={winner} />
                 ))}
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* How Winners Are Selected */}
           <section className="bg-white rounded-2xl shadow-sm border border-gray-200/50 px-6 py-4 ">

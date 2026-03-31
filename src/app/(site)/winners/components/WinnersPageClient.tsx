@@ -108,54 +108,60 @@ export default function WinnersPageClient() {
         />
 
         <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,420px)] lg:items-end">
-            <div>
-              <div className="mx-auto mb-3 h-1 w-20 rounded-full sm:mx-0" style={{ background: theme.gradient }} />
-              <span
-                className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
-                style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.55)" }}
+          <div className="flex flex-col items-center sm:items-start">
+            <div className="mb-3 h-1 w-20 rounded-full" style={{ background: theme.gradient }} />
+            <span
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
+              style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.55)" }}
+            >
+              <Sparkles className="h-3.5 w-3.5" style={{ color: theme.primaryLight }} />
+              Winners Hall of Fame
+            </span>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+              <div
+                className="hidden shrink-0 rounded-[24px] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.35)] sm:inline-flex"
+                style={{ background: theme.gradient }}
               >
-                <Sparkles className="h-3.5 w-3.5" style={{ color: theme.primaryLight }} />
-                Winners Hall of Fame
-              </span>
-              <div className="mt-5 flex items-start gap-4">
-                <div
-                  className="hidden rounded-[24px] p-4 shadow-[0_20px_40px_rgba(0,0,0,0.35)] sm:inline-flex"
-                  style={{ background: theme.gradient }}
-                >
-                  <Trophy className="h-9 w-9" style={{ color: themeTextColor }} />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold leading-tight text-white font-['Poppins'] sm:text-5xl lg:text-6xl">
-                    Real Wins, Real People
-                  </h1>
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-200 sm:text-base lg:text-lg">
-                    Proof from every draw—names, prizes, and the stories that show your entries land
-                    in real workshops.
-                  </p>
-                </div>
+                <Trophy className="h-9 w-9" style={{ color: themeTextColor }} />
+              </div>
+              <div className="text-center sm:text-left">
+                <h1 className="text-4xl font-bold leading-tight text-white font-['Poppins'] sm:text-5xl lg:text-6xl">
+                  Real Wins, Real People
+                </h1>
+                <p className="mx-auto mt-4 max-w-3xl text-sm leading-7 text-slate-200 sm:mx-0 sm:text-base lg:text-lg">
+                  Proof from every draw—names, prizes, and the stories that show your entries land in
+                  real workshops.
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Total Winners", value: loading ? "--" : winners.length },
-                { label: "Major", value: loading ? "--" : majorWinnerCount },
-                { label: "Mini", value: loading ? "--" : miniWinnerCount },
-                { label: "Stories", value: loading ? "--" : totalWinnerStories },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-[24px] border bg-white/[0.06] p-4 text-white backdrop-blur"
-                  style={{ borderColor: theme.borderRgba }}
-                >
-                  <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            <dl
+              className="flex flex-wrap justify-center gap-x-8 gap-y-5 border-t border-white/[0.08] pt-6 text-white sm:justify-start sm:gap-x-10 lg:max-w-xl lg:justify-start lg:border-t-0 lg:border-l lg:pl-10 lg:pt-0"
+              style={{
+                borderLeftColor: theme.borderRgba.replace("0.4)", "0.25)"),
+              }}
+            >
+              {(
+                [
+                  { label: "Winners", value: loading ? "—" : winners.length },
+                  { label: "Major", value: loading ? "—" : majorWinnerCount },
+                  { label: "Mini", value: loading ? "—" : miniWinnerCount },
+                  { label: "Stories", value: loading ? "—" : totalWinnerStories },
+                ] as const
+              ).map((stat) => (
+                <div key={stat.label} className="text-center sm:text-left">
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                     {stat.label}
-                  </span>
-                  <span className="mt-3 block text-3xl font-bold font-['Poppins']">{stat.value}</span>
+                  </dt>
+                  <dd className="mt-1 font-['Poppins'] text-2xl font-bold tabular-nums tracking-tight text-white sm:text-3xl">
+                    {stat.value}
+                  </dd>
                 </div>
               ))}
-            </div>
+            </dl>
           </div>
         </div>
       </section>
@@ -166,13 +172,13 @@ export default function WinnersPageClient() {
       >
         <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-nowrap items-center gap-2 sm:gap-3">
               <WinnerFilterToggle
                 selectedFilter={filter}
                 onFilterChange={setFilter}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
-              <div className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              <div className="min-w-0 text-xs font-medium text-slate-600 dark:text-slate-400 sm:text-sm">
                 Showing{" "}
                 <span className="font-semibold text-slate-950 dark:text-white">
                   {filteredWinners.length}

@@ -1,27 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import useEmblaCarousel from "embla-carousel-react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
-import type { WinnerSummary } from "@/types/winner";
+import WinnerCard from "@/components/cards/WinnerCard";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
-import { formatWinnerName } from "@/utils/winner-name-formatter";
-import { getWinnerDisplayDate } from "@/utils/winners";
+import type { WinnerSummary } from "@/types/winner";
 
 interface LatestWinnerHeroProps {
   className?: string;
   contentWrapperClassName?: string;
-}
-
-function getContrastText(hex: string) {
-  const clean = hex.replace("#", "");
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.62 ? "#111827" : "#ffffff";
 }
 
 export default function LatestWinnerHero({
@@ -29,7 +18,6 @@ export default function LatestWinnerHero({
   contentWrapperClassName,
 }: LatestWinnerHeroProps) {
   const theme = usePromoTheme();
-  const themeTextColor = getContrastText(theme.primary);
   const [winners, setWinners] = useState<WinnerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [visibleDesktopCount, setVisibleDesktopCount] = useState(3);
@@ -132,78 +120,6 @@ export default function LatestWinnerHero({
     return null;
   }
 
-  const renderWinnerCard = (winner: WinnerSummary) => {
-    const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-    const displayImage =
-      winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
-    const prizeLabel = winner.selectedPrize || winner.prize.name;
-    const prizeLine = prizeLabel.length > 34 ? `${prizeLabel.slice(0, 34).trim()}...` : prizeLabel;
-    const dateLabel = `${getWinnerDisplayDate(winner).toUpperCase()} WINNER`;
-
-    return (
-      <article
-        className="overflow-hidden rounded-[24px] border bg-white shadow-[0_18px_42px_rgba(15,23,42,0.10)] dark:border-neutral-700 dark:bg-neutral-900"
-        style={{ borderColor: theme.borderRgba }}
-      >
-        <div className="relative overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-white">
-          <div
-            className="absolute inset-0 opacity-90"
-            style={{
-              background: `radial-gradient(circle at top right, ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.22)")}, transparent 28%), radial-gradient(circle at bottom left, rgba(238,0,0,0.16), transparent 30%)`,
-            }}
-          />
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/15 to-transparent" />
-
-          <div className="relative z-10">
-            <div className="mb-3">
-              <span
-                className="inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] shadow-sm backdrop-blur"
-                style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.62)" }}
-              >
-                {dateLabel}
-              </span>
-            </div>
-
-            <div
-              className="rounded-[20px] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
-              style={{ background: `linear-gradient(135deg, ${theme.primaryDark} 0%, ${theme.primary} 48%, ${theme.primaryLight} 100%)` }}
-            >
-              <div className="group relative aspect-[4/4.1] overflow-hidden rounded-[16px] bg-slate-900">
-                <Image
-                  src={displayImage}
-                  alt={`${formattedName} - ${winner.drawName}`}
-                  fill
-                  className="object-cover transition-transform duration-700 ease-out motion-reduce:transition-none group-hover:scale-[1.03] motion-reduce:group-hover:scale-100"
-                  sizes="(max-width: 768px) 88vw, (max-width: 1280px) 46vw, 31vw"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h3 className="min-w-0 flex-1 text-[1.65rem] font-bold leading-tight tracking-tight font-['Poppins'] text-white sm:text-[1.8rem]">
-                {formattedName}
-              </h3>
-              <span
-                className="inline-flex flex-shrink-0 items-center rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] shadow-[0_8px_18px_rgba(15,23,42,0.20)]"
-                style={{ background: theme.gradient, color: themeTextColor }}
-              >
-                <span className="sm:hidden">1st Prize</span>
-                <span className="hidden sm:inline">1st Prize Winner</span>
-              </span>
-            </div>
-            <p className="mt-2 text-sm font-semibold text-slate-200">{prizeLine}</p>
-          </div>
-        </div>
-
-        <div className="relative bg-white px-5 py-5 text-center dark:bg-neutral-900">
-          <div className="absolute inset-x-0 top-0 h-px" style={{ background: theme.gradient }} />
-          <p className="text-sm text-slate-500 dark:text-neutral-400">Congratulations to our winner!</p>
-        </div>
-      </article>
-    );
-  };
-
   return (
     <section id="latest-winners" className={`relative overflow-hidden py-8 sm:py-10 ${className}`}>
       <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
@@ -244,7 +160,7 @@ export default function LatestWinnerHero({
             <div className="flex">
               {winners.map((winner) => (
                 <div key={winner.id} className="min-w-0 flex-[0_0_86%] pr-4 sm:flex-[0_0_62%]">
-                  {renderWinnerCard(winner)}
+                  <WinnerCard winner={winner} showDrawLink={false} />
                 </div>
               ))}
             </div>
@@ -254,7 +170,9 @@ export default function LatestWinnerHero({
         <div className="hidden lg:block">
           <div className="grid gap-5 xl:grid-cols-3 lg:grid-cols-2">
             {visibleDesktopWinners.map((winner) => (
-              <div key={winner.id}>{renderWinnerCard(winner)}</div>
+              <div key={winner.id}>
+                <WinnerCard winner={winner} showDrawLink={false} />
+              </div>
             ))}
           </div>
 

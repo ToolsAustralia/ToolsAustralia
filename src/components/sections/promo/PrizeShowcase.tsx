@@ -399,7 +399,13 @@ export default function PrizeShowcase({
   const [carouselDeactivated, setCarouselDeactivated] = useState(false);
 
   const effectiveSlugForCatalog = (() => {
-    if (toolsetMode) return toolsetEffectiveSlug ?? toolsetPrizeSlugs?.[0] ?? slugProp;
+    if (toolsetMode)
+      return (
+        toolsetEffectiveSlug ??
+        slugProp ??
+        toolsetPrizeSlugs?.[1] ??
+        toolsetPrizeSlugs?.[0]
+      );
     if (isPromotionsPage) return slugProp;
     if (localEffectiveSlug) return localEffectiveSlug;
     const tt: "sidchrome" | "milwaukee" = toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
@@ -408,13 +414,13 @@ export default function PrizeShowcase({
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
 
-  // Toolset mode: init effective slug from default (Sidchrome)
+  // Toolset mode: init to Milwaukee toolbox (second prize slug) to match default toolset landing
   useEffect(() => {
     if (toolsetMode && toolsetPrizeSlugs) {
-      const defaultSlug = toolsetPrizeSlugs[0];
+      const defaultSlug = toolsetPrizeSlugs[1];
       setToolsetEffectiveSlug(defaultSlug);
-      setToolboxType("sidchrome");
-      setLastNonCashToolboxType("sidchrome");
+      setToolboxType("milwaukee");
+      setLastNonCashToolboxType("milwaukee");
     }
   }, [toolsetMode, toolsetSlug, toolsetPrizeSlugs]); // Added toolsetPrizeSlugs per lint - init runs when slug list changes
 

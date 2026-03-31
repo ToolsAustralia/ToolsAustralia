@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
           testimony?: string;
           selectedPrize?: string;
           selectedPrizeSlug?: string; // Legacy field
+          drawResultUrl?: string;
           cycle?: number;
         };
         const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
           entryNumber: w.entryNumber,
           testimony: testimonyValue,
           selectedPrize: selectedPrizeValue,
+          drawResultUrl: w.drawResultUrl,
           cycle: w.cycle || 1,
         });
       });
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
           testimony?: string;
           selectedPrize?: string;
           selectedPrizeSlug?: string; // Legacy field
+          drawResultUrl?: string;
           cycle?: number;
         };
         const winnerUser = (typeof w.userId === 'object' && !(w.userId instanceof Types.ObjectId) && 'firstName' in w.userId) 
@@ -151,6 +154,7 @@ export async function GET(request: NextRequest) {
           entryNumber: w.entryNumber,
           testimony: testimonyValue,
           selectedPrize: selectedPrizeValue,
+          drawResultUrl: w.drawResultUrl,
           cycle: w.cycle || 1,
         });
       });

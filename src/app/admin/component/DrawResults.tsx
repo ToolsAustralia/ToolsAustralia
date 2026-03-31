@@ -101,6 +101,7 @@ interface DrawResult {
     };
     selectionMethod?: "manual" | "government-app";
     imageUrl?: string;
+    drawResultUrl?: string;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -210,6 +211,7 @@ export default function DrawResults() {
     testimony?: string | null;
     selectedPrize?: string | null;
     imageUrl?: string | null;
+    drawResultUrl?: string | null;
   } | null>(null);
   // Edit Draw Modal
   const [editingDraw, setEditingDraw] = useState<DrawResult | null>(null);
@@ -307,6 +309,7 @@ export default function DrawResults() {
                   testimony: winnerDetailsData.winner.testimony,
                   selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
                   imageUrl: winnerDetailsData.winner.imageUrl ?? null,
+                  drawResultUrl: winnerDetailsData.winner.drawResultUrl ?? null,
                 });
                 setSelectedDraw(draw);
                 setIsEditWinnerModalOpen(true);
@@ -338,6 +341,7 @@ export default function DrawResults() {
         imageUrl?: string;
         testimony?: string;
         selectedPrize?: string;
+        drawResultUrl?: string | null;
       } = {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
@@ -353,6 +357,10 @@ export default function DrawResults() {
 
       if (winnerData.selectedPrize !== undefined) {
         requestBody.selectedPrize = winnerData.selectedPrize;
+      }
+
+      if (winnerData.drawResultUrl !== undefined) {
+        requestBody.drawResultUrl = winnerData.drawResultUrl;
       }
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
@@ -879,11 +887,13 @@ export default function DrawResults() {
             drawName={selectedDraw.name}
             drawType="major"
             totalEntries={selectedDraw.totalEntries}
+            enableImageField
             currentWinner={
               selectedDraw.winner
                 ? {
                     userId: selectedDraw.winner.userId,
                     imageUrl: selectedDraw.winner.imageUrl,
+                    drawResultUrl: selectedDraw.winner.drawResultUrl,
                   }
                 : undefined
             }
@@ -920,6 +930,7 @@ export default function DrawResults() {
             currentTestimony={editingWinner.testimony}
             currentSelectedPrize={editingWinner.selectedPrize}
             currentImageUrl={editingWinner.imageUrl}
+            currentDrawResultUrl={editingWinner.drawResultUrl}
             onUpdate={async () => {
               // Refresh the draws list after update
               await fetchDraws(pagination.currentPage);
