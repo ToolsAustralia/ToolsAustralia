@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import Image from "next/image";
 import { Check, Loader2, MapPin } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
-import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { formatNamePart } from "@/utils/display-name";
 import PaymentMethodSelector from "./PaymentMethodSelector";
 import ExistingAccountModal from "./ExistingAccountModal";
@@ -47,6 +46,7 @@ import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
 import LatestWinnersBadge from "../ui/LatestWinnersBadge";
+import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
@@ -258,11 +258,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   // Major draw winners from shared cache (homepage/promotions/modal) - only fetches if not already loaded
   const { data: majorDrawWinners = [], isLoading: majorDrawWinnersLoading } = useMajorDrawWinners();
-  const [currentWinnerSlideIndex, setCurrentWinnerSlideIndex] = useState(0);
-  const [isCarouselResetting, setIsCarouselResetting] = useState(false);
+  const winnerCarouselRef = useRef<HTMLDivElement | null>(null);
   const winnerCount = majorDrawWinners.length;
-  const carouselSlides = winnerCount > 1 ? [...majorDrawWinners, ...majorDrawWinners] : majorDrawWinners;
-  const totalCarouselSlides = carouselSlides.length;
 
   // Track if package selection modal has been auto-opened from promotion page
   // This prevents the modal from auto-opening multiple times during the same session
@@ -600,27 +597,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     validatePromoLink();
   }, [promoLinkCode, isOpen, activePlan]); // eslint-disable-line react-hooks/exhaustive-deps -- isPlaceholderPlan derived from activePlan
 
-  // Auto-rotate winner slide every 5 seconds, one direction only (always slide right)
+  // Compact winner strip: auto-advance horizontal snap scroll (user can swipe/scroll too)
   useEffect(() => {
     if (!isOpen || winnerCount <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentWinnerSlideIndex((prev) => (prev < winnerCount ? prev + 1 : 0));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isOpen, winnerCount]);
+    const el = winnerCarouselRef.current;
+    if (!el) return;
 
-  // When we land on the duplicate first slide (index === winnerCount), reset to 0 without animating
+    const tick = () => {
+      const node = winnerCarouselRef.current;
+      if (!node) return;
+      const page = node.clientWidth;
+      if (page <= 0) return;
+      const maxLeft = Math.max(0, node.scrollWidth - page);
+      const next = node.scrollLeft + page >= maxLeft - 2 ? 0 : node.scrollLeft + page;
+      node.scrollTo({ left: next, behavior: "smooth" });
+    };
+
+    const interval = setInterval(tick, 5000);
+    return () => clearInterval(interval);
+  }, [isOpen, winnerCount, majorDrawWinnersLoading]);
+
+  // Reset scroll when modal opens or winner list changes
   useEffect(() => {
-    if (winnerCount <= 1 || currentWinnerSlideIndex !== winnerCount) return;
-    const t = setTimeout(() => {
-      setIsCarouselResetting(true);
-      setCurrentWinnerSlideIndex(0);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setIsCarouselResetting(false));
-      });
-    }, 500);
-    return () => clearTimeout(t);
-  }, [currentWinnerSlideIndex, winnerCount]);
+    if (isOpen && winnerCarouselRef.current) {
+      winnerCarouselRef.current.scrollLeft = 0;
+    }
+  }, [isOpen, majorDrawWinners]);
 
   // Resolve billing details once so every Stripe call receives consistent data.
   const resolvedBillingDetails = React.useMemo(() => {
@@ -4774,7 +4776,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     : null;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false} className="dark:!bg-white">
+    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
       <ModalHeader
         title=""
         titleNode={
@@ -4846,19 +4848,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 )}
             {/* Step indicator: only for guests (2-step). Hidden for authenticated users to avoid redundant button-like UI. */}
             {!isAuthenticated && (
-              <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 divide-x divide-gray-200">
+              <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 divide-x divide-gray-200 dark:divide-neutral-700">
                 <button
                   type="button"
                   onClick={() => handleStepClick(1)}
                   style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                    currentStep === 1 ? "text-white font-bold" : "bg-gray-100 text-gray-500 font-medium hover:bg-gray-200"
+                    currentStep === 1
+                      ? "text-white font-bold"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium hover:bg-gray-200 dark:hover:bg-neutral-700"
                   }`}
                   aria-current={currentStep === 1 ? "step" : undefined}
                 >
                   <span
-                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 1 ? "bg-white" : "bg-gray-400 text-white"
+                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/40 ${
+                      currentStep === 1 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
                     }`}
                     style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
                   >
@@ -4873,18 +4877,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   style={hasCompletedRegistration && currentStep === 2 ? { backgroundColor: promoTheme.primary } : undefined}
                   className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
                     !hasCompletedRegistration
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed opacity-80"
+                      ? "bg-gray-100 dark:bg-neutral-900 text-gray-400 dark:text-neutral-500 cursor-not-allowed opacity-80"
                       : currentStep === 2
                         ? "text-white font-bold cursor-pointer"
-                        : "bg-gray-100 text-gray-500 font-medium cursor-pointer hover:bg-gray-200"
+                        : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium cursor-pointer hover:bg-gray-200 dark:hover:bg-neutral-700"
                   }`}
                   aria-current={currentStep === 2 ? "step" : undefined}
                   aria-disabled={!hasCompletedRegistration}
                   title={!hasCompletedRegistration ? "Complete your details first" : undefined}
                 >
                   <span
-                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 ${
-                      currentStep === 2 ? "bg-white" : "bg-gray-400 text-white"
+                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/40 ${
+                      currentStep === 2 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
                     }`}
                     style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
                   >
@@ -4900,8 +4904,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               <div className="space-y-3 sm:space-y-4">
                 {/* General error message */}
                 {registrationErrors.general && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                    <p className="text-sm text-red-600">{registrationErrors.general}</p>
+                  <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg p-3">
+                    <p className="text-sm text-red-600 dark:text-red-400">{registrationErrors.general}</p>
                   </div>
                 )}
 
@@ -5068,7 +5072,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       {/* Show Bonus Applied section when promo link is active */}
                       {promoLinkInfo?.isValid && promoLinkInfo.bonusEntries > 0 ? (
                         <div className="flex gap-2">
-                          <div className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl bg-gray-50 flex items-center text-sm sm:text-base text-gray-700">
+                          <div className="flex-1 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl bg-gray-50 flex items-center text-sm sm:text-base text-gray-700 dark:text-neutral-200">
                             {promoLinkInfo.bonusEntries} extra entries applied
                           </div>
                           <div className="h-11 bg-green-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
@@ -5219,7 +5223,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       <>
                         <h3
                           className={`text-xs sm:text-sm font-bold mb-1 sm:mb-2 ${
-                            promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "" : "text-gray-800"
+                            promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "" : "text-gray-800 dark:text-neutral-100"
                           }`}
                           style={promoEnhancedPlan?.metadata?.isUpsellOffer === true ? { color: promoTheme.primary } : undefined}
                         >
@@ -5250,7 +5254,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                 {promoEnhancedPlan?.name || "No package selected"}
                               </h4>
                               <p
-                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600" : ""}`}
+                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
@@ -5328,106 +5332,77 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             {currentStep === 2 && (
               <div className="mt-4 sm:mt-6">
                 <div className="flex justify-center w-full">
-                  <Image
-                    src="/images/safe-checkout-stripe.png"
-                    alt="Guaranteed safe & secure checkout - Powered by Stripe"
-                    width={300}
-                    height={75}
-                    className="w-full h-auto max-w-full object-contain"
-                  />
+                  <div className="w-full max-w-full bg-[#ffffff] rounded-lg p-2">
+                    <Image
+                      src="/images/safe-checkout-stripe.png"
+                      alt="Guaranteed safe & secure checkout powered by Stripe"
+                      width={600}
+                      height={160}
+                      className="w-full h-auto"
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Winner Announcement Section - Only on step 1 (hidden on step 2 / Billing Info) */}
+            {/* Compact winner strip: swipe/scroll + auto-advance every 5s (no section chrome) */}
             {currentStep !== 2 && (
-              <div className="mt-4 sm:mt-6">
+              <div className="mt-3 sm:mt-4">
                 {majorDrawWinnersLoading ? (
-                  <div className="flex flex-col items-center w-full">
-                    <div className="w-full aspect-[4/3] max-h-[14rem] sm:max-h-[18rem] rounded-lg bg-gray-200 animate-pulse" />
-                  </div>
+                  <div className="h-[92px] sm:h-[104px] w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-100 dark:bg-neutral-900 animate-pulse" />
                 ) : majorDrawWinners.length === 0 ? null : (
-                  <div className="flex flex-col items-center w-full overflow-hidden">
-                    
-                    <div className="relative w-full min-h-[14rem] sm:min-h-[18rem] overflow-hidden rounded-lg">
-                      <div
-                        className="flex"
-                        style={{
-                          width: `${totalCarouselSlides * 100}%`,
-                          transform: `translateX(-${(100 / totalCarouselSlides) * currentWinnerSlideIndex}%)`,
-                          transition: isCarouselResetting ? "none" : "transform 0.5s ease-out",
-                        }}
-                      >
-                        {carouselSlides.map((winner, idx) => {
-                          const displayImage =
-                            winner.imageUrl ||
-                            (winner.prize?.images?.[0]) ||
-                            "/images/placeholders/prize-placeholder.png";
-                          const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-                          return (
-                            <div
-                              key={`${winner.id}-${idx}`}
-                              className="flex-shrink-0 relative aspect-[4/3] max-h-[14rem] sm:max-h-[18rem] w-full overflow-hidden rounded-lg"
-                              style={{ width: `${100 / totalCarouselSlides}%` }}
-                            >
-                              <Image
-                                src={displayImage}
-                                alt={displayName}
-                                fill
-                                className="object-cover"
-                                sizes="(max-width: 640px) 100vw, 50vw"
-                              />
-                              <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-3 z-20 flex justify-center">
-                                <LatestWinnersBadge drawName={winner.drawName} size="small" className="sm:hidden" />
-                                <LatestWinnersBadge drawName={winner.drawName} size="large" className="hidden sm:inline-flex" />
-                              </div>
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-                              <div className="absolute bottom-0 left-0 right-0 z-10 p-3 sm:p-4">
-                                <div className="bg-black/75 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex items-center justify-between gap-3">
-                                  <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 flex-1 min-w-0">
-                                    <p className="text-base sm:text-xl font-bold font-['Poppins'] tracking-tight relative">
-                                      <span
-                                        className="absolute inset-0 bg-gradient-to-r from-yellow-400/30 via-white/40 to-yellow-400/30 bg-clip-text text-transparent blur-md opacity-60 animate-pulse"
-                                        aria-hidden
-                                      >
-                                        {displayName}
-                                      </span>
-                                      <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)]">
-                                        {displayName}
-                                      </span>
-                                      <span
-                                        className="absolute inset-0 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent blur-[2px] opacity-40 -z-0"
-                                        style={{ WebkitTextStroke: "1px rgba(255, 255, 255, 0.2)" } as React.CSSProperties}
-                                        aria-hidden
-                                      >
-                                        {displayName}
-                                      </span>
-                                    </p>
-                                    {winner.winnerState && (
-                                      <div className="flex items-center gap-1.5 sm:gap-2 relative z-10">
-                                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-300 flex-shrink-0" />
-                                        <span className="text-xs sm:text-sm text-gray-100">{winner.winnerState}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <p className="flex-shrink-0 text-[10px] sm:text-xs font-bold text-white relative z-10">
-                                    {(winner.drawDate
-                                      ? new Date(winner.drawDate)
-                                      : new Date(winner.selectedDate)
-                                    ).toLocaleDateString("en-AU", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })}
-                                  </p>
+                  <div
+                    ref={winnerCarouselRef}
+                    className="flex w-full overflow-x-auto snap-x snap-mandatory rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-black/20 [scrollbar-width:thin] scroll-smooth"
+                  >
+                    {majorDrawWinners.map((winner) => {
+                      const displayImage =
+                        winner.imageUrl ||
+                        (winner.prize?.images?.[0]) ||
+                        "/images/placeholders/prize-placeholder.png";
+                      const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+                      const displayDate = (
+                        winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)
+                      ).toLocaleDateString("en-AU", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      });
+                      return (
+                        <div
+                          key={winner.id}
+                          className="relative h-[92px] sm:h-[104px] w-full min-w-full flex-shrink-0 snap-center overflow-hidden bg-neutral-900"
+                        >
+                          <Image
+                            src={displayImage}
+                            alt={displayName}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 100vw, 480px"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+                          <div className="absolute top-1.5 left-1/2 z-10 -translate-x-1/2 sm:top-2">
+                            <LatestWinnersBadge drawName={winner.drawName} size="small" className="scale-90 sm:scale-100" />
+                          </div>
+                          <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between gap-2 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold font-['Poppins'] text-white sm:text-sm drop-shadow-md">
+                                {displayName}
+                              </p>
+                              {winner.winnerState ? (
+                                <div className="mt-0.5 flex items-center gap-1 text-[10px] text-white/85 sm:text-xs">
+                                  <MapPin className="h-3 w-3 shrink-0 text-white/70" />
+                                  <span className="truncate">{winner.winnerState}</span>
                                 </div>
-                              </div>
+                              ) : null}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  
+                            <p className="shrink-0 text-[10px] font-semibold tabular-nums text-white/90 sm:text-xs">
+                              {displayDate}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

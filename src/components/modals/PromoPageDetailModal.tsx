@@ -53,28 +53,28 @@ export default function PromoPageDetailModal({
       />
       <ModalContent className="p-4 sm:p-6 space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4 text-red-700 dark:text-red-300">
             {(error as Error).message}
           </div>
         )}
 
         {/* Visits from other toolset pages */}
         {data?.visitsFrom && data.visitsFrom.length > 0 && (
-          <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-            <h4 className="text-sm font-semibold text-indigo-900 mb-2">
+          <div className="bg-indigo-50 dark:bg-indigo-950/25 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/40">
+            <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200 mb-2">
               Visits from other landing pages
             </h4>
-            <p className="text-xs text-indigo-700 mb-3">
+            <p className="text-xs text-indigo-700 dark:text-indigo-300 mb-3">
               Unique visitors who landed on another promo page first, then navigated here via the &quot;Explore other toolsets&quot; carousel.
             </p>
             <div className="flex flex-wrap gap-2">
               {data.visitsFrom.map(({ referrerSlug, visits }) => (
                 <span
                   key={referrerSlug}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-sm font-medium text-indigo-900"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-900 border border-indigo-200 dark:border-indigo-800/60 text-sm font-medium text-indigo-900 dark:text-indigo-200"
                 >
                   <span>{getPrizeLabel(referrerSlug) ?? referrerSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>
-                  <span className="text-indigo-600">({formatNumber(visits)})</span>
+                  <span className="text-indigo-600 dark:text-indigo-400">({formatNumber(visits)})</span>
                 </span>
               ))}
             </div>
@@ -116,8 +116,8 @@ export default function PromoPageDetailModal({
         )}
 
         {/* Campaign breakdown table */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
+        <div className="bg-white dark:bg-neutral-900/70 rounded-xl shadow-lg border-2 border-red-100 dark:border-red-900/35 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 p-4 border-b border-gray-200 dark:border-neutral-700">
             Breakdown by Ad / Email / Campaign
           </h3>
           <UTMCampaignBreakdownTable

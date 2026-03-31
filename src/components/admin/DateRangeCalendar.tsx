@@ -137,28 +137,28 @@ export default function DateRangeCalendar({
           <button
             type="button"
             onClick={() => onMonthChange(subMonths(month, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             aria-label="Previous month"
           >
-            <ChevronLeft className="w-4 h-4 text-gray-600" />
+            <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
           </button>
 
-          <h3 className="text-base font-semibold text-gray-900">{monthName}</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-neutral-50">{monthName}</h3>
 
           <button
             type="button"
             onClick={() => onMonthChange(addMonths(month, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             aria-label="Next month"
           >
-            <ChevronRight className="w-4 h-4 text-gray-600" />
+            <ChevronRight className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
           </button>
         </div>
 
         {/* Day Headers */}
         <div className="grid grid-cols-7 gap-1 mb-2">
           {dayNames.map((day) => (
-            <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
+            <div key={day} className="text-center text-xs font-medium text-gray-500 dark:text-neutral-500 py-2">
               {day}
             </div>
           ))}
@@ -179,15 +179,18 @@ export default function DateRangeCalendar({
             let dayClassName = "h-8 sm:h-10 w-full text-sm rounded-lg transition-all duration-200 flex items-center justify-center ";
 
             if (isDisabled) {
-              dayClassName += "text-gray-300 cursor-not-allowed bg-gray-50";
+              dayClassName +=
+                "text-gray-300 dark:text-neutral-600 cursor-not-allowed bg-gray-50 dark:bg-neutral-900/80";
             } else if (isSelected) {
-              dayClassName += "bg-red-600 text-white font-bold shadow-md hover:bg-red-700";
+              dayClassName += "bg-red-600 dark:bg-red-600 text-white font-bold shadow-md hover:bg-red-700 dark:hover:bg-red-700";
             } else if (isInRange) {
-              dayClassName += "bg-red-100 text-red-700 font-medium hover:bg-red-200";
+              dayClassName +=
+                "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 font-medium hover:bg-red-200 dark:hover:bg-red-900/40";
             } else if (isToday) {
-              dayClassName += "bg-gray-100 text-gray-900 font-medium hover:bg-gray-200 border-2 border-gray-300";
+              dayClassName +=
+                "bg-gray-100 dark:bg-neutral-800 text-gray-900 dark:text-neutral-100 font-medium hover:bg-gray-200 dark:hover:bg-neutral-700 border-2 border-gray-300 dark:border-neutral-600";
             } else {
-              dayClassName += "text-gray-700 hover:bg-gray-100";
+              dayClassName += "text-gray-800 dark:text-neutral-100 hover:bg-gray-100 dark:hover:bg-neutral-800";
             }
 
             return (

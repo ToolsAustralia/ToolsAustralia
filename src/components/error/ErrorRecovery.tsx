@@ -110,7 +110,7 @@ export const ErrorRecovery: React.FC<ErrorRecoveryProps> = ({
       case "validation":
         return "text-yellow-600 bg-yellow-50 border-yellow-200";
       default:
-        return "text-gray-600 bg-gray-50 border-gray-200";
+        return "text-gray-600 dark:text-neutral-400 bg-gray-50 border-gray-200";
     }
   };
 
@@ -258,7 +258,7 @@ export const FallbackContent: React.FC<{
       <div className="max-w-md mx-auto">
         <Wifi className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
-        <p className="text-gray-600 mb-4">{message}</p>
+        <p className="text-gray-600 dark:text-neutral-400 mb-4">{message}</p>
 
         {onRetry && (
           <button

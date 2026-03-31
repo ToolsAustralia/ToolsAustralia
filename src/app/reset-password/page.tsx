@@ -180,7 +180,7 @@ function ResetPasswordContent() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
           {hasToken ? "Set a new password" : "Forgot your password?"}
         </h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-sm text-gray-600 dark:text-neutral-400 mb-6">
           {hasToken
             ? "Enter a new password for your Tools Australia account. Make sure it’s something secure and easy to remember."
             : "Enter your email address and we’ll send you a secure link to reset your password."}
@@ -189,7 +189,7 @@ function ResetPasswordContent() {
         {!hasToken ? (
           <form onSubmit={handleRequestReset} className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="email">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="email">
                 Email address
               </label>
               <input
@@ -220,7 +220,7 @@ function ResetPasswordContent() {
         ) : (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="new-password">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="new-password">
                 New password
               </label>
               <input
@@ -235,7 +235,7 @@ function ResetPasswordContent() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="confirm-password">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="confirm-password">
                 Confirm new password
               </label>
               <input
@@ -259,7 +259,7 @@ function ResetPasswordContent() {
           </form>
         )}
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-gray-600 dark:text-neutral-400">
           <span>Remembered your password? </span>
           <Link href="/login" className="font-semibold text-[#ee0000] hover:underline">
             Back to sign in

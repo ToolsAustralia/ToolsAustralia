@@ -25,6 +25,7 @@ import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import ThemeMetaSync from "@/components/system/ThemeMetaSync";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
 
 // Export loading components for global use
@@ -83,6 +84,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ErrorBoundary>
       <ThemeProvider>
+        <ThemeMetaSync />
         <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
           <QueryClientProvider client={queryClient}>
             <ApiErrorBoundary>

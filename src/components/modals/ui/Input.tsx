@@ -61,7 +61,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <div className={`space-y-1.5 sm:space-y-2 ${wrapperClassName}`}>
         {/* Label */}
         {label && (
-          <label htmlFor={id} className={`block font-medium text-gray-700 dark:text-gray-300 ${wrapperClassName ? "" : "text-xs sm:text-sm"}`}>
+          <label htmlFor={id} className={`block font-medium text-gray-700 dark:text-neutral-300 ${wrapperClassName ? "" : "text-xs sm:text-sm"}`}>
             {label} {required && <span className="text-red-500 dark:text-red-400">*</span>}
           </label>
         )}
@@ -74,7 +74,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               <button
                 type="button"
                 onClick={onIconClick}
-                className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400"
+                className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 dark:text-gray-500 dark:hover:text-gray-400"
               >
                 <Icon className="w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
               </button>
@@ -97,14 +97,14 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             step={step}
             maxLength={maxLength}
             autoComplete={autoComplete}
-            className={`w-full ${sizeStyles[size]} border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+            className={`w-full ${sizeStyles[size]} border rounded-xl focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
               Icon && !onIconClick ? "pl-10 sm:pl-11 lg:pl-12" : ""
             } ${Icon && onIconClick ? "pr-9 sm:pr-10" : ""} ${
-              error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-600"
+              error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-700"
             } ${
               disabled
                 ? "bg-gray-100 dark:bg-neutral-800 cursor-not-allowed text-gray-900 dark:text-gray-100"
-                : "bg-white dark:bg-neutral-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 hover:border-red-400 dark:hover:border-neutral-500 hover:shadow-sm"
+                : "bg-white dark:bg-neutral-800/80 text-gray-900 dark:text-neutral-100 placeholder-gray-500 dark:placeholder-neutral-500 hover:border-red-400 dark:hover:border-neutral-600 hover:shadow-sm"
             } ${className}`}
           />
         </div>

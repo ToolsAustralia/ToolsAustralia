@@ -29,20 +29,20 @@ export function getStatusColor(status: string) {
   switch (status) {
     case "pending":
     case "new":
-      return "bg-yellow-100 text-yellow-800";
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/45 dark:text-yellow-200";
     case "under_review":
     case "in_progress":
-      return "bg-blue-100 text-blue-800";
+      return "bg-blue-100 text-blue-800 dark:bg-blue-950/45 dark:text-blue-200";
     case "approved":
     case "resolved":
-      return "bg-green-100 text-green-800";
+      return "bg-green-100 text-green-800 dark:bg-green-950/45 dark:text-green-300";
     case "rejected":
     case "closed":
-      return "bg-red-100 text-red-800";
+      return "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300";
     case "contacted":
-      return "bg-purple-100 text-purple-800";
+      return "bg-purple-100 text-purple-800 dark:bg-purple-950/45 dark:text-purple-300";
     default:
-      return "bg-gray-100 text-gray-800";
+      return "bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-200";
   }
 }
 
@@ -60,7 +60,7 @@ export default function StatusSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+        className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
       >
         {statuses.map((s) => (
           <option key={s.value} value={s.value}>

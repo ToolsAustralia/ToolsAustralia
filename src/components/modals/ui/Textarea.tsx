@@ -38,8 +38,8 @@ const Textarea: React.FC<TextareaProps> = ({
     <div className={`space-y-2 ${wrapperClassName}`}>
       {/* Label */}
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-          {label} {required && <span className="text-red-500">*</span>}
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+          {label} {required && <span className="text-red-500 dark:text-red-400">*</span>}
         </label>
       )}
 
@@ -53,14 +53,20 @@ const Textarea: React.FC<TextareaProps> = ({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 resize-none ${
-          error ? "border-red-500 bg-red-50" : "border-gray-300"
-        } ${disabled ? "bg-gray-100 cursor-not-allowed" : "hover:border-red-400 hover:shadow-sm"} ${className}`}
+        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 resize-none text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 ${
+          error
+            ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500"
+            : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
+        } ${
+          disabled
+            ? "bg-gray-100 dark:bg-neutral-800 cursor-not-allowed text-gray-500 dark:text-neutral-500"
+            : "hover:border-red-400 dark:hover:border-red-500/60 hover:shadow-sm"
+        } ${className}`}
       />
 
       {/* Error Message */}
       {error && (
-        <p className="text-red-500 text-sm flex items-center gap-1">
+        <p className="text-red-500 dark:text-red-400 text-sm flex items-center gap-1">
           <AlertCircle className="w-4 h-4" />
           {error}
         </p>

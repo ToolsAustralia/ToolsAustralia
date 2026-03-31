@@ -262,13 +262,13 @@ const Select: React.FC<SelectProps> = ({
           type="button"
           onClick={toggleDropdown}
           disabled={disabled}
-          className={`w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-            error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-600"
+          className={`w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm border rounded-xl text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+            error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-700"
           } ${
             disabled
-              ? "bg-gray-100 dark:bg-neutral-800 cursor-not-allowed text-gray-500 dark:text-gray-400"
-              : "hover:border-red-400 dark:hover:border-neutral-500 hover:shadow-sm cursor-pointer bg-white dark:bg-neutral-900"
-          } ${isOpen ? "border-red-500 ring-2 ring-red-500/20" : ""}`}
+              ? "bg-gray-100 dark:!bg-neutral-800 cursor-not-allowed text-gray-500 dark:text-neutral-500"
+              : "hover:border-red-400 dark:hover:border-neutral-600 hover:shadow-sm cursor-pointer bg-[#ffffff] dark:!bg-neutral-900"
+          } ${isOpen ? "border-red-500 ring-2 ring-red-500/20 dark:border-red-500" : ""}`}
         >
           <span className={selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
             {selectedOption ? selectedOption.label : placeholder}
@@ -284,7 +284,7 @@ const Select: React.FC<SelectProps> = ({
           <div
             ref={optionsListRef}
             data-dropdown-list
-            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden`}
+            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-700 rounded-xl shadow-lg overflow-y-scroll overflow-x-hidden`}
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",
@@ -308,7 +308,7 @@ const Select: React.FC<SelectProps> = ({
                       setSearchTerm(e.target.value);
                       setHighlightedIndex(-1);
                     }}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-md bg-[#ffffff] dark:!bg-neutral-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
                   />
                 </div>
               </div>
@@ -350,7 +350,7 @@ const Select: React.FC<SelectProps> = ({
 
       {/* Error Message */}
       {error && (
-        <p className="text-red-500 text-xs sm:text-sm flex items-center gap-1">
+        <p className="text-red-500 dark:text-red-400 text-xs sm:text-sm flex items-center gap-1">
           <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           {error}
         </p>

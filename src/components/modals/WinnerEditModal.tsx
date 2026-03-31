@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, MessageSquare, Gift, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Trophy, MessageSquare, Gift, AlertCircle, Image as ImageIcon, Link2 } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import ImageUpload from "./ui/ImageUpload";
 import { useToast } from "@/components/ui/Toast";
@@ -17,6 +17,7 @@ interface WinnerEditModalProps {
   currentTestimony?: string | null;
   currentSelectedPrize?: string | null;
   currentImageUrl?: string | null;
+  currentDrawResultUrl?: string | null;
   onUpdate: () => void | Promise<void>;
 }
 
@@ -34,12 +35,14 @@ export default function WinnerEditModal({
   currentTestimony,
   currentSelectedPrize,
   currentImageUrl,
+  currentDrawResultUrl,
   onUpdate,
 }: WinnerEditModalProps) {
   const { showToast } = useToast();
   const [testimony, setTestimony] = useState("");
   const [selectedPrize, setSelectedPrize] = useState("");
   const [winnerImages, setWinnerImages] = useState<(File | string)[]>([]);
+  const [drawResultUrl, setDrawResultUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,9 +52,10 @@ export default function WinnerEditModal({
       setTestimony(currentTestimony || "");
       setSelectedPrize(currentSelectedPrize || "");
       setWinnerImages(currentImageUrl ? [currentImageUrl] : []);
+      setDrawResultUrl(currentDrawResultUrl?.trim() || "");
       setError(null);
     }
-  }, [isOpen, currentTestimony, currentSelectedPrize, currentImageUrl]);
+  }, [isOpen, currentTestimony, currentSelectedPrize, currentImageUrl, currentDrawResultUrl]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +68,25 @@ export default function WinnerEditModal({
         testimony?: string | null;
         selectedPrize?: string | null;
         imageUrl?: string | null;
+        drawResultUrl?: string | null;
       } = {};
+
+      const trimmedVerification = drawResultUrl.trim();
+      if (trimmedVerification) {
+        try {
+          new URL(trimmedVerification);
+        } catch {
+          setError("Draw result link must be a full URL (e.g. https://randomdraws.com.au/...)");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      const prevVerification =
+        currentDrawResultUrl && currentDrawResultUrl.trim() !== "" ? currentDrawResultUrl.trim() : null;
+      const nextVerification = trimmedVerification === "" ? null : trimmedVerification;
+      if (nextVerification !== prevVerification) {
+        updateData.drawResultUrl = nextVerification;
+      }
 
       // Only include fields that have changed
       if (testimony.trim() !== (currentTestimony || "")) {
@@ -134,7 +156,7 @@ export default function WinnerEditModal({
       showToast({
         type: "success",
         title: "Winner Updated",
-        message: "Winner testimony, prize selection, and photo have been updated successfully.",
+        message: "Winner details were updated successfully.",
         duration: 5000,
       });
 
@@ -167,7 +189,7 @@ export default function WinnerEditModal({
           {/* Prize Selection - Only for major draws */}
           {drawType === "major" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
                   <Gift className="w-4 h-4 text-gray-500" />
                   Selected Prize
@@ -189,7 +211,7 @@ export default function WinnerEditModal({
           {/* Winner Photo - Only for major draws */}
           {drawType === "major" && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-gray-500" />
                   Winner Photo
@@ -211,9 +233,29 @@ export default function WinnerEditModal({
             </div>
           )}
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-gray-500" />
+                Draw result link (optional)
+              </div>
+            </label>
+            <input
+              type="url"
+              value={drawResultUrl}
+              onChange={(e) => setDrawResultUrl(e.target.value)}
+              placeholder="https://randomdraws.com.au/..."
+              className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white transition-all duration-200"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Shown on the public draw results page when you want to link to Random Draws or another verification URL.
+              Clear the field to remove the link.
+            </p>
+          </div>
+
           {/* Testimony Field - Rich Text Editor */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-gray-500" />
                 Winner Testimony

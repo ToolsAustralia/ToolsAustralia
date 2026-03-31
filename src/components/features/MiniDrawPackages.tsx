@@ -541,7 +541,7 @@ export default function MiniDrawPackages({
           <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center">
             <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
           </div>
-          <h3 className="text-sm sm:text-base font-bold text-gray-900">Choose Your Pack</h3>
+          <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Choose Your Pack</h3>
         </div>
         {calculatedUserEntryCount > 0 && (
           <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
@@ -557,8 +557,8 @@ export default function MiniDrawPackages({
         <div
           className={`mb-3 sm:mb-4 text-center text-[10px] sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
             isSoldOut
-              ? "bg-red-50 text-red-600 border border-red-100"
-              : "bg-gray-50 text-gray-600 border border-gray-100"
+              ? "bg-red-50 dark:bg-red-950/35 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40"
+              : "bg-gray-50 dark:bg-neutral-800/80 text-gray-600 dark:text-neutral-300 border border-gray-100 dark:border-neutral-700"
           }`}
         >
           {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining.toLocaleString()} entries remaining`}

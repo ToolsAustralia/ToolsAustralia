@@ -72,12 +72,12 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full mx-2 sm:mx-4 max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-2xl shadow-2xl max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full mx-2 sm:mx-4 max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden">
         <ModalHeader title="Payment Methods" onClose={onClose} />
 
         <ModalContent>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg mb-4">
               <p className="font-medium">Error</p>
               <p className="text-sm">{error}</p>
             </div>
@@ -86,15 +86,15 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
           {loading && (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto mb-2"></div>
-              <p className="text-gray-600">Loading payment methods...</p>
+              <p className="text-gray-600 dark:text-neutral-400">Loading payment methods...</p>
             </div>
           )}
 
           {!loading && paymentMethods.length === 0 && (
             <div className="text-center py-12">
-              <CreditCard className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Saved Payment Methods</h3>
-              <p className="text-gray-600 mb-6">You haven&apos;t saved any payment methods yet.</p>
+              <CreditCard className="w-16 h-16 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">No Saved Payment Methods</h3>
+              <p className="text-gray-600 dark:text-neutral-400 mb-6">You haven&apos;t saved any payment methods yet.</p>
               {showAddNew && onAddNew && (
                 <Button
                   onClick={onAddNew}
@@ -115,31 +115,31 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
                   key={paymentMethod.paymentMethodId}
                   className={`border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 ${
                     paymentMethod.isDefault
-                      ? "border-blue-500 bg-white"
-                      : "border-gray-200 bg-white hover:border-gray-300"
+                      ? "border-blue-500 bg-white dark:bg-neutral-900/70 dark:border-blue-600"
+                      : "border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 hover:border-gray-300 dark:hover:border-neutral-500"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 sm:gap-4">
                       {/* Card Icon */}
-                      <div className="flex items-center justify-center w-10 h-6 sm:w-12 sm:h-8 bg-gray-100 rounded-lg">
+                      <div className="flex items-center justify-center w-10 h-6 sm:w-12 sm:h-8 bg-gray-100 dark:bg-neutral-800 rounded-lg">
                         <span className="text-lg sm:text-xl">{getCardBrandIcon(paymentMethod.card?.brand || "")}</span>
                       </div>
 
                       {/* Card Details */}
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-gray-900 text-xs sm:text-base">
+                          <h3 className="font-semibold text-gray-900 dark:text-neutral-100 text-xs sm:text-base">
                             {paymentMethod.card?.brand?.toUpperCase() || "CARD"} •••• {paymentMethod.card?.last4}
                           </h3>
                           {paymentMethod.isDefault && (
                             <div className="flex items-center gap-1">
                               <Star className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500 fill-current" />
-                              <span className="text-xs text-blue-600 font-medium">DEFAULT</span>
+                              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">DEFAULT</span>
                             </div>
                           )}
                         </div>
-                        <p className="text-xs sm:text-sm text-gray-600">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
                           Expires{" "}
                           {formatExpiryDate(paymentMethod.card?.expMonth || 0, paymentMethod.card?.expYear || 0)}
                         </p>
@@ -187,7 +187,7 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
               ))}
 
               {showAddNew && onAddNew && (
-                <div className="pt-4 border-t border-gray-200">
+                <div className="pt-4 border-t border-gray-200 dark:border-neutral-700">
                   <Button
                     onClick={onAddNew}
                     className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"

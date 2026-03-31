@@ -3,8 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Settings, Sun, Moon, ArrowLeft, AlertTriangle, Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
-import { useTheme } from "@/hooks/useTheme";
+import { Settings, ArrowLeft, AlertTriangle, Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
+import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
 
 interface DashboardHeaderProps {
   title?: string;
@@ -33,8 +33,6 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
-
   const isSettingsPage = pathname?.includes("/settings");
 
   const handleBack = () => {
@@ -86,17 +84,7 @@ export default function DashboardHeader({
               </nav>
 
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={toggleTheme}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-                  aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-                >
-                  {theme === "light" ? (
-                    <Moon className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-                  ) : (
-                    <Sun className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-                  )}
-                </button>
+                <HeaderThemeToggle />
 
                 {!isSettingsPage && (
                   <button

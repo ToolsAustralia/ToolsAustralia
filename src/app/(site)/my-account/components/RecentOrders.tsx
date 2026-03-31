@@ -50,7 +50,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
           </svg>
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Recent Orders</h3>
-        <p className="text-gray-600">Your order history will appear here</p>
+        <p className="text-gray-600 dark:text-neutral-400">Your order history will appear here</p>
       </div>
     );
   }
@@ -64,11 +64,11 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
       case "processing":
         return "bg-yellow-100 text-yellow-800";
       case "pending":
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
       case "cancelled":
         return "bg-red-100 text-red-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
     }
   };
 
@@ -98,7 +98,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
                 </span>
               </div>
 
-              <p className="text-sm text-gray-600 mt-1">{getOrderType(order)}</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">{getOrderType(order)}</p>
 
               <p className="text-sm text-gray-500 mt-1">
                 {new Date(order.createdAt).toLocaleDateString("en-AU", {
@@ -137,7 +137,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
           {/* Tracking Number */}
           {order.trackingNumber && (
             <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 <span className="font-medium">Tracking:</span> {order.trackingNumber}
               </p>
             </div>

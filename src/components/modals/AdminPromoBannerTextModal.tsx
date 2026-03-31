@@ -391,7 +391,7 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
 
               <FormSection title="Optional Date Boundaries">
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">
                     Optionally limit when the recurring pattern applies. Leave empty for indefinite recurrence.
                   </p>
                   <DateRangeCalendar

@@ -98,10 +98,10 @@ export default function CustomDateRangeModal({
     <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" closeOnBackdrop={true}>
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Select Date Range</h2>
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-neutral-100">Select Date Range</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
             aria-label="Close"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,14 +115,14 @@ export default function CustomDateRangeModal({
           <div className="flex flex-row gap-2 sm:gap-4 items-end">
             {/* Quick Select Buttons */}
             <div className="flex-shrink-0">
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Quick Select</h3>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2 sm:mb-3">Quick Select</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
                     handleQuickSelect(7);
                     setSelectedMajorDraw("");
                   }}
-                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
                 >
                   <span className="sm:hidden">7D</span>
                   <span className="hidden sm:inline">Last 7 days</span>
@@ -132,7 +132,7 @@ export default function CustomDateRangeModal({
                     handleQuickSelect(30);
                     setSelectedMajorDraw("");
                   }}
-                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-800 dark:text-neutral-100 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors whitespace-nowrap"
                 >
                   <span className="sm:hidden">30D</span>
                   <span className="hidden sm:inline">Last 30 days</span>
@@ -143,7 +143,7 @@ export default function CustomDateRangeModal({
             {/* Major Draw Selection - Dropdown */}
             {majorDraws.length > 0 && (
               <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Major Draws</h3>
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-neutral-200 mb-2 sm:mb-3">Major Draws</h3>
                 <Dropdown
                   options={majorDrawOptions}
                   value={selectedMajorDraw}
@@ -179,9 +179,9 @@ export default function CustomDateRangeModal({
 
         {/* Selected Dates Display */}
         {startDate && endDate && (
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
-            <div className="text-xs sm:text-sm text-gray-600 mb-1">Selected Range:</div>
-            <div className="text-sm sm:text-base font-semibold text-gray-900">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/70 dark:border dark:border-neutral-700 rounded-lg">
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Selected Range:</div>
+            <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100">
               {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
             </div>
           </div>
@@ -192,13 +192,13 @@ export default function CustomDateRangeModal({
           <div className="flex flex-row gap-2 sm:gap-3">
             <button
               onClick={handleClear}
-              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-800 dark:text-neutral-100 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
             >
               Clear
             </button>
             <button
               onClick={onClose}
-              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-800 dark:text-neutral-100 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
             >
               Cancel
             </button>

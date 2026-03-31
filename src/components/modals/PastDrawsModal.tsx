@@ -41,18 +41,18 @@ const PastDrawsModal: React.FC<PastDrawsModalProps> = ({
             {Array.from({ length: 3 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse rounded-2xl border border-gray-100 bg-white p-3 sm:p-4"
+                className="animate-pulse rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 dark:border-neutral-700 dark:bg-neutral-900/80"
               >
                 <div className="flex flex-row gap-3 sm:gap-4">
-                  <div className="flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-xl bg-gray-200" />
+                  <div className="flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-xl bg-gray-200 dark:bg-neutral-700" />
                   <div className="flex-1 space-y-3">
-                    <div className="h-4 bg-gray-200 rounded w-16" />
-                    <div className="h-5 bg-gray-200 rounded w-3/4" />
+                    <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-16" />
+                    <div className="h-5 bg-gray-200 dark:bg-neutral-700 rounded w-3/4" />
                     <div className="flex gap-3">
-                      <div className="h-3 bg-gray-200 rounded w-24" />
-                      <div className="h-3 bg-gray-200 rounded w-20" />
+                      <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-24" />
+                      <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-20" />
                     </div>
-                    <div className="h-7 bg-amber-100 rounded-lg w-24" />
+                    <div className="h-7 bg-amber-100 dark:bg-amber-900/40 rounded-lg w-24" />
                   </div>
                 </div>
               </div>
@@ -61,13 +61,13 @@ const PastDrawsModal: React.FC<PastDrawsModalProps> = ({
         )}
 
         {error && !isLoading && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-950/35 dark:text-red-300">
             <p className="font-semibold">Something went wrong loading your draw history.</p>
             <p className="mt-1">
               Please try again or contact support if the problem continues.{" "}
               <button
                 onClick={() => window.location.reload()}
-                className="text-red-600 underline underline-offset-2 hover:text-red-500"
+                className="text-red-600 underline underline-offset-2 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                 type="button"
               >
                 Retry now
@@ -91,7 +91,7 @@ const PastDrawsModal: React.FC<PastDrawsModalProps> = ({
           ))}
 
         {!isLoading && !error && draws.length > 0 && (
-          <p className="text-center text-xs text-gray-400 pt-2 pb-1">
+          <p className="text-center text-xs text-gray-400 dark:text-neutral-500 pt-2 pb-1">
             Showing {draws.length} completed{" "}
             {draws.length === 1 ? "draw" : "draws"} you entered
           </p>

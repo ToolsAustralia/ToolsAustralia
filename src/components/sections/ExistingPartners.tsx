@@ -65,7 +65,7 @@ export default function ExistingPartners() {
 
         {/* Partner Logos Grid */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
             Featured Partners
           </h3>
 
@@ -85,7 +85,7 @@ export default function ExistingPartners() {
                   />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="text-sm font-medium text-gray-800 font-['Poppins']">{brand.name}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
                   <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                 </div>
               </div>
@@ -93,7 +93,7 @@ export default function ExistingPartners() {
           </div>
 
           {/* Mobile Scroll */}
-          <div className="lg:hidden overflow-x-auto scrollbar-hide">
+          <div className="lg:hidden overflow-x-auto brand-scrollbar">
             <div className="flex gap-6 pb-4 w-max">
               {partnerBrands.map((brand, index) => (
                 <div key={index} className="flex-shrink-0 w-32">
@@ -109,7 +109,7 @@ export default function ExistingPartners() {
                     />
                   </div>
                   <div className="text-center mt-2">
-                    <p className="text-sm font-medium text-gray-800 font-['Poppins']">{brand.name}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
                     <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                   </div>
                 </div>
@@ -120,7 +120,7 @@ export default function ExistingPartners() {
 
         {/* Partner Testimonials */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
             What Our Partners Say
           </h3>
 
@@ -151,7 +151,7 @@ export default function ExistingPartners() {
                 </div>
 
                 {/* Testimonial */}
-                <p className="text-gray-600 font-['Inter'] mb-6 leading-relaxed">
+                <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] mb-6 leading-relaxed">
                   &quot;{testimonial.testimonial}&quot;
                 </p>
 
@@ -162,7 +162,7 @@ export default function ExistingPartners() {
 
                 {/* Author */}
                 <div className="border-t pt-4">
-                  <p className="font-bold text-gray-800 font-['Poppins']">{testimonial.representative}</p>
+                  <p className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins']">{testimonial.representative}</p>
                   <p className="text-sm text-gray-500 font-['Inter']">{testimonial.position}</p>
                   <p className="text-sm font-medium text-[#ee0000] font-['Inter']">{testimonial.company}</p>
                 </div>
@@ -174,10 +174,10 @@ export default function ExistingPartners() {
         {/* Partner Success Stats */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-3xl p-8 lg:p-12">
           <div className="text-center mb-10">
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 mb-4 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-['Poppins']">
               Partnership Success by the Numbers
             </h3>
-            <p className="text-gray-600 font-['Inter'] max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">
               Our partners consistently achieve outstanding results through our platform
             </p>
           </div>
@@ -185,38 +185,38 @@ export default function ExistingPartners() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center">
               <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">150%</div>
-              <div className="text-gray-600 font-['Inter']">Average Sales Increase</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Sales Increase</div>
             </div>
 
             <div className="text-center">
               <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">12K</div>
-              <div className="text-gray-600 font-['Inter']">Avg New Customers</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Avg New Customers</div>
             </div>
 
             <div className="text-center">
               <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">99%</div>
-              <div className="text-gray-600 font-['Inter']">Partner Satisfaction</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Partner Satisfaction</div>
             </div>
 
             <div className="text-center">
               <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">4.9</div>
-              <div className="text-gray-600 font-['Inter']">Average Rating</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Rating</div>
             </div>
           </div>
 
           {/* Call to Action */}
           <div className="text-center mt-10 pt-8 border-t border-gray-200">
-            <p className="text-gray-600 font-['Inter'] mb-4">Ready to join these successful partners?</p>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] mb-4">Ready to join these successful partners?</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>No setup fees</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span>Dedicated support</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                 <span>Flexible terms</span>
               </div>

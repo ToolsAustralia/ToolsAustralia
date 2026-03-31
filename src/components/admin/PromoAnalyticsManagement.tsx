@@ -286,11 +286,12 @@ export default function PromoAnalyticsManagement() {
   };
 
   const getSortIcon = (col: keyof PromoPageMetrics) => {
-    if (sortColumn !== col) return <ArrowUpDown className="w-3.5 h-3.5 opacity-50" />;
+    if (sortColumn !== col)
+      return <ArrowUpDown className="w-3.5 h-3.5 opacity-50 text-gray-500 dark:text-neutral-500" />;
     return sortOrder === "asc" ? (
-      <ArrowUp className="w-3.5 h-3.5" />
+      <ArrowUp className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
     ) : (
-      <ArrowDown className="w-3.5 h-3.5" />
+      <ArrowDown className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0" />
     );
   };
 
@@ -300,7 +301,7 @@ export default function PromoAnalyticsManagement() {
       <span className="inline-flex items-center gap-1 max-w-[min(100%,11rem)]">
         <span>{label}</span>
         <span
-          className="inline-flex shrink-0 text-gray-400 hover:text-gray-600 cursor-help"
+          className="inline-flex shrink-0 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 cursor-help"
           title={hint}
           aria-label={hint}
         >
@@ -335,7 +336,7 @@ export default function PromoAnalyticsManagement() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-lg font-bold text-gray-900">Promo Page Analytics</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Promo Page Analytics</h2>
         {isLgUp ? <div className="flex items-center gap-2">{promoDateRangeToggle}</div> : null}
       </div>
       {!isLgUp && slotEl
@@ -360,7 +361,7 @@ export default function PromoAnalyticsManagement() {
       />
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-lg p-4 text-red-700 dark:text-red-300">
           {(error as Error).message}
         </div>
       )}
@@ -407,7 +408,7 @@ export default function PromoAnalyticsManagement() {
         />
       </div>
 
-      <p className="text-xs text-gray-600 leading-relaxed max-w-4xl">
+      <p className="text-xs text-gray-600 dark:text-neutral-400 leading-relaxed max-w-4xl">
         Each table row compares <strong>unique visitors to that page</strong> with{" "}
         <strong>new accounts</strong> attributed to that page. V→S % can exceed 100% when several
         accounts are created from the same browser session, or when a visit was not recorded but
@@ -415,57 +416,74 @@ export default function PromoAnalyticsManagement() {
       </p>
 
       {/* Channel Attribution (UTM Source: Klaviyo, Facebook, etc.) */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-        <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200 flex items-center gap-2">
-          <Hash className="w-5 h-5 text-indigo-500" />
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2">
+          <Hash className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
           Channel Attribution (UTM Source)
         </h3>
-        <p className="text-sm text-gray-500 px-4 pt-2 pb-1">
+        <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
           Unique visitors, new registrations, and conversions by marketing channel (e.g. Klaviyo,
-          Facebook). Add <code className="bg-gray-100 px-1 rounded">utm_source=klaviyo</code> or{" "}
-          <code className="bg-gray-100 px-1 rounded">utm_source=facebook</code> to campaign URLs.
+          Facebook). Add{" "}
+          <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
+            utm_source=klaviyo
+          </code>{" "}
+          or{" "}
+          <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
+            utm_source=facebook
+          </code>{" "}
+          to campaign URLs.
         </p>
         <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading…</div>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
           ) : (() => {
             const rows = data?.byUTMSource ?? [];
             if (rows.length === 0) {
               return (
-                <div className="p-8 text-center text-gray-500">
-                  No channel data for this period. Campaign links need <code className="bg-gray-100 px-1 rounded">utm_source</code> in the URL.
+                <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+                  No channel data for this period. Campaign links need{" "}
+                  <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
+                    utm_source
+                  </code>{" "}
+                  in the URL.
                 </div>
               );
             }
             return (
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                   <tr>
-                    <th className="text-left p-3 font-semibold text-gray-700">Channel</th>
+                    <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Channel</th>
                     <th
-                      className="text-right p-3 font-semibold"
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                       title="Unique visitors (deduped per channel)"
                     >
                       Unique visitors
                     </th>
                     <th
-                      className="text-right p-3 font-semibold"
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                       title="New accounts with promo attribution"
                     >
                       Registrations
                     </th>
-                    <th className="text-right p-3 font-semibold">Conversions</th>
-                    <th className="text-right p-3 font-semibold">Revenue</th>
-                    <th className="hidden md:table-cell text-right p-3 font-semibold">V→S %</th>
-                    <th className="hidden md:table-cell text-right p-3 font-semibold">S→C %</th>
-                    <th className="hidden md:table-cell text-right p-3 font-semibold">Conv %</th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Conversions</th>
+                    <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">Revenue</th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      V→S %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      S→C %
+                    </th>
+                    <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                      Conv %
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr
                       key={row.utmSource}
-                      className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
                       onClick={() =>
                         setSelectedChannel({
                           utmSource: row.utmSource,
@@ -477,20 +495,28 @@ export default function PromoAnalyticsManagement() {
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-medium ${
                             row.utmSource === "Direct"
-                              ? "bg-gray-100 text-gray-700"
-                              : "bg-indigo-100 text-indigo-800"
+                              ? "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
+                              : "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50"
                           }`}
                         >
                           {row.utmSource}
                         </span>
                       </td>
-                      <td className="p-3 text-right font-mono">{formatNumber(row.visits)}</td>
-                      <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
-                      <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
-                      <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.visits)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.signups)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.conversions)}
+                      </td>
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatCurrency(row.revenue)}
+                      </td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -501,79 +527,85 @@ export default function PromoAnalyticsManagement() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-        <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700">
           Performance by Promotion Page
         </h3>
-        <p className="text-xs text-gray-500 px-4 pt-2 pb-1">
+        <p className="text-xs text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
           Per page: unique visitors vs new accounts; headline totals above sum visitors across all
           pages.
         </p>
         <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading…</div>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                 <tr>
-                  <th className="text-left p-3 font-semibold text-gray-700">Page</th>
+                  <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Page</th>
                   <th
-                    className="text-right p-3 font-semibold"
+                    className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                     title="Unique visitors to this page (deduped by browser / user)"
                   >
                     <button
                       onClick={() => handleSort("visits")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
                     >
                       Unique visitors {getSortIcon("visits")}
                     </button>
                   </th>
-                  <th className="text-right p-3 font-semibold">
+                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     <button
                       onClick={() => handleSort("crossVisits")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
                       title="Visits from other toolset landing pages"
                     >
                       Cross-visits {getSortIcon("crossVisits")}
                     </button>
                   </th>
                   <th
-                    className="text-right p-3 font-semibold"
+                    className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
                     title="New user accounts with this promo attribution"
                   >
                     <button
                       onClick={() => handleSort("signups")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
                     >
                       Registrations {getSortIcon("signups")}
                     </button>
                   </th>
-                  <th className="text-right p-3 font-semibold">
+                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     <button
                       onClick={() => handleSort("conversions")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
                     >
                       Conversions {getSortIcon("conversions")}
                     </button>
                   </th>
-                  <th className="text-right p-3 font-semibold">
+                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     <button
                       onClick={() => handleSort("revenue")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600"
+                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
                     >
                       Revenue {getSortIcon("revenue")}
                     </button>
                   </th>
-                  <th className="hidden md:table-cell text-right p-3 font-semibold">V→S %</th>
-                  <th className="hidden md:table-cell text-right p-3 font-semibold">S→C %</th>
-                  <th className="hidden md:table-cell text-right p-3 font-semibold">Conv %</th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                    V→S %
+                  </th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                    S→C %
+                  </th>
+                  <th className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
+                    Conv %
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedPages.map((row) => (
                   <tr
                     key={`${row.pageType}-${row.slug}`}
-                    className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
                     onClick={() =>
                       setSelectedPage({
                         pageType: row.pageType,
@@ -587,24 +619,39 @@ export default function PromoAnalyticsManagement() {
                       <div className="flex items-center gap-2">
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            row.pageType === "toolset" ? "bg-indigo-100 text-indigo-800" : "bg-amber-100 text-amber-800"
+                            row.pageType === "toolset"
+                              ? "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50"
+                              : "bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/50"
                           }`}
                         >
                           {row.pageType === "toolset" ? "Toolset" : "Evergreen"}
                         </span>
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-gray-900 dark:text-white">
                           {getPrizeLabel(row.slug) ?? row.slug}
                         </span>
                       </div>
                     </td>
-                    <td className="p-3 text-right font-mono">{formatNumber(row.visits)}</td>
-                    <td className="p-3 text-right font-mono" title="From other toolset pages">{formatNumber(row.crossVisits ?? 0)}</td>
-                    <td className="p-3 text-right font-mono">{formatNumber(row.signups)}</td>
-                    <td className="p-3 text-right font-mono">{formatNumber(row.conversions)}</td>
-                    <td className="p-3 text-right font-mono">{formatCurrency(row.revenue)}</td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.visitToSignupRate)}</td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.signupToConversionRate)}</td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600">{formatPercentage(row.overallConversionRate)}</td>
+                    <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                      {formatNumber(row.visits)}
+                    </td>
+                    <td
+                      className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums"
+                      title="From other toolset pages"
+                    >
+                      {formatNumber(row.crossVisits ?? 0)}
+                    </td>
+                    <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                      {formatNumber(row.signups)}
+                    </td>
+                    <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                      {formatNumber(row.conversions)}
+                    </td>
+                    <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                      {formatCurrency(row.revenue)}
+                    </td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
                   </tr>
                 ))}
               </tbody>

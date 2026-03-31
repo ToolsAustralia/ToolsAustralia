@@ -48,12 +48,12 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
               </div>
 
               {/* Exciting Description */}
-              <p className="text-[13px] sm:text-[14px] lg:text-[22px] text-gray-700 font-medium leading-relaxed max-w-sm">
+              <p className="text-[13px] sm:text-[14px] lg:text-[22px] text-gray-700 dark:text-neutral-200 font-medium leading-relaxed max-w-sm">
                 Something amazing is coming! Get ready for our next exciting giveaway with incredible prizes.
               </p>
 
               {/* Coming Soon Indicator */}
-              <div className="flex items-center justify-start gap-2 text-gray-600">
+              <div className="flex items-center justify-start gap-2 text-gray-600 dark:text-neutral-400">
                 <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="text-[11px] sm:text-[12px] lg:text-[18px] font-semibold">Details Coming Soon</span>
               </div>
@@ -63,7 +63,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star key={star} className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-6 lg:h-6 text-yellow-400 fill-current" />
                 ))}
-                <span className="text-[10px] sm:text-[11px] lg:text-[17px] text-gray-600 ml-1 font-medium">
+                <span className="text-[10px] sm:text-[11px] lg:text-[17px] text-gray-600 dark:text-neutral-400 ml-1 font-medium">
                   Premium Quality
                 </span>
               </div>

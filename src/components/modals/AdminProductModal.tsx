@@ -290,7 +290,7 @@ const AdminProductModal: React.FC<AdminProductModalProps> = ({ isOpen, onClose, 
 
           {/* Product Image */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
               Product Image <span className="text-red-500">*</span>
             </label>
             <ImageUpload

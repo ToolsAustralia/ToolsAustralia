@@ -298,7 +298,7 @@ function TestPixelsContent() {
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Test Instructions:</h2>
-          <ol className="list-decimal list-inside space-y-2 text-gray-700">
+          <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-neutral-200">
             <li>Open browser Developer Tools (F12)</li>
             <li>Go to Network tab and refresh page</li>
             <li>Look for Facebook and TikTok pixel requests</li>
@@ -443,7 +443,7 @@ function TestPixelsContent() {
             ) : (
               <div className="space-y-1">
                 {testResults.map((result, index) => (
-                  <div key={index} className="text-sm font-mono text-gray-800">
+                  <div key={index} className="text-sm font-mono text-gray-800 dark:text-neutral-100">
                     {result}
                   </div>
                 ))}

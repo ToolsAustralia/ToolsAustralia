@@ -65,7 +65,10 @@ export default function DateRangeToggle({
     <div
       className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 max-w-full lg:w-auto ${className}`}
     >
-      <div className="overflow-x-auto scrollbar-hide w-full max-w-full" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div
+        className="overflow-x-auto scrollbar-hide w-full max-w-full"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         <div className="flex items-center gap-1 sm:gap-2 flex-nowrap min-w-max">
           {ranges.map((range) => (
             <button

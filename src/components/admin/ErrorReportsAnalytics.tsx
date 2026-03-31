@@ -195,30 +195,30 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">Error Reports Analytics</h3>
-        <p className="text-gray-600">Comprehensive insights into error patterns and trends</p>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Error Reports Analytics</h3>
+        <p className="text-gray-600 dark:text-neutral-400">Comprehensive insights into error patterns and trends</p>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-600">Total Errors</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{reports.length}</div>
+        <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <div className="text-sm text-gray-600 dark:text-neutral-400">Total Errors</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{reports.length}</div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-600">Auto-Logged</div>
+        <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <div className="text-sm text-gray-600 dark:text-neutral-400">Auto-Logged</div>
           <div className="text-2xl font-bold text-blue-600 mt-1">
             {reports.filter((r) => r.autoLogged).length}
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-600">Critical Errors</div>
+        <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <div className="text-sm text-gray-600 dark:text-neutral-400">Critical Errors</div>
           <div className="text-2xl font-bold text-red-600 mt-1">
             {reports.filter((r) => r.severity === "critical").length}
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="text-sm text-gray-600">Resolved</div>
+        <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <div className="text-sm text-gray-600 dark:text-neutral-400">Resolved</div>
           <div className="text-2xl font-bold text-green-600 mt-1">
             {reports.filter((r) => r.status === "resolved").length}
           </div>
@@ -228,8 +228,8 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Error Trends Chart */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Error Trends (Last 30 Days)</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Error Trends (Last 30 Days)</h4>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={errorTrends}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -250,8 +250,8 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
         </div>
 
         {/* Category Distribution */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Error Distribution by Category</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Error Distribution by Category</h4>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -277,8 +277,8 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
         </div>
 
         {/* Severity Distribution */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Error Distribution by Severity</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Error Distribution by Severity</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={severityDistribution}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -302,8 +302,8 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
         </div>
 
         {/* Status Distribution */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Status Distribution</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Status Distribution</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={statusDistribution}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -319,18 +319,18 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
       {/* Top Errors and Users */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Error Messages */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Top 10 Error Messages</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Top 10 Error Messages</h4>
           <div className="space-y-2">
             {topErrors.length > 0 ? (
               topErrors.map((error, index) => (
                 <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {error.message}
                     </div>
                   </div>
-                  <div className="ml-4 text-sm font-bold text-gray-600">{error.count}</div>
+                  <div className="ml-4 text-sm font-bold text-gray-600 dark:text-neutral-400">{error.count}</div>
                 </div>
               ))
             ) : (
@@ -340,18 +340,18 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
         </div>
 
         {/* Top Affected Users */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Top 10 Affected Users</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Top 10 Affected Users</h4>
           <div className="space-y-2">
             {topUsers.length > 0 ? (
               topUsers.map((user, index) => (
                 <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {user.email}
                     </div>
                   </div>
-                  <div className="ml-4 text-sm font-bold text-gray-600">{user.count}</div>
+                  <div className="ml-4 text-sm font-bold text-gray-600 dark:text-neutral-400">{user.count}</div>
                 </div>
               ))
             ) : (
@@ -363,35 +363,35 @@ export default function ErrorReportsAnalytics({ reports }: ErrorReportsAnalytics
 
       {/* Resolution Metrics */}
       {resolutionMetrics.totalResolved > 0 && (
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Resolution Time Metrics</h4>
+        <div className="bg-white dark:bg-neutral-900 p-6 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-4">Resolution Time Metrics</h4>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
-              <div className="text-sm text-gray-600">Average</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">
+              <div className="text-sm text-gray-600 dark:text-neutral-400">Average</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                 {resolutionMetrics.averageHours}h
               </div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Median</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">
+              <div className="text-sm text-gray-600 dark:text-neutral-400">Median</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                 {resolutionMetrics.medianHours}h
               </div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Min</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">
+              <div className="text-sm text-gray-600 dark:text-neutral-400">Min</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                 {resolutionMetrics.minHours}h
               </div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Max</div>
-              <div className="text-lg font-bold text-gray-900 mt-1">
+              <div className="text-sm text-gray-600 dark:text-neutral-400">Max</div>
+              <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                 {resolutionMetrics.maxHours}h
               </div>
             </div>
             <div>
-              <div className="text-sm text-gray-600">Total Resolved</div>
+              <div className="text-sm text-gray-600 dark:text-neutral-400">Total Resolved</div>
               <div className="text-lg font-bold text-green-600 mt-1">
                 {resolutionMetrics.totalResolved}
               </div>

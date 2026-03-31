@@ -114,7 +114,7 @@ export default function AlternatingMultiplierList() {
                         Enabled
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 dark:text-neutral-400 text-xs font-medium rounded">
                         Disabled
                       </span>
                     )}
@@ -122,7 +122,7 @@ export default function AlternatingMultiplierList() {
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Multipliers:</span>
+                      <span className="text-sm text-gray-600 dark:text-neutral-400">Multipliers:</span>
                       <div className="flex items-center gap-2">
                         {config.multipliers.map((multiplier, index) => (
                           <React.Fragment key={multiplier}>
@@ -140,7 +140,7 @@ export default function AlternatingMultiplierList() {
                     {config.isEnabled && currentMultiplier && (
                       <div className="flex items-center gap-2 text-sm">
                         <Info className="w-4 h-4 text-blue-500" />
-                        <span className="text-gray-600">
+                        <span className="text-gray-600 dark:text-neutral-400">
                           <strong>Today:</strong> {currentMultiplier}x (tomorrow: {otherMultiplier}x)
                         </span>
                       </div>

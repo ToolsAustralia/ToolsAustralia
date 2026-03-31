@@ -49,11 +49,11 @@ export function MajorDrawSelector({
   return (
     <div className="flex flex-col sm:flex-row gap-4">
       <div className="flex-1">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Current Draw</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Current Draw</label>
         <select
           value={currentDrawId || ""}
           onChange={(e) => onCurrentDrawChange(e.target.value)}
-          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white font-semibold text-gray-900"
+          className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white dark:bg-neutral-800 font-semibold text-gray-900 dark:text-white"
         >
           <option value="">Select current draw...</option>
           {draws.map((draw) => (
@@ -64,11 +64,11 @@ export function MajorDrawSelector({
         </select>
       </div>
       <div className="flex-1">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Previous Draw</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Previous Draw</label>
         <select
           value={previousDrawId || ""}
           onChange={(e) => onPreviousDrawChange(e.target.value)}
-          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white font-semibold text-gray-900"
+          className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white dark:bg-neutral-800 font-semibold text-gray-900 dark:text-white"
         >
           <option value="">Select previous draw...</option>
           {draws

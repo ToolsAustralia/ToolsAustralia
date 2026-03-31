@@ -383,7 +383,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
   return (
     <div className="space-y-3 sm:space-y-4">
       <div>
-        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2">Payment Methods</h3>
+        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100 mb-1 sm:mb-2">Payment Methods</h3>
         <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           Manage your saved payment methods and update your subscription payment method.
         </p>
@@ -420,7 +420,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
           <div className="w-16 h-16 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center shadow-sm">
             <CreditCard className="w-8 h-8 text-gray-400 dark:text-neutral-500" />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1 sm:mb-2">No Payment Methods</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-1 sm:mb-2">No Payment Methods</h3>
           <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-4 sm:mb-6">You haven&apos;t saved any payment methods yet.</p>
           <Button
             onClick={handleAddNewPaymentMethod}
@@ -445,14 +445,14 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
       {!loading && showAddForm && setupIntentClientSecret && (
         <div className="border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 rounded-lg p-2 sm:p-4 bg-gray-50 dark:bg-neutral-800 shadow-sm">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">Add New Payment Method</h4>
+            <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-neutral-100">Add New Payment Method</h4>
             <Button
               type="button"
               onClick={() => {
                 setShowAddForm(false);
                 setSetupIntentClientSecret(null);
               }}
-              className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
+              className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
             >
               Cancel
             </Button>
@@ -524,7 +524,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <h3 className="font-semibold text-gray-900 dark:text-white text-xs sm:text-sm truncate">
+                        <h3 className="font-semibold text-gray-900 dark:text-neutral-100 text-xs sm:text-sm truncate">
                           {paymentMethod.card?.brand?.toUpperCase() || "CARD"} •••• {paymentMethod.card?.last4}
                         </h3>
                         {paymentMethod.isDefault && (

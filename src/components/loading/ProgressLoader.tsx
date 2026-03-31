@@ -46,7 +46,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
     <div className={`space-y-2 ${className}`}>
       {label && (
         <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-700">{label}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">{label}</span>
           {showPercentage && <span className="text-sm text-gray-500">{Math.round(progress)}%</span>}
         </div>
       )}
@@ -143,7 +143,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
           <p className="text-xs text-gray-500">{fileSize}</p>
         </div>
         {onCancel && (
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors">
             ×
           </button>
         )}
@@ -188,7 +188,7 @@ export const PaymentProgress: React.FC<PaymentProgressProps> = ({ step, progress
 
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-gray-900">{step.charAt(0).toUpperCase() + step.slice(1)} Payment</h3>
-        <p className="text-sm text-gray-600">Please don&apos;t close this window</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-400">Please don&apos;t close this window</p>
       </div>
 
       <ProgressBar progress={progress} color="red" size="lg" className="max-w-md mx-auto" />

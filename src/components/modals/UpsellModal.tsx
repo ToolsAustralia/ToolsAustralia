@@ -694,8 +694,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       {/* Animated Modal */}
       <div
         className={`
-          relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xs sm:max-w-lg mx-auto overflow-hidden
-          transform transition-all duration-300 ease-out
+          relative mx-auto w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-2xl transform transition-all duration-300 ease-out dark:bg-neutral-900 dark:ring-1 dark:ring-neutral-800 sm:max-w-lg sm:rounded-3xl
           ${isVisible ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4"}
         `}
       >
@@ -771,15 +770,15 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 // });
                 handleDecline();
               }}
-              className="w-full text-red-600 py-2 sm:py-2.5 px-4 sm:px-6 rounded-xl border border-red-300 hover:bg-red-50 transition-colors font-medium text-sm sm:text-base"
+              className="w-full rounded-xl border border-red-300 py-2 px-4 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/45 dark:text-red-400 dark:hover:bg-red-950/40 sm:py-2.5 sm:px-6 sm:text-base"
             >
               No thanks, maybe later
             </button>
           </div>
 
           {/* Trust Indicators - Compact */}
-          <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm text-gray-500">
+          <div className="mt-2 border-t border-gray-200 pt-2 dark:border-neutral-700 sm:mt-4 sm:pt-4">
+            <div className="flex items-center justify-center gap-3 text-xs text-gray-500 dark:text-neutral-400 sm:gap-6 sm:text-sm">
               <div className="flex items-center gap-1 sm:gap-2">
                 <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
                 <span>Instant</span>

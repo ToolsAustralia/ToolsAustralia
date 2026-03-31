@@ -85,7 +85,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
       );
     } else if (promo.isExpired) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:text-neutral-100">
           Expired
         </span>
       );
@@ -118,7 +118,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -174,7 +174,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                         </button>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600 space-y-0.5">
+                    <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
                       <div>{getTypeLabel(promo.type)}</div>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 shrink-0" />

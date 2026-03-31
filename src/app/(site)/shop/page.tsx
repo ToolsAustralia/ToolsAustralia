@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 
 export default function ShopPage() {
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950">
       {/* Page Header - Metallic Industrial Design */}
       <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
         {/* Background Image with Dark Overlay */}
@@ -70,7 +70,13 @@ export default function ShopPage() {
       </div>
 
       {/* Main Shop Content - Client Component for Interactivity */}
-      <Suspense fallback={<div className=" text-center">Loading shop...</div>}>
+      <Suspense
+        fallback={
+          <div className="py-12 text-center text-gray-600 dark:text-neutral-400 bg-white dark:bg-neutral-950">
+            Loading shop...
+          </div>
+        }
+      >
         <ShopContent initialProducts={[]} totalProducts={0} />
       </Suspense>
 

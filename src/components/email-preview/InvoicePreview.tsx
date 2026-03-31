@@ -206,7 +206,7 @@ const InvoicePreview: React.FC = () => {
       {/* Paid Invoice Preview (Single Item) */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - Single Item</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Paid Invoice - Single Item</h3>
           <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Paid Status</span>
         </div>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -222,7 +222,7 @@ const InvoicePreview: React.FC = () => {
       {/* Paid Invoice Preview (With Upsell) */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - With Upsell</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Paid Invoice - With Upsell</h3>
           <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
             Combined Items
           </span>

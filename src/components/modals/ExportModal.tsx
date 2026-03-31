@@ -121,12 +121,12 @@ export default function ExportModal({
       <ModalContent>
         <div className="space-y-6">
           {/* Export Info */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-900/50">
             <div className="flex items-center gap-3">
-              <Download className="w-6 h-6 text-blue-600" />
+              <Download className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               <div>
-                <h3 className="font-semibold text-blue-900">Export Details</h3>
-                <p className="text-sm text-blue-700">
+                <h3 className="font-semibold text-blue-900 dark:text-blue-200">Export Details</h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   This will export all {totalParticipants.toLocaleString()} participants from the selected major draw.
                 </p>
               </div>
@@ -135,37 +135,39 @@ export default function ExportModal({
 
           {/* Format Selection */}
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">Export Format *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">Export Format *</label>
             <div className="grid gap-3">
               {EXPORT_FORMATS.map((format) => (
                 <div
                   key={format.value}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                     selectedFormat === format.value
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
+                      ? "border-red-500 bg-red-50 dark:bg-red-950/25 dark:border-red-600"
+                      : "border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500"
                   }`}
                   onClick={() => setSelectedFormat(format.value)}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={`p-2 rounded-lg ${
-                        selectedFormat === format.value ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-600"
+                        selectedFormat === format.value
+                          ? "bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400"
+                          : "bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400"
                       }`}
                     >
                       {format.icon}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{format.label}</h4>
-                      <p className="text-sm text-gray-600">{format.description}</p>
+                      <h4 className="font-medium text-gray-900 dark:text-neutral-100">{format.label}</h4>
+                      <p className="text-sm text-gray-600 dark:text-neutral-400">{format.description}</p>
                     </div>
                     <div
                       className={`w-4 h-4 rounded-full border-2 ${
-                        selectedFormat === format.value ? "border-red-500 bg-red-500" : "border-gray-300"
+                        selectedFormat === format.value ? "border-red-500 bg-red-500" : "border-gray-300 dark:border-neutral-600"
                       }`}
                     >
                       {selectedFormat === format.value && (
-                        <div className="w-full h-full rounded-full bg-white scale-50" />
+                        <div className="w-full h-full rounded-full bg-white dark:bg-neutral-100 scale-50" />
                       )}
                     </div>
                   </div>
@@ -176,10 +178,10 @@ export default function ExportModal({
 
           {/* Export Status */}
           {exportStatus === "success" && (
-            <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+            <div className="p-4 bg-green-50 dark:bg-green-950/25 border-2 border-green-200 dark:border-green-900/45 rounded-lg">
               <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-green-800">
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium text-green-800 dark:text-green-200">
                   Export completed successfully! File is downloading...
                 </span>
               </div>
@@ -187,12 +189,12 @@ export default function ExportModal({
           )}
 
           {exportStatus === "error" && (
-            <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
+            <div className="p-4 bg-red-50 dark:bg-red-950/25 border-2 border-red-200 dark:border-red-900/45 rounded-lg">
               <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-red-600" />
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                 <div>
-                  <span className="text-sm font-medium text-red-800">Export failed</span>
-                  {errorMessage && <p className="text-sm text-red-700 mt-1">{errorMessage}</p>}
+                  <span className="text-sm font-medium text-red-800 dark:text-red-200">Export failed</span>
+                  {errorMessage && <p className="text-sm text-red-700 dark:text-red-300 mt-1">{errorMessage}</p>}
                 </div>
               </div>
             </div>

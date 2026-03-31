@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon, MessageSquare, Gift } from "lucide-react";
+import {
+  Trophy,
+  User,
+  CheckCircle,
+  AlertCircle,
+  Image as ImageIcon,
+  MessageSquare,
+  Gift,
+  Link2,
+} from "lucide-react";
 import UserSearchModal from "./UserSearchModal";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { formatDisplayName } from "@/utils/display-name";
@@ -40,6 +49,8 @@ export interface WinnerSelectionData {
   imageUrl?: string;
   testimony?: string;
   selectedPrize?: string;
+  /** Public draw verification URL; null clears on major draw re-record */
+  drawResultUrl?: string | null;
 }
 
 interface WinnerSelectionModalProps {
@@ -55,6 +66,7 @@ interface WinnerSelectionModalProps {
     imageUrl?: string;
     selectedPrize?: string;
     testimony?: string;
+    drawResultUrl?: string;
   };
   enableImageField?: boolean;
 }
@@ -78,22 +90,28 @@ export default function WinnerSelectionModal({
   // Prize selection and testimony state
   const [selectedPrize, setSelectedPrize] = useState("");
   const [testimony, setTestimony] = useState("");
+  const [drawResultUrl, setDrawResultUrl] = useState("");
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedUser(null);
       setWinnerImages([]);
       setError(null);
-          setSelectedPrize("");
+      setSelectedPrize("");
       setTestimony("");
+      setDrawResultUrl("");
     } else if (enableImageField && currentWinner?.imageUrl) {
       setWinnerImages([currentWinner.imageUrl]);
       setSelectedPrize(currentWinner.selectedPrize || "");
       setTestimony(currentWinner.testimony || "");
+      setDrawResultUrl(currentWinner.drawResultUrl || "");
     } else if (enableImageField) {
-      setWinnerImages([]);
-      setSelectedPrize("");
-      setTestimony("");
+      setWinnerImages(currentWinner?.imageUrl ? [currentWinner.imageUrl] : []);
+      setSelectedPrize(currentWinner?.selectedPrize || "");
+      setTestimony(currentWinner?.testimony || "");
+      setDrawResultUrl(currentWinner?.drawResultUrl || "");
+    } else if (isOpen) {
+      setDrawResultUrl(currentWinner?.drawResultUrl || "");
     }
   }, [isOpen, enableImageField, currentWinner]);
 
@@ -116,12 +134,24 @@ export default function WinnerSelectionModal({
     setError(null);
 
     try {
+      const trimmedVerification = drawResultUrl.trim();
+      if (trimmedVerification) {
+        try {
+          new URL(trimmedVerification);
+        } catch {
+          setError("Draw result link must be a full URL (e.g. https://randomdraws.com.au/...)");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const winnerData: WinnerSelectionData = {
         drawId,
         drawType,
         winnerUserId: selectedUser._id,
         testimony: testimony.trim() || undefined,
         selectedPrize: selectedPrize || undefined,
+        drawResultUrl: trimmedVerification === "" ? null : trimmedVerification,
       };
 
       // Handle image upload for both draw types
@@ -222,18 +252,18 @@ export default function WinnerSelectionModal({
         {/* Content */}
         <ModalContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span className="text-red-700 text-sm">{error}</span>
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Winner Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Winner *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Select Winner *</label>
               {selectedUser ? (
-                <div className="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+                <div className="p-4 border-2 border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950/25 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-semibold">
@@ -241,27 +271,27 @@ export default function WinnerSelectionModal({
                         {selectedUser.lastName.charAt(0)}
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-gray-900 dark:text-neutral-100">
                           {formatDisplayName(selectedUser.firstName, selectedUser.lastName)}
                         </h3>
-                        <p className="text-sm text-gray-600">{selectedUser.email}</p>
-                        {selectedUser.mobile && <p className="text-sm text-gray-600">{selectedUser.mobile}</p>}
+                        <p className="text-sm text-gray-600 dark:text-neutral-400">{selectedUser.email}</p>
+                        {selectedUser.mobile && <p className="text-sm text-gray-600 dark:text-neutral-400">{selectedUser.mobile}</p>}
                         {selectedUser.state && (
-                          <p className="text-sm text-gray-600">{formatState(selectedUser.state)}</p>
+                          <p className="text-sm text-gray-600 dark:text-neutral-400">{formatState(selectedUser.state)}</p>
                         )}
-                        <p className="text-xs text-gray-500 mt-1">Joined {formatDate(selectedUser.createdAt)}</p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">Joined {formatDate(selectedUser.createdAt)}</p>
                       </div>
                     </div>
-                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                   </div>
 
                   {selectedUser.currentDrawEntries && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
-                        <Trophy className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-800">Current Draw Entries</span>
+                        <Trophy className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Current Draw Entries</span>
                       </div>
-                      <p className="text-sm text-blue-700">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
                         Total: <span className="font-semibold">{selectedUser.currentDrawEntries.totalEntries}</span>
                       </p>
                     </div>
@@ -270,7 +300,7 @@ export default function WinnerSelectionModal({
                   <button
                     type="button"
                     onClick={() => setIsUserSearchOpen(true)}
-                    className="mt-3 text-sm text-blue-600 hover:text-blue-800 underline"
+                    className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
                   >
                     Change Winner
                   </button>
@@ -279,25 +309,47 @@ export default function WinnerSelectionModal({
                 <button
                   type="button"
                   onClick={() => setIsUserSearchOpen(true)}
-                  className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors text-left"
+                  className="w-full p-4 border-2 border-dashed border-gray-300 dark:border-neutral-600 rounded-lg hover:border-gray-400 dark:hover:border-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <User className="w-6 h-6 text-gray-400" />
+                    <User className="w-6 h-6 text-gray-400 dark:text-neutral-500" />
                     <div>
-                      <p className="font-medium text-gray-900">Click to search and select winner</p>
-                      <p className="text-sm text-gray-500">Search by name, email, mobile, or user ID</p>
+                      <p className="font-medium text-gray-900 dark:text-neutral-100">Click to search and select winner</p>
+                      <p className="text-sm text-gray-500 dark:text-neutral-400">Search by name, email, mobile, or user ID</p>
                     </div>
                   </div>
                 </button>
               )}
             </div>
 
+            {/* Draw verification / external results link */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                  Draw result link (optional)
+                </div>
+              </label>
+              <input
+                type="url"
+                value={drawResultUrl}
+                onChange={(e) => setDrawResultUrl(e.target.value)}
+                placeholder="https://randomdraws.com.au/..."
+                className="w-full px-4 py-2.5 border-2 border-gray-200 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 transition-all duration-200"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+                If set, the public draw results page can send visitors to your Random Draws (or other) verification URL.
+                Leave empty for no link. For major draws, clearing this field when re-recording a winner removes the
+                stored link.
+              </p>
+            </div>
+
             {/* Prize Selection - Only for major draws */}
             {drawType === "major" && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                   <div className="flex items-center gap-2">
-                    <Gift className="w-4 h-4 text-gray-500" />
+                    <Gift className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
                     Selected Prize (Optional)
                   </div>
                 </label>
@@ -306,9 +358,9 @@ export default function WinnerSelectionModal({
                   value={selectedPrize}
                   onChange={(e) => setSelectedPrize(e.target.value)}
                   placeholder="e.g., $10,000 Cash, Milwaukee + Sidchrome, DeWalt + Sidchrome, etc."
-                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white transition-all duration-200"
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 transition-all duration-200"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
                   Enter the prize selected by the winner. This will be displayed on the winners page. You can enter any prize description (e.g., &quot;$15,000 Cash&quot;, &quot;Milwaukee + Sidchrome Tool Set&quot;, etc.). You can set this now or update it later.
                 </p>
               </div>
@@ -316,9 +368,9 @@ export default function WinnerSelectionModal({
 
             {/* Testimony Field - Rich Text Editor */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-gray-500" />
+                  <MessageSquare className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
                   Winner Testimony (Optional)
                 </div>
               </label>
@@ -328,7 +380,7 @@ export default function WinnerSelectionModal({
                 placeholder="Enter the winner's testimony here. You can format text, highlight important parts, and adjust line spacing."
                 minHeight="250px"
               />
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400">
                 The winner&apos;s testimony will be displayed on the winners page. Use the toolbar to format text, add highlights, and adjust line spacing. You can add or update this later.
               </p>
             </div>
@@ -344,10 +396,10 @@ export default function WinnerSelectionModal({
                   accept="image/*"
                   uploadToCloudinary={false}
                   storeLocally
-                  className="border border-dashed border-gray-200 rounded-lg"
+                  className="border border-dashed border-gray-200 dark:border-neutral-600 rounded-lg"
                 />
-                <p className="flex items-center gap-2 text-xs text-gray-500">
-                  <ImageIcon className="w-4 h-4 text-gray-400" />
+                <p className="flex items-center gap-2 text-xs text-gray-500 dark:text-neutral-400">
+                  <ImageIcon className="w-4 h-4 text-gray-400 dark:text-neutral-500" />
                   Upload or drop an image of the winner. We&apos;ll store it once you submit.
                 </p>
               </div>
@@ -355,12 +407,12 @@ export default function WinnerSelectionModal({
 
             {/* Current Winner Warning */}
             {currentWinner && currentWinner.userId && (
-              <div className="p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 border-2 border-yellow-200 dark:border-yellow-800/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-600" />
-                  <span className="text-sm font-medium text-yellow-800">Current Winner Exists</span>
+                  <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-500" />
+                  <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">Current Winner Exists</span>
                 </div>
-                <p className="text-sm text-yellow-700">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
                   There is already a winner selected for this draw. Selecting a new winner will replace the current one.
                 </p>
               </div>

@@ -106,7 +106,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
             isOutOfStock ? "bg-red-500" : product.stock && product.stock < 10 ? "bg-orange-500" : "bg-green-500"
           }`}
         ></div>
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
           {isOutOfStock
             ? "Out of Stock"
             : product.stock && product.stock < 10
@@ -118,7 +118,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       {/* Quantity Selector */}
       {!isOutOfStock && (
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Quantity:</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Quantity:</span>
           <div className="flex items-center border border-gray-300 rounded-lg">
             <button
               onClick={() => handleQuantityChange(-1)}
@@ -169,19 +169,19 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
           <div className="w-8 h-8 mx-auto mb-2 bg-green-100 rounded-full flex items-center justify-center">
             <div className="w-4 h-4 bg-green-500 rounded-full"></div>
           </div>
-          <div className="text-xs text-gray-600">Free Shipping</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">Free Shipping</div>
         </div>
         <div className="text-center">
           <div className="w-8 h-8 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
             <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
           </div>
-          <div className="text-xs text-gray-600">3 Year Warranty</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">3 Year Warranty</div>
         </div>
         <div className="text-center">
           <div className="w-8 h-8 mx-auto mb-2 bg-purple-100 rounded-full flex items-center justify-center">
             <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
           </div>
-          <div className="text-xs text-gray-600">30-Day Returns</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">30-Day Returns</div>
         </div>
       </div>
     </div>

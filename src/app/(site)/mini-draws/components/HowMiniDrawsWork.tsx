@@ -35,7 +35,7 @@ export default function HowMiniDrawsWork() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <section
         ref={ref}
-        className="bg-white rounded-2xl shadow-sm border border-gray-200/50 px-6 py-8 sm:py-10"
+        className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm border border-gray-200/50 dark:border-neutral-800 px-6 py-8 sm:py-10"
       >
         {/* Section Header */}
         <motion.div
@@ -47,7 +47,7 @@ export default function HowMiniDrawsWork() {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 font-['Poppins'] mb-3">
             How Mini Draws Work
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-gray-600 dark:text-neutral-400 max-w-2xl mx-auto">
             Purchase a mini pack, join active draws, and check the results when we announce winners.
           </p>
         </motion.div>
@@ -57,7 +57,7 @@ export default function HowMiniDrawsWork() {
           {/* Connecting Line (desktop only) */}
           <div className="hidden sm:block absolute top-10 left-[16.67%] right-[16.67%] h-[2px] z-0">
             <motion.div
-              className="h-full bg-gradient-to-r from-transparent via-gray-200 to-transparent"
+              className="h-full bg-gradient-to-r from-transparent via-gray-200 dark:via-neutral-600 to-transparent"
               initial={{ scaleX: 0 }}
               animate={isInView ? { scaleX: 1 } : {}}
               transition={{ duration: prefersReduced ? 0 : 0.8, delay: 0.3 }}
@@ -86,12 +86,12 @@ export default function HowMiniDrawsWork() {
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold text-gray-900 mb-2 font-['Poppins']">{step.title}</h3>
-              <p className="text-sm sm:text-base text-gray-600 leading-relaxed max-w-xs mx-auto">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">{step.title}</h3>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 leading-relaxed max-w-xs mx-auto">
                 {step.href ? (
                   <>
                     Check the{" "}
-                    <a href={step.href} className="text-[#ee0000] hover:underline font-medium">
+                    <a href={step.href} className="text-[#ee0000] dark:text-red-400 hover:underline font-medium">
                       results page
                     </a>{" "}
                     to see who took home the prize.

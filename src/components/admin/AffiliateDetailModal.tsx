@@ -513,11 +513,11 @@ export default function AffiliateDetailModal({
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed" fixedHeight="h-[90dvh]">
       <div className="flex h-full min-h-0 flex-col">
-        <div className="relative flex-shrink-0 border-b border-gray-200 bg-white px-3 sm:px-5 py-3 sm:py-4">
+        <div className="relative flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 sm:px-5 py-3 sm:py-4">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-2.5 right-2 sm:top-3 sm:right-3 z-10 rounded-lg p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+            className="absolute top-2.5 right-2 sm:top-3 sm:right-3 z-10 rounded-lg p-2.5 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
             aria-label="Close"
           >
             <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -525,20 +525,22 @@ export default function AffiliateDetailModal({
 
           <div className="pr-12 sm:pr-14">
             <div className="min-w-0 flex-1">
-              <h2 id="modal-title" className="text-lg sm:text-xl font-bold text-gray-900 truncate">
+              <h2 id="modal-title" className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
                 Affiliate Details
               </h2>
               {data?.affiliate && (
-                <p className="text-xs sm:text-sm text-gray-500 truncate mt-0.5">{data.affiliate.email}</p>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 truncate mt-0.5">
+                  {data.affiliate.email}
+                </p>
               )}
             </div>
           </div>
         </div>
 
         {data && (
-          <div className="flex-shrink-0 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950">
             <nav
-              className="flex gap-1 sm:gap-2 px-2 sm:px-4 overflow-x-auto scroll-smooth"
+              className="flex gap-1 sm:gap-2 px-2 sm:px-4 overflow-x-auto scroll-smooth brand-scrollbar"
               aria-label="Affiliate detail sections"
             >
               {(
@@ -560,8 +562,8 @@ export default function AffiliateDetailModal({
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 sm:gap-2 py-3 sm:py-3 px-3 sm:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all whitespace-nowrap min-h-[48px] shrink-0 ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
+                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30 dark:bg-red-950/25"
+                        : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50"
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
@@ -669,18 +671,18 @@ export default function AffiliateDetailModal({
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden ring-1 ring-gray-100/70">
-                          <dl className="grid grid-cols-2 xl:grid-cols-4 divide-x divide-y divide-gray-100 [&>*]:min-h-0">
-                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm dark:shadow-none overflow-hidden ring-1 ring-gray-100/70 dark:ring-neutral-800/80">
+                          <dl className="grid grid-cols-2 xl:grid-cols-4 divide-x divide-y divide-gray-100 dark:divide-neutral-800 [&>*]:min-h-0">
+                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
+                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Name
                               </dt>
-                              <dd className="mt-1 text-sm text-gray-900 font-medium break-words leading-snug">
+                              <dd className="mt-1 text-sm text-gray-900 dark:text-white font-medium break-words leading-snug">
                                 {data.affiliate.name}
                               </dd>
                             </div>
-                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
+                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Email
                               </dt>
                               <dd className="mt-1 text-sm min-w-0">
@@ -692,48 +694,48 @@ export default function AffiliateDetailModal({
                                 </a>
                               </dd>
                             </div>
-                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
+                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Phone
                               </dt>
-                              <dd className="mt-1 text-sm text-gray-900 leading-snug">
+                              <dd className="mt-1 text-sm text-gray-900 dark:text-white leading-snug">
                                 {data.affiliate.phone ? (
                                   <a href={`tel:${data.affiliate.phone}`} className="hover:text-[#ee0000] font-medium">
                                     {data.affiliate.phone}
                                   </a>
                                 ) : (
-                                  <span className="text-gray-400">—</span>
+                                  <span className="text-gray-400 dark:text-neutral-500">—</span>
                                 )}
                               </dd>
                             </div>
-                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
+                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Username
                               </dt>
-                              <dd className="mt-1 text-sm font-mono text-[12px] sm:text-[13px] text-gray-900 break-all leading-snug">
+                              <dd className="mt-1 text-sm font-mono text-[12px] sm:text-[13px] text-gray-900 dark:text-white break-all leading-snug">
                                 {data.affiliate.username}
                               </dd>
                             </div>
-                            <div className="p-2 sm:p-3.5 xl:p-4 col-span-2 xl:col-span-4 bg-gradient-to-br from-red-50/90 via-white to-white min-w-0 flex flex-row items-center justify-between gap-2 sm:gap-4">
+                            <div className="p-2 sm:p-3.5 xl:p-4 col-span-2 xl:col-span-4 bg-gradient-to-br from-red-50/90 via-white to-white dark:from-red-950/40 dark:via-neutral-900 dark:to-neutral-900 min-w-0 flex flex-row items-center justify-between gap-2 sm:gap-4">
                               <div>
-                                <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                                <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-neutral-400">
                                   Commission rate
                                 </dt>
-                                <dd className="mt-0.5 text-xl sm:text-2xl font-bold text-gray-900 tabular-nums tracking-tight">
+                                <dd className="mt-0.5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tabular-nums tracking-tight">
                                   {((data.affiliate.commissionRate ?? 0.3) * 100).toFixed(1)}%
                                 </dd>
                               </div>
-                              <div className="hidden sm:block h-10 w-px bg-red-200/60 shrink-0" aria-hidden />
+                              <div className="hidden sm:block h-10 w-px bg-red-200/60 dark:bg-red-900/50 shrink-0" aria-hidden />
                               <div className="flex flex-col items-end gap-1">
-                                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                   Status
                                 </span>
                                 {data.affiliate.isActive ? (
-                                  <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200/60">
+                                  <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-300 ring-1 ring-emerald-200/60 dark:ring-emerald-800/50">
                                     Active
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-red-100 text-red-800 ring-1 ring-red-200/60">
+                                  <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-300 ring-1 ring-red-200/60 dark:ring-red-800/50">
                                     Inactive
                                   </span>
                                 )}
@@ -745,12 +747,12 @@ export default function AffiliateDetailModal({
                   </section>
 
                   <section
-                    className="min-w-0 pt-5 sm:pt-6 border-t border-gray-200"
+                    className="min-w-0 pt-5 sm:pt-6 border-t border-gray-200 dark:border-neutral-700"
                     aria-labelledby="affiliate-link-heading"
                   >
                     <h3
                       id="affiliate-link-heading"
-                      className="font-semibold mb-2 sm:mb-3 text-gray-900 text-sm sm:text-base tracking-tight"
+                      className="font-semibold mb-2 sm:mb-3 text-gray-900 dark:text-white text-sm sm:text-base tracking-tight"
                     >
                       Affiliate link
                     </h3>
@@ -759,17 +761,17 @@ export default function AffiliateDetailModal({
                         Save your edits before copying the link, or copy from the preview below.
                       </p>
                     ) : null}
-                    <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-2.5 sm:p-4 ring-1 ring-gray-100/70">
+                    <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm dark:shadow-none p-2.5 sm:p-4 ring-1 ring-gray-100/70 dark:ring-neutral-800/80">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
                         <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                             Shareable URL
                           </p>
                           <div
-                            className="min-h-[2.75rem] sm:min-h-[3rem] flex-1 rounded-lg border border-gray-200 bg-slate-50 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center"
+                            className="min-h-[2.75rem] sm:min-h-[3rem] flex-1 rounded-lg border border-gray-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-950/80 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center"
                             title={data.affiliate.affiliateLink}
                           >
-                            <span className="font-mono text-[10px] sm:text-xs md:text-sm text-gray-800 select-all break-all leading-relaxed">
+                            <span className="font-mono text-[10px] sm:text-xs md:text-sm text-gray-800 dark:text-neutral-100 select-all break-all leading-relaxed">
                               {data.affiliate.affiliateLink}
                             </span>
                           </div>
@@ -792,21 +794,21 @@ export default function AffiliateDetailModal({
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1">Total Signups</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Total Signups</div>
                       <div className="text-lg sm:text-2xl font-bold text-gray-900">{data.affiliate.totalSignups}</div>
                     </div>
                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1">Total Sales</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Total Sales</div>
                       <div className="text-lg sm:text-2xl font-bold text-gray-900">
                         {formatCurrency(data.affiliate.totalSales)}
                       </div>
                     </div>
                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1">Unpaid Commissions</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Unpaid Commissions</div>
                       <div className="text-lg sm:text-2xl font-bold text-green-600">{formatCurrency(unpaidAmount)}</div>
                     </div>
                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                      <div className="text-xs sm:text-sm text-gray-600 mb-1">Pending Count</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Pending Count</div>
                       <div className="text-lg sm:text-2xl font-bold text-gray-900">{pendingCount}</div>
                     </div>
                   </div>
@@ -817,15 +819,15 @@ export default function AffiliateDetailModal({
                       <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200 space-y-2 text-sm">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                           <div>
-                            <span className="font-medium text-gray-700">Account Name:</span>{" "}
+                            <span className="font-medium text-gray-700 dark:text-neutral-200">Account Name:</span>{" "}
                             <span className="text-gray-900">{data.affiliate.bankDetails.accountName || "Not provided"}</span>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-700">BSB:</span>{" "}
+                            <span className="font-medium text-gray-700 dark:text-neutral-200">BSB:</span>{" "}
                             <span className="text-gray-900">{data.affiliate.bankDetails.bsb || "Not provided"}</span>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-700">Account Number:</span>{" "}
+                            <span className="font-medium text-gray-700 dark:text-neutral-200">Account Number:</span>{" "}
                             <span className="text-gray-900">
                               {data.affiliate.bankDetails.accountNumber
                                 ? "••••" + data.affiliate.bankDetails.accountNumber.slice(-4)
@@ -833,7 +835,7 @@ export default function AffiliateDetailModal({
                             </span>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-700">Bank Name:</span>{" "}
+                            <span className="font-medium text-gray-700 dark:text-neutral-200">Bank Name:</span>{" "}
                             <span className="text-gray-900">{data.affiliate.bankDetails.bankName || "Not provided"}</span>
                           </div>
                         </div>
@@ -845,7 +847,7 @@ export default function AffiliateDetailModal({
                       </div>
                     ) : (
                       <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                        <p className="text-gray-600 text-sm">
+                        <p className="text-gray-600 dark:text-neutral-400 text-sm">
                           No bank details provided. The affiliate needs to add their bank details to receive payouts.
                         </p>
                       </div>
@@ -855,7 +857,7 @@ export default function AffiliateDetailModal({
                   {pendingCount > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 p-3 sm:p-4 rounded-lg">
                       <h3 className="font-semibold mb-2 text-gray-900 text-sm sm:text-base">Process Payout</h3>
-                      <p className="text-sm text-gray-600 mb-3">
+                      <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3">
                         {pendingCount} unpaid commissions totaling {formatCurrency(unpaidAmount)}
                       </p>
                       <div className="space-y-3">
@@ -899,7 +901,7 @@ export default function AffiliateDetailModal({
                     </span>
                   </div>
                   {data.referredUsers.length === 0 ? (
-                    <p className="text-gray-600 text-sm">No referred users yet.</p>
+                    <p className="text-gray-600 dark:text-neutral-400 text-sm">No referred users yet.</p>
                   ) : (
                     <>
                       <div className="overflow-x-auto rounded-lg border border-gray-200 -mx-1 sm:mx-0 touch-pan-x">
@@ -968,11 +970,11 @@ export default function AffiliateDetailModal({
                                     {formatDisplayName(user.firstName, user.lastName)}
                                   </div>
                                 </td>
-                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">{user.email}</td>
-                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">{user.email}</td>
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {user.phone || "N/A"}
                                 </td>
-                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">
+                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {formatDate(user.referredAt)}
                                 </td>
                               </tr>
@@ -1133,7 +1135,7 @@ export default function AffiliateDetailModal({
                               <tr key={`g-${item.typeKey}-${idx}`} className="bg-gray-100/90">
                                 <td
                                   colSpan={7}
-                                  className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700 capitalize"
+                                  className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-neutral-200 capitalize"
                                 >
                                   {item.label}
                                 </td>
@@ -1152,16 +1154,16 @@ export default function AffiliateDetailModal({
                                     <span className="text-gray-400">N/A</span>
                                   )}
                                 </td>
-                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600">
+                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {formatDate(item.commission.earnedAt)}
                                 </td>
-                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap capitalize text-gray-600">
+                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap capitalize text-gray-600 dark:text-neutral-400">
                                   {formatCommissionTypeLabel(item.commission.type)}
                                 </td>
-                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600">
+                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {item.commission.packageName}
                                 </td>
-                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-right text-gray-600">
+                                <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-right text-gray-600 dark:text-neutral-400">
                                   {formatCurrency(item.commission.purchaseAmount)}
                                 </td>
                                 <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-right font-semibold text-green-600">
@@ -1249,16 +1251,16 @@ export default function AffiliateDetailModal({
                       <tbody className="divide-y divide-gray-200">
                         {data.payouts.map((payout) => (
                           <tr key={payout.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                               {formatDate(payout.paidAt)}
                             </td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-right font-semibold text-gray-900">
                               {formatCurrency(payout.totalAmount)}
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                               {payout.commissionCount} commissions
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600">
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                               {payout.processedBy?.name || "N/A"}
                             </td>
                           </tr>

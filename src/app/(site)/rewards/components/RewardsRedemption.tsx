@@ -337,12 +337,12 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
               <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
                 Rewards Redemption Paused
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{pauseMessage}</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">{pauseMessage}</p>
             </div>
           </div>
         </div>
         <div className="p-4 sm:p-6 md:p-8">
-          <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 leading-relaxed">
             We&apos;re temporarily disabling redemptions while we upgrade the rewards programme. If you need help with
             an existing request, reach out to support and we&apos;ll get you sorted.
           </p>
@@ -362,7 +362,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
               Claim Packages with Points
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
               Use your {currentUserPoints.toLocaleString()} points to claim packages for free
             </p>
           </div>
@@ -385,11 +385,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
       <div className="p-4 sm:p-6 md:p-8">
         <div
           ref={scrollContainerRef}
-          className="h-[500px] sm:h-[600px] md:h-[700px] lg:h-[800px] overflow-y-auto pr-2 custom-scrollbar"
-          style={{
-            scrollbarWidth: "thin",
-            scrollbarColor: "#ee0000 #f3f4f6",
-          }}
+          className="h-[500px] sm:h-[600px] md:h-[700px] lg:h-[800px] overflow-y-auto pr-2 brand-scrollbar"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {redemptionOptions.slice(0, visibleCount).map((option) => (
@@ -429,7 +425,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed line-clamp-2 sm:line-clamp-3">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 leading-relaxed line-clamp-2 sm:line-clamp-3">
                     {option.description}
                   </p>
                 </div>

@@ -266,7 +266,7 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
           <FormSection title="Promo Period">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Start Date & Time</label>
                 <DateTimePicker
                   id="startDate"
                   name="startDate"
@@ -280,7 +280,7 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">End Date & Time</label>
                 <DateTimePicker
                   id="endDate"
                   name="endDate"

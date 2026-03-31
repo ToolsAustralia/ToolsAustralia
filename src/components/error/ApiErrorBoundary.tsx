@@ -112,7 +112,7 @@ export class ApiErrorBoundary extends Component<Props, State> {
               {isNetworkError ? "Connection Error" : "API Error"}
             </h2>
 
-            <p className="text-gray-600 mb-6">{this.getErrorMessage(error)}</p>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">{this.getErrorMessage(error)}</p>
 
             {process.env.NODE_ENV === "development" && (
               <div className="mb-6 p-4 bg-red-50 rounded-lg text-left">

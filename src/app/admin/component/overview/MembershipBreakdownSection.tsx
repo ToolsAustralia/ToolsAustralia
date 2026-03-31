@@ -48,7 +48,7 @@ export default function MembershipBreakdownSection({
         className="shadow-md"
       >
         {membershipByPackageLoading && (
-          <div className="flex items-center justify-center py-5 sm:py-6 text-gray-500 text-xs sm:text-sm">
+          <div className="flex items-center justify-center py-5 sm:py-6 text-gray-500 dark:text-neutral-400 text-xs sm:text-sm">
             <RefreshCw className="w-6 h-6 sm:w-8 sm:h-8 animate-spin mr-2 shrink-0" />
             <span>Loading membership breakdown…</span>
           </div>
@@ -57,7 +57,7 @@ export default function MembershipBreakdownSection({
         {!membershipByPackageLoading && membershipByPackageData && (
           <>
             {/* Summary Bar */}
-            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-md sm:rounded-lg border border-emerald-200 text-[11px] sm:text-sm text-gray-700 leading-snug">
+            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/40 rounded-md sm:rounded-lg border border-emerald-200 dark:border-emerald-800 text-[11px] sm:text-sm text-gray-700 dark:text-neutral-200 leading-snug">
               <div className="flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2">
                 <button
                   type="button"
@@ -68,11 +68,11 @@ export default function MembershipBreakdownSection({
                   className="text-left hover:underline focus:outline-none focus:ring-1 focus:ring-red-300 rounded"
                 >
                   Active:{" "}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-gray-900 dark:text-white">
                     {(membershipByPackageData.summary?.totalActiveCount ?? 0).toLocaleString()} users
                   </span>
                   {" · "}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-gray-900 dark:text-white">
                     $
                     {(membershipByPackageData.summary?.totalActiveRevenue ?? 0).toLocaleString("en-AU", {
                       minimumFractionDigits: 2,
@@ -90,7 +90,7 @@ export default function MembershipBreakdownSection({
                   className="text-left hover:underline focus:outline-none focus:ring-1 focus:ring-red-300 rounded"
                 >
                   Past due:{" "}
-                  <span className="font-semibold text-gray-900">
+                  <span className="font-semibold text-gray-900 dark:text-white">
                     {(membershipByPackageData.summary?.totalPastDueCount ?? 0).toLocaleString()} users
                   </span>
                   {" · "}
@@ -106,7 +106,7 @@ export default function MembershipBreakdownSection({
             </div>
 
             {/* Mobile: compact matrix — packages as columns, status as rows */}
-            <div className="sm:hidden mb-2 overflow-x-auto -mx-1 px-1">
+            <div className="sm:hidden mb-2 overflow-x-auto -mx-1 px-1 brand-scrollbar">
               <table className="w-full min-w-[280px] text-[10px] border-collapse table-fixed">
                 <thead>
                   <tr>
@@ -114,7 +114,7 @@ export default function MembershipBreakdownSection({
                     {membershipByPackageData.packages.map((pkg) => {
                       const packageIcon = getPackageIcon(pkg.packageId);
                       return (
-                        <th key={pkg.packageId} className="p-1 text-center font-semibold text-gray-800 align-bottom">
+                        <th key={pkg.packageId} className="p-1 text-center font-semibold text-gray-800 dark:text-neutral-200 align-bottom">
                           <div className="flex flex-col items-center gap-0.5 min-h-[3.25rem] justify-end">
                             {packageIcon ? (
                               <Image
@@ -216,7 +216,7 @@ export default function MembershipBreakdownSection({
                       setMembershipModalPackage({ packageId: pkg.packageId, packageName: pkg.packageName });
                       setIsMembershipByPackageModalOpen(true);
                     }}
-                    className="bg-white border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 hover:border-emerald-300 hover:shadow-md hover:bg-emerald-50/30 transition-all text-left cursor-pointer w-full"
+                    className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg sm:rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 hover:border-emerald-300 dark:hover:border-emerald-600 hover:shadow-md hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all text-left cursor-pointer w-full"
                   >
                     {packageIcon ? (
                       <Image
@@ -232,8 +232,12 @@ export default function MembershipBreakdownSection({
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">{pkg.packageName}</p>
-                      <p className="text-[11px] sm:text-sm text-gray-600">Active: {pkg.activeCount.toLocaleString()}</p>
+                      <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white truncate">
+                        {pkg.packageName}
+                      </p>
+                      <p className="text-[11px] sm:text-sm text-gray-600 dark:text-neutral-400">
+                        Active: {pkg.activeCount.toLocaleString()}
+                      </p>
                       <p className="text-[11px] sm:text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
                       <p className="text-[11px] sm:text-sm text-amber-700">Past due: {(pkg.pastDueCount ?? 0).toLocaleString()}</p>
                     </div>

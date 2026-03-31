@@ -215,7 +215,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
               </li>
             )}
             {/* {shopDiscount > 0 && (
-              <li className="flex items-center gap-2 text-sm text-gray-700">
+              <li className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-200">
                 <Percent className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span>
                   <strong>{shopDiscount}%</strong> off shop purchases
@@ -291,7 +291,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-white py-1"
+              className="text-sm text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white py-1"
             >
               Close
             </button>

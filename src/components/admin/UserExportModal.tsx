@@ -320,7 +320,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       <ModalContent padding="md" className="flex flex-col gap-4">
         {/* Segment Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-gray-700">Export Segment</label>
+          <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Export Segment</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {EXPORT_SEGMENTS.map((seg) => (
               <button
@@ -348,7 +348,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
 
         {/* Format Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-gray-700">Export Format</label>
+          <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Export Format</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {EXPORT_FORMATS.map((format) => (
               <button
@@ -381,7 +381,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
         {/* Field Selection */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-gray-700">Select Fields to Export</label>
+            <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Select Fields to Export</label>
             <div className="flex gap-2">
               <button
                 onClick={selectAll}
@@ -473,7 +473,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                             onChange={() => toggleField(field.key)}
                             disabled={isExporting}
                           />
-                          <span className="text-sm text-gray-700 flex-1">{field.displayName}</span>
+                          <span className="text-sm text-gray-700 dark:text-neutral-200 flex-1">{field.displayName}</span>
                           {field.isComputed && (
                             <span className="text-xs text-gray-500 italic">(calculated)</span>
                           )}

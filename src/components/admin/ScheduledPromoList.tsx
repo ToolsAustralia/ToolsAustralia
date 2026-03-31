@@ -63,27 +63,27 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
   const getStatusBadge = (promo: ScheduledPromo) => {
     if (promo.isCurrentlyActive) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950/55 dark:text-green-300">
           Active Now
         </span>
       );
     }
     if (promo.isUpcoming) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
           Upcoming
         </span>
       );
     }
     if (promo.isExpired) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-neutral-800 dark:text-neutral-300">
           Expired
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+      <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-950/45 dark:text-yellow-200">
         Inactive
       </span>
     );
@@ -109,7 +109,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -119,10 +119,10 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
 
         <div className="p-3 sm:p-6">
           {promos.length === 0 ? (
-            <div className="text-center py-8">
-              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No scheduled phases found</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="py-8 text-center">
+              <Calendar className="mx-auto mb-4 h-12 w-12 text-gray-300 dark:text-neutral-600" />
+              <p className="text-gray-500 dark:text-neutral-400">No scheduled phases found</p>
+              <p className="mt-1 text-sm text-gray-400 dark:text-neutral-500">
                 Add a phase to apply multipliers automatically during specific date ranges
               </p>
             </div>
@@ -133,12 +133,12 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                 {promos.map((promo) => (
                   <div
                     key={promo.id}
-                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50/50"
+                    className="rounded-lg border border-gray-200 p-3 hover:bg-gray-50/50 dark:border-neutral-700 dark:hover:bg-neutral-800/50"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <PromoBadgeImage multiplier={promo.multiplier} size="small" className="shrink-0" />
-                        <span className="text-sm font-medium text-gray-900 truncate">
+                        <span className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">
                           {promo.name || getTypeLabel(promo.type)}
                         </span>
                       </div>
@@ -146,7 +146,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                         {getStatusBadge(promo)}
                         <button
                           onClick={() => handleEdit(promo)}
-                          className="text-blue-600 hover:text-blue-900 p-1.5 rounded"
+                          className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -154,7 +154,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                         <button
                           onClick={() => handleDelete(promo.id)}
                           disabled={deletingId === promo.id}
-                          className="text-red-600 hover:text-red-900 p-1.5 rounded disabled:opacity-50"
+                          className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
                           title="Delete"
                         >
                           {deletingId === promo.id ? (
@@ -165,7 +165,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                         </button>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600 space-y-0.5">
+                    <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
                       <div>{getTypeLabel(promo.type)}</div>
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
@@ -179,63 +179,63 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
 
               {/* Desktop: Table layout */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:bg-neutral-800 dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Type
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Multiplier
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Date Range
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-neutral-700 dark:bg-neutral-900/80">
                     {promos.map((promo) => (
-                      <tr key={promo.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{getTypeLabel(promo.type)}</div>
+                      <tr key={promo.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/60">
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900 dark:text-neutral-100">{getTypeLabel(promo.type)}</div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <PromoBadgeImage multiplier={promo.multiplier} size="small" />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-sm text-gray-900 max-w-[140px] truncate">
-                            {promo.name || <span className="text-gray-400 italic">—</span>}
+                          <div className="max-w-[140px] truncate text-sm text-gray-900 dark:text-neutral-100">
+                            {promo.name || <span className="italic text-gray-400 dark:text-neutral-500">—</span>}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-sm text-gray-900">
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                          <div className="text-sm text-gray-900 dark:text-neutral-100">
+                            <div className="mb-0.5 flex items-center gap-1">
+                              <Calendar className="h-3 w-3 shrink-0 text-gray-400 dark:text-neutral-500" />
                               <span className="font-medium">Start:</span>
                               <span>{promo.startDateFormatted || formatDateReadable(new Date(promo.startDate))}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                              <Calendar className="h-3 w-3 shrink-0 text-gray-400 dark:text-neutral-500" />
                               <span className="font-medium">End:</span>
                               <span>{promo.endDateFormatted || formatDateReadable(new Date(promo.endDate))}</span>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promo)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleEdit(promo)}
-                              className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
+                              className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                               title="Edit phase"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -243,7 +243,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
                             <button
                               onClick={() => handleDelete(promo.id)}
                               disabled={deletingId === promo.id}
-                              className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
                               title="Delete phase"
                             >
                               {deletingId === promo.id ? (

@@ -391,7 +391,7 @@ export default function ProductCard({
   // Grid view
   if (viewMode === "grid") {
     return (
-      <div className="bg-white rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden group h-full flex flex-col">
+      <div className="bg-white dark:bg-neutral-900 rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] border border-transparent dark:border-neutral-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-all duration-300 overflow-hidden group h-full flex flex-col">
         <div className="relative">
           {/* Product Image */}
           <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
@@ -455,14 +455,14 @@ export default function ProductCard({
           <div className="flex-1 space-y-2">
             {/* Product Name */}
             <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 hover:text-blue-600 transition-colors line-clamp-2 min-h-[2.5rem]">
+              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2 min-h-[2.5rem]">
                 {productData.name}
               </h3>
             </Link>
 
             {/* Brand (products only) */}
             {!productData.isPrize && (
-              <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 tracking-[0.1px]">
+              <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 dark:text-neutral-400 tracking-[0.1px]">
                 {productData.brand}
               </p>
             )}
@@ -471,7 +471,7 @@ export default function ProductCard({
             {!productData.isPrize && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>
-                <span className="text-[12px] sm:text-[14px] text-gray-600 ml-1">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
                   ({getValidRating(productData.rating).toFixed(1)})
                 </span>
               </div>
@@ -481,7 +481,7 @@ export default function ProductCard({
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>
               </div>
@@ -495,7 +495,7 @@ export default function ProductCard({
                     isPrizeCancelled ? "bg-red-500" : isPrizeClosed ? "bg-yellow-500" : "bg-green-500"
                   }`}
                 />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "Closed" : "Active"}
                 </span>
               </div>
@@ -514,7 +514,7 @@ export default function ProductCard({
           <div className="mt-4 space-y-3">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
                 <span>${productData.price.toFixed(2)}</span>
               </div>
             )}
@@ -604,7 +604,7 @@ export default function ProductCard({
 
   // List view (similar optimistic approach)
   return (
-    <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden">
+    <div className="bg-white dark:bg-neutral-900 rounded-[20px] border border-transparent dark:border-neutral-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-all duration-300 overflow-hidden">
       <div className="flex">
         {/* Product Image */}
         <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
@@ -641,21 +641,21 @@ export default function ProductCard({
           <div className="space-y-2">
             {/* Product Name */}
             <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 hover:text-blue-600 transition-colors line-clamp-2">
+              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2">
                 {productData.name}
               </h3>
             </Link>
 
             {/* Brand (products only) */}
             {!productData.isPrize && (
-              <p className="text-[14px] sm:text-[16px] text-gray-600 tracking-[0.1px]">{productData.brand}</p>
+              <p className="text-[14px] sm:text-[16px] text-gray-600 dark:text-neutral-400 tracking-[0.1px]">{productData.brand}</p>
             )}
 
             {/* Rating - Only show for products, not mini draws */}
             {!productData.isPrize && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>
-                <span className="text-[14px] text-gray-600 ml-1">
+                <span className="text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
                   ({getValidRating(productData.rating).toFixed(1)})
                 </span>
               </div>
@@ -665,7 +665,7 @@ export default function ProductCard({
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>
               </div>
@@ -674,7 +674,7 @@ export default function ProductCard({
             {/* Mini Draw Progress Bar (Entry-based) - List View */}
             {productData.isPrize && productData.minimumEntries && (
               <div className="flex justify-center items-center text-xs">
-                <span className="text-gray-700">{productData.entriesRemaining || 0} entries remaining</span>
+                <span className="text-gray-700 dark:text-neutral-200">{productData.entriesRemaining || 0} entries remaining</span>
               </div>
             )}
 
@@ -690,7 +690,7 @@ export default function ProductCard({
           <div className="flex items-center justify-between mt-4">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
                 <span>${productData.price.toFixed(2)}</span>
               </div>
             )}

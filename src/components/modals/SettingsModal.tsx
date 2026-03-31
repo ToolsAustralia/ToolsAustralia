@@ -36,7 +36,9 @@ type SettingsModalProps = {
 
 const tabButtonClass = (active: boolean) =>
   `flex-1 rounded-lg border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-colors ${
-    active ? "bg-[#ee0000] text-white border-[#ee0000]" : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+    active
+      ? "bg-[#ee0000] text-white border-[#ee0000]"
+      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:border-neutral-500"
   }`;
 
 /**
@@ -237,24 +239,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const profileView = useMemo(
     () => (
       <div className="space-y-3 sm:space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm">
-          <h3 className="text-sm sm:text-base font-semibold text-gray-900">Profile Details</h3>
+        <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900/85">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100">Profile Details</h3>
 
           <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">Name</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-default">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Name</label>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 dark:border-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-200 cursor-default">
                 {formatDisplayName(user.firstName, user.lastName)}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">Email</label>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 cursor-default">
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Email</label>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 dark:border-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-200 cursor-default">
                 {user.email}
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">Email verification</label>
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Email verification</label>
               <div
                 className={`rounded-lg border px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold ${
                   user.isEmailVerified
@@ -266,10 +268,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">Phone number</label>
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Phone number</label>
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 <input
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500"
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value)}
                   placeholder="Enter phone number"
@@ -286,7 +288,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setMobile(user.mobile || "")}
-                    className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   >
                     Reset
                   </button>
@@ -303,7 +305,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs sm:text-sm font-medium text-gray-700">Profession</label>
+              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Profession</label>
               <div className="flex flex-col gap-1.5 sm:gap-2">
                 <input
                   className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
@@ -329,7 +331,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   setState(user.state || "");
                   setProfession(user.profession || "");
                 }}
-                className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
               >
                 Reset
               </button>
@@ -358,12 +360,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const passwordView = (
     <div className="space-y-3 sm:space-y-4">
-      <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm">
-        <h3 className="text-sm sm:text-base font-semibold text-gray-900">Change Password</h3>
-        <p className="text-[10px] sm:text-xs text-gray-500">Minimum of 6 characters</p>
+      <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900/85">
+        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100">Change Password</h3>
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400">Minimum of 6 characters</p>
         <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
           <div className="flex flex-col gap-1">
-            <label className="text-xs sm:text-sm font-medium text-gray-700">Current password</label>
+            <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Current password</label>
             <input
               type="password"
               className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:border-red-500 focus:outline-none"
@@ -373,11 +375,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs sm:text-sm font-medium text-gray-700">New password</label>
+            <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">New password</label>
             <div className="relative">
               <input
                 type={showNewPassword ? "text" : "password"}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 sm:py-2 pr-10 text-xs sm:text-sm focus:border-red-500 focus:outline-none w-full"
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 sm:py-2 pr-10 text-xs sm:text-sm text-gray-900 placeholder:text-gray-500 focus:border-red-500 focus:outline-none w-full dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-500"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password"
@@ -386,7 +388,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 focus:outline-none"
                 tabIndex={-1}
               >
                 {showNewPassword ? (
@@ -398,7 +400,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs sm:text-sm font-medium text-gray-700">Confirm new password</label>
+            <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Confirm new password</label>
             <div className="relative">
               <input
                 type={showConfirmPassword ? "text" : "password"}
@@ -411,7 +413,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 focus:outline-none"
                 tabIndex={-1}
               >
                 {showConfirmPassword ? (
@@ -438,7 +440,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 setNewPassword("");
                 setConfirmNewPassword("");
               }}
-              className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
             >
               Clear
             </button>
@@ -446,14 +448,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">Forgot password</h3>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900/85">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-neutral-100">Forgot password</h3>
 
         <button
           type="button"
           onClick={handleRequestReset}
           disabled={isRequestingReset}
-          className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 dark:border-neutral-600 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isRequestingReset ? "Sending..." : "Send reset email"}
         </button>
@@ -474,7 +476,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   const paymentView = (
-    <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm">
+    <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-900/85">
       <PaymentMethodsTab user={user} />
     </div>
   );

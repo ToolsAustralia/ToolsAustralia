@@ -105,9 +105,9 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm dark:shadow-lg overflow-hidden">
       {/* Tab Navigation */}
-      <div className="border-b border-gray-100">
+      <div className="border-b border-gray-100 dark:border-neutral-800">
         <nav className="flex">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -118,14 +118,14 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative flex-1 py-3.5 sm:py-4 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium transition-colors ${
                   isActive
-                    ? "text-[#ee0000]"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "text-[#ee0000] dark:text-red-400"
+                    : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white"
                 }`}
                 suppressHydrationWarning
               >
                 <Icon
                   className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
-                    isActive ? "text-[#ee0000]" : "text-gray-400"
+                    isActive ? "text-[#ee0000] dark:text-red-400" : "text-gray-400 dark:text-neutral-500"
                   }`}
                 />
                 <span>{tab.label}</span>
@@ -235,17 +235,17 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   </div>
                 ) : (
                   <div className="text-center py-12 sm:py-16">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#ee0000]/10 to-[#cc0000]/5 flex items-center justify-center">
-                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-[#ee0000]" />
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#ee0000]/10 to-[#cc0000]/5 dark:from-red-950/50 dark:to-red-950/20 flex items-center justify-center">
+                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-[#ee0000] dark:text-red-400" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
                       Are You Our Next Lucky Winner?
                     </h4>
-                    <p className="text-sm sm:text-base text-gray-500 max-w-sm mx-auto leading-relaxed">
+                    <p className="text-sm sm:text-base text-gray-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
                       Secure your entries now and you could be the next name on
                       our winners board.
                     </p>
-                    <div className="mt-6 inline-flex items-center gap-1.5 text-[#ee0000] text-sm font-semibold">
+                    <div className="mt-6 inline-flex items-center gap-1.5 text-[#ee0000] dark:text-red-400 text-sm font-semibold">
                       <span>Get your entries</span>
                       <ChevronRight className="w-4 h-4" />
                     </div>
@@ -269,14 +269,14 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.08, duration: 0.3 }}
                       >
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white border border-gray-100 flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <RuleIcon className="w-4 h-4 text-[#ee0000]" />
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white dark:bg-neutral-900 border border-gray-100 dark:border-neutral-700 flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <RuleIcon className="w-4 h-4 text-[#ee0000] dark:text-red-400" />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
                             {rule.title}
                           </div>
-                          <div className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-relaxed">
+                          <div className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
                             {rule.desc}
                           </div>
                         </div>
@@ -286,9 +286,9 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                 </div>
 
                 {/* Draw Flow */}
-                <div className="bg-gradient-to-br from-gray-50 to-gray-50/50 rounded-xl p-4 sm:p-6 border border-gray-100">
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#ee0000]" />
+                <div className="bg-gradient-to-br from-gray-50 to-gray-50/50 dark:from-neutral-800/80 dark:to-neutral-900/80 rounded-xl p-4 sm:p-6 border border-gray-100 dark:border-neutral-700">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#ee0000] dark:text-red-400" />
                     How the Draw Works
                   </h3>
                   <div className="space-y-0">
@@ -306,10 +306,10 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                           )}
                         </div>
                         <div className="pb-4 sm:pb-5 min-w-0">
-                          <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                          <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
                             {step.label}
                           </span>
-                          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-relaxed">
+                          <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
                             {step.text}
                           </p>
                         </div>
@@ -318,11 +318,11 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   </div>
 
                   {latestWinner && (
-                    <div className="mt-2 pt-4 border-t border-gray-200/60 flex items-center gap-3">
+                    <div className="mt-2 pt-4 border-t border-gray-200/60 dark:border-neutral-700 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center flex-shrink-0">
                         <Crown className="w-4 h-4 text-white" />
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-600">
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
                         <span className="font-semibold text-gray-900">
                           Latest Winner:
                         </span>{" "}
@@ -342,8 +342,8 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
 
                 {/* Winner Spotlight */}
                 {latestWinner?.imageUrl && (
-                  <div className="flex items-center gap-4 sm:gap-5 p-4 sm:p-5 rounded-xl bg-gradient-to-r from-gray-50 to-white border border-gray-100">
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0">
+                  <div className="flex items-center gap-4 sm:gap-5 p-4 sm:p-5 rounded-xl bg-gradient-to-r from-gray-50 to-white dark:from-neutral-800/70 dark:to-neutral-900 border border-gray-100 dark:border-neutral-700">
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-gray-100 dark:border-neutral-700 shadow-sm flex-shrink-0">
                       <Image
                         src={latestWinner.imageUrl}
                         alt="Winner"
@@ -353,16 +353,16 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       />
                     </div>
                     <div>
-                      <div className="text-[10px] sm:text-xs font-semibold text-[#ee0000] uppercase tracking-wider mb-1">
+                      <div className="text-[10px] sm:text-xs font-semibold text-[#ee0000] dark:text-red-400 uppercase tracking-wider mb-1">
                         Winner Spotlight
                       </div>
-                      <p className="text-sm sm:text-base font-bold text-gray-900">
+                      <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">
                         {formatWinnerName(
                           latestWinner.winnerFirstName,
                           latestWinner.winnerLastName
                         )}
                       </p>
-                      <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-0.5">
                         Won {miniDraw.prize.name}
                       </p>
                     </div>

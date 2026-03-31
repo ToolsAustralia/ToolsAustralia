@@ -50,7 +50,7 @@ export function PromotionsGuestThemeToggle() {
   if (!onPromotionsRoute || loading || isAuthenticated) return null;
 
   return (
-    <div className="fixed right-4 bottom-24 z-40 sm:bottom-28">
+    <div className="fixed bottom-32 right-4 z-[55] sm:bottom-36 pointer-events-auto">
       <ThemeToggleButton />
     </div>
   );

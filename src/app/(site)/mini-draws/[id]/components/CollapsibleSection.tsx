@@ -35,16 +35,16 @@ export default function CollapsibleSection({
       >
         <div className="flex items-center gap-2 min-w-0">
           {icon}
-          <span className="text-sm font-semibold text-gray-900 truncate">
+          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
             {title}
           </span>
         </div>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: prefersReduced ? 0 : 0.2 }}
-          className="w-6 h-6 rounded-full bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center flex-shrink-0 transition-colors"
+          className="w-6 h-6 rounded-full bg-gray-100 dark:bg-neutral-800 group-hover:bg-gray-200 dark:group-hover:bg-neutral-700 flex items-center justify-center flex-shrink-0 transition-colors"
         >
-          <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+          <ChevronDown className="w-3.5 h-3.5 text-gray-500 dark:text-neutral-400" />
         </motion.div>
       </button>
 
@@ -52,7 +52,7 @@ export default function CollapsibleSection({
       {!hideDesktopTitle && (
         <div className="hidden lg:flex items-center gap-2 mb-3">
           {icon}
-          <span className="text-base font-semibold text-gray-900">{title}</span>
+          <span className="text-base font-semibold text-gray-900 dark:text-white">{title}</span>
         </div>
       )}
 

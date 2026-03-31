@@ -166,20 +166,19 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 100 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className={`fixed bottom-10 sm:bottom-12 left-0 right-0 flex justify-center z-50 ${className}`}
-          onMouseEnter={() => !isCollapsed && setIsExpanded(true)}
-          onMouseLeave={() => setIsExpanded(false)}
-          onClick={() => {
-            // Mobile: toggle expanded on click
-            if (isCollapsed) setIsExpanded(!isExpanded);
-          }}
+          className={`fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none ${className}`}
         >
           <motion.div
             animate={{
               scale: isCollapsedState ? 0.95 : 1,
             }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className={`relative bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-xl shadow-2xl border ${
+            onMouseEnter={() => !isCollapsed && setIsExpanded(true)}
+            onMouseLeave={() => setIsExpanded(false)}
+            onClick={() => {
+              if (isCollapsed) setIsExpanded(!isExpanded);
+            }}
+            className={`relative pointer-events-auto bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-xl shadow-2xl border ${
               gatesClosed ? "border-yellow-500/50" : "border-red-500/50"
             } backdrop-blur-sm overflow-visible w-full mx-4 ${
               isCollapsedState ? "max-w-md" : "max-w-4xl"

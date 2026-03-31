@@ -285,7 +285,7 @@ export default function AdminMonthlyRedeemablesModal({
           <FormSection title="Coupon Window">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1.5">
                   <span className="inline-flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-red-600" />
                     Start
@@ -300,7 +300,7 @@ export default function AdminMonthlyRedeemablesModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1.5">
                   <span className="inline-flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-red-600" />
                     End
@@ -316,7 +316,7 @@ export default function AdminMonthlyRedeemablesModal({
                 />
               </div>
             </div>
-            <label className="mt-3 h-11 px-3 rounded-lg border border-gray-300 bg-white flex items-center gap-2 text-sm text-gray-700">
+            <label className="mt-3 h-11 px-3 rounded-lg border border-gray-300 bg-white flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-200">
               <input
                 type="checkbox"
                 checked={formData.neverExpires}
@@ -335,7 +335,7 @@ export default function AdminMonthlyRedeemablesModal({
           {targetingMode === "dynamic-segment" && (
             <FormSection title="Dynamic Segment Rules">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-neutral-100 mb-2">
                   <Target className="w-4 h-4 text-red-600" />
                   Audience Constraints
                 </div>
@@ -354,7 +354,7 @@ export default function AdminMonthlyRedeemablesModal({
                     onChange={(e) => setFormData((prev) => ({ ...prev, maxInactiveDays: e.target.value }))}
                     placeholder="Max inactive days"
                   />
-                  <label className="h-11 px-3 rounded-lg border border-gray-300 bg-white flex items-center gap-2 text-sm text-gray-700">
+                  <label className="h-11 px-3 rounded-lg border border-gray-300 bg-white flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-200">
                     <input
                       type="checkbox"
                       checked={formData.requiresEmailVerified}

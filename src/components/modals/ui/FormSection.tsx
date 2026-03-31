@@ -14,7 +14,7 @@ const FormSection: React.FC<FormSectionProps> = ({ title, icon: Icon, children, 
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Section Header */}
-      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-2">
         {Icon && <Icon className="w-5 h-5" />}
         {title}
       </h3>

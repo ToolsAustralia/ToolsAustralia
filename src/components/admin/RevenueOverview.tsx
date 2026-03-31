@@ -474,11 +474,7 @@ export default function RevenueOverview() {
           {/* Chart Container */}
           <div
             ref={chartContainerRef}
-            className="absolute left-8 sm:left-10 right-0 top-0 bottom-16 overflow-x-auto overflow-y-clip custom-scrollbar"
-            style={{
-              scrollbarWidth: "thin",
-              scrollbarColor: "#fbbf24 #1e293b",
-            }}
+            className="absolute left-8 sm:left-10 right-0 top-0 bottom-16 overflow-x-auto overflow-y-clip brand-scrollbar"
           >
             <div className="flex items-end justify-start gap-4 sm:gap-5 lg:gap-6 h-full w-full min-w-max px-2 sm:px-4">
               {chartData.map((data, index) => {

@@ -328,7 +328,7 @@ export default function MajorDrawEditModal({
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Information */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
                 <Edit className="w-5 h-5" />
                 Basic Information
               </h3>
@@ -359,7 +359,7 @@ export default function MajorDrawEditModal({
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                   Description <span className="text-red-500">*</span>
                 </label>
                 {errors.description && (
@@ -379,7 +379,7 @@ export default function MajorDrawEditModal({
 
             {/* Prize Information */}
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
                 <Package className="w-5 h-5" />
                 Prize Information
               </h3>
@@ -409,7 +409,7 @@ export default function MajorDrawEditModal({
               </div>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                   Prize Description <span className="text-red-500">*</span>
                 </label>
                 {errors["prize.description"] && (
@@ -451,7 +451,7 @@ export default function MajorDrawEditModal({
 
             {/* Dates */}
             <div className="bg-purple-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
                 Important Dates
               </h3>

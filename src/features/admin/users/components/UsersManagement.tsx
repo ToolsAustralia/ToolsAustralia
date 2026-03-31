@@ -202,7 +202,7 @@ export default function UsersManagement() {
 
       {/* Results Summary */}
       {usersData && (
-        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           <p>
             Showing {(usersData.pagination.currentPage - 1) * usersData.pagination.limit + 1} to{" "}
             {Math.min(usersData.pagination.currentPage * usersData.pagination.limit, usersData.pagination.totalCount)}{" "}

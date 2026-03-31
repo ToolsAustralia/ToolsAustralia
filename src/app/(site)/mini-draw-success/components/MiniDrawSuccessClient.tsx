@@ -14,17 +14,17 @@ interface MiniDrawSuccessClientProps {
 
 export default function MiniDrawSuccessClient({ searchParams: _searchParams }: MiniDrawSuccessClientProps) {
   return (
-    <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+    <div className="bg-gray-50 dark:bg-neutral-950 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Success Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-12 h-12 text-green-600" />
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-950/50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">
             Mini Draw Entry Successful!
           </h1>
-          <p className="text-gray-600 text-lg">
+          <p className="text-gray-600 dark:text-neutral-400 text-lg">
             Thank you for your purchase. Your entry has been added to the mini draw.
           </p>
         </div>
@@ -47,7 +47,7 @@ export default function MiniDrawSuccessClient({ searchParams: _searchParams }: M
                 </Link>
                 <Link
                   href="/"
-                  className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors"
+                  className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 dark:bg-neutral-800 text-gray-900 dark:text-white font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-neutral-700 transition-colors"
                 >
                   Continue Shopping
                 </Link>
@@ -57,9 +57,9 @@ export default function MiniDrawSuccessClient({ searchParams: _searchParams }: M
         </div>
 
         {/* Additional Information */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">What&apos;s Next?</h2>
-          <ul className="space-y-3 text-gray-600">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm border border-gray-200 dark:border-neutral-800 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">What&apos;s Next?</h2>
+          <ul className="space-y-3 text-gray-600 dark:text-neutral-400">
             <li className="flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
               <span>Your entry has been added to the mini draw</span>

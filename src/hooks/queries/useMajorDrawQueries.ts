@@ -388,6 +388,7 @@ export const useCompletedMajorDraws = () => {
               state: string;
               entryNumber: number;
               selectedDate: string;
+              drawResultUrl?: string;
             };
           }>;
           total: number;
@@ -490,6 +491,7 @@ export const useMajorDrawPrefetch = () => {
                 state: string;
                 entryNumber: number;
                 selectedDate: string;
+                drawResultUrl?: string;
               };
             }>;
             total: number;

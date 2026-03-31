@@ -267,7 +267,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                         type="text"
                         value={generatedUrl}
                         readOnly
-                        className="flex-1 px-3 py-2 bg-white border border-green-300 rounded text-sm text-gray-700"
+                        className="flex-1 px-3 py-2 bg-white border border-green-300 rounded text-sm text-gray-700 dark:text-neutral-200"
                       />
                       <button
                         type="button"
@@ -313,7 +313,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                     disabled={isSubmitting}
                     className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
                   />
-                  <label htmlFor="codeModeAuto" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  <label htmlFor="codeModeAuto" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                     Auto-generate code
                   </label>
                 </div>
@@ -332,7 +332,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                     disabled={isSubmitting}
                     className="w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
                   />
-                  <label htmlFor="codeModeCustom" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  <label htmlFor="codeModeCustom" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                     Use custom code
                   </label>
                 </div>
@@ -396,7 +396,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                   disabled={isSubmitting}
                   className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                 />
-                <label htmlFor="appliesToMembership" className="text-sm font-medium text-gray-700 cursor-pointer">
+                <label htmlFor="appliesToMembership" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                   Apply to Membership Packages
                 </label>
               </div>
@@ -414,7 +414,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                   disabled={isSubmitting}
                   className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                 />
-                <label htmlFor="appliesToOneTime" className="text-sm font-medium text-gray-700 cursor-pointer">
+                <label htmlFor="appliesToOneTime" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                   Apply to One-Time Packages
                 </label>
               </div>
@@ -430,7 +430,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
           <FormSection title="Campaign Targeting">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Type</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Campaign Type</label>
                 <select
                   value={formData.campaignType}
                   onChange={(e) => {
@@ -459,7 +459,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Eligibility Audience</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Eligibility Audience</label>
                 <select
                   value={formData.eligibilityAudience}
                   onChange={(e) =>
@@ -491,7 +491,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                   disabled={isSubmitting}
                   className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
                 />
-                <label htmlFor="requireInactiveSubscription" className="text-sm font-medium text-gray-700 cursor-pointer">
+                <label htmlFor="requireInactiveSubscription" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                   Require no active subscription at redemption
                 </label>
               </div>
@@ -605,7 +605,7 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
                 disabled={isSubmitting}
                 className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
               />
-              <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
+              <label htmlFor="isActive" className="text-sm font-medium text-gray-700 dark:text-neutral-200">
                 Active (Promo link is enabled and can be used)
               </label>
             </div>

@@ -200,7 +200,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
             </div>
           ) : (
             <>
-              <div className="mb-5 sm:mb-7 -mx-1 sm:-mx-2 px-1 sm:px-2 overflow-x-auto scrollbar-hide">
+              <div className="mb-5 sm:mb-7 -mx-1 sm:-mx-2 px-1 sm:px-2 overflow-x-auto brand-scrollbar">
                 <div className="flex gap-2 sm:gap-3 min-w-max pb-2">
                   {sections.map((section) => {
                     const isActive = section.id === activeSection?.id;

@@ -247,14 +247,14 @@ export default function ProductCategories({
         <div className="text-center mb-8 sm:mb-10 lg:mb-12">
           <h2
             className={`text-[20px] sm:text-[24px] lg:text-[48px] font-bold font-['Poppins'] mb-2 sm:mb-3 lg:mb-4 leading-tight ${
-              showBackground ? "text-white drop-shadow-lg" : "text-gray-900"
+              showBackground ? "text-white drop-shadow-lg" : "text-gray-900 dark:text-white"
             }`}
           >
             {title}
           </h2>
           <p
             className={`text-[14px] sm:text-[16px] lg:text-[18px] max-w-3xl mx-auto ${
-              showBackground ? "text-slate-200" : "text-gray-600"
+              showBackground ? "text-slate-200" : "text-gray-600 dark:text-neutral-400"
             }`}
           >
             {description}

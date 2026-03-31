@@ -12,6 +12,9 @@ import { getNextMidnightAEST, convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
 import { resolvePromoBannerLeftVisual } from "@/utils/promo-banner/resolve-promo-banner-left-visual";
+import type { HolidayPromoSlot } from "@/utils/promo-banner/holiday-promo-banner";
+import { readInitialHolidayDevSlotForClient } from "@/utils/promo-banner/holiday-promo-banner";
+import { PromoHolidayDevToolbar } from "./PromoHolidayDevToolbar";
 import { NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { UrgencyClockIcon } from "@/components/ui";
@@ -83,7 +86,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const toolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
   const preferDark = theme.preferDarkBackground ?? false;
   const rightSectionTextClass = preferDark ? "text-black" : "text-white";
-  const rightSectionLabelClass = preferDark ? "text-gray-800" : "text-red-100";
+  const rightSectionLabelClass = preferDark ? "text-gray-800 dark:text-neutral-100" : "text-red-100";
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
@@ -93,6 +96,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Gap period: gates closed (no active draw), next draw ~3.5hrs away
   const isGapPeriod = currentDraw?.status !== "active";
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
+
+  const [holidayDevPreview, setHolidayDevPreview] = useState<HolidayPromoSlot | null>(() =>
+    readInitialHolidayDevSlotForClient()
+  );
 
   // User context for member+one-time tab multiplier resolution (align with MembershipSection)
   const { userData } = useUserContext();
@@ -528,6 +535,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       scheduledPromoUrgent: scheduledPromoState.hasScheduledPromo && scheduledPromoState.isUrgent,
       hasScheduledPromo: scheduledPromoState.hasScheduledPromo,
       multiplier,
+      holidayDevPreview: process.env.NODE_ENV === "development" ? holidayDevPreview : null,
     });
   }, [
     variantConfig?.banner?.leftImageUrl,
@@ -540,9 +548,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     scheduledPromoState.isUrgent,
     multiplier,
     getDrawDateStatus,
+    holidayDevPreview,
   ]);
 
   const isDrawnTomorrowLeftArt = leftVisual.staticFamily === "drawn-tomorrow";
+  const isHolidayLeftArt = leftVisual.isHolidayVisual === true;
 
   const leftVisualStaticUrls = useMemo(() => {
     if (leftVisual.srcFallbacks?.length) {
@@ -625,7 +635,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     measureInFlowOnly();
     window.addEventListener("resize", measureInFlowOnly);
     return () => window.removeEventListener("resize", measureInFlowOnly);
-  }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily]);
+  }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily, isHolidayLeftArt]);
 
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
   if (!isPromoResolved) return null;
@@ -773,21 +783,29 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       alt={leftVisual.alt}
                       onError={handleLeftImageError}
                       className={`w-auto object-contain object-center lg:object-left drop-shadow-md ${
-                        isDrawnTomorrowLeftArt
+                        isHolidayLeftArt
                           ? isScrolled
                             ? showPromoCountdownStrip
-                              ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(310px,calc(100vw-11rem))] sm:max-w-[min(300px,calc(100vw-13rem))] lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,215px)]"
-                              : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
+                              ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-w-[min(640px,calc(100vw-10rem))] sm:max-w-[min(620px,calc(100vw-12rem))] lg:max-w-[min(94vw,640px)] max-[360px]:h-[4rem] max-[360px]:max-w-[min(90vw,400px)]"
+                              : "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-w-[min(94vw,600px)] sm:max-w-[min(96vw,640px)] max-[360px]:h-[4rem] max-[360px]:max-w-[min(90vw,380px)]"
                             : showPromoCountdownStrip
-                              ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(400px,calc(100vw-11rem))] sm:max-w-[min(400px,calc(100vw-13rem))] lg:max-w-[min(95vw,400px)]"
-                              : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
-                          : isScrolled
-                            ? showPromoCountdownStrip
-                              ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(520px,calc(100vw-11rem))] sm:max-w-[min(500px,calc(100vw-13rem))] lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,360px)]"
-                              : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
-                            : showPromoCountdownStrip
-                              ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(580px,calc(100vw-11rem))] sm:max-w-[min(580px,calc(100vw-13rem))] lg:max-w-[min(95vw,580px)]"
-                              : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
+                              ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-w-[min(680px,calc(100vw-10rem))] sm:max-w-[min(660px,calc(100vw-12rem))] lg:max-w-[min(96vw,680px)] max-[360px]:h-[4.25rem] max-[360px]:max-w-[min(92vw,420px)]"
+                              : "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-w-[min(96vw,680px)]"
+                          : isDrawnTomorrowLeftArt
+                            ? isScrolled
+                              ? showPromoCountdownStrip
+                                ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(310px,calc(100vw-11rem))] sm:max-w-[min(300px,calc(100vw-13rem))] lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,215px)]"
+                                : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
+                              : showPromoCountdownStrip
+                                ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(400px,calc(100vw-11rem))] sm:max-w-[min(400px,calc(100vw-13rem))] lg:max-w-[min(95vw,400px)]"
+                                : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
+                            : isScrolled
+                              ? showPromoCountdownStrip
+                                ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(520px,calc(100vw-11rem))] sm:max-w-[min(500px,calc(100vw-13rem))] lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,360px)]"
+                                : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
+                              : showPromoCountdownStrip
+                                ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(580px,calc(100vw-11rem))] sm:max-w-[min(580px,calc(100vw-13rem))] lg:max-w-[min(95vw,580px)]"
+                                : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
                       }`}
                     />
                   </motion.div>
@@ -795,12 +813,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   <div
                     className={`${
                       isScrolled
-                        ? isDrawnTomorrowLeftArt
-                          ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] w-[6.25rem] sm:w-[9.25rem]"
-                          : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
-                        : isDrawnTomorrowLeftArt
-                          ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
-                          : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
+                        ? isHolidayLeftArt
+                          ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] w-[11.5rem] sm:w-[16rem]"
+                          : isDrawnTomorrowLeftArt
+                            ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] w-[6.25rem] sm:w-[9.25rem]"
+                            : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
+                        : isHolidayLeftArt
+                          ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] w-[12.5rem] sm:w-[17rem]"
+                          : isDrawnTomorrowLeftArt
+                            ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
+                            : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
                     } shrink-0 rounded bg-white/10 animate-pulse max-sm:absolute max-sm:top-1/2 max-sm:-translate-y-1/2 sm:static sm:translate-x-0 sm:translate-y-0 ${
                       showPromoCountdownStrip
                         ? "max-sm:left-1/2 max-sm:-translate-x-1/2"
@@ -1081,6 +1103,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
           </div>
         </div>
       </motion.div>
+      <PromoHolidayDevToolbar forcedSlot={holidayDevPreview} onForcedSlotChange={setHolidayDevPreview} />
     </>
   );
 }

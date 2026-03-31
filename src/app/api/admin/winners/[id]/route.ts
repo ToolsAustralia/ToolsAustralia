@@ -24,6 +24,7 @@ const updateWinnerSchema = z.object({
   // Legacy field - kept for backward compatibility
   selectedPrizeSlug: z.string().optional().nullable(),
   imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+  drawResultUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
 /**
@@ -190,6 +191,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       winner.imageUrl = validatedData.imageUrl && validatedData.imageUrl.trim() !== "" ? validatedData.imageUrl : undefined;
     }
 
+    if (validatedData.drawResultUrl !== undefined) {
+      winner.drawResultUrl =
+        validatedData.drawResultUrl && validatedData.drawResultUrl !== "" ? validatedData.drawResultUrl : undefined;
+    }
+
     await winner.save();
 
     // Fetch updated winner with populated data
@@ -237,6 +243,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         selectedPrize: (updatedWinner.selectedPrize || updatedWinner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
         selectedPrizeSlug: updatedWinner.selectedPrizeSlug || null, // Legacy field
         imageUrl: updatedWinner.imageUrl ?? null,
+        drawResultUrl: updatedWinner.drawResultUrl ?? null,
       },
     });
   } catch (error) {

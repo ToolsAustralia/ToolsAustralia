@@ -226,7 +226,7 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
           {/* Multiplier Selection */}
           <FormSection title="Select Two Multipliers">
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 Select exactly 2 multipliers that will alternate daily. The system will automatically switch between
                 them at midnight AEST.
               </p>
@@ -291,7 +291,7 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
                 }
                 disabled={isSubmitting}
               />
-              <label htmlFor="isEnabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+              <label htmlFor="isEnabled" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                 Enable alternating multiplier
               </label>
             </div>

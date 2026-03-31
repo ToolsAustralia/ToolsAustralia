@@ -101,7 +101,7 @@ export default function ChannelDetailModal({
       />
       <ModalContent className="p-4 sm:p-6 space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4 text-red-700 dark:text-red-300">
             {(error as Error).message}
           </div>
         )}
@@ -141,14 +141,14 @@ export default function ChannelDetailModal({
         )}
 
         {/* Pages table */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
+        <div className="bg-white dark:bg-neutral-900/70 rounded-xl shadow-lg border-2 border-red-100 dark:border-red-900/35 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 p-4 border-b border-gray-200 dark:border-neutral-700">
             Pages Receiving Traffic
           </h3>
           {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading...</div>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading...</div>
           ) : sortedPages.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
               No page data for this channel in the selected period.
             </div>
           ) : (
@@ -156,7 +156,7 @@ export default function ChannelDetailModal({
               <table className="w-full min-w-[320px] text-xs sm:text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left p-1.5 sm:p-2 md:p-3 font-semibold text-gray-700 min-w-[80px]">Page</th>
+                    <th className="text-left p-1.5 sm:p-2 md:p-3 font-semibold text-gray-700 dark:text-neutral-200 min-w-[80px]">Page</th>
                     <th className="text-right p-1.5 sm:p-2 md:p-3 font-semibold whitespace-nowrap">
                       <button onClick={() => handlePageSort("visits")} className="flex items-center justify-end gap-0.5 sm:gap-1 w-full hover:text-red-600">
                         Visits {getPageSortIcon("visits")}
@@ -184,14 +184,14 @@ export default function ChannelDetailModal({
                 </thead>
                 <tbody>
                   {sortedPages.map((row) => (
-                    <tr key={`${row.pageType}-${row.slug}`} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="p-1.5 sm:p-2 md:p-3 font-medium text-gray-900 break-words">
+                    <tr key={`${row.pageType}-${row.slug}`} className="border-t border-gray-100 dark:border-neutral-700 hover:bg-gray-50 dark:hover:bg-neutral-800/50">
+                      <td className="p-1.5 sm:p-2 md:p-3 font-medium text-gray-900 dark:text-neutral-100 break-words">
                         <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                           <span
                             className={`inline-flex px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium whitespace-nowrap ${
                               row.pageType === "toolset"
-                                ? "bg-indigo-100 text-indigo-800"
-                                : "bg-amber-100 text-amber-800"
+                                ? "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200"
+                                : "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200"
                             }`}
                           >
                             {row.pageType === "toolset" ? "Toolset" : "Evergreen"}
@@ -203,9 +203,9 @@ export default function ChannelDetailModal({
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatNumber(row.signups)}</td>
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatNumber(row.conversions)}</td>
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatCurrency(row.revenue)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 tabular-nums">{formatPercentage(row.visitToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 tabular-nums">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 tabular-nums">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.visitToSignupRate)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.signupToConversionRate)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.overallConversionRate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -215,8 +215,8 @@ export default function ChannelDetailModal({
         </div>
 
         {/* Campaign breakdown */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 p-4 border-b border-gray-200">
+        <div className="bg-white dark:bg-neutral-900/70 rounded-xl shadow-lg border-2 border-red-100 dark:border-red-900/35 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 p-4 border-b border-gray-200 dark:border-neutral-700">
             Breakdown by Campaign
           </h3>
           <UTMCampaignBreakdownTable

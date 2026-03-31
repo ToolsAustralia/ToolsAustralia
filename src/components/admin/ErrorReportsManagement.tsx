@@ -131,12 +131,12 @@ function ErrorReportDetailModal({
     new: "bg-blue-100 text-blue-800",
     investigating: "bg-yellow-100 text-yellow-800",
     resolved: "bg-green-100 text-green-800",
-    dismissed: "bg-gray-100 text-gray-800",
+    dismissed: "bg-gray-100 text-gray-800 dark:text-neutral-100",
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl dark:shadow-none border border-gray-200 dark:border-neutral-700 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 flex items-center justify-between">
           <div>
@@ -158,7 +158,7 @@ function ErrorReportDetailModal({
           {/* Status and User Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ErrorReportStatus)}
@@ -171,8 +171,8 @@ function ErrorReportDetailModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">User</label>
-              <div className="px-3 py-2 bg-gray-50 rounded-lg">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">User</label>
+              <div className="px-3 py-2 bg-gray-50 dark:bg-neutral-800 rounded-lg border border-transparent dark:border-neutral-700">
                 {report.isAuthenticated ? (
                   <ClickableUserDisplay
                     displayText={
@@ -181,10 +181,10 @@ function ErrorReportDetailModal({
                         : report.userEmail || "Unknown"
                     }
                     userId={typeof report.userId === "string" ? report.userId : null}
-                    className="text-sm font-medium text-gray-900"
+                    className="text-sm font-medium text-gray-900 dark:text-white"
                   />
                 ) : (
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 dark:text-neutral-400">
                     {report.userEmail || report.guestEmail ? (
                       <span>Guest: {report.userEmail || report.guestEmail}</span>
                     ) : (
@@ -198,17 +198,17 @@ function ErrorReportDetailModal({
 
           {/* Error Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Error Message</label>
-            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-900">{report.errorMessage}</p>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Error Message</label>
+            <div className="px-4 py-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-lg">
+              <p className="text-sm text-red-900 dark:text-red-200">{report.errorMessage}</p>
             </div>
           </div>
 
           {/* Error Stack */}
           {report.errorStack && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stack Trace</label>
-              <pre className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs overflow-x-auto">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Stack Trace</label>
+              <pre className="px-4 py-3 bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-700 rounded-lg text-xs overflow-x-auto text-gray-800 dark:text-neutral-300">
                 {report.errorStack}
               </pre>
             </div>
@@ -217,9 +217,9 @@ function ErrorReportDetailModal({
           {/* API Endpoint */}
           {report.apiEndpoint && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">API Endpoint</label>
-              <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                <span className="text-sm font-mono">{report.httpMethod} {report.apiEndpoint}</span>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">API Endpoint</label>
+              <div className="px-4 py-2 bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg">
+                <span className="text-sm font-mono text-gray-900 dark:text-neutral-200">{report.httpMethod} {report.apiEndpoint}</span>
                 {report.httpStatus && (
                   <span className={`ml-2 px-2 py-1 rounded text-xs ${
                     report.httpStatus >= 500
@@ -238,16 +238,16 @@ function ErrorReportDetailModal({
           {/* Browser Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Browser</label>
-              <div className="px-3 py-2 bg-gray-50 rounded-lg text-sm">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Browser</label>
+              <div className="px-3 py-2 bg-gray-50 dark:bg-neutral-800 rounded-lg text-sm text-gray-900 dark:text-neutral-200 border border-transparent dark:border-neutral-700">
                 {report.browserInfo
                   ? `${report.browserInfo.name || "Unknown"} ${report.browserInfo.version || ""} on ${report.browserInfo.os || "Unknown"}`
                   : "Unknown"}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Page</label>
-              <div className="px-3 py-2 bg-gray-50 rounded-lg text-sm truncate">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Page</label>
+              <div className="px-3 py-2 bg-gray-50 dark:bg-neutral-800 rounded-lg text-sm truncate text-gray-900 dark:text-neutral-200 border border-transparent dark:border-neutral-700">
                 {report.route || report.currentUrl || "Unknown"}
               </div>
             </div>
@@ -256,31 +256,31 @@ function ErrorReportDetailModal({
           {/* User Notes */}
           {report.userNotes && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">User Notes</label>
-              <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-900 whitespace-pre-wrap">{report.userNotes}</p>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">User Notes</label>
+              <div className="px-4 py-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-200 whitespace-pre-wrap">{report.userNotes}</p>
               </div>
             </div>
           )}
 
           {/* Admin Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Admin Notes</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Admin Notes</label>
             <textarea
               value={adminNotes}
               onChange={(e) => setAdminNotes(e.target.value)}
               rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:ring-2 focus:ring-red-500 focus:border-red-500"
               placeholder="Add notes about this error report..."
             />
           </div>
         </div>
 
         {/* Footer */}
-        <div className="border-t p-4 flex justify-end gap-3">
+        <div className="border-t border-gray-200 dark:border-neutral-700 p-4 flex justify-end gap-3 bg-gray-50/50 dark:bg-neutral-950/50">
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
           >
             Cancel
           </button>
@@ -617,7 +617,7 @@ export default function ErrorReportsManagement() {
     new: "bg-blue-100 text-blue-800",
     investigating: "bg-yellow-100 text-yellow-800",
     resolved: "bg-green-100 text-green-800",
-    dismissed: "bg-gray-100 text-gray-800",
+    dismissed: "bg-gray-100 text-gray-800 dark:text-neutral-100",
   };
 
   const statusIcons = {
@@ -629,8 +629,8 @@ export default function ErrorReportsManagement() {
 
   if (error) {
     return (
-      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-800">Failed to load error reports. Please try again.</p>
+      <div className="p-6 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-lg">
+        <p className="text-red-800 dark:text-red-300">Failed to load error reports. Please try again.</p>
       </div>
     );
   }
@@ -640,10 +640,10 @@ export default function ErrorReportsManagement() {
       {/* Header - Matching AdminPage pattern */}
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
             Error Reports
           </h2>
-          <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
             View and manage error reports from users
           </p>
         </div>
@@ -665,7 +665,7 @@ export default function ErrorReportsManagement() {
             className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors text-xs sm:text-sm ${
               showAnalytics
                 ? "bg-red-600 text-white"
-                : "bg-white border border-gray-300 hover:bg-gray-50"
+                : "bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-neutral-800"
             }`}
           >
             <span className="hidden sm:inline">{showAnalytics ? "Hide Analytics" : "Show Analytics"}</span>
@@ -673,7 +673,7 @@ export default function ErrorReportsManagement() {
           </button>
           <button
             onClick={handleExportCSV}
-            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
             title="Export to CSV"
           >
             <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -681,7 +681,7 @@ export default function ErrorReportsManagement() {
           </button>
           <button
             onClick={handleExportJSON}
-            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
             title="Export to JSON"
           >
             <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -689,7 +689,7 @@ export default function ErrorReportsManagement() {
           </button>
           <button
             onClick={() => refetch()}
-            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-neutral-600 rounded-lg text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
           >
             <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Refresh</span>
@@ -737,11 +737,11 @@ export default function ErrorReportsManagement() {
       )}
 
       {/* Search and Filters - Elevated Design (Matching UsersManagement) */}
-      <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
+      <div className="bg-gradient-to-br from-white via-gray-50 to-white dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 lg:gap-4">
           {/* Search Bar - Enhanced */}
           <div className="relative flex-1 group flex items-center gap-2">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-neutral-500 group-focus-within:text-red-600 dark:group-focus-within:text-red-400 transition-colors w-4 h-4 sm:w-5 sm:h-5" />
             <input
               type="text"
               placeholder="Search error messages, emails, endpoints..."
@@ -750,20 +750,20 @@ export default function ErrorReportsManagement() {
                 setSearch(e.target.value);
                 setPage(1); // Reset to first page on search
               }}
-              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
+              className="w-full pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
             />
             {/* Mobile Filter Toggle Button */}
             <button
               onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
+              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 hover:border-red-500 dark:hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
               aria-label="Toggle filters"
             >
-              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400"}`} />
               {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
               {isFiltersOpen ? (
-                <ChevronUp className="w-4 h-4 text-gray-600" />
+                <ChevronUp className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
               ) : (
-                <ChevronDown className="w-4 h-4 text-gray-600" />
+                <ChevronDown className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
               )}
             </button>
           </div>
@@ -771,11 +771,11 @@ export default function ErrorReportsManagement() {
 
         {/* ✅ NEW: Advanced Filters - Collapsible on Mobile */}
         {(isFiltersOpen || !isFiltersOpen) && (
-          <div className={`pt-4 border-t border-gray-200 ${isFiltersOpen ? "block" : "hidden sm:block"}`}>
+          <div className={`pt-4 border-t border-gray-200 dark:border-neutral-700 ${isFiltersOpen ? "block" : "hidden sm:block"}`}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {/* Status Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Status</label>
                 <Dropdown
                   options={[
                     { value: "all", label: "All Status" },
@@ -795,7 +795,7 @@ export default function ErrorReportsManagement() {
 
               {/* Category Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Category</label>
                 <Dropdown
                   options={[
                     { value: "all", label: "All Categories" },
@@ -817,7 +817,7 @@ export default function ErrorReportsManagement() {
 
               {/* Severity Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Severity</label>
                 <Dropdown
                   options={[
                     { value: "all", label: "All Severities" },
@@ -837,7 +837,7 @@ export default function ErrorReportsManagement() {
 
               {/* User Email Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">User Email</label>
                 <input
                   type="text"
                   placeholder="Filter by email..."
@@ -846,13 +846,13 @@ export default function ErrorReportsManagement() {
                     setUserEmailFilter(e.target.value);
                     setPage(1);
                   }}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
                 />
               </div>
 
               {/* Auto-Logged Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Auto-Logged</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Auto-Logged</label>
                 <Dropdown
                   options={[
                     { value: "all", label: "All" },
@@ -870,7 +870,7 @@ export default function ErrorReportsManagement() {
 
               {/* API Endpoint Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">API Endpoint</label>
                 <input
                   type="text"
                   placeholder="Filter by endpoint..."
@@ -879,13 +879,13 @@ export default function ErrorReportsManagement() {
                     setApiEndpointFilter(e.target.value);
                     setPage(1);
                   }}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
                 />
               </div>
 
               {/* Date Range */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Start Date</label>
                 <input
                   type="date"
                   value={startDate}
@@ -893,12 +893,12 @@ export default function ErrorReportsManagement() {
                     setStartDate(e.target.value);
                     setPage(1);
                   }}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">End Date</label>
                 <input
                   type="date"
                   value={endDate}
@@ -906,7 +906,7 @@ export default function ErrorReportsManagement() {
                     setEndDate(e.target.value);
                     setPage(1);
                   }}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
+                  className="w-full px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all duration-200"
                 />
               </div>
 
@@ -915,7 +915,7 @@ export default function ErrorReportsManagement() {
                 <div className="flex items-end">
                   <button
                     onClick={clearAllFilters}
-                    className="w-full px-4 py-2 border-2 border-red-300 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-400 transition-colors font-medium"
+                    className="w-full px-4 py-2 border-2 border-red-300 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60 hover:border-red-400 transition-colors font-medium"
                   >
                     Clear All Filters
                   </button>
@@ -927,8 +927,8 @@ export default function ErrorReportsManagement() {
 
         {/* ✅ NEW: Grouping Controls */}
         {!showAnalytics && (
-          <div className="pt-4 border-t border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Group By</label>
+          <div className="pt-4 border-t border-gray-200 dark:border-neutral-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Group By</label>
             <Dropdown
               options={[
                 { value: "none", label: "No Grouping" },
@@ -948,25 +948,25 @@ export default function ErrorReportsManagement() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none">
         {isLoading ? (
           <div className="p-12 text-center">
             <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-            <p className="text-gray-600 mt-4">Loading error reports...</p>
+            <p className="text-gray-600 dark:text-neutral-400 mt-4">Loading error reports...</p>
           </div>
         ) : !data?.reports || data.reports.length === 0 ? (
           <div className="p-12 text-center">
             <Bug className="w-12 h-12 mx-auto text-gray-400" />
-            <p className="text-gray-600 mt-4">No error reports found</p>
+            <p className="text-gray-600 dark:text-neutral-400 mt-4">No error reports found</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200">
+                  <tr className="border-b border-gray-200 dark:border-neutral-700">
                     {/* ✅ NEW: Bulk select checkbox */}
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider w-12">
                       <button
                         onClick={handleSelectAll}
                         className="flex items-center justify-center"
@@ -979,43 +979,43 @@ export default function ErrorReportsManagement() {
                         )}
                       </button>
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Error
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Category
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Severity
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       User
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       API Endpoint
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Date
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-200 dark:divide-neutral-700">
                   {groupBy !== "none" && groupedReports ? (
                     // ✅ NEW: Grouped view
                     groupedReports.map((group) => (
                       <React.Fragment key={group.key}>
-                        <tr className="bg-gray-100">
+                        <tr className="bg-gray-100 dark:bg-neutral-800">
                           <td colSpan={9} className="px-4 py-2">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-gray-900">{group.key}</span>
-                                <span className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
+                                <span className="font-semibold text-gray-900 dark:text-white">{group.key}</span>
+                                <span className="text-xs text-gray-600 dark:text-neutral-400 bg-gray-200 dark:bg-neutral-700 px-2 py-1 rounded">
                                   {group.count} {group.count === 1 ? "error" : "errors"}
                                 </span>
                               </div>
@@ -1041,7 +1041,7 @@ export default function ErrorReportsManagement() {
                                 </button>
                               </td>
                               <td className="px-4 py-3 pl-8">
-                                <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white max-w-md truncate">
                                   {report.errorMessage}
                                 </div>
                                 {report.autoLogged && (
@@ -1082,7 +1082,7 @@ export default function ErrorReportsManagement() {
                                   {report.status}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
+                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
                                 {report.isAuthenticated ? (
                                   <ClickableUserDisplay
                                     displayText={
@@ -1095,14 +1095,14 @@ export default function ErrorReportsManagement() {
                                 ) : (
                                   <span>
                                     {report.userEmail || report.guestEmail ? (
-                                      <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                      <span className="text-gray-600 dark:text-neutral-400">Guest: {report.userEmail || report.guestEmail}</span>
                                     ) : (
                                       <span className="text-gray-400">Anonymous</span>
                                     )}
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 font-mono">
                                 {report.apiEndpoint ? (
                                   <span className="truncate max-w-xs block">
                                     {report.httpMethod} {report.apiEndpoint}
@@ -1111,7 +1111,7 @@ export default function ErrorReportsManagement() {
                                   <span className="text-gray-400">—</span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
+                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
                                 {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
                               </td>
                               <td className="px-4 py-3">
@@ -1148,7 +1148,7 @@ export default function ErrorReportsManagement() {
                             </button>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-gray-900 max-w-md truncate">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white max-w-md truncate">
                               {report.errorMessage}
                             </div>
                             {report.autoLogged && (
@@ -1189,7 +1189,7 @@ export default function ErrorReportsManagement() {
                               {report.status}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
                             {report.isAuthenticated ? (
                               <ClickableUserDisplay
                                 displayText={
@@ -1202,14 +1202,14 @@ export default function ErrorReportsManagement() {
                             ) : (
                               <span>
                                 {report.userEmail || report.guestEmail ? (
-                                  <span className="text-gray-600">Guest: {report.userEmail || report.guestEmail}</span>
+                                  <span className="text-gray-600 dark:text-neutral-400">Guest: {report.userEmail || report.guestEmail}</span>
                                 ) : (
                                   <span className="text-gray-400">Anonymous</span>
                                 )}
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 font-mono">
                             {report.apiEndpoint ? (
                               <span className="truncate max-w-xs block">
                                 {report.httpMethod} {report.apiEndpoint}
@@ -1218,7 +1218,7 @@ export default function ErrorReportsManagement() {
                               <span className="text-gray-400">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
                             {format(new Date(report.createdAt), "MMM d, yyyy HH:mm")}
                           </td>
                           <td className="px-4 py-3">
@@ -1245,7 +1245,7 @@ export default function ErrorReportsManagement() {
                     <button
                       onClick={() => setPage(1)}
                       disabled={data.pagination.page === 1}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="First page"
                     >
                       <ChevronsLeft className="w-4 h-4" />
@@ -1253,7 +1253,7 @@ export default function ErrorReportsManagement() {
                     <button
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={data.pagination.page === 1}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -1261,7 +1261,7 @@ export default function ErrorReportsManagement() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
                       Page {data.pagination.page} of {data.pagination.totalPages}
                     </span>
                   </div>
@@ -1270,7 +1270,7 @@ export default function ErrorReportsManagement() {
                     <button
                       onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
                       disabled={data.pagination.page === data.pagination.totalPages}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Next page"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -1278,7 +1278,7 @@ export default function ErrorReportsManagement() {
                     <button
                       onClick={() => setPage(data.pagination.totalPages)}
                       disabled={data.pagination.page === data.pagination.totalPages}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Last page"
                     >
                       <ChevronsRight className="w-4 h-4" />

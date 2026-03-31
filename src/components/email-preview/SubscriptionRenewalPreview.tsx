@@ -177,7 +177,7 @@ const SubscriptionRenewalPreview: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-xl font-bold text-gray-800">Subscription Renewal Email</h3>
+        <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Subscription Renewal Email</h3>
         <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
           Renewal Confirmation
         </span>

@@ -221,7 +221,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0 w-full">
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <label className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-700 cursor-pointer select-none min-w-0">
+            <label className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-700 dark:text-neutral-200 cursor-pointer select-none min-w-0">
               <input
                 type="checkbox"
                 className="rounded border-gray-300 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0"
@@ -269,7 +269,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
       )}
 
       {dateReady && isLoading && (
-        <p className="text-xs sm:text-sm text-gray-600">Loading…</p>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Loading…</p>
       )}
 
       {dateReady && error && (
@@ -287,7 +287,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
               <button
                 type="button"
                 onClick={() => setUrlColumnsExpanded((v) => !v)}
-                className="sm:hidden inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 hover:text-gray-900"
+                className="sm:hidden inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900"
               >
                 {urlColumnsExpanded ? (
                   <>
@@ -307,7 +307,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
             </div>
           </div>
           <div
-            className="-mx-3 sm:mx-0 px-3 sm:px-0 w-full min-w-0 overflow-x-auto scrollbar-hide"
+            className="-mx-3 sm:mx-0 px-3 sm:px-0 w-full min-w-0 overflow-x-auto brand-scrollbar"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             <table className="w-full min-w-[300px] sm:min-w-[900px] lg:min-w-[1100px] text-xs sm:text-sm">
@@ -317,35 +317,35 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="url"
                     align="left"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-[11px] sm:text-sm text-gray-700 min-w-[100px] sm:min-w-[180px] whitespace-nowrap"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-[11px] sm:text-sm text-gray-700 dark:text-neutral-200 min-w-[100px] sm:min-w-[180px] whitespace-nowrap"
                   >
                     URL
                   </SortHeader>
                   <SortHeader
                     column="spend"
                     align="right"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap text-[11px] sm:text-sm"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-[11px] sm:text-sm"
                   >
                     Spend
                   </SortHeader>
                   <SortHeader
                     column="clicks"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden md:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden md:table-cell" : ""}`}
                   >
                     Clicks
                   </SortHeader>
                   <SortHeader
                     column="impressions"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden lg:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden lg:table-cell" : ""}`}
                   >
                     Impr.
                   </SortHeader>
                   <SortHeader
                     column="cpc"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   >
                     CPC
                   </SortHeader>
@@ -360,7 +360,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="conversions"
                     align="right"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap text-[11px] sm:text-sm"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-[11px] sm:text-sm"
                   >
                     <span className="sm:hidden">Conv</span>
                     <span className="hidden sm:inline">Conv.</span>
@@ -368,21 +368,21 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="cpa"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   >
                     CPA
                   </SortHeader>
                   <SortHeader
                     column="roas"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                   >
                     ROAS
                   </SortHeader>
                   <SortHeader
                     column="profit"
                     align="right"
-                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 whitespace-nowrap ${!urlColumnsExpanded ? "hidden xl:table-cell" : ""}`}
+                    className={`sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap ${!urlColumnsExpanded ? "hidden xl:table-cell" : ""}`}
                   >
                     Profit
                   </SortHeader>
@@ -415,7 +415,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                           <button
                             type="button"
                             onClick={() => toggleRow(row.canonicalUrl)}
-                            className="p-0.5 sm:p-1 rounded hover:bg-gray-200 text-gray-600"
+                            className="p-0.5 sm:p-1 rounded hover:bg-gray-200 text-gray-600 dark:text-neutral-400"
                             aria-label={expandedUrl === row.canonicalUrl ? "Collapse" : "Expand"}
                           >
                             {expandedUrl === row.canonicalUrl ? (
@@ -476,7 +476,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                         <tr className="bg-slate-50">
                           <td colSpan={COL_SPAN} className="px-2 py-2 sm:px-3 sm:py-3">
                             {detailQuery.isLoading && (
-                              <p className="text-[11px] sm:text-xs text-gray-600">Loading ads…</p>
+                              <p className="text-[11px] sm:text-xs text-gray-600 dark:text-neutral-400">Loading ads…</p>
                             )}
                             {detailQuery.error && (
                               <p className="text-[11px] sm:text-xs text-red-600 leading-snug">
@@ -487,12 +487,12 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                             )}
                             {detailQuery.data?.rows && detailQuery.data.rows.length > 0 && (
                               <div
-                                className="-mx-1 sm:mx-0 w-full min-w-0 overflow-x-auto scrollbar-hide"
+                                className="-mx-1 sm:mx-0 w-full min-w-0 overflow-x-auto brand-scrollbar"
                                 style={{ WebkitOverflowScrolling: "touch" }}
                               >
                                 <table className="w-full min-w-[280px] sm:min-w-[640px] text-[10px] sm:text-xs">
                                   <thead>
-                                    <tr className="border-b border-slate-200 text-gray-600">
+                                    <tr className="border-b border-slate-200 text-gray-600 dark:text-neutral-400">
                                       <th className="sticky top-0 z-10 bg-slate-50 text-left py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold">
                                         Ad
                                       </th>
@@ -527,7 +527,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                                         <tr className="bg-slate-200/80">
                                           <td
                                             colSpan={8}
-                                            className="py-1 px-1 sm:py-1.5 sm:px-2 text-[10px] sm:text-[11px] font-semibold text-gray-800 uppercase tracking-wide"
+                                            className="py-1 px-1 sm:py-1.5 sm:px-2 text-[10px] sm:text-[11px] font-semibold text-gray-800 dark:text-neutral-100 uppercase tracking-wide"
                                           >
                                             {group.label}
                                           </td>
@@ -539,7 +539,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                                                 {d.adId}
                                               </span>
                                               {d.adName ? (
-                                                <span className="block text-gray-700 text-[10px] sm:text-xs leading-snug line-clamp-2 sm:line-clamp-none">
+                                                <span className="block text-gray-700 dark:text-neutral-200 text-[10px] sm:text-xs leading-snug line-clamp-2 sm:line-clamp-none">
                                                   {d.adName}
                                                 </span>
                                               ) : null}

@@ -22,6 +22,7 @@ type WinnerLean = {
   selectionMethod?: "manual" | "government-app";
   selectedBy?: PopulatedUser | Types.ObjectId | string;
   imageUrl?: string;
+  drawResultUrl?: string;
   prizeSnapshot: {
     name: string;
     description: string;
@@ -132,6 +133,7 @@ export async function GET() {
               ? `${winner.selectedBy.firstName} ${winner.selectedBy.lastName}`
               : null,
             imageUrl: winner.imageUrl,
+            drawResultUrl: winner.drawResultUrl,
           }
         : null;
 

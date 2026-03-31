@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
               entryNumber: winner.entryNumber,
               selectedDate: winner.selectedDate.toISOString(),
               imageUrl: winner.imageUrl,
+              drawResultUrl: winner.drawResultUrl,
               cycle: winner.cycle,
             };
           }
