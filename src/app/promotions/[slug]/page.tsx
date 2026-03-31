@@ -54,6 +54,7 @@ import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignm
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -130,12 +131,12 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Preload: evergreen hero always uses all-prizes collage (matches PromoHero useAllPrizesHero)
-  const allPrizesHero = resolveEvergreenHeroImages();
-  const heroImagePaths: PromoImagePaths = {
-    desktop: allPrizesHero.desktop,
-    mobile: allPrizesHero.mobile,
-  };
+  // Preload: brand folder heroes per prize slug (`landing/{brand}/…`); cash-prize uses all-prizes collage
+  const landingForPrize = getLandingHeroImagePaths(prize.slug);
+  const fallbackAllPrizes = resolveEvergreenHeroImages();
+  const heroImagePaths: PromoImagePaths = landingForPrize
+    ? { desktop: landingForPrize.desktop, mobile: landingForPrize.mobile }
+    : { desktop: fallbackAllPrizes.desktop, mobile: fallbackAllPrizes.mobile };
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -183,7 +184,6 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
                 initialPromo={membershipPromo}
                 initialMajorDraw={majorDraw}
                 prizeSlug={prize.slug}
-                useAllPrizesHero
               />
            
             </div>

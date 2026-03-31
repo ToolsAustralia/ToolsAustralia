@@ -42,6 +42,7 @@ export default function MajorDrawManagement() {
     selectedPrize?: string | null;
     winnerId?: string;
     winnerName?: string;
+    drawResultUrl?: string | null;
   } | null>(null);
   const [_isLoadingWinner, setIsLoadingWinner] = useState(false);
   const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
@@ -88,6 +89,8 @@ export default function MajorDrawManagement() {
                         selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
                         winnerId: winnerDetailsData.winner.id,
                         winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
+                        drawResultUrl:
+                          winnerDetailsData.winner.drawResultUrl ?? drawResultFromApi ?? null,
                       });
                     } else {
                       // Fallback
@@ -100,6 +103,7 @@ export default function MajorDrawManagement() {
                         testimony: winnerForDraw.testimony,
                         selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
                         winnerId: winnerForDraw.id,
+                        drawResultUrl: winnerForDraw.drawResultUrl ?? drawResultFromApi ?? null,
                       });
                     }
                   } else {
@@ -113,6 +117,7 @@ export default function MajorDrawManagement() {
                       testimony: winnerForDraw.testimony,
                       selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
                       winnerId: winnerForDraw.id,
+                      drawResultUrl: winnerForDraw.drawResultUrl ?? drawResultFromApi ?? null,
                     });
                   }
                 } else {
@@ -125,6 +130,7 @@ export default function MajorDrawManagement() {
                     imageUrl: data.winner.imageUrl,
                     testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: drawResultFromApi ?? null,
                   });
                 }
               } else {
@@ -137,6 +143,7 @@ export default function MajorDrawManagement() {
                   imageUrl: data.winner.imageUrl,
                   testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: drawResultFromApi ?? null,
                 });
               }
             } else {
@@ -149,6 +156,7 @@ export default function MajorDrawManagement() {
                 imageUrl: data.winner.imageUrl,
                 testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: drawResultFromApi ?? null,
               });
             }
           } catch (detailError) {
@@ -162,6 +170,7 @@ export default function MajorDrawManagement() {
               imageUrl: data.winner.imageUrl,
               testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: drawResultFromApi ?? null,
             });
           }
         } else {
@@ -339,6 +348,7 @@ export default function MajorDrawManagement() {
         imageUrl?: string;
         testimony?: string;
         selectedPrize?: string;
+        drawResultUrl?: string | null;
       } = {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
@@ -362,6 +372,10 @@ export default function MajorDrawManagement() {
       }
       if (winnerData.selectedPrize !== undefined) {
         requestBody.selectedPrize = winnerData.selectedPrize;
+      }
+
+      if (winnerData.drawResultUrl !== undefined) {
+        requestBody.drawResultUrl = winnerData.drawResultUrl;
       }
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
@@ -667,6 +681,9 @@ export default function MajorDrawManagement() {
             ? {
                 userId: currentWinner.userId,
                 imageUrl: currentWinner.imageUrl,
+                testimony: currentWinner.testimony ?? undefined,
+                selectedPrize: currentWinner.selectedPrize ?? undefined,
+                drawResultUrl: currentWinner.drawResultUrl ?? undefined,
               }
             : undefined
         }
@@ -684,6 +701,7 @@ export default function MajorDrawManagement() {
           currentTestimony={currentWinner.testimony}
           currentSelectedPrize={currentWinner.selectedPrize}
           currentImageUrl={currentWinner.imageUrl}
+          currentDrawResultUrl={currentWinner.drawResultUrl}
           onUpdate={async () => {
             refetch();
           }}

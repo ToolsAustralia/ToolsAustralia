@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Trophy, User, CheckCircle, AlertCircle, Image as ImageIcon, MessageSquare, Gift } from "lucide-react";
+import {
+  Trophy,
+  User,
+  CheckCircle,
+  AlertCircle,
+  Image as ImageIcon,
+  MessageSquare,
+  Gift,
+  Link2,
+} from "lucide-react";
 import UserSearchModal from "./UserSearchModal";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { formatDisplayName } from "@/utils/display-name";
@@ -40,6 +49,8 @@ export interface WinnerSelectionData {
   imageUrl?: string;
   testimony?: string;
   selectedPrize?: string;
+  /** Public draw verification URL; null clears on major draw re-record */
+  drawResultUrl?: string | null;
 }
 
 interface WinnerSelectionModalProps {
@@ -55,6 +66,7 @@ interface WinnerSelectionModalProps {
     imageUrl?: string;
     selectedPrize?: string;
     testimony?: string;
+    drawResultUrl?: string;
   };
   enableImageField?: boolean;
 }
@@ -78,22 +90,28 @@ export default function WinnerSelectionModal({
   // Prize selection and testimony state
   const [selectedPrize, setSelectedPrize] = useState("");
   const [testimony, setTestimony] = useState("");
+  const [drawResultUrl, setDrawResultUrl] = useState("");
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedUser(null);
       setWinnerImages([]);
       setError(null);
-          setSelectedPrize("");
+      setSelectedPrize("");
       setTestimony("");
+      setDrawResultUrl("");
     } else if (enableImageField && currentWinner?.imageUrl) {
       setWinnerImages([currentWinner.imageUrl]);
       setSelectedPrize(currentWinner.selectedPrize || "");
       setTestimony(currentWinner.testimony || "");
+      setDrawResultUrl(currentWinner.drawResultUrl || "");
     } else if (enableImageField) {
-      setWinnerImages([]);
-      setSelectedPrize("");
-      setTestimony("");
+      setWinnerImages(currentWinner?.imageUrl ? [currentWinner.imageUrl] : []);
+      setSelectedPrize(currentWinner?.selectedPrize || "");
+      setTestimony(currentWinner?.testimony || "");
+      setDrawResultUrl(currentWinner?.drawResultUrl || "");
+    } else if (isOpen) {
+      setDrawResultUrl(currentWinner?.drawResultUrl || "");
     }
   }, [isOpen, enableImageField, currentWinner]);
 
@@ -116,12 +134,24 @@ export default function WinnerSelectionModal({
     setError(null);
 
     try {
+      const trimmedVerification = drawResultUrl.trim();
+      if (trimmedVerification) {
+        try {
+          new URL(trimmedVerification);
+        } catch {
+          setError("Draw result link must be a full URL (e.g. https://randomdraws.com.au/...)");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const winnerData: WinnerSelectionData = {
         drawId,
         drawType,
         winnerUserId: selectedUser._id,
         testimony: testimony.trim() || undefined,
         selectedPrize: selectedPrize || undefined,
+        drawResultUrl: trimmedVerification === "" ? null : trimmedVerification,
       };
 
       // Handle image upload for both draw types
@@ -290,6 +320,28 @@ export default function WinnerSelectionModal({
                   </div>
                 </button>
               )}
+            </div>
+
+            {/* Draw verification / external results link */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-gray-500" />
+                  Draw result link (optional)
+                </div>
+              </label>
+              <input
+                type="url"
+                value={drawResultUrl}
+                onChange={(e) => setDrawResultUrl(e.target.value)}
+                placeholder="https://randomdraws.com.au/..."
+                className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ee0000] focus:border-[#ee0000] font-['Inter'] bg-white transition-all duration-200"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                If set, the public draw results page can send visitors to your Random Draws (or other) verification URL.
+                Leave empty for no link. For major draws, clearing this field when re-recording a winner removes the
+                stored link.
+              </p>
             </div>
 
             {/* Prize Selection - Only for major draws */}

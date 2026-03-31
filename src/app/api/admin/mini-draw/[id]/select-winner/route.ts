@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     const selectionMethodValue = formData.get("selectionMethod");
     const selectedByValue = formData.get("selectedBy");
     const existingImageUrlValue = formData.get("imageUrl");
+    const drawResultUrlValue = formData.get("drawResultUrl");
     const imageFileEntry = formData.get("winnerImage");
 
     if (
@@ -74,6 +75,24 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    let drawResultUrl: string | undefined;
+    if (typeof drawResultUrlValue === "string") {
+      const t = drawResultUrlValue.trim();
+      if (t) {
+        const urlCheck = z.string().url().safeParse(t);
+        if (!urlCheck.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Draw result URL must be a valid http(s) link",
+            },
+            { status: 400 }
+          );
+        }
+        drawResultUrl = urlCheck.data;
+      }
     }
 
     const baseData = {
@@ -292,6 +311,7 @@ export async function POST(request: NextRequest) {
             selectedDate: winnerDoc.selectedDate,
             selectionMethod: winnerDoc.selectionMethod,
             imageUrl: winnerDoc.imageUrl,
+            drawResultUrl: winnerDoc.drawResultUrl,
           },
         },
         message: "Winner recorded and draw reopened successfully",

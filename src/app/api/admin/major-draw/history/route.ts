@@ -25,6 +25,7 @@ type WinnerLean = {
   selectionMethod?: "manual" | "government-app";
   selectedBy?: PopulatedUser | Types.ObjectId | string;
   imageUrl?: string;
+  drawResultUrl?: string;
   prizeSnapshot: {
     name: string;
     description: string;
@@ -103,6 +104,7 @@ type ProcessedDraw = {
     } | null;
     selectionMethod?: "manual" | "government-app";
     imageUrl?: string;
+    drawResultUrl?: string;
   } | null;
   createdAt: Date;
   updatedAt: Date;
@@ -295,6 +297,7 @@ export async function GET(request: NextRequest) {
                 : null,
               selectionMethod: winner.selectionMethod,
               imageUrl: winner.imageUrl,
+              drawResultUrl: winner.drawResultUrl,
             }
           : null,
         createdAt: drawDoc.createdAt,
