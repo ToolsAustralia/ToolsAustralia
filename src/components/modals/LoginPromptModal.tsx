@@ -38,15 +38,15 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({ isOpen, onClose }) 
         <div className="w-full max-w-md space-y-6">
           {/* Icon/Illustration */}
           <div className="flex justify-center">
-            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
-              <LogIn className="w-10 h-10 text-red-600" />
+            <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
+              <LogIn className="w-10 h-10 text-red-600 dark:text-red-400" />
             </div>
           </div>
 
           {/* Message */}
           <div className="space-y-3">
-            <h3 className="text-xl font-bold text-gray-900">Please Login to Continue</h3>
-            <p className="text-gray-600 text-sm leading-relaxed">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-neutral-100">Please Login to Continue</h3>
+            <p className="text-gray-600 dark:text-neutral-400 text-sm leading-relaxed">
               You need to be logged in to your account to purchase entries for mini draws. Please log in to continue.
             </p>
           </div>

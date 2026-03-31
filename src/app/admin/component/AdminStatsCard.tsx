@@ -97,15 +97,17 @@ export default function AdminStatsCard({
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${className}`}>
+      <div
+        className={`bg-white dark:bg-neutral-900 rounded-xl shadow-sm dark:shadow-none border border-gray-100 dark:border-neutral-700 overflow-hidden ${className}`}
+      >
         <div className="p-4">
           <div className="animate-pulse">
             <div className="flex items-center justify-between mb-3">
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+              <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/2"></div>
+              <div className="w-10 h-10 bg-gray-200 dark:bg-neutral-700 rounded-lg"></div>
             </div>
-            <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-            <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+            <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-3/4 mb-2"></div>
+            <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/3"></div>
           </div>
         </div>
       </div>
@@ -114,10 +116,7 @@ export default function AdminStatsCard({
 
   return (
     <div
-      className={`relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group ${className}`}
-      style={{
-        background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-      }}
+      className={`relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 hover:shadow-xl transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950 ${className}`}
     >
       {/* Gradient overlay on hover */}
       <div
@@ -128,16 +127,16 @@ export default function AdminStatsCard({
         <div className="flex items-start justify-between mb-2 sm:mb-4">
           <div className="flex-1 min-w-0">
             {typeof title === "string" ? (
-              <p className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                 {title}
               </p>
             ) : (
-              <div className="text-slate-600 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
+              <div className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
                 {title}
               </div>
             )}
             {subtitle && (
-              <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 font-medium mb-1 sm:mb-2 leading-tight">
+              <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 dark:text-neutral-500 font-medium mb-1 sm:mb-2 leading-tight">
                 {subtitle}
               </p>
             )}
@@ -150,7 +149,7 @@ export default function AdminStatsCard({
         </div>
 
         <div className="space-y-1 sm:space-y-2">
-          <p className="text-xl sm:text-3xl lg:text-4xl font-bold text-slate-900 leading-none tracking-tight">
+          <p className="text-xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
 
@@ -169,7 +168,7 @@ export default function AdminStatsCard({
                 {trend.isPositive ? "+" : ""}
                 {trend.value}%
               </span>
-              <span className="text-slate-500 text-[9px] sm:text-xs ml-1 font-normal hidden sm:inline">
+              <span className="text-slate-500 dark:text-neutral-400 text-[9px] sm:text-xs ml-1 font-normal hidden sm:inline">
                 vs last period
               </span>
             </div>

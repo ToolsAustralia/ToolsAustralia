@@ -263,17 +263,17 @@ export default function AdminSidebar({
   };
 
   return (
-    <div className="w-full h-full bg-white border-r-2 border-red-100 flex flex-col shadow-lg">
+    <div className="w-full h-full bg-white dark:bg-neutral-900 border-r-2 border-red-100 dark:border-red-900/40 flex flex-col shadow-lg">
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-gray-200">
+      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-800">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-xl flex items-center justify-center">
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
-              <p className="text-sm text-gray-600">Tools Australia</p>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
+              <p className="text-sm text-gray-600 dark:text-neutral-400">Tools Australia</p>
             </div>
           </div>
 
@@ -281,7 +281,7 @@ export default function AdminSidebar({
           {isMobile && onClose && (
             <button
               onClick={onClose}
-              className="lg:hidden w-10 h-10 text-gray-500 hover:text-white hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 rounded-full transition-all duration-200 flex items-center justify-center"
+              className="lg:hidden w-10 h-10 text-gray-500 dark:text-neutral-400 hover:text-white hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 rounded-full transition-all duration-200 flex items-center justify-center"
               aria-label="Close sidebar"
             >
               <X className="w-5 h-5" />
@@ -292,7 +292,7 @@ export default function AdminSidebar({
         <button
           type="button"
           onClick={onNavigateToSite}
-          className="group w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-gray-800 rounded-lg border border-gray-200 bg-gray-50/80 hover:border-red-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white transition-all duration-200"
+          className="group w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-neutral-200 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/80 dark:bg-neutral-800/80 hover:border-red-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white transition-all duration-200"
         >
           <Home className="w-3.5 h-3.5 shrink-0 text-red-600 group-hover:text-white transition-colors" />
           <span className="group-hover:text-white">View Site</span>
@@ -327,11 +327,11 @@ export default function AdminSidebar({
                         ? `Draws, ${fullCapacityCount} mini draw${fullCapacityCount === 1 ? "" : "s"} ready to complete`
                         : `${group.label} section`
                   }
-                  className="group w-full flex items-center justify-between gap-2 py-2 pl-1 pr-1 text-left rounded-md text-gray-600 hover:text-gray-900 hover:bg-red-50/70 transition-colors"
+                  className="group w-full flex items-center justify-between gap-2 py-2 pl-1 pr-1 text-left rounded-md text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-red-50/70 dark:hover:bg-neutral-800 transition-colors"
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <GroupIcon className="w-4 h-4 shrink-0 text-red-600" aria-hidden />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 group-hover:text-gray-800 truncate">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500 group-hover:text-gray-800 dark:text-neutral-100 dark:hover:text-neutral-100 dark:group-hover:text-white truncate">
                       {group.label}
                     </span>
                   </span>
@@ -351,14 +351,14 @@ export default function AdminSidebar({
                       />
                     )}
                     {isExpanded ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
                     ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
                     )}
                   </span>
                 </button>
                 {isExpanded && (
-                  <div className="ml-1.5 pl-2.5 border-l border-red-100 space-y-0.5">
+                  <div className="ml-1.5 pl-2.5 border-l border-red-100 dark:border-red-900/50 space-y-0.5">
                     {group.tabs.map((tab) => {
                       const Icon = tab.icon;
                       const isActive =
@@ -375,18 +375,18 @@ export default function AdminSidebar({
                       className={`group w-full flex items-center gap-2 px-2 py-2 text-left text-sm rounded-lg transition-all duration-200 ${
                         isActive
                           ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-md"
-                          : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                          : "text-gray-700 dark:text-neutral-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                       }`}
                     >
                       <Icon
                         className={`w-4 h-4 flex-shrink-0 ${
-                          isActive ? "text-white" : "text-gray-500 group-hover:text-white"
+                          isActive ? "text-white" : "text-gray-500 dark:text-neutral-400 group-hover:text-white"
                         }`}
                       />
                       <div className="flex-1 min-w-0">
                         <div
                           className={`font-medium leading-snug ${
-                            isActive ? "text-white" : "text-gray-900 group-hover:text-white"
+                            isActive ? "text-white" : "text-gray-900 dark:text-white group-hover:text-white"
                           }`}
                         >
                           {tab.label}
@@ -417,9 +417,9 @@ export default function AdminSidebar({
       </div>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
         <div className="flex items-center gap-3 mb-3">
-          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-red-100 shadow-sm">
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-red-100 dark:ring-red-900/50 shadow-sm">
             <Image
               src={ADMIN_CIRCULAR_LOGO}
               alt="Tools Australia"
@@ -428,19 +428,19 @@ export default function AdminSidebar({
               className="h-full w-full object-cover"
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 truncate">{user.name}</div>
+          <div className="flex-1 min-w-0 text-gray-900 dark:text-neutral-100">
+            <div className="font-medium truncate">{user.name}</div>
 
             <div className="flex items-center gap-1 mt-1">
-              <Crown className="w-3 h-3 text-yellow-500" />
-              <span className="text-xs font-medium text-gray-600 capitalize">{user.role}</span>
+              <Crown className="w-3 h-3 text-yellow-500 shrink-0" />
+              <span className="text-xs font-medium text-gray-600 dark:text-neutral-400 capitalize">{user.role}</span>
             </div>
           </div>
         </div>
 
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
         >
           <LogOut className="w-4 h-4" />
           Sign Out

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, ReactNode } from "react";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useAutoTheme } from "@/hooks/useAutoTheme";
+import { readThemeFromPersistStorage } from "@/utils/themeBootstrap";
 
 type Theme = "light" | "dark";
 
@@ -16,14 +17,35 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 interface ThemeProviderProps {
   children: ReactNode;
-  scoped?: boolean;
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, scoped = false }) => {
+export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const { theme, setTheme, toggleTheme } = useThemeStore();
-  
+  const bootstrapped = useRef(false);
+
   // Enable auto-theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light)
   useAutoTheme();
+
+  // Align Zustand with inline head script + localStorage before paint (avoids stripping `dark` on first client render)
+  useLayoutEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    if (typeof window === "undefined") return;
+    try {
+      const root = document.documentElement;
+      const stored = readThemeFromPersistStorage();
+      const resolved: Theme =
+        stored ?? (root.classList.contains("dark") ? "dark" : "light");
+      useThemeStore.setState({ theme: resolved });
+      if (resolved === "dark") {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,13 +57,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, scoped =
     } else {
       root.classList.remove("dark");
     }
-
-    if (scoped) {
-      return () => {
-        root.classList.remove("dark");
-      };
-    }
-  }, [theme, scoped]);
+  }, [theme]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>

@@ -175,14 +175,14 @@ export default function AdminScheduledPromoCalendarModal({
 
       <ModalContent>
         <div className="space-y-6">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-neutral-400">
             Paint entry multipliers per civil day in <strong>Australia/Sydney</strong>. Existing phases that overlap this
             month are reconciled (trimmed, split, or cleared). Days marked &quot;—&quot; leave no scheduled promo for that
             day (toggle / alternating rules apply).
           </p>
 
           {applyError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{applyError}</div>
+            <div className="rounded-lg border border-red-200 dark:border-red-900/45 bg-red-50 dark:bg-red-950/25 px-4 py-3 text-sm text-red-800 dark:text-red-200">{applyError}</div>
           )}
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -200,7 +200,7 @@ export default function AdminScheduledPromoCalendarModal({
                     </option>
                   ))}
                 </select>
-                <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-neutral-200">
                   <input
                     type="checkbox"
                     checked={applyToAllTypes}
@@ -221,7 +221,7 @@ export default function AdminScheduledPromoCalendarModal({
                       onClick={() => setBrush(m)}
                       disabled={applyMutation.isPending}
                       className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
-                        brush === m ? "border-red-600 bg-red-600 text-white" : "border-gray-200 bg-white text-gray-800"
+                        brush === m ? "border-red-600 bg-red-600 text-white" : "border-gray-200 bg-white text-gray-800 dark:text-neutral-100"
                       }`}
                     >
                       {m}x
@@ -234,7 +234,7 @@ export default function AdminScheduledPromoCalendarModal({
                     className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
                       brush === "clear"
                         ? "border-gray-700 bg-gray-800 text-white"
-                        : "border-gray-200 bg-white text-gray-800"
+                        : "border-gray-200 bg-white text-gray-800 dark:text-neutral-100"
                     }`}
                   >
                     Gap
@@ -267,10 +267,10 @@ export default function AdminScheduledPromoCalendarModal({
               </FormSection>
             </div>
 
-            <div className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50/80 p-4">
+            <div className="flex-1 min-w-0 rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50/80 dark:bg-neutral-900/40 p-4">
               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2 text-gray-900">
-                  <Calendar className="h-5 w-5 text-red-600" />
+                <div className="flex items-center gap-2 text-gray-900 dark:text-neutral-100">
+                  <Calendar className="h-5 w-5 text-red-600 dark:text-red-400" />
                   <span className="font-semibold">{monthTitle(year, month)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export default function AdminScheduledPromoCalendarModal({
                     type="button"
                     onClick={() => shiftMonth(-1)}
                     disabled={applyMutation.isPending}
-                    className="rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 p-2 text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     aria-label="Previous month"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -291,7 +291,7 @@ export default function AdminScheduledPromoCalendarModal({
                       setMonth(n.month);
                     }}
                     disabled={applyMutation.isPending}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   >
                     Today
                   </button>
@@ -299,7 +299,7 @@ export default function AdminScheduledPromoCalendarModal({
                     type="button"
                     onClick={() => shiftMonth(1)}
                     disabled={applyMutation.isPending}
-                    className="rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 p-2 text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     aria-label="Next month"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -308,7 +308,7 @@ export default function AdminScheduledPromoCalendarModal({
                     type="button"
                     onClick={() => hydrateFromServer()}
                     disabled={applyMutation.isPending || promosLoading}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   >
                     Reload
                   </button>
@@ -316,7 +316,7 @@ export default function AdminScheduledPromoCalendarModal({
               </div>
 
               {promosLoading && days.length === 0 ? (
-                <div className="flex justify-center py-12 text-gray-500 text-sm">Loading schedule…</div>
+                <div className="flex justify-center py-12 text-gray-500 dark:text-neutral-400 text-sm">Loading schedule…</div>
               ) : (
                 <ScheduledPromoMonthGrid
                   weekRows={weekRows}
@@ -328,7 +328,7 @@ export default function AdminScheduledPromoCalendarModal({
             </div>
           </div>
 
-          <div className="flex flex-col-reverse gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-200 dark:border-neutral-700 pt-4 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" size="md" onClick={onClose} disabled={applyMutation.isPending}>
               Cancel
             </Button>

@@ -17,8 +17,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="h-screen-dvh overflow-hidden">
       <AdminUserModalProvider>
         <Suspense fallback={
-          <div className="min-h-screen-svh flex items-center justify-center">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+          <div className="min-h-screen-svh flex items-center justify-center bg-gray-50 dark:bg-neutral-950">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500"></div>
           </div>
         }>
           {children}

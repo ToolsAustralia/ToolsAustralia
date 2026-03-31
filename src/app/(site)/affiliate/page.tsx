@@ -204,7 +204,7 @@ export default function AffiliateDashboardPage() {
       <div className="min-h-screen-svh flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
+          <p className="text-gray-600 dark:text-neutral-400">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -215,7 +215,7 @@ export default function AffiliateDashboardPage() {
       <div className="min-h-screen-svh flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Dashboard</h1>
-          <p className="text-gray-600 mb-4">Unable to load your affiliate dashboard information.</p>
+          <p className="text-gray-600 dark:text-neutral-400 mb-4">Unable to load your affiliate dashboard information.</p>
           <button
             onClick={() => window.location.reload()}
             className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
@@ -356,7 +356,7 @@ export default function AffiliateDashboardPage() {
                 )}
               </button>
             </div>
-            <p className="text-sm text-gray-600 mt-3">
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mt-3">
               Share this link to earn commission on each successful purchase from your referrals (subscriptions, renewals,
               add-ons, and eligible products). Payments must complete successfully.
             </p>
@@ -393,7 +393,7 @@ export default function AffiliateDashboardPage() {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Password *</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Current Password *</label>
                   <div className="relative">
                     <input
                       type={showCurrentPassword ? "text" : "password"}
@@ -405,14 +405,14 @@ export default function AffiliateDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300"
                     >
                       {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Username</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">New Username</label>
                   <input
                     type="text"
                     value={accountFormData.newUsername}
@@ -421,7 +421,7 @@ export default function AffiliateDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">New Password</label>
                   <div className="relative">
                     <input
                       type={showNewPassword ? "text" : "password"}
@@ -432,14 +432,14 @@ export default function AffiliateDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300"
                     >
                       {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Confirm New Password</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? "text" : "password"}
@@ -450,7 +450,7 @@ export default function AffiliateDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300"
                     >
                       {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -464,7 +464,7 @@ export default function AffiliateDashboardPage() {
                 </button>
               </form>
             ) : (
-              <div className="text-gray-600">
+              <div className="text-gray-600 dark:text-neutral-400">
                 <p>Update your username and password to keep your account secure.</p>
               </div>
             )}
@@ -485,7 +485,7 @@ export default function AffiliateDashboardPage() {
               <form onSubmit={handleBankDetailsSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Account Name</label>
                     <input
                       type="text"
                       value={bankFormData.accountName}
@@ -494,7 +494,7 @@ export default function AffiliateDashboardPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">
                       BSB <span className="text-gray-500 font-normal">(Optional)</span>
                     </label>
                     <input
@@ -510,7 +510,7 @@ export default function AffiliateDashboardPage() {
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Account Number</label>
                     <input
                       type="text"
                       value={bankFormData.accountNumber}
@@ -519,7 +519,7 @@ export default function AffiliateDashboardPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Bank Name</label>
                     <input
                       type="text"
                       value={bankFormData.bankName}
@@ -540,15 +540,15 @@ export default function AffiliateDashboardPage() {
                 {dashboard.bankDetails ? (
                   <div className="space-y-2 text-sm">
                     <p>
-                      <span className="font-medium text-gray-700">Account Name:</span>{" "}
+                      <span className="font-medium text-gray-700 dark:text-neutral-200">Account Name:</span>{" "}
                       <span className="text-gray-900">{dashboard.bankDetails.accountName || "Not provided"}</span>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-700">BSB:</span>{" "}
+                      <span className="font-medium text-gray-700 dark:text-neutral-200">BSB:</span>{" "}
                       <span className="text-gray-900">{dashboard.bankDetails.bsb || "Not provided"}</span>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-700">Account Number:</span>{" "}
+                      <span className="font-medium text-gray-700 dark:text-neutral-200">Account Number:</span>{" "}
                       <span className="text-gray-900">
                         {dashboard.bankDetails.accountNumber
                           ? "••••" + dashboard.bankDetails.accountNumber.slice(-4)
@@ -556,12 +556,12 @@ export default function AffiliateDashboardPage() {
                       </span>
                     </p>
                     <p>
-                      <span className="font-medium text-gray-700">Bank Name:</span>{" "}
+                      <span className="font-medium text-gray-700 dark:text-neutral-200">Bank Name:</span>{" "}
                       <span className="text-gray-900">{dashboard.bankDetails.bankName || "Not provided"}</span>
                     </p>
                   </div>
                 ) : (
-                  <p className="text-gray-600">No bank details provided. Add your bank details to receive payouts.</p>
+                  <p className="text-gray-600 dark:text-neutral-400">No bank details provided. Add your bank details to receive payouts.</p>
                 )}
               </div>
             )}
@@ -573,7 +573,7 @@ export default function AffiliateDashboardPage() {
               Recent Unpaid Commissions
             </h2>
             {dashboard.recentCommissions.length === 0 ? (
-              <p className="text-gray-600">No unpaid commissions yet</p>
+              <p className="text-gray-600 dark:text-neutral-400">No unpaid commissions yet</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

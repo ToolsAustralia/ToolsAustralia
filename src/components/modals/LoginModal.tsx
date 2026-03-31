@@ -76,13 +76,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     }
   }, [isOpen]);
 
-  // Redirect if already authenticated
+  // If the user opens this modal while already signed in, send them to the right dashboard.
+  // When the modal is closed we must NOT redirect — parent pages (e.g. /dev/modals) mount this
+  // component with isOpen=false and would otherwise always bounce logged-in users to /my-account.
   useEffect(() => {
+    if (!isOpen) return;
     if (status === "authenticated" && session) {
-      router.push("/my-account");
+      const dest = session.user?.role === "admin" ? "/admin" : "/my-account";
+      router.push(dest);
       onClose();
     }
-  }, [status, session, router, onClose]);
+  }, [isOpen, status, session, router, onClose]);
 
   // Clear error when a valid 6-digit code is entered
   useEffect(() => {
@@ -577,8 +581,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
         <div className="w-full max-w-md space-y-6">
           {/* Email Display */}
           <div className="text-center">
-            <p className="text-sm text-gray-600">Signing in as</p>
-            <p className="text-base font-semibold text-gray-900">{email}</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400">Signing in as</p>
+            <p className="text-base font-semibold text-gray-900 dark:text-neutral-100">{email}</p>
           </div>
 
           {/* Error Message - hidden for password form when Input shows it inline; shown for verification, login code, and non-password errors (e.g. Google) */}
@@ -596,7 +600,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
               {needsEmailVerification ? (
                 <div className="space-y-4">
                   <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-4">
+                    <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
                       {codeSent
                         ? "Enter the 6-digit code sent to your email"
                         : "Your email needs to be verified. We'll send you a verification code."}
@@ -608,7 +612,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                       {/* Verification Code Input */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700">Verification Code</label>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">Verification Code</label>
                           <button
                             type="button"
                             onClick={handlePasteButtonClick}
@@ -648,7 +652,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                             />
                           ))}
                         </div>
-                        <p className="text-xs text-gray-500 text-center">
+                        <p className="text-xs text-gray-500 dark:text-neutral-500 text-center">
                           Enter the code exactly as shown in your email
                         </p>
                       </div>
@@ -695,7 +699,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                 /* Login Code Flow (passwordless sign-in) */
                 <div className="space-y-4">
                   <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-4">
+                    <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
                       {loginCodeSent
                         ? "Enter the 6-digit code sent to your email"
                         : "We'll send a one-time code to your email to sign in."}
@@ -706,7 +710,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                     <>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between mb-2">
-                          <label className="block text-sm font-medium text-gray-700">Sign-in Code</label>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">Sign-in Code</label>
                           <button
                             type="button"
                             onClick={handlePasteButtonClick}
@@ -746,7 +750,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                             />
                           ))}
                         </div>
-                        <p className="text-xs text-gray-500 text-center">Enter the code exactly as shown in your email</p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-500 text-center">Enter the code exactly as shown in your email</p>
                       </div>
 
                       <div className="flex flex-col gap-2">

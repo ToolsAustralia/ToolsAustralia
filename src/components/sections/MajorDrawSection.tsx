@@ -490,7 +490,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
     return (
       <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
-        <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
+        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-['Poppins'] mb-2 sm:mb-3 text-center">
           Pick Your Toolset
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
@@ -510,7 +510,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                     : isActive && type === "cash"
                       ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                      : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-gray-300 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500"
                 }`}
               >
                 {label}
@@ -551,8 +551,8 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       }
                       className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
-                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                          : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
                       }`}
                     >
                       {isActive && brandLogoPath && (
@@ -567,14 +567,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         </div>
                       )}
                       {isActive && (
-                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
                           <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
                           className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
-                            isActive ? "text-white" : "text-gray-900"
+                            isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
                           <div className="block">{formattedLabel.line1}</div>
@@ -591,19 +591,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={handlePreviousPrize}
                       suppressHydrationWarning
-                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-all duration-200"
                       aria-label="Previous prize"
                     >
-                      <ChevronLeft className="w-6 h-6 text-gray-700" />
+                      <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextPrize}
                       suppressHydrationWarning
-                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-all duration-200"
                       aria-label="Next prize"
                     >
-                      <ChevronRight className="w-6 h-6 text-gray-700" />
+                      <ChevronRight className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                     </button>
                   </>
                 )}
@@ -642,8 +642,8 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       }
                       className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
-                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                          : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
                       }`}
                     >
                       {isActive && brandLogoPath && (
@@ -658,14 +658,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         </div>
                       )}
                       {isActive && (
-                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
                           <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
                           className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
-                            isActive ? "text-white" : "text-gray-900"
+                            isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
                           <div className="block">{formattedLabel.line1}</div>
@@ -698,17 +698,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               }}
               className={`relative p-5 rounded-2xl border-2 text-center overflow-visible min-h-[110px] max-w-md mx-auto block w-full cursor-pointer ${
                 isActive
-                  ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                  : "bg-white text-gray-700 hover:scale-[1.02]"
+                  ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                  : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:scale-[1.02]"
               }`}
             >
               {isActive && (
-                <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
+                <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
                   <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
                 </div>
               )}
               <div className="relative z-10">
-                <div className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${isActive ? "text-white" : "text-gray-900"}`}>
+                <div className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"}`}>
                   <div className="block">{formattedLabel.line1}</div>
                   {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                   {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
@@ -791,7 +791,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="text-center space-y-2 px-4">
               {/* Mobile: Main Title */}
               <div className="flex items-center justify-center gap-2">
-                <h2 className="hidden lg:block text-[24px] font-bold text-black font-['Poppins'] leading-tight">
+                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">
                   {prizeHeroHeading}
                 </h2>
               </div>
@@ -801,7 +801,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </p>
               )}
               {prizeSubheading && (
-                <p className="hidden sm:block text-xs text-gray-600 font-medium">{prizeSubheading}</p>
+                <p className="hidden sm:block text-xs text-gray-600 dark:text-neutral-400 font-medium">{prizeSubheading}</p>
               )}
             </div>
 
@@ -820,7 +820,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               </div>
               {renderPickYourToolset()}
               <div
-                className="relative w-full max-w-sm mx-auto rounded-2xl border-2 overflow-hidden bg-white"
+                className="relative w-full max-w-sm mx-auto rounded-2xl border-2 overflow-hidden bg-white dark:bg-neutral-900"
                 style={{
                   borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
                   boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
@@ -867,7 +867,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   >
                     {prizeImages.map((image, index) => (
                       <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900">
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize image ${index + 1}`}
@@ -881,7 +881,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ))}
                   </Swiper>
                 ) : (
-                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
+                  <div className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900">
                     <Image
                       src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
                       alt={prizeImages[0]?.alt || "Prize image"}
@@ -912,7 +912,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       onClick={() => handleMobileThumbnailClick(index)}
                     >
                       <div
-                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white"
+                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white dark:bg-neutral-900"
                         style={{
                           borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
                         }}
@@ -933,7 +933,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-2 gap-2 sm:gap-4")}
 
               <div className="px-3 sm:px-4">
-                <p className="text-xs sm:text-base text-gray-700 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left mb-4">
+                <p className="text-xs sm:text-base text-gray-700 dark:text-neutral-300 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left mb-4">
                   {prizeSummary}
                 </p>
               </div>
@@ -942,7 +942,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Mobile: Countdown Timer or Draw Ended */}
             {majorDrawLoading || !currentMajorDraw ? (
               // Skeleton loader for countdown
-              <div className="rounded-3xl p-6 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-200 to-gray-300">
+              <div className="rounded-3xl p-6 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-800 dark:to-neutral-900">
                 <div className="grid grid-cols-4 gap-3">
                   {[1, 2, 3, 4].map((i) => (
                     <div
@@ -1041,7 +1041,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {user ? (
               userStatsLoading ? (
                 // Skeleton loader for user entries
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1051,10 +1051,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
               ) : (
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <button
                     onClick={() => setShowBreakdown(!showBreakdown)}
-                    className="w-full text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                    className="w-full text-left hover:bg-gray-50 dark:hover:bg-neutral-800/60 rounded-lg p-2 -m-2 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1070,7 +1070,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                           </div>
                         )}
                         <svg
-                          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                          className={`w-4 h-4 text-gray-500 dark:text-neutral-400 transition-transform duration-200 ${
                             showBreakdown ? "rotate-180" : ""
                           }`}
                           fill="none"
@@ -1086,14 +1086,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   {showBreakdown && (
                     <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                       <div className="flex justify-between items-center">
-                        <span className="text-[12px] text-gray-700">From Membership:</span>
-                        <span className="text-[12px] font-medium text-gray-600">
+                        <span className="text-[12px] text-gray-700 dark:text-neutral-300">From Membership:</span>
+                        <span className="text-[12px] font-medium text-gray-600 dark:text-neutral-400">
                           {enhancedUserStats.membershipEntries || 0}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[12px] text-gray-700">From Packages:</span>
-                        <span className="text-[12px] font-medium text-gray-600">
+                        <span className="text-[12px] text-gray-700 dark:text-neutral-300">From Packages:</span>
+                        <span className="text-[12px] font-medium text-gray-600 dark:text-neutral-400">
                           {enhancedUserStats.oneTimeEntries || 0}
                         </span>
                       </div>
@@ -1150,7 +1150,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Left Column - Gallery & Countdown */}
             <div className="flex flex-col space-y-6">
               <div
-                className="relative rounded-2xl border-2 overflow-hidden bg-white"
+                className="relative rounded-2xl border-2 overflow-hidden bg-white dark:bg-neutral-900"
                 style={{
                   borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
                   boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
@@ -1204,7 +1204,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   >
                     {prizeImages.map((image, index) => (
                       <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
+                        <div className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900">
                           <Image
                             src={image.src}
                             alt={image.alt || `Prize image ${index + 1}`}
@@ -1218,7 +1218,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     ))}
                   </Swiper>
                 ) : (
-                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
+                  <div className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900">
                     <Image
                       src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
                       alt={prizeImages[0]?.alt || "Prize image"}
@@ -1251,7 +1251,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         onClick={() => handleDesktopThumbnailClick(index)}
                       >
                         <div
-                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 bg-white cursor-pointer"
+                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 bg-white dark:bg-neutral-900 cursor-pointer"
                           style={{
                             borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
                           }}
@@ -1273,7 +1273,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {/* Countdown / Draw Ended Notice */}
               {majorDrawLoading || !currentMajorDraw ? (
                 // Skeleton loader for countdown (desktop)
-                <div className="rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br from-gray-200 to-gray-300">
+                <div className="rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-800 dark:to-neutral-900">
                   <div className="grid grid-cols-4 gap-3">
                     {[1, 2, 3, 4].map((i) => (
                       <div
@@ -1393,7 +1393,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {user ? (
                 userStatsLoading ? (
                   // Skeleton loader for user entries (desktop)
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1403,10 +1403,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <button
                       onClick={() => setShowBreakdown(!showBreakdown)}
-                      className="w-full text-left hover:bg-red-50/40 rounded-lg px-3 py-2 transition-colors"
+                      className="w-full text-left hover:bg-red-50/40 dark:hover:bg-red-950/25 rounded-lg px-3 py-2 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -1422,7 +1422,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                             </div>
                           )}
                           <svg
-                            className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                            className={`w-4 h-4 text-gray-500 dark:text-neutral-400 transition-transform duration-200 ${
                               showBreakdown ? "rotate-180" : ""
                             }`}
                             fill="none"
@@ -1436,7 +1436,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </button>
 
                     {showBreakdown && (
-                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                      <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-neutral-300">
                         <div className="flex justify-between">
                           <span>From Membership</span>
                           <span className="font-semibold">{enhancedUserStats.membershipEntries}</span>
@@ -1451,7 +1451,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 )
               ) : null}
 
-              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
+              <div className="flex flex-col gap-3 border-t border-gray-200 dark:border-neutral-700 pt-4">
                 <button
                   onClick={() => openEntryFlow()}
                   className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}

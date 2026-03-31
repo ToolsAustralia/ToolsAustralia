@@ -198,6 +198,8 @@ export default function UserSearchModal({
   const handlePageChange = (newPage: number) => {
     if (debouncedSearchQuery.trim()) {
       searchUsers(debouncedSearchQuery, newPage);
+    } else if (hasDrawFilter) {
+      searchUsers("", newPage);
     }
   };
 
@@ -232,7 +234,7 @@ export default function UserSearchModal({
       <ModalHeader title={title} subtitle={description} onClose={onClose} />
 
       {/* Search Input */}
-      <div className="relative p-6 border-b border-gray-200">
+      <div className="relative p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-950/30">
         <Input
           ref={inputRef}
           type="text"
@@ -253,32 +255,32 @@ export default function UserSearchModal({
       <ModalContent padding="none">
         <div className="flex-1 overflow-y-auto">
           {error && (
-            <div className="p-4 m-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span className="text-red-700 text-sm">{error}</span>
+            <div className="p-4 m-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
             </div>
           )}
 
           {!searchQuery.trim() && !hasDrawFilter && !isLoading && (
-            <div className="p-8 text-center text-gray-500">
-              <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">Start typing to search users</p>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+              <Search className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+              <p className="text-lg font-medium text-gray-900 dark:text-neutral-100">Start typing to search users</p>
               <p className="text-sm mt-1">Search by name, email, mobile, or user ID</p>
             </div>
           )}
 
           {!searchQuery.trim() && hasDrawFilter && isLoading && searchResults.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin" />
-              <p className="text-lg font-medium">Loading participants...</p>
+              <p className="text-lg font-medium text-gray-900 dark:text-neutral-100">Loading participants...</p>
               <p className="text-sm mt-1">Fetching users who entered this draw</p>
             </div>
           )}
 
           {searchQuery.trim() && !isLoading && searchResults.length === 0 && !error && (
-            <div className="p-8 text-center text-gray-500">
-              <User className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No users found</p>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+              <User className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+              <p className="text-lg font-medium text-gray-900 dark:text-neutral-100">No users found</p>
               <p className="text-sm mt-1">Try a different search term</p>
             </div>
           )}
@@ -290,8 +292,8 @@ export default function UserSearchModal({
                   key={user._id}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
                     selectedUser?._id === user._id
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      ? "border-red-500 bg-red-50 dark:bg-red-950/25"
+                      : "border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-800/50"
                   }`}
                   onClick={() => handleUserSelect(user)}
                 >
@@ -303,10 +305,10 @@ export default function UserSearchModal({
                           {user.lastName.charAt(0)}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-gray-900">
+                          <h3 className="font-semibold text-gray-900 dark:text-neutral-100">
                             {formatDisplayName(user.firstName, user.lastName)}
                           </h3>
-                          <p className="text-sm text-gray-600">ID: {user._id}</p>
+                          <p className="text-sm text-gray-600 dark:text-neutral-400">ID: {user._id}</p>
                         </div>
                         {selectedUser?._id === user._id && (
                           <CheckCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -314,64 +316,64 @@ export default function UserSearchModal({
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2 text-gray-600">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-neutral-400">
                           <Mail className="w-4 h-4" />
                           <span>{user.email}</span>
                         </div>
                         {user.mobile && (
-                          <div className="flex items-center gap-2 text-gray-600">
+                          <div className="flex items-center gap-2 text-gray-600 dark:text-neutral-400">
                             <Phone className="w-4 h-4" />
                             <span>{user.mobile}</span>
                           </div>
                         )}
                         {user.state && (
-                          <div className="flex items-center gap-2 text-gray-600">
+                          <div className="flex items-center gap-2 text-gray-600 dark:text-neutral-400">
                             <MapPin className="w-4 h-4" />
                             <span>{formatState(user.state)}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-gray-600">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-neutral-400">
                           <Calendar className="w-4 h-4" />
                           <span>Joined {formatDate(user.createdAt)}</span>
                         </div>
                       </div>
 
                       {user.currentDrawEntries && (
-                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-lg">
                           <div className="flex items-center gap-2 mb-2">
-                            <Trophy className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm font-medium text-blue-800">Current Draw Entries</span>
+                            <Trophy className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Current Draw Entries</span>
                           </div>
-                          <div className="text-sm text-blue-700">
+                          <div className="text-sm text-blue-700 dark:text-blue-300">
                             <p className="font-semibold">Total: {user.currentDrawEntries.totalEntries}</p>
                             <div className="flex flex-wrap gap-2 mt-1">
                               {user.currentDrawEntries.entriesBySource.membership && (
-                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-200 rounded text-xs">
                                   Membership: {user.currentDrawEntries.entriesBySource.membership}
                                 </span>
                               )}
                               {user.currentDrawEntries.entriesBySource["one-time-package"] && (
-                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-200 rounded text-xs">
                                   One-time: {user.currentDrawEntries.entriesBySource["one-time-package"]}
                                 </span>
                               )}
                               {user.currentDrawEntries.entriesBySource.upsell && (
-                                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-200 rounded text-xs">
                                   Upsell: {user.currentDrawEntries.entriesBySource.upsell}
                                 </span>
                               )}
                               {user.currentDrawEntries.entriesBySource["mini-draw"] && (
-                                <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200 rounded text-xs">
                                   Mini-draw: {user.currentDrawEntries.entriesBySource["mini-draw"]}
                                 </span>
                               )}
                               {user.currentDrawEntries.entriesBySource.referral && (
-                                <span className="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-pink-100 dark:bg-pink-950/40 text-pink-800 dark:text-pink-200 rounded text-xs">
                                   Referral: {user.currentDrawEntries.entriesBySource.referral}
                                 </span>
                               )}
                               {user.currentDrawEntries.entriesBySource["bonus-entry-promo"] && (
-                                <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">
+                                <span className="px-2 py-1 bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 rounded text-xs">
                                   Campaign/Promo: {user.currentDrawEntries.entriesBySource["bonus-entry-promo"]}
                                 </span>
                               )}
@@ -395,7 +397,7 @@ export default function UserSearchModal({
                   >
                     Previous
                   </Button>
-                  <span className="px-4 py-2 text-sm text-gray-600">
+                  <span className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400">
                     Page {pagination.currentPage} of {pagination.totalPages}
                   </span>
                   <Button
@@ -413,25 +415,31 @@ export default function UserSearchModal({
         </div>
       </ModalContent>
 
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            {(searchQuery.trim() || searchResults.length > 0) && (
-              <span>
-                {pagination.totalCount} {hasDrawFilter ? "participant" : "user"}
-                {pagination.totalCount !== 1 ? "s" : ""} found
-              </span>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmSelection} disabled={!selectedUser}>
-              Select User
-            </Button>
-          </div>
+      {/* Footer — matches ModalFooter strip: border, surface, spacing */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/80">
+        <div className="text-sm text-gray-600 dark:text-neutral-300 order-2 sm:order-1 min-h-[1.25rem]">
+          {(searchQuery.trim() ||
+            searchResults.length > 0 ||
+            (hasDrawFilter && !isLoading)) && (
+            <span>
+              {pagination.totalCount.toLocaleString()} {hasDrawFilter ? "participant" : "user"}
+              {pagination.totalCount !== 1 ? "s" : ""} found
+              {selectedUser && (
+                <span className="hidden sm:inline text-gray-500 dark:text-neutral-500">
+                  {" "}
+                  · {formatDisplayName(selectedUser.firstName, selectedUser.lastName)} selected
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 order-1 sm:order-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto dark:border-neutral-600 dark:hover:bg-neutral-800">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmSelection} disabled={!selectedUser} className="w-full sm:w-auto">
+            Select User
+          </Button>
         </div>
       </div>
     </ModalContainer>

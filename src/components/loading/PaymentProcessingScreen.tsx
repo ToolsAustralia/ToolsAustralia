@@ -252,7 +252,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
             <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
               {packageType === "membership" ? `${packageName} Upgraded!` : `${packageName} Activated!`}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
               {packageType === "membership"
                 ? "Your subscription has been upgraded successfully!"
                 : "Your benefits have been successfully granted"}
@@ -301,7 +301,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
             <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
               {isTimeout ? "Processing in Progress" : "Processing Error"}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 mb-4">{error}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-4">{error}</p>
             {isTimeout ? (
               <div className="space-y-2">
                 <p className="text-xs text-gray-500">

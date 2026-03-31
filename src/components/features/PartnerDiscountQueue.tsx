@@ -298,7 +298,7 @@ export default function PartnerDiscountQueue({
       case "upsell":
         return <Gift className="w-5 h-5 text-orange-600" />;
       default:
-        return <Package className="w-5 h-5 text-gray-600" />;
+        return <Package className="w-5 h-5 text-gray-600 dark:text-neutral-400" />;
     }
   };
 
@@ -324,7 +324,7 @@ export default function PartnerDiscountQueue({
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
 
@@ -351,7 +351,7 @@ export default function PartnerDiscountQueue({
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
   };

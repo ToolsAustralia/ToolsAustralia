@@ -29,7 +29,7 @@ const MiniDrawFullCapacityPreview: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-xl font-bold text-gray-800">Mini Draw 100% Capacity Notification Preview</h3>
+        <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Mini Draw 100% Capacity Notification Preview</h3>
         <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
           Admin Notification
         </span>

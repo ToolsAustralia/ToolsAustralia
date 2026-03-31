@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { CreditCard, Plus, ChevronRight, Cog } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
 import { PaymentElement, useStripe, useElements, Elements } from "@stripe/react-stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { autoLogStripeError } from "@/utils/error-reporting/auto-log-error";
 import { collectErrorContext } from "@/utils/error-reporting/collect-error-context";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
@@ -17,7 +18,99 @@ import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment
 
 const stripePromise = getStripePromise();
 
-// CARD_ELEMENT_OPTIONS removed - PaymentElement handles styling automatically
+/** Shared PaymentElement layout rules (wallet tabs, input height). */
+const STRIPE_PAYMENT_ELEMENT_RULES: Record<string, Record<string, string>> = {
+  ".Tab": {
+    display: "flex",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: "8px",
+  },
+  ".Tab--selected": {
+    display: "flex",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: "8px",
+  },
+  "button[role='tab']": {
+    display: "flex",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: "8px",
+  },
+  ".TabIcon, svg, img": {
+    display: "inline-flex",
+    alignItems: "center",
+    flexShrink: "0",
+    marginRight: "0",
+  },
+  ".TabLabel, span": {
+    display: "inline-flex",
+    alignItems: "center",
+  },
+  ".Input": {
+    fontSize: "14px",
+    padding: "12px 10px",
+    minHeight: "44px",
+    boxSizing: "border-box",
+  },
+  ".Input--empty": {
+    fontSize: "14px",
+    minHeight: "44px",
+  },
+  ".Input--focus": {
+    fontSize: "14px",
+    minHeight: "44px",
+  },
+  ".Input--invalid": {
+    fontSize: "14px",
+    minHeight: "44px",
+  },
+  "input[data-elements-stable-field-name='cardNumber']": {
+    fontSize: "14px",
+    padding: "12px 10px",
+    minHeight: "44px",
+    boxSizing: "border-box",
+  },
+  "input[data-elements-stable-field-name='cardExpiry']": {
+    fontSize: "14px",
+    padding: "12px 10px",
+    minHeight: "44px",
+    boxSizing: "border-box",
+  },
+  "input[data-elements-stable-field-name='cardCvc']": {
+    fontSize: "14px",
+    padding: "12px 10px",
+    minHeight: "44px",
+    boxSizing: "border-box",
+  },
+  ".InputElement": {
+    fontSize: "14px",
+    padding: "12px 10px",
+    minHeight: "44px",
+    boxSizing: "border-box",
+  },
+};
+
+function buildMembershipStripeAppearance(isDark: boolean) {
+  return {
+    theme: (isDark ? "night" : "stripe") as "night" | "stripe",
+    variables: {
+      colorPrimary: "#ee0000",
+      colorPrimaryText: "#ffffff",
+      colorBackground: isDark ? "#0a0a0a" : "#ffffff",
+      colorText: isDark ? "#fafafa" : "#1f2937",
+      colorTextSecondary: isDark ? "#a3a3a3" : "#6b7280",
+      colorDanger: "#dc2626",
+      colorBorder: isDark ? "#525252" : "#e5e7eb",
+      fontFamily: "system-ui, sans-serif",
+      spacingUnit: "4px",
+      borderRadius: "8px",
+      fontSizeBase: "14px",
+    },
+    rules: STRIPE_PAYMENT_ELEMENT_RULES,
+  };
+}
 
 interface PaymentMethodSelectorProps {
   onPaymentMethodSelect: (paymentMethod: SavedPaymentMethod | null) => void;
@@ -606,30 +699,29 @@ const StripeCardForm = React.forwardRef<
     if (isStripeLoading) {
       return (
         <div className="space-y-0">
-          
-          <div className="p-3 border border-gray-300 rounded-lg bg-gray-50 mt-0">
+          <div className="p-3 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-50 dark:bg-neutral-950 mt-0">
             {/* Payment method tabs skeleton */}
             <div className="flex gap-2 mb-4">
-              <div className="h-10 bg-gray-200 rounded animate-pulse flex-1"></div>
+              <div className="h-10 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse flex-1"></div>
               {shouldEnableWallets && (
                 <>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
-                  <div className="h-10 bg-gray-200 rounded animate-pulse w-24"></div>
+                  <div className="h-10 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-24"></div>
+                  <div className="h-10 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-24"></div>
                 </>
               )}
             </div>
             {/* Card Element Skeleton */}
             <div className="space-y-3">
-              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-12 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
               <div className="flex gap-3">
-                <div className="flex-1 h-12 bg-gray-200 rounded animate-pulse"></div>
-                <div className="w-20 h-12 bg-gray-200 rounded animate-pulse"></div>
+                <div className="flex-1 h-12 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
+                <div className="w-20 h-12 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
               </div>
             </div>
           </div>
           <div className="text-center">
-            <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-red-600 rounded-full animate-spin"></div>
+            <div className="inline-flex items-center space-x-2 text-sm text-gray-500 dark:text-neutral-400">
+              <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-red-600 rounded-full animate-spin"></div>
               <span>Loading payment form...</span>
             </div>
           </div>
@@ -639,8 +731,7 @@ const StripeCardForm = React.forwardRef<
 
     return (
       <div className="space-y-0">
-        
-        <div className="p-3 border border-gray-300 rounded-lg bg-white mt-0">
+        <div className="p-3 border border-gray-300 dark:border-neutral-600 rounded-lg bg-[#ffffff] dark:bg-neutral-950 mt-0">
           <PaymentElement
             key={`payment-element-${clientSecret?.split("_secret_")[0] || "default"}-${amount || 0}-${packageName || "default"}`}
             options={paymentElementOptions}
@@ -664,7 +755,7 @@ const StripeCardForm = React.forwardRef<
             }}
           />
         </div>
-        {cardError && <p className="text-red-500 text-sm mt-2">{cardError}</p>}
+        {cardError && <p className="text-red-600 dark:text-red-400 text-sm mt-2">{cardError}</p>}
       </div>
     );
   }
@@ -714,6 +805,8 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   const { paymentMethods, loading } = useSavedPaymentMethods();
   const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const stripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
 
   // Auto-select default payment method when component loads (only once)
   useEffect(() => {
@@ -767,35 +860,35 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
     return (
       <div className={`space-y-2 sm:space-y-3 ${className}`}>
         {/* Payment Method Skeleton */}
-        <div className="border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4">
+        <div className="border border-gray-200 dark:border-neutral-700 rounded-lg sm:rounded-xl p-3 sm:p-4">
           <div className="flex items-center space-x-3 sm:space-x-4">
             {/* Card Icon Skeleton */}
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-neutral-800 rounded-lg animate-pulse flex-shrink-0"></div>
 
             {/* Card Details Skeleton */}
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+              <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-3/4"></div>
+              <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-1/2"></div>
             </div>
 
             {/* Radio Button Skeleton */}
-            <div className="w-5 h-5 bg-gray-200 rounded-full animate-pulse flex-shrink-0"></div>
+            <div className="w-5 h-5 bg-gray-200 dark:bg-neutral-800 rounded-full animate-pulse flex-shrink-0"></div>
           </div>
         </div>
 
         {/* Add New Payment Method Skeleton */}
-        <div className="border border-gray-200 rounded-lg sm:rounded-xl p-3 sm:p-4">
+        <div className="border border-gray-200 dark:border-neutral-700 rounded-lg sm:rounded-xl p-3 sm:p-4">
           <div className="flex items-center space-x-3 sm:space-x-4">
             {/* Plus Icon Skeleton */}
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-lg animate-pulse flex-shrink-0"></div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-neutral-800 rounded-lg animate-pulse flex-shrink-0"></div>
 
             {/* Add New Text Skeleton */}
             <div className="flex-1">
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-2/3"></div>
+              <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-2/3"></div>
             </div>
 
             {/* Chevron Skeleton */}
-            <div className="w-5 h-5 bg-gray-200 rounded animate-pulse flex-shrink-0"></div>
+            <div className="w-5 h-5 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse flex-shrink-0"></div>
           </div>
         </div>
       </div>
@@ -809,117 +902,26 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
         <>
           {isCreatingIntent ? (
             <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-red-600" />
                 Card Details
               </h4>
-              <div className="p-4 sm:p-6 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 min-h-[120px]">
+              <div className="p-4 sm:p-6 border border-gray-200 dark:border-neutral-600 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-neutral-900 flex flex-col items-center justify-center gap-4 min-h-[120px]">
                 <Cog className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 animate-spin" aria-hidden />
                 <div className="text-center space-y-1">
-                  <p className="text-sm font-medium text-gray-900">Preparing secure checkout...</p>
-                  <p className="text-xs text-gray-500">Loading your payment form. This only takes a moment.</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-neutral-100">Preparing secure checkout...</p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">Loading your payment form. This only takes a moment.</p>
                 </div>
               </div>
             </div>
           ) : clientSecretForElements && activeIntentType ? (
             <Elements
-              key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}`}
+              key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}-${isDarkMode ? "dark" : "light"}`}
               stripe={stripePromise}
               options={{
                 clientSecret: clientSecretForElements,
                 locale: "en",
-                appearance: {
-                  theme: "stripe",
-                  variables: {
-                    colorPrimary: "#ee0000",
-                    colorBackground: "#ffffff",
-                    colorText: "#1f2937",
-                    colorDanger: "#dc2626",
-                    fontFamily: "system-ui, sans-serif",
-                    spacingUnit: "4px",
-                    borderRadius: "8px",
-                    // Match coupon code input size on mobile
-                    fontSizeBase: "14px", // text-sm equivalent
-                  },
-                  rules: {
-                    // Ensure wallet payment method tabs have icon and text on same row
-                    ".Tab": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    ".Tab--selected": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Target tab button content
-                    "button[role='tab']": {
-                      display: "flex",
-                      alignItems: "center",
-                      flexDirection: "row",
-                      gap: "8px",
-                    },
-                    // Ensure icons are inline
-                    ".TabIcon, svg, img": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                      flexShrink: "0",
-                      marginRight: "0",
-                    },
-                    // Ensure payment method labels are inline with icons
-                    ".TabLabel, span": {
-                      display: "inline-flex",
-                      alignItems: "center",
-                    },
-                    // Uniform 44px height to match coupon input and purchase button
-                    ".Input": {
-                      fontSize: "14px",
-                      padding: "12px 10px",
-                      minHeight: "44px",
-                      boxSizing: "border-box",
-                    },
-                    ".Input--empty": {
-                      fontSize: "14px",
-                      minHeight: "44px",
-                    },
-                    ".Input--focus": {
-                      fontSize: "14px",
-                      minHeight: "44px",
-                    },
-                    ".Input--invalid": {
-                      fontSize: "14px",
-                      minHeight: "44px",
-                    },
-                    // Card number, expiration, and CVC inputs - 44px height
-                    "input[data-elements-stable-field-name='cardNumber']": {
-                      fontSize: "14px",
-                      padding: "12px 10px",
-                      minHeight: "44px",
-                      boxSizing: "border-box",
-                    },
-                    "input[data-elements-stable-field-name='cardExpiry']": {
-                      fontSize: "14px",
-                      padding: "12px 10px",
-                      minHeight: "44px",
-                      boxSizing: "border-box",
-                    },
-                    "input[data-elements-stable-field-name='cardCvc']": {
-                      fontSize: "14px",
-                      padding: "12px 10px",
-                      minHeight: "44px",
-                      boxSizing: "border-box",
-                    },
-                    ".InputElement": {
-                      fontSize: "14px",
-                      padding: "12px 10px",
-                      minHeight: "44px",
-                      boxSizing: "border-box",
-                    },
-                  },
-                },
+                appearance: stripeAppearance,
               }}
             >
               <StripeCardForm
@@ -936,16 +938,16 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
             </Elements>
           ) : cardFormError ? (
             <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-red-600" />
                 Card Details
               </h4>
-              <div className="p-4 border border-red-300 rounded-lg bg-red-50">
+              <div className="p-4 border border-red-300 dark:border-red-800/60 rounded-lg bg-red-50 dark:bg-red-950/40">
                 <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 text-red-600">⚠️</div>
+                  <div className="w-5 h-5 text-red-600 dark:text-red-400">⚠️</div>
                   <div>
-                    <p className="text-sm text-red-800 font-medium">Failed to load payment form</p>
-                    <p className="text-xs text-red-600 mt-1">{cardFormError}</p>
+                    <p className="text-sm text-red-800 dark:text-red-300 font-medium">Failed to load payment form</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">{cardFormError}</p>
                   </div>
                 </div>
               </div>
@@ -957,27 +959,27 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
       {/* For authenticated users, show Payment Method section */}
       {isAuthenticated && (
         <>
-          <h3 className="text-sm sm:text-lg font-semibold text-gray-900 flex items-center gap-1.5 sm:gap-2">
+          <h3 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-1.5 sm:gap-2">
             <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
             Payment Method
           </h3>
 
           {/* Selected Payment Method */}
           {selectedPaymentMethod ? (
-            <div className="border-2 border-blue-500 bg-blue-50 rounded-lg sm:rounded-xl p-3 sm:p-4">
+            <div className="rounded-lg sm:rounded-xl p-3 sm:p-4 border-2 border-neutral-200 bg-neutral-50 dark:border-red-500/35 dark:bg-neutral-900">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex items-center justify-center w-8 h-5 sm:w-10 sm:h-6 bg-white rounded">
+                  <div className="flex items-center justify-center w-8 h-5 sm:w-10 sm:h-6 bg-[#ffffff] dark:bg-neutral-800 rounded border border-neutral-200 dark:border-neutral-600">
                     <span className="text-sm sm:text-lg">
                       {getCardBrandIcon(selectedPaymentMethod.card?.brand || "")}
                     </span>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900 text-sm sm:text-base">
+                    <h4 className="font-semibold text-gray-900 dark:text-neutral-100 text-sm sm:text-base">
                       {formatCardDisplay(selectedPaymentMethod)}
                     </h4>
                     {selectedPaymentMethod.isDefault && (
-                      <p className="text-xs text-blue-600 font-medium">✓ Default Payment Method</p>
+                      <p className="text-xs text-red-600 dark:text-red-400 font-medium">✓ Default Payment Method</p>
                     )}
                   </div>
                 </div>
@@ -986,7 +988,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     setHasUserInteracted(true);
                     onPaymentMethodSelect(null);
                   }}
-                  className="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium"
+                  className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs sm:text-sm font-medium"
                 >
                   Change
                 </button>
@@ -998,24 +1000,24 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               {paymentMethods.length > 0 && (
                 <button
                   onClick={handleUseDefaultPaymentMethod}
-                  className="w-full border-2 border-gray-200 hover:border-blue-300 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
+                  className="w-full border-2 border-gray-200 dark:border-neutral-600 hover:border-red-400/70 dark:hover:border-red-500/50 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 group-hover:text-blue-600" />
+                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-neutral-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                       <div>
-                        <h4 className="font-medium text-gray-900 text-sm sm:text-base">
+                        <h4 className="font-medium text-gray-900 dark:text-neutral-100 text-sm sm:text-base">
                           <span className="sm:hidden">Use Default</span>
                           <span className="hidden sm:inline">Use Default Payment Method</span>
                         </h4>
-                        <p className="text-xs sm:text-sm text-gray-600">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
                           {paymentMethods.find((pm) => pm.isDefault)?.card
                             ? formatCardDisplay(paymentMethods.find((pm) => pm.isDefault)!)
                             : "No default payment method"}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-blue-600" />
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                   </div>
                 </button>
               )}
@@ -1028,22 +1030,22 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                     setHasUserInteracted(true);
                     setShowPaymentMethodsModal(true);
                   }}
-                  className="w-full border-2 border-gray-200 hover:border-blue-300 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
+                  className="w-full border-2 border-gray-200 dark:border-neutral-600 hover:border-red-400/70 dark:hover:border-red-500/50 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 sm:gap-3">
-                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 group-hover:text-blue-600" />
+                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-neutral-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                       <div>
-                        <h4 className="font-medium text-gray-900 text-sm sm:text-base">
+                        <h4 className="font-medium text-gray-900 dark:text-neutral-100 text-sm sm:text-base">
                           <span className="sm:hidden">Saved Methods</span>
                           <span className="hidden sm:inline">Choose from Saved Methods</span>
                         </h4>
-                        <p className="text-xs sm:text-sm text-gray-600">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
                           {paymentMethods.length} saved payment method{paymentMethods.length !== 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-blue-600" />
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                   </div>
                 </button>
               )}
@@ -1055,20 +1057,20 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                   setHasUserInteracted(true);
                   onAddNewPaymentMethod();
                 }}
-                className="w-full border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
+                className="w-full border-2 border-dashed border-gray-300 dark:border-neutral-600 hover:border-red-400/80 dark:hover:border-red-500/45 rounded-lg sm:rounded-xl p-3 sm:p-4 text-left transition-colors group"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 group-hover:text-blue-600" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-neutral-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                     <div>
-                      <h4 className="font-medium text-gray-900 text-sm sm:text-base">
+                      <h4 className="font-medium text-gray-900 dark:text-neutral-100 text-sm sm:text-base">
                         <span className="sm:hidden">Add New Card</span>
                         <span className="hidden sm:inline">Add New Payment Method</span>
                       </h4>
-                      <p className="text-xs sm:text-sm text-gray-600">Enter new card details</p>
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Enter new card details</p>
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-blue-600" />
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                 </div>
               </button>
             </div>
@@ -1081,110 +1083,21 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               aria-hidden={!!(selectedPaymentMethod && !showCardForm)}
             >
               {isCreatingIntent ? (
-                <div className="p-4 sm:p-6 border border-gray-200 rounded-lg sm:rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 min-h-[120px]">
+                <div className="p-4 sm:p-6 border border-gray-200 dark:border-neutral-600 rounded-lg sm:rounded-xl bg-gray-50 dark:bg-neutral-900 flex flex-col items-center justify-center gap-4 min-h-[120px]">
                   <Cog className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 animate-spin" aria-hidden />
                   <div className="text-center space-y-1">
-                    <p className="text-sm font-medium text-gray-900">Preparing secure checkout...</p>
-                    <p className="text-xs text-gray-500">Loading your payment form. This only takes a moment.</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-neutral-100">Preparing secure checkout...</p>
+                    <p className="text-xs text-gray-500 dark:text-neutral-400">Loading your payment form. This only takes a moment.</p>
                   </div>
                 </div>
               ) : clientSecretForElements && activeIntentType ? (
                 <Elements
-                  key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}`}
+                  key={`elements-${activeIntentType}-${packageType}-${clientSecretForElements.split("_secret_")[0] || clientSecretForElements.slice(0, 24)}-${amount || 0}-${packageName || "default"}-${isDarkMode ? "dark" : "light"}`}
                   stripe={stripePromise}
                   options={{
                     clientSecret: clientSecretForElements,
-                    appearance: {
-                      theme: "stripe",
-                      variables: {
-                        colorPrimary: "#ee0000",
-                        colorBackground: "#ffffff",
-                        colorText: "#1f2937",
-                        colorDanger: "#dc2626",
-                        fontFamily: "system-ui, sans-serif",
-                        spacingUnit: "4px",
-                        borderRadius: "8px",
-                        // Match coupon code input size on mobile
-                        fontSizeBase: "14px", // text-sm equivalent
-                      },
-                      rules: {
-                        // Ensure wallet payment method tabs have icon and text on same row
-                        ".Tab": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        ".Tab--selected": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Target tab button content
-                        "button[role='tab']": {
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "row",
-                          gap: "8px",
-                        },
-                        // Ensure icons are inline
-                        ".TabIcon, svg, img": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                          flexShrink: "0",
-                          marginRight: "0",
-                        },
-                        // Ensure payment method labels are inline with icons
-                        ".TabLabel, span": {
-                          display: "inline-flex",
-                          alignItems: "center",
-                        },
-                        // Uniform 44px height to match coupon input and purchase button
-                        ".Input": {
-                          fontSize: "14px",
-                          padding: "12px 10px",
-                          minHeight: "44px",
-                          boxSizing: "border-box",
-                        },
-                        ".Input--empty": {
-                          fontSize: "14px",
-                          minHeight: "44px",
-                        },
-                        ".Input--focus": {
-                          fontSize: "14px",
-                          minHeight: "44px",
-                        },
-                        ".Input--invalid": {
-                          fontSize: "14px",
-                          minHeight: "44px",
-                        },
-                        "input[data-elements-stable-field-name='cardNumber']": {
-                          fontSize: "14px",
-                          padding: "12px 10px",
-                          minHeight: "44px",
-                          boxSizing: "border-box",
-                        },
-                        "input[data-elements-stable-field-name='cardExpiry']": {
-                          fontSize: "14px",
-                          padding: "12px 10px",
-                          minHeight: "44px",
-                          boxSizing: "border-box",
-                        },
-                        "input[data-elements-stable-field-name='cardCvc']": {
-                          fontSize: "14px",
-                          padding: "12px 10px",
-                          minHeight: "44px",
-                          boxSizing: "border-box",
-                        },
-                        ".InputElement": {
-                          fontSize: "14px",
-                          padding: "12px 10px",
-                          minHeight: "44px",
-                          boxSizing: "border-box",
-                        },
-                      },
-                    },
+                    locale: "en",
+                    appearance: stripeAppearance,
                   }}
                 >
                   <StripeCardForm
@@ -1203,11 +1116,11 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 // Fallback loading state
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
+                    <div className="w-4 h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse w-24"></div>
                   </div>
-                  <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
-                    <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="p-3 border border-gray-300 dark:border-neutral-600 rounded-lg bg-gray-50 dark:bg-neutral-950">
+                    <div className="h-12 bg-gray-200 dark:bg-neutral-800 rounded animate-pulse"></div>
                   </div>
                 </div>
               )}

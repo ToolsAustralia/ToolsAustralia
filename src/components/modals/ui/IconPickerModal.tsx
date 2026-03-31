@@ -73,7 +73,7 @@ const IconPickerModal: React.FC<IconPickerModalProps> = ({ isOpen, onClose, onSe
                     key={name}
                     type="button"
                     onClick={() => handleSelect(name)}
-                    className="group flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white hover:border-red-500 hover:bg-red-50/60 transition-colors p-3 text-gray-700 hover:text-red-600 shadow-sm"
+                    className="group flex flex-col items-center gap-2 rounded-lg border border-gray-200 bg-white hover:border-red-500 hover:bg-red-50/60 transition-colors p-3 text-gray-700 dark:text-neutral-200 hover:text-red-600 shadow-sm"
                   >
                     <Component className="w-6 h-6" />
                     <span className="text-[11px] font-medium tracking-wide text-center">{name}</span>

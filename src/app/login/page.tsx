@@ -18,6 +18,7 @@ import { Eye, EyeOff, Gift, Star, Zap, Shield } from "lucide-react";
 import Image from "next/image";
 
 import { useToast } from "@/components/ui/Toast";
+import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -63,7 +64,9 @@ function SquareCheckbox({ checked, onChange }: { checked: boolean; onChange: (ch
 
       <div
         className={`w-6 h-6 border-2 rounded ${
-          checked ? "border-[#ee0000] bg-[#ee0000]" : "border-[#d9d9d9] bg-white"
+          checked
+            ? "border-[#ee0000] bg-[#ee0000]"
+            : "border-[#d9d9d9] bg-white dark:border-neutral-500 dark:bg-neutral-900"
         } flex items-center justify-center`}
       >
         {checked && (
@@ -211,8 +214,8 @@ function LoginPageContent() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      <div className="min-h-screen-svh flex items-center justify-center bg-white dark:bg-neutral-950">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500"></div>
       </div>
     );
   }
@@ -436,15 +439,15 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="h-screen-dvh bg-white flex flex-col lg:flex-row overflow-hidden">
+    <div className="h-screen-dvh bg-white dark:bg-neutral-950 flex flex-col lg:flex-row overflow-hidden text-neutral-900 dark:text-neutral-100">
       {/* Left Column - Login Form */}
 
       <div className="w-full lg:w-[591px] flex flex-col p-4 sm:p-6 lg:p-8 lg:overflow-y-auto">
-        {/* Logo Section */}
+        {/* Logo + theme */}
 
-        <div className="mb-4 sm:mb-6 lg:mb-12">
-          <Link href="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-            <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative">
+        <div className="mb-4 sm:mb-6 lg:mb-12 flex items-start justify-between gap-3">
+          <Link href="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity min-w-0">
+            <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative shrink-0">
               <Image
                 src="/images/Tools Australia Logo/Social Media Profile_Primary.png"
                 alt="Tools Australia Logo"
@@ -454,8 +457,11 @@ function LoginPageContent() {
               />
             </div>
 
-            <span className="text-xl sm:text-2xl font-semibold text-black tracking-[-0.96px]">Tools Australia</span>
+            <span className="text-xl sm:text-2xl font-semibold text-neutral-900 dark:text-white tracking-[-0.96px]">
+              Tools Australia
+            </span>
           </Link>
+          <ThemeToggleButton className="group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white/90 shadow-sm transition-all duration-300 hover:scale-105 active:scale-95 dark:border-neutral-600 dark:bg-neutral-900/90" />
         </div>
 
         {/* Content Section */}
@@ -464,11 +470,11 @@ function LoginPageContent() {
           {/* Text Section */}
 
           <div className="mb-3 sm:mb-4 lg:mb-6">
-            <h1 className="text-[24px] sm:text-[28px] lg:text-[40px] font-bold text-[#232323] mb-1 sm:mb-2 tracking-[-1.6px]">
+            <h1 className="text-[24px] sm:text-[28px] lg:text-[40px] font-bold text-neutral-900 dark:text-white mb-1 sm:mb-2 tracking-[-1.6px]">
               Sign in
             </h1>
 
-            <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-[#969696] leading-[1.5]">
+            <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-500 dark:text-neutral-400 leading-[1.5]">
               Please login to continue to your account.
             </p>
           </div>
@@ -485,12 +491,12 @@ function LoginPageContent() {
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border-[1.5px] border-[#d9d9d9] rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-[#232323] focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                  className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border-[1.5px] border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
                   placeholder=""
                   required
                 />
 
-                <label className="absolute -top-[10.5px] left-3 bg-white px-1 text-[11px] sm:text-[12px] lg:text-[14px] font-medium text-[#9a9a9a]">
+                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-[11px] sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
                   Email
                 </label>
               </div>
@@ -505,7 +511,7 @@ function LoginPageContent() {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border border-[#d9d9d9] rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-[#232323] focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200 pr-12"
+                  className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200 pr-12"
                   placeholder="Password"
                   required
                 />
@@ -513,7 +519,7 @@ function LoginPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-[#9a9a9a] hover:text-gray-600"
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
@@ -532,7 +538,7 @@ function LoginPageContent() {
                   onChange={(checked) => setFormData((prev) => ({ ...prev, rememberMe: checked }))}
                 />
 
-                <label className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-[#232323]">
+                <label className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-neutral-800 dark:text-neutral-200">
                   Keep me logged in
                 </label>
               </div>
@@ -547,7 +553,11 @@ function LoginPageContent() {
 
             {/* Error Message */}
 
-            {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
+            {error && (
+              <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
 
             {/* Sign In Button */}
 
@@ -562,11 +572,13 @@ function LoginPageContent() {
             {/* Divider */}
 
             <div className="flex items-center gap-2.5">
-              <div className="flex-1 h-px bg-[#d9d9d9]"></div>
+              <div className="flex-1 h-px bg-[#d9d9d9] dark:bg-neutral-600"></div>
 
-              <span className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-[#6e6e6e]">or</span>
+              <span className="text-[12px] sm:text-[14px] lg:text-[16px] font-medium text-neutral-500 dark:text-neutral-400">
+                or
+              </span>
 
-              <div className="flex-1 h-px bg-[#d9d9d9]"></div>
+              <div className="flex-1 h-px bg-[#d9d9d9] dark:bg-neutral-600"></div>
             </div>
 
             {/* Google Sign In */}
@@ -575,7 +587,7 @@ function LoginPageContent() {
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isLoading}
-              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-white border border-[#e6e8e7] text-[#232323] rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)]"
+              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-white dark:bg-neutral-900 border border-[#e6e8e7] dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] dark:shadow-none"
             >
               <GoogleIcon />
               Sign in with Google
@@ -585,7 +597,7 @@ function LoginPageContent() {
           {/* Sign Up Link */}
 
           <div className="mt-3 sm:mt-4 lg:mt-6 text-center">
-            <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-[#6c6c6c]">
+            <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-600 dark:text-neutral-400">
               Need an account?{" "}
               <Link
                 href="/membership"
@@ -633,6 +645,7 @@ function LoginPageContent() {
         <div className="absolute inset-0 z-0">
           <Image src="/images/loginBg.jpg" alt="Tools background" fill className="object-cover" priority />
         </div>
+        <div className="absolute inset-0 z-[1] bg-black/25 dark:bg-black/55 pointer-events-none" aria-hidden />
 
         {/* Content Overlay */}
 
@@ -640,7 +653,7 @@ function LoginPageContent() {
           <div className="max-w-[525px] w-full">
             {/* Main CTA Card */}
 
-            <div className="bg-[#f7fafc] rounded-[10px] p-4 sm:p-6 lg:p-11 mb-4 sm:mb-6 lg:mb-8 relative overflow-visible">
+            <div className="bg-[#f7fafc] dark:bg-neutral-900/95 dark:border dark:border-neutral-700 rounded-[10px] p-4 sm:p-6 lg:p-11 mb-4 sm:mb-6 lg:mb-8 relative overflow-visible">
               {/* Background Blur Effect - Responsive positioning */}
 
               <div className="absolute -right-[15px] sm:-right-[20px] lg:-right-[30px] top-[80px] sm:top-[120px] lg:top-[155px] w-[120px] sm:w-[160px] lg:w-[214px] h-[80px] sm:h-[100px] lg:h-[135px] bg-[#f43636] blur-[30px] sm:blur-[40px] lg:blur-[50px] z-10"></div>
@@ -664,7 +677,7 @@ function LoginPageContent() {
                   Achieve More with the Right Tools
                 </h2>
 
-                <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-[#718096] mb-4 sm:mb-6 lg:mb-8 leading-[1.4] sm:leading-[28px] tracking-[-0.32px] max-w-[240px] sm:max-w-none">
+                <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-[#718096] dark:text-neutral-400 mb-4 sm:mb-6 lg:mb-8 leading-[1.4] sm:leading-[28px] tracking-[-0.32px] max-w-[240px] sm:max-w-none">
                   Shop quality tools and earn rewards every time you buy. Your membership gives you exclusive perks,
                   discounts, and access to premium offers.
                 </p>
@@ -676,7 +689,7 @@ function LoginPageContent() {
 
               {/* Small Earnings Card - Positioned in bottom right of main card */}
 
-              <div className="absolute bottom-[-8px] sm:bottom-[-10px] right-0 sm:right-4 lg:right-0 w-[160px] sm:w-[160px] lg:w-[287px] h-[50px] sm:h-[60px] lg:h-[94px] bg-[#f7fafc] rounded-[10px] p-1.5 sm:p-2 lg:p-5 border border-[#e6e8e7] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] z-40">
+              <div className="absolute bottom-[-8px] sm:bottom-[-10px] right-0 sm:right-4 lg:right-0 w-[160px] sm:w-[160px] lg:w-[287px] h-[50px] sm:h-[60px] lg:h-[94px] bg-[#f7fafc] dark:bg-neutral-900 rounded-[10px] p-1.5 sm:p-2 lg:p-5 border border-[#e6e8e7] dark:border-neutral-600 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] dark:shadow-none z-40">
                 <AnimatedOffers />
               </div>
             </div>
@@ -688,7 +701,7 @@ function LoginPageContent() {
                 Unlock New Benefits
               </h3>
 
-              <p className="text-[12px] sm:text-[16px] lg:text-[20px] text-[#cfd9e0] leading-[1.385]">
+              <p className="text-[12px] sm:text-[16px] lg:text-[20px] text-[#cfd9e0] dark:text-neutral-300 leading-[1.385]">
                 Track your purchases, maximize your points, and enjoy smarter shopping with our rewards-driven
                 marketplace.
               </p>
@@ -703,8 +716,8 @@ function LoginPageContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen-svh flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      <div className="min-h-screen-svh flex items-center justify-center bg-white dark:bg-neutral-950">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 dark:border-red-500"></div>
       </div>
     }>
       <LoginPageContent />

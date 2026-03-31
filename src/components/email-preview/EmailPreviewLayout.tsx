@@ -22,7 +22,7 @@ const EmailPreviewLayout: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Email Template Previews</h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-gray-600 dark:text-neutral-400">
             Preview all email templates before deploying to Klaviyo. This page is only accessible in development mode.
           </p>
         </div>
@@ -35,7 +35,7 @@ const EmailPreviewLayout: React.FC = () => {
               className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
                 activeTab === "invoice"
                   ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               Invoice Email
@@ -45,7 +45,7 @@ const EmailPreviewLayout: React.FC = () => {
               className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
                 activeTab === "verification"
                   ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               Verification Email
@@ -55,7 +55,7 @@ const EmailPreviewLayout: React.FC = () => {
               className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
                 activeTab === "payment-failed"
                   ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               Payment Failed Email
@@ -65,7 +65,7 @@ const EmailPreviewLayout: React.FC = () => {
               className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
                 activeTab === "subscription-renewal"
                   ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               Subscription Renewal Email
@@ -75,7 +75,7 @@ const EmailPreviewLayout: React.FC = () => {
               className={`-mb-px rounded-t-lg border-b-2 px-6 py-3 text-sm font-semibold transition-colors ${
                 activeTab === "mini-draw-full"
                   ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               Mini Draw 100% Capacity

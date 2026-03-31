@@ -24,13 +24,13 @@ export default async function MiniDrawSuccessPage({ searchParams }: MiniDrawSucc
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
+        <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50 dark:bg-neutral-950">
           <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 font-medium">Loading payment details...</p>
+          <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading payment details...</p>
         </div>
       }
     >
-      <div className="min-h-screen-svh bg-gray-50">
+      <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950">
         <MiniDrawSuccessClient searchParams={resolvedSearchParams} />
       </div>
     </Suspense>

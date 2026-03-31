@@ -148,7 +148,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
             <button
               type="button"
               onClick={() => setShowNewPassword(!showNewPassword)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 focus:outline-none transition-all"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 focus:outline-none transition-all"
               tabIndex={-1}
             >
               {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -194,7 +194,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
             <button
               type="button"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 focus:outline-none transition-all"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-neutral-800 focus:outline-none transition-all"
               tabIndex={-1}
             >
               {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

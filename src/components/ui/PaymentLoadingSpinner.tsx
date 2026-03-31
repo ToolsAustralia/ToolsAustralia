@@ -77,7 +77,7 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
 
       {/* Loading message */}
       <div className="text-center">
-        <p className="text-sm font-medium text-gray-800 drop-shadow-sm">{message}</p>
+        <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 drop-shadow-sm">{message}</p>
         <p className="text-xs text-gray-500 mt-1">Please wait...</p>
       </div>
 

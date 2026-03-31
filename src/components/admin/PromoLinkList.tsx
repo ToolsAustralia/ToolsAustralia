@@ -77,7 +77,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
       );
     } else if (promoLink.isExpired) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:text-neutral-100">
           Expired
         </span>
       );
@@ -110,7 +110,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -141,7 +141,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                         </span>
                         <button
                           onClick={() => handleCopyLink(promoLink.promoUrl, promoLink.id)}
-                          className="text-gray-400 hover:text-gray-600 shrink-0"
+                          className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 shrink-0"
                           title="Copy"
                         >
                           {copiedId === promoLink.id ? (
@@ -174,7 +174,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                         </button>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600 space-y-0.5">
+                    <div className="text-xs text-gray-600 dark:text-neutral-400 space-y-0.5">
                       <div className="flex items-center gap-1">
                         <Link2 className="w-3 h-3 shrink-0" />
                         {promoLink.bonusEntries} entries
@@ -205,7 +205,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                           className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
                             promoLink.campaignType === "cancelled-membership-comeback"
                               ? "bg-orange-100 text-orange-800"
-                              : "bg-gray-100 text-gray-700"
+                              : "bg-gray-100 text-gray-700 dark:text-neutral-200"
                           }`}
                         >
                           {promoLink.campaignType === "cancelled-membership-comeback" ? "Comeback" : "General"}
@@ -263,7 +263,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                             <span className="text-sm font-mono font-semibold text-gray-900">{promoLink.code}</span>
                             <button
                               onClick={() => handleCopyLink(promoLink.promoUrl, promoLink.id)}
-                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
                               title="Copy link"
                             >
                               {copiedId === promoLink.id ? (
@@ -324,7 +324,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                               className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                                 promoLink.campaignType === "cancelled-membership-comeback"
                                   ? "bg-orange-100 text-orange-800"
-                                  : "bg-gray-100 text-gray-700"
+                                  : "bg-gray-100 text-gray-700 dark:text-neutral-200"
                               }`}
                             >
                               {promoLink.campaignType === "cancelled-membership-comeback" ? "Comeback" : "General"}

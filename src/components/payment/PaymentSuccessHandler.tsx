@@ -111,7 +111,7 @@ export function PaymentSuccessHandler({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-        <p className="text-gray-600 font-medium">Verifying your payment...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Verifying your payment...</p>
         <p className="text-sm text-gray-500">Please wait while we confirm your payment status.</p>
       </div>
     );
@@ -122,7 +122,7 @@ export function PaymentSuccessHandler({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <Loader2 className="w-12 h-12 text-yellow-600 animate-spin" />
-        <p className="text-gray-600 font-medium">Processing your payment...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Processing your payment...</p>
         <p className="text-sm text-gray-500">Your payment is being processed. This may take a few moments.</p>
       </div>
     );
@@ -134,7 +134,7 @@ export function PaymentSuccessHandler({
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <XCircle className="w-12 h-12 text-red-600" />
         <p className="text-gray-900 font-semibold text-lg">Payment Failed</p>
-        <p className="text-gray-600 text-center max-w-md">
+        <p className="text-gray-600 dark:text-neutral-400 text-center max-w-md">
           {errorMessage || error || "Your payment could not be processed. Please try again."}
         </p>
         {paymentIntent?.id && (
@@ -150,7 +150,7 @@ export function PaymentSuccessHandler({
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <AlertCircle className="w-12 h-12 text-yellow-600" />
         <p className="text-gray-900 font-semibold text-lg">Action Required</p>
-        <p className="text-gray-600 text-center max-w-md">
+        <p className="text-gray-600 dark:text-neutral-400 text-center max-w-md">
           Additional authentication is required. Please complete the verification process.
         </p>
       </div>

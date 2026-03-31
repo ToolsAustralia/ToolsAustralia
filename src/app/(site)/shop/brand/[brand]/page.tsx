@@ -294,7 +294,7 @@ export default async function BrandShopPage({ params }: BrandPageProps) {
           <MetallicDivider height="h-[2px]" className="absolute bottom-0 left-0 right-0" />
         </section>
 
-        <Suspense fallback={<div className="py-16 text-center text-gray-600">Loading {brand.name} products...</div>}>
+        <Suspense fallback={<div className="py-16 text-center text-gray-600 dark:text-neutral-400">Loading {brand.name} products...</div>}>
           <ShopContent initialProducts={[]} totalProducts={0} defaultBrand={brandKey} />
         </Suspense>
 

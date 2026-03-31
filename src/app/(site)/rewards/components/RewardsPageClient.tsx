@@ -93,13 +93,7 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
             </div>
 
             {/* Right Column - Rewards History and Partner Discounts */}
-            <div
-              className="space-y-6 sm:space-y-8 "
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "#ee0000 #f3f4f6",
-              }}
-            >
+            <div className="space-y-6 sm:space-y-8">
               {/* Rewards History */}
               <RewardsHistory user={updatedUser} />
 

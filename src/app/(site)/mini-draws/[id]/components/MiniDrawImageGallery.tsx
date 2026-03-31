@@ -58,7 +58,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
 
   if (!images || images.length === 0) {
     return (
-      <div className="relative rounded-2xl shadow-lg border border-gray-200 bg-white overflow-hidden">
+      <div className="relative rounded-2xl shadow-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
         <div className="relative aspect-square lg:aspect-[4/3]">
           <Image
             src="/images/placeholder-product.jpg"
@@ -76,7 +76,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
   return (
     <div className="relative space-y-3 sm:space-y-4">
       {/* Main Swiper Display */}
-      <div className="relative rounded-2xl shadow-lg border border-gray-200 bg-white overflow-hidden">
+      <div className="relative rounded-2xl shadow-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
         <Swiper
           modules={[Navigation, Pagination, Thumbs]}
           thumbs={{
@@ -94,7 +94,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`slide-${index}`}
-                  className="relative aspect-square lg:aspect-[4/3] bg-gray-50 cursor-zoom-in"
+                  className="relative aspect-square lg:aspect-[4/3] bg-gray-50 dark:bg-neutral-950 cursor-zoom-in"
                   initial={prefersReduced ? {} : { opacity: 0.7 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.3 }}
@@ -143,10 +143,10 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
           {images.map((image, index) => (
             <SwiperSlide key={index} className="!w-16 !h-16 sm:!w-20 sm:!h-20">
               <div
-                className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white ${
+                className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white dark:bg-neutral-900 ${
                   activeIndex === index
                     ? "border-[#ee0000] shadow-md shadow-[#ee0000]/20"
-                    : "border-gray-200 hover:border-gray-400"
+                    : "border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500"
                 }`}
               >
                 <Image

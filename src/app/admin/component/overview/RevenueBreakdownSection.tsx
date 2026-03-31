@@ -87,7 +87,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.membershipPurchase).revenue.toLocaleString()}`}
             icon={Package}
             color="orange"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("membership-purchase")}
@@ -105,7 +105,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.membershipRenewal).revenue.toLocaleString()}`}
             icon={RefreshCw}
             color="yellow"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("membership-renewal")}
@@ -123,7 +123,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.oneTimePurchase).revenue.toLocaleString()}`}
             icon={ShoppingCart}
             color="blue"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("one-time-purchase")}
@@ -141,7 +141,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.additionalOneTimePurchase).revenue.toLocaleString()}`}
             icon={ShoppingBag}
             color="indigo"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("additional-one-time")}
@@ -159,7 +159,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.miniDraw).revenue.toLocaleString()}`}
             icon={Trophy}
             color="purple"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("mini-draw")}
@@ -172,7 +172,7 @@ export default function RevenueBreakdownSection({
             value={`$${getRevenueData(breakdown.upsell).revenue.toLocaleString()}`}
             icon={TrendingUp}
             color="pink"
-            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900"
+            valueClassName="text-sm sm:text-xl lg:text-lg xl:text-xl font-bold tabular-nums text-gray-900 dark:text-white"
             className="hover:scale-[1.02] transition-transform"
             clickable={true}
             onClick={() => handleRevenueCardClick("upsell")}

@@ -41,7 +41,7 @@ const PastDrawCard: React.FC<PastDrawCardProps> = ({
   const drawNumber = totalDraws - drawIndex;
 
   return (
-    <div className="group relative rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
+    <div className="group relative rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden dark:border-neutral-700 dark:bg-neutral-900/85">
       <div className="flex flex-row gap-3 sm:gap-4">
         {/* Prize Image */}
         <div className="relative flex-shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden">
@@ -54,8 +54,8 @@ const PastDrawCard: React.FC<PastDrawCardProps> = ({
               sizes="(max-width: 640px) 96px, 128px"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-red-100 via-red-200 to-red-300 flex items-center justify-center">
-              <Ticket className="w-8 h-8 sm:w-10 sm:h-10 text-red-400" />
+            <div className="w-full h-full bg-gradient-to-br from-red-100 via-red-200 to-red-300 dark:from-red-950 dark:via-red-900 dark:to-red-950 flex items-center justify-center">
+              <Ticket className="w-8 h-8 sm:w-10 sm:h-10 text-red-400 dark:text-red-500" />
             </div>
           )}
           {imageUrl && (
@@ -68,23 +68,23 @@ const PastDrawCard: React.FC<PastDrawCardProps> = ({
           {/* Header Row */}
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center bg-gray-100 text-gray-600 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center bg-gray-100 text-gray-600 dark:text-neutral-400 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full">
                 Draw #{drawNumber}
               </span>
             </div>
-            <h4 className="text-sm sm:text-base font-bold text-gray-900 font-['Poppins'] truncate leading-tight">
+            <h4 className="text-sm sm:text-base font-bold text-gray-900 dark:text-neutral-100 font-['Poppins'] truncate leading-tight">
               {draw.name}
             </h4>
           </div>
 
           {/* Date + Winner Row */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-neutral-400">
               <Calendar className="w-3 h-3 text-red-500 flex-shrink-0" />
               <span>{formatDrawDate(draw.drawDate)}</span>
             </div>
             {draw.winner && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-neutral-400">
                 <Award className="w-3 h-3 text-red-500 flex-shrink-0" />
                 <span className="truncate max-w-[120px]">
                   {formatWinnerNameFromString(draw.winner.name)}

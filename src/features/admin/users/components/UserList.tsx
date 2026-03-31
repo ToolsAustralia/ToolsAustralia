@@ -97,7 +97,7 @@ export default function UserList({
         <div className="p-6 sm:p-8 text-center">
           <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Error Loading Users</h3>
-          <p className="text-sm sm:text-base text-gray-600 mb-4">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 mb-4">
             {error instanceof Error ? error.message : "Failed to load users"}
           </p>
           <button
@@ -117,7 +117,7 @@ export default function UserList({
         <div className="p-6 sm:p-8 text-center">
           <Users className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Users Found</h3>
-          <p className="text-sm sm:text-base text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400">
             {filters.search || filters.subscriptionStatus || filters.role
               ? "Try adjusting your search criteria"
               : "No users have been registered yet"}
@@ -134,7 +134,7 @@ export default function UserList({
           <thead className="bg-gray-50 border-b-2 border-gray-200">
             <tr>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("createdAt")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -142,11 +142,11 @@ export default function UserList({
                   {getSortIcon("createdAt", filters.sortBy || "createdAt", filters.sortOrder || "desc")}
                 </div>
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
                 Subscription
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("totalSpent")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -155,7 +155,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
                 onClick={() => onSort("majorDrawEntries")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -164,7 +164,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("miniDrawCount")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -173,7 +173,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("lastLogin")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -181,10 +181,10 @@ export default function UserList({
                   {getSortIcon("lastLogin", filters.sortBy || "createdAt", filters.sortOrder || "desc")}
                 </div>
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
+              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider hidden sm:table-cell">
                 Status
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -205,7 +205,7 @@ export default function UserList({
               <button
                 onClick={() => onPageChange(1)}
                 disabled={!pagination.hasPrevPage}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="First page"
               >
                 <ChevronsLeft className="w-4 h-4" />
@@ -213,7 +213,7 @@ export default function UserList({
               <button
                 onClick={() => onPageChange(pagination.currentPage - 1)}
                 disabled={!pagination.hasPrevPage}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Previous page"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -221,7 +221,7 @@ export default function UserList({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs sm:text-sm text-gray-700 font-medium">
+              <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
                 Page {pagination.currentPage} of {pagination.totalPages}
               </span>
             </div>
@@ -230,7 +230,7 @@ export default function UserList({
               <button
                 onClick={() => onPageChange(pagination.currentPage + 1)}
                 disabled={!pagination.hasNextPage}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Next page"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -238,7 +238,7 @@ export default function UserList({
               <button
                 onClick={() => onPageChange(pagination.totalPages)}
                 disabled={!pagination.hasNextPage}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Last page"
               >
                 <ChevronsRight className="w-4 h-4" />

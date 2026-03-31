@@ -141,13 +141,13 @@ export default async function DrawResultsPage() {
           ) : null}
 
           {/* How Winners Are Selected */}
-          <section className="bg-white rounded-2xl shadow-sm border border-gray-200/50 px-6 py-4 ">
+          <section className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-200/50 dark:border-slate-700/80 px-6 py-4">
             <div className="text-center mb-8">
               <div className="flex items-center justify-center mb-4"></div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 font-['Poppins'] mb-3">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3">
                 How Winners Are Selected
               </h2>
-              <p className="text-gray-600 max-w-2xl mx-auto">
+              <p className="text-gray-600 dark:text-slate-300 max-w-2xl mx-auto">
                 Our fair and transparent selection process ensures every participant has an equal chance
               </p>
             </div>
@@ -156,8 +156,8 @@ export default async function DrawResultsPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-600 to-red-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
                   <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Random Selection</h3>
-                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">Random Selection</h3>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 leading-relaxed">
                   Random draw system and methodology is government certified
                 </p>
               </div>
@@ -165,8 +165,8 @@ export default async function DrawResultsPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-green-600 to-green-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
                   <Users className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Fair Process</h3>
-                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">Fair Process</h3>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 leading-relaxed">
                   Winners selected through government certified digital system, RandomDraws.
                 </p>
               </div>
@@ -174,8 +174,8 @@ export default async function DrawResultsPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform duration-300 shadow-lg">
                   <Bell className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 font-['Poppins']">Winner Notification</h3>
-                <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">Winner Notification</h3>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 leading-relaxed">
                   Live streamed on Facebook! All participants will be notified of the winners via social media, sms or
                   email!
                 </p>

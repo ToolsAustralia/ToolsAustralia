@@ -38,7 +38,7 @@ function PartnerBenefitsContent() {
     return (
       <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
         <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-600 font-medium">Loading your benefits...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
       </div>
     );
   }
@@ -47,7 +47,7 @@ function PartnerBenefitsContent() {
     return (
       <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
         <p className="text-2xl font-semibold text-gray-900">We couldn&apos;t load your benefits.</p>
-        <p className="text-gray-600">{error instanceof Error ? error.message : "Please try again shortly."}</p>
+        <p className="text-gray-600 dark:text-neutral-400">{error instanceof Error ? error.message : "Please try again shortly."}</p>
         <button
           onClick={() => window.location.reload()}
           className="px-6 py-3 bg-red-600 text-white rounded-lg font-semibold shadow hover:bg-red-700 transition"
@@ -168,7 +168,7 @@ export default function PartnerBenefitsPage() {
       fallback={
         <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
           <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 font-medium">Loading your benefits...</p>
+          <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
         </div>
       }
     >

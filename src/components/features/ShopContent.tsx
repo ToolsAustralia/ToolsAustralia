@@ -189,13 +189,13 @@ export default function ShopContent({
             />
 
             {/* Sidebar */}
-            <div className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-xl overflow-y-auto transform transition-transform duration-300 ease-in-out">
-              <div className="p-4 border-b border-gray-200 sticky top-0 bg-white z-10">
+            <div className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar transform transition-transform duration-300 ease-in-out border-r-2 border-gray-200 dark:border-red-900/40">
+              <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Filters</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
                   <button
                     onClick={handleCloseFilters}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 dark:hover:text-white rounded-full transition-colors text-gray-700 dark:text-neutral-400"
                     aria-label="Close filters"
                   >
                     <X className="w-5 h-5" />
@@ -211,16 +211,18 @@ export default function ShopContent({
 
         {/* Main Content */}
         <div className="flex-1">
-          <div className="mb-6 rounded-2xl border border-gray-200 bg-gradient-to-br from-white via-white to-gray-50 p-4 shadow-sm sm:p-5">
+          <div className="mb-6 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-gradient-to-br from-white via-white to-gray-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950 p-4 shadow-sm sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-gray-900 sm:text-lg">Browse Products</h2>
-                <p className="text-xs text-gray-500 sm:text-sm">Fine-tune results with filters, sorting, and view mode.</p>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white sm:text-lg">Browse Products</h2>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 sm:text-sm">
+                  Fine-tune results with filters, sorting, and view mode.
+                </p>
               </div>
               {hasControlsApplied && (
                 <button
                   onClick={handleClearAll}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-red-200 dark:border-red-900/50 bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-950/30"
                 >
                   <X className="h-3.5 w-3.5" />
                   Reset controls
@@ -231,19 +233,19 @@ export default function ShopContent({
             <div className="space-y-3 md:hidden">
               <div className="flex items-center gap-2">
                 <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
                   <input
                     type="text"
                     placeholder="Search products..."
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
                   />
                 </div>
 
                 <button
                   onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
                 >
                   <Filter className="h-4 w-4" />
                   Filters
@@ -256,11 +258,13 @@ export default function ShopContent({
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 bg-white p-1">
+                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
                   <button
                     onClick={() => setViewMode("grid")}
                     className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                      viewMode === "grid" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                      viewMode === "grid"
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
                     }`}
                     aria-label="Grid view"
                   >
@@ -269,7 +273,9 @@ export default function ShopContent({
                   <button
                     onClick={() => setViewMode("list")}
                     className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                      viewMode === "list" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                      viewMode === "list"
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
                     }`}
                     aria-label="List view"
                   >
@@ -278,7 +284,7 @@ export default function ShopContent({
                 </div>
 
                 <div className="relative min-w-0 flex-1">
-                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
                     <ArrowUpDown className="h-4 w-4" />
                   </div>
                   <Dropdown
@@ -286,7 +292,7 @@ export default function ShopContent({
                     value={sortBy}
                     onChange={handleSortChange}
                     placeholder="Sort by"
-                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-[#ee0000]/10"
                   />
                 </div>
               </div>
@@ -294,20 +300,20 @@ export default function ShopContent({
 
             <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
                 <input
                   type="text"
                   placeholder="Search products..."
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
                 />
               </div>
 
               <div className="lg:hidden">
                 <button
                   onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
                 >
                   <Filter className="h-4 w-4" />
                   Filters
@@ -319,11 +325,13 @@ export default function ShopContent({
                 </button>
               </div>
 
-              <div className="inline-flex items-center rounded-xl border border-gray-300 bg-white p-1">
+              <div className="inline-flex items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    viewMode === "grid" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                    viewMode === "grid"
+                      ? "bg-black text-white dark:bg-white dark:text-black"
+                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
                   }`}
                   aria-label="Grid view"
                 >
@@ -332,7 +340,9 @@ export default function ShopContent({
                 <button
                   onClick={() => setViewMode("list")}
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    viewMode === "list" ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"
+                    viewMode === "list"
+                      ? "bg-black text-white dark:bg-white dark:text-black"
+                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
                   }`}
                   aria-label="List view"
                 >
@@ -341,7 +351,7 @@ export default function ShopContent({
               </div>
 
               <div className="relative min-w-[190px]">
-                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500">
+                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
                   <ArrowUpDown className="h-4 w-4" />
                 </div>
                 <Dropdown
@@ -349,7 +359,7 @@ export default function ShopContent({
                   value={sortBy}
                   onChange={handleSortChange}
                   placeholder="Sort by"
-                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 [&>button]:focus:ring-[#ee0000]/10"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:focus:ring-[#ee0000]/10"
                 />
               </div>
             </div>
@@ -360,7 +370,7 @@ export default function ShopContent({
             {/* Results count and loading */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <p className="text-gray-600 text-sm sm:text-base">
+                <p className="text-gray-600 dark:text-neutral-400 text-sm sm:text-base">
                   {totalProducts > 0 ? (
                     <>
                       Showing {(currentPage - 1) * 12 + 1}-{Math.min(currentPage * 12, totalProducts)} of{" "}
@@ -371,15 +381,15 @@ export default function ShopContent({
                   )}
                 </p>
                 {isLoading && (
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-black dark:border-t-white rounded-full animate-spin" />
                 )}
               </div>
             </div>
 
             {/* Error message */}
             {isError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                <p className="text-red-600 text-sm">
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-3 mb-4">
+                <p className="text-red-600 dark:text-red-400 text-sm">
                   {error instanceof Error ? error.message : "Failed to load products. Please try again."}
                 </p>
               </div>
@@ -393,13 +403,13 @@ export default function ShopContent({
               {[...Array(8)].map((_, i) => (
                 <div
                   key={i}
-                  className="bg-white rounded-[25px] shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] p-4 sm:p-6 animate-pulse"
+                  className="bg-white dark:bg-neutral-900 rounded-[25px] shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] dark:shadow-[0px_4px_10px_0px_rgba(0,0,0,0.4)] p-4 sm:p-6 animate-pulse"
                 >
-                  <div className="h-[150px] sm:h-[196px] bg-gray-200 rounded-[10px] mb-4"></div>
+                  <div className="h-[150px] sm:h-[196px] bg-gray-200 dark:bg-neutral-800 rounded-[10px] mb-4" />
                   <div className="space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded w-3/4" />
+                    <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded w-1/2" />
+                    <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded w-1/4" />
                   </div>
                 </div>
               ))}
@@ -427,8 +437,10 @@ export default function ShopContent({
               <div className="text-gray-400 mb-6">
                 <Clock className="w-20 h-20 mx-auto text-gray-300" />
               </div>
-              <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 font-['Poppins']">Coming Soon</h3>
-              <p className="text-base sm:text-lg text-gray-600 mb-6 max-w-md mx-auto font-['Inter']">
+              <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">
+                Coming Soon
+              </h3>
+              <p className="text-base sm:text-lg text-gray-600 dark:text-neutral-300 mb-6 max-w-md mx-auto font-['Inter']">
                 Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can win
                 amazing tools!
               </p>
@@ -446,17 +458,17 @@ export default function ShopContent({
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Previous
                 </button>
-                <span className="px-3 py-2 text-sm text-gray-600">
+                <span className="px-3 py-2 text-sm text-gray-600 dark:text-neutral-400">
                   {currentPage} of {totalPages}
                 </span>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Next
                 </button>
@@ -467,7 +479,7 @@ export default function ShopContent({
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
@@ -490,7 +502,9 @@ export default function ShopContent({
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
                         className={`w-10 h-10 rounded-lg transition-colors ${
-                          pageNum === currentPage ? "bg-black text-white" : "border border-gray-300 hover:bg-gray-50"
+                          pageNum === currentPage
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "border border-gray-300 dark:border-neutral-600 text-gray-900 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800"
                         }`}
                       >
                         {pageNum}
@@ -502,7 +516,7 @@ export default function ShopContent({
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>

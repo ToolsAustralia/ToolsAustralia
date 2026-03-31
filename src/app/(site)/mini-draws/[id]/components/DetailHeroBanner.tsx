@@ -85,15 +85,15 @@ export default function DetailHeroBanner({
           transition={{ duration: d, delay: 0.05 }}
         >
           <Link href="/" className="hover:text-white transition-colors">Home</Link>
-          <ChevronRight className="w-3 h-3 flex-shrink-0 text-gray-600" />
+          <ChevronRight className="w-3 h-3 flex-shrink-0 text-gray-600 dark:text-neutral-400" />
           <Link href="/mini-draws" className="hover:text-white transition-colors">Mini Draws</Link>
-          <ChevronRight className="w-3 h-3 flex-shrink-0 text-gray-600" />
+          <ChevronRight className="w-3 h-3 flex-shrink-0 text-gray-600 dark:text-neutral-400" />
           <span className="text-gray-300 font-medium truncate max-w-[180px] sm:max-w-[280px]">{drawName}</span>
         </motion.nav>
 
         {/* Brand + Status + Quick Actions — single row */}
         <motion.div
-          className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4 overflow-x-auto no-scrollbar"
+          className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4 overflow-x-auto brand-scrollbar"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: d, delay: 0.1 }}

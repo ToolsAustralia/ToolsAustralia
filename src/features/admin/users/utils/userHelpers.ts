@@ -73,7 +73,7 @@ export function getSubscriptionBadgeConfig(subscription?: { isActive?: boolean }
   if (!subscription) {
     return {
       label: "No Subscription",
-      className: "px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200",
+      className: "px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:text-neutral-200 border border-gray-200",
     };
   }
 

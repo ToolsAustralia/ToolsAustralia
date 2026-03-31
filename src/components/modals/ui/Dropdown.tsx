@@ -200,7 +200,7 @@ const Dropdown: React.FC<DropdownProps> = ({
     <div className={`relative ${isOpen ? "z-[100]" : ""} ${className}`} ref={dropdownRef}>
       {/* Label */}
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
           {label}
           {required && <span className="text-red-500 dark:text-red-400 ml-1">*</span>}
         </label>
@@ -213,7 +213,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         onKeyDown={handleKeyDown}
         disabled={disabled}
         className={`
-          w-full border rounded-lg text-left transition-all duration-200
+          w-full border rounded-xl text-left transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
           ${
             compact
@@ -222,13 +222,13 @@ const Dropdown: React.FC<DropdownProps> = ({
           }
           ${
             error
-              ? "border-red-300 dark:border-red-500 bg-red-50 dark:bg-red-950/30"
+              ? "border-red-300 dark:border-red-500 bg-red-50 dark:bg-red-950/40"
               : active
-              ? "border-red-500 dark:border-red-500 bg-red-50/50 dark:bg-red-950/30 shadow-md"
-              : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500"
+              ? "border-red-500 dark:border-red-500 bg-red-50/80 dark:bg-red-950/40 shadow-md"
+              : "border-gray-300 dark:border-neutral-600 bg-[#ffffff] dark:!bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500 dark:hover:!bg-neutral-900"
           }
-          ${disabled ? "bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-gray-500 cursor-not-allowed" : "cursor-pointer"}
-          ${isOpen ? "ring-2 ring-red-500 border-transparent" : ""}
+          ${disabled ? "bg-gray-100 dark:!bg-neutral-900 text-gray-400 dark:text-neutral-500 cursor-not-allowed" : "cursor-pointer"}
+          ${isOpen ? "ring-2 ring-red-500 border-transparent dark:border-transparent" : ""}
         `}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -238,7 +238,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         <div className="flex items-center justify-between gap-1 sm:gap-2">
           <span
             className={`truncate flex-1 flex items-center gap-1 sm:gap-1.5 ${
-              selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"
+              selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-neutral-400"
             }`}
           >
             {selectedOption?.icon && (
@@ -251,7 +251,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
           </span>
           <ChevronDown
-            className="flex-shrink-0 w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
+            className="flex-shrink-0 w-4 h-4 text-gray-400 dark:text-neutral-500 transition-transform duration-200"
             style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
           />
         </div>
@@ -263,7 +263,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className={`absolute z-50 w-full min-w-[220px] ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden`}
+          className={`absolute z-50 w-full min-w-[220px] isolate ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} bg-[#ffffff] dark:!bg-neutral-950 border border-gray-200 dark:border-neutral-600 rounded-xl shadow-lg dark:shadow-2xl dark:shadow-black/50 overflow-y-auto overflow-x-hidden`}
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
@@ -274,7 +274,9 @@ const Dropdown: React.FC<DropdownProps> = ({
           onWheel={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">No options available</div>
+            <div className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 text-center bg-[#ffffff] dark:!bg-neutral-950">
+              No options available
+            </div>
           ) : (
             options.map((option) => {
               const IconComponent = option.icon;
@@ -290,10 +292,10 @@ const Dropdown: React.FC<DropdownProps> = ({
                     flex items-center justify-between gap-2
                     ${
                       option.disabled
-                        ? "text-gray-400 dark:text-gray-500 cursor-not-allowed bg-gray-50 dark:bg-neutral-800"
-                        : "text-gray-900 dark:text-white hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
+                        ? "text-gray-400 dark:text-neutral-500 cursor-not-allowed bg-gray-50 dark:bg-neutral-900"
+                        : "text-gray-900 dark:text-neutral-100 hover:bg-red-50 dark:hover:bg-neutral-800 cursor-pointer"
                     }
-                    ${option.value === value ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400" : ""}
+                    ${option.value === value ? "bg-red-50 dark:bg-neutral-800 text-red-700 dark:text-red-300" : ""}
                     first:rounded-t-lg last:rounded-b-lg
                   `}
                   role="option"

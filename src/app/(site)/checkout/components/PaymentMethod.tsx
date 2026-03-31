@@ -113,11 +113,11 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
                 />
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-lg ${isSelected ? "bg-red-100" : "bg-gray-100"}`}>
-                    <Icon className={`w-5 h-5 ${isSelected ? "text-red-600" : "text-gray-600"}`} />
+                    <Icon className={`w-5 h-5 ${isSelected ? "text-red-600" : "text-gray-600 dark:text-neutral-400"}`} />
                   </div>
                   <div>
                     <div className={`font-medium ${isSelected ? "text-red-900" : "text-gray-900"}`}>{method.name}</div>
-                    <div className={`text-sm ${isSelected ? "text-red-700" : "text-gray-600"}`}>
+                    <div className={`text-sm ${isSelected ? "text-red-700" : "text-gray-600 dark:text-neutral-400"}`}>
                       {method.description}
                     </div>
                   </div>
@@ -131,14 +131,14 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
       {/* Card Payment Form */}
       {paymentInfo.method === "card" && (
         <div className="space-y-6">
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
             <Lock className="w-4 h-4 text-green-600" />
             <span>Your payment information is encrypted and secure</span>
           </div>
 
           {/* Card Number */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Card Number *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Card Number *</label>
             <input
               type="text"
               value={paymentInfo.cardNumber || ""}
@@ -154,7 +154,7 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
 
           {/* Card Holder Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Name on Card *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Name on Card *</label>
             <input
               type="text"
               value={paymentInfo.nameOnCard || ""}
@@ -170,7 +170,7 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
           {/* Expiry Date and CVV */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Expiry Date *</label>
               <input
                 type="text"
                 value={paymentInfo.expiryDate || ""}
@@ -185,7 +185,7 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">CVV *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">CVV *</label>
               <input
                 type="text"
                 value={paymentInfo.cvv || ""}
@@ -227,13 +227,13 @@ export default function PaymentMethod({ paymentInfo, setPaymentInfo, errors }: P
             {paymentInfo.method === "paypal" ? (
               <Shield className="w-8 h-8 text-blue-600" />
             ) : (
-              <Smartphone className="w-8 h-8 text-gray-600" />
+              <Smartphone className="w-8 h-8 text-gray-600 dark:text-neutral-400" />
             )}
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
             {paymentMethods.find((m) => m.id === paymentInfo.method)?.name}
           </h3>
-          <p className="text-gray-600 mb-4">{paymentMethods.find((m) => m.id === paymentInfo.method)?.description}</p>
+          <p className="text-gray-600 dark:text-neutral-400 mb-4">{paymentMethods.find((m) => m.id === paymentInfo.method)?.description}</p>
           <p className="text-sm text-gray-500">You&apos;ll be redirected to complete your payment securely</p>
         </div>
       )}

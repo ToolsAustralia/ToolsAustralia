@@ -12,7 +12,7 @@ export interface TrendIndicatorProps {
 
 export function TrendIndicator({ value, direction, showIcon = true, className = "" }: TrendIndicatorProps) {
   const colorClass =
-    direction === "up" ? "text-emerald-600" : direction === "down" ? "text-red-600" : "text-gray-600";
+    direction === "up" ? "text-emerald-600" : direction === "down" ? "text-red-600" : "text-gray-600 dark:text-neutral-400";
 
   const Icon = direction === "up" ? ArrowUp : direction === "down" ? ArrowDown : Minus;
 

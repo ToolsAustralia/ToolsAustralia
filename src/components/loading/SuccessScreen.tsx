@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Gift, Star, Zap, Ticket, Tag } from "lucide-react";
+import { Check, Gift, Star, Zap, Ticket, Tag, ShieldCheck } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 
 interface Benefit {
@@ -159,29 +159,48 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
 
       {/* Card */}
       <div
-        className="relative w-full max-w-sm sm:max-w-md mx-auto overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_30px_80px_-18px_rgba(16,185,129,0.45)] animate-in zoom-in-90 slide-in-from-bottom-4 duration-500"
+        className="relative mx-auto w-full max-w-sm overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_30px_80px_-18px_rgba(16,185,129,0.45)] animate-in zoom-in-90 slide-in-from-bottom-4 duration-500 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_30px_80px_-18px_rgba(16,185,129,0.2)] sm:max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top accent gradient */}
         <div className="h-1.5 bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500" />
-        <div className="pointer-events-none absolute -right-14 -top-14 h-36 w-36 rounded-full bg-emerald-100 blur-2xl" />
-        <div className="pointer-events-none absolute -left-10 bottom-0 h-28 w-28 rounded-full bg-teal-100 blur-2xl" />
+        <div className="pointer-events-none absolute -right-14 -top-14 h-36 w-36 rounded-full bg-emerald-100 blur-2xl dark:bg-emerald-500/15" />
+        <div className="pointer-events-none absolute -left-10 bottom-0 h-28 w-28 rounded-full bg-teal-100 blur-2xl dark:bg-teal-500/15" />
 
         <div className="relative p-5 sm:p-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700 sm:text-[11px]">
-              <Zap className="h-3.5 w-3.5" />
-              Transaction complete
+          {/* Status strip — typographic / editorial, not pill buttons */}
+          <div className="mb-6 flex items-center justify-between gap-4 border-b border-gray-100/90 pb-4 dark:border-neutral-800 sm:mb-7 sm:pb-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="h-9 w-0.5 shrink-0 rounded-full bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500 shadow-[0_0_12px_rgba(52,211,153,0.35)] dark:shadow-[0_0_14px_rgba(52,211,153,0.2)] sm:h-10"
+                aria-hidden
+              />
+              <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-800 dark:text-emerald-300/95 sm:text-[11px]">
+                Transaction complete
+              </p>
             </div>
-            <div className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700 sm:text-xs">
-              Secure
+            <div
+              className="flex shrink-0 flex-col items-end gap-0.5 text-right"
+              title="Processed over a secure connection"
+            >
+              <div className="flex items-center gap-1.5 text-gray-600 dark:text-neutral-400">
+                <ShieldCheck
+                  className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400/90"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                <span className="text-[10px] font-medium tracking-wide sm:text-xs">Secure</span>
+              </div>
+              <span className="text-[9px] font-normal tracking-wide text-gray-400 dark:text-neutral-600 sm:text-[10px]">
+                Encrypted
+              </span>
             </div>
           </div>
 
           {/* Checkmark */}
           <div className="mb-5 sm:mb-6 flex justify-center">
             <div className="relative">
-              <div className="absolute -inset-2 rounded-full border-2 border-emerald-200/70" />
+              <div className="absolute -inset-2 rounded-full border-2 border-emerald-200/70 dark:border-emerald-400/35" />
               <div
                 className="absolute inset-0 rounded-full bg-emerald-400/20 animate-ping"
                 style={{ animationDuration: "2.2s" }}
@@ -193,10 +212,10 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
           </div>
 
           {/* Title */}
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1.5 sm:mb-2 tracking-tight animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300 text-center">
+          <h2 className="mb-1.5 text-center text-xl font-bold tracking-tight text-gray-900 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-300 dark:text-neutral-100 sm:mb-2 sm:text-2xl">
             {title}
           </h2>
-          <p className="text-sm sm:text-base text-gray-500 mb-5 sm:mb-6 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-400 text-center">
+          <p className="mb-5 animate-in fade-in slide-in-from-bottom-2 text-center text-sm text-gray-500 delay-400 duration-500 dark:text-neutral-400 sm:mb-6 sm:text-base">
             {subtitle}
           </p>
 
@@ -208,8 +227,8 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
                   key={index}
                   className={`flex items-center gap-2.5 sm:gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 animate-in slide-in-from-left-4 fade-in duration-500 shadow-sm ${
                     benefit.highlight
-                      ? "bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border border-amber-200/70"
-                      : "bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 border border-emerald-200/70"
+                      ? "border border-amber-200/70 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 dark:border-amber-500/35 dark:from-amber-950/55 dark:via-yellow-950/45 dark:to-orange-950/55"
+                      : "border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 dark:border-emerald-500/35 dark:from-emerald-950/55 dark:via-green-950/45 dark:to-teal-950/55"
                   }`}
                   style={{ animationDelay: `${index * 100 + 600}ms`, animationFillMode: "both" }}
                 >
@@ -224,7 +243,9 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
                   </div>
                   <span
                     className={`font-medium text-xs sm:text-sm ${
-                      benefit.highlight ? "text-amber-900" : "text-emerald-900"
+                      benefit.highlight
+                        ? "text-amber-900 dark:text-amber-100"
+                        : "text-emerald-900 dark:text-emerald-100"
                     }`}
                   >
                     {benefit.text}
@@ -235,14 +256,17 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
           )}
 
           {/* Dismiss hint */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-center text-[10px] sm:text-xs text-gray-500 animate-in fade-in duration-500 delay-1000" style={{ animationFillMode: "both" }}>
+          <div
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-center text-[10px] text-gray-500 animate-in fade-in duration-500 delay-1000 dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-400 sm:text-xs"
+            style={{ animationFillMode: "both" }}
+          >
             Tap anywhere to dismiss
           </div>
         </div>
 
         {/* Progress bar */}
         {autoCloseDelay > 0 && (
-          <div className="h-1.5 bg-gray-100">
+          <div className="h-1.5 bg-gray-100 dark:bg-neutral-800">
             <div
               className="h-full bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500 transition-[width] duration-100 ease-linear"
               style={{ width: `${100 - progress}%` }}

@@ -136,7 +136,7 @@ export default function PromoBannerTextList() {
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               text.isActive
                                 ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-600"
+                                : "bg-gray-100 text-gray-600 dark:text-neutral-400"
                             }`}
                           >
                             {text.isActive ? (
@@ -164,7 +164,7 @@ export default function PromoBannerTextList() {
                           />
                           <p className="text-xs text-gray-500 break-all sm:max-w-md">{text.imageUrl}</p>
                         </div>
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className="text-sm text-gray-600 dark:text-neutral-400 space-y-1">
                           <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4" />
                             <span>{formatSchedule(text)}</span>
@@ -185,7 +185,7 @@ export default function PromoBannerTextList() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleEdit(text)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-600 dark:text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Edit"
                     >
                       <Edit className="w-4 h-4" />
@@ -193,7 +193,7 @@ export default function PromoBannerTextList() {
                     <button
                       onClick={() => handleDelete(text.id)}
                       disabled={deletingId === text.id}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                       title="Delete"
                     >
                       {deletingId === text.id ? (

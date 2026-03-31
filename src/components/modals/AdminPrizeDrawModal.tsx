@@ -216,7 +216,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
           </FormSection>
 
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
               Prize Images <span className="text-red-500">*</span>
             </label>
             <ImageUpload

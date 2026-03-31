@@ -40,7 +40,9 @@ export default function DashboardSection({
   const ActionIcon = action?.icon;
 
   return (
-    <div className={`bg-white rounded-lg sm:rounded-xl border border-gray-200 shadow-sm ${className}`}>
+    <div
+      className={`bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none ${className}`}
+    >
       {(title || action || collapsible || headerTrailing) && (
         <div
           className={`flex flex-wrap items-start sm:items-center justify-between gap-2 ${noPadding ? "p-3 sm:p-4 lg:p-5" : "px-3 sm:px-4 lg:px-5 pt-3 sm:pt-4 lg:pt-5 pb-2 sm:pb-3"} ${
@@ -49,14 +51,20 @@ export default function DashboardSection({
           onClick={collapsible ? onToggleExpand : undefined}
         >
           <div className="flex-1 min-w-0">
-            {title && <h3 className="text-sm sm:text-base font-semibold text-gray-900 leading-snug">{title}</h3>}
-            {subtitle && <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 leading-snug">{subtitle}</p>}
+            {title && (
+              <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white leading-snug">{title}</h3>
+            )}
+            {subtitle && (
+              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
+                {subtitle}
+              </p>
+            )}
           </div>
           {headerTrailing && <div className="shrink-0 ml-auto sm:ml-0">{headerTrailing}</div>}
           {action && !collapsible && (
             <button
               onClick={action.onClick}
-              className="flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700 transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
             >
               {ActionIcon && <ActionIcon className="w-4 h-4" />}
               {action.label}
@@ -65,7 +73,7 @@ export default function DashboardSection({
           {collapsible && (
             <button
               type="button"
-              className="text-gray-400 hover:text-gray-600 transition-colors ml-2"
+              className="text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors ml-2"
               aria-label={isExpanded ? "Collapse section" : "Expand section"}
             >
               <svg

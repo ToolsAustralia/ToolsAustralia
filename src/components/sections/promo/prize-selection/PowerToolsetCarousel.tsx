@@ -131,7 +131,7 @@ export function PowerToolsetCarousel({
         initial="hidden"
         animate="visible"
         whileHover="hover"
-        className="relative w-20 h-24 sm:w-28 sm:h-36 flex-shrink-0 overflow-visible"
+        className="relative h-24 w-20 shrink-0 overflow-visible sm:h-36 sm:w-28"
       >
         {brandLogo && (
           <div className={`absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 z-20 h-4 w-14 sm:h-5 sm:w-16 pointer-events-none ${toolset === "milwaukee" ? "scale-125" : ""}`}>
@@ -147,7 +147,7 @@ export function PowerToolsetCarousel({
         <motion.button
           type="button"
           onClick={() => onSelect(prizeOption.slug)}
-          className="relative w-full h-full cursor-pointer rounded-xl overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+          className="relative h-full w-full cursor-pointer overflow-hidden rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2"
         >
           <div className="absolute inset-0">
             <Image
@@ -225,7 +225,7 @@ export function PowerToolsetCarousel({
       ) : (
         <>
           {/* Left - non-focused toolsets */}
-          <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide flex-nowrap pt-6 sm:pt-7">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-x-hidden overflow-y-hidden overscroll-none pt-6 sm:gap-2 sm:pt-7 md:gap-3">
             {leftPrizes.map((prize, i) => renderSideImage(prize, i, true))}
           </div>
 
@@ -313,7 +313,7 @@ export function PowerToolsetCarousel({
           </div>
 
           {/* Right - non-focused toolsets */}
-          <div className="flex items-center justify-start gap-1 sm:gap-2 md:gap-3 flex-1 min-w-0 overflow-x-auto overflow-y-visible scrollbar-hide flex-nowrap pt-6 sm:pt-7">
+          <div className="flex min-w-0 flex-1 items-center justify-start gap-1 overflow-x-hidden overflow-y-hidden overscroll-none pt-6 sm:gap-2 sm:pt-7 md:gap-3">
             {rightPrizes.map((prize, i) => renderSideImage(prize, i, false))}
           </div>
         </>

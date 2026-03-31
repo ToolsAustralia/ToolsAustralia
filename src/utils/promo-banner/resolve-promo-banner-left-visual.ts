@@ -1,11 +1,18 @@
 /**
- * Resolves the promo banner left-column image (variant > scheduled > static under public/images/promoBanner).
+ * Resolves the promo banner left-column image (Easter 2026 Holiday art > variant > scheduled > static).
+ * Holiday takeover wins whenever the AEST calendar is Apr 3–6 2026 (or dev preview is set).
  * No network calls — returns relative paths or full URLs only.
  *
  * Static filenames: `{base}-{multiplier}x.png` where multiplier is 2|3|5|10. Missing assets should use 10x
  * until 2x/3x/5x exist in repo; `bannerMultiplierFileKey` maps unknown/null multipliers to 10.
  */
 
+import {
+  buildHolidayPromoBannerPaths,
+  getActiveHolidayPromoSlot,
+  holidayPromoAltText,
+  type HolidayPromoSlot,
+} from "./holiday-promo-banner";
 import { resolvePromoBannerAssetBrand } from "./resolve-promo-banner-asset-brand";
 import { buildStaticPromoBannerPaths, type StaticPromoBannerFamily } from "./build-static-promo-banner-paths";
 
@@ -28,6 +35,10 @@ export interface ResolvePromoBannerLeftVisualParams {
   /** `source === "scheduled"` with end date from effective-for-banner. */
   hasScheduledPromo: boolean;
   multiplier: number | null;
+  /**
+   * Development only: force Holiday-folder slot (`promoHoliday` preview). Production callers omit this.
+   */
+  holidayDevPreview?: HolidayPromoSlot | null;
 }
 
 export interface ResolvePromoBannerLeftVisualResult {
@@ -37,6 +48,8 @@ export interface ResolvePromoBannerLeftVisualResult {
   srcFallbacks?: string[];
   /** Set only for brand assets under `public/images/promoBanner` (not variant/scheduled URLs). */
   staticFamily?: StaticPromoBannerFamily;
+  /** True when using `{Brand}/Holiday/*.png` for the long-weekend campaign. */
+  isHolidayVisual?: boolean;
 }
 
 const DEFAULT_ALT = "Promo entries";
@@ -57,6 +70,19 @@ function resolveStaticFamily(params: ResolvePromoBannerLeftVisualParams): Static
 export function resolvePromoBannerLeftVisual(
   params: ResolvePromoBannerLeftVisualParams
 ): ResolvePromoBannerLeftVisualResult {
+  const holidaySlot = params.holidayDevPreview ?? getActiveHolidayPromoSlot();
+  if (holidaySlot) {
+    const brand = resolvePromoBannerAssetBrand(params.slug ?? null, params.toolsetSlug ?? null);
+    const paths = buildHolidayPromoBannerPaths(brand, holidaySlot);
+    const [src, ...srcFallbacks] = paths;
+    return {
+      src,
+      alt: holidayPromoAltText(holidaySlot),
+      isHolidayVisual: true,
+      ...(srcFallbacks.length > 0 ? { srcFallbacks } : {}),
+    };
+  }
+
   const variantUrl = trimUrl(params.variantLeftImageUrl);
   if (variantUrl) {
     return { src: variantUrl, alt: DEFAULT_ALT };

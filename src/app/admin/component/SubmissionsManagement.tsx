@@ -159,16 +159,16 @@ export default function SubmissionsManagement() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Tabs and Filters Container */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-6">
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-4">
+        <div className="mb-4 border-b border-gray-200 dark:border-neutral-700">
           <nav className="-mb-px flex space-x-8">
             <button
               onClick={() => setActiveTab("partner")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`border-b-2 px-1 py-2 text-sm font-medium ${
                 activeTab === "partner"
-                  ? "border-red-500 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  ? "border-red-500 text-red-600 dark:text-red-400"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-200"
               }`}
             >
               <Building className="w-4 h-4 inline mr-2" />
@@ -176,10 +176,10 @@ export default function SubmissionsManagement() {
             </button>
             <button
               onClick={() => setActiveTab("contact")}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              className={`border-b-2 px-1 py-2 text-sm font-medium ${
                 activeTab === "contact"
-                  ? "border-red-500 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  ? "border-red-500 text-red-600 dark:text-red-400"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-200"
               }`}
             >
               <MessageSquare className="w-4 h-4 inline mr-2" />
@@ -192,13 +192,13 @@ export default function SubmissionsManagement() {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400 dark:text-neutral-500" />
               <input
                 type="text"
                 placeholder={`Search ${activeTab === "partner" ? "partner applications" : "contact submissions"}...`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder:text-neutral-500"
               />
             </div>
           </div>
@@ -207,7 +207,7 @@ export default function SubmissionsManagement() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -220,7 +220,7 @@ export default function SubmissionsManagement() {
               <select
                 value={readFilter}
                 onChange={(e) => setReadFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-red-500 focus:ring-2 focus:ring-red-500 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               >
                 <option value="all">All</option>
                 <option value="unread">Unread</option>
@@ -233,9 +233,9 @@ export default function SubmissionsManagement() {
 
       {/* Content */}
       {activeTab === "partner" ? (
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-200">
-            <p className="text-xs sm:text-sm text-gray-600">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+          <div className="border-b border-gray-200 px-4 py-2 dark:border-neutral-700">
+            <p className="text-xs text-gray-600 dark:text-neutral-400 sm:text-sm">
               {partnerPagination.total > 0
                 ? `Showing ${(partnerPagination.page - 1) * partnerPagination.limit + 1} to ${Math.min(partnerPagination.page * partnerPagination.limit, partnerPagination.total)} of ${partnerPagination.total} partner applications`
                 : "No partner applications"}
@@ -262,7 +262,7 @@ export default function SubmissionsManagement() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-200 dark:divide-neutral-700">
                 {partnerApplications.map((app) => (
                   <tr
                     key={app._id}
@@ -291,16 +291,18 @@ export default function SubmissionsManagement() {
                         {app.status.replace("_", " ")}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          app.readAt ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          app.readAt
+                            ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
                         }`}
                       >
                         {app.readAt ? "Read" : "Unread"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
                       {formatDateInAEST(new Date(app.submittedAt), "dd MMM yyyy")}
                     </td>
                   </tr>
@@ -309,13 +311,13 @@ export default function SubmissionsManagement() {
             </table>
           </div>
           {partnerPagination.pages > 1 && (
-            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="border-t-2 border-gray-200 bg-gray-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-950 sm:px-6 sm:py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={() => goToPage("partner", 1)}
                     disabled={partnerPagination.page <= 1}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="First page"
                   >
                     <ChevronsLeft className="w-4 h-4" />
@@ -323,20 +325,20 @@ export default function SubmissionsManagement() {
                   <button
                     onClick={() => goToPage("partner", partnerPagination.page - 1)}
                     disabled={partnerPagination.page <= 1}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
                   Page {partnerPagination.page} of {partnerPagination.pages}
                 </span>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={() => goToPage("partner", partnerPagination.page + 1)}
                     disabled={partnerPagination.page >= partnerPagination.pages}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -344,7 +346,7 @@ export default function SubmissionsManagement() {
                   <button
                     onClick={() => goToPage("partner", partnerPagination.pages)}
                     disabled={partnerPagination.page >= partnerPagination.pages}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Last page"
                   >
                     <ChevronsRight className="w-4 h-4" />
@@ -355,64 +357,66 @@ export default function SubmissionsManagement() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-200">
-            <p className="text-xs sm:text-sm text-gray-600">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none sm:rounded-xl">
+          <div className="border-b border-gray-200 px-4 py-2 dark:border-neutral-700">
+            <p className="text-xs text-gray-600 dark:text-neutral-400 sm:text-sm">
               {contactPagination.total > 0
                 ? `Showing ${(contactPagination.page - 1) * contactPagination.limit + 1} to ${Math.min(contactPagination.page * contactPagination.limit, contactPagination.total)} of ${contactPagination.total} contact submissions`
                 : "No contact submissions"}
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Contact
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Subject
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Read
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Submitted
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200 bg-white dark:divide-neutral-700 dark:bg-neutral-950/90">
                 {contactSubmissions.map((submission) => (
                   <tr
                     key={submission._id}
                     onClick={() => handleViewDetails(submission)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 dark:text-neutral-100">
                           {formatDisplayName(submission.firstName, submission.lastName)}
                         </div>
-                        <div className="text-sm text-gray-500">{submission.email}</div>
-                        <div className="text-sm text-gray-500">{submission.phone}</div>
+                        <div className="text-sm text-gray-500 dark:text-neutral-400">{submission.email}</div>
+                        <div className="text-sm text-gray-500 dark:text-neutral-400">{submission.phone}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{submission.subject}</div>
-                      <div className="text-sm text-gray-500 truncate max-w-xs">
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <div className="text-sm text-gray-900 dark:text-neutral-100">{submission.subject}</div>
+                      <div className="max-w-xs truncate text-sm text-gray-500 dark:text-neutral-500">
                         {submission.message.substring(0, 100)}...
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          submission.readAt ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          submission.readAt
+                            ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
                         }`}
                       >
                         {submission.readAt ? "Read" : "Unread"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
                       {formatDateInAEST(new Date(submission.submittedAt), "dd MMM yyyy")}
                     </td>
                   </tr>
@@ -421,13 +425,13 @@ export default function SubmissionsManagement() {
             </table>
           </div>
           {contactPagination.pages > 1 && (
-            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="border-t-2 border-gray-200 bg-gray-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-950 sm:px-6 sm:py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={() => goToPage("contact", 1)}
                     disabled={contactPagination.page <= 1}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="First page"
                   >
                     <ChevronsLeft className="w-4 h-4" />
@@ -435,20 +439,20 @@ export default function SubmissionsManagement() {
                   <button
                     onClick={() => goToPage("contact", contactPagination.page - 1)}
                     disabled={contactPagination.page <= 1}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Previous page"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                 </div>
-                <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                <span className="text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">
                   Page {contactPagination.page} of {contactPagination.pages}
                 </span>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={() => goToPage("contact", contactPagination.page + 1)}
                     disabled={contactPagination.page >= contactPagination.pages}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Next page"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -456,7 +460,7 @@ export default function SubmissionsManagement() {
                   <button
                     onClick={() => goToPage("contact", contactPagination.pages)}
                     disabled={contactPagination.page >= contactPagination.pages}
-                    className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
                     aria-label="Last page"
                   >
                     <ChevronsRight className="w-4 h-4" />

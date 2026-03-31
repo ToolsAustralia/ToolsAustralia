@@ -149,7 +149,7 @@ export default function BirthdatePicker({
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-white dark:bg-neutral-900 text-gray-900 dark:text-white text-left text-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-500 dark:focus:border-blue-500 ${
+        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-[#ffffff] text-gray-900 text-left text-sm transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-neutral-600 dark:bg-[#171717] dark:text-white dark:focus:border-blue-500 dark:focus:ring-blue-500 ${
           error
             ? "border-red-500 dark:border-red-500 hover:border-red-600 dark:hover:border-red-600"
             : "border-gray-300 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500"
@@ -172,7 +172,7 @@ export default function BirthdatePicker({
         <div
           role="dialog"
           aria-label="Choose date of birth"
-          className="absolute z-50 mt-1 left-0 right-0 w-full min-w-0 rounded-xl border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-900 shadow-xl py-4 px-3 lg:py-3 lg:px-2.5"
+          className="absolute left-0 right-0 z-50 mt-1 w-full min-w-0 rounded-xl border border-gray-200 bg-[#ffffff] py-4 px-3 shadow-xl dark:border-neutral-600 dark:bg-[#171717] lg:px-2.5 lg:py-3"
         >
           {/* Month & Year – custom dropdowns matching site theme (red accent, no default select look) */}
           <div className="grid grid-cols-2 gap-3 mb-4 lg:gap-2 lg:mb-3">
@@ -186,10 +186,10 @@ export default function BirthdatePicker({
                   onClick={() => setOpenDropdown((o) => (o === "month" ? null : "month"))}
                   aria-expanded={openDropdown === "month"}
                   aria-haspopup="listbox"
-                  className={`w-full flex items-center justify-between gap-1 pl-3 pr-8 py-2.5 lg:py-1.5 lg:pl-2 lg:pr-6 lg:text-xs rounded-lg border text-left text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
+                  className={`flex w-full items-center justify-between gap-1 rounded-lg border py-2.5 pl-3 pr-8 text-left text-sm font-medium transition-all duration-200 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:py-1.5 lg:pl-2 lg:pr-6 lg:text-xs ${
                     openDropdown === "month"
-                      ? "border-red-500 ring-2 ring-red-500/20 bg-white dark:bg-neutral-900"
-                      : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-red-400 dark:hover:border-neutral-500 text-gray-900 dark:text-white"
+                      ? "border-red-500 bg-[#ffffff] ring-2 ring-red-500/20 dark:bg-[#171717]"
+                      : "border-gray-300 bg-[#ffffff] text-gray-900 hover:border-red-400 dark:border-neutral-600 dark:bg-[#262626] dark:text-white dark:hover:border-neutral-500"
                   }`}
                 >
                   <span className="truncate">{MONTHS[getMonth(viewDate)]}</span>
@@ -200,7 +200,7 @@ export default function BirthdatePicker({
                 {openDropdown === "month" && (
                   <div
                     role="listbox"
-                    className="absolute z-[60] left-0 right-0 mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 shadow-lg py-1 scroll-smooth overscroll-contain touch-pan-y"
+                    className="absolute left-0 right-0 z-[60] mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 bg-[#ffffff] py-1 shadow-lg dark:border-neutral-600 dark:bg-[#171717] overscroll-contain scroll-smooth touch-pan-y"
                     style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                   >
                     {MONTHS.map((name, i) => (
@@ -213,10 +213,10 @@ export default function BirthdatePicker({
                           handleMonthChange(i);
                           setOpenDropdown(null);
                         }}
-                        className={`w-full px-3 py-2 lg:py-1.5 lg:px-2 lg:text-xs text-left flex items-center justify-between transition-colors duration-150 ${
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors duration-150 lg:px-2 lg:py-1.5 lg:text-xs ${
                           getMonth(viewDate) === i
-                            ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 font-medium"
-                            : "text-gray-900 dark:text-white hover:bg-red-50 dark:hover:bg-red-950/30"
+                            ? "bg-red-50 font-medium text-red-700 dark:bg-[#3f1515] dark:text-red-300"
+                            : "text-gray-900 hover:bg-red-50 dark:text-white dark:hover:bg-[#2a1818]"
                         }`}
                       >
                         {name}
@@ -237,10 +237,10 @@ export default function BirthdatePicker({
                   onClick={() => setOpenDropdown((o) => (o === "year" ? null : "year"))}
                   aria-expanded={openDropdown === "year"}
                   aria-haspopup="listbox"
-                  className={`w-full flex items-center justify-between gap-1 pl-3 pr-8 py-2.5 lg:py-1.5 lg:pl-2 lg:pr-6 lg:text-xs rounded-lg border text-left text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 ${
+                  className={`flex w-full items-center justify-between gap-1 rounded-lg border py-2.5 pl-3 pr-8 text-left text-sm font-medium transition-all duration-200 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 lg:py-1.5 lg:pl-2 lg:pr-6 lg:text-xs ${
                     openDropdown === "year"
-                      ? "border-red-500 ring-2 ring-red-500/20 bg-white dark:bg-neutral-900"
-                      : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 hover:border-red-400 dark:hover:border-neutral-500 text-gray-900 dark:text-white"
+                      ? "border-red-500 bg-[#ffffff] ring-2 ring-red-500/20 dark:bg-[#171717]"
+                      : "border-gray-300 bg-[#ffffff] text-gray-900 hover:border-red-400 dark:border-neutral-600 dark:bg-[#262626] dark:text-white dark:hover:border-neutral-500"
                   }`}
                 >
                   <span className="truncate">{getYear(viewDate)}</span>
@@ -251,7 +251,7 @@ export default function BirthdatePicker({
                 {openDropdown === "year" && (
                   <div
                     role="listbox"
-                    className="absolute z-[60] left-0 right-0 mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 shadow-lg py-1 scroll-smooth overscroll-contain touch-pan-y"
+                    className="absolute left-0 right-0 z-[60] mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 bg-[#ffffff] py-1 shadow-lg dark:border-neutral-600 dark:bg-[#171717] overscroll-contain scroll-smooth touch-pan-y"
                     style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                   >
                     {years.map((y) => (
@@ -264,10 +264,10 @@ export default function BirthdatePicker({
                           handleYearChange(y);
                           setOpenDropdown(null);
                         }}
-                        className={`w-full px-3 py-2 lg:py-1.5 lg:px-2 lg:text-xs text-left flex items-center justify-between transition-colors duration-150 ${
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors duration-150 lg:px-2 lg:py-1.5 lg:text-xs ${
                           getYear(viewDate) === y
-                            ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 font-medium"
-                            : "text-gray-900 dark:text-white hover:bg-red-50 dark:hover:bg-red-950/30"
+                            ? "bg-red-50 font-medium text-red-700 dark:bg-[#3f1515] dark:text-red-300"
+                            : "text-gray-900 hover:bg-red-50 dark:text-white dark:hover:bg-[#2a1818]"
                         }`}
                       >
                         {y}

@@ -123,7 +123,7 @@ export default function MilestoneRewardsPanel() {
                 <Medal className="w-5 h-5 text-red-600" />
                 Milestone Rewards
               </h3>
-              <p className="text-gray-600 mt-1 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-neutral-400 mt-1 text-xs sm:text-sm">
                 Auto-issue rewards based on spend, entries gained, and loyalty days.
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function MilestoneRewardsPanel() {
           ) : rewards.length === 0 ? (
             <div className="text-center py-10">
               <Medal className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-600">No milestone rewards configured yet.</p>
+              <p className="text-gray-600 dark:text-neutral-400">No milestone rewards configured yet.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -170,7 +170,7 @@ export default function MilestoneRewardsPanel() {
                     <div className="min-w-0">
                       <h4 className="text-sm sm:text-base font-semibold text-gray-900 truncate">{reward.name}</h4>
                       {reward.displayLabel && <p className="text-xs text-indigo-600 font-semibold">{reward.displayLabel}</p>}
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-xs text-gray-600 dark:text-neutral-400 mt-1">
                         {reward.milestoneType} · Threshold {reward.threshold.toLocaleString()} · {reward.entriesAmount.toLocaleString()} entries
                       </p>
                       <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-gray-500">
@@ -202,7 +202,7 @@ export default function MilestoneRewardsPanel() {
                     </div>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                        reward.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"
+                        reward.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700 dark:text-neutral-200"
                       }`}
                     >
                       {reward.isActive ? "Active" : "Inactive"}
@@ -214,7 +214,7 @@ export default function MilestoneRewardsPanel() {
                         setEditingReward(reward);
                         setIsModalOpen(true);
                       }}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                       Edit
@@ -222,7 +222,7 @@ export default function MilestoneRewardsPanel() {
                     <button
                       onClick={() => toggleReward(reward.id, !reward.isActive)}
                       disabled={actionRewardId === reward.id}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
                     >
                       <Power className="w-3.5 h-3.5" />
                       {reward.isActive ? "Deactivate" : "Activate"}

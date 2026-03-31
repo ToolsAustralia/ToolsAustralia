@@ -346,14 +346,14 @@ export function UserMetricsView() {
           {filterMode === "month" && (
             <>
               <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                <label htmlFor="month-select" className="text-sm font-medium text-gray-700 whitespace-nowrap hidden sm:inline">
+                <label htmlFor="month-select" className="text-sm font-medium text-gray-700 dark:text-neutral-200 whitespace-nowrap hidden sm:inline">
                   Month:
                 </label>
                 <select
                   id="month-select"
                   value={selectedMonth}
                   onChange={(e) => handleMonthSelect(e.target.value)}
-                  className="px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white font-semibold text-gray-900 flex-1 sm:flex-none min-w-[140px]"
+                  className="px-3 py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm bg-white dark:bg-neutral-800 font-semibold text-gray-900 dark:text-white flex-1 sm:flex-none min-w-[140px]"
                 >
                   {monthOptions.map((month) => (
                     <option key={month} value={month}>
@@ -458,21 +458,21 @@ export function UserMetricsView() {
 
           {/* No data state */}
           {(!dailyMetricsData || dailyMetricsData.length === 0) && viewMode === "table" && (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-              <p className="text-gray-600">No user metrics data available for the selected period.</p>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-6 text-center">
+              <p className="text-gray-600 dark:text-neutral-400">No user metrics data available for the selected period.</p>
             </div>
           )}
 
           {viewMode === "chart" && !aggregateData && (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-              <p className="text-gray-600">No user metrics data available for the selected period.</p>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-6 text-center">
+              <p className="text-gray-600 dark:text-neutral-400">No user metrics data available for the selected period.</p>
             </div>
           )}
 
           {/* Major Draw Comparison Section - Show when in month mode and major-draw comparison mode */}
           {filterMode === "month" && comparisonMode === "major-draw" && (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900">Major Draw Comparison</h3>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-6 space-y-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Major Draw Comparison</h3>
               <MajorDrawSelector
                 currentDrawId={currentDrawId}
                 previousDrawId={previousDrawId}
@@ -486,14 +486,14 @@ export function UserMetricsView() {
                 </div>
               ) : userMajorDrawLoading ? (
                 <div className="text-center py-8">
-                  <p className="text-gray-600">Loading comparison data...</p>
+                  <p className="text-gray-600 dark:text-neutral-400">Loading comparison data...</p>
                 </div>
               ) : userMajorDrawError ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-red-700">Error loading comparison: {userMajorDrawError instanceof Error ? userMajorDrawError.message : "Unknown error"}</p>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-600">
+                <div className="text-center py-8 text-gray-600 dark:text-neutral-400">
                   <p>Please select both current and previous major draws to compare.</p>
                 </div>
               )}
@@ -556,45 +556,52 @@ function UserMajorDrawComparisonTable({ data }: { data: UserMajorDrawComparisonD
 
   return (
     <div className="overflow-x-auto">
-      <div className="mb-4 text-sm text-gray-600">
+      <div className="mb-4 text-sm text-gray-600 dark:text-neutral-400">
         <div className="flex flex-col sm:flex-row gap-4">
           <div>
-            <span className="font-semibold text-gray-900">Current: </span>
+            <span className="font-semibold text-gray-900 dark:text-white">Current: </span>
             {currentDrawInfo.name} ({format(new Date(currentDrawInfo.activationDate), "MMM d")} - {format(new Date(currentDrawInfo.drawDate), "MMM d, yyyy")})
           </div>
           <div>
-            <span className="font-semibold text-gray-900">Previous: </span>
+            <span className="font-semibold text-gray-900 dark:text-white">Previous: </span>
             {previousDrawInfo.name} ({format(new Date(previousDrawInfo.activationDate), "MMM d")} - {format(new Date(previousDrawInfo.drawDate), "MMM d, yyyy")})
           </div>
         </div>
       </div>
       <table className="w-full">
         <thead>
-          <tr className="border-b-2 border-gray-200 bg-gray-50">
-            <th className="text-left py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700">Metric</th>
-            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700">Current Draw</th>
-            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700">Previous Draw</th>
-            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-700">Change</th>
+          <tr className="border-b-2 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
+            <th className="text-left py-3 px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Metric</th>
+            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Current Draw</th>
+            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Previous Draw</th>
+            <th className="text-right py-3 px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Change</th>
           </tr>
         </thead>
         <tbody>
           {metrics.map((metric) => (
-            <tr key={metric.label} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <td className="py-3 px-4 text-sm text-gray-900 font-medium">{metric.label}</td>
-              <td className="py-3 px-4 text-sm text-right text-gray-900 font-semibold">
+            <tr
+              key={metric.label}
+              className="border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors"
+            >
+              <td className="py-3 px-4 text-sm text-gray-900 dark:text-white font-medium">{metric.label}</td>
+              <td className="py-3 px-4 text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                 {metric.format(metric.current)}
               </td>
-              <td className="py-3 px-4 text-sm text-right text-gray-600">{metric.format(metric.previous)}</td>
+              <td className="py-3 px-4 text-sm text-right text-gray-600 dark:text-neutral-400 tabular-nums">
+                {metric.format(metric.previous)}
+              </td>
               <td className="py-3 px-4 text-sm text-right">
                 <div className="flex items-center justify-end gap-2">
                   <span className={`text-xs font-semibold ${
-                    metric.comparison.direction === "up" ? "text-emerald-600" :
-                    metric.comparison.direction === "down" ? "text-red-600" :
-                    "text-gray-600"
+                    metric.comparison.direction === "up"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : metric.comparison.direction === "down"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-gray-600 dark:text-neutral-400"
                   }`}>
                     {metric.comparison.percentage > 0 ? "+" : ""}{metric.comparison.percentage.toFixed(1)}%
                   </span>
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-gray-600 dark:text-neutral-400">
                     ({metric.comparison.value > 0 ? "+" : ""}{metric.format(metric.comparison.value)})
                   </span>
                 </div>

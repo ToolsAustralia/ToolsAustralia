@@ -86,7 +86,7 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
 
       {/* Modal Content - matching your site's design system */}
       <div
-        className={`relative bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-auto overflow-hidden transform transition-all duration-300 ease-out ${
+        className={`relative bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-auto overflow-hidden transform transition-all duration-300 ease-out ${
           isOpen ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4"
         }`}
       >
@@ -109,26 +109,26 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
         <div className="p-6">
           <div className="mb-6">
             {/* Required Choice Notice */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+            <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800/60 rounded-lg p-3 mb-4">
               <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 text-yellow-600">⚠️</div>
-                <p className="text-sm text-yellow-800 font-medium">Please choose your preference to continue</p>
+                <div className="w-5 h-5 text-yellow-600 dark:text-yellow-500">⚠️</div>
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">Please choose your preference to continue</p>
               </div>
             </div>
 
-            <p className="text-gray-700 mb-4 leading-relaxed">
+            <p className="text-gray-700 dark:text-neutral-200 mb-4 leading-relaxed">
               We use analytics and advertising pixels to improve your experience and show you relevant content. This
               helps us understand how you use our website and personalize your experience.
             </p>
 
             <div className="space-y-4">
-              <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-neutral-800/80 rounded-lg border border-transparent dark:border-neutral-700">
                 <div className="flex-shrink-0">
                   <div className="w-3 h-3 bg-blue-500 rounded-full mt-1"></div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900">Facebook Pixel</h4>
-                  <p className="text-sm text-gray-600">Tracks website interactions for advertising and analytics</p>
+                  <h4 className="font-semibold text-gray-900 dark:text-neutral-100">Facebook Pixel</h4>
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">Tracks website interactions for advertising and analytics</p>
                 </div>
               </div>
 
@@ -137,13 +137,13 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
                   <div className="w-3 h-3 bg-red-500 rounded-full mt-1"></div>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-gray-900">TikTok Pixel</h4>
-                  <p className="text-sm text-gray-600">Measures advertising effectiveness and user engagement</p>
+                  <h4 className="font-semibold text-gray-900 dark:text-neutral-100">TikTok Pixel</h4>
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">Measures advertising effectiveness and user engagement</p>
                 </div>
               </div>
             </div>
 
-            <p className="text-sm text-gray-500 mt-4">
+            <p className="text-sm text-gray-500 dark:text-neutral-400 mt-4">
               You can change your preferences at any time in your browser settings or contact us for assistance.
             </p>
           </div>
@@ -158,7 +158,7 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
             </button>
             <button
               onClick={handleDecline}
-              className="flex-1 border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors duration-200"
+              className="flex-1 border-2 border-gray-300 text-gray-700 dark:text-neutral-200 px-6 py-3 rounded-full font-medium hover:bg-gray-50 transition-colors duration-200"
             >
               Decline
             </button>
@@ -166,7 +166,7 @@ export default function PixelConsentModal({ isOpen, onCloseAction, onAccept, onD
 
           {/* Privacy Policy Link */}
           <div className="mt-4 text-center">
-            <a href="/privacy-policy" className="text-sm text-red-600 hover:text-red-800 underline transition-colors">
+            <a href="/privacy-policy" className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline transition-colors">
               Privacy Policy
             </a>
           </div>

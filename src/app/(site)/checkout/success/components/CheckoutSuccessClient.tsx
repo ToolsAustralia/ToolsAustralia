@@ -88,7 +88,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Order Confirmed!</h1>
-            <p className="text-gray-600 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
+            <p className="text-gray-600 dark:text-neutral-400 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
             <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
               Order ID: {orderId}
             </div>
@@ -104,7 +104,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">Order Details</h2>
-                <p className="text-gray-600">Items in your order</p>
+                <p className="text-gray-600 dark:text-neutral-400">Items in your order</p>
               </div>
             </div>
 
@@ -124,7 +124,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                     <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{item.name}</h3>
                     <p className="text-xs text-gray-500">{item.brand}</p>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-sm text-gray-600">Qty: {item.quantity}</span>
+                      <span className="text-sm text-gray-600 dark:text-neutral-400">Qty: {item.quantity}</span>
                       <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                   </div>
@@ -150,27 +150,27 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 font-['Poppins']">Shipping Information</h3>
-                  <p className="text-gray-600 text-sm">Delivery details</p>
+                  <p className="text-gray-600 dark:text-neutral-400 text-sm">Delivery details</p>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Truck className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-neutral-400">
                     <strong>{order.shipping.method}</strong>
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-neutral-400">
                     Estimated delivery:{" "}
                     <strong>{new Date(order.shipping.estimatedDelivery).toLocaleDateString()}</strong>
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-neutral-400">
                     <div>
                       <strong>{order.shipping.address.name}</strong>
                     </div>
@@ -192,21 +192,21 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 font-['Poppins']">Payment Information</h3>
-                  <p className="text-gray-600 text-sm">Payment details</p>
+                  <p className="text-gray-600 dark:text-neutral-400 text-sm">Payment details</p>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Payment Method:</span>
+                  <span className="text-sm text-gray-600 dark:text-neutral-400">Payment Method:</span>
                   <span className="text-sm font-medium text-gray-900">{order.payment.method}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Amount Paid:</span>
+                  <span className="text-sm text-gray-600 dark:text-neutral-400">Amount Paid:</span>
                   <span className="text-sm font-medium text-gray-900">${order.payment.amount.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className="text-sm text-gray-600 dark:text-neutral-400">Status:</span>
                   <span className="text-sm font-medium text-green-600">Paid</span>
                 </div>
               </div>
@@ -221,17 +221,17 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <Mail className="w-8 h-8 text-blue-600 mx-auto mb-2" />
               <h3 className="font-semibold text-gray-900 mb-1">Email Confirmation</h3>
-              <p className="text-sm text-gray-600">You&apos;ll receive an order confirmation email shortly</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-400">You&apos;ll receive an order confirmation email shortly</p>
             </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
               <Package className="w-8 h-8 text-orange-600 mx-auto mb-2" />
               <h3 className="font-semibold text-gray-900 mb-1">Processing</h3>
-              <p className="text-sm text-gray-600">We&apos;re preparing your order for shipment</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-400">We&apos;re preparing your order for shipment</p>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <Truck className="w-8 h-8 text-green-600 mx-auto mb-2" />
               <h3 className="font-semibold text-gray-900 mb-1">Shipping</h3>
-              <p className="text-sm text-gray-600">You&apos;ll get tracking info when your order ships</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-400">You&apos;ll get tracking info when your order ships</p>
             </div>
           </div>
         </div>
@@ -248,12 +248,12 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
           <Link
             href="/shop"
-            className="inline-flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all duration-200"
+            className="inline-flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 dark:text-neutral-200 rounded-lg font-medium hover:bg-gray-200 transition-all duration-200"
           >
             Continue Shopping
           </Link>
 
-          <button className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200">
+          <button className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200">
             <Download className="w-4 h-4 mr-2" />
             Download Receipt
           </button>
@@ -262,20 +262,20 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
           {/* Support Information */}
           <div className="text-center mt-8 p-6 bg-gray-100 rounded-2xl">
           <h3 className="font-semibold text-gray-900 mb-2">Need Help?</h3>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 dark:text-neutral-400 mb-4">
             If you have any questions about your order, our support team is here to help.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="tel:+61412345678"
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 transition-colors"
             >
               <Phone className="w-4 h-4" />
               +61 4XX XXX XXX
             </a>
             <a
               href={`mailto:${contactEmail}`}
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 transition-colors"
             >
               <Mail className="w-4 h-4" />
               {contactEmail}
