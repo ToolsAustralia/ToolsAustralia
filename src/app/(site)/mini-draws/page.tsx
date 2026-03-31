@@ -19,7 +19,7 @@ export default async function MiniDrawsPage() {
   const nonce = await getNonce();
 
   return (
-    <div className="min-h-screen-svh bg-white w-full overflow-x-hidden">
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-x-hidden">
       <BreadcrumbJsonLd
         items={[
           { name: "Home", item: `${baseUrl}/` },
@@ -37,7 +37,7 @@ export default async function MiniDrawsPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="hidden lg:block w-80">
-                <div className="bg-white rounded-lg shadow-sm p-6 space-y-4">
+                <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 shadow-sm p-6 space-y-4">
                   <Skeleton className="h-6 w-24" />
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="space-y-2">

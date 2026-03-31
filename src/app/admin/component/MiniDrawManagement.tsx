@@ -32,6 +32,7 @@ import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
 import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
 import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
+import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import MiniDrawEditModal, {
   type AdminMiniDrawSummary,
   type MiniDrawEditPayload,
@@ -363,9 +364,18 @@ export default function MiniDrawManagement() {
 
   const getStatusBadge = (status: string) => {
     const badges = {
-      active: { bg: "bg-green-100 text-green-800", icon: CheckCircle },
-      completed: { bg: "bg-gray-100 text-gray-800", icon: Trophy },
-      cancelled: { bg: "bg-red-100 text-red-800", icon: XCircle },
+      active: {
+        bg: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
+        icon: CheckCircle,
+      },
+      completed: {
+        bg: "bg-gray-100 text-gray-800 dark:text-neutral-100 dark:bg-neutral-700 dark:text-neutral-200",
+        icon: Trophy,
+      },
+      cancelled: {
+        bg: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+        icon: XCircle,
+      },
     };
     const badge = badges[status as keyof typeof badges] || badges.active;
     const Icon = badge.icon;
@@ -380,19 +390,19 @@ export default function MiniDrawManagement() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600"></div>
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 dark:border-red-400"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
       <div className="w-full mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Mini Draw Management</h1>
-            <p className="text-lg text-gray-600 font-['Poppins']">Create and manage mini draws</p>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">Mini Draw Management</h1>
+            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Poppins']">Create and manage mini draws</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -411,10 +421,10 @@ export default function MiniDrawManagement() {
                   setIsOrderDirty(false);
                 }
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shadow ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shadow dark:shadow-none ${
                 isReorderMode
-                  ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
+                  ? "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                  : "bg-white text-gray-700 dark:text-neutral-200 border border-gray-200 hover:bg-gray-50 dark:bg-neutral-900 dark:text-neutral-200 dark:border-neutral-700 dark:hover:bg-neutral-800"
               }`}
               disabled={isSavingOrder}
             >
@@ -425,8 +435,8 @@ export default function MiniDrawManagement() {
         </div>
 
         {isReorderMode && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-amber-900">
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-amber-900 dark:text-amber-100">
               Drag the cards to reorder them. Save when you&apos;re happy with the order.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -440,7 +450,7 @@ export default function MiniDrawManagement() {
               <button
                 onClick={() => void handleCancelReorder()}
                 disabled={isSavingOrder}
-                className="px-4 py-2 rounded-lg font-semibold text-amber-900 border border-amber-300 bg-white hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg font-semibold text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-700 bg-white dark:bg-neutral-900 hover:bg-amber-100 dark:hover:bg-amber-950/50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Discard Changes
               </button>
@@ -458,7 +468,7 @@ export default function MiniDrawManagement() {
                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   selectedStatus === status
                     ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg"
-                    : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+                    : "bg-white text-gray-700 dark:text-neutral-200 hover:bg-gray-50 border border-gray-200 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:border-neutral-700"
                 }`}
               >
                 {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -471,13 +481,13 @@ export default function MiniDrawManagement() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search mini draws by name..."
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 pr-10 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-100 transition-colors"
+              className="w-full rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 pr-10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40 transition-colors"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm("")}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 dark:text-neutral-500 dark:hover:text-neutral-300"
               >
                 <span className="text-xs font-semibold">Clear</span>
               </button>
@@ -488,9 +498,9 @@ export default function MiniDrawManagement() {
         {/* Mini Draws List - Always use compact grid layout */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
           {filteredMiniDraws.length === 0 ? (
-            <div className="col-span-full bg-white rounded-xl shadow-lg border border-gray-100 p-8 text-center">
-              <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No mini draws found</p>
+            <div className="col-span-full bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-8 text-center">
+              <Trophy className="w-16 h-16 text-gray-400 dark:text-neutral-500 mx-auto mb-4" />
+              <p className="text-gray-600 dark:text-neutral-400">No mini draws found</p>
             </div>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -726,7 +736,7 @@ function MiniDrawCard({
 
   const isAt100 = capacityPercentage >= 100 || draw.status === "completed";
   const iconBtn =
-    "flex items-center gap-2  rounded-md transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] md:text-xs font-medium";
+    "flex items-center gap-2 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] md:text-xs font-medium text-gray-800 dark:text-neutral-200";
 
   return (
     <div
@@ -740,9 +750,9 @@ function MiniDrawCard({
         tabIndex={reorderMode ? undefined : 0}
         onClick={reorderMode ? undefined : onEdit}
         onKeyDown={reorderMode ? undefined : (e) => e.key === "Enter" && onEdit()}
-        className={`relative rounded-lg bg-white shadow-md border border-gray-200 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px] ${reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200"}`}
+        className={`relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px] ${reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60"}`}
       >
-        <div className="relative w-full h-32 md:h-44 bg-gray-100">
+        <div className="relative w-full h-32 md:h-44 bg-gray-100 dark:bg-neutral-800">
           <Image
             src={previewImage}
             alt={draw.prize.name}
@@ -776,16 +786,18 @@ function MiniDrawCard({
         </div>
         <div className="px-2.5 pt-2.5 pb-2 md:px-4 md:pt-4 md:pb-3 md:space-y-3 space-y-2 flex-1 flex flex-col min-h-0">
           <div className="min-h-[2.5em] md:min-h-[2.75em] flex items-start overflow-hidden">
-            <h3 className="text-xs md:text-sm font-bold text-gray-900 line-clamp-2 leading-tight break-words">{draw.name}</h3>
+            <h3 className="text-xs md:text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight break-words">
+              {draw.name}
+            </h3>
           </div>
           <div className="space-y-1.5 shrink-0">
-            <div className="flex items-center justify-between text-[10px] md:text-xs font-semibold text-gray-700">
+            <div className="flex items-center justify-between text-[10px] md:text-xs font-semibold text-gray-700 dark:text-neutral-300">
               <span className="truncate">
                 {totalEntries.toLocaleString()}/{minimumEntries.toLocaleString()}
               </span>
               <span>{capacityPercentage}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+            <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-1.5 overflow-hidden">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300"
                 style={{ width: `${capacityPercentage}%` }}
@@ -794,7 +806,7 @@ function MiniDrawCard({
           </div>
           {!reorderMode && (
             <div
-              className="flex items-center justify-between gap-2 md:gap-4 pt-2 border-t border-gray-100 shrink-0"
+              className="flex items-center justify-between gap-2 md:gap-4 pt-2 border-t border-gray-100 dark:border-neutral-700 shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
               <button

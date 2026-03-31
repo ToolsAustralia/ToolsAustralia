@@ -153,14 +153,14 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Rewards History</h2>
-          <p className="mt-1 text-sm text-gray-600">We&apos;re upgrading the rewards experience.</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">We&apos;re upgrading the rewards experience.</p>
         </div>
         <div className="p-6">
           <div className="text-center py-8">
             <div className="w-12 h-12 mx-auto mb-4 bg-yellow-100 rounded-full flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-yellow-600" />
             </div>
-            <p className="text-gray-700 font-medium mb-2">Rewards activity is temporarily unavailable.</p>
+            <p className="text-gray-700 dark:text-neutral-200 font-medium mb-2">Rewards activity is temporarily unavailable.</p>
             <p className="text-gray-500 text-sm leading-relaxed">{pauseMessage}</p>
           </div>
         </div>
@@ -173,12 +173,12 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Rewards History</h2>
-          <p className="mt-1 text-sm text-gray-600">Your recent points activity</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">Your recent points activity</p>
         </div>
         <div className="p-6 flex items-center justify-center h-64">
           <div className="flex items-center gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-[#ee0000]" />
-            <span className="text-gray-600">Loading your rewards history...</span>
+            <span className="text-gray-600 dark:text-neutral-400">Loading your rewards history...</span>
           </div>
         </div>
       </div>
@@ -190,7 +190,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Rewards History</h2>
-          <p className="mt-1 text-sm text-gray-600">Your recent points activity</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">Your recent points activity</p>
         </div>
         <div className="p-6">
           <div className="text-center py-8">
@@ -198,7 +198,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
               <TrendingDown className="w-6 h-6 text-red-600" />
             </div>
             <p className="text-red-600 font-medium mb-2">Unable to load rewards history</p>
-            <p className="text-gray-600 text-sm mb-4">{error}</p>
+            <p className="text-gray-600 dark:text-neutral-400 text-sm mb-4">{error}</p>
             <button
               onClick={fetchRewardsHistory}
               className="px-4 py-2 bg-[#ee0000] text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
@@ -217,7 +217,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Rewards History</h2>
-            <p className="mt-1 text-sm text-gray-600">Your recent points activity</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">Your recent points activity</p>
           </div>
           {summary && (
             <div className="text-right">
@@ -256,11 +256,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
         {/* Transaction History */}
         <div
           ref={scrollContainerRef}
-          className="h-[320px] overflow-y-auto pr-2 custom-scrollbar"
-          style={{
-            scrollbarWidth: "thin",
-            scrollbarColor: "#ee0000 #f3f4f6",
-          }}
+          className="h-[320px] overflow-y-auto pr-2 brand-scrollbar"
         >
           <div className="space-y-4">
             {history.length === 0 ? (
@@ -268,7 +264,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
                 <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                   <CreditCard className="w-6 h-6 text-gray-400" />
                 </div>
-                <p className="text-gray-600 font-medium mb-1">No rewards history yet</p>
+                <p className="text-gray-600 dark:text-neutral-400 font-medium mb-1">No rewards history yet</p>
                 <p className="text-gray-500 text-sm">Start making purchases to earn points!</p>
               </div>
             ) : (

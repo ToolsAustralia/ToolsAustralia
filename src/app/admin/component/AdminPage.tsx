@@ -23,6 +23,7 @@ import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
+import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
 import { Shield, Menu, BarChart3 } from "lucide-react";
 
 export default function AdminPage({ user, navigateTo, selectedTab = "overview" }: AdminDashboardProps) {
@@ -82,13 +83,13 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   // Access denied component
   if (!user.isAdmin) {
     return (
-      <div className="h-screen-dvh bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md mx-auto text-center bg-white rounded-2xl shadow-2xl border-2 border-red-100 p-12">
+      <div className="h-screen-dvh bg-gray-50 dark:bg-neutral-950 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border-2 border-red-100 dark:border-red-900/40 p-12">
           <div className="w-20 h-20 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full mx-auto mb-6 flex items-center justify-center">
             <Shield className="w-10 h-10 text-white" />
           </div>
-          <h2 className="text-3xl font-bold mb-4 text-gray-900">Access Denied</h2>
-          <p className="text-gray-600 mb-8 text-lg">You don&apos;t have permission to access the admin panel.</p>
+          <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">Access Denied</h2>
+          <p className="text-gray-600 dark:text-neutral-300 mb-8 text-lg">You don&apos;t have permission to access the admin panel.</p>
           <button
             onClick={() => navigateTo("home")}
             className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] text-white font-semibold px-8 py-3 rounded-xl transition-all duration-200"
@@ -101,7 +102,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   }
 
   return (
-    <div className="h-screen-dvh bg-gray-50 flex">
+    <div className="h-screen-dvh bg-gray-50 dark:bg-neutral-950 flex text-gray-900 dark:text-neutral-100">
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
         <>
@@ -110,7 +111,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* Mobile Sidebar */}
           <div
-            className={`lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white z-[70] shadow-2xl ${
+            className={`lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white dark:bg-neutral-900 z-[70] shadow-2xl ${
               isClosingMobileSidebar ? "sidebar-slide-out" : "sidebar-slide-in"
             } flex flex-col`}
           >
@@ -142,28 +143,28 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar — on mobile overview, bottom border lives on date row so header + filters read as one block */}
         <div
-          className={`bg-white px-4 lg:px-6 py-3 flex-shrink-0 ${
+          className={`bg-white dark:bg-neutral-900 px-4 lg:px-6 py-3 flex-shrink-0 ${
             selectedTab === "overview"
-              ? "max-lg:border-b-0 max-lg:shadow-none lg:border-b lg:border-gray-200 lg:shadow-sm"
-              : "border-b border-gray-200 shadow-sm"
+              ? "max-lg:border-b-0 max-lg:shadow-none lg:border-b lg:border-gray-200 dark:lg:border-neutral-800 lg:shadow-sm dark:lg:shadow-none"
+              : "border-b border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-none"
           }`}
         >
-          <div className="flex items-center">
+          <div className="flex items-center justify-between gap-4 w-full">
             <div className="flex items-center gap-3 min-w-0">
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className="lg:hidden w-8 h-8 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 rounded-lg flex items-center justify-center"
+                className="lg:hidden w-8 h-8 text-gray-600 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-800 transition-all duration-200 rounded-lg flex items-center justify-center"
                 aria-label="Open admin menu"
               >
                 <Menu className="h-4 w-4" />
               </button>
 
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 capitalize">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white capitalize">
                   {selectedTab.replace("-", " ")}
                 </h1>
-                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
                   {selectedTab === "overview" && "Dashboard overview and key metrics"}
                   {selectedTab === "major-draw" && "Monthly major draw management"}
                   {selectedTab === "draw-results" && "View and manage draw results"}
@@ -178,18 +179,19 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 </p>
               </div>
             </div>
+            <HeaderThemeToggle className="shrink-0" />
           </div>
         </div>
 
         {/* Mobile: shared date toolbar slot under header (overview, Facebook Ads, Promo Analytics) */}
         {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
-          <div className="lg:hidden shrink-0 bg-white border-b border-gray-200">
+          <div className="lg:hidden shrink-0 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
             <div id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
           </div>
         )}
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto admin-scrollbar p-4 lg:p-6 bg-gray-50 min-h-0">
+        <div className="flex-1 overflow-y-auto admin-scrollbar p-4 lg:p-6 bg-gray-50 dark:bg-neutral-950 min-h-0">
           {/* OVERVIEW TAB */}
           {selectedTab === "overview" && <DashboardOverview />}
 
@@ -234,14 +236,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* Placeholder for other tabs - temporarily disabled since tabs are hidden */}
           {false && (
-            <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-6 sm:p-8 text-center">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border-2 border-red-100 dark:border-red-900/40 p-6 sm:p-8 text-center">
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-red-600 to-red-700 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 capitalize">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-2 capitalize">
                 {selectedTab.replace("-", " ")} Management
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 {selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)} management interface will be available in a
                 future update.
               </p>

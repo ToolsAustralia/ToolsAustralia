@@ -248,6 +248,7 @@ export async function POST(request: NextRequest) {
               category: miniDraw.prize.category,
             },
             imageUrl: imageUrlToSave,
+            drawResultUrl,
             cycle: currentCycle,
           },
         ],

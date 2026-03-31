@@ -128,8 +128,8 @@ export default function ReportProblemModal({
         {submitSuccess ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <CheckCircle className="w-16 h-16 text-green-600 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Thank You!</h3>
-            <p className="text-gray-600">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-neutral-100 mb-2">Thank You!</h3>
+            <p className="text-gray-600 dark:text-neutral-400">
               Your error report has been submitted successfully. We&apos;ll review it and work on a fix.
             </p>
           </div>
@@ -137,7 +137,7 @@ export default function ReportProblemModal({
           <>
             {/* Error Message Display */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 Error Message
               </label>
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -152,7 +152,7 @@ export default function ReportProblemModal({
 
             {/* User Notes */}
             <div className="mb-6">
-              <label htmlFor="userNotes" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="userNotes" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 Additional Details (Optional)
               </label>
               <Textarea
@@ -164,17 +164,17 @@ export default function ReportProblemModal({
                 maxLength={2000}
                 className="w-full"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-neutral-500 mt-1">
                 {userNotes.length}/2000 characters
               </p>
             </div>
 
             {/* Submit Error */}
             {submitError && (
-              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="mb-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-3">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-900">{submitError}</p>
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-900 dark:text-red-200">{submitError}</p>
                 </div>
               </div>
             )}

@@ -100,7 +100,7 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
     <div className={`${getUrgencyBg()} border rounded-lg p-3 sm:p-4`}>
       <div className="flex items-center gap-2 mb-3">
         <Clock className={`w-4 h-4 ${getUrgencyColor()}`} />
-        <span className="text-sm font-medium text-gray-800">
+        <span className="text-sm font-medium text-gray-800 dark:text-neutral-100">
           {changeType === "downgrade" ? "Downgrade" : "Upgrade"} scheduled
         </span>
       </div>
@@ -109,21 +109,21 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
       <div className="flex items-center justify-center gap-2 sm:gap-4 mb-3">
         <div className="text-center">
           <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>{timeLeft.days}</div>
-          <div className="text-xs text-gray-600">days</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">days</div>
         </div>
         <div className="text-gray-400">:</div>
         <div className="text-center">
           <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>
             {timeLeft.hours.toString().padStart(2, "0")}
           </div>
-          <div className="text-xs text-gray-600">hours</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">hours</div>
         </div>
         <div className="text-gray-400">:</div>
         <div className="text-center">
           <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>
             {timeLeft.minutes.toString().padStart(2, "0")}
           </div>
-          <div className="text-xs text-gray-600">min</div>
+          <div className="text-xs text-gray-600 dark:text-neutral-400">min</div>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-3 h-3 text-orange-500" />
-          <span className="text-xs text-gray-700">
+          <span className="text-xs text-gray-700 dark:text-neutral-200">
             Use your current {currentBenefits.packageName} benefits before they expire:
           </span>
         </div>
@@ -139,33 +139,33 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
           <div className="bg-white/50 rounded p-2 text-center">
             <div className="font-medium text-gray-900">{currentBenefits.entriesPerMonth}</div>
-            <div className="text-gray-600">entries</div>
+            <div className="text-gray-600 dark:text-neutral-400">entries</div>
           </div>
           <div className="bg-white/50 rounded p-2 text-center">
             <div className="font-medium text-gray-900">{currentBenefits.shopDiscountPercent}%</div>
-            <div className="text-gray-600">discount</div>
+            <div className="text-gray-600 dark:text-neutral-400">discount</div>
           </div>
           <div className="bg-white/50 rounded p-2 text-center">
             <div className="font-medium text-gray-900">{currentBenefits.partnerDiscountDays}</div>
-            <div className="text-gray-600">partner days</div>
+            <div className="text-gray-600 dark:text-neutral-400">partner days</div>
           </div>
         </div>
       </div>
 
       {/* Next Benefits Preview */}
       <div className="mt-3 pt-3 border-t border-gray-200">
-        <div className="text-xs text-gray-600 mb-2">Then you&apos;ll get {newBenefits.packageName} benefits:</div>
+        <div className="text-xs text-gray-600 dark:text-neutral-400 mb-2">Then you&apos;ll get {newBenefits.packageName} benefits:</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
           <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.entriesPerMonth}</div>
+            <div className="font-medium text-gray-700 dark:text-neutral-200">{newBenefits.entriesPerMonth}</div>
             <div className="text-gray-500">entries</div>
           </div>
           <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.shopDiscountPercent}%</div>
+            <div className="font-medium text-gray-700 dark:text-neutral-200">{newBenefits.shopDiscountPercent}%</div>
             <div className="text-gray-500">discount</div>
           </div>
           <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.partnerDiscountDays}</div>
+            <div className="font-medium text-gray-700 dark:text-neutral-200">{newBenefits.partnerDiscountDays}</div>
             <div className="text-gray-500">partner days</div>
           </div>
         </div>

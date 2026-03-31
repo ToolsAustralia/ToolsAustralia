@@ -101,7 +101,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
           {/* Add Product */}
           <button
             onClick={() => setIsProductModalOpen(true)}
-            className="bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm hover:shadow-md min-h-[80px]"
+            className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[80px]"
           >
             <Package className="w-5 h-5 mb-1.5" />
             <span className="text-sm font-medium">Add Product</span>
@@ -109,7 +109,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
 
           {/* Send Broadcast */}
           <button
-            className="bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm hover:shadow-md min-h-[80px]"
+            className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[80px]"
           >
             <Megaphone className="w-5 h-5 mb-1.5" />
             <span className="text-sm font-medium">Send Broadcast</span>
@@ -118,7 +118,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
           {/* Export Participants */}
           <button
             onClick={() => setIsExportModalOpen(true)}
-            className="bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm hover:shadow-md min-h-[80px]"
+            className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-4 flex flex-col items-center justify-center rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[80px]"
           >
             <Download className="w-5 h-5 mb-1.5" />
             <span className="text-sm font-medium">Export Participants</span>
@@ -145,19 +145,19 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
       {/* Export Modal */}
       {isExportModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Export Major Draw Participants</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Export Major Draw Participants</h3>
               <button
                 onClick={() => setIsExportModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <p className="text-gray-600 mb-6 text-sm">
+            <p className="text-gray-600 dark:text-neutral-400 mb-6 text-sm">
               Export all participants and their entry counts from the current major draw.
             </p>
             <div className="space-y-3">
@@ -180,7 +180,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
               <button
                 onClick={() => setIsExportModalOpen(false)}
                 disabled={isExporting}
-                className="w-full px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
+                className="w-full px-4 py-3 border-2 border-gray-300 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
               >
                 Cancel
               </button>

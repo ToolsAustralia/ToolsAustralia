@@ -82,7 +82,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <h1 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h1>
 
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">
               We&apos;re sorry, but something unexpected happened. Please try again or go back to the home page.
             </p>
 

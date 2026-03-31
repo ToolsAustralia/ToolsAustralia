@@ -57,10 +57,10 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
     return (
       <div className="space-y-3 sm:space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900">{typeLabel}</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">{typeLabel}</h3>
           {currentPromo && (
             <div className="flex items-center gap-2">
-              <span className="text-xs sm:text-sm text-gray-600">Current:</span>
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Current:</span>
               <PromoBadgeImage multiplier={currentPromo.multiplier} size="small" />
             </div>
           )}
@@ -83,7 +83,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
                   ${
                     isActive
                       ? "bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-600 text-black shadow-lg scale-105 ring-2 ring-yellow-300"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-700 hover:scale-105"
                   }
                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
                 `}
@@ -114,7 +114,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
               ${
                 !currentPromo
                   ? "bg-gradient-to-r from-red-500 via-red-600 to-red-700 text-white shadow-lg scale-105 ring-2 ring-red-300"
-                  : "bg-gray-100 text-gray-700 hover:bg-red-100 hover:text-red-700 hover:scale-105"
+                  : "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-red-100 hover:text-red-700 hover:scale-105"
               }
               disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
             `}

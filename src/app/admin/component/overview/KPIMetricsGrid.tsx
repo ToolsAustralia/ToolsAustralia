@@ -126,7 +126,7 @@ export default function KPIMetricsGrid({
           <button
             type="button"
             onClick={onRevenueExpandToggle}
-            className="lg:hidden text-gray-400 hover:text-gray-600 transition-colors p-1"
+            className="lg:hidden text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1"
             aria-label={isRevenueExpanded ? "Collapse revenue details" : "Expand revenue details"}
           >
             {isRevenueExpanded ? (
@@ -253,7 +253,7 @@ export default function KPIMetricsGrid({
           <button
             type="button"
             onClick={onAdvertisingExpandToggle}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1"
             aria-label={isAdvertisingExpanded ? "Collapse advertising details" : "Expand advertising details"}
           >
             {isAdvertisingExpanded ? (
@@ -321,7 +321,7 @@ export default function KPIMetricsGrid({
           <button
             type="button"
             onClick={onUsersPerformanceExpandToggle}
-            className="lg:hidden text-gray-400 hover:text-gray-600 transition-colors p-1 shrink-0"
+            className="lg:hidden text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1 shrink-0"
             aria-label={
               isUsersPerformanceExpanded ? "Hide total users and drop-off rate" : "Show total users and drop-off rate"
             }

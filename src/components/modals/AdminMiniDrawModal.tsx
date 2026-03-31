@@ -205,7 +205,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
             />
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 Description <span className="text-red-500">*</span>
               </label>
               {errors.description && (
@@ -241,7 +241,7 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
             />
 
             <div>
-              <label htmlFor="prize.description" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="prize.description" className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 Prize Description <span className="text-red-500">*</span>
               </label>
               {errors["prize.description"] && (

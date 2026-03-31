@@ -77,10 +77,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        {/* Force light mode for Android email/SMS browsers */}
-        <meta name="color-scheme" content="light" />
-        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: dark)" />
+        {/* Single theme-color updated client-side by ThemeMetaSync; avoids duplicate meta tags */}
+        <meta name="theme-color" content="#ffffff" />
+        {/* Apply persisted (Zustand persist) theme before React hydrates to prevent light flash */}
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var r=localStorage.getItem("ta-theme");var t=null;if(r){var p=JSON.parse(r);t=p&&p.state&&p.state.theme}var d=t==="dark"||(!r&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
+          }}
+        />
         {googleVerify ? <meta name="google-site-verification" content={googleVerify} /> : null}
         {bingVerify ? <meta name="msvalidate.01" content={bingVerify} /> : null}
         {/** Facebook domain verification meta tag so Meta can confirm ownership for ads */}
@@ -98,7 +103,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Contentsquare UX analytics - load in head for accurate tracking */}
         <script src="https://t.contentsquare.net/uxa/80b94ffdd640f.js" async />
       </head>
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${inter.className} antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100`}>
         <GoogleTagManager
           gtmId={process.env.NEXT_PUBLIC_GTM_ID}
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_GTM_TESTING}

@@ -238,7 +238,7 @@ export default function CheckoutPageClient() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Secure Checkout</h1>
-          <p className="text-gray-600">Complete your order in just a few steps</p>
+          <p className="text-gray-600 dark:text-neutral-400">Complete your order in just a few steps</p>
         </div>
 
         {/* Progress Steps */}
@@ -293,7 +293,7 @@ export default function CheckoutPageClient() {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">Shipping Information</h2>
-                    <p className="text-gray-600">Where should we deliver your order?</p>
+                    <p className="text-gray-600 dark:text-neutral-400">Where should we deliver your order?</p>
                   </div>
                 </div>
 
@@ -324,7 +324,7 @@ export default function CheckoutPageClient() {
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="font-medium text-gray-900">{option.name}</div>
-                              <div className="text-sm text-gray-600">{option.description}</div>
+                              <div className="text-sm text-gray-600 dark:text-neutral-400">{option.description}</div>
                             </div>
                             <div className="text-right">
                               {option.free ? (
@@ -351,7 +351,7 @@ export default function CheckoutPageClient() {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">Payment Method</h2>
-                    <p className="text-gray-600">Choose how you&apos;d like to pay</p>
+                    <p className="text-gray-600 dark:text-neutral-400">Choose how you&apos;d like to pay</p>
                   </div>
                 </div>
 
@@ -368,7 +368,7 @@ export default function CheckoutPageClient() {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">Review Your Order</h2>
-                    <p className="text-gray-600">Please review your order details</p>
+                    <p className="text-gray-600 dark:text-neutral-400">Please review your order details</p>
                   </div>
                 </div>
 
@@ -381,12 +381,12 @@ export default function CheckoutPageClient() {
                       <p className="font-medium text-gray-900">
                         {formatDisplayName(shippingInfo.firstName, shippingInfo.lastName)}
                       </p>
-                      <p className="text-gray-600">{shippingInfo.address}</p>
-                      {shippingInfo.apartment && <p className="text-gray-600">Apt {shippingInfo.apartment}</p>}
-                      <p className="text-gray-600">
+                      <p className="text-gray-600 dark:text-neutral-400">{shippingInfo.address}</p>
+                      {shippingInfo.apartment && <p className="text-gray-600 dark:text-neutral-400">Apt {shippingInfo.apartment}</p>}
+                      <p className="text-gray-600 dark:text-neutral-400">
                         {shippingInfo.city}, {shippingInfo.state} {shippingInfo.zipCode}
                       </p>
-                      <p className="text-gray-600">{shippingInfo.country}</p>
+                      <p className="text-gray-600 dark:text-neutral-400">{shippingInfo.country}</p>
                     </div>
                   </div>
 
@@ -395,8 +395,8 @@ export default function CheckoutPageClient() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Shipping Method</h3>
                     <div className="bg-gray-50 rounded-lg p-4">
                       <p className="font-medium text-gray-900">{selectedShipping.name}</p>
-                      <p className="text-gray-600">{selectedShipping.description}</p>
-                      <p className="text-gray-600">
+                      <p className="text-gray-600 dark:text-neutral-400">{selectedShipping.description}</p>
+                      <p className="text-gray-600 dark:text-neutral-400">
                         {selectedShipping.free ? "FREE" : `$${selectedShipping.price.toFixed(2)}`}
                       </p>
                     </div>
@@ -411,7 +411,7 @@ export default function CheckoutPageClient() {
                         onChange={(e) => setTermsAccepted(e.target.checked)}
                         className="mt-1 w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-2 focus:ring-red-500/20"
                       />
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-600 dark:text-neutral-400">
                         I agree to the{" "}
                         <a href="/terms" className="text-red-600 hover:text-red-700 underline">
                           Terms and Conditions
@@ -446,7 +446,7 @@ export default function CheckoutPageClient() {
                 className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                   currentStep === 1
                     ? "text-gray-400 cursor-not-allowed"
-                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                    : "text-gray-700 dark:text-neutral-200 hover:text-gray-900 hover:bg-gray-100"
                 }`}
               >
                 Previous

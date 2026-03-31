@@ -70,7 +70,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   const textClass =
     titleTextClassName ?? (preferDarkBackground ? "!text-black" : "text-white");
   const subtitleClass =
-    subtitleTextClassName ?? (preferDarkBackground ? "!text-gray-800" : "text-white/80");
+    subtitleTextClassName ?? (preferDarkBackground ? "!text-gray-800 dark:text-neutral-100" : "text-white/80");
   const headerUsesDarkForeground =
     !titleTextClassName && preferDarkBackground
       ? true

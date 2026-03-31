@@ -28,7 +28,7 @@ export default async function CheckoutSuccessPage({ searchParams }: CheckoutSucc
       fallback={
         <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
           <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 font-medium">Loading order details...</p>
+          <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading order details...</p>
         </div>
       }
     >

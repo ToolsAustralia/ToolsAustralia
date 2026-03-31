@@ -56,14 +56,16 @@ export default function PromoManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Promo Management</h2>
-          <p className="text-gray-600 text-sm sm:text-base mt-0.5 sm:mt-1">Manage campaigns and entry multipliers</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Promo Management</h2>
+          <p className="text-gray-600 dark:text-neutral-400 text-sm sm:text-base mt-0.5 sm:mt-1">
+            Manage campaigns and entry multipliers
+          </p>
         </div>
       </div>
 
       {/* Promo Tabs */}
       <div className="space-y-3 sm:space-y-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4">
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -75,7 +77,7 @@ export default function PromoManagement() {
                   className={`inline-flex items-center justify-center gap-2 h-9 px-3 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors w-full sm:w-auto ${
                     isActive
                       ? "bg-gradient-to-r from-red-600 to-red-700 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-700"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -95,18 +97,18 @@ export default function PromoManagement() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Scheduled Promos
                   </h3>
-                  <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                     Campaign phases with date ranges; apply automatically. Priority: Scheduled &gt; Toggle &gt; Alternating.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => setIsScheduledCalendarModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 text-red-700 bg-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 transition-all duration-200 w-full sm:w-auto"
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 dark:border-red-500 text-red-700 dark:text-red-300 bg-white dark:bg-neutral-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-200 w-full sm:w-auto"
                   >
                     <Calendar className="w-4 h-4" />
                     Month grid
@@ -123,10 +125,10 @@ export default function PromoManagement() {
                   </button>
                 </div>
               </div>
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-                <div className="p-3 sm:p-4 border-b border-gray-200">
+              <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 mb-4">
+                <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-neutral-700">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <h4 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                       <Zap className="w-4 h-4 text-yellow-500" />
                       Active Promos
                     </h4>
@@ -134,7 +136,7 @@ export default function PromoManagement() {
                       <button
                         onClick={() => refetchActive()}
                         disabled={activeLoading}
-                        className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                        className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
                       >
                         <RefreshCw className={`w-4 h-4 ${activeLoading ? "animate-spin" : ""}`} />
                       </button>
@@ -155,8 +157,8 @@ export default function PromoManagement() {
                     </div>
                   ) : activePromos.length === 0 ? (
                     <div className="text-center py-6">
-                      <Zap className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500 text-sm">No active promos</p>
+                      <Zap className="w-10 h-10 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-neutral-400 text-sm">No active promos</p>
                     </div>
                   ) : (
                     <div className="space-y-2.5">
@@ -169,12 +171,12 @@ export default function PromoManagement() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2.5 mb-1">
                                 <PromoBadgeImage multiplier={promo.multiplier} size="small" className="shrink-0" />
-                                <span className="text-sm font-medium text-gray-700 capitalize truncate">
+                                <span className="text-sm font-medium text-gray-700 dark:text-neutral-200 capitalize truncate">
                                   {promo.type.replace("-", " ")}
                                 </span>
                               </div>
                               {promo.createdBy && (
-                                <div className="text-xs text-gray-600 truncate">
+                                <div className="text-xs text-gray-600 dark:text-neutral-400 truncate">
                                   Created by: {formatDisplayName(promo.createdBy.firstName, promo.createdBy.lastName)}
                                 </div>
                               )}
@@ -200,11 +202,11 @@ export default function PromoManagement() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Gift className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Bonus Entry Promos
                   </h3>
-                  <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                     Date-based promos granting bonus entries during specific periods
                   </p>
                 </div>
@@ -224,11 +226,11 @@ export default function PromoManagement() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Link2 className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Promo Links
                   </h3>
-                  <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                     Shareable promo links with unique codes for bonus entries on next purchase
                   </p>
                 </div>
@@ -248,11 +250,11 @@ export default function PromoManagement() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Promo Banner Image Schedule
                   </h3>
-                  <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                     Scheduled left banner image for campaigns. One-time or recurring (weekdays/weekends). AEST timezone.
                   </p>
                 </div>
@@ -272,11 +274,11 @@ export default function PromoManagement() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                 <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Repeat className="w-5 h-5 text-red-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Repeat className="w-5 h-5 text-red-600 dark:text-red-400" />
                     Alternating Multiplier Settings
                   </h3>
-                  <p className="text-gray-600 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
                     Daily alternating multipliers at midnight AEST. Priority: Active &gt; Alternating &gt; Default
                   </p>
                 </div>

@@ -332,24 +332,24 @@ export default function RevenueDetailModal({
       />
 
       {/* Search and Actions */}
-      <div className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-br from-white via-gray-50 to-white">
+      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-800 bg-gradient-to-br from-white via-gray-50 to-white dark:from-neutral-900 dark:via-neutral-900/95 dark:to-neutral-900">
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Search, Filter, and Export Row - All in one row on mobile */}
           <div className="flex flex-row gap-2 items-center">
             {/* Search Input */}
             <div className="relative flex-1 group min-w-0">
-              <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5 z-10" />
+              <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-neutral-500 group-focus-within:text-red-600 dark:group-focus-within:text-red-500 transition-colors w-4 h-4 sm:w-5 sm:h-5 z-10" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
                 disabled={isLoading}
-                className="w-full pl-8 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 text-xs sm:text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full pl-8 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 text-xs sm:text-sm border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-neutral-500 disabled:bg-gray-100 dark:disabled:bg-neutral-800 disabled:cursor-not-allowed"
               />
               {isLoading && (
                 <div className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 z-10">
-                  <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 animate-spin" />
+                  <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 dark:text-neutral-500 animate-spin" />
                 </div>
               )}
             </div>
@@ -374,25 +374,25 @@ export default function RevenueDetailModal({
             <div className="sm:hidden relative mobile-filter-container">
               <button
                 onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-                className={`px-2.5 py-2 border-2 rounded-lg bg-white hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md flex-shrink-0 ${
+                className={`px-2.5 py-2 border-2 rounded-lg bg-white dark:bg-neutral-900 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md flex-shrink-0 ${
                   hasActiveFilters
                     ? "border-red-500 text-red-600"
-                    : "border-gray-300 text-gray-600 hover:border-red-500"
+                    : "border-gray-300 text-gray-600 dark:text-neutral-400 hover:border-red-500"
                 }`}
                 aria-label="Toggle filter"
               >
-                <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+                <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400"}`} />
                 {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
               </button>
 
               {/* Mobile Filter Dropdown - Show when icon is clicked */}
               {isFilterDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white border-2 border-gray-300 rounded-lg shadow-lg">
-                  <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-900">Filter by Package</span>
+                <div className="absolute right-0 top-full mt-2 z-50 w-64 bg-white dark:bg-neutral-900 border-2 border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg">
+                  <div className="p-3 border-b border-gray-200 dark:border-neutral-700 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Filter by Package</span>
                     <button
                       onClick={() => setIsFilterDropdownOpen(false)}
-                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors"
                       aria-label="Close filter"
                     >
                       <X className="w-4 h-4" />
@@ -419,7 +419,7 @@ export default function RevenueDetailModal({
                           clearAllFilters();
                           setIsFilterDropdownOpen(false);
                         }}
-                        className="mt-3 w-full px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 border-2 border-red-300 hover:border-red-500 rounded-lg bg-white hover:bg-red-50 transition-all duration-200 flex items-center justify-center gap-1.5"
+                        className="mt-3 w-full px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border-2 border-red-300 dark:border-red-800 hover:border-red-500 rounded-lg bg-white dark:bg-neutral-900 hover:bg-red-50 dark:hover:bg-red-950/25 transition-all duration-200 flex items-center justify-center gap-1.5"
                       >
                         <X className="w-4 h-4" />
                         Clear Filter
@@ -434,7 +434,7 @@ export default function RevenueDetailModal({
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="hidden sm:flex px-3 py-2.5 text-sm font-semibold text-red-600 hover:text-red-700 border-2 border-red-300 hover:border-red-500 rounded-lg bg-white hover:bg-red-50 transition-all duration-200 items-center justify-center gap-1.5 shadow-sm hover:shadow-md flex-shrink-0"
+                className="hidden sm:flex px-3 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 border-2 border-red-300 dark:border-red-800 hover:border-red-500 rounded-lg bg-white dark:bg-neutral-900 hover:bg-red-50 dark:hover:bg-red-600/20 transition-all duration-200 items-center justify-center gap-1.5 shadow-sm hover:shadow-md flex-shrink-0"
                 title="Clear all filters"
               >
                 <X className="w-4 h-4" />
@@ -448,7 +448,7 @@ export default function RevenueDetailModal({
               <button
                 onClick={handleExportCSV}
                 disabled={!revenueData || filteredAndSortedUsers.length === 0}
-                className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                 title="Export CSV"
               >
                 <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -457,7 +457,7 @@ export default function RevenueDetailModal({
               <button
                 onClick={handleExportExcel}
                 disabled={!revenueData || filteredAndSortedUsers.length === 0}
-                className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                 title="Export Excel"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -472,23 +472,23 @@ export default function RevenueDetailModal({
       <ModalContent padding="none">
         <div className="flex-1 overflow-y-auto">
           {error && (
-            <div className="p-4 m-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <span className="text-red-700 text-sm">{error instanceof Error ? error.message : "Failed to load revenue details"}</span>
+            <div className="p-4 m-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/45 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              <span className="text-red-700 dark:text-red-300 text-sm">{error instanceof Error ? error.message : "Failed to load revenue details"}</span>
             </div>
           )}
 
           {isLoading && !revenueData && (
             <div className="p-8 text-center">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin" />
-              <p className="text-gray-600">Loading revenue details...</p>
+              <p className="text-gray-600 dark:text-neutral-400">Loading revenue details...</p>
             </div>
           )}
 
           {!isLoading && revenueData && filteredAndSortedUsers.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
-              <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No users found</p>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+              <Users className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+              <p className="text-lg font-medium text-gray-900 dark:text-neutral-100">No users found</p>
               <p className="text-sm mt-1">
                 {searchQuery.trim() ? "Try a different search term" : "No purchases found for this category"}
               </p>
@@ -498,9 +498,9 @@ export default function RevenueDetailModal({
           {revenueData && filteredAndSortedUsers.length > 0 && (
             <div className="p-4">
               {/* Table Header - Desktop */}
-              <div className="hidden lg:grid lg:grid-cols-12 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 mb-4 text-sm font-semibold text-gray-700">
+              <div className="hidden lg:grid lg:grid-cols-12 gap-4 p-4 bg-gray-50 dark:bg-neutral-800/80 rounded-lg border border-gray-200 dark:border-neutral-700 mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-200">
                 <div
-                  className="col-span-3 cursor-pointer hover:text-gray-900 flex items-center gap-1"
+                  className="col-span-3 cursor-pointer hover:text-gray-900 dark:hover:text-neutral-100 flex items-center gap-1"
                   onClick={() => handleSort("name")}
                 >
                   Name
@@ -508,21 +508,21 @@ export default function RevenueDetailModal({
                 </div>
                 <div className="col-span-3">Email</div>
                 <div
-                  className="col-span-1 cursor-pointer hover:text-gray-900 flex items-center justify-end gap-1"
+                  className="col-span-1 cursor-pointer hover:text-gray-900 dark:hover:text-neutral-100 flex items-center justify-end gap-1"
                   onClick={() => handleSort("count")}
                 >
                   Purchases
                   {sortBy === "count" && (sortOrder === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
                 </div>
                 <div
-                  className="col-span-2 cursor-pointer hover:text-gray-900 flex items-center justify-end gap-1"
+                  className="col-span-2 cursor-pointer hover:text-gray-900 dark:hover:text-neutral-100 flex items-center justify-end gap-1"
                   onClick={() => handleSort("amount")}
                 >
                   Total
                   {sortBy === "amount" && (sortOrder === "asc" ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
                 </div>
                 <div
-                  className="col-span-2 cursor-pointer hover:text-gray-900 flex items-center gap-1"
+                  className="col-span-2 cursor-pointer hover:text-gray-900 dark:hover:text-neutral-100 flex items-center gap-1"
                   onClick={() => handleSort("date")}
                 >
                   First Purchase
@@ -543,7 +543,7 @@ export default function RevenueDetailModal({
                   return (
                     <div
                       key={user.userId}
-                      className="border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all duration-200"
+                      className="border-2 border-gray-200 dark:border-neutral-600 rounded-lg hover:border-gray-300 dark:hover:border-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition-all duration-200"
                     >
                       {/* User Row */}
                       <div
@@ -554,24 +554,24 @@ export default function RevenueDetailModal({
                         <div className="lg:hidden space-y-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <User className="w-5 h-5 text-gray-400" />
+                              <User className="w-5 h-5 text-gray-400 dark:text-neutral-500" />
                               <div>
-                                <p className="font-semibold text-gray-900">
+                                <p className="font-semibold text-gray-900 dark:text-neutral-100">
                                   {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
                                 </p>
-                                <p className="text-sm text-gray-600">{user.userInfo.email}</p>
+                                <p className="text-sm text-gray-600 dark:text-neutral-400">{user.userInfo.email}</p>
                               </div>
                             </div>
-                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-neutral-500" />}
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-sm">
                             <div>
-                              <span className="text-gray-500">Purchases:</span>{" "}
-                              <span className="font-medium">{user.purchaseCount}</span>
+                              <span className="text-gray-500 dark:text-neutral-400">Purchases:</span>{" "}
+                              <span className="font-medium text-gray-900 dark:text-neutral-100">{user.purchaseCount}</span>
                             </div>
                             <div className="text-right">
-                              <span className="text-gray-500">Total:</span>{" "}
-                              <span className="font-semibold text-emerald-600">{formatCurrency(user.totalContributed)}</span>
+                              <span className="text-gray-500 dark:text-neutral-400">Total:</span>{" "}
+                              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(user.totalContributed)}</span>
                             </div>
                           </div>
                         </div>
@@ -579,30 +579,30 @@ export default function RevenueDetailModal({
                         {/* Desktop View */}
                         <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center">
                           <div className="col-span-3">
-                            <p className="font-semibold text-gray-900">
+                            <p className="font-semibold text-gray-900 dark:text-neutral-100">
                               {formatDisplayName(user.userInfo.firstName, user.userInfo.lastName)}
                             </p>
-                            {user.userInfo.mobile && <p className="text-xs text-gray-500">{user.userInfo.mobile}</p>}
+                            {user.userInfo.mobile && <p className="text-xs text-gray-500 dark:text-neutral-400">{user.userInfo.mobile}</p>}
                           </div>
-                          <div className="col-span-3 text-sm text-gray-600">{user.userInfo.email}</div>
-                          <div className="col-span-1 text-right font-medium">{user.purchaseCount}</div>
-                          <div className="col-span-2 text-right font-semibold text-emerald-600">
+                          <div className="col-span-3 text-sm text-gray-600 dark:text-neutral-400">{user.userInfo.email}</div>
+                          <div className="col-span-1 text-right font-medium text-gray-900 dark:text-neutral-100">{user.purchaseCount}</div>
+                          <div className="col-span-2 text-right font-semibold text-emerald-600 dark:text-emerald-400">
                             {formatCurrency(user.totalContributed)}
                           </div>
-                          <div className="col-span-2 text-sm text-gray-600">
+                          <div className="col-span-2 text-sm text-gray-600 dark:text-neutral-400">
                             {firstPurchase ? formatDate(firstPurchase.timestamp) : "N/A"}
                           </div>
                           <div className="col-span-1 text-center">
-                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-neutral-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-neutral-500" />}
                           </div>
                         </div>
                       </div>
 
                       {/* Expanded Purchase Details */}
                       {isExpanded && (
-                        <div className="border-t border-gray-200 bg-gray-50 p-4">
+                        <div className="border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900/50 p-4">
                           <div className="mb-3 flex items-center justify-between">
-                            <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-2">
                               <ShoppingCart className="w-4 h-4" />
                               Purchase Details ({user.purchases.length})
                             </h4>
@@ -624,32 +624,32 @@ export default function RevenueDetailModal({
                             {sortedPurchases.map((purchase, idx) => (
                               <div
                                 key={purchase.paymentEventId || idx}
-                                className="bg-white p-3 rounded border border-gray-200 flex items-center justify-between"
+                                className="bg-white dark:bg-neutral-900/70 p-3 rounded border border-gray-200 dark:border-neutral-700 flex items-center justify-between"
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <Package className="w-4 h-4 text-gray-400" />
-                                    <span className="font-medium text-gray-900">
+                                    <Package className="w-4 h-4 text-gray-400 dark:text-neutral-500" />
+                                    <span className="font-medium text-gray-900 dark:text-neutral-100">
                                       {purchase.packageName || purchase.packageId || "Unknown Package"}
                                     </span>
                                     {purchase.billingReason && (
-                                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                      <span className="text-xs bg-blue-100 dark:bg-blue-950/45 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
                                         {purchase.billingReason === "subscription_cycle" ? "Renewal" : "New"}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-4 text-xs text-gray-600">
+                                  <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-neutral-400">
                                     <span className="flex items-center gap-1">
                                       <Calendar className="w-3 h-3" />
                                       {formatDate(purchase.timestamp)}
                                     </span>
                                     {purchase.packageId && (
-                                      <span className="text-gray-500">ID: {purchase.packageId}</span>
+                                      <span className="text-gray-500 dark:text-neutral-500">ID: {purchase.packageId}</span>
                                     )}
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-semibold text-emerald-600">{formatCurrency(purchase.amount)}</p>
+                                  <p className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(purchase.amount)}</p>
                                 </div>
                               </div>
                             ))}
@@ -663,18 +663,18 @@ export default function RevenueDetailModal({
 
               {/* Pagination - Show when API returns more than 50 users */}
               {revenueData && revenueData.pagination.totalCount > 50 && (
-                <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
-                  <div className="text-sm text-gray-600">
+                <div className="mt-6 flex items-center justify-between border-t border-gray-200 dark:border-neutral-800 pt-4">
+                  <div className="text-sm text-gray-600 dark:text-neutral-300">
                     {filteredCount > 0 ? (
                       <>
                         Showing {filteredCount} user{filteredCount !== 1 ? "s" : ""} on this page
                         {hasActiveFilters && revenueData.pagination.totalCount > filteredCount && (
-                          <span className="text-gray-500 ml-1">
+                          <span className="text-gray-500 dark:text-neutral-500 ml-1">
                             (filtered from {revenueData.pagination.totalCount.toLocaleString()} total)
                           </span>
                         )}
                         {!hasActiveFilters && (
-                          <span className="text-gray-500 ml-1">
+                          <span className="text-gray-500 dark:text-neutral-500 ml-1">
                             (of {revenueData.pagination.totalCount.toLocaleString()} total)
                           </span>
                         )}
@@ -693,7 +693,7 @@ export default function RevenueDetailModal({
                       <ChevronLeft className="w-4 h-4" />
                       Previous
                     </Button>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 dark:text-neutral-300">
                       Page {revenueData.pagination.currentPage} of {revenueData.pagination.totalPages}
                     </span>
                     <Button
@@ -710,11 +710,11 @@ export default function RevenueDetailModal({
               )}
               {/* Show pagination info when there are filtered results but no API pagination needed */}
               {revenueData && revenueData.pagination.totalCount <= 50 && filteredCount > 0 && (
-                <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
-                  <div className="text-sm text-gray-600">
+                <div className="mt-6 flex items-center justify-between border-t border-gray-200 dark:border-neutral-800 pt-4">
+                  <div className="text-sm text-gray-600 dark:text-neutral-300">
                     Showing {filteredCount} user{filteredCount !== 1 ? "s" : ""}
                     {hasActiveFilters && revenueData.pagination.totalCount > filteredCount && (
-                      <span className="text-gray-500 ml-1">
+                      <span className="text-gray-500 dark:text-neutral-500 ml-1">
                         (filtered from {revenueData.pagination.totalCount.toLocaleString()} total)
                       </span>
                     )}

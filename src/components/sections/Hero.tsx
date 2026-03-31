@@ -70,7 +70,7 @@ export default function Hero() {
           />
         </div>
         {/* Dark overlay for better text readability */}
-        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="absolute inset-0 bg-black/20 dark:bg-black/45" />
       </div>
 
       {/* Main Hero Content */}

@@ -666,10 +666,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ee0000] mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading user details...</p>
+            <p className="text-gray-600 dark:text-neutral-400">Loading user details...</p>
           </div>
         </div>
       </div>
@@ -679,11 +679,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   if (error || !user) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
             <div className="text-red-500 text-6xl mb-4">⚠️</div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading User</h3>
-            <p className="text-gray-600 mb-4">{error?.message || "Failed to load user details"}</p>
+            <p className="text-gray-600 dark:text-neutral-400 mb-4">{error?.message || "Failed to load user details"}</p>
             <button
               onClick={onCloseAction}
               className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
@@ -1176,14 +1176,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     <>
       {/* Main Modal */}
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div
-          className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200/50 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-          }}
-        >
+        <div className="rounded-2xl shadow-2xl dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-700 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950">
             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1">
               {/* User Avatar - Logo or Package Icon (matching UsersManagement) */}
               {hasActiveSubscription && packageIcon ? (
@@ -1210,7 +1205,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </div>
                 </span>
               ) : (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100 dark:bg-neutral-800 ring-1 ring-gray-200/80 dark:ring-neutral-600">
                   <Image
                     src={defaultLogo}
                     alt="Tools Australia"
@@ -1221,23 +1216,23 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
+                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {formatDisplayName(user?.firstName, user?.lastName)}
                 </h2>
-                <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 truncate">{user?.email}</p>
+                <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate">{user?.email}</p>
               </div>
             </div>
             <button
               onClick={onCloseAction}
-              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 sm:p-2"
+              className="rounded-lg text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100/80 dark:hover:bg-neutral-800 transition-colors flex-shrink-0 p-1 sm:p-2"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
             </button>
           </div>
 
           {/* Tabs - Bigger on mobile for easy touching */}
-          <div className="border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white sticky top-0 z-20 shadow-sm">
-            <nav className="flex gap-1 sm:gap-2 lg:gap-4 px-2 sm:px-4 lg:px-6 overflow-x-auto">
+          <div className="border-b-2 border-slate-200/50 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950 sticky top-0 z-20 shadow-sm dark:shadow-none">
+            <nav className="flex gap-1 sm:gap-2 lg:gap-4 px-2 sm:px-4 lg:px-6 overflow-x-auto brand-scrollbar">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1247,8 +1242,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 sm:gap-2 py-4 sm:py-3 lg:py-4 px-4 sm:px-3 border-b-2 font-semibold text-xs sm:text-xs lg:text-sm transition-all whitespace-nowrap min-h-[48px] ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
+                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30 dark:bg-red-950/25"
+                        : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50"
                     }`}
                   >
                     <Icon className="w-4 h-4 sm:w-4 sm:h-4" />
@@ -1312,15 +1307,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                        style={{
-                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-                        }}
+                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
@@ -1330,7 +1322,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
                             </div>
                           </div>
-                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
                         </div>
@@ -1357,9 +1349,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   );
                   const hasBreakdown = Object.keys(entriesBySource).length > 0;
                   return hasBreakdown ? (
-                    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Current draw entries by source</h3>
-                      <p className="text-xs text-gray-500 mb-2">Breakdown of how entries were earned (referral, codes, promos, etc.)</p>
+                    <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Current draw entries by source</h3>
+                      <p className="text-xs text-gray-500 dark:text-neutral-400 mb-2">
+                        Breakdown of how entries were earned (referral, codes, promos, etc.)
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         {entriesBySource.membership != null && entriesBySource.membership > 0 && (
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Membership: {entriesBySource.membership}</span>
@@ -1385,7 +1379,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 })()}
 
                 {/* Basic Information - Minimized on mobile */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("overview") ? (
                     <form
                       onSubmit={overviewForm.handleSubmit(handleOverviewSubmit)}
@@ -1403,7 +1397,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("overview")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
@@ -1541,7 +1535,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1554,7 +1548,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="profileSetupCompleted"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1567,7 +1561,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isEmailVerified"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1580,7 +1574,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isMobileVerified"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1603,7 +1597,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("overview")}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Details
                         </button>
@@ -1612,7 +1606,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Email</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Email</p>
                             <p className="font-medium break-words text-sm mb-1">{user.email}</p>
                             <div className="flex items-center gap-1">
                               {user.isEmailVerified ? (
@@ -1630,7 +1624,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Mobile</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Mobile</p>
                             <p className="font-medium break-words text-sm mb-1">{user.mobile || "Not provided"}</p>
                             <div className="flex items-center gap-1">
                               {user.isMobileVerified ? (
@@ -1648,7 +1642,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Role</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Role</p>
                             <p className="font-medium capitalize text-sm">{user.role}</p>
                           </div>
                         </div>
@@ -1656,7 +1650,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Shield className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Account Status</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Account Status</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                                 user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -1670,13 +1664,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2 col-span-2">
                           <CreditCard className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Saved payment methods</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Saved payment methods</p>
                             {user.savedPaymentMethods && user.savedPaymentMethods.length > 0 ? (
                               <div className="flex flex-wrap gap-2">
                                 {user.savedPaymentMethods.map((pm) => (
                                   <span
                                     key={pm.paymentMethodId}
-                                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-neutral-200"
                                   >
                                     <span className="truncate max-w-[140px]">{pm.paymentMethodId}</span>
                                     {pm.isDefault && (
@@ -1696,7 +1690,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">State</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">State</p>
                             <p className="font-medium text-sm">{user.state || "Not provided"}</p>
                           </div>
                         </div>
@@ -1704,7 +1698,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Profession</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Profession</p>
                             <p className="font-medium text-sm">{user.profession || "Not provided"}</p>
                           </div>
                         </div>
@@ -1712,7 +1706,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Cake className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Date of birth</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Date of birth</p>
                             <p className="font-medium text-sm">{formatBirthdateDisplay(user.birthdate)}</p>
                           </div>
                         </div>
@@ -1720,7 +1714,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Member Since</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Member Since</p>
                             <p className="font-medium text-sm">{formatDate(user.createdAt)}</p>
                             <p className="text-xs text-gray-500 mt-0.5">{user.statistics.accountAge} days ago</p>
                           </div>
@@ -1729,7 +1723,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Clock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Last Login</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Last Login</p>
                             <p className="font-medium text-sm">
                               {user.lastLogin ? formatDate(user.lastLogin) : "No login recorded"}
                             </p>
@@ -1747,7 +1741,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
 
                 {user.referral && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-2 sm:p-4 lg:p-6">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-700 p-2 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                       <div>
                         <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
@@ -1758,7 +1752,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         </p>
                       </div>
                       {user.referral.code && (
-                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-gray-700">
+                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-gray-700 dark:text-neutral-200">
                           <span className="uppercase tracking-wide text-[9px] sm:text-xs text-gray-500">Code</span>
                           <span className="text-sm sm:text-lg font-bold text-gray-900">{user.referral.code}</span>
                         </div>
@@ -1788,31 +1782,31 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                     <div className="mt-6">
                       {referralHistory.length === 0 ? (
-                        <p className="text-sm text-gray-500">No referral activity recorded yet.</p>
+                        <p className="text-sm text-gray-500 dark:text-neutral-400">No referral activity recorded yet.</p>
                       ) : (
                         <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700 text-sm">
+                            <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                               <tr>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Role</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Friend Email</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Entries Awarded</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Conversion Date</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Recorded</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Role</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Status</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Friend Email</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Entries Awarded</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Conversion Date</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Recorded</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 dark:divide-neutral-800 bg-white dark:bg-neutral-900">
                               {referralHistory.map((event) => (
-                                <tr key={event.id}>
-                                  <td className="px-4 py-3 text-gray-700 capitalize">{event.role}</td>
-                                  <td className="px-4 py-3 text-gray-700">{formatReferralStatus(event.status)}</td>
-                                  <td className="px-4 py-3 text-gray-700">{event.friendEmail || "—"}</td>
-                                  <td className="px-4 py-3 text-gray-700">{event.entriesAwarded}</td>
-                                  <td className="px-4 py-3 text-gray-700">
+                                <tr key={event.id} className="hover:bg-gray-50/80 dark:hover:bg-neutral-800/50">
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200 capitalize">{event.role}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{formatReferralStatus(event.status)}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{event.friendEmail || "—"}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{event.entriesAwarded}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">
                                     {formatReferralDate(event.conversionDate)}
                                   </td>
-                                  <td className="px-4 py-3 text-gray-700">{formatReferralDate(event.createdAt)}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{formatReferralDate(event.createdAt)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1824,7 +1818,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 )}
 
                 {/* Quick Actions - Minimized on mobile */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
                     Quick Actions
                   </h3>
@@ -1832,19 +1826,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     <button
                       onClick={() => setShowSendEmailModal(true)}
                       disabled={actionLoading === "send_email"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50"
                     >
                       <Send className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs font-medium text-gray-700">Send Email</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Send Email</span>
                     </button>
 
                     <button
                       onClick={() => setShowAdminPasswordModal(true)}
                       disabled={actionLoading === "admin_set_password"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors disabled:opacity-50"
                     >
                       <Key className="w-5 h-5 text-yellow-600" />
-                      <span className="text-xs font-medium text-gray-700">Set Password</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Set Password</span>
                     </button>
 
                     <button
@@ -1857,19 +1851,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         )
                       }
                       disabled={actionLoading === "clear_payment_methods" || !user?.savedPaymentMethods || user.savedPaymentMethods.length === 0}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
                     >
                       <CreditCard className="w-5 h-5 text-orange-600" />
-                      <span className="text-xs font-medium text-gray-700">Clear Payment Methods</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Clear Payment Methods</span>
                     </button>
 
                     <button
                       onClick={handleDeleteClick}
                       disabled={isLoadingDeletionSummary || !userId}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-red-300 dark:hover:border-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
                     >
                       <Trash2 className="w-5 h-5 text-red-600" />
-                      <span className="text-xs font-medium text-gray-700">Delete User</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Delete User</span>
                     </button>
                   </div>
                 </div>
@@ -1878,7 +1872,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
             {activeTab === "subscription" && (
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("subscription") ? (
                     <form
                       onSubmit={subscriptionForm.handleSubmit(handleSubscriptionSubmit)}
@@ -1897,7 +1891,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("subscription")}
-                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
@@ -1947,7 +1941,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           )}
                         />
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             Start Date
                           </label>
                           <input
@@ -1957,7 +1951,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             End Date
                           </label>
                           <input
@@ -1970,7 +1964,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={subscriptionForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1984,7 +1978,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={subscriptionForm.control}
                           name="autoRenew"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -2088,7 +2082,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => setActiveEditTab("subscription")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Edit Subscription
                           </button>
@@ -2098,13 +2092,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       {user.subscription ? (
                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Package</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Package</p>
                             <p className="font-medium text-sm">
                               {user.subscription.packageName || user.subscription.packageId}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Status</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Status</p>
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                                 user.subscription.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -2114,38 +2108,38 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             </span>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Start Date</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Start Date</p>
                             <p className="font-medium text-sm">{formatDate(user.subscription.startDate)}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">End Date</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">End Date</p>
                             <p className="font-medium text-sm">
                               {user.subscription.endDate ? formatDate(user.subscription.endDate) : "Active"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Auto Renew</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Auto Renew</p>
                             <span className="font-medium text-sm">
                               {user.subscription.autoRenew ? "Enabled" : "Disabled"}
                             </span>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Rewards Points</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Rewards Points</p>
                             <p className="font-medium text-sm">
                               {rewardsFeatureEnabled ? user.rewardsPoints : "Unavailable"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Accumulated Entries</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Accumulated Entries</p>
                             <p className="font-medium text-sm">{user.subscription?.lastMonthAccumulatedEntries ?? 0}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Entry Wallet</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Entry Wallet</p>
                             <p className="font-medium text-sm">{user.entryWallet}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-lg border border-dashed border-gray-300 bg-white px-6 py-8 text-center">
+                        <div className="rounded-lg border border-dashed border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-6 py-8 text-center">
                           <Shield className="mx-auto mb-3 h-12 w-12 text-gray-300" />
                           <h4 className="text-base font-semibold text-gray-900">No subscription assigned</h4>
                           <p className="mt-1 text-sm text-gray-500">
@@ -2160,7 +2154,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Subscription History */}
                 {user.subscriptionHistory.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900">Subscription History</h3>
                       {subscriptionHistoryScroll.total > 0 && (
@@ -2183,7 +2177,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={`${sub.timestamp ?? ""}-${sub.packageId ?? ""}-${index}`}
-                            className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white border border-gray-200 p-2 sm:p-3 hover:shadow-sm transition-shadow"
+                            className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 p-2 sm:p-3 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {packageIcon ? (
@@ -2305,15 +2299,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                        style={{
-                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-                        }}
+                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
@@ -2323,7 +2314,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
                             </div>
                           </div>
-                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
                         </div>
@@ -2335,7 +2326,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   })}
                 </div>
 
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-6">
                   {isEditing("purchases") ? (
                     <form onSubmit={purchasesForm.handleSubmit(handlePurchasesSubmit)} className="space-y-6">
                       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2350,7 +2341,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("purchases")}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
@@ -2370,7 +2361,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddOneTimePackage}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add One-time Package
                           </button>
@@ -2393,7 +2384,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 space-y-4"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-sm font-semibold text-gray-900">
@@ -2441,7 +2432,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     />
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Purchase Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Purchase Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.purchaseDate` as const)}
@@ -2449,7 +2440,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Start Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Start Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.startDate` as const)}
@@ -2460,7 +2451,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">End Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">End Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.endDate` as const)}
@@ -2474,7 +2465,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={purchasesForm.control}
                                       name={`oneTimePackages.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-4 py-3">
+                                        <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3">
                                           <Checkbox
                                             checked={field.value}
                                             onChange={(e) => field.onChange(e.target.checked)}
@@ -2497,7 +2488,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMiniPackage}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Mini Draw Package
                           </button>
@@ -2513,7 +2504,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 space-y-4"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-sm font-semibold text-gray-900">
@@ -2529,7 +2520,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Package ID</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Package ID</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.packageId` as const)}
                                         className={inputClasses}
@@ -2540,7 +2531,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Package Name</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Package Name</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.packageName` as const)}
                                         className={inputClasses}
@@ -2551,7 +2542,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Mini Draw ID</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Mini Draw ID</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.miniDrawId` as const)}
                                         className={inputClasses}
@@ -2562,7 +2553,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Purchase Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Purchase Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.purchaseDate` as const)}
@@ -2570,7 +2561,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Start Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Start Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.startDate` as const)}
@@ -2581,7 +2572,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">End Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">End Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.endDate` as const)}
@@ -2592,7 +2583,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Entries Granted</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Entries Granted</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2609,7 +2600,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Price (AUD)</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Price (AUD)</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2624,7 +2615,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
                                         Partner Discount Hours
                                       </label>
                                       <input
@@ -2643,7 +2634,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Partner Discount Days</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Partner Discount Days</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2660,7 +2651,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div className="md:col-span-2">
-                                      <label className="text-sm font-medium text-gray-700">
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
                                         Stripe Payment Intent ID
                                       </label>
                                       <input
@@ -2680,7 +2671,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={purchasesForm.control}
                                       name={`miniDrawPackages.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200">
                                           <input
                                             type="checkbox"
                                             checked={field.value}
@@ -2713,7 +2704,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("purchases")}
-                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Packages
                         </button>
@@ -2724,7 +2715,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Recent Orders */}
                 {!isEditing("purchases") && user.orders.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900">Orders</h3>
                       <p className="text-xs text-gray-500">
@@ -2736,7 +2727,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       {ordersScroll.slice.map((order: OrderItem, index: number) => (
                         <div
                           key={order._id || `order-${index}`}
-                          className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                          className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
                         >
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                             <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
@@ -2744,7 +2735,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <p className="font-medium text-xs sm:text-sm text-gray-900">
                                 Order #{order.orderNumber || order._id || "--"}
                               </p>
-                              <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                              <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                 {formatDate(order.createdAt || new Date().toISOString())}
                               </p>
                             </div>
@@ -2759,7 +2750,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   ? "bg-green-100 text-green-800"
                                   : order.status === "pending"
                                   ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-gray-100 text-gray-800"
+                                  : "bg-gray-100 text-gray-800 dark:text-neutral-100"
                               }`}
                             >
                               {order.status || "Unspecified"}
@@ -2776,7 +2767,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* One-time Packages */}
                 {!isEditing("purchases") && user.oneTimePackages.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900">One-time Packages</h3>
                       <p className="text-xs text-gray-500">
@@ -2790,7 +2781,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={`${pkg.packageId ?? ""}-${pkg.purchaseDate ?? ""}-${index}`}
-                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {packageIcon ? (
@@ -2843,7 +2834,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {pkg.packageName || pkg.packageId || "Package"}
                                 </p>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <p className="text-[10px] sm:text-xs text-gray-600">
+                                  <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400">
                                     {formatDate(pkg.purchaseDate || new Date().toISOString())}
                                   </p>
                                 </div>
@@ -2854,13 +2845,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 {pkg.entriesGranted || 0} entries
                               </p>
                               {pkg.price && (
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 mt-0.5">
+                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatCurrency(pkg.price)}
                                 </p>
                               )}
                               <span
                                 className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
-                                  pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                                  pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800 dark:text-neutral-100"
                                 }`}
                               >
                                 {pkg.isActive ? "Active" : "Expired"}
@@ -2878,7 +2869,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Mini Draw Packages (read-only) */}
                 {!isEditing("purchases") && user.miniDrawPackages.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mini Draw Packages</h3>
                       <p className="text-xs text-gray-500">
@@ -2896,7 +2887,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={`${md.miniDrawId ?? ""}-${md.stripePaymentIntentId ?? ""}-${index}`}
-                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 border border-amber-200">
@@ -2906,7 +2897,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="font-medium text-xs sm:text-sm text-gray-900">
                                   {md.packageName || md.packageId || "Mini draw package"}
                                 </p>
-                                <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatDate(md.purchaseDate || new Date().toISOString())}
                                   {md.miniDrawId ? ` · Draw ${md.miniDrawId}` : ""}
                                 </p>
@@ -2917,13 +2908,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 {md.entriesGranted || 0} entries
                               </p>
                               {md.price != null && (
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 mt-0.5">
+                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatCurrency(Number(md.price))}
                                 </p>
                               )}
                               <span
                                 className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
-                                  md.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                                  md.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800 dark:text-neutral-100"
                                 }`}
                               >
                                 {md.isActive ? "Active" : "Expired"}
@@ -2938,7 +2929,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     </div>
                   </div>
                 )}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("activity") ? (
                     <form
                       onSubmit={activityForm.handleSubmit(handleActivitySubmit)}
@@ -2956,7 +2947,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("activity")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
@@ -2976,7 +2967,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMajorDraw}
-                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Entry
                           </button>
@@ -2991,7 +2982,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-xs font-semibold text-gray-900">Major Draw {index + 1}</h5>
@@ -3048,7 +3039,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMiniDraw}
-                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Entry
                           </button>
@@ -3063,7 +3054,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-xs font-semibold text-gray-900">Mini Draw {index + 1}</h5>
@@ -3110,7 +3101,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={activityForm.control}
                                       name={`miniDrawParticipation.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                                        <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                                           <Checkbox
                                             checked={field.value ?? true}
                                             onChange={(e) => field.onChange(e.target.checked)}
@@ -3139,7 +3130,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("activity")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Entries
                         </button>
@@ -3150,7 +3141,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Major Draw Participation */}
                 {!isEditing("activity") && user.majorDrawParticipation.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Major Draw Participation</h3>
                     <div className="space-y-2">
                       {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => {
@@ -3168,12 +3159,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={draw.drawId || `draw-${index}`}
-                            className="p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
+                            className="p-2.5 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700"
                           >
                             <div className="flex items-center justify-between">
                               <div className="min-w-0 flex-1">
                                 <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
-                                <p className="text-xs text-gray-600 mt-0.5">
+                                <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
                                 </p>
                               </div>
@@ -3186,7 +3177,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       ? "bg-green-100 text-green-800"
                                       : draw.status === "active"
                                       ? "bg-blue-100 text-blue-800"
-                                      : "bg-gray-100 text-gray-800"
+                                      : "bg-gray-100 text-gray-800 dark:text-neutral-100"
                                   }`}
                                 >
                                   {draw.status || "Unspecified"}
@@ -3239,7 +3230,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Mini Draw Participation */}
                 {!isEditing("activity") && user.miniDrawParticipation?.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Mini Draw Participation</h3>
                     <div className="space-y-2">
                       {user.miniDrawParticipation.map((entry, index: number) => {
@@ -3254,13 +3245,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={entry.miniDrawId?.toString?.() || `mini-${index}`}
-                            className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
+                            className="flex items-center justify-between p-2.5 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-sm truncate">
                                 {miniDrawName || entry.miniDrawId?.toString?.() || "Mini draw"}
                               </p>
-                              <p className="text-xs text-gray-600 mt-0.5">
+                              <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                 {drawDateValue ? formatDate(drawDateValue) : "Draw date not set"}
                               </p>
                             </div>
@@ -3273,7 +3264,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     ? "bg-green-100 text-green-800"
                                     : entry.isActive
                                     ? "bg-blue-100 text-blue-800"
-                                    : "bg-gray-100 text-gray-800"
+                                    : "bg-gray-100 text-gray-800 dark:text-neutral-100"
                                 }`}
                               >
                                 {miniDrawStatus || (entry.isActive ? "Active" : "Inactive")}
@@ -3288,7 +3279,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Payment events — paginated via infinite scroll */}
                 {(activityPaymentTotal > 0 || activityEvents.length > 0) && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
                       <div>
                         <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment activity</h3>
@@ -3337,13 +3328,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           return (
                             <div
                               key={event._id ?? `${event.timestamp ?? ""}-${index}`}
-                              className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border-2 border-slate-200/50 hover:shadow-md hover:border-slate-300 transition-all"
+                              className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border-2 border-slate-200/50 dark:border-neutral-700 hover:shadow-md hover:border-slate-300 dark:hover:border-neutral-600 transition-all"
                             >
                               <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
                                 <div className="flex-shrink-0 mt-0.5">
                                   {packageImg ? (
                                     <span
-                                      className="inline-flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+                                      className="inline-flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-slate-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 shadow-sm overflow-hidden"
                                     >
                                       <Image
                                         src={packageImg}
@@ -3425,13 +3416,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Action Confirmation Modal */}
       {showActionModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
             <h3 className="text-xl font-bold text-gray-900 mb-2">{showActionModal.title}</h3>
-            <p className="text-gray-600 mb-6">{showActionModal.description}</p>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">{showActionModal.description}</p>
 
             {showActionModal.requiresInput && (
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                   {showActionModal.action === "toggle_status" ? "Reason (optional)" : "Note"}
                 </label>
                 <textarea
@@ -3450,7 +3441,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   setShowActionModal(null);
                   setActionInput("");
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
@@ -3469,13 +3460,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Send Email Modal */}
       {showSendEmailModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-lg w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Send Email</h3>
-            <p className="text-gray-600 mb-6">Compose and send an email directly to the user.</p>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">Compose and send an email directly to the user.</p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Subject</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   value={emailSubject}
@@ -3484,7 +3475,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Message</label>
                 <textarea
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   rows={5}
@@ -3499,7 +3490,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowSendEmailModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -3519,15 +3510,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Admin Set Password Modal */}
       {showAdminPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Set New Password</h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">
               Set a new password for this user. Minimum length is enforced; no verification email is sent.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">New password</label>
                 <input
                   type="password"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none"
@@ -3542,7 +3533,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowAdminPasswordModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -3596,25 +3587,25 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowCancelSubscriptionModal(false)}
           />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto">
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="relative bg-white dark:bg-neutral-900 rounded-xl shadow-2xl dark:shadow-none w-full max-w-md mx-auto border border-gray-200 dark:border-neutral-700">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
               <div className="flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-red-600" />
-                <h3 className="text-lg font-bold text-gray-900">Cancel Subscription</h3>
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Cancel Subscription</h3>
               </div>
               <button
                 onClick={() => setShowCancelSubscriptionModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-gray-700 dark:text-neutral-200">
                 How would you like to cancel this user&apos;s subscription?
               </p>
               <div className="space-y-3">
-                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 cursor-pointer has-[:checked]:border-red-300 dark:has-[:checked]:border-red-700 has-[:checked]:bg-red-50/50 dark:has-[:checked]:bg-red-950/30">
                   <input
                     type="radio"
                     name="cancelOption"
@@ -3623,13 +3614,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     className="mt-1 text-red-600"
                   />
                   <div>
-                    <span className="font-medium text-gray-900">Cancel at end of billing period</span>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <span className="font-medium text-gray-900 dark:text-white">Cancel at end of billing period</span>
+                    <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                       User keeps access until the current period ends.
                     </p>
                   </div>
                 </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 cursor-pointer has-[:checked]:border-red-300 dark:has-[:checked]:border-red-700 has-[:checked]:bg-red-50/50 dark:has-[:checked]:bg-red-950/30">
                   <input
                     type="radio"
                     name="cancelOption"
@@ -3638,8 +3629,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     className="mt-1 text-red-600"
                   />
                   <div>
-                    <span className="font-medium text-gray-900">Cancel immediately</span>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <span className="font-medium text-gray-900 dark:text-white">Cancel immediately</span>
+                    <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                       Access revoked now. No refund for unused time.
                     </p>
                   </div>
@@ -3650,7 +3641,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowCancelSubscriptionModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-60"
                 disabled={cancelSubscriptionMutation.isPending}
               >
                 Cancel

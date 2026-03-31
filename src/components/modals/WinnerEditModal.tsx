@@ -17,6 +17,7 @@ interface WinnerEditModalProps {
   currentTestimony?: string | null;
   currentSelectedPrize?: string | null;
   currentImageUrl?: string | null;
+  currentDrawResultUrl?: string | null;
   onUpdate: () => void | Promise<void>;
 }
 
@@ -188,7 +189,7 @@ export default function WinnerEditModal({
           {/* Prize Selection - Only for major draws */}
           {drawType === "major" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
                   <Gift className="w-4 h-4 text-gray-500" />
                   Selected Prize
@@ -210,7 +211,7 @@ export default function WinnerEditModal({
           {/* Winner Photo - Only for major draws */}
           {drawType === "major" && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-gray-500" />
                   Winner Photo
@@ -233,7 +234,7 @@ export default function WinnerEditModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
               <div className="flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-gray-500" />
                 Draw result link (optional)
@@ -254,7 +255,7 @@ export default function WinnerEditModal({
 
           {/* Testimony Field - Rich Text Editor */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-gray-500" />
                 Winner Testimony

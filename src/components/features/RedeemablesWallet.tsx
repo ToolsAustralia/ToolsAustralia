@@ -90,7 +90,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
             </div>
             <div>
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 font-['Poppins']">Redeemables Wallet</h3>
-              <p className="text-xs sm:text-sm text-gray-600">Manage stacked free-entry rewards and monthly codes</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Manage stacked free-entry rewards and monthly codes</p>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
@@ -102,7 +102,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
 
       <div className="p-5 space-y-4">
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3.5">
-          <p className="text-xs sm:text-sm font-semibold text-gray-800 mb-2.5">Have a code? Redeem instantly</p>
+          <p className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 mb-2.5">Have a code? Redeem instantly</p>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               value={codeInput}
@@ -155,7 +155,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                         <h4 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                           {item.campaignName || `Monthly Reward ${item.monthKey}`}
                         </h4>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1 flex items-center gap-1.5">
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-1 flex items-center gap-1.5">
                           <Ticket className="w-3.5 h-3.5" />
                           {item.entriesAmount.toLocaleString()} free entries
                         </p>
@@ -203,7 +203,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                           </button>
                         )
                       ) : (
-                        <div className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gray-100 text-gray-600 text-xs sm:text-sm font-medium">
+                        <div className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gray-100 text-gray-600 dark:text-neutral-400 text-xs sm:text-sm font-medium">
                           <Clock3 className="w-4 h-4" />
                           {item.status === "redeemed" ? "Redeemed" : formatStatus(item.status)}
                         </div>
@@ -215,7 +215,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
             ) : (
               <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center">
                 <Gift className="w-7 h-7 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-gray-800">No redeemables yet</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-neutral-100">No redeemables yet</p>
                 <p className="text-xs text-gray-500 mt-1">When rewards are issued, they will appear here automatically.</p>
               </div>
             )}

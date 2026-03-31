@@ -64,7 +64,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
     const badges = {
       open: { text: "Open", color: "bg-green-100 text-green-800" },
       filled: { text: "Entries Full", color: "bg-yellow-100 text-yellow-800" },
-      completed: { text: "Completed", color: "bg-gray-100 text-gray-800" },
+      completed: { text: "Completed", color: "bg-gray-100 text-gray-800 dark:text-neutral-100" },
       cancelled: { text: "Cancelled", color: "bg-red-100 text-red-800" },
     };
 
@@ -91,7 +91,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">{miniDraw.name}</h1>
-          <p className="text-lg text-gray-600 mb-4">{miniDraw.description}</p>
+          <p className="text-lg text-gray-600 dark:text-neutral-400 mb-4">{miniDraw.description}</p>
           <div className="flex items-center gap-3 flex-wrap mb-4">
             <span
               className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${brandBadgeClass}`}
@@ -115,8 +115,8 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                 <h2 className="text-2xl font-bold text-gray-900">Prize</h2>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">{miniDraw.prize.name}</h3>
-              <p className="text-gray-600 mb-4">{miniDraw.prize.description}</p>
-              <div className="text-base font-semibold text-gray-700 mb-4">
+              <p className="text-gray-600 dark:text-neutral-400 mb-4">{miniDraw.prize.description}</p>
+              <div className="text-base font-semibold text-gray-700 dark:text-neutral-200 mb-4">
                 Exclusive reward details for members only
               </div>
               {miniDraw.prize.images && miniDraw.prize.images.length > 0 && (
@@ -144,7 +144,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                   <GaugeCircle className="w-5 h-5 text-red-600" />
                   <div>
                     <div className="font-medium text-gray-900">Progress</div>
-                    <div className="text-gray-700">
+                    <div className="text-gray-700 dark:text-neutral-200">
                       {entriesRemaining.toLocaleString()} entries remaining
                     </div>
                   </div>
@@ -154,7 +154,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                   <Gift className="w-5 h-5 text-red-600" />
                   <div>
                     <div className="font-medium text-gray-900">Cycle</div>
-                    <div className="text-gray-700">Currently running cycle #{cycle}</div>
+                    <div className="text-gray-700 dark:text-neutral-200">Currently running cycle #{cycle}</div>
                   </div>
                 </div>
 
@@ -171,7 +171,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                     <div className="font-medium text-gray-900">
                       {isSoldOut || isCompleted ? "Capacity Reached" : "Entries Remaining"}
                     </div>
-                    <div className="text-gray-700">
+                    <div className="text-gray-700 dark:text-neutral-200">
                       {isSoldOut || isCompleted ? "No additional entries accepted" : entriesRemaining.toLocaleString()}
                     </div>
                   </div>
@@ -193,7 +193,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                   <Gift className="w-6 h-6 text-yellow-600" />
                   <h2 className="text-2xl font-bold text-gray-900">Latest Winner</h2>
                 </div>
-                <p className="text-gray-700">
+                <p className="text-gray-700 dark:text-neutral-200">
                   Entry #{latestWinner.entryNumber} • Selected{" "}
                   {new Date(latestWinner.selectedDate).toLocaleDateString()}
                   {latestWinnerCycle > 0 ? ` (Cycle #${latestWinnerCycle})` : ""}
@@ -217,7 +217,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
           <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 mb-3">Current Status</h3>
-              <p className="text-sm text-gray-700 leading-relaxed">
+              <p className="text-sm text-gray-700 dark:text-neutral-200 leading-relaxed">
                 {isCancelled
                   ? "This draw has been cancelled. If you have any questions, reach out to our support team."
                   : isCompleted
@@ -241,7 +241,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
             {!showPackages && !isCompleted && !isCancelled && (
               <div className="bg-white rounded-xl shadow-lg p-6 border border-red-100 text-center">
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Entries Closed</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-neutral-400">
                   We’ve reached the maximum number of entries for this giveaway. Keep an eye out for the next mini draw!
                 </p>
               </div>

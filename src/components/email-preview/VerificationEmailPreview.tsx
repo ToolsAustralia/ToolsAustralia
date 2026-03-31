@@ -268,7 +268,7 @@ const VerificationEmailPreview: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-xl font-bold text-gray-800">Email Verification Preview</h3>
+        <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Email Verification Preview</h3>
         <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-800">
           Verification Email
         </span>

@@ -50,7 +50,7 @@ export default function OrderSummary({
               </span>
             )}
           </div>
-          <p className="text-gray-600">{items.length} item(s)</p>
+          <p className="text-gray-600 dark:text-neutral-400">{items.length} item(s)</p>
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export default function OrderSummary({
                 {item.brand} • {item.model}
               </p>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-sm text-gray-600">Qty: {item.quantity}</span>
+                <span className="text-sm text-gray-600 dark:text-neutral-400">Qty: {item.quantity}</span>
                 <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             </div>
@@ -80,7 +80,7 @@ export default function OrderSummary({
         {originalSubtotal && vipDiscount && (
           <>
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Subtotal</span>
+              <span className="text-gray-600 dark:text-neutral-400">Subtotal</span>
               <span className="font-medium text-gray-500 line-through">${originalSubtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between">
@@ -90,14 +90,14 @@ export default function OrderSummary({
               <span className="font-medium text-green-600">-${vipDiscount.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Discounted Subtotal</span>
+              <span className="text-gray-600 dark:text-neutral-400">Discounted Subtotal</span>
               <span className="font-medium text-gray-900">${subtotal.toFixed(2)}</span>
             </div>
           </>
         )}
         {!originalSubtotal && (
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Subtotal</span>
+            <span className="text-gray-600 dark:text-neutral-400">Subtotal</span>
             <span className="font-medium text-gray-900">${subtotal.toFixed(2)}</span>
           </div>
         )}
@@ -105,7 +105,7 @@ export default function OrderSummary({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Truck className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-600">Shipping</span>
+            <span className="text-gray-600 dark:text-neutral-400">Shipping</span>
           </div>
           <span className="font-medium text-gray-900">
             {shippingCost === 0 ? "FREE" : `$${shippingCost.toFixed(2)}`}
@@ -113,7 +113,7 @@ export default function OrderSummary({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-gray-600">GST (10%)</span>
+          <span className="text-gray-600 dark:text-neutral-400">GST (10%)</span>
           <span className="font-medium text-gray-900">${tax.toFixed(2)}</span>
         </div>
 
@@ -127,15 +127,15 @@ export default function OrderSummary({
 
       {/* Trust Indicators */}
       <div className="mt-6 space-y-3">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
           <CreditCard className="w-4 h-4 text-green-600" />
           <span>Secure payment processing</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
           <Package className="w-4 h-4 text-blue-600" />
           <span>Free returns within 30 days</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
           <Truck className="w-4 h-4 text-orange-600" />
           <span>Fast and reliable shipping</span>
         </div>
@@ -149,7 +149,7 @@ export default function OrderSummary({
             placeholder="Discount code"
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 hover:border-red-400"
           />
-          <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
+          <button className="px-4 py-2 bg-gray-100 text-gray-700 dark:text-neutral-200 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
             Apply
           </button>
         </div>

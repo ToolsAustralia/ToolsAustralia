@@ -25,16 +25,16 @@ export default function AboutToolsAustralia() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center mb-16">
           {/* Left Column - Content */}
           <div>
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 mb-6 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-6 font-['Poppins']">
               Connecting Tools with the People Who Need Them
             </h3>
 
-            <p className="text-[16px] sm:text-[18px] text-gray-600 mb-6 font-['Inter'] leading-relaxed">
+            <p className="text-[16px] sm:text-[18px] text-gray-600 dark:text-neutral-400 mb-6 font-['Inter'] leading-relaxed">
               Since our founding, Tools Australia has revolutionized how Australians discover, purchase, and engage with
               quality tools. We&apos;ve created more than just a marketplace – we&apos;ve built a community.
             </p>
 
-            <p className="text-[16px] sm:text-[18px] text-gray-600 mb-8 font-['Inter'] leading-relaxed">
+            <p className="text-[16px] sm:text-[18px] text-gray-600 dark:text-neutral-400 mb-8 font-['Inter'] leading-relaxed">
               Our platform combines cutting-edge technology with deep industry expertise to deliver unparalleled value
               to both customers and partners. From weekend warriors to professional tradespeople, we serve everyone who
               values quality tools.
@@ -46,35 +46,35 @@ export default function AboutToolsAustralia() {
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-red-600" />
                 </div>
-                <span className="text-gray-700 font-medium font-['Inter']">Verified Products</span>
+                <span className="text-gray-700 dark:text-neutral-200 font-medium font-['Inter']">Verified Products</span>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-red-600" />
                 </div>
-                <span className="text-gray-700 font-medium font-['Inter']">Expert Reviews</span>
+                <span className="text-gray-700 dark:text-neutral-200 font-medium font-['Inter']">Expert Reviews</span>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-red-600" />
                 </div>
-                <span className="text-gray-700 font-medium font-['Inter']">Secure Payments</span>
+                <span className="text-gray-700 dark:text-neutral-200 font-medium font-['Inter']">Secure Payments</span>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="w-5 h-5 text-red-600" />
                 </div>
-                <span className="text-gray-700 font-medium font-['Inter']">Fast Shipping</span>
+                <span className="text-gray-700 dark:text-neutral-200 font-medium font-['Inter']">Fast Shipping</span>
               </div>
             </div>
           </div>
 
           {/* Right Column - Stats Cards */}
           {/* Mobile/Tablet: Horizontal Scroll */}
-          <div className="lg:hidden overflow-x-auto pb-4 scrollbar-hide">
+          <div className="lg:hidden overflow-x-auto pb-4 brand-scrollbar">
             <div className="flex gap-6 min-w-max">
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center flex-shrink-0 w-48">
                 {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">30,000+</div> */}
@@ -144,24 +144,24 @@ export default function AboutToolsAustralia() {
         {/* Values Section */}
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 mb-3 font-['Poppins']">Quality First</h4>
-            <p className="text-gray-600 font-['Inter']">
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Quality First</h4>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               We only give away tools from trusted, top-tier brands. Every prize is hand-picked and vetted to meet the
               highest standards for performance, durability, and value.
             </p>
           </div>
 
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 mb-3 font-['Poppins']">Community Driven</h4>
-            <p className="text-gray-600 font-['Inter']">
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Community Driven</h4>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               Our members are the heart of what we do. From shaping the giveaways we launch to sharing their wins and
               stories, our community fuels the excitement that keeps us growing.
             </p>
           </div>
 
           <div className="text-center">
-            <h4 className="text-xl font-bold text-gray-800 mb-3 font-['Poppins']">Innovation</h4>
-            <p className="text-gray-600 font-['Inter']">
+            <h4 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins']">Innovation</h4>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">
               We’re constantly improving how Australians win and engage – from streamlined entry systems to unique
               membership perks – making tool giveaways easier, fairer, and more rewarding than ever.
             </p>

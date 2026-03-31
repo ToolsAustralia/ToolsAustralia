@@ -291,7 +291,7 @@ export default function DrawsPage() {
           ) : activeMiniDraws.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-neutral-800 flex items-center justify-center">
-                <Trophy className="w-7 h-7 text-gray-400 dark:text-gray-600" />
+                <Trophy className="w-7 h-7 text-gray-400 dark:text-gray-600 dark:text-neutral-400" />
               </div>
               <p className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1">No active mini draws right now</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Check back soon for new draws!</p>

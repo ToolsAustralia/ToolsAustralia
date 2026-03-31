@@ -214,7 +214,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const brandLabel = brandMeta?.name ?? "Mini Draw";
 
   return (
-    <div className="min-h-screen-svh bg-gray-50 w-full overflow-x-hidden">
+    <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950 w-full overflow-x-hidden">
       <ScrollToTopOnMount miniDrawId={miniDrawData._id} />
       <MiniDrawViewTracking miniDraw={miniDrawData} />
 
@@ -253,10 +253,10 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
             {/* Description - collapsible on mobile, always open on desktop */}
             <CollapsibleSection
               title="About This Prize"
-              className="order-2 lg:order-1 bg-white rounded-2xl border border-gray-100 p-4 sm:p-5 shadow-sm"
+              className="order-2 lg:order-1 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 p-4 sm:p-5 shadow-sm dark:shadow-lg"
             >
               <div
-                className="text-sm text-gray-600 leading-relaxed prose prose-sm max-w-none [&>p]:mb-2 last:[&>p]:mb-0"
+                className="text-sm text-gray-600 dark:text-neutral-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 last:[&>p]:mb-0"
                 dangerouslySetInnerHTML={{ __html: miniDrawData.description }}
               />
             </CollapsibleSection>
@@ -268,7 +268,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
           <CollapsibleSection
             title="Winners & Draw Rules"
             hideDesktopTitle
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 lg:bg-transparent lg:border-0 lg:shadow-none lg:p-0"
+            className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm dark:shadow-lg p-4 lg:bg-transparent lg:dark:bg-transparent lg:border-0 lg:dark:border-0 lg:shadow-none lg:dark:shadow-none lg:p-0"
           >
             <MiniDrawTabs miniDraw={miniDrawData} />
           </CollapsibleSection>

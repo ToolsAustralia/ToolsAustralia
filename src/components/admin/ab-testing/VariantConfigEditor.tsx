@@ -280,7 +280,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       <FormSection title="Banner Configuration" icon={Type}>
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-700">Promo banner left image</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200">Promo banner left image</p>
             <p className="text-xs text-gray-500">
               Upload is sent to Cloudinary only when you save the variant. You can also paste an image URL.
             </p>
@@ -440,7 +440,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
           />
           {(formData.config.banner?.countdownMode === "static_urgency" && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Urgency label</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">Urgency label</label>
               <div className="flex flex-wrap gap-2">
                 {STATIC_URGENCY_LABEL_PRESETS.map((preset) => (
                   <button
@@ -461,7 +461,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       formData.config.banner?.countdownLabel === preset
                         ? "bg-amber-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        : "bg-gray-200 text-gray-700 dark:text-neutral-200 hover:bg-gray-300"
                     }`}
                   >
                     {preset}
@@ -562,11 +562,11 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">One-time packages</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">One-time packages</h4>
               <div className="space-y-2">
                 {ONE_TIME_SLOTS.map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-2">
-                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <label className="w-24 text-sm text-gray-600 dark:text-neutral-400 shrink-0">{label}</label>
                     <Select
                       id={`oneTime-${key}`}
                       value={formData.config.packageColors?.oneTime?.[key] ?? ""}
@@ -593,11 +593,11 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               </div>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Membership packages</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Membership packages</h4>
               <div className="space-y-2">
                 {MEMBERSHIP_SLOTS.map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-2">
-                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <label className="w-24 text-sm text-gray-600 dark:text-neutral-400 shrink-0">{label}</label>
                     <Select
                       id={`membership-${key}`}
                       value={formData.config.packageColors?.membership?.[key] ?? ""}

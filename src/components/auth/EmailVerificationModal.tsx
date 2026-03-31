@@ -538,7 +538,7 @@ export default function EmailVerificationModal({
                           clearStateFromStorage();
                           onWrongEmailAction();
                         }}
-                        className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 font-medium font-['Poppins'] underline transition-colors"
+                        className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-gray-300 font-medium font-['Poppins'] underline transition-colors"
                       >
                         Wrong email?
                       </button>
@@ -559,7 +559,7 @@ export default function EmailVerificationModal({
                     </div>
                     <button
                       onClick={onSkipAction}
-                      className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 py-2 px-4 rounded-lg font-medium font-['Poppins'] transition-colors"
+                      className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-gray-300 py-2 px-4 rounded-lg font-medium font-['Poppins'] transition-colors"
                     >
                       Skip for now
                     </button>

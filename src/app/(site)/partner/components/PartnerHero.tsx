@@ -110,7 +110,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                   <h3 className="text-lg font-bold text-white mb-4 font-['Poppins'] text-center drop-shadow-md">
                     Why Partner With Us?
                   </h3>
-                  <div className="overflow-x-auto pb-4 scrollbar-hide">
+                  <div className="overflow-x-auto pb-4 brand-scrollbar">
                     <div className="flex gap-4 min-w-max">
                       {/* Feature Card 1 */}
                       <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">

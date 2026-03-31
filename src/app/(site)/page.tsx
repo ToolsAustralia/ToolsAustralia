@@ -50,7 +50,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen-svh bg-white w-full overflow-hidden">
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
       {/* Mini Draw Trigger for Landing Page */}
       <LandingPageTrigger />
       <FloatingCountdownBanner />
@@ -66,13 +66,13 @@ export default function HomePage() {
         {/* Winner Testimonies Section - Client-side fetch */}
         <Suspense
           fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+            <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
               <SectionContainer>
                 <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
+                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
                     Winner Testimonies
                   </div>
-                  <div className="text-gray-500">Loading testimonies...</div>
+                  <div className="text-gray-500 dark:text-neutral-400">Loading testimonies...</div>
                 </div>
               </SectionContainer>
             </section>
@@ -84,13 +84,13 @@ export default function HomePage() {
         {/* Mini Draws Section - Client-side fetch */}
         <Suspense
           fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
+            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
               <SectionContainer>
                 <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
+                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
                     MINI DRAWS
                   </div>
-                  <div className="text-gray-500">Loading mini draws...</div>
+                  <div className="text-gray-500 dark:text-neutral-400">Loading mini draws...</div>
                 </div>
               </SectionContainer>
             </section>
@@ -145,13 +145,13 @@ export default function HomePage() {
         {/* Best Sellers Section - Client-side fetch */}
         <Suspense
           fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
+            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
               <SectionContainer>
                 <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
+                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
                     BEST SELLERS
                   </div>
-                  <div className="text-gray-500">Loading products...</div>
+                  <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
                 </div>
               </SectionContainer>
             </section>
@@ -163,13 +163,13 @@ export default function HomePage() {
         {/* New Arrivals Section - Client-side fetch */}
         <Suspense
           fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden">
+            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
               <SectionContainer>
                 <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
+                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
                     NEW ARRIVALS
                   </div>
-                  <div className="text-gray-500">Loading products...</div>
+                  <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
                 </div>
               </SectionContainer>
             </section>

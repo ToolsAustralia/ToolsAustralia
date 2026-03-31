@@ -2,6 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --bg-page: #f9fafb;
+    --bg-surface: #ffffff;
+    --text-primary: #111827;
+    --text-muted: #6b7280;
+    --border-default: #e5e7eb;
+  }
+
+  .dark {
+    --bg-page: #0a0a0a;
+    --bg-surface: #171717;
+    --text-primary: #f5f5f5;
+    --text-muted: #a3a3a3;
+    --border-default: #404040;
+  }
+
+  html {
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+}
+
+/* Semantic surfaces (use for new chrome; migrate incrementally from raw Tailwind) */
+@layer utilities {
+  .bg-page {
+    background-color: var(--bg-page);
+  }
+  .bg-surface {
+    background-color: var(--bg-surface);
+  }
+  .text-primary-token {
+    color: var(--text-primary);
+  }
+  .text-muted-token {
+    color: var(--text-muted);
+  }
+  .border-token {
+    border-color: var(--border-default);
+  }
+}
+
+/* Recharts — readable axes/grid in admin dark mode */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: #404040;
+}
+
+.dark .recharts-text.recharts-cartesian-axis-tick-value {
+  fill: #a3a3a3;
+}
+
+.dark .recharts-legend-item-text {
+  color: #e5e5e5 !important;
+}
+
 /* Acumin Pro Condensed - Ultra Black Italic. Add font file (e.g. AcuminProCondensed-UltraBlackItalic.woff2) to public/fonts/ to load. */
 @font-face {
   font-family: "Acumin Pro Condensed";
@@ -110,60 +165,58 @@
   }
 }
 
-/* Metallic modal scrollbar utilities */
-/* Applies only when the element has the .modal-scrollbar class */
-@layer utilities {
-  .modal-scrollbar {
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: #ef4444 #1f2937; /* thumb track */
+/* Brand scrollbars — same as admin sidebar / main (Tools Australia red thumb, light & dark tracks).
+   Use .brand-scrollbar on any overflow-auto / scroll container. Aliases: .admin-scrollbar, .custom-scrollbar, .modal-scrollbar */
+
+/* Modal body: match shop / filter-sidebar dark surfaces (charcoal panel, light type).
+   Plain CSS only — nested selectors must not @apply utilities that appear in the selector
+   (Tailwind reports a circular dependency for e.g. .modal-panel-body .text-gray-900). */
+@layer components {
+  .modal-panel-body {
+    color: rgb(17 24 39);
   }
 
-  .modal-scrollbar::-webkit-scrollbar {
-    width: 10px;
+  .dark .modal-panel-body {
+    color: rgb(245 245 245);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-track {
-    background: linear-gradient(180deg, #111827, #1f2937);
-    border-radius: 8px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  .dark .modal-panel-body .text-gray-900 {
+    color: rgb(255 255 255);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #b91c1c, #ef4444);
-    border-radius: 8px;
-    border: 2px solid #1f2937; /* outlines thumb against dark track */
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  .dark .modal-panel-body .text-gray-800 {
+    color: rgb(245 245 245);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #dc2626, #f87171);
-    box-shadow: 0 0 14px rgba(239, 68, 68, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .dark .modal-panel-body .text-gray-700 {
+    color: rgb(212 212 212);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb:active {
-    background: linear-gradient(180deg, #991b1b, #ef4444);
-    box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) inset;
+  .dark .modal-panel-body .text-gray-600 {
+    color: rgb(163 163 163);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
+  .dark .modal-panel-body .text-gray-500 {
+    color: rgb(115 115 115);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .modal-scrollbar::-webkit-scrollbar-thumb,
-    .modal-scrollbar::-webkit-scrollbar-thumb:hover,
-    .modal-scrollbar::-webkit-scrollbar-thumb:active {
-      box-shadow: none;
-    }
+  .dark .modal-panel-body .border-gray-100,
+  .dark .modal-panel-body .border-gray-200 {
+    border-color: rgb(38 38 38);
   }
-}
 
-/* Dropdown lists: ensure native touch/swipe scroll on mobile */
-@layer utilities {
-  [data-dropdown-list] {
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
-    overscroll-behavior-y: contain;
+  .dark .modal-panel-body .border-gray-300 {
+    border-color: rgb(64 64 64);
+  }
+
+  .dark .modal-panel-body .bg-gray-50,
+  .dark .modal-panel-body .bg-gray-100 {
+    background-color: rgb(38 38 38 / 0.6);
+  }
+
+  /* Subtle glass effect for general white chips — use bg-[#ffffff] or dark:!bg-* on popovers or they read as transparent */
+  .dark .modal-panel-body .bg-white {
+    background-color: rgb(38 38 38 / 0.4);
   }
 }
 
@@ -209,62 +262,120 @@
   animation-delay: 1s;
 }
 
-/* Custom Scrollbar for Rewards Page */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #1e293b;
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(to right, #fbbf24, #f59e0b, #fbbf24);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to right, #fcd34d, #fbbf24, #fcd34d);
-}
-
-/* Custom Scrollbar for Revenue Overview Chart (mobile horizontal scroll) */
-@media (max-width: 640px) {
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: #fbbf24 #1e293b;
-  }
-}
-
-/* Admin dashboard – red thumb, warm light track (matches Tools Australia brand) */
 @layer utilities {
-  .admin-scrollbar {
+  /* Scrollbar chrome only — do NOT set touch-action: pan-y here: it blocks horizontal pan on overflow-x-auto (tabs, tables). */
+  .admin-scrollbar,
+  .brand-scrollbar,
+  .custom-scrollbar,
+  .modal-scrollbar,
+  [data-dropdown-list] {
     scrollbar-width: thin;
     scrollbar-color: #ee0000 #fef2f2;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .admin-scrollbar::-webkit-scrollbar {
+  /* Vertical dropdown lists only: contain vertical scroll without stealing horizontal gestures from parents. */
+  [data-dropdown-list] {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+
+  .admin-scrollbar::-webkit-scrollbar,
+  .brand-scrollbar::-webkit-scrollbar,
+  .custom-scrollbar::-webkit-scrollbar,
+  .modal-scrollbar::-webkit-scrollbar,
+  [data-dropdown-list]::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
-  .admin-scrollbar::-webkit-scrollbar-track {
+  .admin-scrollbar::-webkit-scrollbar-track,
+  .brand-scrollbar::-webkit-scrollbar-track,
+  .custom-scrollbar::-webkit-scrollbar-track,
+  .modal-scrollbar::-webkit-scrollbar-track,
+  [data-dropdown-list]::-webkit-scrollbar-track {
     background: #fef2f2;
     border-radius: 8px;
   }
 
-  .admin-scrollbar::-webkit-scrollbar-thumb {
+  .admin-scrollbar::-webkit-scrollbar-thumb,
+  .brand-scrollbar::-webkit-scrollbar-thumb,
+  .custom-scrollbar::-webkit-scrollbar-thumb,
+  .modal-scrollbar::-webkit-scrollbar-thumb,
+  [data-dropdown-list]::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #ee0000 0%, #dc2626 100%);
     border-radius: 8px;
   }
 
-  .admin-scrollbar::-webkit-scrollbar-thumb:hover {
+  .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+  .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+  [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
   }
 
-  .admin-scrollbar::-webkit-scrollbar-corner {
+  .admin-scrollbar::-webkit-scrollbar-corner,
+  .brand-scrollbar::-webkit-scrollbar-corner,
+  .custom-scrollbar::-webkit-scrollbar-corner,
+  .modal-scrollbar::-webkit-scrollbar-corner,
+  [data-dropdown-list]::-webkit-scrollbar-corner {
     background: #fef2f2;
+  }
+
+  .dark .admin-scrollbar,
+  .dark .brand-scrollbar,
+  .dark .custom-scrollbar,
+  .dark .modal-scrollbar,
+  .dark [data-dropdown-list] {
+    scrollbar-color: #ee0000 #262626;
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-track,
+  .dark .brand-scrollbar::-webkit-scrollbar-track,
+  .dark .custom-scrollbar::-webkit-scrollbar-track,
+  .dark .modal-scrollbar::-webkit-scrollbar-track,
+  .dark [data-dropdown-list]::-webkit-scrollbar-track {
+    background: #262626;
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-thumb,
+  .dark .brand-scrollbar::-webkit-scrollbar-thumb,
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb,
+  .dark .modal-scrollbar::-webkit-scrollbar-thumb,
+  .dark [data-dropdown-list]::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #b91c1c 100%);
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-corner,
+  .dark .brand-scrollbar::-webkit-scrollbar-corner,
+  .dark .custom-scrollbar::-webkit-scrollbar-corner,
+  .dark .modal-scrollbar::-webkit-scrollbar-corner,
+  .dark [data-dropdown-list]::-webkit-scrollbar-corner {
+    background: #262626;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-scrollbar::-webkit-scrollbar-thumb,
+    .brand-scrollbar::-webkit-scrollbar-thumb,
+    .custom-scrollbar::-webkit-scrollbar-thumb,
+    .modal-scrollbar::-webkit-scrollbar-thumb,
+    [data-dropdown-list]::-webkit-scrollbar-thumb,
+    .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+    .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+    .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+    [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
+      transition: none;
+    }
   }
 }
 
@@ -291,9 +402,55 @@
 }
 
 @layer base {
+  /* Viewport scrollbar — same brand treatment as admin sidebar */
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
     overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #ee0000 #fef2f2;
+  }
+
+  html::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  html::-webkit-scrollbar-track {
+    background: #fef2f2;
+    border-radius: 8px;
+  }
+
+  html::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #dc2626 100%);
+    border-radius: 8px;
+  }
+
+  html::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+  }
+
+  html::-webkit-scrollbar-corner {
+    background: #fef2f2;
+  }
+
+  html.dark {
+    scrollbar-color: #ee0000 #262626;
+  }
+
+  html.dark::-webkit-scrollbar-track {
+    background: #262626;
+  }
+
+  html.dark::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #b91c1c 100%);
+  }
+
+  html.dark::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+  }
+
+  html.dark::-webkit-scrollbar-corner {
+    background: #262626;
   }
   
   /* Prevent scroll snapping on mobile during navigation */
@@ -661,13 +818,15 @@
     animation-play-state: paused;
   }
 
-  /* Hide scrollbar for membership cards and horizontal scrolling */
-  .scrollbar-hide {
-    -ms-overflow-style: none; /* Internet Explorer 10+ */
-    scrollbar-width: none; /* Firefox */
+  /* Hide scrollbar (carousels / marquees only). Prefer .brand-scrollbar for scroll areas that should show the thumb. */
+  .scrollbar-hide,
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none; /* Safari and Chrome */
+  .scrollbar-hide::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* Hide "View All Products" button in MyAccount page */
@@ -1146,17 +1305,6 @@
 #other-toolsets-next::after {
   content: none !important;
 }
-
-
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
 /* Metallic shimmer animation for promo badges */
 @keyframes shimmer {
   0% {

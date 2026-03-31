@@ -110,7 +110,7 @@ export default function CustomerTestimonials() {
           <h2 className="text-[20px] sm:text-[24px] lg:text-[56px] font-bold text-gray-900 mb-2 sm:mb-3 lg:mb-4 font-['Poppins'] leading-tight">
             What Our <span className="text-red-600">Customers</span> Say
           </h2>
-          <p className="text-[14px] sm:text-[16px] lg:text-[20px] text-gray-600 max-w-4xl mx-auto leading-relaxed">
+          <p className="text-[14px] sm:text-[16px] lg:text-[20px] text-gray-600 dark:text-neutral-400 max-w-4xl mx-auto leading-relaxed">
             Real testimonials from professionals who trust Tools Australia for their business needs
           </p>
         </div>
@@ -146,7 +146,7 @@ export default function CustomerTestimonials() {
                       </div>
 
                       {/* Testimonial Text */}
-                      <p className="text-gray-700 leading-relaxed text-[14px] sm:text-[16px] mb-6 sm:mb-8 font-medium">
+                      <p className="text-gray-700 dark:text-neutral-200 leading-relaxed text-[14px] sm:text-[16px] mb-6 sm:mb-8 font-medium">
                         &ldquo;{testimonial.text}&rdquo;
                       </p>
 
@@ -160,7 +160,7 @@ export default function CustomerTestimonials() {
                         </div>
                         <div>
                           <h4 className="font-bold text-gray-900 text-[14px] sm:text-[16px]">{testimonial.name}</h4>
-                          <p className="text-gray-600 text-[12px] sm:text-[14px]">{testimonial.role}</p>
+                          <p className="text-gray-600 dark:text-neutral-400 text-[12px] sm:text-[14px]">{testimonial.role}</p>
                           <p className="text-red-600 text-[12px] sm:text-[14px] font-semibold">{testimonial.company}</p>
                         </div>
                       </div>
@@ -200,7 +200,7 @@ export default function CustomerTestimonials() {
                       </div>
 
                       {/* Testimonial Text */}
-                      <p className="text-gray-700 leading-relaxed text-[16px] mb-8 font-medium">
+                      <p className="text-gray-700 dark:text-neutral-200 leading-relaxed text-[16px] mb-8 font-medium">
                         &ldquo;{testimonial.text}&rdquo;
                       </p>
 
@@ -214,7 +214,7 @@ export default function CustomerTestimonials() {
                         </div>
                         <div>
                           <h4 className="font-bold text-gray-900 text-[16px]">{testimonial.name}</h4>
-                          <p className="text-gray-600 text-[14px]">{testimonial.role}</p>
+                          <p className="text-gray-600 dark:text-neutral-400 text-[14px]">{testimonial.role}</p>
                           <p className="text-red-600 text-[14px] font-semibold">{testimonial.company}</p>
                         </div>
                       </div>
@@ -230,14 +230,14 @@ export default function CustomerTestimonials() {
             onClick={prevTestimonial}
             className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 sm:-translate-x-6 w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-white rounded-full shadow-2xl flex items-center justify-center hover:bg-gray-50 transition-all duration-300 border border-gray-100 group hover:shadow-3xl hover:scale-110"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-600 group-hover:text-red-600 transition-colors" />
+            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-600 dark:text-neutral-400 group-hover:text-red-600 transition-colors" />
           </button>
 
           <button
             onClick={nextTestimonial}
             className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 sm:translate-x-6 w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-white rounded-full shadow-2xl flex items-center justify-center hover:bg-gray-50 transition-all duration-300 border border-gray-100 group hover:shadow-3xl hover:scale-110"
           >
-            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-600 group-hover:text-red-600 transition-colors" />
+            <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-gray-600 dark:text-neutral-400 group-hover:text-red-600 transition-colors" />
           </button>
         </div>
       </div>

@@ -370,14 +370,14 @@ const PaymentFailedPreview: React.FC = () => {
     <div className="space-y-6">
       {/* Scenario Selector */}
       <div className="rounded-lg bg-white p-4 shadow-sm">
-        <label htmlFor="scenario-select" className="mb-2 block text-sm font-semibold text-gray-700">
+        <label htmlFor="scenario-select" className="mb-2 block text-sm font-semibold text-gray-700 dark:text-neutral-200">
           Select Failure Scenario:
         </label>
         <select
           id="scenario-select"
           value={selectedScenario}
           onChange={(e) => setSelectedScenario(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {Object.entries(scenarioLabels).map(([value, label]) => (
             <option key={value} value={value}>
@@ -393,7 +393,7 @@ const PaymentFailedPreview: React.FC = () => {
       {/* Email Preview */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">{scenarioLabels[selectedScenario]}</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">{scenarioLabels[selectedScenario]}</h3>
           <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">Payment Failed</span>
         </div>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">

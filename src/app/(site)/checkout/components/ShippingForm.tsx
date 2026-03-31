@@ -50,7 +50,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">First Name *</label>
             <input
               type="text"
               value={shippingInfo.firstName}
@@ -64,7 +64,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Last Name *</label>
             <input
               type="text"
               value={shippingInfo.lastName}
@@ -87,7 +87,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Email Address *</label>
             <input
               type="email"
               value={shippingInfo.email}
@@ -101,7 +101,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Phone Number *</label>
             <input
               type="tel"
               value={shippingInfo.phone}
@@ -124,7 +124,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
         </h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Street Address *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Street Address *</label>
             <input
               type="text"
               value={shippingInfo.address}
@@ -138,7 +138,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Apartment, Suite, Unit (Optional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Apartment, Suite, Unit (Optional)</label>
             <input
               type="text"
               value={shippingInfo.apartment || ""}
@@ -150,7 +150,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">City *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">City *</label>
               <input
                 type="text"
                 value={shippingInfo.city}
@@ -164,7 +164,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">ZIP Code *</label>
               <input
                 type="text"
                 value={shippingInfo.zipCode}
@@ -180,7 +180,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">State *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">State *</label>
               <select
                 value={shippingInfo.state}
                 onChange={(e) => handleInputChange("state", e.target.value)}
@@ -199,7 +199,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Country *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Country *</label>
               <input
                 type="text"
                 value={shippingInfo.country}
@@ -218,7 +218,7 @@ export default function ShippingForm({ shippingInfo, setShippingInfo, errors }: 
           Delivery Instructions
         </h3>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Special Instructions (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Special Instructions (Optional)</label>
           <textarea
             rows={3}
             className="w-full px-4 py-3 border border-gray-300 hover:border-red-400 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 resize-none"

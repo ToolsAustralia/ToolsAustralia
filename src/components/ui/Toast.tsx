@@ -148,15 +148,15 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
   const getIcon = () => {
     switch (type) {
       case "success":
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+        return <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />;
       case "error":
-        return <XCircle className="w-5 h-5 text-red-600" />;
+        return <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />;
       case "warning":
-        return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+        return <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />;
       case "info":
-        return <Info className="w-5 h-5 text-blue-600" />;
+        return <Info className="w-5 h-5 text-blue-600 dark:text-blue-400" />;
       default:
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+        return <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />;
     }
   };
 
@@ -167,38 +167,43 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
     switch (type) {
       case "success":
         return {
-          bg: "bg-white",
-          border: "border-green-200",
-          shadow: "shadow-lg shadow-green-100",
-          iconBg: "bg-green-100",
+          bg: "bg-white dark:bg-neutral-900/95",
+          border: "border-green-200 dark:border-green-800/60",
+          shadow:
+            "shadow-lg shadow-green-100 dark:shadow-xl dark:shadow-black/40 dark:ring-1 dark:ring-green-900/30",
+          iconBg: "bg-green-100 dark:bg-green-950/50",
         };
       case "error":
         return {
-          bg: "bg-white",
-          border: "border-red-200",
-          shadow: "shadow-lg shadow-red-100",
-          iconBg: "bg-red-100",
+          bg: "bg-white dark:bg-neutral-900/95",
+          border: "border-red-200 dark:border-red-800/55",
+          shadow:
+            "shadow-lg shadow-red-100 dark:shadow-xl dark:shadow-black/40 dark:ring-1 dark:ring-red-900/25",
+          iconBg: "bg-red-100 dark:bg-red-950/45",
         };
       case "warning":
         return {
-          bg: "bg-white",
-          border: "border-yellow-200",
-          shadow: "shadow-lg shadow-yellow-100",
-          iconBg: "bg-yellow-100",
+          bg: "bg-white dark:bg-neutral-900/95",
+          border: "border-yellow-200 dark:border-yellow-800/50",
+          shadow:
+            "shadow-lg shadow-yellow-100 dark:shadow-xl dark:shadow-black/40 dark:ring-1 dark:ring-yellow-900/20",
+          iconBg: "bg-yellow-100 dark:bg-yellow-950/45",
         };
       case "info":
         return {
-          bg: "bg-white",
-          border: "border-blue-200",
-          shadow: "shadow-lg shadow-blue-100",
-          iconBg: "bg-blue-100",
+          bg: "bg-white dark:bg-neutral-900/95",
+          border: "border-blue-200 dark:border-blue-800/55",
+          shadow:
+            "shadow-lg shadow-blue-100 dark:shadow-xl dark:shadow-black/40 dark:ring-1 dark:ring-blue-900/25",
+          iconBg: "bg-blue-100 dark:bg-blue-950/45",
         };
       default:
         return {
-          bg: "bg-white",
-          border: "border-green-200",
-          shadow: "shadow-lg shadow-green-100",
-          iconBg: "bg-green-100",
+          bg: "bg-white dark:bg-neutral-900/95",
+          border: "border-green-200 dark:border-green-800/60",
+          shadow:
+            "shadow-lg shadow-green-100 dark:shadow-xl dark:shadow-black/40 dark:ring-1 dark:ring-green-900/30",
+          iconBg: "bg-green-100 dark:bg-green-950/50",
         };
     }
   };
@@ -267,9 +272,9 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <h4 className="text-xs sm:text-base font-semibold text-gray-900 leading-tight">{title}</h4>
+            <h4 className="text-xs sm:text-base font-semibold text-gray-900 dark:text-neutral-100 leading-tight">{title}</h4>
             {message && (
-              <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-600 leading-snug sm:leading-relaxed">
+              <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-300 leading-snug sm:leading-relaxed">
                 {message}
               </p>
             )}
@@ -281,7 +286,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
                   action.onClick();
                   handleClose();
                 }}
-                className="mt-1 sm:mt-2 text-xs sm:text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                className="mt-1 sm:mt-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
               >
                 {action.label}
               </button>
@@ -294,7 +299,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
                   onReportProblem(errorContext);
                   // Don't close toast when reporting - let user see the report was triggered
                 }}
-                className="mt-1 sm:mt-2 flex items-center gap-1 text-xs sm:text-sm font-medium text-red-600 hover:text-red-800 transition-colors"
+                className="mt-1 sm:mt-2 flex items-center gap-1 text-xs sm:text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors"
               >
                 <Bug className="w-3 h-3 sm:w-4 sm:h-4" />
                 Report Problem
@@ -305,7 +310,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
           {/* Close Button - Increased size on mobile for easier tapping */}
           <button
             onClick={handleClose}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md sm:rounded-lg transition-all p-1.5 sm:p-1 -m-0.5 sm:-m-1"
+            className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-neutral-500 dark:hover:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-md sm:rounded-lg transition-all p-1.5 sm:p-1 -m-0.5 sm:-m-1"
             aria-label="Close toast"
           >
             <X className="w-5 h-5 sm:w-4 sm:h-4" />

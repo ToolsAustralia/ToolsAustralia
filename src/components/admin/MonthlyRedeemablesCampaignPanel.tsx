@@ -164,7 +164,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                 <Gift className="w-5 h-5 text-red-600" />
                 Redeemable Coupons
               </h3>
-              <p className="text-gray-600 mt-1 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-neutral-400 mt-1 text-xs sm:text-sm">
                 Create coupons via modal. Eligible users now receive rewards automatically.
               </p>
             </div>
@@ -203,7 +203,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
           ) : campaigns.length === 0 ? (
             <div className="text-center py-10">
               <Gift className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-600">No redeemable coupons yet.</p>
+              <p className="text-gray-600 dark:text-neutral-400">No redeemable coupons yet.</p>
               <p className="text-sm text-gray-500 mt-1">Create one with the modal to make rewards available automatically.</p>
             </div>
           ) : (
@@ -219,7 +219,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                       </div>
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                          campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"
+                          campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700 dark:text-neutral-200"
                         }`}
                       >
                         {campaign.isActive ? "Active" : "Inactive"}
@@ -245,7 +245,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                       </div>
                     </div>
 
-                    <div className="mt-2 text-xs text-gray-600">
+                    <div className="mt-2 text-xs text-gray-600 dark:text-neutral-400">
                       <p className="truncate">{campaign.targetingMode}</p>
                       <p className="mt-1">Start: {formatDateTime(campaign.startsAt)}</p>
                       <p>End: {campaign.neverExpires ? "Never Expires" : formatDateTime(campaign.endsAt || "")}</p>
@@ -265,7 +265,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                           setEditingCampaign(campaign);
                           setIsModalOpen(true);
                         }}
-                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50"
+                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                         Edit
@@ -275,7 +275,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                           setRedemptionsModal({ campaignId: campaign.id, campaignName: campaign.name });
                           loadRedemptions(campaign.id, 1);
                         }}
-                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50"
+                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         Redeemed
@@ -283,7 +283,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                       <button
                         onClick={() => handleToggle(campaign.id, !campaign.isActive)}
                         disabled={busyCampaignId === campaign.id}
-                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
                       >
                         <Power className="w-3.5 h-3.5" />
                         {campaign.isActive ? "Disable" : "Activate"}
@@ -291,7 +291,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                       <button
                         onClick={() => handleDelete(campaign.id)}
                         disabled={busyCampaignId === campaign.id}
-                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-red-300 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-950/60 disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         Delete
@@ -302,28 +302,52 @@ export default function MonthlyRedeemablesCampaignPanel() {
               </div>
 
               <div className="hidden md:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+                  <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Month</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Coupon</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Code</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Mode</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Targeting</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Redeemed</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Window</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Month
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Coupon
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Code
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Mode
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Targeting
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Redeemed
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Window
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Status
+                      </th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
+                  <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
                     {campaigns.map((campaign) => (
-                      <tr key={campaign.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-3 text-sm font-semibold text-gray-900">{campaign.monthKey}</td>
-                        <td className="px-3 py-3 text-sm text-gray-800">
+                      <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
+                        <td className="px-3 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+                          {campaign.monthKey}
+                        </td>
+                        <td className="px-3 py-3 text-sm text-gray-800 dark:text-neutral-100">
                           <div className="font-medium">{campaign.name}</div>
-                          {campaign.displayLabel && <div className="text-xs text-indigo-600 font-semibold">{campaign.displayLabel}</div>}
-                          <div className="text-xs text-gray-500">
+                          {campaign.displayLabel && (
+                            <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+                              {campaign.displayLabel}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-500 dark:text-neutral-400">
                             {campaign.entriesAmount.toLocaleString()} entries
                             {(() => {
                               const req = campaign.purchaseRequirement ?? (campaign.requiresPurchase ? "membership" : "none");
@@ -335,20 +359,24 @@ export default function MonthlyRedeemablesCampaignPanel() {
                             {campaign.neverExpires ? " · Never Expires" : ""}
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-xs text-gray-700">
-                          <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{campaign.code}</span>
+                        <td className="px-3 py-3 text-xs text-gray-700 dark:text-neutral-200">
+                          <span className="font-mono bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1.5 py-0.5 rounded">
+                            {campaign.code}
+                          </span>
                         </td>
-                        <td className="px-3 py-3 text-sm text-gray-700 capitalize">{campaign.campaignMode}</td>
-                        <td className="px-3 py-3 text-sm text-gray-700">{campaign.targetingMode}</td>
-                        <td className="px-3 py-3 text-sm font-semibold text-gray-800">{campaign.redeemedCount}</td>
-                        <td className="px-3 py-3 text-xs text-gray-600">
+                        <td className="px-3 py-3 text-sm text-gray-700 dark:text-neutral-200 capitalize">{campaign.campaignMode}</td>
+                        <td className="px-3 py-3 text-sm text-gray-700 dark:text-neutral-200">{campaign.targetingMode}</td>
+                        <td className="px-3 py-3 text-sm font-semibold text-gray-800 dark:text-neutral-100">{campaign.redeemedCount}</td>
+                        <td className="px-3 py-3 text-xs text-gray-600 dark:text-neutral-400">
                           <div>{formatDateTime(campaign.startsAt)}</div>
                           <div>{campaign.neverExpires ? "Never Expires" : formatDateTime(campaign.endsAt || "")}</div>
                         </td>
                         <td className="px-3 py-3">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                              campaign.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"
+                              campaign.isActive
+                                ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50"
+                                : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
                             }`}
                           >
                             {campaign.isActive ? "Active" : "Inactive"}
@@ -361,7 +389,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                                 setEditingCampaign(campaign);
                                 setIsModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50"
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                               Edit
@@ -371,7 +399,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                                 setRedemptionsModal({ campaignId: campaign.id, campaignName: campaign.name });
                                 loadRedemptions(campaign.id, 1);
                               }}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50"
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               View Redeemed
@@ -379,7 +407,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                             <button
                               onClick={() => handleToggle(campaign.id, !campaign.isActive)}
                               disabled={busyCampaignId === campaign.id}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 bg-white text-gray-800 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
                             >
                               <Power className="w-3.5 h-3.5" />
                               {campaign.isActive ? "Disable" : "Activate"}
@@ -387,7 +415,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                             <button
                               onClick={() => handleDelete(campaign.id)}
                               disabled={busyCampaignId === campaign.id}
-                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-red-300 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100 disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-100 dark:hover:bg-red-950/60 disabled:opacity-50"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               Delete
@@ -419,51 +447,71 @@ export default function MonthlyRedeemablesCampaignPanel() {
       />
 
       {redemptionsModal && (
-        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl bg-white rounded-xl border border-gray-200 shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="fixed inset-0 z-[80] bg-black/40 dark:bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-xl border border-gray-200 dark:border-neutral-700 shadow-xl dark:shadow-none">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700">
               <div>
-                <h4 className="text-lg font-bold text-gray-900">Redeemed Users</h4>
-                <p className="text-sm text-gray-600">{redemptionsModal.campaignName}</p>
+                <h4 className="text-lg font-bold text-gray-900 dark:text-white">Redeemed Users</h4>
+                <p className="text-sm text-gray-600 dark:text-neutral-400">{redemptionsModal.campaignName}</p>
               </div>
               <button
                 onClick={() => setRedemptionsModal(null)}
-                className="w-9 h-9 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 flex items-center justify-center"
+                className="w-9 h-9 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-700 flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-4">
               {isLoadingRedemptions ? (
-                <div className="py-8 flex items-center justify-center text-gray-500 gap-2">
+                <div className="py-8 flex items-center justify-center text-gray-500 dark:text-neutral-400 gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading redemptions...
                 </div>
               ) : redemptions.length === 0 ? (
-                <div className="py-8 text-center text-sm text-gray-600">No users have redeemed this coupon yet.</div>
+                <div className="py-8 text-center text-sm text-gray-600 dark:text-neutral-400">No users have redeemed this coupon yet.</div>
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+                      <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">User</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Email</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Redeemed At</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Code</th>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Entries</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                            User
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                            Email
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                            Redeemed At
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                            Code
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200 uppercase">
+                            Entries
+                          </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-100">
+                      <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
                         {redemptions.map((item) => (
-                          <tr key={item.issuanceId}>
-                            <td className="px-3 py-2 text-sm font-medium text-gray-900">{item.userName}</td>
-                            <td className="px-3 py-2 text-sm text-gray-700">{item.userEmail}</td>
-                            <td className="px-3 py-2 text-sm text-gray-700">{formatDateTime(item.redeemedAt)}</td>
-                            <td className="px-3 py-2 text-xs text-gray-700">
-                              {item.code ? <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{item.code}</span> : "—"}
+                          <tr key={item.issuanceId} className="hover:bg-gray-50/80 dark:hover:bg-neutral-800/50">
+                            <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">
+                              {item.userName}
                             </td>
-                            <td className="px-3 py-2 text-sm text-gray-900">{item.entriesAmount}</td>
+                            <td className="px-3 py-2 text-sm text-gray-700 dark:text-neutral-200">{item.userEmail}</td>
+                            <td className="px-3 py-2 text-sm text-gray-700 dark:text-neutral-200">{formatDateTime(item.redeemedAt)}</td>
+                            <td className="px-3 py-2 text-xs text-gray-700 dark:text-neutral-200">
+                              {item.code ? (
+                                <span className="font-mono bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1.5 py-0.5 rounded">
+                                  {item.code}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-900 dark:text-white tabular-nums">
+                              {item.entriesAmount}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -473,17 +521,17 @@ export default function MonthlyRedeemablesCampaignPanel() {
                     <button
                       onClick={() => redemptionsModal && loadRedemptions(redemptionsModal.campaignId, redemptionsPage - 1)}
                       disabled={redemptionsPage <= 1 || isLoadingRedemptions}
-                      className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 disabled:opacity-50"
+                      className="h-9 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
                     >
                       Previous
                     </button>
-                    <span className="text-xs text-gray-600">
+                    <span className="text-xs text-gray-600 dark:text-neutral-400">
                       Page {redemptionsPage} of {redemptionsTotalPages}
                     </span>
                     <button
                       onClick={() => redemptionsModal && loadRedemptions(redemptionsModal.campaignId, redemptionsPage + 1)}
                       disabled={redemptionsPage >= redemptionsTotalPages || isLoadingRedemptions}
-                      className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 disabled:opacity-50"
+                      className="h-9 px-3 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50"
                     >
                       Next
                     </button>

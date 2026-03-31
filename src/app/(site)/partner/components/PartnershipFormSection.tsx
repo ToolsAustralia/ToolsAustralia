@@ -109,7 +109,7 @@ const Button = ({
   const variantClasses =
     variant === "primary"
       ? "bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl transform hover:scale-105"
-      : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300";
+      : "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 border border-gray-300";
 
   return (
     <button
@@ -275,7 +275,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
               Application Submitted!
             </h2>
-            <p className="text-lg text-gray-600 font-['Inter'] mb-8">
+            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] mb-8">
               Thank you for your interest in partnering with us. We&apos;ll be in touch within 24 hours.
             </p>
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 max-w-md mx-auto">
@@ -297,7 +297,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
             Ready to Partner with Us?
           </h2>
-          <p className="text-lg text-gray-600 font-['Inter'] max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">
             Fill out the form below and our team will get back to you within 24 hours to discuss your partnership
             opportunities.
           </p>

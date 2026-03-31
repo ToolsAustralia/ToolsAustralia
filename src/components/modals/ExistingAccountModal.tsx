@@ -56,7 +56,7 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
           <div className="w-full max-w-md space-y-6">
             {/* Icon/Illustration */}
             <div className="flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/45 flex items-center justify-center">
                 <svg
                   className="w-10 h-10 text-red-600"
                   fill="none"
@@ -76,10 +76,10 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
 
             {/* Message */}
             <div className="space-y-3">
-              <h3 className="text-xl font-bold text-gray-900">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-neutral-100">
                 {conflictField === "email" ? "Email Already Exists" : "Mobile Number Already Exists"}
               </h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
+              <p className="text-gray-600 dark:text-neutral-400 text-sm leading-relaxed">
                 This {fieldLabel} is already associated with an account that has made purchases. To continue, please log
                 in to your existing account.
               </p>

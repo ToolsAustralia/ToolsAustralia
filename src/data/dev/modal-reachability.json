@@ -1,0 +1,271 @@
+{
+  "generatedAt": "2026-03-31T04:45:44.462Z",
+  "method": "Transitive imports from Next.js app entry files (page, layout, route, loading, error, template, default, not-found, global-error, middleware, instrumentation). Does not evaluate dynamic non-literal imports or runtime-only usage.",
+  "entrySeedCount": 322,
+  "reachableSrcFileCount": 1010,
+  "modalInventoryCount": 65,
+  "reachableModalCount": 63,
+  "unreachableModalCount": 2,
+  "modals": [
+    {
+      "path": "src/components/admin/ab-testing/ExperimentDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/ab-testing/ExperimentFormModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/AffiliateDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/ChargePastDueModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/ChargePastDueUserModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/CustomDateRangeModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/submissions/SubmissionDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/UserDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/UserExportModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/auth/EmailVerificationModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/auth/OTPVerificationModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/auth/PasswordlessLoginModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminAlternatingMultiplierModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminBonusEntryPromoModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminMajorDrawModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminMilestoneRewardModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminMiniDrawModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminMonthlyRedeemablesModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminPrizeDrawModal.tsx",
+      "reachable": false
+    },
+    {
+      "path": "src/components/modals/AdminProductModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminPromoBannerTextModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminPromoLinkModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminPromoToggle.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminScheduledPromoCalendarModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/AdminScheduledPromoModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/CancellationUpsellModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ChannelDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ConfirmationModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ExistingAccountModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ExportModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/GateClosedModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/LoginModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/LoginPromptModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/MajorDrawEditModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/MembershipByPackageDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/MembershipModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/MiniDrawEditModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/MiniDrawPackageModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PackageDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PackageSelectionModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ParticipantsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PartnerModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PastDrawsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PixelConsentModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PrizeSpecificationsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/PromoPageDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ReferFriendModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/RenewalFailedModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ReportProblemModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/RevenueDetailModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/SavedPaymentMethodsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/SettingsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/SpecialPackagesModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/StripePaymentModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/SubscriptionExplainerModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/SubscriptionManagementModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/ui/IconPickerModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/UnifiedModalManager.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/UpsellManager.tsx",
+      "reachable": false
+    },
+    {
+      "path": "src/components/modals/UpsellModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/UserSearchModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/UserSetupModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/WinnerEditModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/WinnerSelectionModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/ui/FullscreenImageViewer.tsx",
+      "reachable": true
+    }
+  ]
+}

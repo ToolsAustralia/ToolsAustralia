@@ -99,7 +99,7 @@ export default function WinnersSection({
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins']">{title}</h2>
           </div>
-          <p className="text-base sm:text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed font-['Inter']">
+          <p className="text-base sm:text-lg text-gray-600 dark:text-neutral-400 max-w-3xl mx-auto leading-relaxed font-['Inter']">
             {subtitle}
           </p>
         </div>
@@ -134,7 +134,7 @@ export default function WinnersSection({
                   className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 bg-white rounded-full p-3 shadow-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hidden lg:flex items-center justify-center"
                   aria-label="Previous winners"
                 >
-                  <ChevronLeft className="w-6 h-6 text-gray-700" />
+                  <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                 </button>
                 <button
                   onClick={goToNext}
@@ -142,7 +142,7 @@ export default function WinnersSection({
                   className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 bg-white rounded-full p-3 shadow-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hidden lg:flex items-center justify-center"
                   aria-label="Next winners"
                 >
-                  <ChevronRight className="w-6 h-6 text-gray-700" />
+                  <ChevronRight className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                 </button>
               </>
             )}
@@ -252,7 +252,7 @@ export default function WinnersSection({
                         {/* Win Date */}
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                           <div className="p-1 sm:p-1.5 bg-gray-50 rounded-lg sm:rounded-xl">
-                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-neutral-400" />
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
@@ -299,7 +299,7 @@ export default function WinnersSection({
               <Trophy className="w-10 h-10 text-gray-500" />
             </div>
             <h3 className="text-xl font-bold text-gray-900 font-['Poppins'] mb-2">No Winners Yet</h3>
-            <p className="text-gray-600 font-['Inter']">Check back soon to see our amazing winners!</p>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter']">Check back soon to see our amazing winners!</p>
           </div>
         )}
       </div>

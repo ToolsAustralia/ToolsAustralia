@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/loading/SkeletonLoader";
 
 export default function MiniDrawDetailLoading() {
   return (
-    <div className="min-h-screen-svh bg-gray-50">
+    <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950">
       {/* Hero Banner Skeleton */}
       <div className="pt-[86px] sm:pt-[106px] pb-8 sm:pb-12 bg-gradient-to-b from-black via-slate-900 to-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -48,7 +48,7 @@ export default function MiniDrawDetailLoading() {
           {/* Right Column (packages first on mobile) */}
           <div className="flex flex-col gap-5">
             {/* Purchase section — red accent bar + package grid */}
-            <div className="order-first lg:order-2 bg-white rounded-2xl border border-gray-100 shadow-lg overflow-hidden">
+            <div className="order-first lg:order-2 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-lg overflow-hidden">
               <div className="h-1 bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000]" />
               <div className="p-3 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between">
@@ -68,10 +68,10 @@ export default function MiniDrawDetailLoading() {
             </div>
 
             {/* Description — collapsible on mobile */}
-            <div className="order-2 lg:order-1 bg-white rounded-2xl border border-gray-100 p-4 sm:p-5">
+            <div className="order-2 lg:order-1 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-6 w-6 rounded-full bg-gray-100 lg:hidden" />
+                <Skeleton className="h-6 w-6 rounded-full bg-gray-100 dark:bg-neutral-800 lg:hidden" />
               </div>
               <div className="hidden lg:block space-y-2 mt-3">
                 <Skeleton className="h-4 w-full" />
@@ -117,13 +117,13 @@ export default function MiniDrawDetailLoading() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl shadow-sm overflow-hidden animate-pulse">
-                <div className="aspect-[4/3] bg-gray-200" />
+              <div key={i} className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm overflow-hidden animate-pulse">
+                <div className="aspect-[4/3] bg-gray-200 dark:bg-neutral-800" />
                 <div className="p-3 sm:p-4 space-y-2">
-                  <div className="h-3 bg-gray-200 rounded w-16" />
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                  <div className="h-1.5 bg-gray-200 rounded-full w-full" />
-                  <div className="h-9 bg-gray-200 rounded-full w-full mt-2" />
+                  <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded w-16" />
+                  <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded w-3/4" />
+                  <div className="h-1.5 bg-gray-200 dark:bg-neutral-800 rounded-full w-full" />
+                  <div className="h-9 bg-gray-200 dark:bg-neutral-800 rounded-full w-full mt-2" />
                 </div>
               </div>
             ))}

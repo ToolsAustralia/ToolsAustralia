@@ -25,7 +25,7 @@ export default function UpsellSuccessClient({ searchParams: _searchParams }: Ups
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">
             Upsell Purchase Successful!
           </h1>
-          <p className="text-gray-600 text-lg">
+          <p className="text-gray-600 dark:text-neutral-400 text-lg">
             Thank you for your purchase. Your additional entries have been added to your account.
           </p>
         </div>
@@ -60,7 +60,7 @@ export default function UpsellSuccessClient({ searchParams: _searchParams }: Ups
         {/* Additional Information */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">What&apos;s Next?</h2>
-          <ul className="space-y-3 text-gray-600">
+          <ul className="space-y-3 text-gray-600 dark:text-neutral-400">
             <li className="flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
               <span>Your additional entries have been added to your account</span>

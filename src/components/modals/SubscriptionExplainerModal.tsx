@@ -29,7 +29,7 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md">
       <ModalHeader title="How your membership entries work" onClose={onClose} />
       <ModalContent className="p-4 sm:p-6 space-y-4">
-        <p className="text-gray-700 text-sm sm:text-base">
+        <p className="text-gray-700 dark:text-neutral-200 text-sm sm:text-base">
           You receive{" "}
           <strong>
             {entriesPerMonth.toLocaleString()} + {lastMonthAccumulatedEntries.toLocaleString()} entries
@@ -49,10 +49,11 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
           />
         )}
         {/* Billing rule: 25–27 joiners renew on 24th; source of truth: src/utils/billing/anchor-billing.ts */}
-        <div className="rounded-xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 sm:px-5 sm:py-4 shadow-sm">
-          <p className="text-amber-900 text-sm sm:text-base font-semibold leading-snug">
-            If you joined on the <strong className="text-amber-700">25th, 26th, or 27th</strong>, you&apos;ll be billed
-            on the <strong className="text-amber-700">24th of the following month</strong>.
+        <div className="rounded-xl border-2 border-amber-400/60 bg-amber-50 px-4 py-3 sm:px-5 sm:py-4 shadow-sm dark:border-amber-500/45 dark:bg-amber-950/40">
+          <p className="text-amber-900 dark:text-amber-100 text-sm sm:text-base font-semibold leading-snug">
+            If you joined on the{" "}
+            <strong className="text-amber-700 dark:text-amber-300">25th, 26th, or 27th</strong>, you&apos;ll be billed on
+            the <strong className="text-amber-700 dark:text-amber-300">24th of the following month</strong>.
           </p>
         </div>
         <div className="pt-2">

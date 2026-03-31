@@ -74,7 +74,7 @@ export default function RecentActivityFeed() {
       {/* Fixed height scrollable container */}
       <div className="relative max-h-[500px] overflow-y-auto admin-scrollbar pr-2">
         {isLoading && (
-          <div className="flex items-center justify-center py-6 sm:py-8 text-gray-500">
+          <div className="flex items-center justify-center py-6 sm:py-8 text-gray-500 dark:text-neutral-400">
             <RefreshCw className="w-6 h-6 sm:w-8 sm:h-8 animate-spin mr-2 shrink-0" />
             <span className="text-xs sm:text-sm">Loading activities…</span>
           </div>
@@ -83,14 +83,14 @@ export default function RecentActivityFeed() {
         {error && (
           <div className="text-center py-6 sm:py-8">
             <AlertTriangle className="w-6 h-6 sm:w-8 sm:h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-xs sm:text-sm text-red-600">Failed to load recent activities</p>
+            <p className="text-xs sm:text-sm text-red-600 dark:text-red-400">Failed to load recent activities</p>
           </div>
         )}
 
         {!isLoading && !error && allActivities.length === 0 && (
           <div className="text-center py-6 sm:py-8">
-            <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-xs sm:text-sm text-gray-500">No recent activity</p>
+            <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-neutral-500 mx-auto mb-2" />
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400">No recent activity</p>
           </div>
         )}
 
@@ -101,12 +101,14 @@ export default function RecentActivityFeed() {
                 {/* Timeline Dot and Line */}
                 <div className="relative flex flex-col items-center">
                   <div className={`w-2 h-2 rounded-full ${getStatusColor(activity.status)} flex-shrink-0 mt-1.5`} />
-                  {index < allActivities.length - 1 && <div className="w-px h-full bg-gray-200 absolute top-3" />}
+                  {index < allActivities.length - 1 && (
+                    <div className="w-px h-full bg-gray-200 dark:bg-neutral-600 absolute top-3" />
+                  )}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0 pb-1">
-                  <p className="text-xs sm:text-sm font-medium text-gray-900 leading-snug">
+                  <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-neutral-100 leading-snug">
                     {activity.miniDrawId && activity.action.includes('"') ? (
                       <>
                         {activity.action.split('"')[0]}
@@ -114,7 +116,7 @@ export default function RecentActivityFeed() {
                           href={`/mini-draws/${activity.miniDrawId}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-red-600 hover:text-red-700 underline font-semibold"
+                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline font-semibold"
                         >
                           {activity.action.split('"')[1]}
                         </a>
@@ -128,10 +130,10 @@ export default function RecentActivityFeed() {
                     <ClickableUserDisplay
                       displayText={activity.user}
                       userId={activity.userId ?? null}
-                      className="text-[10px] sm:text-xs text-gray-500"
+                      className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400"
                     />
-                    <span className="text-[10px] sm:text-xs text-gray-400">•</span>
-                    <span className="text-[10px] sm:text-xs text-gray-500">{activity.time}</span>
+                    <span className="text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
+                    <span className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400">{activity.time}</span>
                   </div>
                 </div>
               </div>
@@ -142,7 +144,7 @@ export default function RecentActivityFeed() {
 
             {/* Loading more indicator */}
             {isFetchingNextPage && (
-              <div className="flex items-center justify-center py-3 sm:py-4 text-gray-500">
+              <div className="flex items-center justify-center py-3 sm:py-4 text-gray-500 dark:text-neutral-400">
                 <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin mr-2 shrink-0" />
                 <span className="text-xs sm:text-sm">Loading more activities…</span>
               </div>
@@ -150,7 +152,7 @@ export default function RecentActivityFeed() {
 
             {/* End of list indicator */}
             {!hasNextPage && allActivities.length > 15 && (
-              <div className="text-center py-3 sm:py-4 text-[10px] sm:text-xs text-gray-400 border-t border-gray-100 mt-2">
+              <div className="text-center py-3 sm:py-4 text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500 border-t border-gray-100 dark:border-neutral-800 mt-2">
                 No more activities to load
               </div>
             )}

@@ -575,11 +575,11 @@ export default function DrawResults() {
       case "active":
         return "bg-yellow-100 text-yellow-800";
       case "queued":
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
       case "cancelled":
         return "bg-red-100 text-red-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
     }
   };
 
@@ -603,7 +603,7 @@ export default function DrawResults() {
     } else {
       return {
         icon: Clock,
-        color: "text-gray-600",
+        color: "text-gray-600 dark:text-neutral-400",
         text: "Pending",
         bgColor: "bg-gray-50 border-gray-200",
       };
@@ -620,14 +620,14 @@ export default function DrawResults() {
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-3 sm:p-4 animate-pulse">
+            <div key={i} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4 animate-pulse">
               <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
               <div className="h-8 bg-gray-200 rounded mb-2 w-3/4"></div>
               <div className="h-3 bg-gray-200 rounded w-1/2"></div>
             </div>
           ))}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6 animate-pulse">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6 animate-pulse">
           <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
           <div className="h-10 bg-gray-200 rounded w-full"></div>
         </div>
@@ -672,7 +672,7 @@ export default function DrawResults() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
         <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Filter & Search</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <Input
@@ -731,7 +731,7 @@ export default function DrawResults() {
             const StatusIcon = winnerStatus.icon;
 
             return (
-              <div key={draw._id} className="bg-white rounded-xl shadow-lg border-2 border-red-100 p-4 sm:p-6">
+              <div key={draw._id} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
@@ -746,20 +746,20 @@ export default function DrawResults() {
                       </div>
 
                       <div
-                        className="text-gray-600 mb-3 [&_p]:my-0"
+                        className="text-gray-600 dark:text-neutral-400 mb-3 [&_p]:my-0"
                         dangerouslySetInnerHTML={{ __html: draw.description || "" }}
                       />
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
                           <Calendar className="w-4 h-4" />
                           <span>Draw: {formatDate(draw.drawDate)}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
                           <DollarSign className="w-4 h-4" />
                           <span>{draw.prize?.value ? formatCurrency(draw.prize.value) : "N/A"}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
                           <Users className="w-4 h-4" />
                           <span>{draw.totalEntries.toLocaleString()} entries</span>
                         </div>
@@ -825,14 +825,14 @@ export default function DrawResults() {
 
       {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="bg-white rounded-xl shadow-lg border-2 border-red-100 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
             <div className="flex items-center gap-1 sm:gap-2">
               <button
                 type="button"
                 onClick={() => handlePageChange(1)}
                 disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="First page"
               >
                 <ChevronsLeft className="w-4 h-4" />
@@ -841,13 +841,13 @@ export default function DrawResults() {
                 type="button"
                 onClick={() => handlePageChange(pagination.currentPage - 1)}
                 disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Previous page"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
             </div>
-            <span className="text-xs sm:text-sm text-gray-700 font-medium">
+            <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
               Page {pagination.currentPage} of {pagination.totalPages}
             </span>
             <div className="flex items-center gap-1 sm:gap-2">
@@ -855,7 +855,7 @@ export default function DrawResults() {
                 type="button"
                 onClick={() => handlePageChange(pagination.currentPage + 1)}
                 disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Next page"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -864,7 +864,7 @@ export default function DrawResults() {
                 type="button"
                 onClick={() => handlePageChange(pagination.totalPages)}
                 disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Last page"
               >
                 <ChevronsRight className="w-4 h-4" />

@@ -194,13 +194,13 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
   if (isSuccess) {
     return (
       <div className="flex flex-col items-center justify-center py-8 px-6">
-        <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h3>
-        <p className="text-gray-600 text-center mb-6">
+        <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-neutral-100 mb-2">Payment Successful!</h3>
+        <p className="text-gray-600 dark:text-neutral-400 text-center mb-6">
           Your upgrade to {packageName} has been processed. Your new benefits are now active!
         </p>
         <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 dark:border-green-400"></div>
         </div>
       </div>
     );
@@ -208,14 +208,14 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-gray-50 rounded-lg p-4 mb-6">
+      <div className="bg-gray-50 dark:bg-neutral-800/80 dark:border dark:border-neutral-700 rounded-lg p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">Upgrading to:</span>
-          <span className="text-sm font-semibold text-gray-900">{packageName}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Upgrading to:</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{packageName}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Amount:</span>
-          <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} AUD</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Amount:</span>
+          <span className="text-lg font-bold text-gray-900 dark:text-neutral-100">${(amount / 100).toFixed(2)} AUD</span>
         </div>
       </div>
 
@@ -423,13 +423,13 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
   if (isSuccess) {
     return (
       <div className="flex flex-col items-center justify-center py-8 px-6">
-        <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h3>
-        <p className="text-gray-600 text-center mb-6">
+        <CheckCircle className="w-16 h-16 text-green-500 dark:text-green-400 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-neutral-100 mb-2">Payment Successful!</h3>
+        <p className="text-gray-600 dark:text-neutral-400 text-center mb-6">
           Your upgrade to {packageName} has been processed. Your new benefits are now active!
         </p>
         <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 dark:border-green-400"></div>
         </div>
       </div>
     );
@@ -438,10 +438,10 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* ✅ Enhanced Payment Summary with Proration Details */}
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-5 mb-6 border border-green-200">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-green-200">
-          <span className="text-sm font-medium text-gray-700">Upgrading to:</span>
-          <span className="text-base font-bold text-gray-900">{packageName}</span>
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/25 dark:to-emerald-950/25 rounded-lg p-5 mb-6 border border-green-200 dark:border-green-900/45">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-green-200 dark:border-green-900/40">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Upgrading to:</span>
+          <span className="text-base font-bold text-gray-900 dark:text-neutral-100">{packageName}</span>
         </div>
 
         {/* Show upgrade summary (no proration) */}
@@ -449,27 +449,27 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
           <div className="space-y-3">
             {/* Upgrade Breakdown */}
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between text-gray-600">
+              <div className="flex items-center justify-between text-gray-600 dark:text-neutral-400">
                 <span>Current Plan:</span>
                 <span className="font-medium">
                   {currentUpgradeInfo.fromPackage.name} (${currentUpgradeInfo.fromPackage.price}/month)
                 </span>
               </div>
-              <div className="flex items-center justify-between text-gray-600">
+              <div className="flex items-center justify-between text-gray-600 dark:text-neutral-400">
                 <span>New Plan:</span>
-                <span className="font-medium text-green-700">
+                <span className="font-medium text-green-700 dark:text-green-300">
                   {currentUpgradeInfo.toPackage.name} (${currentUpgradeInfo.toPackage.price}/month)
                 </span>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-green-200">
-                <span className="font-medium text-gray-700">Prorated Charge (Today):</span>
-                <span className="text-sm text-gray-700">Billing cycle restarts today</span>
+              <div className="flex items-center justify-between pt-2 border-t border-green-200 dark:border-green-900/40">
+                <span className="font-medium text-gray-700 dark:text-neutral-200">Prorated Charge (Today):</span>
+                <span className="text-sm text-gray-700 dark:text-neutral-200">Billing cycle restarts today</span>
               </div>
             </div>
 
             {/* Billing Info */}
             {currentUpgradeInfo.billingInfo && (
-              <div className="bg-white/60 rounded-lg p-3 mt-3 text-xs text-gray-600">
+              <div className="bg-white/60 rounded-lg p-3 mt-3 text-xs text-gray-600 dark:text-neutral-400">
                 <div className="flex items-center justify-between mb-1">
                   <span>Next Billing Date:</span>
                   <span className="font-medium text-gray-900">{currentUpgradeInfo.billingInfo.nextBillingDate}</span>
@@ -486,24 +486,24 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
           </div>
         ) : (
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Total Amount:</span>
-            <span className="text-lg font-bold text-gray-900">${(amount / 100).toFixed(2)} AUD</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Total Amount:</span>
+            <span className="text-lg font-bold text-gray-900 dark:text-neutral-100">${(amount / 100).toFixed(2)} AUD</span>
           </div>
         )}
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
+        <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-neutral-400">
           <CreditCard className="w-4 h-4" />
           <span>Enter new card details</span>
         </div>
 
-        <div className="border border-gray-200 rounded-lg p-4">
+        <div className="border border-gray-200 dark:border-neutral-700 dark:bg-neutral-900/30 rounded-lg p-4">
           {elementsError ? (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <div className="text-red-500 mb-2">⚠️ Payment Form Error</div>
-                <div className="text-sm text-gray-600 mb-4">{elementsError}</div>
+                <div className="text-sm text-gray-600 dark:text-neutral-400 mb-4">{elementsError}</div>
                 <button
                   onClick={() => window.location.reload()}
                   className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
@@ -515,7 +515,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
           ) : !stripe || !elements ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-              <span className="ml-3 text-gray-600">Loading payment form...</span>
+              <span className="ml-3 text-gray-600 dark:text-neutral-400">Loading payment form...</span>
             </div>
           ) : (
             <PaymentElement

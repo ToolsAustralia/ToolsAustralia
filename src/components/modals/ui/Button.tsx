@@ -46,8 +46,9 @@ const Button: React.FC<ButtonProps> = ({
     primary: "bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444] text-white hover:shadow-lg hover:scale-105",
     secondary: "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700",
     danger: "bg-red-600 text-white hover:bg-red-700",
-    outline: "border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white",
-    ghost: "text-gray-700 hover:bg-gray-100",
+    outline:
+      "border-2 border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:text-white",
+    ghost: "text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800",
     metallic:
       // Metallic primary inspired by components/ui/MetallicButton primary variant
       "relative bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white shadow-lg shadow-[#ee0000]/40 " +

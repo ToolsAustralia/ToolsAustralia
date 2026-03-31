@@ -282,7 +282,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                     }`}
                   />
                 ))}
-                <span className="ml-2 text-sm font-medium text-gray-700">{product.rating}</span>
+                <span className="ml-2 text-sm font-medium text-gray-700 dark:text-neutral-200">{product.rating}</span>
               </div>
               <span className="text-sm text-gray-500">({product.reviews} reviews)</span>
             </div>
@@ -299,7 +299,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             {/* Description */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-              <p className="text-gray-600 leading-relaxed">{product.description}</p>
+              <p className="text-gray-600 dark:text-neutral-400 leading-relaxed">{product.description}</p>
             </div>
 
             {/* Interactive Components */}

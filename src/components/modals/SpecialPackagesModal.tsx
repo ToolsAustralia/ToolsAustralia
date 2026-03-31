@@ -62,22 +62,12 @@ export interface SpecialPackagesModalProps {
  * Displays additional one-time packages for users with active subscriptions OR current draw entries
  * Features package selection with one-click purchase using saved payment methods
  */
+/** Solid promo primary (e.g. Milwaukee red) — no gradient / glow, matches landing “pure brand” treatment */
 const SpecialPackages50OffText: React.FC = () => {
   const theme = usePromoTheme();
-  const r = parseInt(theme.primary.slice(1, 3), 16);
-  const g = parseInt(theme.primary.slice(3, 5), 16);
-  const b = parseInt(theme.primary.slice(5, 7), 16);
   return (
-    <span
-      className="font-bold bg-clip-text text-transparent"
-      style={{
-        backgroundImage: `linear-gradient(to right, ${theme.primary}, #ff4444, ${theme.primary})`,
-        WebkitBackgroundClip: "text",
-        backgroundClip: "text",
-        filter: `drop-shadow(0 0 6px rgba(${r},${g},${b},0.5))`,
-      }}
-    >
-      50% off 
+    <span className="font-bold" style={{ color: theme.primary }}>
+      50% off{" "}
     </span>
   );
 };
@@ -693,37 +683,36 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         height="fixed"
         fixedHeight="max-h-[90dvh]"
         closeOnBackdrop={false}
-        className="flex flex-col sm:max-w-xl dark:!bg-white"
+        className="flex flex-col sm:max-w-xl"
       >
         <ModalHeader title="" onClose={handleClose} showLogo={true} logoSize="sm" accent="none" />
 
         {/* Congratulations Section - Below Header (hidden when package is selected) */}
         {!selectedPackage && (
-          <div className="bg-white text-gray-800 p-2 sm:p-3 text-center">
-            <h2 className="text-green-600 text-xs sm:text-sm font-bold mb-1">
+          <div className="bg-white text-gray-800 dark:bg-neutral-900 dark:text-neutral-100 p-2 sm:p-3 text-center border-b border-gray-200 dark:border-neutral-800">
+            <h2 className="text-green-600 dark:text-emerald-400 text-xs sm:text-sm font-bold mb-1">
               CONGRATULATIONS{userData?.firstName ? ` ${userData.firstName.toUpperCase()}` : ""}!
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 mb-3">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-3">
               you are entitled to{" "}
               <SpecialPackages50OffText />
-              {" "}
               today
             </p>
 
             {/* Divider-style: ----- icon special packages activated ----- */}
-            <div className="flex w-full items-center justify-center gap-2 sm:gap-3 text-gray-400">
+            <div className="flex w-full items-center justify-center gap-2 sm:gap-3 text-gray-400 dark:text-neutral-500">
               <span
-                className="h-px min-w-[40px] flex-1 origin-right animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-transparent via-gray-300 to-gray-400"
+                className="h-px min-w-[40px] flex-1 origin-right animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-transparent via-gray-300 to-gray-400 dark:from-transparent dark:via-neutral-600 dark:to-neutral-500"
                 style={{ animationDelay: "0.1s" }}
               />
               <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 animate-[fadeSlideUp_0.5s_ease-out_forwards] opacity-0" style={{ animationDelay: "0.35s" }}>
                 <Zap className="w-3.5 h-3.5 shrink-0 text-amber-500 sm:w-4 sm:h-4 animate-[pulse_2s_ease-in-out_infinite]" style={{ animationDelay: "1s" }} />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 sm:text-xs">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 sm:text-xs">
                   Special Packages Activated
                 </span>
               </div>
               <span
-                className="h-px min-w-[40px] flex-1 origin-left animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-gray-400 via-gray-300 to-transparent"
+                className="h-px min-w-[40px] flex-1 origin-left animate-[lineExpand_0.7s_ease-out_forwards] bg-gradient-to-r from-gray-400 via-gray-300 to-transparent dark:from-neutral-500 dark:via-neutral-600 dark:to-transparent"
                 style={{ animationDelay: "0.1s" }}
               />
             </div>
@@ -868,7 +857,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                 </button>
               )}
             </div>
-            {couponError && <p className="mt-2 text-xs text-red-600">{couponError}</p>}
+            {couponError && (
+              <p className="mt-2 text-xs text-red-600 dark:text-red-400">{couponError}</p>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -967,8 +958,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           })()}
 
           {/* Trust Indicators */}
-          <div className="pt-3 sm:pt-4 border-t border-gray-200 mt-4 sm:mt-6">
-            <div className="flex items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm text-gray-500">
+          <div className="mt-4 border-t border-gray-200 pt-3 dark:border-neutral-800 sm:mt-6 sm:pt-4">
+            <div className="flex items-center justify-center gap-3 text-xs text-gray-500 dark:text-neutral-400 sm:gap-6 sm:text-sm">
               <div className="flex items-center gap-1">
                 <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
                 <span>Instant</span>

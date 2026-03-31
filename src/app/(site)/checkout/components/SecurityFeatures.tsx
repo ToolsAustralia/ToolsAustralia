@@ -51,7 +51,7 @@ export default function SecurityFeatures() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mt-6">
       <div className="text-center mb-6">
         <h3 className="text-lg font-bold text-gray-900 mb-2 font-['Poppins']">Why Shop With Us?</h3>
-        <p className="text-gray-600 text-sm">Your security and satisfaction are our top priorities</p>
+        <p className="text-gray-600 dark:text-neutral-400 text-sm">Your security and satisfaction are our top priorities</p>
       </div>
 
       <div className="space-y-4">
@@ -64,7 +64,7 @@ export default function SecurityFeatures() {
               </div>
               <div className="flex-1">
                 <h4 className="font-medium text-gray-900 text-sm">{feature.title}</h4>
-                <p className="text-xs text-gray-600">{feature.description}</p>
+                <p className="text-xs text-gray-600 dark:text-neutral-400">{feature.description}</p>
               </div>
             </div>
           );
@@ -76,19 +76,19 @@ export default function SecurityFeatures() {
         <div className="flex items-center justify-center gap-4">
           <div className="text-center">
             <div className="w-12 h-8 bg-gray-100 rounded flex items-center justify-center mb-1">
-              <span className="text-xs font-bold text-gray-600">SSL</span>
+              <span className="text-xs font-bold text-gray-600 dark:text-neutral-400">SSL</span>
             </div>
             <span className="text-xs text-gray-500">Secure</span>
           </div>
           <div className="text-center">
             <div className="w-12 h-8 bg-gray-100 rounded flex items-center justify-center mb-1">
-              <span className="text-xs font-bold text-gray-600">PCI</span>
+              <span className="text-xs font-bold text-gray-600 dark:text-neutral-400">PCI</span>
             </div>
             <span className="text-xs text-gray-500">Compliant</span>
           </div>
           <div className="text-center">
             <div className="w-12 h-8 bg-gray-100 rounded flex items-center justify-center mb-1">
-              <span className="text-xs font-bold text-gray-600">256</span>
+              <span className="text-xs font-bold text-gray-600 dark:text-neutral-400">256</span>
             </div>
             <span className="text-xs text-gray-500">Bit SSL</span>
           </div>

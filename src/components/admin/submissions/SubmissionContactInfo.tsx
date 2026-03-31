@@ -22,31 +22,31 @@ export default function SubmissionContactInfo({
 }: SubmissionContactInfoProps) {
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+      <h4 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
         Contact Information
       </h4>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium text-gray-900">
+          <span className="font-medium text-gray-900 dark:text-neutral-100">
             {formatDisplayName(firstName, lastName)}
           </span>
         </div>
         <a
           href={`mailto:${email}`}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600 transition-colors"
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-red-600 transition-colors"
         >
           <Mail className="w-4 h-4 flex-shrink-0" />
           <span className="truncate">{email}</span>
         </a>
         <a
           href={`tel:${phone}`}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600 transition-colors"
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-red-600 transition-colors"
         >
           <Phone className="w-4 h-4 flex-shrink-0" />
           <span>{phone}</span>
         </a>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Calendar className="w-4 h-4 flex-shrink-0" />
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-neutral-400">
+          <Calendar className="h-4 w-4 flex-shrink-0" />
           <span>
             {formatDateInLocal(
               new Date(submittedAt),

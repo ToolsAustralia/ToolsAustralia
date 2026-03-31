@@ -171,7 +171,7 @@ export default function ExperimentDetailModal({
               className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === "variants"
                   ? "border-red-600 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               <Target className="w-4 h-4 inline mr-2" />
@@ -182,7 +182,7 @@ export default function ExperimentDetailModal({
               className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === "results"
                   ? "border-red-600 text-red-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
               <BarChart3 className="w-4 h-4 inline mr-2" />
@@ -196,16 +196,16 @@ export default function ExperimentDetailModal({
           <FormSection title="Experiment Information" icon={FlaskConical}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium text-gray-700">Target Pages</p>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm font-medium text-gray-700 dark:text-neutral-200">Target Pages</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
                   {experiment.slugTargets.includes("*")
                     ? "All Pages"
                     : `${experiment.slugTargets.length} page(s)`}
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-700">Schedule</p>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm font-medium text-gray-700 dark:text-neutral-200">Schedule</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">
                   {experiment.startDate
                     ? `Start: ${format(new Date(experiment.startDate), "MMM d, yyyy")}`
                     : "No start date"}

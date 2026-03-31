@@ -53,7 +53,7 @@ export default function UnviewedSubmissionsNotification({
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h4 className="font-semibold text-gray-900 mb-2">Unviewed submissions</h4>
-              <div className="space-y-1.5 text-sm text-gray-600">
+              <div className="space-y-1.5 text-sm text-gray-600 dark:text-neutral-400">
                 {counts.partner > 0 && (
                   <div className="flex items-center gap-2">
                     <Building className="w-4 h-4 text-red-600 flex-shrink-0" />
@@ -78,7 +78,7 @@ export default function UnviewedSubmissionsNotification({
             </div>
             <button
               onClick={handleDismiss}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+              className="p-1 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 rounded transition-colors"
               aria-label="Dismiss"
             >
               <X className="w-5 h-5" />

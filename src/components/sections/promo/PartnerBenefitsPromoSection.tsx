@@ -259,7 +259,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                         </span>
                       </div>
                     ))}
-                    <span className="text-[10px] text-gray-600 font-poppins">
+                    <span className="text-[10px] text-gray-600 dark:text-neutral-400 font-poppins">
                       + one-time packs
                     </span>
                   </div>
@@ -282,7 +282,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                                 opacity: 0.3 + month * 0.14,
                               }}
                             />
-                            <span className="text-[8px] text-gray-600 font-poppins">M{month}</span>
+                            <span className="text-[8px] text-gray-600 dark:text-neutral-400 font-poppins">M{month}</span>
                           </div>
                         );
                       })}
