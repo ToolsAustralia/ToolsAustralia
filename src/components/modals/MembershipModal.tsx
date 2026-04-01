@@ -4764,8 +4764,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   // Loading and success screens are now handled by global LoadingContext
 
   const promoMultiplier = promoEnhancedPlan?.metadata?.isPromoActive && typeof promoEnhancedPlan?.metadata?.promoMultiplier === "number"

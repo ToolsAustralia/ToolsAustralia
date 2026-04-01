@@ -509,7 +509,6 @@ export default function AffiliateDetailModal({
     );
   };
 
-  if (!isOpen) return null;
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed" fixedHeight="h-[90dvh]">
       <div className="flex h-full min-h-0 flex-col">

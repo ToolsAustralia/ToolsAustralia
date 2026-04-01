@@ -100,8 +100,6 @@ export default function PasswordlessLoginModal({ isOpen, onClose, onLoginSuccess
     onClose();
   };
 
-  if (!isOpen) return null;
-
   if (showOTPVerification) {
     return (
       <OTPVerificationModal

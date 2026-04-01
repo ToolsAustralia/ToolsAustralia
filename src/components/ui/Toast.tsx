@@ -33,6 +33,7 @@ import React, { useState, useEffect, useContext, createContext, useCallback } fr
 import { CheckCircle, AlertCircle, XCircle, Info, X, Bug } from "lucide-react";
 import { ErrorContext } from "@/types/error-reporting";
 import { Z_INDEX } from "@/constants/z-index";
+import { TOAST_TRANSITION_MS } from "@/utils/motion/modalPresets";
 
 export interface ToastProps {
   id?: string;
@@ -116,7 +117,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
     const startTime = Date.now();
     const hideTimer = setTimeout(() => {
       setVisible(false);
-      setTimeout(onRemove, 300); // Wait for exit animation to complete
+      setTimeout(onRemove, TOAST_TRANSITION_MS); // Wait for exit animation to complete
     }, timeToWait);
 
     return () => {
@@ -212,7 +213,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
   const handleClose = () => {
     setVisible(false);
-    setTimeout(onRemove, 300);
+    setTimeout(onRemove, TOAST_TRANSITION_MS);
   };
 
   // Swipe-to-dismiss handlers
@@ -249,10 +250,11 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
   return (
     <div
-      className={`max-w-[calc(100vw-1rem)] sm:max-w-sm w-full transform transition-all duration-300 ease-in-out ${
+      className={`max-w-[calc(100vw-1rem)] sm:max-w-sm w-full transform transition-all ease-in-out ${
         visible ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
       }`}
       style={{
+        transitionDuration: `${TOAST_TRANSITION_MS}ms`,
         marginTop: index * 4 + "px", // Stack toasts with compact spacing on mobile
         transform: swipeDistance > 0 ? `translateX(${swipeTransform}px)` : undefined,
         opacity: swipeDistance > 0 ? Math.max(0.3, 1 - swipeDistance / 200) : undefined,

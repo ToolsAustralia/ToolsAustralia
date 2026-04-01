@@ -622,10 +622,8 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   // Show PaymentProcessingScreen if payment is being processed
-  if (showPaymentProcessing && paymentIntentId) {
+  if (isOpen && showPaymentProcessing && paymentIntentId) {
     return (
       <PaymentProcessingScreen
         paymentIntentId={paymentIntentId}

@@ -37,8 +37,6 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
     onClose();
   };
 
-  if (!isOpen && !showLoginModal) return null;
-
   const fieldLabel = conflictField === "email" ? "email address" : "mobile number";
 
   return (

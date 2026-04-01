@@ -483,8 +483,6 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
       <ModalHeader

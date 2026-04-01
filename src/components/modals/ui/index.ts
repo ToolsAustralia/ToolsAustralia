@@ -20,7 +20,7 @@ export type { default as SelectProps } from "./Select";
 export type { default as ButtonProps } from "./Button";
 export type { default as CheckboxProps } from "./Checkbox";
 export type { default as ImageUploadProps } from "./ImageUpload";
-export type { default as ModalContainerProps } from "./ModalContainer";
+export type { ModalContainerProps, ModalPresentation } from "./ModalContainer";
 export type { ModalHeaderProps } from "./ModalHeader";
 export type { ModalFooterProps } from "./ModalFooter";
 export type { default as ModalContentProps } from "./ModalContent";

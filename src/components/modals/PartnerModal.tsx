@@ -179,8 +179,6 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" closeOnBackdrop={false}>
       {/* Custom Header for Partner Modal - Highly optimized for mobile */}

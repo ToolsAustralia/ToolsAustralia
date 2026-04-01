@@ -571,8 +571,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={true}>
       <ModalHeader title="Login to Your Account" onClose={onClose} showLogo={true} variant="metallic" accent="red" />

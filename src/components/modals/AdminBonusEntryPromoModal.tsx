@@ -229,8 +229,6 @@ const AdminBonusEntryPromoModal: React.FC<AdminBonusEntryPromoModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader

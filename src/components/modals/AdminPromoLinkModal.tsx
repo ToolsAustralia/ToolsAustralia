@@ -240,8 +240,6 @@ const AdminPromoLinkModal: React.FC<AdminPromoLinkModalProps> = ({ isOpen, onClo
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader
