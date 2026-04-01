@@ -942,8 +942,6 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     }
   };
 
-  if (!isOpen) return null;
-
   const headerTitle = success ? "Setup Complete!" : activeStep === 3 ? "Verify Your Email" : "Complete Your Profile";
   const headerSubtitle = success
     ? "Your account is ready to use"

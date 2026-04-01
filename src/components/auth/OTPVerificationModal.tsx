@@ -117,8 +117,6 @@ export default function OTPVerificationModal({
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md">
       <ModalHeader title="Verify Your Mobile" subtitle={`We've sent a 6-digit code to ${mobile}`} onClose={onClose} />

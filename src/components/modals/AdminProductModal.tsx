@@ -222,8 +222,6 @@ const AdminProductModal: React.FC<AdminProductModalProps> = ({ isOpen, onClose, 
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
       <ModalHeader

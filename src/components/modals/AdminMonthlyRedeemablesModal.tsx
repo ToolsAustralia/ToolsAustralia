@@ -215,8 +215,6 @@ export default function AdminMonthlyRedeemablesModal({
     setError(null);
   }, [editingCampaign, isOpen]);
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader title={editingCampaign ? "Edit Monthly Redeemables Coupon" : "Create Monthly Redeemables Coupon"} onClose={onClose} showLogo={false} />

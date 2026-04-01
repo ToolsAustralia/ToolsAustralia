@@ -147,8 +147,6 @@ export default function AdminMilestoneRewardModal({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader title={editingReward ? "Edit Milestone Reward" : "Create Milestone Reward"} onClose={onClose} showLogo={false} />

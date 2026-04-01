@@ -47,9 +47,7 @@ export default function ExperimentDetailModal({
   const updateVariantMutation = useUpdateVariant();
   const deleteVariantMutation = useDeleteVariant();
 
-  if (!isOpen) return null;
-
-  if (isLoading) {
+  if (isOpen && isLoading) {
     return (
       <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl">
         <ModalHeader title="Loading Experiment..." onClose={onClose} showLogo={false} />

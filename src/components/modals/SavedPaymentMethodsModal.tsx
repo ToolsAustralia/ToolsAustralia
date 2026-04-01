@@ -68,8 +68,6 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
     return `${month.toString().padStart(2, "0")}/${year.toString().slice(-2)}`;
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose}>
       <div className="bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-2xl shadow-2xl max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full mx-2 sm:mx-4 max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden">

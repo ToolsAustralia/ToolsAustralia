@@ -22,8 +22,6 @@ const LoginPromptModal: React.FC<LoginPromptModalProps> = ({ isOpen, onClose }) 
     router.push("/login"); // Redirect to login page
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={true}>
       <ModalHeader

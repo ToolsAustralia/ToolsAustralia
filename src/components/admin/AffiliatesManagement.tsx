@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import AffiliateDetailModal from "./AffiliateDetailModal";
+import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 interface Affiliate {
   id: string;
@@ -568,8 +569,14 @@ function CreateAffiliateModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 max-w-md w-full flex max-h-[90dvh] flex-col overflow-hidden">
+    <ModalContainer
+      isOpen
+      onClose={onClose}
+      size="md"
+      height="auto"
+      className="flex flex-col !max-w-md max-h-[90dvh] overflow-hidden !border-gray-100 dark:!border-neutral-700 shadow-lg dark:shadow-none !bg-white dark:!bg-neutral-900 rounded-xl"
+      preventBackButton={false}
+    >
         <div className="flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-6 pt-6 pb-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">Create Affiliate</h3>
@@ -668,7 +675,6 @@ function CreateAffiliateModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalContainer>
   );
 }
