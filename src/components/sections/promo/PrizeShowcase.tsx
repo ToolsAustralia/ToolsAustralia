@@ -63,6 +63,18 @@ function isMajorDrawBrandCollectionWebp(srcLower: string): boolean {
   return /\/(dewalt|makita|milwaukee|ryobi)\.webp$/.test(srcLower);
 }
 
+/** Pre-composed toolbox + toolset hero art (first gallery slides) — scaled down in frame vs raw product heroes. */
+function isMajorDrawToolboxCompositeHero(srcLower: string): boolean {
+  return (
+    srcLower.includes("makitaset-milwaukeetb.webp") ||
+    srcLower.includes("makitaset-sidchrometb.webp") ||
+    srcLower.includes("dewaltset-milwaukeetb.webp") ||
+    srcLower.includes("dewaltset-sidchrometb.webp") ||
+    srcLower.includes("milwaukeeset-milwaukeetb.webp") ||
+    srcLower.includes("milwaukeeset-sidchrome.webp")
+  );
+}
+
 type GalleryLayoutResult = {
   scaleClass: string;
   translateClass: string;
@@ -81,6 +93,14 @@ function getPrizeGalleryImageLayout(
     return {
       scaleClass: "scale-90",
       translateClass: "-translate-y-[4%]",
+      objectPosition: { objectPosition: "center center" as const },
+    };
+  }
+
+  if (isMajorDrawToolboxCompositeHero(src)) {
+    return {
+      scaleClass: "scale-90",
+      translateClass: "-translate-y-[3%]",
       objectPosition: { objectPosition: "center center" as const },
     };
   }
