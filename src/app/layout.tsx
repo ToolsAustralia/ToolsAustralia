@@ -83,7 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script
           nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var r=localStorage.getItem("ta-theme");var t=null;if(r){var p=JSON.parse(r);t=p&&p.state&&p.state.theme}var d=t==="dark"||(!r&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
+            __html: `(function(){try{function h(){var p=new Intl.DateTimeFormat("en-AU",{timeZone:"Australia/Sydney",hour:"numeric",hourCycle:"h23"}).formatToParts(new Date());for(var i=0;i<p.length;i++)if(p[i].type==="hour")return parseInt(p[i].value,10);return 12}function n(x){return x>=18||x<6}var r=localStorage.getItem("ta-theme");var t=null;if(r){var p=JSON.parse(r);t=p&&p.state&&p.state.theme}var d=t==="dark"||(!r&&n(h()));if(d){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`,
           }}
         />
         {googleVerify ? <meta name="google-site-verification" content={googleVerify} /> : null}
@@ -103,7 +103,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Contentsquare UX analytics - load in head for accurate tracking */}
         <script src="https://t.contentsquare.net/uxa/80b94ffdd640f.js" async />
       </head>
-      <body className={`${inter.className} antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100`}>
+      <body
+        className={`${inter.className} antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 transition-colors duration-200 ease-out`}
+      >
         <GoogleTagManager
           gtmId={process.env.NEXT_PUBLIC_GTM_ID}
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_GTM_TESTING}
