@@ -2,11 +2,13 @@
 
 import { useEffect } from "react";
 import { useThemeStore } from "@/stores/useThemeStore";
+import {
+  DARK_MODE_START_HOUR,
+  getScheduledThemeForSydney,
+  LIGHT_MODE_START_HOUR,
+  SYDNEY_TZ,
+} from "@/utils/themeSchedule";
 import { formatInTimeZone } from "date-fns-tz";
-
-const AEST_TIMEZONE = "Australia/Sydney";
-const DARK_MODE_START_HOUR = 18; // 6 PM
-const LIGHT_MODE_START_HOUR = 6; // 6 AM
 
 /**
  * Auto Theme Hook
@@ -34,16 +36,7 @@ export function useAutoTheme() {
      */
     const checkAndSetTheme = () => {
       try {
-        const now = new Date();
-        
-        // Get current hour in Australia/Sydney timezone (handles AEST/AEDT automatically)
-        const hourStr = formatInTimeZone(now, AEST_TIMEZONE, "H");
-        const currentHour = parseInt(hourStr, 10);
-
-        // Determine if we should be in dark mode
-        // Dark mode: 18:00 (6 PM) to 05:59 (5:59 AM)
-        const shouldBeDark = currentHour >= DARK_MODE_START_HOUR || currentHour < LIGHT_MODE_START_HOUR;
-        const targetTheme = shouldBeDark ? "dark" : "light";
+        const targetTheme = getScheduledThemeForSydney();
 
         // Only update if theme needs to change
         if (theme !== targetTheme) {
@@ -72,7 +65,7 @@ export function useAutoTheme() {
  */
 export function getNextThemeTransitionTime(): { time: string; theme: "dark" | "light" } {
   const now = new Date();
-  const hourStr = formatInTimeZone(now, AEST_TIMEZONE, "H");
+  const hourStr = formatInTimeZone(now, SYDNEY_TZ, "H");
   const currentHour = parseInt(hourStr, 10);
 
   if (currentHour >= DARK_MODE_START_HOUR || currentHour < LIGHT_MODE_START_HOUR) {

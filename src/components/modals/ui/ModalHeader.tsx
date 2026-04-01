@@ -33,6 +33,10 @@ export interface ModalHeaderProps {
    * (e.g. solid brand color for prize spec modal).
    */
   customBackground?: boolean;
+  /**
+   * Tighter padding, smaller title, and closer close control on small screens (sm+ matches default look).
+   */
+  compact?: boolean;
 }
 
 const ModalHeader: React.FC<ModalHeaderProps> = ({
@@ -53,6 +57,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   subtitleTextClassName,
   style: headerStyle,
   customBackground = false,
+  compact = false,
 }) => {
   const resolvedVariant = variant === "auto" ? (showLogo ? "metallic" : "brand") : variant;
 
@@ -83,36 +88,52 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
               titleTextClassName.includes("text-gray-9"))
         );
 
+  const paddingClass = compact ? "p-3 sm:p-4" : "p-4";
+  const closePositionClass = compact ? "top-3 right-3 sm:top-4 sm:right-4" : "top-4 right-4";
+  const titleGutterClass = compact ? "px-9 sm:px-12" : "px-12";
+  const titleTypographyClass = compact
+    ? "text-center text-sm sm:text-lg font-bold leading-snug sm:leading-normal"
+    : "text-center text-base sm:text-lg font-bold";
+
   return (
-    <div className={`${headerBaseClass} ${accentClass} p-4 ${textClass} relative ${className}`} style={headerStyle}>
+    <div
+      className={`${headerBaseClass} ${accentClass} ${paddingClass} ${textClass} relative ${className}`}
+      style={headerStyle}
+    >
       {/* Close Button - Conditionally rendered based on showCloseButton prop */}
       {showCloseButton && (
         <button
           onClick={onClose}
           type="button"
-          className={`absolute top-4 right-4 ${textClass} transition-all duration-300 hover:scale-110 z-50 p-1 rounded-full focus:outline-none focus:ring-2 ${
+          className={`absolute ${closePositionClass} ${textClass} transition-all duration-300 hover:scale-110 z-50 p-0.5 sm:p-1 rounded-full focus:outline-none focus:ring-2 ${
             headerUsesDarkForeground
               ? "hover:bg-black/15 hover:text-gray-900 focus:ring-black/20"
               : "hover:bg-white/10 hover:text-white focus:ring-white/20"
           }`}
           aria-label="Close modal"
         >
-          <X size={20} />
+          <X className={compact ? "w-[18px] h-[18px] sm:h-5 sm:w-5" : "h-5 w-5"} strokeWidth={2.25} aria-hidden />
         </button>
       )}
 
       {/* Logo */}
       {showLogo && (
-        <div className="flex justify-center mb-2">
+        <div className={`flex justify-center ${compact ? "mb-1 sm:mb-2" : "mb-2"}`}>
           <Image src={logoSrc} alt={logoAlt} width={120} height={40} className={`${logoHeightClass} w-auto`} />
         </div>
       )}
 
-      {/* Title - px-12 keeps title clear of the close button; long titles wrap in the safe zone */}
-      <h2 className="text-center text-base sm:text-lg font-bold px-12">{titleNode ?? title}</h2>
+      {/* Title — horizontal padding keeps copy clear of the close control */}
+      <h2 className={`${titleTypographyClass} ${titleGutterClass}`}>{titleNode ?? title}</h2>
 
       {/* Subtitle */}
-      {subtitle && <p className={`text-center ${subtitleClass} text-sm mt-1`}>{subtitle}</p>}
+      {subtitle && (
+        <p
+          className={`text-center ${subtitleClass} ${compact ? "text-xs sm:text-sm mt-0.5 sm:mt-1" : "text-sm mt-1"}`}
+        >
+          {subtitle}
+        </p>
+      )}
     </div>
   );
 };
