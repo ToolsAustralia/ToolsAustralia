@@ -271,11 +271,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     handleCouponApply(normalizedInitialCode);
   }, [isOpen, initialCouponCode, handleCouponApply]);
 
-  // CRITICAL: Verify user has access (subscription OR current draw entries) before showing modal
-  if (!isOpen) return null;
-
   // Verify user is authenticated and has access to additional packages
-  if (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
+  if (
+    isOpen &&
+    (!isAuthenticated || !hasAdditionalPackageAccess(userData, userMajorDrawStats))
+  ) {
     // console.log("🚫 SpecialPackagesModal: User not authenticated or doesn't have access to additional packages");
     return null;
   }

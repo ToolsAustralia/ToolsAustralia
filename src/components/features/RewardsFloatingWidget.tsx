@@ -13,6 +13,7 @@ import {
   hasSeenRewardsSpotlight,
   markRewardsSpotlightSeen,
 } from "@/utils/rewards-widget-spotlight-storage";
+import { MODAL_DURATION_ENTER_S } from "@/utils/motion/modalPresets";
 
 interface RewardsFloatingWidgetProps {
   userId: string;
@@ -316,7 +317,7 @@ export default function RewardsFloatingWidget({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            transition={{ duration: MODAL_DURATION_ENTER_S, ease: "easeOut" }}
             onClick={() => setIsOpen(false)}
           >
             <motion.div

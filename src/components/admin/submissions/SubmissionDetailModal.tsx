@@ -8,6 +8,7 @@ import ConversationThread from "./ConversationThread";
 import type { ThreadMessage } from "./ConversationThread";
 import ReplyForm from "./ReplyForm";
 import { getStatusColor } from "./StatusSelect";
+import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 interface Reply {
   _id: string;
@@ -212,15 +213,14 @@ export default function SubmissionDetailModal({
   const messages = buildThreadMessages();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative w-full max-w-2xl lg:max-w-3xl mx-4 rounded-2xl shadow-2xl dark:shadow-none border border-gray-200 dark:border-neutral-700 flex flex-col max-h-[90vh] overflow-hidden bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950">
+    <ModalContainer
+      isOpen
+      onClose={onClose}
+      size="4xl"
+      height="auto"
+      preventBackButton={false}
+      className="relative mx-4 flex flex-col !max-w-2xl lg:!max-w-3xl max-h-[90vh] overflow-hidden !border-gray-200 dark:!border-neutral-700 shadow-2xl dark:shadow-none !bg-gradient-to-br from-white via-slate-50 to-white dark:!from-neutral-900 dark:!via-neutral-900 dark:!to-neutral-950"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -327,7 +327,6 @@ export default function SubmissionDetailModal({
             {toast.message}
           </div>
         )}
-      </div>
-    </div>
+    </ModalContainer>
   );
 }

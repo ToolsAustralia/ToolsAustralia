@@ -422,8 +422,6 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     return `${paymentMethod.card.brand.toUpperCase()} •••• ${paymentMethod.card.last4}`;
   };
 
-  if (!isOpen) return null;
-
   // Success state
   if (isSuccess) {
     return (

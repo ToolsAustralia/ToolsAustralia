@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import { AlertTriangle, CheckCircle, ArrowUp, ArrowDown, XCircle, Trash2 } from "lucide-react";
-import { Button } from "./ui";
-import { Z_INDEX } from "@/constants/z-index";
+import { Button, ModalContainer } from "./ui";
 
 export interface ConfirmationModalProps {
   isOpen: boolean;
@@ -115,12 +114,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-lg sm:rounded-xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto max-h-[90dvh] overflow-y-auto flex flex-col">
+    <ModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      height="auto"
+      className="max-h-[90dvh] !max-w-sm sm:!max-w-md rounded-xl sm:rounded-xl shadow-2xl"
+      nestedSecondary
+    >
+      <div className="relative flex flex-col max-h-[90dvh] overflow-hidden w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
           <div className="flex items-center gap-3">
@@ -133,7 +136,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Main message */}
           <p className="text-sm sm:text-base text-gray-700 dark:text-neutral-200 leading-relaxed">{message}</p>
 
@@ -337,7 +340,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalContainer>
   );
 };
 

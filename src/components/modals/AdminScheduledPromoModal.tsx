@@ -201,8 +201,6 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader

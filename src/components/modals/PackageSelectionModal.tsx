@@ -19,6 +19,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -44,6 +45,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
   // Determine active tab based on current plan (no toggle, just display what's selected)
   const activeTab: "membership" | "one-time" = currentPlan.period === "mo" ? "membership" : "one-time";
   const { variantConfig } = useVariantContext();
+  const isNarrowViewport = useMediaQuery("(max-width: 639px)");
   const { data: session } = useSession();
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan>(currentPlan);
   // Sub-tab for one-time packages: allow switching between regular one-time and membership packages
@@ -498,10 +500,15 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     }
   }
 
-  if (!isOpen) return null;
-
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="sm" height="fixed" fixedHeight="max-h-[80dvh]">
+    <ModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      size="sm"
+      height="fixed"
+      fixedHeight="max-h-[80dvh]"
+      presentation={isNarrowViewport ? "sheet" : "dialog"}
+    >
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
 
       <ModalContent padding="lg" className="">

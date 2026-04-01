@@ -167,8 +167,6 @@ export default function AdminScheduledPromoCalendarModal({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl">
       <ModalHeader title="Schedule promos — month grid" onClose={onClose} showLogo={false} />

@@ -259,8 +259,6 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg">
       <ModalHeader

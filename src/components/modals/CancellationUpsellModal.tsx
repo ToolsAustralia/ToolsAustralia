@@ -123,8 +123,6 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4">
       {/* Animated Backdrop */}

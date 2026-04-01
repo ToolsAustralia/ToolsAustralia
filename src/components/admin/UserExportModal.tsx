@@ -303,8 +303,6 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl" height="fixed">
       <ModalHeader

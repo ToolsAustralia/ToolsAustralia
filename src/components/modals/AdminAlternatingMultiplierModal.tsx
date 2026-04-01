@@ -186,8 +186,6 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg">
       <ModalHeader

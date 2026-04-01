@@ -145,8 +145,6 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
       <ModalHeader

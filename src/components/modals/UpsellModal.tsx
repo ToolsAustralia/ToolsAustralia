@@ -19,6 +19,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
+import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 /**
  * UpsellModal Component
@@ -38,7 +39,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // This maintains backward compatibility with the interface
   void onAccept; // Suppress unused parameter warning
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
   const [invoiceFinalized, setInvoiceFinalized] = useState(false);
   const finalizationTimeoutIdRef = React.useRef<NodeJS.Timeout | null>(null);
   // ✅ FIX: Track if finalization is in progress to prevent race conditions
@@ -325,11 +325,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
   }, [isOpen, userData?._id, refetchPaymentMethods, queryClient]);
 
-  // Animation effect and reset payment processing state
+  // Reset payment processing state when modal opens / invoice timeout
   useEffect(() => {
     if (isOpen) {
-      // Small delay to ensure smooth animation
-      const timer = setTimeout(() => setIsVisible(true), 10);
       // Reset payment processing state to prevent infinite polling
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
@@ -375,14 +373,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       }
 
       return () => {
-        clearTimeout(timer);
         if (finalizationTimeoutIdRef.current) {
           clearTimeout(finalizationTimeoutIdRef.current);
           finalizationTimeoutIdRef.current = null;
         }
       };
-    } else {
-      setIsVisible(false);
     }
   }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, defaultPaymentMethod]); // eslint-disable-line react-hooks/exhaustive-deps -- userContext/userData omitted to avoid visibility flicker
 
@@ -677,26 +672,17 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     return imagePath;
   };
 
-  if (!isOpen) return null;
-
   // Global loading and success screens are now handled by LoadingContext
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4 max-h-screen overflow-y-auto">
-      {/* Animated Backdrop */}
-      <div
-        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-          isVisible ? "opacity-100" : "opacity-0"
-        }`}
-        // Disabled backdrop click to prevent auto-close
-      />
-
-      {/* Animated Modal */}
-      <div
-        className={`
-          relative mx-auto w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-2xl transform transition-all duration-300 ease-out dark:bg-neutral-900 dark:ring-1 dark:ring-neutral-800 sm:max-w-lg sm:rounded-3xl
-          ${isVisible ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4"}
-        `}
+    <>
+      <ModalContainer
+        isOpen={isOpen}
+        onClose={handleClose}
+        closeOnBackdrop={false}
+        size="lg"
+        height="auto"
+        className="!max-w-xs sm:!max-w-lg overflow-hidden shadow-2xl sm:rounded-3xl"
       >
         {/* Hero Section - Image Display - No Padding */}
         <div className="relative w-full overflow-hidden">
@@ -794,9 +780,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </ModalContainer>
 
-      {/* Payment Processing Screen */}
       {showPaymentProcessing && paymentIntentId && (
         <PaymentProcessingScreen
           paymentIntentId={paymentIntentId}
@@ -808,7 +793,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           onTimeout={handleClose}
         />
       )}
-    </div>
+    </>
   );
 };
 

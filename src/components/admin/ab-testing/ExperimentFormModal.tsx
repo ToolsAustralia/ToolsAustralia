@@ -154,8 +154,6 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl">
       <ModalHeader

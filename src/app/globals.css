@@ -21,6 +21,18 @@
 
   html {
     transition: background-color 0.2s ease, color 0.2s ease;
+    /* Reserves space for the scrollbar so hiding overflow during modals doesn’t narrow/widen the layout */
+    scrollbar-gutter: stable;
+  }
+
+  /*
+   * Body scroll-lock adds padding-right; viewport-fixed chrome (header, bottom nav) still sizes to
+   * the full viewport unless we match that gutter. Do not use transform on body to “fix” this — it
+   * breaks stacking for portaled modals on several browsers.
+   */
+  html[data-modal-scroll-lock] header.fixed,
+  html[data-modal-scroll-lock] nav.fixed.bottom-0 {
+    padding-inline-end: var(--scrollbar-width, 0px);
   }
 }
 
