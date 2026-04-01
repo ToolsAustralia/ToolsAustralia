@@ -9,10 +9,10 @@ export const TOOLBOX_IMAGES = {
 
 /** Add new toolsets here - slug format: "{toolset}-{toolbox}" (e.g. ryobi-milwaukee) */
 export const POWERSET_IMAGES: Record<string, string> = {
-  milwaukee: "/images/brands/name/milwaukeeSet.png",
-  dewalt: "/images/brands/name/dewaltSet.png",
-  makita: "/images/brands/name/makitaSet.png",
-  ryobi: "/images/brands/name/ryobiSet.png",
+  milwaukee: "/images/majordraws/milwaukee-set/MILWAUKEE.webp",
+  dewalt: "/images/majordraws/dewalt-set/DEWALT.webp",
+  makita: "/images/majordraws/makita-set/MAKITA.webp",
+  ryobi: "/images/majordraws/ryobi-set/RYOBI.webp",
 };
 
 /** Brand name logo images - overlay on power toolset images */

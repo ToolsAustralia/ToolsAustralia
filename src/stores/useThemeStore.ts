@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { getScheduledThemeForSydney } from "@/utils/themeSchedule";
 
 type Theme = "light" | "dark";
 
@@ -9,6 +10,8 @@ interface ThemeStore {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  /** Re-enable time-based theme (Sydney 6pm–6am dark) and apply the current slot immediately */
+  restoreAutoTheme: () => void;
   /** Enable automatic theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light) */
   autoThemeEnabled: boolean;
   setAutoThemeEnabled: (enabled: boolean) => void;
@@ -28,6 +31,12 @@ export const useThemeStore = create<ThemeStore>()(
           // When user manually toggles, disable auto-theme
           userManualOverride: true,
         })),
+      restoreAutoTheme: () =>
+        set({
+          userManualOverride: false,
+          autoThemeEnabled: true,
+          theme: getScheduledThemeForSydney(),
+        }),
       autoThemeEnabled: true,
       setAutoThemeEnabled: (enabled) => set({ autoThemeEnabled: enabled }),
       userManualOverride: false,

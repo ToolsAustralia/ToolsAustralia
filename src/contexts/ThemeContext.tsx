@@ -11,6 +11,7 @@ interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  restoreAutoTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -20,7 +21,7 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const { theme, setTheme, toggleTheme } = useThemeStore();
+  const { theme, setTheme, toggleTheme, restoreAutoTheme } = useThemeStore();
   const bootstrapped = useRef(false);
 
   // Enable auto-theme switching based on time of day (6 PM AEST = dark, 6 AM AEST = light)
@@ -60,7 +61,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, restoreAutoTheme }}>
       {children}
     </ThemeContext.Provider>
   );
