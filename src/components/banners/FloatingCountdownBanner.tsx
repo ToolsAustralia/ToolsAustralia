@@ -190,6 +190,8 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
             {/* X Button */}
             <button
               onClick={handleDismiss}
+              type="button"
+              aria-label="Dismiss countdown"
               className="absolute -top-3 -right-4 z-20 bg-white hover:bg-red-50 rounded-full p-1.5 transition-all duration-300 hover:scale-110 hover:shadow-lg group"
             >
               <X className="w-5 h-5 text-red-400 group-hover:text-red-600 transition-colors duration-300" />

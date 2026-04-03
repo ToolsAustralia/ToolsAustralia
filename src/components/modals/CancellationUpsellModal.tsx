@@ -123,6 +123,12 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
     onClose();
   };
 
+  // When closed, render nothing. A full-screen fixed shell with opacity-0 still captures
+  // pointer events and broke Settings → Subscription (and any embedded subscription panel).
+  if (!isOpen) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4">
       {/* Animated Backdrop */}
