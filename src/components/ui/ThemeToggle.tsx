@@ -11,9 +11,8 @@ import { useThemeToggleWithHold } from "@/hooks/useThemeToggleWithHold";
  * Hold ~0.5s to turn time-based theme (Sydney) back on after a manual toggle.
  */
 export function ThemeToggleButton({ className }: { className?: string }) {
-  const { theme, autoThemeEnabled, userManualOverride } = useThemeStore();
+  const { theme } = useThemeStore();
   const hold = useThemeToggleWithHold();
-  const autoPaused = !autoThemeEnabled || userManualOverride;
 
   return (
     <button
@@ -40,9 +39,6 @@ export function ThemeToggleButton({ className }: { className?: string }) {
           theme === "dark" ? "rotate-0 scale-100 opacity-100" : "-rotate-90 scale-0 opacity-0"
         }`}
       />
-      {autoPaused && (
-        <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-orange-500 border-2 border-white dark:border-black animate-pulse" />
-      )}
     </button>
   );
 }
@@ -59,7 +55,7 @@ export function PromotionsGuestThemeToggle() {
   if (!onPromotionsRoute || loading || isAuthenticated) return null;
 
   return (
-    <div className="fixed bottom-32 right-4 z-[55] sm:bottom-36 pointer-events-auto">
+    <div className="fixed z-[55] pointer-events-auto max-sm:bottom-28 max-sm:left-4 max-sm:right-auto sm:bottom-36 sm:right-4 sm:left-auto">
       <ThemeToggleButton />
     </div>
   );
