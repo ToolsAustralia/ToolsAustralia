@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Settings, AlertTriangle, CheckCircle, XCircle, ArrowUp, ArrowDown, CreditCard } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
@@ -303,7 +303,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   // Fetch subscription benefits
   const fetchSubscriptionBenefits = useCallback(async () => {
-    if (!isOpen || !user.subscription?.isActive) return;
+    if ((!isOpen && !renderAsPanel) || !user.subscription?.isActive) return;
 
     setBenefitsLoading(true);
     try {
@@ -320,27 +320,35 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     } finally {
       setBenefitsLoading(false);
     }
-  }, [isOpen, user.subscription?.isActive]);
+  }, [isOpen, renderAsPanel, user.subscription?.isActive]);
 
-  // Handle escape key to close modal and fetch benefits
+  // Escape + body scroll lock apply only to real modals. Embedded settings panel must keep
+  // document scrolling so actions below the fold stay reachable on small viewports.
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isOpen) {
+      if (event.key === "Escape" && isOpen && !renderAsPanel) {
         onClose();
       }
     };
 
-    if (isOpen) {
+    const lockBody = isOpen && !renderAsPanel;
+
+    if (lockBody) {
       document.addEventListener("keydown", handleEscapeKey);
       document.body.style.overflow = "hidden";
+    }
+
+    if (isOpen || renderAsPanel) {
       fetchSubscriptionBenefits();
     }
 
     return () => {
       document.removeEventListener("keydown", handleEscapeKey);
-      document.body.style.overflow = "unset";
+      if (lockBody) {
+        document.body.style.overflow = "unset";
+      }
     };
-  }, [isOpen, onClose, user.subscription?.isActive, fetchSubscriptionBenefits]);
+  }, [isOpen, renderAsPanel, onClose, user.subscription?.isActive, fetchSubscriptionBenefits]);
 
   // Active subscription: either isActive=true OR past_due with autoRenew=true (failed renewal)
   // This allows us to show subscription details for past_due subscriptions
@@ -387,6 +395,42 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     const activeOneTimeData = user.enrichedOneTimePackages?.find((pkg) => pkg.isActive);
     return activeOneTimeData?.packageData || null;
   })();
+
+  const upgradeConfirmationBenefits = useMemo(() => {
+    if (!selectedUpgrade || !membershipPackage) return undefined;
+    const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const currentAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const { entriesToGrant, newLastMonthAccumulatedEntries } = calculateUpgradeEntries(
+      selectedUpgrade.entriesPerMonth,
+      currentAccumulated,
+      membershipPromoMultiplier
+    );
+    const promoNote =
+      membershipPromoMultiplier > 1
+        ? ` Includes ${membershipPromoMultiplier}× promo on this upgrade’s monthly grant.`
+        : "";
+    return [
+      `Accumulated free entries after upgrade: ${newLastMonthAccumulatedEntries.toLocaleString()} (${currentAccumulated.toLocaleString()} you have now + ${entriesToGrant.toLocaleString()} from ${selectedUpgrade.name}’s monthly grant).${promoNote}`,
+      `Every billing cycle on this plan, your balance grows by ${selectedUpgrade.entriesPerMonth} accumulated entries.`,
+      `${selectedUpgrade.partnerDiscountDays} days partner access`,
+    ];
+  }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
+
+  const downgradeConfirmationBenefits = useMemo(() => {
+    if (!selectedDowngrade) return undefined;
+    const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const currentAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const { newLastMonthAccumulatedEntries } = calculateRenewalEntries(
+      selectedDowngrade.entriesPerMonth,
+      currentAccumulated
+    );
+    const firstCycleAdd = newLastMonthAccumulatedEntries - currentAccumulated;
+    return [
+      `When your plan changes at the next billing date, accumulated free entries are expected to reach ${newLastMonthAccumulatedEntries.toLocaleString()} (${currentAccumulated.toLocaleString()} now + ${firstCycleAdd.toLocaleString()} from the first month on ${selectedDowngrade.name}).`,
+      `Each billing cycle on this plan adds ${selectedDowngrade.entriesPerMonth} entries to your accumulated total.`,
+      `${selectedDowngrade.partnerDiscountDays} days partner access`,
+    ];
+  }, [selectedDowngrade, user.subscription]);
 
   const handleUpgradeSubscription = async () => {
     if (!selectedUpgrade || !membershipPackage) return;
@@ -945,6 +989,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       );
                       // After upgrade, user will have: lastMonthAccumulatedEntries + (newBaseEntries * promoMultiplier)
                       const totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
+                      const upgradeColorScheme = getMembershipSectionColorScheme(upgrade.packageId, true);
+                      const upgradeTextClass =
+                        upgradeColorScheme.enterNowButtonTextClass ??
+                        (upgradeColorScheme.textGradientStyle ? "" : "text-white");
+                      const upgradeButtonStyle = (upgradeColorScheme.enterNowButtonStyle ??
+                        upgradeColorScheme.badgeStyle) as React.CSSProperties;
 
                       return (
                         <div
@@ -963,18 +1013,24 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span>{upgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
-                          <Button
-                            onClick={() => {
-                              setSelectedUpgrade(upgrade);
-                              setShowUpgradeConfirm(true);
-                            }}
-                            disabled={isLoading || benefitsLoading}
-                            variant="primary"
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 w-full sm:w-auto ml-0 sm:ml-4 text-xs sm:text-sm shadow-sm hover:shadow-md"
+                          <div
+                            className={`w-full sm:w-auto sm:ml-4 rounded-2xl ${upgradeColorScheme.glow}`}
                           >
-                            Upgrade Now
-                          </Button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUpgrade(upgrade);
+                                setShowUpgradeConfirm(true);
+                              }}
+                              disabled={isLoading || benefitsLoading}
+                              className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${upgradeTextClass} ${upgradeColorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                              style={upgradeButtonStyle}
+                            >
+                              <span className="relative z-10" style={upgradeColorScheme.textGradientStyle ?? undefined}>
+                                Upgrade Now
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1024,20 +1080,22 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedDowngrade(downgrade);
-                              setShowDowngradeConfirm(true);
-                            }}
-                            disabled={isLoading || benefitsLoading}
-                            className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto ml-0 sm:ml-4 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow-md`}
-                            style={buttonStyle}
-                          >
-                            <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                              Schedule Downgrade
-                            </span>
-                          </button>
+                          <div className={`w-full sm:w-auto sm:ml-4 rounded-2xl ${colorScheme.glow}`}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDowngrade(downgrade);
+                                setShowDowngradeConfirm(true);
+                              }}
+                              disabled={isLoading || benefitsLoading}
+                              className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                              style={buttonStyle}
+                            >
+                              <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                Schedule Downgrade
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1211,23 +1269,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           cancelText="Keep Current Plan"
           isLoading={isLoading}
           details={
-            selectedUpgrade && membershipPackage
+            selectedUpgrade && membershipPackage && upgradeConfirmationBenefits
               ? {
                   packageName: selectedUpgrade.name,
                   price: selectedUpgrade.price,
-                  benefits: [
-                    `${selectedUpgrade.entriesPerMonth} entries per month (from ${
-                      "entriesPerMonth" in membershipPackage
-                        ? membershipPackage.entriesPerMonth || 0
-                        : "totalEntries" in membershipPackage
-                        ? membershipPackage.totalEntries || 0
-                        : 0
-                    })`,
-                    `${selectedUpgrade.shopDiscountPercent}% shop discount (from ${
-                      membershipPackage.shopDiscountPercent || 0
-                    }%)`,
-                    `${selectedUpgrade.partnerDiscountDays} days partner access`,
-                  ],
+                  benefits: upgradeConfirmationBenefits,
                   info: [
                     "✓ Pay full plan price now",
                     "✓ Upgrade activates immediately",
@@ -1254,15 +1300,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           cancelText="Keep Current Plan"
           isLoading={isLoading}
           details={
-            selectedDowngrade
+            selectedDowngrade && downgradeConfirmationBenefits
               ? {
                   packageName: selectedDowngrade.name,
                   price: selectedDowngrade.price,
-                  benefits: [
-                    `${selectedDowngrade.entriesPerMonth} entries per month`,
-                    `${selectedDowngrade.shopDiscountPercent}% shop discount`,
-                    `${selectedDowngrade.partnerDiscountDays} days partner access`,
-                  ],
+                  benefits: downgradeConfirmationBenefits,
                   info: ["No charge today", "Keep current benefits until cycle end"],
                   warnings: ["No refunds - you keep what you paid for"],
                 }

@@ -9,6 +9,7 @@ import {
   backdropVariants,
   dialogNestedPanelVariants,
   dialogPanelVariants,
+  MODAL_DURATION_EXIT_S,
   reducedBackdropVariants,
   reducedPanelVariants,
   sheetPanelVariants,
@@ -79,6 +80,15 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       setIsLocked(false);
     }
   }, [isOpen]);
+
+  // If exit animation never completes (Framer / reduced-motion edge cases), avoid leaving the
+  // portal mounted with body scroll-lock stuck indefinitely.
+  useEffect(() => {
+    if (isOpen || !isLocked) return;
+    const fallbackMs = Math.round(MODAL_DURATION_EXIT_S * 1000) + 150;
+    const id = window.setTimeout(() => setIsLocked(false), fallbackMs);
+    return () => window.clearTimeout(id);
+  }, [isOpen, isLocked]);
 
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
@@ -449,7 +459,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       aria-labelledby="modal-title"
     >
       <motion.div
-        className="absolute inset-0 bg-black/50 touch-none pointer-events-auto"
+        className={`absolute inset-0 bg-black/50 touch-none ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
         variants={backdropV}
         initial="closed"
         animate={isOpen ? "open" : "closed"}
@@ -461,7 +471,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       <motion.div
         ref={modalContentRef}
         className={`
-        relative overflow-hidden flex flex-col pointer-events-auto mx-auto
+        relative overflow-hidden flex flex-col ${isOpen ? "pointer-events-auto" : "pointer-events-none"} mx-auto
         ${
           isDarkMode
             ? "dark bg-neutral-900 border border-neutral-800 shadow-2xl shadow-black/50"

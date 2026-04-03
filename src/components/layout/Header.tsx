@@ -18,6 +18,7 @@ import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
 import MetallicButton from "@/components/ui/MetallicButton";
+import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import PackageDetailModal, {
   type PackageDetailModalPackageData,
@@ -485,7 +486,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
             {/* Logo - Optimized for Viewport Width */}
             <Link href="/" className="flex-shrink-0 touch-manipulation">
-              <div className="relative h-[36px] w-[110px] sm:h-[44px] sm:w-[130px] lg:h-[48px] lg:w-[150px] flex items-center justify-center">
+              <div className="relative h-[30px] w-[92px] sm:h-[40px] sm:w-[122px] lg:h-[48px] lg:w-[150px] flex items-center justify-center">
                 <Image
                   src={HEADER_LOGO_LIGHT_SRC}
                   alt="Tools Australia"
@@ -550,7 +551,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               }`}
               aria-current={isActiveLink("/membership") ? "page" : undefined}
             >
-              Membership
+              Membership Package
             </Link>
             {isAuthenticated && isRewardsFeatureEnabled && (
               <Link
@@ -680,7 +681,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen);
                       }
                     }}
-                    className="flex items-center gap-3 text-right hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg px-3 py-2 transition-all duration-200 hover:scale-105 cursor-pointer"
+                    className="flex items-center gap-3 text-right rounded-full border border-gray-200 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-black/90"
                   >
                     <div>
                       <div className="flex flex-col gap-1">
@@ -910,19 +911,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
-            {/* Cart Button - With Item Count and Animation */}
-            <button
-              onClick={() => (isCartOpen ? handleCloseCart() : setIsCartOpen(true))}
-              className="relative w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 text-gray-700 dark:text-neutral-200 hover:text-red-600 transition-all duration-200 rounded-full hover:bg-gray-50 dark:hover:bg-neutral-800 hover:scale-105 flex items-center justify-center touch-manipulation bg-gray-100 dark:bg-neutral-800 group z-10"
-              suppressHydrationWarning
-            >
-              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center min-w-[16px] text-[10px] animate-bounce">
-                  {cartItemCount > 99 ? "99+" : cartItemCount}
-                </span>
-              )}
-            </button>
+            {/* Theme (replaces cart until shop is live) */}
+            <div className="relative z-10 flex items-center justify-center">
+              <ThemeToggleButton
+                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
+              />
+            </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
@@ -943,7 +937,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     // console.log("🖱️ Setting isMobileUserMenuOpen to:", !isMobileUserMenuOpen);
                     setIsMobileUserMenuOpen(!isMobileUserMenuOpen);
                   }}
-                  className="w-8 h-8 sm:w-10 sm:h-10 text-gray-700 dark:text-neutral-200 hover:text-red-600 transition-colors duration-200 rounded-full hover:bg-gray-50 dark:hover:bg-neutral-800 flex items-center justify-center touch-manipulation relative z-50"
+                  className="relative z-50 flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 text-gray-700 dark:text-neutral-200 hover:text-red-600"
                   aria-label="User menu"
                   type="button"
                 >
@@ -1270,7 +1264,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   aria-current={isActiveLink("/membership") ? "page" : undefined}
                 >
                   <Crown className="w-5 h-5" />
-                  Membership
+                  Membership Package
                 </Link>
 
                 {isAuthenticated && isRewardsFeatureEnabled && (
@@ -1401,15 +1395,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     >
                       <UserCircle className="w-5 h-5" />
                       My Account
-                    </Link>
-
-                    <Link
-                      href="/membership"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                      onClick={handleCloseMobileMenu}
-                    >
-                      <Crown className="w-5 h-5" />
-                      My Membership
                     </Link>
                   </>
                 )}

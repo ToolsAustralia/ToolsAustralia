@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useMyAccountData } from "@/hooks/queries";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
+import MembershipModal from "@/components/modals/MembershipModal";
 import DashboardHeader from "../components/DashboardHeader";
 import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";
@@ -181,6 +182,16 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <MembershipModal
+        isOpen={membershipModal.isModalOpen}
+        onClose={membershipModal.closeModal}
+        selectedPlan={membershipModal.selectedPlan}
+        onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
+        }
+      />
     </div>
   );
 }

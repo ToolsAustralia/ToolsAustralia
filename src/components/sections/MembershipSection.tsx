@@ -25,15 +25,44 @@ import {
   getPackageColorSchemeForPromo,
   getMembershipSectionInnerSheenClassNames,
   getCardBorderStyle,
+  type PackageColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
 
-/** Uniform Enter Now CTA style: slate gradient, border, shadow, shimmer. Text is white; package color only on hover/active. */
-const UNIFORM_CTA_CLASS =
-  "group relative overflow-hidden membership-enter-cta-animation bg-gradient-to-r from-slate-700 via-slate-600 to-slate-700 text-white border border-slate-400/50 shadow-lg shadow-slate-900/40 hover:shadow-xl hover:shadow-slate-500/30 hover:scale-[1.02] hover:brightness-110 active:scale-[0.97] active:brightness-95 active:shadow-lg transition-all duration-200 ease-out";
-const UNIFORM_CTA_DISABLED_CLASS = "cursor-not-allowed opacity-90 hover:scale-100 hover:shadow-none hover:brightness-100";
-const CTA_TEXT_HOVER_ACTIVE = "text-white group-hover:[color:var(--cta-accent)] group-active:[color:var(--cta-accent)] transition-colors duration-200";
+/** Per-package Enter Now — same building blocks as Schedule Downgrade in subscription management (gradient panel + border glow + shimmer). */
+function packageEnterNowButtonStyle(colorScheme: PackageColorScheme): React.CSSProperties {
+  return (colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle) as React.CSSProperties;
+}
+
+function packageEnterNowCtaClassName(
+  colorScheme: PackageColorScheme,
+  size: "mobile" | "desktop",
+  visuallyDisabled: boolean
+): string {
+  const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
+  const textSize = size === "mobile" ? "text-[14px] sm:text-[17px]" : "text-[14px] sm:text-[16px]";
+  const base = [
+    "font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5",
+    textSize,
+    "transition-all duration-300 transform",
+    textClass,
+    /* Pulsing box-shadow (brand-tuned in globals.css) — same family as Schedule Downgrade */
+    colorScheme.borderGlow,
+    "membership-enter-cta-animation",
+  ];
+  if (visuallyDisabled) {
+    base.push("opacity-60 cursor-not-allowed hover:scale-100");
+  } else {
+    base.push("hover:scale-[1.02] hover:brightness-105");
+  }
+  return base.join(" ");
+}
+
+/** Outer halo uses package `glow` (filter) so it isn’t clipped by the CTA’s overflow-hidden shimmer. */
+function packageEnterNowGlowWrapClassName(colorScheme: PackageColorScheme): string {
+  return `w-full rounded-2xl ${colorScheme.glow}`;
+}
 
 interface MembershipSectionProps {
   title?: string;
@@ -713,13 +742,18 @@ export default function MembershipSection({
                             {/* Action Button - In flow, no overlay (8px below price for grouped feel) */}
                             <div className="flex-shrink-0 mt-auto pt-0">
                               {isCurrentSubscription(plan) ? (
-                                <button
-                                  disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`}
-                                  style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
-                                >
-                                  <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>Current Plan</span>
-                                </button>
+                                <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className={packageEnterNowCtaClassName(colorScheme, "mobile", true)}
+                                    style={packageEnterNowButtonStyle(colorScheme)}
+                                  >
+                                    <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                      Current Plan
+                                    </span>
+                                  </button>
+                                </div>
                               ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
                                   disabled
@@ -733,11 +767,6 @@ export default function MembershipSection({
                                   const isSubscriptionPlan =
                                     plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                                   let buttonText = "Enter Now";
-                                  const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform`;
-                                  const uniformClass = hierarchy.isCurrent
-                                    ? `${baseLayout} ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`
-                                    : `${baseLayout} ${UNIFORM_CTA_CLASS}`;
 
                                   if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
                                     buttonText = "Update payment";
@@ -747,16 +776,23 @@ export default function MembershipSection({
                                     else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
                                   }
 
+                                  const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;
+
                                   return (
-                                    <button
-                                      className={uniformClass}
-                                      style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
-                                      onClick={() => handlePlanSelect(plan)}
-                                      disabled={hasActiveSubscription && hierarchy.isCurrent}
-                                      suppressHydrationWarning
-                                    >
-                                      <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>{buttonText}</span>
-                                    </button>
+                                    <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                                      <button
+                                        type="button"
+                                        className={packageEnterNowCtaClassName(colorScheme, "mobile", isCtaDisabled)}
+                                        style={packageEnterNowButtonStyle(colorScheme)}
+                                        onClick={() => handlePlanSelect(plan)}
+                                        disabled={isCtaDisabled}
+                                        suppressHydrationWarning
+                                      >
+                                        <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                          {buttonText}
+                                        </span>
+                                      </button>
+                                    </div>
                                   );
                                 })()
                               )}
@@ -997,13 +1033,18 @@ export default function MembershipSection({
                       {/* Action Button - Inside card at bottom (8px below price for grouped feel) */}
                       <div className="flex-shrink-0 pt-0">
                         {isCurrentSubscription(plan) ? (
-                          <button
-                            disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`}
-                            style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
-                          >
-                            <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>Current Plan</span>
-                          </button>
+                          <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                            <button
+                              type="button"
+                              disabled
+                              className={packageEnterNowCtaClassName(colorScheme, "desktop", true)}
+                              style={packageEnterNowButtonStyle(colorScheme)}
+                            >
+                              <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                Current Plan
+                              </span>
+                            </button>
+                          </div>
                         ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                           <button
                             disabled
@@ -1017,11 +1058,6 @@ export default function MembershipSection({
                             const isSubscriptionPlan =
                               plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
                             let buttonText = "Enter Now";
-                            const buttonHeight = "h-[44px] sm:h-[48px]";
-                            const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform`;
-                            const uniformClass = hierarchy.isCurrent
-                              ? `${baseLayout} ${UNIFORM_CTA_CLASS} ${UNIFORM_CTA_DISABLED_CLASS}`
-                              : `${baseLayout} ${UNIFORM_CTA_CLASS}`;
 
                             if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
                               buttonText = "Update payment";
@@ -1031,16 +1067,23 @@ export default function MembershipSection({
                               else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
                             }
 
+                            const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;
+
                             return (
-                              <button
-                                className={uniformClass}
-                                style={{ ["--cta-accent" as string]: colorScheme.accentHexLight ?? colorScheme.accentHex }}
-                                onClick={() => handlePlanSelect(plan)}
-                                disabled={hasActiveSubscription && hierarchy.isCurrent}
-                                suppressHydrationWarning
-                              >
-                                <span className={`relative z-10 ${CTA_TEXT_HOVER_ACTIVE}`}>{buttonText}</span>
-                              </button>
+                              <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                                <button
+                                  type="button"
+                                  className={packageEnterNowCtaClassName(colorScheme, "desktop", isCtaDisabled)}
+                                  style={packageEnterNowButtonStyle(colorScheme)}
+                                  onClick={() => handlePlanSelect(plan)}
+                                  disabled={isCtaDisabled}
+                                  suppressHydrationWarning
+                                >
+                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
+                                    {buttonText}
+                                  </span>
+                                </button>
+                              </div>
                             );
                           })()
                         )}
