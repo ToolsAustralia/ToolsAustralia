@@ -5,6 +5,28 @@
  */
 
 import { escapeHtml, escapeHtmlPreserveNewlines } from './utils';
+import {
+  PRIMARY_BUTTON_STYLE,
+  MAILTO_LINK_STYLE,
+  CODE_BOX_OUTER_STYLE,
+  CODE_LABEL_STYLE,
+  CODE_TEXT_STYLE,
+  CALLOUT_AMBER_BOX_STYLE,
+  CALLOUT_AMBER_TITLE_STYLE,
+  CALLOUT_AMBER_UL_STYLE,
+  CALLOUT_AMBER_LI_STYLE,
+  CALLOUT_AMBER_PASSWORD_RESET_STYLE,
+  HEADER_TITLE_INLINE_STYLE,
+  LOGO_IMG_TAG_SUFFIX,
+  REPLY_BODY_WRAPPER_STYLE,
+  NOTIFICATION_FIELD_ROW_TD_STYLE,
+  NOTIFICATION_FIELD_LABEL_STYLE,
+  NOTIFICATION_FIELD_VALUE_STYLE,
+  NOTIFICATION_MESSAGE_BOX_STYLE,
+  NOTIFICATION_MESSAGE_LABEL_STYLE,
+  NOTIFICATION_MESSAGE_CONTENT_STYLE,
+  NOTIFICATION_TIMESTAMP_STYLE,
+} from './template-styles';
 
 /**
  * Get the base URL for the application
@@ -101,17 +123,6 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                 text-align: center;
                 margin: 30px 0;
                 position: relative;
-            }
-            .verification-section::before {
-                content: '';
-                position: absolute;
-                top: -2px;
-                left: -2px;
-                right: -2px;
-                bottom: -2px;
-                background: linear-gradient(135deg, #dc2626, #b91c1c);
-                border-radius: 12px;
-                z-index: -1;
             }
             .verification-label {
                 font-size: 14px;
@@ -217,8 +228,8 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
             <div class="container">
                 <div class="header">
                     <div class="logo-container">
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                        <h1 class="header-title">Email Verification: ${safeCode}</h1>
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Email Verification: ${safeCode}</h1>
                     </div>
                 </div>
                 
@@ -229,27 +240,27 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                         Thank you for joining Tools Australia. To complete your account setup and ensure the security of your account, please verify your email address using the verification code below.
                     </p>
                     
-                    <div class="verification-section">
-                        <p class="verification-label">Your Verification Code</p>
-                        <div class="verification-code">${safeCode}</div>
+                    <div class="verification-section" style="${CODE_BOX_OUTER_STYLE}">
+                        <p class="verification-label" style="${CODE_LABEL_STYLE}">Your Verification Code</p>
+                        <div class="verification-code" style="${CODE_TEXT_STYLE}">${safeCode}</div>
                     </div>
                     
                     <p class="instructions">
                         Enter this code in the verification form to activate your account and start enjoying all the benefits of your Tools Australia membership.
                     </p>
                     
-                    <div class="security-notice">
-                        <h3>Security Information</h3>
-                        <ul>
-                            <li>This verification code expires in 24 hours</li>
-                            <li>Never share this code with anyone</li>
-                            <li>If you didn't request this verification, please ignore this email</li>
-                            <li>For security reasons, this code can only be used once</li>
+                    <div class="security-notice" style="${CALLOUT_AMBER_BOX_STYLE}">
+                        <h3 style="${CALLOUT_AMBER_TITLE_STYLE}">Security Information</h3>
+                        <ul style="${CALLOUT_AMBER_UL_STYLE}">
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">This verification code expires in 24 hours</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">Never share this code with anyone</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">If you didn't request this verification, please ignore this email</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">For security reasons, this code can only be used once</li>
                         </ul>
                     </div>
                     
                     <p class="support-text">
-                        If you have any questions or need assistance, our support team is here to help. You can reach us through your account dashboard or by contacting <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a>.
+                        If you have any questions or need assistance, our support team is here to help. You can reach us through your account dashboard or by contacting <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a>.
                     </p>
                     
                     <div class="signature">
@@ -262,7 +273,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
                 </div>
             </div>
@@ -449,8 +460,8 @@ export function createPasswordResetEmailTemplate(
             <div class="container">
                 <div class="header">
                     <div class="logo-container">
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                        <h1 class="header-title">Password Reset</h1>
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Password Reset</h1>
                     </div>
                 </div>
                 
@@ -466,18 +477,18 @@ export function createPasswordResetEmailTemplate(
                       <a
                         href="${resetUrl}"
                         class="reset-button"
-                        style="color:#ffffff !important; text-decoration:none;"
+                        style="${PRIMARY_BUTTON_STYLE}"
                       >
                         Reset Password
                       </a>
                     </div>
 
-                    <div class="security-notice">
-                        <h3>Security Information</h3>
-                        <ul>
-                            <li>This reset link expires in ${expiryText}.</li>
-                            <li>Never share this link with anyone.</li>
-                            <li>If you didn't request a password reset, you can safely ignore this email.</li>
+                    <div class="security-notice" style="${CALLOUT_AMBER_PASSWORD_RESET_STYLE}">
+                        <h3 style="${CALLOUT_AMBER_TITLE_STYLE}">Security Information</h3>
+                        <ul style="${CALLOUT_AMBER_UL_STYLE}">
+                            <li style="margin:6px 0;font-size:14px;color:#92400e;">This reset link expires in ${expiryText}.</li>
+                            <li style="margin:6px 0;font-size:14px;color:#92400e;">Never share this link with anyone.</li>
+                            <li style="margin:6px 0;font-size:14px;color:#92400e;">If you didn't request a password reset, you can safely ignore this email.</li>
                         </ul>
                     </div>
 
@@ -496,7 +507,7 @@ export function createPasswordResetEmailTemplate(
                 
                 <div class="footer">
                     <p class="footer-text">© 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
                     <p class="footer-text">Tools Australia - Your trusted partner for quality tools and equipment.</p>
                 </div>
             </div>
@@ -567,11 +578,6 @@ export function createContactSubmissionEmailTemplate(data: {
             .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
             .content { padding: 40px 30px; }
             .intro { font-size: 16px; color: #4b5563; margin-bottom: 30px; line-height: 1.7; }
-            .info-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
-            .info-item { border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; }
-            .info-item:last-child { border-bottom: none; }
-            .info-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-            .info-value { font-size: 16px; color: #111827; font-weight: 500; }
             .message-section { background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 20px; border-radius: 8px; margin: 30px 0; }
             .message-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
             .message-content { font-size: 15px; color: #1f2937; line-height: 1.8; white-space: pre-wrap; }
@@ -585,38 +591,38 @@ export function createContactSubmissionEmailTemplate(data: {
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                    <h1 class="header-title">New Contact Form Submission</h1>
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">New Contact Form Submission</h1>
                 </div>
             
             <div class="content">
                 <p class="intro">You have received a new contact form submission from the Tools Australia website.</p>
                 
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Full Name</div>
-                        <div class="info-value">${safeFirstName} ${safeLastName}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${safeEmail}" style="color: #dc2626; text-decoration: none;">${safeEmail}</a></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${safePhone}" style="color: #dc2626; text-decoration: none;">${safePhone}</a></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Subject</div>
-                        <div class="info-value">${safeSubject}</div>
-                    </div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:30px;">
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Full Name</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeFirstName} ${safeLastName}</div>
+                    </td></tr>
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Email Address</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}"><a href="mailto:${safeEmail}" style="${MAILTO_LINK_STYLE}">${safeEmail}</a></div>
+                    </td></tr>
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Phone Number</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}"><a href="tel:${safePhone}" style="${MAILTO_LINK_STYLE}">${safePhone}</a></div>
+                    </td></tr>
+                    <tr><td style="padding:0;">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Subject</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeSubject}</div>
+                    </td></tr>
+                </table>
+                
+                <div class="message-section" style="${NOTIFICATION_MESSAGE_BOX_STYLE}">
+                    <div class="message-label" style="${NOTIFICATION_MESSAGE_LABEL_STYLE}">Message</div>
+                    <div class="message-content" style="${NOTIFICATION_MESSAGE_CONTENT_STYLE}">${safeMessage}</div>
                 </div>
                 
-                <div class="message-section">
-                    <div class="message-label">Message</div>
-                    <div class="message-content">${safeMessage}</div>
-                </div>
-                
-                <div class="timestamp">
+                <div class="timestamp" style="${NOTIFICATION_TIMESTAMP_STYLE}">
                     <strong>Submitted:</strong> ${submittedDate}
                 </div>
             </div>
@@ -624,7 +630,7 @@ export function createContactSubmissionEmailTemplate(data: {
             <div class="footer">
                 <p class="footer-text">This is an automated notification from Tools Australia.</p>
                 <p class="footer-text">Please reply directly to this email to respond to the customer.</p>
-                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
             </div>
         </div>
     </div>
@@ -698,11 +704,6 @@ export function createPartnerApplicationEmailTemplate(data: {
             .header-title { color: white; font-size: 18px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
             .content { padding: 40px 30px; }
             .intro { font-size: 16px; color: #4b5563; margin-bottom: 30px; line-height: 1.7; }
-            .info-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 30px; }
-            .info-item { border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; }
-            .info-item:last-child { border-bottom: none; }
-            .info-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-            .info-value { font-size: 16px; color: #111827; font-weight: 500; }
             .goals-section { background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 20px; border-radius: 8px; margin: 30px 0; }
             .goals-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
             .goals-content { font-size: 15px; color: #1f2937; line-height: 1.8; white-space: pre-wrap; }
@@ -716,52 +717,52 @@ export function createPartnerApplicationEmailTemplate(data: {
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                    <h1 class="header-title">New Partner Application</h1>
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">New Partner Application</h1>
                 </div>
             
             <div class="content">
                 <p class="intro">You have received a new partner application from the Tools Australia website.</p>
                 
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Contact Name</div>
-                        <div class="info-value">${safeFirstName} ${safeLastName}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Email Address</div>
-                        <div class="info-value"><a href="mailto:${safeEmail}" style="color: #dc2626; text-decoration: none;">${safeEmail}</a></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Phone Number</div>
-                        <div class="info-value"><a href="tel:${safePhone}" style="color: #dc2626; text-decoration: none;">${safePhone}</a></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Business Name</div>
-                        <div class="info-value">${safeBusinessName}</div>
-                    </div>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:30px;">
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Contact Name</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeFirstName} ${safeLastName}</div>
+                    </td></tr>
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Email Address</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}"><a href="mailto:${safeEmail}" style="${MAILTO_LINK_STYLE}">${safeEmail}</a></div>
+                    </td></tr>
+                    <tr><td style="${NOTIFICATION_FIELD_ROW_TD_STYLE}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Phone Number</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}"><a href="tel:${safePhone}" style="${MAILTO_LINK_STYLE}">${safePhone}</a></div>
+                    </td></tr>
+                    <tr><td style="${data.abn || data.acn ? NOTIFICATION_FIELD_ROW_TD_STYLE : 'padding:0;'}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">Business Name</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeBusinessName}</div>
+                    </td></tr>
                     ${data.abn ? `
-                    <div class="info-item">
-                        <div class="info-label">ABN</div>
-                        <div class="info-value">${safeAbn}</div>
-                    </div>
+                    <tr><td style="${data.acn ? NOTIFICATION_FIELD_ROW_TD_STYLE : 'padding:0;'}">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">ABN</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeAbn}</div>
+                    </td></tr>
                     ` : ''}
                     ${data.acn ? `
-                    <div class="info-item">
-                        <div class="info-label">ACN</div>
-                        <div class="info-value">${safeAcn}</div>
-                    </div>
+                    <tr><td style="padding:0;">
+                        <div style="${NOTIFICATION_FIELD_LABEL_STYLE}">ACN</div>
+                        <div style="${NOTIFICATION_FIELD_VALUE_STYLE}">${safeAcn}</div>
+                    </td></tr>
                     ` : ''}
-                </div>
+                </table>
                 
                 ${data.goals ? `
-                <div class="goals-section">
-                    <div class="goals-label">Partnership Goals</div>
-                    <div class="goals-content">${safeGoals}</div>
+                <div class="goals-section" style="${NOTIFICATION_MESSAGE_BOX_STYLE}">
+                    <div class="goals-label" style="${NOTIFICATION_MESSAGE_LABEL_STYLE}">Partnership Goals</div>
+                    <div class="goals-content" style="${NOTIFICATION_MESSAGE_CONTENT_STYLE}">${safeGoals}</div>
                 </div>
                 ` : ''}
                 
-                <div class="timestamp">
+                <div class="timestamp" style="${NOTIFICATION_TIMESTAMP_STYLE}">
                     <strong>Submitted:</strong> ${submittedDate}
                 </div>
             </div>
@@ -769,7 +770,7 @@ export function createPartnerApplicationEmailTemplate(data: {
             <div class="footer">
                 <p class="footer-text">This is an automated notification from Tools Australia.</p>
                 <p class="footer-text">Please reply directly to this email to respond to the applicant.</p>
-                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
             </div>
         </div>
     </div>
@@ -835,14 +836,6 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
                 margin: 30px 0;
                 position: relative;
             }
-            .code-section::before {
-                content: '';
-                position: absolute;
-                top: -2px; left: -2px; right: -2px; bottom: -2px;
-                background: linear-gradient(135deg, #dc2626, #b91c1c);
-                border-radius: 12px;
-                z-index: -1;
-            }
             .code-label { font-size: 14px; font-weight: 600; color: #dc2626; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 15px 0; }
             .login-code { font-size: 36px; font-weight: 800; color: #dc2626; letter-spacing: 8px; font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace; margin: 0; }
             .security-notice {
@@ -873,8 +866,8 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
             <div class="container">
                 <div class="header">
                     <div>
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                        <h1 class="header-title">Login Code: ${safeCode}</h1>
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Login Code: ${safeCode}</h1>
                     </div>
                 </div>
                 <div class="content">
@@ -882,17 +875,17 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
                     <p class="intro-text">
                         You requested a one-time code to sign in to your Tools Australia account. Enter the code below to continue.
                     </p>
-                    <div class="code-section">
-                        <p class="code-label">Your Sign-In Code</p>
-                        <div class="login-code">${safeCode}</div>
+                    <div class="code-section" style="${CODE_BOX_OUTER_STYLE}">
+                        <p class="code-label" style="${CODE_LABEL_STYLE}">Your Sign-In Code</p>
+                        <div class="login-code" style="${CODE_TEXT_STYLE}">${safeCode}</div>
                     </div>
-                    <div class="security-notice">
-                        <h3>Security Information</h3>
-                        <ul>
-                            <li>This code expires in ${expiryMinutes} minutes</li>
-                            <li>Never share this code with anyone</li>
-                            <li>If you didn't request this code, you can safely ignore this email</li>
-                            <li>This code can only be used once</li>
+                    <div class="security-notice" style="${CALLOUT_AMBER_BOX_STYLE}">
+                        <h3 style="${CALLOUT_AMBER_TITLE_STYLE}">Security Information</h3>
+                        <ul style="${CALLOUT_AMBER_UL_STYLE}">
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">This code expires in ${expiryMinutes} minutes</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">Never share this code with anyone</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">If you didn't request this code, you can safely ignore this email</li>
+                            <li style="${CALLOUT_AMBER_LI_STYLE}">This code can only be used once</li>
                         </ul>
                     </div>
                     <div class="signature">
@@ -904,7 +897,7 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
                 </div>
                 <div class="footer">
                     <p class="footer-text">&copy; 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
                 </div>
             </div>
         </div>
@@ -982,12 +975,12 @@ export function createAdminReplyEmailTemplate(
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo" />
-                    <h1 class="header-title">Reply to Your ${typeLabel}</h1>
+                    <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Reply to Your ${typeLabel}</h1>
                 </div>
                 <div class="content">
                     <h2 class="greeting">Hi ${safeName},</h2>
-                    <div class="reply-body">${messageHtml}</div>
+                    <div class="reply-body" style="${REPLY_BODY_WRAPPER_STYLE}">${messageHtml}</div>
                     <div class="signature">
                         <p class="signature-text">
                             Best regards,<br>
@@ -997,7 +990,7 @@ export function createAdminReplyEmailTemplate(
                 </div>
                 <div class="footer">
                     <p class="footer-text">&copy; 2025 Tools Australia. All rights reserved.</p>
-                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color: #dc2626; text-decoration: none;">${SUPPORT_EMAIL}</a></p>
+                    <p class="footer-text">Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="${MAILTO_LINK_STYLE}">${SUPPORT_EMAIL}</a></p>
                 </div>
             </div>
         </div>
@@ -1093,7 +1086,7 @@ export function createMiniDrawFullCapacityTemplate(data: {
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
                                     <td align="center" style="padding: 8px 0;">
-                                        <a href="${adminLink}" style="display: inline-block; background-color: #dc2626; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 16px; padding: 14px 28px; border-radius: 10px;">Go to Mini Draws Admin</a>
+                                        <a href="${adminLink}" style="${PRIMARY_BUTTON_STYLE}">Go to Mini Draws Admin</a>
                                     </td>
                                 </tr>
                             </table>

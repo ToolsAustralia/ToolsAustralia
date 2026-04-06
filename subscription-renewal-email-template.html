@@ -1,7 +1,16 @@
+<!--
+  Klaviyo: paste this document into a campaign/flow email's custom HTML (or upload).
+  Critical layout/colors are duplicated inline so the message stays readable if <style> is stripped (Gmail/Outlook).
+-->
 <html>  
   <head>    
     <meta charset="utf-8"/>
     <meta content="width=device-width" name="viewport"/>
+    <!--[if mso]>
+    <style type="text/css">
+      body, table, td { font-family: Arial, sans-serif !important; }
+    </style>
+    <![endif]-->
     <style>
       /* === GLOBAL RESETS === */
       body,
@@ -257,22 +266,22 @@
       }
     </style>
   </head>
-  <body>    
-    <div class="wrapper">      
-      <div class="card">
+  <body style="margin:0;padding:0;background-color:#f2f3f5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;line-height:1.6;">    
+    <div class="wrapper" style="width:100%;background-color:#f2f3f5;padding:40px 10px;">      
+      <div class="card" style="max-width:640px;width:100%;margin:0 auto;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;">
         <!-- HEADER -->
-        <div class="header">          
-          <img alt="Tools Australia Logo" class="header-logo" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png"/>
-          <h1>
+        <div class="header" style="background-color:#0f172a;text-align:center;padding:40px 20px 30px;color:#ffffff;">          
+          <img alt="Tools Australia Logo" class="header-logo" width="160" src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" style="max-width:160px;height:auto;display:block;margin:0 auto 8px auto;border:0;"/>
+          <h1 style="font-size:26px;font-weight:bold;margin:0 0 4px 0;color:#ffffff;">
             Membership Renewed
           </h1>
-          <p>
+          <p style="font-size:14px;margin:0;color:#ffffff;opacity:0.9;">
             Payment received and confirmed
           </p>
         </div>
 
         <!-- MAIN CONTENT -->
-        <div class="content">
+        <div class="content" style="padding:30px;">
           <!-- Opening Message -->
           <div class="section">
             <strong>Dear {{ person.first_name }},</strong>
@@ -286,36 +295,36 @@
           <!-- Renewal Details -->
           <div class="section">
             <strong>Renewal Details:</strong>
-            <table class="payment-details">
+            <table class="payment-details" style="border-collapse:collapse;width:100%;margin-top:16px;border:1px solid #e5e7eb;">
               <tbody>
                 {% if event.package_name %}
                 <tr>
-                  <th>Package</th>
-                  <td>{{ event.package_name }}</td>
+                  <th style="padding:12px 14px;background-color:#f1f5f9;border-bottom:2px solid #e5e7eb;font-size:12px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Package</th>
+                  <td style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#4b5563;background-color:#ffffff;word-break:break-word;">{{ event.package_name }}</td>
                 </tr>
                 {% endif %}
                 {% if event.renewal_date %}
                 <tr>
-                  <th>Renewal Date</th>
-                  <td>{{ event.renewal_date }}</td>
+                  <th style="padding:12px 14px;background-color:#f1f5f9;border-bottom:2px solid #e5e7eb;font-size:12px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Renewal Date</th>
+                  <td style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#4b5563;background-color:#ffffff;word-break:break-word;">{{ event.renewal_date }}</td>
                 </tr>
                 {% endif %}
                 {% if event.price %}
                 <tr>
-                  <th>Amount Paid</th>
-                  <td><strong style="color: #dc2626;">A${{ event.price }}</strong></td>
+                  <th style="padding:12px 14px;background-color:#f1f5f9;border-bottom:2px solid #e5e7eb;font-size:12px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Amount Paid</th>
+                  <td style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#4b5563;background-color:#ffffff;word-break:break-word;"><strong style="color: #dc2626;">A${{ event.price }}</strong></td>
                 </tr>
                 {% endif %}
                 {% if event.payment_intent_id %}
                 <tr>
-                  <th>Payment ID</th>
-                  <td class="payment-id">{{ event.payment_intent_id }}</td>
+                  <th style="padding:12px 14px;background-color:#f1f5f9;border-bottom:2px solid #e5e7eb;font-size:12px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Payment ID</th>
+                  <td class="payment-id" style="padding:12px 14px;border-bottom:1px solid #f3f4f6;font-size:11px;font-family:monospace;color:#64748b;background-color:#ffffff;word-break:break-all;">{{ event.payment_intent_id }}</td>
                 </tr>
                 {% endif %}
                 {% if person.current_draw_name %}
                 <tr>
-                  <th>Current Major Draw</th>
-                  <td>{{ person.current_draw_name }}</td>
+                  <th style="padding:12px 14px;background-color:#f1f5f9;border-bottom:2px solid #e5e7eb;font-size:12px;color:#1f2937;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left;width:40%;">Current Major Draw</th>
+                  <td style="padding:12px 14px;border-bottom:none;font-size:13px;color:#4b5563;background-color:#ffffff;word-break:break-word;">{{ person.current_draw_name }}</td>
                 </tr>
                 {% endif %}
               </tbody>
@@ -324,9 +333,9 @@
 
           <!-- Entries Granted -->
           {% if event.entries_granted %}
-          <div class="entries-box">
-            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
-            <div class="entries-value">{{ event.entries_granted }}</div>
+          <div class="entries-box" style="background-color:#fff4f4;border:2px solid #dc2626;border-radius:12px;padding:20px;text-align:center;margin:24px 0;">
+            <div class="entries-label" style="font-size:14px;font-weight:600;color:#dc2626;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">🎟️ New Entries Added This Renewal</div>
+            <div class="entries-value" style="font-size:28px;font-weight:800;color:#dc2626;margin:8px 0;line-height:1.2;">{{ event.entries_granted }}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
               Entries have been added to your account
             </div>
@@ -336,23 +345,23 @@
           <div class="divider"></div>
 
           <!-- CTA Button -->
-          <div class="cta-container">
-            <a href="https://toolsaustralia.com.au/my-account" class="cta-button">
+          <div class="cta-container" style="text-align:center;margin:32px 0;">
+            <a href="https://toolsaustralia.com.au/my-account" class="cta-button" style="display:inline-block;background-color:#dc2626;background-image:linear-gradient(135deg,#dc2626,#b91c1c);color:#ffffff !important;text-decoration:none;font-weight:700;font-size:16px;padding:16px 32px;border-radius:8px;text-align:center;margin:12px 8px;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;mso-line-height-rule:exactly;">
               View My Account
             </a>
           </div>
         </div>
 
         <!-- FOOTER -->
-        <div class="footer">          
-          <p>
+        <div class="footer" style="text-align:center;font-size:12px;color:#6b7280;background-color:#f9fafb;padding:24px 20px;border-top:2px solid #e5e7eb;">          
+          <p style="margin:0 0 8px 0;">
             Thank you for being a valued member!
           </p>
-          <p>
-            For inquiries, contact <span class="support-email">support@toolsaustralia.com.au</span>
+          <p style="margin:0 0 8px 0;">
+            For inquiries, contact <span class="support-email" style="font-weight:700;color:#1f2937;">support@toolsaustralia.com.au</span>
           </p>
           <br/>
-          <a href="{% unsubscribe %}">Unsubscribe</a>
+          <a href="{% unsubscribe %}" style="color:#6b7280;text-decoration:none;">Unsubscribe</a>
         </div>
       </div>
     </div>
