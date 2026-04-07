@@ -18,6 +18,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 
 interface User {
   _id: string;
@@ -531,14 +532,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const handleCancelSubscription = async () => {
     if (!activeSubscription) return;
 
-    // Check if user has already redeemed the cancellation upsell
     if (user.cancellationUpsellRedeemed) {
-      // User already redeemed, proceed with cancellation
       await proceedWithCancellation();
-    } else {
-      // Show cancellation upsell modal
+    } else if (canOfferCancellationUpsellRedeem(user)) {
       setShowCancelConfirm(false);
       setShowCancellationUpsell(true);
+    } else {
+      await proceedWithCancellation();
     }
   };
 

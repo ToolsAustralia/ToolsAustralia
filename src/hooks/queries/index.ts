@@ -211,6 +211,7 @@ export {
   type UpdateAutoRenewResponse,
   type UpdateSubscriptionPaymentMethodResponse,
   type PayFailedInvoiceResponse,
+  type PayFailedInvoiceFailureCode,
 } from "./useSubscriptionQueries";
 
 // Query keys and utilities

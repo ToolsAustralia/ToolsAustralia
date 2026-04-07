@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import mongoose from "mongoose";
+import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 
 /**
  * POST /api/cancellation-upsell/redeem
@@ -34,11 +35,7 @@ export async function POST() {
       return NextResponse.json({ error: "You have already redeemed this offer" }, { status: 400 });
     }
 
-    // Check if user has an active subscription (required for this offer)
-    const hasActiveSubscription = user.subscription?.isActive;
-    const hasActiveOneTimePackages = user.oneTimePackages?.some((pkg: { isActive: boolean }) => pkg.isActive);
-
-    if (!hasActiveSubscription && !hasActiveOneTimePackages) {
+    if (!canOfferCancellationUpsellRedeem(user)) {
       return NextResponse.json(
         { error: "No active membership found. This offer is only available to active members." },
         { status: 400 }

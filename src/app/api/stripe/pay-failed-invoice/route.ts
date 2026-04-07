@@ -33,6 +33,11 @@ import {
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 import { analyzePaymentIntentForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
+import {
+  dropNonConfirmableInvoicePaymentIntent,
+  isPaymentIntentClientConfirmable,
+} from "@/utils/payment/stripe/payment-intent-payable";
+import { classifyStripeInvoicePayInitFailure } from "@/utils/payment/stripe/stripe-invoice-pay-errors";
 
 export async function POST(_request: NextRequest) {
   try {
@@ -131,6 +136,8 @@ export async function POST(_request: NextRequest) {
       }
     }
 
+    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
+
     // ✅ STRIPE BEST PRACTICE: Reuse existing PaymentIntent from invoice
     // If no PaymentIntent found, we need to get Stripe to create/reuse one via invoice operations
     // We should NEVER manually create a PaymentIntent - let Stripe handle it
@@ -213,6 +220,8 @@ export async function POST(_request: NextRequest) {
         );
       }
     }
+
+    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
 
     // ✅ STRIPE BEST PRACTICE: If invoice is open but has no PaymentIntent,
     // use stripe.invoices.pay() to create/attach the correct PaymentIntent
@@ -321,6 +330,8 @@ export async function POST(_request: NextRequest) {
                     { status: 400 }
                   );
                 }
+
+                paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
               } catch (retrieveError) {
                 console.error("Error retrieving PaymentIntent from error:", retrieveError);
               }
@@ -328,9 +339,24 @@ export async function POST(_request: NextRequest) {
 
             // If we still don't have a PaymentIntent, return error
             if (!paymentIntent) {
-              const errorMessage = isStripeError(payError) ? payError.message : "Unable to process payment. Please contact support.";
+              const classified = classifyStripeInvoicePayInitFailure(payError);
+              if (classified) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    error: classified.error,
+                    details: classified.details,
+                    failureCode: classified.failureCode,
+                  },
+                  { status: classified.httpStatus }
+                );
+              }
+              const errorMessage = isStripeError(payError)
+                ? payError.message
+                : "Unable to process payment. Please contact support.";
               return NextResponse.json(
                 {
+                  success: false,
                   error: "Failed to initialize payment",
                   details: errorMessage || "Unable to process payment. Please contact support.",
                 },
@@ -359,8 +385,26 @@ export async function POST(_request: NextRequest) {
     // 3. See clear error messages if payment fails
     if (!paymentIntent?.client_secret) {
       return NextResponse.json(
-        { error: "PaymentIntent does not have a client secret" },
-        { status: 500 }
+        {
+          success: false,
+          error: "Payment setup error",
+          details: "Unable to start payment for this invoice. Please contact support.",
+          failureCode: "payment_intent_not_payable",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isPaymentIntentClientConfirmable(paymentIntent)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment setup error",
+          details:
+            "This payment session is no longer valid. Please try again, or contact support if the problem continues.",
+          failureCode: "payment_intent_not_payable",
+        },
+        { status: 400 }
       );
     }
 
