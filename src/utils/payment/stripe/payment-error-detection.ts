@@ -13,6 +13,7 @@ export type ErrorType =
   | "payment_processing_error"
   | "payment_failed"
   | "card_declined"
+  | "stripe_excessive_retry"
   | "insufficient_funds"
   | "network_error"
   | "unknown";
@@ -22,6 +23,7 @@ export type RecoveryStrategy =
   | "payment_intent_recovery"
   | "api_retry"
   | "manual_retry"
+  | "new_payment_method_only"
   | "none";
 
 export interface ErrorDetectionResult {
@@ -148,7 +150,18 @@ export function categorizeError(error: unknown): {
 } {
   const errorMessage = extractErrorMessage(error).toLowerCase();
   const errorCode = extractErrorCode(error)?.toLowerCase() || "";
-  
+
+  if (typeof error === "object" && error !== null) {
+    const err = error as Record<string, unknown>;
+    if (err.requiresDifferentPaymentMethod === true || err.failureReason === "stripe_excessive_retry") {
+      return {
+        category: "non-recoverable",
+        errorType: "stripe_excessive_retry",
+        shouldPreserveState: true,
+      };
+    }
+  }
+
   // ✅ NEW: Check for recovery flags from status checks (SetupIntent with last_setup_error)
   if (typeof error === "object" && error !== null) {
     const err = error as Record<string, unknown>;
@@ -287,7 +300,11 @@ export function getRecoveryStrategy(error: unknown): RecoveryStrategy {
   if (categorization.category === "retryable") {
     return "manual_retry";
   }
-  
+
+  if (categorization.errorType === "stripe_excessive_retry") {
+    return "new_payment_method_only";
+  }
+
   return "none";
 }
 

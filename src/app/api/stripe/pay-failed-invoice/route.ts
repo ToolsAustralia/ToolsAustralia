@@ -32,6 +32,7 @@ import {
 } from "@/utils/payment/failed-invoice-handler";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
+import { analyzePaymentIntentForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 
 export async function POST(_request: NextRequest) {
   try {
@@ -305,6 +306,21 @@ export async function POST(_request: NextRequest) {
                 paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
                   expand: ["payment_method"],
                 });
+
+                const excessiveRetry = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+                if (excessiveRetry.requiresDifferentPaymentMethod) {
+                  return NextResponse.json(
+                    {
+                      success: false,
+                      error: "Payment blocked",
+                      details:
+                        "This card can't be charged right now because it was declined too many times. Add or use a different card, or try again later.",
+                      requiresDifferentPaymentMethod: true,
+                      ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+                    },
+                    { status: 400 }
+                  );
+                }
               } catch (retrieveError) {
                 console.error("Error retrieving PaymentIntent from error:", retrieveError);
               }
@@ -345,6 +361,21 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json(
         { error: "PaymentIntent does not have a client secret" },
         { status: 500 }
+      );
+    }
+
+    const excessiveRetryFinal = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+    if (excessiveRetryFinal.requiresDifferentPaymentMethod) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment blocked",
+          details:
+            "This card can't be charged right now because it was declined too many times. Add or use a different card, or try again later.",
+          requiresDifferentPaymentMethod: true,
+          ...(excessiveRetryFinal.failureReason && { failureReason: excessiveRetryFinal.failureReason }),
+        },
+        { status: 400 }
       );
     }
 

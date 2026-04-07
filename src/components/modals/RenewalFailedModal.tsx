@@ -22,6 +22,9 @@ import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/
 import { useToast } from "@/components/ui/Toast";
 import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { usePayFailedInvoice } from "@/hooks/queries/useSubscriptionQueries";
+import { ApiError } from "@/lib/queries";
+import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
+import { paymentIntentIdFromClientSecret } from "@/utils/payment/stripe/stripe-excessive-retry";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -41,13 +44,14 @@ interface RenewalFailedModalProps {
  */
 const PaymentForm: React.FC<{
   clientSecret: string;
+  paymentIntentId?: string | null;
   amount: number;
   currency: string;
   selectedPaymentMethod?: SavedPaymentMethod | null;
   onPaymentSuccess: (paymentMethodId?: string) => void;
-  onPaymentError: (error: string, details?: string) => void;
+  onPaymentError: (error: string, details?: string, meta?: { requiresDifferentPaymentMethod?: boolean }) => void;
   onCancel: () => void;
-}> = ({ clientSecret, selectedPaymentMethod, onPaymentSuccess, onPaymentError, onCancel }) => {
+}> = ({ clientSecret, paymentIntentId, selectedPaymentMethod, onPaymentSuccess, onPaymentError, onCancel }) => {
   const stripe = useStripe();
   const elements = useElements();
   const { showToast } = useToast();
@@ -161,11 +165,30 @@ const PaymentForm: React.FC<{
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Payment could not be processed. Please try again.";
-      onPaymentError(errorMessage);
+      const piId = paymentIntentId ?? paymentIntentIdFromClientSecret(clientSecret);
+      let requiresDifferentPm = false;
+      if (piId) {
+        try {
+          const res = await fetch("/api/stripe/analyze-payment-intent", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ paymentIntentId: piId }),
+          });
+          if (res.ok) {
+            const body = (await res.json()) as { requiresDifferentPaymentMethod?: boolean };
+            requiresDifferentPm = body.requiresDifferentPaymentMethod === true;
+          }
+        } catch {
+          // ignore — fall back to generic error
+        }
+      }
+      const toastPayload = requiresDifferentPm ? formatPaymentError({ requiresDifferentPaymentMethod: true }) : null;
+      onPaymentError(errorMessage, undefined, { requiresDifferentPaymentMethod: requiresDifferentPm });
       showToast({
         type: "error",
-        title: "Payment Failed",
-        message: errorMessage,
+        title: toastPayload?.title ?? "Payment Failed",
+        message: toastPayload?.message ?? errorMessage,
         duration: 10000,
       });
     } finally {
@@ -282,10 +305,12 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const [paymentState, setPaymentState] = useState<{
     requiresConfirmation: boolean;
     clientSecret?: string;
+    paymentIntentId?: string;
     amount?: number;
     currency?: string;
     invoiceId?: string;
   } | null>(null);
+  const [requiresDifferentPaymentMethod, setRequiresDifferentPaymentMethod] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -303,6 +328,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       setErrorDetails(null);
       setSelectedPaymentMethod(null);
       setShowPaymentMethods(false);
+      setRequiresDifferentPaymentMethod(false);
       // Don't auto-trigger - let user click "Resolve Payment Issue" button
     }
   }, [isOpen]);
@@ -326,9 +352,11 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         }, 2000);
       } else if (response.requiresPaymentConfirmation && response.data?.paymentIntent?.clientSecret) {
         // Payment requires confirmation via Payment Element
+        setRequiresDifferentPaymentMethod(false);
         setPaymentState({
           requiresConfirmation: true,
           clientSecret: response.data.paymentIntent.clientSecret,
+          paymentIntentId: response.data.paymentIntent.id,
           amount: response.data.paymentIntent.amount,
           currency: response.data.paymentIntent.currency || "aud",
           invoiceId: response.data.invoiceId,
@@ -343,9 +371,33 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         throw new Error(errorMsg + (details ? `: ${details}` : ""));
       }
     } catch (err: unknown) {
-      // Handle API error responses that may have both error and details
-      // ApiError from lib/queries has: message, status, data
-      if (err && typeof err === "object") {
+      if (err instanceof ApiError && err.data && typeof err.data === "object" && err.data !== null) {
+        const d = err.data as Record<string, unknown>;
+        if (d.requiresDifferentPaymentMethod === true) {
+          setRequiresDifferentPaymentMethod(true);
+          const formatted = formatPaymentError(err.data);
+          setError(formatted.title);
+          setErrorDetails(formatted.message);
+          showToast({
+            type: "error",
+            title: formatted.title,
+            message: formatted.message,
+            duration: 12000,
+          });
+        } else {
+          const errorMsg =
+            (typeof d.error === "string" && d.error) || err.message || "Failed to process payment";
+          const details = typeof d.details === "string" ? d.details : null;
+          setError(errorMsg);
+          setErrorDetails(details);
+          showToast({
+            type: "error",
+            title: errorMsg,
+            message: details || errorMsg,
+            duration: 10000,
+          });
+        }
+      } else if (err && typeof err === "object") {
         // Check if it's an ApiError with data property
         const apiError = err as { 
           name?: string; 
@@ -411,7 +463,14 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   };
 
   // Handle payment error from Payment Element
-  const handlePaymentError = (errorMessage: string, details?: string) => {
+  const handlePaymentError = (
+    errorMessage: string,
+    details?: string,
+    meta?: { requiresDifferentPaymentMethod?: boolean }
+  ) => {
+    if (meta?.requiresDifferentPaymentMethod) {
+      setRequiresDifferentPaymentMethod(true);
+    }
     setError(errorMessage);
     setErrorDetails(details || null);
   };
@@ -446,6 +505,22 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
         <ModalHeader title="Complete Payment" onClose={onClose} />
         <ModalContent className="p-4 sm:p-6">
+          {requiresDifferentPaymentMethod && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                    Use a different card
+                  </h4>
+                  <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-200">
+                    This card cannot be retried right now due to repeated declines. Select “Enter new payment method” or another saved card.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Alert Banner */}
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
             <div className="flex items-start gap-2">
@@ -609,6 +684,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           >
             <PaymentForm
               clientSecret={paymentState.clientSecret}
+              paymentIntentId={paymentState.paymentIntentId}
               amount={paymentState.amount || 0}
               currency={paymentState.currency || "aud"}
               selectedPaymentMethod={selectedPaymentMethod}
@@ -627,6 +703,22 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
       <ModalHeader title="Subscription Renewal Failed" onClose={onClose} />
       <ModalContent className="p-4 sm:p-6">
+        {requiresDifferentPaymentMethod && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs sm:text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                  Use a different card
+                </h4>
+                <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-200">
+                  This card cannot be retried right now due to repeated declines. Add a new card in account settings, or contact support if you need help.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Alert Banner */}
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-start gap-2">
