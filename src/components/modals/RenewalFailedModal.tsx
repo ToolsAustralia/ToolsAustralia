@@ -384,6 +384,20 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
             message: formatted.message,
             duration: 12000,
           });
+        } else if (
+          d.failureCode === "invoice_not_payable" ||
+          d.failureCode === "payment_intent_not_payable"
+        ) {
+          setRequiresDifferentPaymentMethod(false);
+          const formatted = formatPaymentError(err.data);
+          setError(formatted.title);
+          setErrorDetails(formatted.message);
+          showToast({
+            type: "error",
+            title: formatted.title,
+            message: formatted.message,
+            duration: 14000,
+          });
         } else {
           const errorMsg =
             (typeof d.error === "string" && d.error) || err.message || "Failed to process payment";

@@ -112,6 +112,14 @@ export function formatPaymentError(error: unknown): {
         shouldIncludeTryAgain: false,
       };
 
+    case "invoice_collection_blocked":
+      return {
+        title: "This bill can’t be paid here",
+        message:
+          "Your renewal invoice can’t be collected through this screen anymore (it may have been closed or replaced in billing). Please contact support so we can reset your invoice or help you pay. If your card was blocked after many declines, you may need a different card once billing is reopened.",
+        shouldIncludeTryAgain: false,
+      };
+
     case "insufficient_funds":
       return {
         title: "Insufficient Funds",
