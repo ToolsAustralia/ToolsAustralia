@@ -164,6 +164,8 @@ export interface UpdateSubscriptionPaymentMethodResponse {
   };
 }
 
+export type PayFailedInvoiceFailureCode = "invoice_not_payable" | "payment_intent_not_payable";
+
 export interface PayFailedInvoiceResponse {
   success: boolean;
   requiresPaymentConfirmation?: boolean;
@@ -172,6 +174,7 @@ export interface PayFailedInvoiceResponse {
   details?: string;
   requiresDifferentPaymentMethod?: boolean;
   failureReason?: "stripe_excessive_retry";
+  failureCode?: PayFailedInvoiceFailureCode;
   data?: {
     invoiceId?: string;
     status?: string;
