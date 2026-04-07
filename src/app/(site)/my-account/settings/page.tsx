@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   User,
   CreditCard,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useMyAccountData } from "@/hooks/queries";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { queryKeys } from "@/lib/queryKeys";
 import MembershipModal from "@/components/modals/MembershipModal";
 import DashboardHeader from "../components/DashboardHeader";
 import ProfileTab from "../components/settings/ProfileTab";
@@ -39,6 +41,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const membershipModal = useMembershipModal();
+  const queryClient = useQueryClient();
 
   const {
     data: accountData,
@@ -119,6 +122,13 @@ export default function SettingsPage() {
     signOut({ callbackUrl: "/" });
   };
 
+  const handleSubscriptionUpdate = useCallback(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
+  }, [queryClient, session?.user?.id]);
+
   return (
     <div>
       <DashboardHeader
@@ -175,6 +185,7 @@ export default function SettingsPage() {
               <SubscriptionTab
                 user={user as Parameters<typeof SubscriptionTab>[0]["user"]}
                 membershipModal={membershipModal}
+                onSubscriptionUpdate={handleSubscriptionUpdate}
               />
             )}
             {activeSection === "password" && <PasswordTab userEmail={user.email} />}
