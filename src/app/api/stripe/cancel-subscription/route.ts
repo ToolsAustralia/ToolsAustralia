@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
         currentPeriodEnd: result.currentPeriodEnd,
         endDate: result.endDate,
         cancelledImmediately: result.cancelledImmediately,
+        isPastDue: result.isPastDue,
       },
     });
   } catch (error) {
