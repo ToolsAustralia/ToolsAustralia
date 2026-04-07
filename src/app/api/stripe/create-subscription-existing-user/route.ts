@@ -18,6 +18,7 @@ import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata"
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -460,6 +461,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, payError);
+
         return NextResponse.json(
           {
             success: false,
@@ -469,6 +472,10 @@ export async function POST(request: NextRequest) {
             ...(declineCode && { decline_code: declineCode }),
             ...(errorType && { type: errorType }),
             ...(correlationId && { correlationId }),
+            ...(excessiveRetry.requiresDifferentPaymentMethod && {
+              requiresDifferentPaymentMethod: true,
+              ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+            }),
           },
           { status: 400 }
         );

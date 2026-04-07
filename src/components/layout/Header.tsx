@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,6 +17,7 @@ import { formatDisplayName } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 import MembershipBadge from "@/components/ui/MembershipBadge";
@@ -83,6 +84,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
+  /** 0 = membership CTA, 1 = promotion/giveaway CTA — swapped each animation cycle */
+  const [topBarPromoSlide, setTopBarPromoSlide] = useState(0);
   const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -163,6 +166,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const pathname = usePathname();
   const isRewardsFeatureEnabled = rewardsEnabled();
 
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  /** Same pick as PrizeShowcase hero: membership multiplier if >1, else one-time. */
+  const topBarActivePromoMultiplier = useMemo(() => {
+    if (resolvedMembershipMultiplier != null && resolvedMembershipMultiplier > 1) {
+      return resolvedMembershipMultiplier;
+    }
+    if (resolvedOneTimeMultiplier != null && resolvedOneTimeMultiplier > 1) {
+      return resolvedOneTimeMultiplier;
+    }
+    return null;
+  }, [resolvedMembershipMultiplier, resolvedOneTimeMultiplier]);
+
   // Check if we're on an affiliate page or login page (hide top bar on these pages)
   const isAffiliatePage = pathname?.startsWith("/affiliate");
   const isLoginPage = pathname === "/login";
@@ -216,6 +232,16 @@ export default function Header({ isFixed = true }: HeaderProps) {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isMobileMenuOpen, isCartOpen, handleCloseMobileMenu, handleCloseCart]);
+
+  // Rotate promotional top-bar message every 3s (matches `.animate-topbar-reappear-once` duration in globals.css)
+  useEffect(() => {
+    if (isTopBarHidden || !authStateResolved || shouldHideTopBar) return;
+    if (isAuthenticated && isSetupRequired) return;
+    const id = window.setInterval(() => {
+      setTopBarPromoSlide((s) => (s === 0 ? 1 : 0));
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [isTopBarHidden, authStateResolved, shouldHideTopBar, isAuthenticated, isSetupRequired]);
 
   // Initialize localStorage values on mount for better UX
   useEffect(() => {
@@ -416,13 +442,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {!isTopBarHidden && authStateResolved && !shouldHideTopBar && (
         <div
           data-top-bar
-          className={`h-[24px] sm:h-[28px] w-full flex items-center justify-center relative animate-slideDown ${
+          className={`w-full flex items-center justify-center relative z-[1] animate-slideDown shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${
             isAuthenticated && isSetupRequired
-              ? "bg-blue-600" // Blue for setup reminder
-              : "bg-[#ee0000]" // Red for promotional
+              ? "bg-blue-600 h-[24px] sm:h-[28px]" // Blue for setup reminder
+              : "bg-[#ee0000] h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
           }`}
         >
-          <div className="flex items-center justify-center w-full px-2 sm:px-3 overflow-hidden">
+          <div
+            className={`flex w-full px-2 sm:px-3 overflow-hidden items-center justify-center ${
+              isAuthenticated && isSetupRequired ? "" : "pr-7 sm:pr-8"
+            }`}
+          >
             {isAuthenticated && isSetupRequired ? (
               <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
                 <span className="font-normal">Complete your profile to set up email/password login. </span>
@@ -434,12 +464,36 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
               </p>
             ) : (
-              <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
-                <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
-                <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
-                  Join Now
-                </Link>
-              </p>
+              <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
+                {topBarPromoSlide === 0 ? (
+                  <p
+                    key="topbar-membership"
+                    className="text-white text-[8px] sm:text-[10px] font-normal leading-tight animate-topbar-reappear-once"
+                  >
+                    <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
+                    <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
+                      Join Now
+                    </Link>
+                  </p>
+                ) : (
+                  <p
+                    key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
+                    className="text-white text-[8px] sm:text-[10px] font-normal leading-tight animate-topbar-reappear-once"
+                  >
+                    {topBarActivePromoMultiplier != null ? (
+                      <>
+                        <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
+                        <span className="font-normal"> are live now — monthly tool giveaway. </span>
+                      </>
+                    ) : (
+                      <span className="font-normal">Monthly tool giveaway. </span>
+                    )}
+                    <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
+                      View giveaway
+                    </Link>
+                  </p>
+                )}
+              </div>
             )}
           </div>
           <button

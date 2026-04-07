@@ -167,7 +167,11 @@ export interface UpdateSubscriptionPaymentMethodResponse {
 export interface PayFailedInvoiceResponse {
   success: boolean;
   requiresPaymentConfirmation?: boolean;
-  message: string;
+  message?: string;
+  error?: string;
+  details?: string;
+  requiresDifferentPaymentMethod?: boolean;
+  failureReason?: "stripe_excessive_retry";
   data?: {
     invoiceId?: string;
     status?: string;

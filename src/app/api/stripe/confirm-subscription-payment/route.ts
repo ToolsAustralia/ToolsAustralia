@@ -14,6 +14,7 @@ import {
   setDefaultPaymentMethod,
 } from "@/utils/payment/stripe/payment-method-utils";
 import { getCustomerWithDefaultPaymentMethod } from "@/utils/payment/stripe/customer-utils";
+import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 // Klaviyo integration handled by webhook for best practices
@@ -431,6 +432,8 @@ export async function POST(request: NextRequest) {
               }
             }
             
+            const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, payError);
+
             // ✅ CRITICAL FIX: Return properly formatted error response instead of throwing
             // This ensures frontend can extract the actual Stripe error
             return NextResponse.json(
@@ -441,6 +444,10 @@ export async function POST(request: NextRequest) {
                 code: errorCode,
                 decline_code: declineCode,
                 type: errorType,
+                ...(excessiveRetry.requiresDifferentPaymentMethod && {
+                  requiresDifferentPaymentMethod: true,
+                  ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+                }),
               },
               { status: 400 }
             );
