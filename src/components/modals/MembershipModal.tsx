@@ -4058,8 +4058,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
 
               if (!confirmResponse.ok) {
+                const formatted = formatPaymentError(confirmResult);
                 // ✅ Error will be caught by catch block below, which will create new SetupIntent
-                throw new Error(confirmResult.details || confirmResult.error || "Failed to confirm payment");
+                throw new Error(formatted.message);
               }
 
               // console.log("✅ New user subscription payment confirmed successfully");

@@ -103,7 +103,15 @@ export function formatPaymentError(error: unknown): {
         message: "Your card was declined. Please check your card details or try a different payment method.",
         shouldIncludeTryAgain: true,
       };
-    
+
+    case "stripe_excessive_retry":
+      return {
+        title: "Card Temporarily Blocked",
+        message:
+          "This card was declined too many times, so the card network is blocking further attempts for a while. Please use a different card or payment method. Retrying the same card usually will not work until the block clears. More detail: https://support.stripe.com/questions/payment-blocked-due-to-excessive-retries",
+        shouldIncludeTryAgain: false,
+      };
+
     case "insufficient_funds":
       return {
         title: "Insufficient Funds",

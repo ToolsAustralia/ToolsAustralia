@@ -1035,6 +1035,15 @@
   animation: topBarReappear 3s ease-in-out infinite;
 }
 
+/* Single cycle — use with rotating top-bar messages so each line gets one full in/out before swap */
+.animate-topbar-reappear-once {
+  animation-name: topBarReappear;
+  animation-duration: 3s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
 /* Pulsing glow effect for call-to-action buttons */
 @keyframes pulseGlow {
   0%,

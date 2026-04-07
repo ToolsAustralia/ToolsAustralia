@@ -10,6 +10,10 @@ import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import {
+  analyzePaymentIntentForExcessiveRetry,
+  analyzeStripePayErrorForExcessiveRetry,
+} from "@/utils/payment/stripe/stripe-excessive-retry";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -277,6 +281,21 @@ export async function POST(request: NextRequest) {
         const paymentIntent = (invoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent }).payment_intent;
 
         if (paymentIntent && paymentIntent.client_secret) {
+          const excessiveRetry = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+          if (excessiveRetry.requiresDifferentPaymentMethod) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Payment failed",
+                details:
+                  "This card cannot be charged right now due to repeated declines. Please use a different payment method.",
+                requiresDifferentPaymentMethod: true,
+                ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+              },
+              { status: 400 }
+            );
+          }
+
           return NextResponse.json({
             success: false,
             requiresPaymentConfirmation: true,
@@ -295,6 +314,21 @@ export async function POST(request: NextRequest) {
               },
             },
           });
+        }
+
+        const payErrRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, paymentError);
+        if (payErrRetry.requiresDifferentPaymentMethod) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment failed",
+              details:
+                "This card cannot be charged right now due to repeated declines. Please use a different payment method.",
+              requiresDifferentPaymentMethod: true,
+              ...(payErrRetry.failureReason && { failureReason: payErrRetry.failureReason }),
+            },
+            { status: 400 }
+          );
         }
 
         throw paymentError;
