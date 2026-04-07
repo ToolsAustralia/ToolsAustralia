@@ -21,6 +21,7 @@ import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";
 import SubscriptionTab from "../components/settings/SubscriptionTab";
 import PaymentTab from "../components/settings/PaymentTab";
+import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 
 type SettingsSection = "profile" | "subscription" | "password" | "payment";
 
@@ -65,6 +66,13 @@ export default function SettingsPage() {
     }
   }, [searchParams]);
 
+  const handleSubscriptionUpdate = useCallback(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
+  }, [queryClient, session?.user?.id]);
+
   if (status === "loading" || loading) {
     return (
       <div>
@@ -102,7 +110,7 @@ export default function SettingsPage() {
   }
 
   const { user } = accountData;
-  const hasFailed = user.subscription?.status === "past_due" && !user.subscription?.isActive;
+  const hasFailed = hasFailedRenewal(user as unknown as import("@/models/User").IUser);
 
   const headerTitle = activeSection
     ? SETTINGS_ITEMS.find((i) => i.id === activeSection)?.label ?? "Settings"
@@ -121,13 +129,6 @@ export default function SettingsPage() {
     localStorage.removeItem("topBarHidden");
     signOut({ callbackUrl: "/" });
   };
-
-  const handleSubscriptionUpdate = useCallback(() => {
-    const userId = session?.user?.id;
-    if (!userId) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(userId) });
-  }, [queryClient, session?.user?.id]);
 
   return (
     <div>
