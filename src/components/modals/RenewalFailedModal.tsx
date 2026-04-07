@@ -16,12 +16,13 @@
  */
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { getStripePromise } from "@/lib/stripe-client";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
-import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
-import { usePayFailedInvoice } from "@/hooks/queries/useSubscriptionQueries";
+import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle, Mail } from "lucide-react";
+import { usePayFailedInvoice, type PayFailedInvoiceFailureCode } from "@/hooks/queries/useSubscriptionQueries";
 import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { paymentIntentIdFromClientSecret } from "@/utils/payment/stripe/stripe-excessive-retry";
@@ -30,8 +31,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useUserContext } from "@/contexts/UserContext";
 import { formatDisplayName } from "@/utils/display-name";
+import { SUPPORT_EMAIL } from "@/lib/email/sender-identities";
 
 const stripePromise = getStripePromise();
+
+const RENEWAL_BILLING_SUPPORT_SUBJECT = encodeURIComponent("Subscription renewal – cannot pay invoice");
+function renewalBillingSupportMailto(): string {
+  return `mailto:${SUPPORT_EMAIL}?subject=${RENEWAL_BILLING_SUPPORT_SUBJECT}`;
+}
 
 interface RenewalFailedModalProps {
   isOpen: boolean;
@@ -317,6 +324,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
   const [_showPaymentMethods, setShowPaymentMethods] = useState(false);
+  /** invoice_not_payable / payment_intent_not_payable: same API cannot collect without billing repair */
+  const [terminalCollectionFailure, setTerminalCollectionFailure] =
+    useState<PayFailedInvoiceFailureCode | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -329,6 +339,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       setSelectedPaymentMethod(null);
       setShowPaymentMethods(false);
       setRequiresDifferentPaymentMethod(false);
+      setTerminalCollectionFailure(null);
       // Don't auto-trigger - let user click "Resolve Payment Issue" button
     }
   }, [isOpen]);
@@ -338,6 +349,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     setIsLoading(true);
     setError(null);
     setErrorDetails(null);
+    setTerminalCollectionFailure(null);
 
     try {
       const response = await payFailedInvoiceMutation.mutateAsync();
@@ -388,6 +400,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           d.failureCode === "invoice_not_payable" ||
           d.failureCode === "payment_intent_not_payable"
         ) {
+          setTerminalCollectionFailure(d.failureCode as PayFailedInvoiceFailureCode);
           setRequiresDifferentPaymentMethod(false);
           const formatted = formatPaymentError(err.data);
           setError(formatted.title);
@@ -733,14 +746,40 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           </div>
         )}
 
-        {/* Alert Banner */}
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+        {/* Alert Banner — shorter when terminal billing: detailed guidance is in error box below */}
+        <div
+          className={
+            terminalCollectionFailure
+              ? "bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-700 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6"
+              : "bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6"
+          }
+        >
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertTriangle
+              className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 ${
+                terminalCollectionFailure ? "text-neutral-600 dark:text-neutral-400" : "text-red-600"
+              }`}
+            />
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs sm:text-sm font-semibold text-red-900 mb-1">Payment Required</h4>
-              <p className="text-xs sm:text-sm text-red-700">
-                Your subscription renewal payment failed. Please resolve the payment issue to reactivate your subscription.
+              <h4
+                className={`text-xs sm:text-sm font-semibold mb-1 ${
+                  terminalCollectionFailure
+                    ? "text-neutral-900 dark:text-neutral-100"
+                    : "text-red-900"
+                }`}
+              >
+                {terminalCollectionFailure ? "Renewal payment blocked" : "Payment Required"}
+              </h4>
+              <p
+                className={`text-xs sm:text-sm ${
+                  terminalCollectionFailure
+                    ? "text-neutral-700 dark:text-neutral-300"
+                    : "text-red-700"
+                }`}
+              >
+                {terminalCollectionFailure
+                  ? "We can’t start card payment for this renewal on this screen. Use Contact support or your account below."
+                  : "Your subscription renewal payment failed. Please resolve the payment issue to reactivate your subscription."}
               </p>
             </div>
           </div>
@@ -770,6 +809,33 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
             <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 animate-spin mb-3 sm:mb-4" />
             <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400">Loading payment options...</p>
           </div>
+        ) : terminalCollectionFailure ? (
+          <div className="space-y-2 sm:space-y-3">
+            {/* Terminal billing (Stripe): invoice/session not collectible in-app without ops — see stripe-invoice-pay-errors + pay-failed-invoice */}
+            <a
+              href={renewalBillingSupportMailto()}
+              className="w-full inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ee0000]/40 px-3 py-2 text-sm bg-red-600 text-white hover:bg-red-700"
+            >
+              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+              Contact support
+            </a>
+            <Link
+              href="/my-account"
+              className="w-full inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 border-2 border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:text-white px-3 py-2 text-sm"
+              onClick={() => onClose()}
+            >
+              Go to account
+            </Link>
+            <Button
+              onClick={onClose}
+              variant="ghost"
+              disabled={isLoading}
+              className="w-full text-sm sm:text-base"
+              size="sm"
+            >
+              Close
+            </Button>
+          </div>
         ) : (
           <div className="space-y-2 sm:space-y-3">
             <Button
@@ -793,8 +859,10 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           </div>
         )}
 
-        <div className="mt-4 sm:mt-6 text-[10px] sm:text-xs text-gray-500 text-center">
-          You can close this modal and resolve the payment issue later from your account settings.
+        <div className="mt-4 sm:mt-6 text-[10px] sm:text-xs text-gray-500 dark:text-neutral-500 text-center">
+          {terminalCollectionFailure
+            ? "Our team may need to fix your invoice in billing before you can pay. You can still update saved cards under your account."
+            : "You can close this modal and resolve the payment issue later from your account settings."}
         </div>
       </ModalContent>
     </ModalContainer>

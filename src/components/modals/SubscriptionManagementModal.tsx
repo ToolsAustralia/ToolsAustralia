@@ -560,22 +560,38 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         throw new Error(result.error || "Failed to cancel subscription");
       }
 
-      // Show enhanced cancellation toast with end date
-      const resolvedEndDateIso =
-        result.data?.currentPeriodEnd || result.data?.endDate || user.subscription?.endDate || null;
-      const endDate = resolvedEndDateIso
-        ? new Date(resolvedEndDateIso).toLocaleDateString()
-        : "the end of your billing period";
-      const daysRemaining = resolvedEndDateIso
-        ? Math.max(0, Math.ceil((new Date(resolvedEndDateIso).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-        : "several";
+      const cancelledImmediately = Boolean(result.data?.cancelledImmediately);
+      const isPastDueCancel = Boolean(result.data?.isPastDue);
 
-      showToast({
-        type: "warning",
-        title: "Subscription Cancelled",
-        message: `Your subscription will end on ${endDate} (${daysRemaining} days). You'll keep full access until then. We're sad to see you go!`,
-        duration: 15000, // Show for 15 seconds for important info
-      });
+      if (cancelledImmediately) {
+        showToast({
+          type: "warning",
+          title: "Subscription Cancelled",
+          message:
+            typeof result.message === "string" && result.message.trim().length > 0
+              ? result.message
+              : isPastDueCancel
+                ? "Your subscription has been canceled. It was already past due, so access tied to an active paid subscription may have ended."
+                : "Your subscription has been canceled immediately.",
+          duration: 15000,
+        });
+      } else {
+        const resolvedEndDateIso =
+          result.data?.currentPeriodEnd || result.data?.endDate || user.subscription?.endDate || null;
+        const endDate = resolvedEndDateIso
+          ? new Date(resolvedEndDateIso).toLocaleDateString()
+          : "the end of your billing period";
+        const daysRemaining = resolvedEndDateIso
+          ? Math.max(0, Math.ceil((new Date(resolvedEndDateIso).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+          : "several";
+
+        showToast({
+          type: "warning",
+          title: "Subscription Cancelled",
+          message: `Your subscription will end on ${endDate} (${daysRemaining} days). You'll keep full access until then. We're sad to see you go!`,
+          duration: 15000,
+        });
+      }
 
       // Refresh user data and benefits
       if (onSubscriptionUpdate) {
