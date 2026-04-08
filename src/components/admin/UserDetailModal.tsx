@@ -25,6 +25,8 @@ import {
   Gift,
   Trash2,
   Cake,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -368,6 +370,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const [showCancelSubscriptionModal, setShowCancelSubscriptionModal] = useState(false);
   const [showChargePastDueUserModal, setShowChargePastDueUserModal] = useState(false);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [headerEmailCopied, setHeaderEmailCopied] = useState(false);
+  const headerEmailCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
   const referralHistory = user?.referral?.history ?? [];
@@ -430,6 +434,16 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     obs.observe(el);
     return () => obs.disconnect();
   }, [isOpen, activeTab, userId, activityEvents.length, paymentEventsInfinite.hasNextPage]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHeaderEmailCopied(false);
+      if (headerEmailCopyTimeoutRef.current) {
+        clearTimeout(headerEmailCopyTimeoutRef.current);
+        headerEmailCopyTimeoutRef.current = null;
+      }
+    }
+  }, [isOpen]);
 
   const overviewDefaults = useMemo<OverviewFormValues>(
     () => ({
@@ -987,6 +1001,22 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
   };
 
+  const handleCopyHeaderEmail = async () => {
+    const email = user?.email?.trim();
+    if (!email) return;
+    try {
+      await navigator.clipboard.writeText(email);
+      if (headerEmailCopyTimeoutRef.current) clearTimeout(headerEmailCopyTimeoutRef.current);
+      setHeaderEmailCopied(true);
+      headerEmailCopyTimeoutRef.current = setTimeout(() => {
+        setHeaderEmailCopied(false);
+        headerEmailCopyTimeoutRef.current = null;
+      }, 2000);
+    } catch {
+      alert("Could not copy email. Check clipboard permissions.");
+    }
+  };
+
   const handleSubscriptionSubmit = async (values: SubscriptionFormValues) => {
     const payload: AdminUserUpdatePayload = {
       subscription: {
@@ -1256,7 +1286,26 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {formatDisplayName(user?.firstName, user?.lastName)}
                 </h2>
-                <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate">{user?.email}</p>
+                <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 mt-0.5">
+                  <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate min-w-0">
+                    {user?.email}
+                  </p>
+                  {user?.email ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyHeaderEmail()}
+                      className="rounded-lg border border-gray-300 dark:border-neutral-600 p-1 sm:p-1.5 text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 flex-shrink-0 transition-colors"
+                      aria-label={headerEmailCopied ? "Email copied to clipboard" : "Copy email address"}
+                      title={headerEmailCopied ? "Copied" : "Copy email"}
+                    >
+                      {headerEmailCopied ? (
+                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-400" strokeWidth={2.5} />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2} />
+                      )}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
             <button
@@ -1700,7 +1749,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Email</p>
-                            <p className="font-medium break-words text-sm mb-1">{user.email}</p>
+                            <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.email}
+                            </p>
                             <div className="flex items-center gap-1">
                               {user.isEmailVerified ? (
                                 <CheckCircle className="w-3.5 h-3.5 text-green-500" />
@@ -1718,7 +1769,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Mobile</p>
-                            <p className="font-medium break-words text-sm mb-1">{user.mobile || "Not provided"}</p>
+                            <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.mobile || "Not provided"}
+                            </p>
                             <div className="flex items-center gap-1">
                               {user.isMobileVerified ? (
                                 <CheckCircle className="w-3.5 h-3.5 text-green-500" />
@@ -1736,7 +1789,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Role</p>
-                            <p className="font-medium capitalize text-sm">{user.role}</p>
+                            <p className="font-medium capitalize text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.role}
+                            </p>
                           </div>
                         </div>
 
@@ -1760,7 +1815,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">
                               Klaviyo marketing
                             </p>
-                            <p className="font-medium text-sm">
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
                               {user.acceptsPromotionalEmail !== false ? "Subscribed (app)" : "Unsubscribed (app)"}
                             </p>
                           </div>
@@ -1787,7 +1842,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-500">No saved payment methods</p>
+                              <p className="text-xs sm:text-sm text-gray-500 leading-snug">No saved payment methods</p>
                             )}
                           </div>
                         </div>
@@ -1796,7 +1851,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">State</p>
-                            <p className="font-medium text-sm">{user.state || "Not provided"}</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.state || "Not provided"}
+                            </p>
                           </div>
                         </div>
 
@@ -1804,7 +1861,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Profession</p>
-                            <p className="font-medium text-sm">{user.profession || "Not provided"}</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.profession || "Not provided"}
+                            </p>
                           </div>
                         </div>
 
@@ -1812,7 +1871,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Cake className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Date of birth</p>
-                            <p className="font-medium text-sm">{formatBirthdateDisplay(user.birthdate)}</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {formatBirthdateDisplay(user.birthdate)}
+                            </p>
                           </div>
                         </div>
 
@@ -1820,8 +1881,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Member Since</p>
-                            <p className="font-medium text-sm">{formatDate(user.createdAt)}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{user.statistics.accountAge} days ago</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {formatDate(user.createdAt)}
+                            </p>
+                            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug">
+                              {user.statistics.accountAge} days ago
+                            </p>
                           </div>
                         </div>
 
@@ -1829,10 +1894,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Clock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Last Login</p>
-                            <p className="font-medium text-sm">
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
                               {user.lastLogin ? formatDate(user.lastLogin) : "No login recorded"}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug">
                               {user.statistics.daysSinceLastLogin !== undefined &&
                               user.statistics.daysSinceLastLogin !== null
                                 ? `${user.statistics.daysSinceLastLogin} days ago`
