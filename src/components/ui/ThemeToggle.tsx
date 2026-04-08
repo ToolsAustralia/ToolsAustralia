@@ -55,7 +55,7 @@ export function PromotionsGuestThemeToggle() {
   if (!onPromotionsRoute || loading || isAuthenticated) return null;
 
   return (
-    <div className="fixed z-[55] pointer-events-auto max-sm:bottom-28 max-sm:left-4 max-sm:right-auto sm:bottom-36 sm:right-4 sm:left-auto">
+    <div className="fixed z-[55] pointer-events-auto bottom-4 right-4">
       <ThemeToggleButton />
     </div>
   );
