@@ -59,7 +59,7 @@ export default function PromotionsAccountButton() {
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: 40, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 350, damping: 28 }}
-          className="fixed right-4 bottom-4 z-40 flex flex-col items-end gap-3"
+          className="fixed right-4 bottom-16 z-40 flex flex-col items-end gap-3 sm:bottom-4"
         >
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -69,7 +69,8 @@ export default function PromotionsAccountButton() {
             <ThemeToggleButton />
           </motion.div>
 
-          <div className="flex items-end justify-end gap-2">
+          {/* Menu is absolutely positioned so its height never stretches this row — theme toggle stays fixed. */}
+          <div className="relative h-12 w-12 shrink-0 overflow-visible">
             <AnimatePresence>
               {isOpen && (
                 <motion.div
@@ -77,7 +78,7 @@ export default function PromotionsAccountButton() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 24 }}
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  className="flex items-center gap-2 pr-2"
+                  className="absolute bottom-0 right-full mr-2 flex items-end"
                 >
                   <div
                     className="flex flex-col w-fit rounded-xl py-2 px-2 shadow-2xl overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black"
@@ -107,7 +108,7 @@ export default function PromotionsAccountButton() {
               onClick={() => setIsOpen(!isOpen)}
               aria-label={isOpen ? "Close menu" : "Open menu"}
               aria-expanded={isOpen}
-              className={`group relative flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] shrink-0 ${preferDark ? "text-black" : "text-white"}`}
+              className={`group absolute bottom-0 right-0 z-10 flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] ${preferDark ? "text-black" : "text-white"}`}
               style={{
                 background: promoTheme.gradient,
                 boxShadow: `0 0 30px ${promoTheme.shadowRgba}`,
