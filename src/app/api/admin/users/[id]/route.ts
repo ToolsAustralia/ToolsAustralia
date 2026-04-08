@@ -208,7 +208,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           klaviyoPromotionalTarget
         );
         if (!kSync.success) {
-          warning = `Saved in database, but Klaviyo could not update marketing email preference: ${kSync.error ?? "unknown error"}. The user may still receive or miss mailings until Klaviyo matches this setting.`;
+          warning = `Saved in database, but Klaviyo could not update marketing preferences: ${kSync.error ?? "unknown error"}. Verify email/SMS consent in Klaviyo if needed.`;
           console.error("❌ Klaviyo marketing sync after admin PATCH:", kSync.error);
         }
       }

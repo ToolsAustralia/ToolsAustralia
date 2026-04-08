@@ -74,7 +74,8 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
 }
 
 /**
- * Apply Klaviyo email marketing subscription after an admin changes User.acceptsPromotionalEmail.
+ * Apply Klaviyo marketing (email + SMS marketing) after an admin changes User.acceptsPromotionalEmail.
+ * SMS uses the E.164 number from the same shape as profile sync. Transactional SMS is not changed here.
  * Does not run when KLAVIYO_ENABLED is false.
  */
 export async function syncKlaviyoEmailMarketingFromAdminPreference(
@@ -100,13 +101,29 @@ export async function syncKlaviyoEmailMarketingFromAdminPreference(
       };
     }
 
+    const profileId = upsert.profile_id;
+    const phoneE164 = profile.phone_number?.trim();
+    const errors: string[] = [];
+
     if (wantsPromotionalEmail) {
-      const sub = await klaviyo.subscribeToEmailList(upsert.profile_id, user.email);
-      return sub.success ? { success: true } : { success: false, error: sub.error };
+      const emailRes = await klaviyo.subscribeToEmailList(profileId, user.email);
+      if (!emailRes.success) errors.push(emailRes.error || "Email subscribe failed");
+
+      if (phoneE164) {
+        const smsRes = await klaviyo.subscribeToSMSList(profileId, phoneE164, ["sms_marketing"]);
+        if (!smsRes.success) errors.push(smsRes.error || "SMS marketing subscribe failed");
+      }
+    } else {
+      const emailRes = await klaviyo.unsubscribeFromEmailList(profileId, user.email);
+      if (!emailRes.success) errors.push(emailRes.error || "Email unsubscribe failed");
+
+      if (phoneE164) {
+        const smsRes = await klaviyo.unsubscribeFromSMSList(profileId, phoneE164);
+        if (!smsRes.success) errors.push(smsRes.error || "SMS marketing unsubscribe failed");
+      }
     }
 
-    const unsub = await klaviyo.unsubscribeFromEmailList(upsert.profile_id, user.email);
-    return unsub.success ? { success: true } : { success: false, error: unsub.error };
+    return errors.length ? { success: false, error: errors.join(" ") } : { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { success: false, error: message };
