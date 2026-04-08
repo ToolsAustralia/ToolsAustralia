@@ -10,6 +10,7 @@ import {
   UserFilters,
 } from "@/types/admin";
 import type { TrendData } from "@/types/admin/trend-types";
+import { appendUserFiltersToSearchParams } from "@/utils/admin/appendUserFiltersToSearchParams";
 
 // Types for recent activities
 export interface RecentActivity {
@@ -715,13 +716,7 @@ export function useAdminUsers(
     queryKey: ["admin", "users", "list", filters],
     queryFn: async (): Promise<AdminUsersResponse["data"]> => {
       const searchParams = new URLSearchParams();
-
-      // Add filters to search params
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          searchParams.append(key, value.toString());
-        }
-      });
+      appendUserFiltersToSearchParams(searchParams, filters);
 
       const response = await fetch(`/api/admin/users?${searchParams.toString()}`);
 

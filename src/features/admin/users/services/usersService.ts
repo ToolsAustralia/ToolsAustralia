@@ -4,19 +4,14 @@
  */
 
 import type { AdminUserDetail, AdminUserDetailResponse, AdminUsersResponse, UserFilters } from "@/types/admin";
+import { appendUserFiltersToSearchParams } from "@/utils/admin/appendUserFiltersToSearchParams";
 
 /**
  * Get paginated list of users with search and filtering
  */
 export async function getUsers(filters: UserFilters): Promise<AdminUsersResponse["data"]> {
   const searchParams = new URLSearchParams();
-
-  // Add filters to search params
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      searchParams.append(key, value.toString());
-    }
-  });
+  appendUserFiltersToSearchParams(searchParams, filters);
 
   const response = await fetch(`/api/admin/users?${searchParams.toString()}`);
 

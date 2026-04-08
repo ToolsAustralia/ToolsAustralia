@@ -83,8 +83,10 @@ export async function buildUserFilter(
     role?: string;
     dateFrom?: string;
     dateTo?: string;
-    /** Australian state code e.g. NSW */
+    /** Single state (optional; prefer `states` from repeated query params) */
     state?: string;
+    /** Australian state codes; matched with $in when more than one */
+    states?: string[];
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
   }
@@ -98,6 +100,7 @@ export async function buildUserFilter(
     dateFrom,
     dateTo,
     state,
+    states,
     inActiveMajorDraw,
   } = filters;
 
@@ -382,13 +385,22 @@ export async function buildUserFilter(
     }
   }
 
-  if (state !== undefined && state !== null && String(state).trim() !== "") {
-    const code = String(state).trim().toUpperCase();
-    if (AU_STATE_CODES.has(code)) {
-      filter.state = code;
-    } else {
-      filter.state = { $in: [] };
-    }
+  const stateCodesInput = [
+    ...(states ?? []),
+    ...(state !== undefined && state !== null && String(state).trim() !== "" ? [String(state).trim()] : []),
+  ];
+  const validStateCodes = [
+    ...new Set(
+      stateCodesInput.map((c) => c.toUpperCase()).filter((c) => AU_STATE_CODES.has(c))
+    ),
+  ];
+  if (validStateCodes.length === 1) {
+    filter.state = validStateCodes[0];
+  } else if (validStateCodes.length > 1) {
+    filter.state = { $in: validStateCodes };
+  } else if (stateCodesInput.length > 0) {
+    // Request included unknown state value(s) — no matches
+    filter.state = { $in: [] };
   }
 
   if (inActiveMajorDraw === "yes" || inActiveMajorDraw === "no") {
