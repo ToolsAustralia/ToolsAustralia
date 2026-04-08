@@ -1167,7 +1167,9 @@ class KlaviyoClient {
                     email: email,
                     subscriptions: {
                       email: {
-                        marketing: {},
+                        marketing: {
+                          consent: "UNSUBSCRIBED",
+                        },
                       },
                     },
                   },
@@ -1257,7 +1259,9 @@ class KlaviyoClient {
                     phone_number: phoneNumber,
                     subscriptions: {
                       sms: {
-                        marketing: {},
+                        marketing: {
+                          consent: "UNSUBSCRIBED",
+                        },
                       },
                     },
                   },
