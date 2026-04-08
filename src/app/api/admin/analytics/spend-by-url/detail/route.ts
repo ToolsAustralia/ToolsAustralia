@@ -14,7 +14,7 @@ function centsToAud(cents: number): number {
 
 /**
  * GET /api/admin/analytics/spend-by-url/detail?canonicalUrl=&startDate=&endDate=
- * Per-ad breakdown for one canonical landing URL.
+ * Per-ad breakdown for one or more canonical landing URLs (repeat canonicalUrl for batch).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -33,53 +33,63 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const canonicalUrl = searchParams.get("canonicalUrl");
+    const canonicalUrls = searchParams.getAll("canonicalUrl").map((u) => u.trim()).filter(Boolean);
+    const uniqueCanonicalUrls = [...new Set(canonicalUrls)];
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    if (!canonicalUrl || !startDate || !endDate) {
+    if (uniqueCanonicalUrls.length === 0 || !startDate || !endDate) {
       return NextResponse.json(
         {
           success: false,
-          error: "canonicalUrl, startDate, and endDate are required",
+          error: "At least one canonicalUrl, startDate, and endDate are required",
         },
         { status: 400 }
       );
     }
 
-    const rows = await aggService.getSpendByUrlDetail(adAccountId, canonicalUrl, startDate, endDate);
+    const rows = await aggService.getSpendByUrlDetailForCanonicalUrls(
+      adAccountId,
+      uniqueCanonicalUrls,
+      startDate,
+      endDate
+    );
 
     const currency = "AUD";
+
+    const rowPayload = rows.map((r) => {
+      const spend = centsToAud(r.spendCents);
+      const revenue = centsToAud(r.revenueCents);
+      const cpc = r.clicks > 0 ? spend / r.clicks : 0;
+      const roas = spend > 0 ? revenue / spend : 0;
+      return {
+        adId: r.adId,
+        adName: r.adName,
+        spend,
+        spendCents: r.spendCents,
+        impressions: r.impressions,
+        clicks: r.clicks,
+        conversions: r.conversions,
+        revenue,
+        revenueCents: r.revenueCents,
+        cpc,
+        roas,
+        adFormat: r.adFormat,
+      };
+    });
 
     return NextResponse.json({
       success: true,
       meta: {
-        canonicalUrl,
+        canonicalUrls: uniqueCanonicalUrls,
+        /** @deprecated Use canonicalUrls; kept for single-URL clients */
+        canonicalUrl: uniqueCanonicalUrls[0],
         startDate,
         endDate,
         currency,
         adAccountId,
       },
-      rows: rows.map((r) => {
-        const spend = centsToAud(r.spendCents);
-        const revenue = centsToAud(r.revenueCents);
-        const cpc = r.clicks > 0 ? spend / r.clicks : 0;
-        const roas = spend > 0 ? revenue / spend : 0;
-        return {
-          adId: r.adId,
-          adName: r.adName,
-          spend,
-          spendCents: r.spendCents,
-          impressions: r.impressions,
-          clicks: r.clicks,
-          conversions: r.conversions,
-          revenue,
-          revenueCents: r.revenueCents,
-          cpc,
-          roas,
-          adFormat: r.adFormat,
-        };
-      }),
+      rows: rowPayload,
     });
   } catch (e) {
     console.error("spend-by-url detail GET:", e);
