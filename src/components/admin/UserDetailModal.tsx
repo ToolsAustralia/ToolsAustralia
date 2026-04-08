@@ -970,6 +970,23 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
   };
 
+  const handleKlaviyoMarketingPreference = async (acceptsPromotionalEmail: boolean) => {
+    if (!user?.id) return;
+    try {
+      const { warning } = await updateUser.mutateAsync({
+        userId: user.id,
+        payload: { basicInfo: { acceptsPromotionalEmail } },
+      });
+      alert(
+        warning
+          ? `Marketing preference updated.\n\n${warning}`
+          : "Marketing preference updated."
+      );
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to update marketing preference.");
+    }
+  };
+
   const handleSubscriptionSubmit = async (values: SubscriptionFormValues) => {
     const payload: AdminUserUpdatePayload = {
       subscription: {
@@ -1371,9 +1388,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   return hasBreakdown ? (
                     <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4">
                       <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Current draw entries by source</h3>
-                      <p className="text-xs text-gray-500 dark:text-neutral-400 mb-2">
-                        Breakdown of how entries were earned (referral, codes, promos, etc.)
-                      </p>
+                      
                       <div className="flex flex-wrap gap-2">
                         {entriesBySource.membership != null && entriesBySource.membership > 0 && (
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Membership: {entriesBySource.membership}</span>
@@ -1607,12 +1622,36 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="acceptsPromotionalEmail"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 col-span-2">
-                              <Checkbox
-                                checked={field.value}
-                                onChange={(e) => field.onChange(e.target.checked)}
-                                label="Klaviyo marketing (email & SMS)"
-                              />
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 col-span-2 space-y-2">
+                              <div>
+                                <p className="text-xs font-medium text-gray-800 dark:text-neutral-200">
+                                  Klaviyo marketing (email & SMS)
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                                  {field.value
+                                    ? "Opted in in the app. Click Save to apply and sync to Klaviyo."
+                                    : "Opted out in the app. Click Save to apply and sync to Klaviyo."}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {field.value ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => field.onChange(false)}
+                                    className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors"
+                                  >
+                                    Unsubscribe from marketing
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => field.onChange(true)}
+                                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                                  >
+                                    Subscribe to marketing
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                         />
@@ -1627,13 +1666,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             Review contact details and verification status.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditTab("overview")}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
-                        >
-                          Edit Details
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {user.acceptsPromotionalEmail !== false ? (
+                            <button
+                              type="button"
+                              disabled={updateUser.isPending}
+                              onClick={() => void handleKlaviyoMarketingPreference(false)}
+                              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updateUser.isPending ? "Updating..." : "Unsubscribe from marketing"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={updateUser.isPending}
+                              onClick={() => void handleKlaviyoMarketingPreference(true)}
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updateUser.isPending ? "Updating..." : "Subscribe to marketing"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setActiveEditTab("overview")}
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit Details
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div className="flex items-start gap-2">
