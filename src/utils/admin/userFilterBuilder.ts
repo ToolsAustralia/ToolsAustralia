@@ -16,32 +16,6 @@ import MajorDraw from "@/models/MajorDraw";
 const AU_STATE_CODES = new Set(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
 
 /**
- * Inclusive age bracket on birthdate using UTC calendar dates.
- * Only users with a stored birthdate match when any age bound is set.
- */
-function birthdateFilterFromAgeBounds(ageMin?: number, ageMax?: number): Record<string, unknown> | null {
-  const hasMin = ageMin !== undefined && Number.isFinite(ageMin) && ageMin >= 0;
-  const hasMax = ageMax !== undefined && Number.isFinite(ageMax) && ageMax >= 0;
-  if (!hasMin && !hasMax) return null;
-
-  const cond: Record<string, unknown> = { $exists: true, $ne: null };
-  const today = new Date();
-  // Age >= ageMin ⇒ birthdate <= (today - ageMin years) UTC
-  if (hasMin) {
-    const latest = new Date(today);
-    latest.setUTCFullYear(latest.getUTCFullYear() - ageMin!);
-    cond.$lte = latest;
-  }
-  // Age <= ageMax ⇒ birthdate > (today - (ageMax + 1) years) UTC
-  if (hasMax) {
-    const earliestExclusive = new Date(today);
-    earliestExclusive.setUTCFullYear(earliestExclusive.getUTCFullYear() - ageMax! - 1);
-    cond.$gt = earliestExclusive;
-  }
-  return cond;
-}
-
-/**
  * Get filter for true active subscriptions (subscriptions that will auto-renew)
  * 
  * This matches the projected income calculation logic:
@@ -111,10 +85,6 @@ export async function buildUserFilter(
     dateTo?: string;
     /** Australian state code e.g. NSW */
     state?: string;
-    /** Minimum age (inclusive); must have birthdate */
-    ageMin?: string | number;
-    /** Maximum age (inclusive); must have birthdate */
-    ageMax?: string | number;
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
   }
@@ -128,8 +98,6 @@ export async function buildUserFilter(
     dateFrom,
     dateTo,
     state,
-    ageMin,
-    ageMax,
     inActiveMajorDraw,
   } = filters;
 
@@ -421,15 +389,6 @@ export async function buildUserFilter(
     } else {
       filter.state = { $in: [] };
     }
-  }
-
-  const ageMinN =
-    ageMin !== undefined && ageMin !== "" && ageMin !== null ? parseInt(String(ageMin), 10) : undefined;
-  const ageMaxN =
-    ageMax !== undefined && ageMax !== "" && ageMax !== null ? parseInt(String(ageMax), 10) : undefined;
-  const birthdateAge = birthdateFilterFromAgeBounds(ageMinN, ageMaxN);
-  if (birthdateAge) {
-    filter.birthdate = birthdateAge;
   }
 
   if (inActiveMajorDraw === "yes" || inActiveMajorDraw === "no") {

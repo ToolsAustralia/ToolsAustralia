@@ -26,7 +26,6 @@ import {
  * - dateFrom: Filter users created after this date
  * - dateTo: Filter users created before this date
  * - state: Australian state code (NSW, VIC, …)
- * - ageMin / ageMax: Inclusive age from stored birthdate (requires birthdate on profile)
  * - inActiveMajorDraw: "yes" | "no" (active major draw with totalEntries > 0)
  * - sortBy: Sort field (createdAt, email, lastLogin, totalSpent, majorDrawEntries, miniDrawCount)
  * - sortOrder: Sort direction (asc, desc)
@@ -76,8 +75,6 @@ export async function GET(request: NextRequest) {
     }
 
     const state = searchParams.get("state") || "";
-    const ageMin = searchParams.get("ageMin") || "";
-    const ageMax = searchParams.get("ageMax") || "";
     const inActiveMajorDraw = searchParams.get("inActiveMajorDraw") || "";
 
     const filter = await buildUserFilter({
@@ -89,8 +86,6 @@ export async function GET(request: NextRequest) {
       dateFrom: dateFrom || "",
       dateTo: dateTo || "",
       state,
-      ageMin,
-      ageMax,
       inActiveMajorDraw,
     });
 
