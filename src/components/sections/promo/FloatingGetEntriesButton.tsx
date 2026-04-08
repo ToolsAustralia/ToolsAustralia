@@ -74,7 +74,7 @@ export default function FloatingGetEntriesButton() {
             damping: 20,
             duration: 0.5,
           }}
-          className="fixed bottom-12 sm:bottom-14 left-0 right-0 flex justify-center z-50"
+          className="fixed bottom-4 left-0 right-0 flex justify-center z-50"
         >
           <motion.button
             onClick={handleGetEntries}

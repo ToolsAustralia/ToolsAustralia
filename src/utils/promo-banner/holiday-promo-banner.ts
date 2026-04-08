@@ -12,6 +12,7 @@ const AEST_TIMEZONE = "Australia/Sydney";
 export const HOLIDAY_PROMO_CAMPAIGN_YEAR = 2026;
 
 const SESSION_STORAGE_KEY = "toolsau-promo-holiday-dev-slot";
+const SESSION_STORAGE_TOOLBAR_HIDDEN_KEY = "toolsau-promo-holiday-dev-toolbar-hidden";
 
 export type HolidayPromoSlot =
   | "good-friday"
@@ -128,6 +129,25 @@ export function readInitialHolidayDevSlotForClient(): HolidayPromoSlot | null {
     return fromUrl;
   }
   return readHolidayPromoDevSessionSlot();
+}
+
+export function readHolidayDevToolbarHidden(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(SESSION_STORAGE_TOOLBAR_HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeHolidayDevToolbarHidden(hidden: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (hidden) sessionStorage.setItem(SESSION_STORAGE_TOOLBAR_HIDDEN_KEY, "1");
+    else sessionStorage.removeItem(SESSION_STORAGE_TOOLBAR_HIDDEN_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export type PromoHolidayDevToolbarItem = {

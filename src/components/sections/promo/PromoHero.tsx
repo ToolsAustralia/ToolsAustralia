@@ -134,16 +134,13 @@ export default function PromoHero({
           }
         }}
       >
-        <div className="lg:hidden absolute inset-0">
+        <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
           <Image
             src={heroImagePaths.mobile}
             alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
             unoptimized
-            className="object-cover"
-            style={{
-              objectPosition: "50%",
-            }}
+            className="object-contain object-top"
             onError={() => setImageError(true)}
           />
         </div>
@@ -155,10 +152,7 @@ export default function PromoHero({
             priority
             unoptimized
             sizes="100vw"
-            className="object-cover"
-            style={{
-              objectPosition: "50% 50%",
-            }}
+            className="object-contain object-top"
             onError={() => setImageError(true)}
           />
         </div>
