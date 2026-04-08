@@ -377,8 +377,8 @@ export interface UserFilters {
   role?: "user" | "admin";
   dateFrom?: string;
   dateTo?: string;
-  /** Australian state code e.g. NSW */
-  state?: string;
+  /** Australian state codes (e.g. NSW, VIC); OR semantics when multiple */
+  states?: string[];
   /** Active major draw with entries: yes | no */
   inActiveMajorDraw?: "yes" | "no" | "";
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
