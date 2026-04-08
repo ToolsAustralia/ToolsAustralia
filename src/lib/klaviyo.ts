@@ -62,6 +62,12 @@ class KlaviyoClient {
   private readonly BASE_RETRY_DELAY_MS = 2000; // 2 seconds base delay
   private readonly GATEWAY_ERROR_DELAY_MULTIPLIER = 2; // Double delay for gateway errors (502/504)
 
+  /**
+   * Klaviyo `revision` header (API versioning). Override with KLAVIYO_API_REVISION.
+   * @see https://developers.klaviyo.com/en/docs/api_versioning_and_revision_history
+   */
+  private readonly apiRevision = process.env.KLAVIYO_API_REVISION?.trim() || "2025-10-15";
+
   constructor() {
     const config = getKlaviyoConfig();
     this.apiKey = config.apiKey;
@@ -181,7 +187,7 @@ class KlaviyoClient {
         headers: {
           Authorization: `Klaviyo-API-Key ${this.apiKey}`,
           "Content-Type": "application/json",
-          revision: "2024-10-15",
+          revision: this.apiRevision,
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -830,7 +836,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -865,7 +871,7 @@ class KlaviyoClient {
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                  revision: "2024-10-15",
+                  revision: this.apiRevision,
                 },
                 body: JSON.stringify(listPayload),
               }),
@@ -1017,7 +1023,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1071,7 +1077,7 @@ class KlaviyoClient {
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                  revision: "2024-10-15",
+                  revision: this.apiRevision,
                 },
                 body: JSON.stringify(listPayload),
               }),
@@ -1124,24 +1130,18 @@ class KlaviyoClient {
   }
 
   /**
-   * Unsubscribe user from email marketing list
+   * Unsubscribe user from email marketing (bulk delete job).
    *
-   * Sets email marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
-   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   * Per Klaviyo `ProfileSubscriptionDeleteQueryResourceObject`, each item is `type` + `attributes` only
+   * (email + subscriptions). Do not send JSON:API resource `id` on nested profiles — it is rejected.
    *
-   * @param profileId - Klaviyo profile ID
+   * @param _profileId - Reserved for backwards compatibility / logging (not sent in request body)
    * @param email - Email address (required)
-   * @returns Success status and any error message
+   * @see https://developers.klaviyo.com/en/reference/bulk_unsubscribe_profiles
    */
-  async unsubscribeFromEmailList(profileId: string, email: string): Promise<{ success: boolean; error?: string }> {
+  async unsubscribeFromEmailList(_profileId: string, email: string): Promise<{ success: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
-    }
-
-    // Validate profile ID
-    if (!profileId || profileId.trim() === "") {
-      console.error("❌ Invalid profile ID for email unsubscribe:", profileId);
-      return { success: false, error: "Profile ID is required" };
     }
 
     // Validate email
@@ -1162,9 +1162,8 @@ class KlaviyoClient {
               data: [
                 {
                   type: "profile",
-                  id: profileId,
                   attributes: {
-                    email: email,
+                    email: email.trim().toLowerCase(),
                     subscriptions: {
                       email: {
                         marketing: {
@@ -1185,9 +1184,10 @@ class KlaviyoClient {
           fetch(url, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/vnd.api+json",
+              Accept: "application/vnd.api+json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1202,7 +1202,7 @@ class KlaviyoClient {
       }
 
       if (this.mode === "development") {
-        console.log("✅ Email unsubscribe completed:", { profileId, email });
+        console.log("✅ Email unsubscribe job accepted:", { email });
       }
 
       return { success: true };
@@ -1216,24 +1216,20 @@ class KlaviyoClient {
   }
 
   /**
-   * Unsubscribe user from SMS marketing list
+   * Unsubscribe user from SMS marketing (bulk delete job).
    *
-   * Sets SMS marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
-   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   * Nested profile objects must not include resource `id` — only `type` + `attributes` with E.164 `phone_number`.
    *
-   * @param profileId - Klaviyo profile ID
-   * @param phoneNumber - Phone number (required)
-   * @returns Success status and any error message
+   * @param _profileId - Reserved for backwards compatibility (not sent in request body)
+   * @param phoneNumber - E.164 phone (required)
+   * @see https://developers.klaviyo.com/en/reference/bulk_unsubscribe_profiles
    */
-  async unsubscribeFromSMSList(profileId: string, phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+  async unsubscribeFromSMSList(
+    _profileId: string,
+    phoneNumber: string
+  ): Promise<{ success: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
-    }
-
-    // Validate profile ID
-    if (!profileId || profileId.trim() === "") {
-      console.error("❌ Invalid profile ID for SMS unsubscribe:", profileId);
-      return { success: false, error: "Profile ID is required" };
     }
 
     // Validate phone number
@@ -1254,9 +1250,8 @@ class KlaviyoClient {
               data: [
                 {
                   type: "profile",
-                  id: profileId,
                   attributes: {
-                    phone_number: phoneNumber,
+                    phone_number: phoneNumber.trim(),
                     subscriptions: {
                       sms: {
                         marketing: {
@@ -1277,9 +1272,10 @@ class KlaviyoClient {
           fetch(url, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/vnd.api+json",
+              Accept: "application/vnd.api+json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1294,7 +1290,7 @@ class KlaviyoClient {
       }
 
       if (this.mode === "development") {
-        console.log("✅ SMS unsubscribe completed:", { profileId, phoneNumber });
+        console.log("✅ SMS unsubscribe job accepted:", { phoneNumber });
       }
 
       return { success: true };
@@ -1350,7 +1346,7 @@ class KlaviyoClient {
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                revision: "2024-10-15",
+                revision: this.apiRevision,
               },
               body: JSON.stringify(emailListPayload),
             }),
@@ -1396,7 +1392,7 @@ class KlaviyoClient {
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                revision: "2024-10-15",
+                revision: this.apiRevision,
               },
               body: JSON.stringify(smsListPayload),
             }),
@@ -1498,7 +1494,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),

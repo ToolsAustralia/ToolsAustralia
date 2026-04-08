@@ -379,10 +379,6 @@ export interface UserFilters {
   dateTo?: string;
   /** Australian state code e.g. NSW */
   state?: string;
-  /** Minimum age inclusive (birthdate must exist) */
-  ageMin?: string;
-  /** Maximum age inclusive (birthdate must exist) */
-  ageMax?: string;
   /** Active major draw with entries: yes | no */
   inActiveMajorDraw?: "yes" | "no" | "";
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
