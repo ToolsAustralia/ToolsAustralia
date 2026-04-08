@@ -234,6 +234,7 @@ export async function userToKlaviyoProfile(
 
       // Profile completion
       profile_setup_completed: user.profileSetupCompleted || false,
+      app_accepts_promotional_email: user.acceptsPromotionalEmail !== false,
 
       // Subscription details
       has_active_subscription: user.subscription?.isActive || false,

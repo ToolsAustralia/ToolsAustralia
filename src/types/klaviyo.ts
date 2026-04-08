@@ -67,6 +67,9 @@ export interface KlaviyoProfileProperties {
   // Profile completion
   profile_setup_completed?: boolean;
 
+  /** Mirrors app User.acceptsPromotionalEmail; Klaviyo subscription object is source of truth for deliverability */
+  app_accepts_promotional_email?: boolean;
+
   // Partner discount status
   partner_discount_active?: boolean;
   partner_discount_queued_count?: number;

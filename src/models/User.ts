@@ -158,6 +158,12 @@ export interface IUser extends Document {
   lastLogin?: Date;
   isActive: boolean;
 
+  /**
+   * When false, the user should not receive Klaviyo marketing/promotional email.
+   * Omitted/undefined means opted in (legacy users and default). Not synced from Klaviyo unsubscribe links alone.
+   */
+  acceptsPromotionalEmail?: boolean;
+
   // ✅ REMOVED: Old atomic lock arrays - now using event-based idempotency via PaymentEvent model
 
   // Payment Processing Tracking (for additional safety)
@@ -346,6 +352,10 @@ const UserSchema = new Schema<IUser>(
     profileSetupCompleted: {
       type: Boolean,
       default: false, // New users need to complete setup
+    },
+    acceptsPromotionalEmail: {
+      type: Boolean,
+      required: false,
     },
     role: {
       type: String,

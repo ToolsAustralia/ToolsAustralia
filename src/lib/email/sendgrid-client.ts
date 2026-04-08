@@ -68,6 +68,8 @@ class SendGridClient {
     html?: string;
     text?: string;
     replyTo?: string;
+    /** Optional SendGrid / SMTP headers (e.g. Message-ID for thread isolation) */
+    headers?: Record<string, string>;
   }): Promise<EmailResult> {
     if (!this.config.enabled) {
       return {
@@ -131,6 +133,7 @@ class SendGridClient {
         templateId: params.templateId,
         dynamicTemplateData: params.dynamicTemplateData,
         replyTo: params.replyTo,
+        ...(params.headers && Object.keys(params.headers).length > 0 ? { headers: params.headers } : {}),
       } as Parameters<typeof sgMail.send>[0];
     } else {
       const content: Array<{ type: string; value: string }> = [];
@@ -156,6 +159,7 @@ class SendGridClient {
         subject: params.subject,
         content,
         replyTo: params.replyTo,
+        ...(params.headers && Object.keys(params.headers).length > 0 ? { headers: params.headers } : {}),
       } as unknown as Parameters<typeof sgMail.send>[0];
     }
 

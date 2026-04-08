@@ -17,6 +17,7 @@ import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { stripe } from "@/lib/stripe";
+import { syncKlaviyoEmailMarketingFromAdminPreference } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -129,6 +130,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const dbSession = await mongoose.startSession();
     let userMissing = false;
     let transactionError: unknown;
+    /** When set after the transaction, sync this preference to Klaviyo */
+    let klaviyoPromotionalTarget: boolean | undefined;
 
     try {
       await dbSession.withTransaction(async () => {
@@ -139,8 +142,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           throw new Error("User not found");
         }
 
-        // Apply each optional update block only when provided
-        applyBasicInfoUpdate(user, payload.basicInfo);
+        if (payload.basicInfo) {
+          if (payload.basicInfo.acceptsPromotionalEmail !== undefined) {
+            const beforeOptIn = user.acceptsPromotionalEmail !== false;
+            applyBasicInfoUpdate(user, payload.basicInfo);
+            const afterOptIn = user.acceptsPromotionalEmail !== false;
+            if (beforeOptIn !== afterOptIn) {
+              klaviyoPromotionalTarget = afterOptIn;
+            }
+          } else {
+            applyBasicInfoUpdate(user, payload.basicInfo);
+          }
+        }
         applySubscriptionUpdate(user, payload.subscription);
         applyRewardsUpdate(user, payload.rewards);
 
@@ -186,9 +199,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    let warning: string | undefined;
+    if (klaviyoPromotionalTarget !== undefined) {
+      const userDoc = await User.findById(userId);
+      if (userDoc) {
+        const kSync = await syncKlaviyoEmailMarketingFromAdminPreference(
+          userDoc,
+          klaviyoPromotionalTarget
+        );
+        if (!kSync.success) {
+          warning = `Saved in database, but Klaviyo could not update marketing email preference: ${kSync.error ?? "unknown error"}. The user may still receive or miss mailings until Klaviyo matches this setting.`;
+          console.error("❌ Klaviyo marketing sync after admin PATCH:", kSync.error);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: updatedProfile,
+      ...(warning ? { warning } : {}),
     });
   } catch (error) {
     console.error("❌ Error updating user detail:", error);
@@ -535,6 +564,7 @@ async function buildAdminUserProfile(userId: string) {
     isEmailVerified: user.isEmailVerified,
     isMobileVerified: user.isMobileVerified,
     profileSetupCompleted: user.profileSetupCompleted,
+    acceptsPromotionalEmail: user.acceptsPromotionalEmail !== false,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     lastLogin: user.lastLogin,
@@ -680,6 +710,10 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
 
   if (basicInfo.profileSetupCompleted !== undefined) {
     user.profileSetupCompleted = basicInfo.profileSetupCompleted;
+  }
+
+  if (basicInfo.acceptsPromotionalEmail !== undefined) {
+    user.acceptsPromotionalEmail = basicInfo.acceptsPromotionalEmail;
   }
 }
 

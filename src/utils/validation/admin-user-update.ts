@@ -49,6 +49,7 @@ const basicInfoSchema = z
     isEmailVerified: z.boolean().optional(),
     isMobileVerified: z.boolean().optional(),
     profileSetupCompleted: z.boolean().optional(),
+    acceptsPromotionalEmail: z.boolean().optional(),
   })
   .strict()
   .partial();
