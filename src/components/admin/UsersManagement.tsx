@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Search,
@@ -47,7 +47,128 @@ import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 import Dropdown from "@/components/modals/ui/Dropdown";
+import Checkbox from "@/components/modals/ui/Checkbox";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+
+function AdminStatesMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[] | undefined;
+  onChange: (codes: string[] | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const codes = selected ?? [];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const toggleCode = (code: string) => {
+    const set = new Set(codes);
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    const next = Array.from(set).sort();
+    onChange(next.length ? next : undefined);
+  };
+
+  const active = codes.length > 0;
+  const summary =
+    codes.length === 0 ? "State" : codes.length === 1 ? codes[0]! : `${codes.length} states`;
+
+  return (
+    <div
+      className={`relative w-full min-w-[220px] ${open ? "z-[100]" : ""}`}
+      ref={ref}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={active ? codes.join(", ") : "Filter by state / territory"}
+        className={`
+          w-full min-w-[220px] border rounded-xl text-left transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
+          px-3 py-2 sm:px-4 sm:text-sm text-sm
+          ${
+            active
+              ? "border-red-500 dark:border-red-500 bg-red-50/80 dark:bg-red-950/40 shadow-md"
+              : "border-gray-300 dark:border-neutral-600 bg-[#ffffff] dark:!bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500"
+          }
+          ${open ? "ring-2 ring-red-500 border-transparent dark:border-transparent" : ""}
+        `}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={`flex min-w-0 flex-1 items-center gap-2 ${
+              active ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-neutral-400"
+            }`}
+          >
+            <MapPin className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-neutral-400" />
+            <span className="truncate whitespace-nowrap">{summary}</span>
+          </span>
+          <ChevronDown
+            className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-neutral-500 transition-transform duration-200"
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          />
+        </div>
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-[100] mt-1 w-full min-w-[220px] max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-gray-200 bg-[#ffffff] shadow-lg dark:border-neutral-600 dark:!bg-neutral-950 dark:shadow-2xl dark:shadow-black/50"
+          role="listbox"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {codes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(undefined);
+                setOpen(false);
+              }}
+              className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
+            >
+              Clear states
+            </button>
+          )}
+          {AUSTRALIAN_STATES.map((s) => {
+            const checked = codes.includes(s.code);
+            const id = `admin-users-filter-state-${s.code}`;
+            return (
+              <div
+                key={s.code}
+                className="transition-colors hover:bg-red-50 dark:hover:bg-neutral-800"
+              >
+                <Checkbox
+                  id={id}
+                  checked={checked}
+                  onChange={() => toggleCode(s.code)}
+                  label={`${s.code} · ${s.name}`}
+                  className="!m-0 w-full !items-center px-4 py-3 !gap-3 !text-sm text-gray-900 dark:text-neutral-100 [&_label]:cursor-pointer [&_label]:whitespace-nowrap [&_label]:font-normal"
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * World-class Users Management component
@@ -67,7 +188,7 @@ export default function UsersManagement() {
     autoRenew: undefined,
     membershipPackage: undefined,
     role: undefined,
-    state: undefined,
+    states: undefined,
     inActiveMajorDraw: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
@@ -173,7 +294,7 @@ export default function UsersManagement() {
       autoRenew: undefined,
       membershipPackage: undefined,
       role: undefined,
-      state: undefined,
+      states: undefined,
       inActiveMajorDraw: undefined,
       sortBy: "createdAt",
       sortOrder: "desc",
@@ -188,7 +309,7 @@ export default function UsersManagement() {
       filters.autoRenew ||
       filters.membershipPackage ||
       filters.role ||
-      filters.state ||
+      (filters.states?.length ?? 0) > 0 ||
       filters.inActiveMajorDraw
     );
   }, [filters]);
@@ -525,21 +646,17 @@ export default function UsersManagement() {
               />
             </div>
 
-            {/* State */}
+            {/* States (multi-select) — width matches Dropdown (min-w-[220px] list) */}
             <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
-              <Dropdown
-                options={[
-                  { value: "", label: "State", icon: MapPin },
-                  ...AUSTRALIAN_STATES.map((s) => ({
-                    value: s.code,
-                    label: `${s.code} · ${s.name}`,
-                    icon: MapPin,
-                  })),
-                ]}
-                value={filters.state || ""}
-                onChange={(value) => updateFilter("state", value)}
-                placeholder="State"
-                active={!!filters.state}
+              <AdminStatesMultiSelect
+                selected={filters.states}
+                onChange={(codes) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    states: codes,
+                    page: 1,
+                  }))
+                }
               />
             </div>
 
@@ -642,7 +759,7 @@ export default function UsersManagement() {
             <Users className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-2">No Users Found</h3>
             <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400">
-              {filters.search || filters.subscriptionStatus || filters.role
+              {filters.search || filters.subscriptionStatus || filters.role || (filters.states?.length ?? 0) > 0
                 ? "Try adjusting your search criteria"
                 : "No users have been registered yet"}
             </p>

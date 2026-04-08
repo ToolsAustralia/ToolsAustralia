@@ -101,8 +101,8 @@ function getFilterSummary(filters: UserFilters): string {
   if (filters.role) {
     parts.push(`Role: ${filters.role}`);
   }
-  if (filters.state) {
-    parts.push(`State: ${filters.state}`);
+  if (filters.states?.length) {
+    parts.push(`States: ${filters.states.join(", ")}`);
   }
   if (filters.inActiveMajorDraw) {
     parts.push(
@@ -239,7 +239,11 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       if (filters.role) params.set("role", filters.role);
       if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
-      if (filters.state) params.set("state", filters.state);
+      if (filters.states?.length) {
+        for (const c of filters.states) {
+          params.append("state", c);
+        }
+      }
       if (filters.inActiveMajorDraw) params.set("inActiveMajorDraw", filters.inActiveMajorDraw);
 
       const response = await fetch(`/api/admin/users/export?${params.toString()}`, {

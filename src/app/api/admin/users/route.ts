@@ -25,7 +25,7 @@ import {
  * - role: Filter by user role (user, admin)
  * - dateFrom: Filter users created after this date
  * - dateTo: Filter users created before this date
- * - state: Australian state code (NSW, VIC, …)
+ * - state: Australian state code (NSW, VIC, …). Repeat for multiple states (OR).
  * - inActiveMajorDraw: "yes" | "no" (active major draw with totalEntries > 0)
  * - sortBy: Sort field (createdAt, email, lastLogin, totalSpent, majorDrawEntries, miniDrawCount)
  * - sortOrder: Sort direction (asc, desc)
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       console.log("🔍 [DEBUG] Past Due + Will Renew filter combination:");
     }
 
-    const state = searchParams.get("state") || "";
+    const stateList = searchParams.getAll("state").map((s) => s.trim()).filter(Boolean);
     const inActiveMajorDraw = searchParams.get("inActiveMajorDraw") || "";
 
     const filter = await buildUserFilter({
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       role,
       dateFrom: dateFrom || "",
       dateTo: dateTo || "",
-      state,
+      states: stateList,
       inActiveMajorDraw,
     });
 
