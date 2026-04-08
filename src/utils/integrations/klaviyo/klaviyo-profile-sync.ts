@@ -19,7 +19,7 @@ import type { IMajorDraw } from "@/models/MajorDraw";
  * This ensures users who manually unsubscribe via Klaviyo links won't be resubscribed
  *
  * Subscribes to:
- * - Email marketing (always)
+ * - Email marketing (unless User.acceptsPromotionalEmail === false)
  * - SMS marketing (if phone number exists)
  * - SMS transactional (if phone number exists) - subscribed immediately, no purchase required
  *
@@ -30,8 +30,8 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
   try {
     const profile = await userToKlaviyoProfile(user);
 
-    // ✅ Subscribe to email marketing (always)
-    if (user.email) {
+    // ✅ Subscribe to email marketing when not opted out via app flag
+    if (user.email && user.acceptsPromotionalEmail !== false) {
       try {
         const emailResult = await klaviyo.subscribeToEmailList(profileId, user.email);
         if (emailResult.success) {
@@ -42,6 +42,10 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
       } catch (emailError) {
         console.error(`❌ Error subscribing user to email on registration: ${emailError}`);
       }
+    } else if (user.email && user.acceptsPromotionalEmail === false) {
+      console.log(
+        `ℹ️ Skipping Klaviyo email marketing subscribe on registration (acceptsPromotionalEmail=false): ${user.email}`
+      );
     }
 
     // ✅ Subscribe to SMS marketing AND transactional (if phone number exists)
@@ -66,6 +70,46 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
     }
   } catch (error) {
     console.error(`❌ Error in initial Klaviyo subscription for ${user.email}:`, error);
+  }
+}
+
+/**
+ * Apply Klaviyo email marketing subscription after an admin changes User.acceptsPromotionalEmail.
+ * Does not run when KLAVIYO_ENABLED is false.
+ */
+export async function syncKlaviyoEmailMarketingFromAdminPreference(
+  user: IUser,
+  wantsPromotionalEmail: boolean
+): Promise<{ success: boolean; error?: string }> {
+  if (process.env.KLAVIYO_ENABLED === "false") {
+    return { success: true };
+  }
+
+  if (!user.email?.trim()) {
+    return { success: false, error: "User has no email" };
+  }
+
+  try {
+    const profile = await userToKlaviyoProfile(user);
+    const upsert = await klaviyo.upsertProfile(profile);
+
+    if (!upsert.success || !upsert.profile_id) {
+      return {
+        success: false,
+        error: upsert.error || "Klaviyo profile upsert failed",
+      };
+    }
+
+    if (wantsPromotionalEmail) {
+      const sub = await klaviyo.subscribeToEmailList(upsert.profile_id, user.email);
+      return sub.success ? { success: true } : { success: false, error: sub.error };
+    }
+
+    const unsub = await klaviyo.unsubscribeFromEmailList(upsert.profile_id, user.email);
+    return unsub.success ? { success: true } : { success: false, error: unsub.error };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
   }
 }
 

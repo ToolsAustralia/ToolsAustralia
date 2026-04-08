@@ -864,13 +864,15 @@ export function useAdminUserActions() {
   });
 }
 
+export type AdminUpdateUserResult = { data: AdminUserDetail; warning?: string };
+
 /**
  * Hook to update a user's profile from the admin dashboard
  */
 export function useAdminUpdateUser() {
   const queryClient = useQueryClient();
 
-  return useMutation<AdminUserDetail, Error, { userId: string; payload: AdminUserUpdatePayload }>({
+  return useMutation<AdminUpdateUserResult, Error, { userId: string; payload: AdminUserUpdatePayload }>({
     mutationFn: async ({ userId, payload }) => {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
@@ -901,9 +903,9 @@ export function useAdminUpdateUser() {
         throw new Error(result.error || "Failed to update user");
       }
 
-      return result.data;
+      return { data: result.data, warning: result.warning };
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (_result, variables) => {
       // Refresh the detail view with the latest data
       queryClient.invalidateQueries({
         queryKey: ["admin", "users", "detail", variables.userId],

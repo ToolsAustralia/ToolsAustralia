@@ -101,6 +101,20 @@ function getFilterSummary(filters: UserFilters): string {
   if (filters.role) {
     parts.push(`Role: ${filters.role}`);
   }
+  if (filters.state) {
+    parts.push(`State: ${filters.state}`);
+  }
+  if (filters.ageMin) {
+    parts.push(`Age min: ${filters.ageMin}`);
+  }
+  if (filters.ageMax) {
+    parts.push(`Age max: ${filters.ageMax}`);
+  }
+  if (filters.inActiveMajorDraw) {
+    parts.push(
+      filters.inActiveMajorDraw === "yes" ? "In active major draw" : "Not in active major draw"
+    );
+  }
 
   return parts.length > 0 ? parts.join(", ") : "All users";
 }
@@ -231,6 +245,10 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       if (filters.role) params.set("role", filters.role);
       if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
+      if (filters.state) params.set("state", filters.state);
+      if (filters.ageMin) params.set("ageMin", filters.ageMin);
+      if (filters.ageMax) params.set("ageMax", filters.ageMax);
+      if (filters.inActiveMajorDraw) params.set("inActiveMajorDraw", filters.inActiveMajorDraw);
 
       const response = await fetch(`/api/admin/users/export?${params.toString()}`, {
         method: "GET",

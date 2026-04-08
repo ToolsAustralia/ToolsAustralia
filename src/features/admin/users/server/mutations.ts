@@ -83,6 +83,10 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
   if (basicInfo.profileSetupCompleted !== undefined) {
     user.profileSetupCompleted = basicInfo.profileSetupCompleted;
   }
+
+  if (basicInfo.acceptsPromotionalEmail !== undefined) {
+    user.acceptsPromotionalEmail = basicInfo.acceptsPromotionalEmail;
+  }
 }
 
 /**

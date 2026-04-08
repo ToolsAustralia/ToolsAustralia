@@ -8,7 +8,38 @@
  * providing a single source of truth for all user filtering.
  */
 
+import mongoose from "mongoose";
+import MajorDraw from "@/models/MajorDraw";
+
 // UserFilters type is available but not directly imported here to avoid circular dependencies
+
+const AU_STATE_CODES = new Set(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
+
+/**
+ * Inclusive age bracket on birthdate using UTC calendar dates.
+ * Only users with a stored birthdate match when any age bound is set.
+ */
+function birthdateFilterFromAgeBounds(ageMin?: number, ageMax?: number): Record<string, unknown> | null {
+  const hasMin = ageMin !== undefined && Number.isFinite(ageMin) && ageMin >= 0;
+  const hasMax = ageMax !== undefined && Number.isFinite(ageMax) && ageMax >= 0;
+  if (!hasMin && !hasMax) return null;
+
+  const cond: Record<string, unknown> = { $exists: true, $ne: null };
+  const today = new Date();
+  // Age >= ageMin ⇒ birthdate <= (today - ageMin years) UTC
+  if (hasMin) {
+    const latest = new Date(today);
+    latest.setUTCFullYear(latest.getUTCFullYear() - ageMin!);
+    cond.$lte = latest;
+  }
+  // Age <= ageMax ⇒ birthdate > (today - (ageMax + 1) years) UTC
+  if (hasMax) {
+    const earliestExclusive = new Date(today);
+    earliestExclusive.setUTCFullYear(earliestExclusive.getUTCFullYear() - ageMax! - 1);
+    cond.$gt = earliestExclusive;
+  }
+  return cond;
+}
 
 /**
  * Get filter for true active subscriptions (subscriptions that will auto-renew)
@@ -78,9 +109,29 @@ export async function buildUserFilter(
     role?: string;
     dateFrom?: string;
     dateTo?: string;
+    /** Australian state code e.g. NSW */
+    state?: string;
+    /** Minimum age (inclusive); must have birthdate */
+    ageMin?: string | number;
+    /** Maximum age (inclusive); must have birthdate */
+    ageMax?: string | number;
+    /** "yes" = has entries in active major draw; "no" = not in that set */
+    inActiveMajorDraw?: string;
   }
 ): Promise<Record<string, unknown>> {
-  const { search, subscriptionStatus, autoRenew, membershipPackage, role, dateFrom, dateTo } = filters;
+  const {
+    search,
+    subscriptionStatus,
+    autoRenew,
+    membershipPackage,
+    role,
+    dateFrom,
+    dateTo,
+    state,
+    ageMin,
+    ageMax,
+    inActiveMajorDraw,
+  } = filters;
 
   // Initialize filter object
   const filter: Record<string, unknown> = {};
@@ -360,6 +411,48 @@ export async function buildUserFilter(
     } else {
       // If no matching packages found, return empty result
       filter["subscription.packageId"] = { $in: [] };
+    }
+  }
+
+  if (state !== undefined && state !== null && String(state).trim() !== "") {
+    const code = String(state).trim().toUpperCase();
+    if (AU_STATE_CODES.has(code)) {
+      filter.state = code;
+    } else {
+      filter.state = { $in: [] };
+    }
+  }
+
+  const ageMinN =
+    ageMin !== undefined && ageMin !== "" && ageMin !== null ? parseInt(String(ageMin), 10) : undefined;
+  const ageMaxN =
+    ageMax !== undefined && ageMax !== "" && ageMax !== null ? parseInt(String(ageMax), 10) : undefined;
+  const birthdateAge = birthdateFilterFromAgeBounds(ageMinN, ageMaxN);
+  if (birthdateAge) {
+    filter.birthdate = birthdateAge;
+  }
+
+  if (inActiveMajorDraw === "yes" || inActiveMajorDraw === "no") {
+    const activeDraw = await MajorDraw.findOne({ status: "active" }).select("entries").lean();
+    const withEntries = (activeDraw?.entries ?? []).filter(
+      (e: { totalEntries?: number; quantity?: number }) => (e.totalEntries ?? e.quantity ?? 0) > 0
+    );
+    const entryUserIds = withEntries.map((e: { userId: mongoose.Types.ObjectId | string }) =>
+      typeof e.userId === "string" ? e.userId : e.userId.toString()
+    );
+    const oidList = entryUserIds.map((id: string) => new mongoose.Types.ObjectId(id));
+
+    if (inActiveMajorDraw === "yes") {
+      if (oidList.length === 0) {
+        if (!filter.$and) filter.$and = [];
+        (filter.$and as Array<Record<string, unknown>>).push({ _id: { $in: [] } });
+      } else {
+        if (!filter.$and) filter.$and = [];
+        (filter.$and as Array<Record<string, unknown>>).push({ _id: { $in: oidList } });
+      }
+    } else if (oidList.length > 0) {
+      if (!filter.$and) filter.$and = [];
+      (filter.$and as Array<Record<string, unknown>>).push({ _id: { $nin: oidList } });
     }
   }
 

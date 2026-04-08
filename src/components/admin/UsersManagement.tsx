@@ -29,6 +29,7 @@ import {
   ChevronUp,
   ChevronDown,
   Download,
+  MapPin,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -46,6 +47,7 @@ import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
 import Dropdown from "@/components/modals/ui/Dropdown";
+import { AUSTRALIAN_STATES } from "@/data/australianStates";
 
 /**
  * World-class Users Management component
@@ -65,6 +67,10 @@ export default function UsersManagement() {
     autoRenew: undefined,
     membershipPackage: undefined,
     role: undefined,
+    state: undefined,
+    ageMin: undefined,
+    ageMax: undefined,
+    inActiveMajorDraw: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
@@ -169,6 +175,10 @@ export default function UsersManagement() {
       autoRenew: undefined,
       membershipPackage: undefined,
       role: undefined,
+      state: undefined,
+      ageMin: undefined,
+      ageMax: undefined,
+      inActiveMajorDraw: undefined,
       sortBy: "createdAt",
       sortOrder: "desc",
     });
@@ -181,7 +191,11 @@ export default function UsersManagement() {
       filters.subscriptionStatus ||
       filters.autoRenew ||
       filters.membershipPackage ||
-      filters.role
+      filters.role ||
+      filters.state ||
+      filters.ageMin ||
+      filters.ageMax ||
+      filters.inActiveMajorDraw
     );
   }, [filters]);
 
@@ -514,6 +528,70 @@ export default function UsersManagement() {
                 onChange={(value) => updateFilter("role", value)}
                 placeholder="Roles"
                 active={!!filters.role}
+              />
+            </div>
+
+            {/* State */}
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "State", icon: MapPin },
+                  ...AUSTRALIAN_STATES.map((s) => ({
+                    value: s.code,
+                    label: `${s.code} · ${s.name}`,
+                    icon: MapPin,
+                  })),
+                ]}
+                value={filters.state || ""}
+                onChange={(value) => updateFilter("state", value)}
+                placeholder="State"
+                active={!!filters.state}
+              />
+            </div>
+
+            {/* Age range (birthdate required on profile) */}
+            <div className="flex items-center gap-1 min-w-[140px]">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={120}
+                placeholder="Min age"
+                aria-label="Minimum age"
+                value={filters.ageMin ?? ""}
+                onChange={(e) =>
+                  updateFilter("ageMin", e.target.value === "" ? "" : e.target.value)
+                }
+                className="w-[4.5rem] sm:w-[5rem] px-2 py-1.5 sm:py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm"
+              />
+              <span className="text-gray-400 text-xs shrink-0">–</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={120}
+                placeholder="Max age"
+                aria-label="Maximum age"
+                value={filters.ageMax ?? ""}
+                onChange={(e) =>
+                  updateFilter("ageMax", e.target.value === "" ? "" : e.target.value)
+                }
+                className="w-[4.5rem] sm:w-[5rem] px-2 py-1.5 sm:py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm"
+              />
+            </div>
+
+            {/* Active major draw participation */}
+            <div className="min-w-[100px] sm:min-w-[140px] lg:min-w-[160px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Major draw", icon: Trophy },
+                  { value: "yes", label: "In active draw", icon: CheckCircle },
+                  { value: "no", label: "Not in draw", icon: Ban },
+                ]}
+                value={filters.inActiveMajorDraw || ""}
+                onChange={(value) => updateFilter("inActiveMajorDraw", value)}
+                placeholder="Major draw"
+                active={!!filters.inActiveMajorDraw}
               />
             </div>
 

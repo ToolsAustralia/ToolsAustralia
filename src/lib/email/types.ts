@@ -47,6 +47,8 @@ export interface ContactSubmissionPayload {
   subject: string;
   message: string;
   submittedAt: string; // ISO date string
+  /** Saved submission document id — used for unique subject / Message-ID (avoids Gmail threading) */
+  submissionId: string;
 }
 
 export interface PartnerApplicationPayload {

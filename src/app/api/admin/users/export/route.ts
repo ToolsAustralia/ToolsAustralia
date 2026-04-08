@@ -128,6 +128,10 @@ export async function GET(request: NextRequest) {
         role: searchParams.get("role") || "",
         dateFrom: searchParams.get("dateFrom") || "",
         dateTo: searchParams.get("dateTo") || "",
+        state: searchParams.get("state") || "",
+        ageMin: searchParams.get("ageMin") || "",
+        ageMax: searchParams.get("ageMax") || "",
+        inActiveMajorDraw: searchParams.get("inActiveMajorDraw") || "",
       };
       const filter = await buildUserFilter(filters);
       const rawUsers = await User.find(filter)
@@ -154,9 +158,17 @@ export async function GET(request: NextRequest) {
       const sub = searchParams.get("subscriptionStatus") || "";
       const pkg = searchParams.get("membershipPackage") || "";
       const role = searchParams.get("role") || "";
+      const st = searchParams.get("state") || "";
+      const aMin = searchParams.get("ageMin") || "";
+      const aMax = searchParams.get("ageMax") || "";
+      const inDraw = searchParams.get("inActiveMajorDraw") || "";
       if (sub) filterSummary.push(sub);
       if (pkg) filterSummary.push(pkg.replace(/[^a-zA-Z0-9]/g, "-"));
       if (role) filterSummary.push(role);
+      if (st) filterSummary.push(st.toLowerCase());
+      if (aMin) filterSummary.push(`ageMin${aMin}`);
+      if (aMax) filterSummary.push(`ageMax${aMax}`);
+      if (inDraw) filterSummary.push(inDraw === "yes" ? "in-draw" : "not-in-draw");
     }
     const filterSuffix = filterSummary.length > 0 ? `-${filterSummary.join("-")}` : "";
     const baseFilename = `users-export-${dateStr}-${timeStr}${filterSuffix}`;

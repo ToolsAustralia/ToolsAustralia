@@ -190,6 +190,8 @@ export interface AdminUserDetail {
   isEmailVerified: boolean;
   isMobileVerified?: boolean;
   profileSetupCompleted?: boolean;
+  /** false = opted out of Klaviyo marketing email; omitted/undefined treated as opted in */
+  acceptsPromotionalEmail?: boolean;
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
@@ -375,6 +377,14 @@ export interface UserFilters {
   role?: "user" | "admin";
   dateFrom?: string;
   dateTo?: string;
+  /** Australian state code e.g. NSW */
+  state?: string;
+  /** Minimum age inclusive (birthdate must exist) */
+  ageMin?: string;
+  /** Maximum age inclusive (birthdate must exist) */
+  ageMax?: string;
+  /** Active major draw with entries: yes | no */
+  inActiveMajorDraw?: "yes" | "no" | "";
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
   sortOrder?: "asc" | "desc";
 }
@@ -431,6 +441,8 @@ export interface AdminUserDetailResponse {
   success: boolean;
   data: AdminUserDetail;
   error?: string;
+  /** Present when DB saved but Klaviyo marketing preference sync failed */
+  warning?: string;
 }
 
 export interface AdminUserUpdatePayload {
@@ -448,6 +460,8 @@ export interface AdminUserUpdatePayload {
     isEmailVerified?: boolean;
     isMobileVerified?: boolean;
     profileSetupCompleted?: boolean;
+    /** Klaviyo marketing/promotional email (not transactional) */
+    acceptsPromotionalEmail?: boolean;
   };
   subscription?: {
     packageId?: string | null;

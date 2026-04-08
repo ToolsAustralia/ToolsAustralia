@@ -118,16 +118,23 @@ class EmailService {
       subject: payload.subject,
       message: payload.message,
       submittedAt: new Date(payload.submittedAt),
+      submissionId: payload.submissionId,
     });
-    const textContent = `New Contact Form Submission\n\nName: ${payload.firstName} ${payload.lastName}\nEmail: ${payload.email}\nPhone: ${payload.phone}\nSubject: ${payload.subject}\n\nMessage:\n${payload.message}\n\nSubmitted at: ${new Date(payload.submittedAt).toLocaleString('en-AU')}`;
+    const textContent = `New Contact Form Submission\n\nSubmission ID: ${payload.submissionId}\nName: ${payload.firstName} ${payload.lastName}\nEmail: ${payload.email}\nPhone: ${payload.phone}\nSubject: ${payload.subject}\n\nMessage:\n${payload.message}\n\nSubmitted at: ${new Date(payload.submittedAt).toLocaleString('en-AU')}`;
+
+    const shortRef = payload.submissionId.replace(/\s/g, "").slice(-6);
+    const subject = `New contact · ${payload.firstName} ${payload.lastName} · ${payload.subject} · #${shortRef}`;
 
     return this.client.sendEmail({
       to: CONTACT_RECIPIENT,
       from: { email: sender.fromEmail, name: sender.fromName },
-      subject: `New Contact Form Submission: ${payload.subject}`,
+      subject,
       html: htmlContent,
       text: textContent,
       replyTo: payload.email,
+      headers: {
+        "Message-ID": `<contact-${payload.submissionId}@toolsaustralia.com.au>`,
+      },
     });
   }
 
