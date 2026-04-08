@@ -26,8 +26,7 @@ export default function PromotionsAccountButton() {
   const promoTheme = usePromoTheme();
   const preferDark = promoTheme.preferDarkBackground ?? false;
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const themeToggleRef = useRef<HTMLDivElement>(null);
+  const fabStackRef = useRef<HTMLDivElement>(null);
 
   const isVisible = !loading && isAuthenticated;
 
@@ -41,7 +40,7 @@ export default function PromotionsAccountButton() {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const node = e.target as Node;
-      if (menuRef.current?.contains(node) || themeToggleRef.current?.contains(node)) return;
+      if (fabStackRef.current?.contains(node)) return;
       setIsOpen(false);
     };
     if (isOpen) {
@@ -53,27 +52,24 @@ export default function PromotionsAccountButton() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <>
+        <motion.div
+          key="promo-account-fab-stack"
+          ref={fabStackRef}
+          initial={{ opacity: 0, x: 40, scale: 0.9 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 40, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 350, damping: 28 }}
+          className="fixed right-4 bottom-4 z-40 flex flex-col items-end gap-3"
+        >
           <motion.div
-            key="promo-theme-fab"
-            ref={themeToggleRef}
-            initial={{ opacity: 0, x: 40, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 40, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="fixed right-4 z-40 bottom-[calc(6rem+3rem+0.5rem)] sm:bottom-[calc(7rem+3rem+0.5rem)]"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30, delay: 0.03 }}
           >
             <ThemeToggleButton />
           </motion.div>
-          <motion.div
-            key="promo-account-menu"
-            ref={menuRef}
-            initial={{ opacity: 0, x: 40, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 40, scale: 0.9 }}
-            transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="fixed right-4 bottom-24 sm:bottom-28 z-40 flex items-end justify-end gap-2"
-          >
+
+          <div className="flex items-end justify-end gap-2">
             <AnimatePresence>
               {isOpen && (
                 <motion.div
@@ -125,8 +121,8 @@ export default function PromotionsAccountButton() {
               />
               <Menu className="h-6 w-6 relative z-10" />
             </motion.button>
-          </motion.div>
-        </>
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
