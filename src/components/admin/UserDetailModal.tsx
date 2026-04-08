@@ -1611,13 +1611,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
-                                label="Klaviyo marketing / promotional email"
+                                label="Klaviyo marketing (email & SMS)"
                               />
-                              <p className="text-[11px] text-gray-500 dark:text-neutral-400 mt-1.5 pl-8">
-                                Controls promotional sends in Klaviyo. Does not affect transactional email. If the user
-                                unsubscribes only via a Klaviyo link, this checkbox may not match until you update it
-                                here.
-                              </p>
                             </div>
                           )}
                         />
@@ -1703,13 +1698,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Send className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">
-                              Klaviyo marketing email
+                              Klaviyo marketing
                             </p>
                             <p className="font-medium text-sm">
                               {user.acceptsPromotionalEmail !== false ? "Subscribed (app)" : "Unsubscribed (app)"}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
-                              Promotional only; managed here or via Klaviyo unsubscribe links.
                             </p>
                           </div>
                         </div>
