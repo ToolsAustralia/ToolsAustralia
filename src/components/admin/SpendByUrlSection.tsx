@@ -3,11 +3,8 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ChevronDown, ChevronUp, ChevronRight, Link2, ArrowDown, ArrowUp } from "lucide-react";
-import {
-  useSpendByUrlAnalytics,
-  useSpendByUrlDetail,
-} from "@/hooks/queries/useSpendByUrlAnalytics";
-import type { SpendByUrlDetailRow } from "@/hooks/queries/useSpendByUrlAnalytics";
+import { useSpendByUrlAnalytics, useSpendByUrlDetail } from "@/hooks/queries/useSpendByUrlAnalytics";
+import SpendByUrlAdBreakdownTable from "@/components/admin/spend-by-url/SpendByUrlAdBreakdownTable";
 
 function isUnresolvedLandingUrl(canonicalUrl: string): boolean {
   return canonicalUrl.startsWith("unknown://");
@@ -57,22 +54,6 @@ interface SpendByUrlSectionProps {
 
 /** expand + URL + 9 metric columns */
 const COL_SPAN = 11;
-
-function groupDetailAdsByFormat(rows: SpendByUrlDetailRow[]) {
-  const order: Array<{ format: SpendByUrlDetailRow["adFormat"]; label: string }> = [
-    { format: "video", label: "Video ads" },
-    { format: "static", label: "Static / image ads" },
-    { format: "carousel", label: "Carousel" },
-    { format: "unknown", label: "Other / unresolved creative" },
-  ];
-  return order
-    .map(({ format, label }) => ({
-      label,
-      format,
-      rows: rows.filter((r) => (r.adFormat ?? "unknown") === format),
-    }))
-    .filter((g) => g.rows.length > 0);
-}
 
 export default function SpendByUrlSection({ startDate, endDate, dateReady }: SpendByUrlSectionProps) {
   const queryClient = useQueryClient();
@@ -486,92 +467,12 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                               </p>
                             )}
                             {detailQuery.data?.rows && detailQuery.data.rows.length > 0 && (
-                              <div
-                                className="-mx-1 sm:mx-0 w-full min-w-0 overflow-x-auto brand-scrollbar"
-                                style={{ WebkitOverflowScrolling: "touch" }}
-                              >
-                                <table className="w-full min-w-[280px] sm:min-w-[640px] text-[10px] sm:text-xs">
-                                  <thead>
-                                    <tr className="border-b border-slate-200 text-gray-600 dark:text-neutral-400">
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-left py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold">
-                                        Ad
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold whitespace-nowrap">
-                                        Spend
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold hidden md:table-cell">
-                                        Clicks
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold hidden lg:table-cell">
-                                        Impr.
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold hidden sm:table-cell whitespace-nowrap">
-                                        CPC
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold text-emerald-900 whitespace-nowrap">
-                                        <span className="sm:hidden">Rev</span>
-                                        <span className="hidden sm:inline">Meta rev.</span>
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold whitespace-nowrap">
-                                        <span className="sm:hidden">Conv</span>
-                                        <span className="hidden sm:inline">Conv.</span>
-                                      </th>
-                                      <th className="sticky top-0 z-10 bg-slate-50 text-right py-1 px-0.5 sm:py-1.5 sm:px-1 font-semibold hidden sm:table-cell whitespace-nowrap">
-                                        ROAS
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {groupDetailAdsByFormat(detailQuery.data.rows).map((group) => (
-                                      <React.Fragment key={group.format}>
-                                        <tr className="bg-slate-200/80">
-                                          <td
-                                            colSpan={8}
-                                            className="py-1 px-1 sm:py-1.5 sm:px-2 text-[10px] sm:text-[11px] font-semibold text-gray-800 dark:text-neutral-100 uppercase tracking-wide"
-                                          >
-                                            {group.label}
-                                          </td>
-                                        </tr>
-                                        {group.rows.map((d) => (
-                                          <tr key={d.adId} className="border-b border-slate-100/80">
-                                            <td className="py-1 px-0.5 sm:px-1 text-gray-900 max-w-[7rem] sm:max-w-none">
-                                              <span className="font-mono text-[9px] sm:text-[11px] text-gray-500 block truncate">
-                                                {d.adId}
-                                              </span>
-                                              {d.adName ? (
-                                                <span className="block text-gray-700 dark:text-neutral-200 text-[10px] sm:text-xs leading-snug line-clamp-2 sm:line-clamp-none">
-                                                  {d.adName}
-                                                </span>
-                                              ) : null}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right whitespace-nowrap tabular-nums">
-                                              {formatAud(d.spend)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right hidden md:table-cell whitespace-nowrap tabular-nums">
-                                              {formatNum(d.clicks)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right hidden lg:table-cell whitespace-nowrap tabular-nums">
-                                              {formatNum(d.impressions)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right hidden sm:table-cell whitespace-nowrap tabular-nums">
-                                              {formatAud(d.cpc)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right whitespace-nowrap tabular-nums text-emerald-800">
-                                              {formatAud(d.revenue)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right whitespace-nowrap tabular-nums">
-                                              {formatNum(d.conversions)}
-                                            </td>
-                                            <td className="py-1 px-0.5 sm:px-1 text-right hidden sm:table-cell whitespace-nowrap tabular-nums">
-                                              {d.roas.toFixed(2)}x
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </React.Fragment>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                              <SpendByUrlAdBreakdownTable
+                                rows={detailQuery.data.rows}
+                                showSearch={false}
+                                density="compact"
+                                ariaLabel="Ads for this landing URL"
+                              />
                             )}
                             {detailQuery.data?.rows?.length === 0 && !detailQuery.isLoading && (
                               <p className="text-xs text-gray-500">

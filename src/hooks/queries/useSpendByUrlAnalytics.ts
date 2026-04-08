@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export interface SpendByUrlRow {
   canonicalUrl: string;
@@ -59,12 +60,29 @@ export interface SpendByUrlDetailRow {
   adFormat: "video" | "static" | "carousel" | "unknown";
 }
 
+export interface SpendByUrlDetailResponse {
+  success: boolean;
+  rows: SpendByUrlDetailRow[];
+  meta?: {
+    canonicalUrl?: string;
+    canonicalUrls?: string[];
+    startDate?: string;
+    endDate?: string;
+    currency?: string;
+    adAccountId?: string;
+  };
+}
+
+function detailQueryKeyFingerprint(canonicalUrls: string[]): string {
+  return [...new Set(canonicalUrls.map((u) => u.trim()).filter(Boolean))].sort().join("\n");
+}
+
 export function useSpendByUrlDetail(
   canonicalUrl: string | null,
   startDate: string | undefined,
   endDate: string | undefined
 ) {
-  return useQuery<{ success: boolean; rows: SpendByUrlDetailRow[]; meta?: { canonicalUrl: string } }>({
+  return useQuery<SpendByUrlDetailResponse>({
     queryKey: ["admin", "analytics", "spend-by-url", "detail", canonicalUrl, startDate, endDate],
     enabled: Boolean(canonicalUrl && startDate && endDate),
     queryFn: async () => {
@@ -73,7 +91,42 @@ export function useSpendByUrlDetail(
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
       const res = await fetch(`/api/admin/analytics/spend-by-url/detail?${params.toString()}`);
-      const json = await res.json();
+      const json = (await res.json()) as SpendByUrlDetailResponse & { error?: string };
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to load detail");
+      }
+      return json;
+    },
+  });
+}
+
+export function useSpendByUrlDetailMany(
+  canonicalUrls: string[] | null | undefined,
+  startDate: string | undefined,
+  endDate: string | undefined,
+  options?: { enabled?: boolean }
+) {
+  const fingerprint = useMemo(
+    () => (canonicalUrls?.length ? detailQueryKeyFingerprint(canonicalUrls) : ""),
+    [canonicalUrls]
+  );
+
+  const enabled =
+    options?.enabled !== false &&
+    Boolean(fingerprint && startDate && endDate && canonicalUrls && canonicalUrls.length > 0);
+
+  return useQuery<SpendByUrlDetailResponse>({
+    queryKey: ["admin", "analytics", "spend-by-url", "detail", "many", fingerprint, startDate, endDate],
+    enabled,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      for (const u of canonicalUrls!) {
+        params.append("canonicalUrl", u);
+      }
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+      const res = await fetch(`/api/admin/analytics/spend-by-url/detail?${params.toString()}`);
+      const json = (await res.json()) as SpendByUrlDetailResponse & { error?: string };
       if (!res.ok) {
         throw new Error(json.error || "Failed to load detail");
       }

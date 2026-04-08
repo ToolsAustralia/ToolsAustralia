@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import DashboardSection from "./DashboardSection";
+import PrizePerformanceAdsModal from "@/components/modals/PrizePerformanceAdsModal";
 import { useSpendByUrlAnalytics } from "@/hooks/queries/useSpendByUrlAnalytics";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, ArrowDown, ArrowUp } from "lucide-react";
@@ -30,6 +31,7 @@ interface PromotionMetric {
   conversions: number;
   roas: number;
   logoScale?: string;
+  canonicalUrls: string[];
 }
 
 type SortKey = "prize" | "spend" | "revenue" | "conversions" | "roas";
@@ -76,6 +78,7 @@ export default function AdvertisingBreakdownSection({
   const { data, isLoading, isFetching, error: queryError } = useSpendByUrlAnalytics(startDate, endDate);
 
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "roas", dir: "desc" });
+  const [selectedPrize, setSelectedPrize] = useState<PromotionMetric | null>(null);
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -117,6 +120,8 @@ export default function AdvertisingBreakdownSection({
             r.canonicalUrl.endsWith(`/promotions/${promo.slug}`)
         );
 
+        const canonicalUrls = [...new Set(rowsForPromo.map((r) => r.canonicalUrl))];
+
         if (rowsForPromo.length === 0) {
           return {
             ...promo,
@@ -124,6 +129,7 @@ export default function AdvertisingBreakdownSection({
             revenue: 0,
             conversions: 0,
             roas: 0,
+            canonicalUrls,
           };
         }
 
@@ -138,6 +144,7 @@ export default function AdvertisingBreakdownSection({
           revenue,
           conversions,
           roas,
+          canonicalUrls,
         };
       })
       .filter((metric) => metric.spend > 0 || metric.revenue > 0 || metric.conversions > 0); // Only show rows with data
@@ -191,7 +198,10 @@ export default function AdvertisingBreakdownSection({
       >
         <button
           type="button"
-          onClick={() => onSortColumn(column)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSortColumn(column);
+          }}
           className="inline-flex w-full min-w-0 items-center justify-center gap-0.5 font-semibold text-inherit hover:opacity-90 -my-0.5 py-0.5 rounded"
         >
           <span className="min-w-0">{children}</span>
@@ -294,7 +304,36 @@ export default function AdvertisingBreakdownSection({
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
                 {sortedMetrics.map((metric) => (
-                  <tr key={metric.slug} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
+                  <tr
+                    key={metric.slug}
+                    tabIndex={0}
+                    onClick={() => {
+                      if (metric.canonicalUrls.length > 0 && startDate && endDate) {
+                        setSelectedPrize(metric);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        metric.canonicalUrls.length > 0 &&
+                        startDate &&
+                        endDate &&
+                        (e.key === "Enter" || e.key === " ")
+                      ) {
+                        e.preventDefault();
+                        setSelectedPrize(metric);
+                      }
+                    }}
+                    className={`hover:bg-gray-50 dark:hover:bg-neutral-800/60 ${
+                      metric.canonicalUrls.length > 0 && dateReady
+                        ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
+                        : ""
+                    }`}
+                    aria-label={
+                      metric.canonicalUrls.length > 0 && dateReady
+                        ? `View ads for ${metric.brand}`
+                        : undefined
+                    }
+                  >
                     <td className="px-1 py-1.5 sm:p-2 sm:py-2.5 align-middle">
                       <div className="flex items-center justify-center min-h-[2.25rem] sm:min-h-[3rem]">
                         <div className="relative w-12 h-7 sm:w-20 sm:h-10 md:w-24 md:h-12 flex items-center justify-center">
@@ -326,6 +365,18 @@ export default function AdvertisingBreakdownSection({
             </table>
           </div>
         </div>
+      )}
+
+      {selectedPrize && startDate && endDate && (
+        <PrizePerformanceAdsModal
+          isOpen={Boolean(selectedPrize)}
+          onClose={() => setSelectedPrize(null)}
+          brandLabel={selectedPrize.brand}
+          slug={selectedPrize.slug}
+          startDate={startDate}
+          endDate={endDate}
+          canonicalUrls={selectedPrize.canonicalUrls}
+        />
       )}
     </DashboardSection>
   );
