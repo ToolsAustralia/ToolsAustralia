@@ -18,6 +18,17 @@ export interface RecomputeResult {
   rowsWritten: number;
 }
 
+export type SpendByUrlDetailAggRow = {
+  adId: string;
+  adName?: string;
+  spendCents: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenueCents: number;
+  adFormat: "video" | "static" | "carousel" | "unknown";
+};
+
 /**
  * Rebuilds LandingPageMetricsDaily from MetaAdInsightsDaily + MetaAdDestination for a date range.
  */
@@ -184,34 +195,23 @@ export class SpendByUrlAggregationService {
   }
 
   /**
-   * Per-ad totals for one canonical URL (drill-down).
-   */
-  /**
    * Placeholder when no website URL was resolved; embeds the Meta ad id.
    * @see MetaAdDestinationService — if Graph API errors on the ad, no destination doc exists,
    * but aggregation still buckets spend under this string, so drill-down must not rely on MetaAdDestination alone.
    */
   private static readonly UNKNOWN_META_AD_RE = /^unknown:\/\/meta-ad\/(\d+)$/;
 
-  async getSpendByUrlDetail(
+  /**
+   * Resolve ad ids and destination docs for one canonical URL (same rules as legacy drill-down).
+   */
+  private async collectAdIdsAndDestsForCanonicalUrl(
     adAccountId: string,
     canonicalUrl: string,
     since: string,
     until: string
-  ): Promise<
-    Array<{
-      adId: string;
-      adName?: string;
-      spendCents: number;
-      impressions: number;
-      clicks: number;
-      conversions: number;
-      revenueCents: number;
-      adFormat: "video" | "static" | "carousel" | "unknown";
-    }>
-  > {
+  ): Promise<{ adIds: string[]; destByAd: Map<string, (typeof dests)[number]> }> {
     const dests = await MetaAdDestination.find({ adAccountId, canonicalUrl }).lean();
-    const destByAd = new Map(dests.map((d) => [d.adId, d]));
+    const destByAd = new Map(dests.map((d) => [d.adId, d] as [string, (typeof dests)[number]]));
     let adIds = dests.map((d) => d.adId);
 
     if (adIds.length === 0) {
@@ -228,6 +228,43 @@ export class SpendByUrlAggregationService {
       }
     }
 
+    return { adIds, destByAd };
+  }
+
+  /**
+   * Per-ad totals for one or more canonical URLs (union of ads, single insights query).
+   */
+  async getSpendByUrlDetailForCanonicalUrls(
+    adAccountId: string,
+    canonicalUrls: string[],
+    since: string,
+    until: string
+  ): Promise<SpendByUrlDetailAggRow[]> {
+    const uniqueUrls = [...new Set(canonicalUrls.map((u) => u.trim()).filter(Boolean))];
+    if (uniqueUrls.length === 0) {
+      return [];
+    }
+
+    const mergedDestByAd = new Map<string, { adFormat?: string }>();
+    const adIdSet = new Set<string>();
+
+    for (const canonicalUrl of uniqueUrls) {
+      const { adIds, destByAd } = await this.collectAdIdsAndDestsForCanonicalUrl(
+        adAccountId,
+        canonicalUrl,
+        since,
+        until
+      );
+      for (const [id, d] of destByAd) {
+        const doc = d as { adFormat?: string };
+        mergedDestByAd.set(id, { adFormat: doc.adFormat });
+      }
+      for (const id of adIds) {
+        adIdSet.add(id);
+      }
+    }
+
+    const adIds = [...adIdSet];
     if (adIds.length === 0) {
       return [];
     }
@@ -272,7 +309,7 @@ export class SpendByUrlAggregationService {
 
     return [...byAd.entries()]
       .map(([adId, v]) => {
-        const dest = destByAd.get(adId);
+        const dest = mergedDestByAd.get(adId);
         const raw = dest?.adFormat;
         const adFormat: "video" | "static" | "carousel" | "unknown" =
           raw === "video" || raw === "static" || raw === "carousel" || raw === "unknown"
@@ -295,5 +332,17 @@ export class SpendByUrlAggregationService {
         if (fa !== fb) return fa - fb;
         return b.spendCents - a.spendCents;
       });
+  }
+
+  /**
+   * Per-ad totals for one canonical URL (drill-down).
+   */
+  async getSpendByUrlDetail(
+    adAccountId: string,
+    canonicalUrl: string,
+    since: string,
+    until: string
+  ): Promise<SpendByUrlDetailAggRow[]> {
+    return this.getSpendByUrlDetailForCanonicalUrls(adAccountId, [canonicalUrl], since, until);
   }
 }
