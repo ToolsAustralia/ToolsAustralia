@@ -17,6 +17,7 @@ const ContactSubmissionEmailPreview: React.FC = () => {
       subject: "Question about delivery",
       message: "Hi,\n\nCould you confirm if my order will arrive before Friday?\n\nThanks!",
       submittedAt: new Date("2026-04-07T14:30:00+10:00"),
+      submissionId: "000000000000000000000000",
     });
   }, [mounted]);
 

@@ -528,6 +528,7 @@ export function createContactSubmissionEmailTemplate(data: {
   subject: string;
   message: string;
   submittedAt: Date;
+  submissionId: string;
 }): string {
   const submittedDate = new Date(data.submittedAt).toLocaleString('en-AU', {
     dateStyle: 'full',
@@ -540,6 +541,7 @@ export function createContactSubmissionEmailTemplate(data: {
   const safePhone = escapeHtml(data.phone);
   const safeSubject = escapeHtml(data.subject);
   const safeMessage = escapeHtmlPreserveNewlines(data.message);
+  const safeSubmissionId = escapeHtml(data.submissionId);
 
   return `
     <!DOCTYPE html>
@@ -623,6 +625,7 @@ export function createContactSubmissionEmailTemplate(data: {
                 </div>
                 
                 <div class="timestamp" style="${NOTIFICATION_TIMESTAMP_STYLE}">
+                    <strong>Submission ID:</strong> ${safeSubmissionId}<br />
                     <strong>Submitted:</strong> ${submittedDate}
                 </div>
             </div>

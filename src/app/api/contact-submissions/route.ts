@@ -176,6 +176,7 @@ export async function POST(request: NextRequest) {
       subject: validatedData.subject,
       message: validatedData.message,
       submittedAt: contactSubmission.submittedAt.toISOString(),
+      submissionId: String(contactSubmission._id),
     });
 
     if (!emailResult.success) {

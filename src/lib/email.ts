@@ -324,6 +324,7 @@ function createContactSubmissionEmailTemplate(data: {
   subject: string;
   message: string;
   submittedAt: Date;
+  submissionId: string;
 }): string {
   return contactSubmissionEmailHtml(data);
 }
@@ -353,6 +354,7 @@ export async function sendContactSubmissionEmail(data: {
   subject: string;
   message: string;
   submittedAt: Date;
+  submissionId?: string;
 }): Promise<EmailResult> {
   try {
     const transporter = createEmailTransporter();
@@ -365,8 +367,20 @@ export async function sendContactSubmissionEmail(data: {
       };
     }
 
-    const htmlContent = createContactSubmissionEmailTemplate(data);
+    const submissionId = data.submissionId ?? `legacy-${Date.now()}`;
+    const htmlContent = createContactSubmissionEmailTemplate({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      subject: data.subject,
+      message: data.message,
+      submittedAt: data.submittedAt,
+      submissionId,
+    });
     const recipientEmail = process.env.CONTACT_EMAIL || "support@toolsaustralia.com.au";
+    const shortRef = submissionId.replace(/\s/g, "").slice(-6);
+    const subject = `New contact · ${data.firstName} ${data.lastName} · ${data.subject} · #${shortRef}`;
 
     const mailOptions = {
       from: {
@@ -375,9 +389,9 @@ export async function sendContactSubmissionEmail(data: {
       },
       to: recipientEmail,
       replyTo: data.email,
-      subject: `New Contact Form Submission: ${data.subject}`,
+      subject,
       html: htmlContent,
-      text: `New Contact Form Submission\n\nName: ${data.firstName} ${data.lastName}\nEmail: ${data.email}\nPhone: ${
+      text: `New Contact Form Submission\n\nSubmission ID: ${submissionId}\nName: ${data.firstName} ${data.lastName}\nEmail: ${data.email}\nPhone: ${
         data.phone
       }\nSubject: ${data.subject}\n\nMessage:\n${data.message}\n\nSubmitted at: ${new Date(
         data.submittedAt

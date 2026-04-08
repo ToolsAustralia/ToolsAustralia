@@ -202,6 +202,8 @@ const overviewFormSchema = z.object({
   isEmailVerified: z.boolean(),
   isMobileVerified: z.boolean(),
   profileSetupCompleted: z.boolean(),
+  /** Klaviyo promotional / marketing email (not transactional) */
+  acceptsPromotionalEmail: z.boolean(),
 });
 
 const subscriptionFormSchema = z.object({
@@ -443,6 +445,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       isEmailVerified: user?.isEmailVerified ?? false,
       isMobileVerified: user?.isMobileVerified ?? false,
       profileSetupCompleted: user?.profileSetupCompleted ?? false,
+      acceptsPromotionalEmail: user?.acceptsPromotionalEmail !== false,
     }),
     [user]
   );
@@ -950,12 +953,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         isEmailVerified: values.isEmailVerified,
         isMobileVerified: values.isMobileVerified,
         profileSetupCompleted: values.profileSetupCompleted,
+        acceptsPromotionalEmail: values.acceptsPromotionalEmail,
       },
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("User details updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `User details updated successfully.\n\n${warning}`
+          : "User details updated successfully."
+      );
       setActiveEditTab(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to update user details.");
@@ -984,8 +992,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Subscription details updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Subscription details updated successfully.\n\n${warning}`
+          : "Subscription details updated successfully."
+      );
       setActiveEditTab(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to update subscription.");
@@ -1051,8 +1063,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Package information updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Package information updated successfully.\n\n${warning}`
+          : "Package information updated successfully."
+      );
       removedOneTimePackagesRef.current = [];
       removedMiniPackagesRef.current = [];
       setActiveEditTab(null);
@@ -1092,8 +1108,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Draw participation updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Draw participation updated successfully.\n\n${warning}`
+          : "Draw participation updated successfully."
+      );
       removedMajorDrawRef.current = [];
       removedMiniDrawRef.current = [];
       setActiveEditTab(null);
@@ -1583,6 +1603,24 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             </div>
                           )}
                         />
+                        <Controller
+                          control={overviewForm.control}
+                          name="acceptsPromotionalEmail"
+                          render={({ field }) => (
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 col-span-2">
+                              <Checkbox
+                                checked={field.value}
+                                onChange={(e) => field.onChange(e.target.checked)}
+                                label="Klaviyo marketing / promotional email"
+                              />
+                              <p className="text-[11px] text-gray-500 dark:text-neutral-400 mt-1.5 pl-8">
+                                Controls promotional sends in Klaviyo. Does not affect transactional email. If the user
+                                unsubscribes only via a Klaviyo link, this checkbox may not match until you update it
+                                here.
+                              </p>
+                            </div>
+                          )}
+                        />
                       </div>
                     </form>
                   ) : (
@@ -1658,6 +1696,21 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             >
                               {user.isActive ? "Active" : "Inactive"}
                             </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2 col-span-2">
+                          <Send className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">
+                              Klaviyo marketing email
+                            </p>
+                            <p className="font-medium text-sm">
+                              {user.acceptsPromotionalEmail !== false ? "Subscribed (app)" : "Unsubscribed (app)"}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                              Promotional only; managed here or via Klaviyo unsubscribe links.
+                            </p>
                           </div>
                         </div>
 

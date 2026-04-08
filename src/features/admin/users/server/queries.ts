@@ -306,6 +306,7 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
     isEmailVerified: user.isEmailVerified,
     isMobileVerified: user.isMobileVerified,
     profileSetupCompleted: user.profileSetupCompleted,
+    acceptsPromotionalEmail: user.acceptsPromotionalEmail !== false,
     createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
     updatedAt: user.updatedAt instanceof Date ? user.updatedAt.toISOString() : user.updatedAt,
     lastLogin: user.lastLogin instanceof Date ? user.lastLogin.toISOString() : user.lastLogin,
