@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type CSSProperties } from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, LayoutDashboard, Gift, Home } from "lucide-react";
+import { User, LayoutDashboard, Gift, Home } from "lucide-react";
 import { useUserContext } from "@/contexts/UserContext";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
+import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 
 const MENU_ITEMS = [
   { href: "/my-account", label: "My Account", icon: LayoutDashboard },
@@ -17,15 +19,26 @@ const MENU_ITEMS = [
 /**
  * Expandable/collapsible floating menu on promotions pages. Toggle to reveal
  * navigation links. Only shown to authenticated users—keeps guests focused on
- * the promo landing page. Matches promo page theme: red gradient, dark panel.
+ * the promo landing page. Light bg in site light mode, dark bg in site dark mode; brand-accent icon.
  * Positioned bottom-right at fixed distance from bottom so it doesn't shift
  * when the menu expands/compresses.
  */
 export default function PromotionsAccountButton() {
   const { isAuthenticated, loading } = useUserContext();
   const promoTheme = usePromoTheme();
-  const preferDark = promoTheme.preferDarkBackground ?? false;
+  const siteTheme = useThemeStore((s) => s.theme);
+  const isLightSite = siteTheme === "light";
   const [isOpen, setIsOpen] = useState(false);
+  const menuHoverBg = hexToRgbaString(promoTheme.primary, 0.22);
+  const fabShadow = isLightSite
+    ? `0 2px 14px rgba(0,0,0,0.08), 0 0 22px ${promoTheme.shadowRgba}`
+    : `0 4px 22px rgba(0,0,0,0.55), 0 0 26px ${promoTheme.shadowRgba}`;
+  const fabShadowHover = isLightSite
+    ? `0 4px 20px rgba(0,0,0,0.12), 0 0 34px ${promoTheme.hoverShadowRgba}`
+    : `0 6px 28px rgba(0,0,0,0.6), 0 0 40px ${promoTheme.hoverShadowRgba}`;
+  const stackShadow = isLightSite
+    ? `0 2px 14px rgba(0,0,0,0.1), 0 0 22px ${promoTheme.shadowRgba}`
+    : `0 4px 22px rgba(0,0,0,0.55), 0 0 26px ${promoTheme.shadowRgba}`;
   const fabStackRef = useRef<HTMLDivElement>(null);
 
   const isVisible = !loading && isAuthenticated;
@@ -66,7 +79,13 @@ export default function PromotionsAccountButton() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 30, delay: 0.03 }}
           >
-            <ThemeToggleButton />
+            <ThemeToggleButton
+              className="group relative flex h-12 w-12 shrink-0 touch-manipulation items-center justify-center rounded-full bg-white/95 dark:bg-black backdrop-blur-sm shadow-lg transition-all duration-300 hover:scale-110 hover:shadow-xl active:scale-95 border border-neutral-200 dark:border-transparent"
+              style={{
+                boxShadow: stackShadow,
+                ...(!isLightSite ? { borderColor: promoTheme.borderRgba } : {}),
+              }}
+            />
           </motion.div>
 
           {/* Menu is absolutely positioned so its height never stretches this row — theme toggle stays fixed. */}
@@ -81,15 +100,23 @@ export default function PromotionsAccountButton() {
                   className="absolute bottom-0 right-full mr-2 flex items-end"
                 >
                   <div
-                    className="flex flex-col w-fit rounded-xl py-2 px-2 shadow-2xl overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-black"
-                    style={{ border: `1px solid ${promoTheme.borderRgba}` }}
+                    className="flex flex-col w-fit rounded-xl py-2 px-2 shadow-2xl overflow-hidden bg-white dark:bg-black"
+                    style={
+                      {
+                        border: `1px solid ${promoTheme.borderRgba}`,
+                        boxShadow: isLightSite
+                          ? `0 8px 28px rgba(0,0,0,0.12), 0 0 24px ${promoTheme.shadowRgba}`
+                          : `0 12px 40px rgba(0,0,0,0.5), 0 0 28px ${promoTheme.shadowRgba}`,
+                        ["--promo-menu-hover" as string]: menuHoverBg,
+                      } as CSSProperties
+                    }
                   >
                     {MENU_ITEMS.map(({ href, label, icon: Icon }) => (
                       <Link
                         key={href}
                         href={href}
                         onClick={() => setIsOpen(false)}
-                        className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white/90 hover:bg-[rgba(211,47,47,0.3)] hover:text-white transition-all duration-200 font-sans whitespace-nowrap"
+                        className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-neutral-800 dark:text-white/90 hover:bg-[color:var(--promo-menu-hover)] hover:text-neutral-950 dark:hover:text-white transition-all duration-200 font-sans whitespace-nowrap"
                       >
                         <Icon
                           className="h-4 w-4 min-w-4 min-h-4 shrink-0 transition-colors"
@@ -106,21 +133,22 @@ export default function PromotionsAccountButton() {
             <motion.button
               type="button"
               onClick={() => setIsOpen(!isOpen)}
-              aria-label={isOpen ? "Close menu" : "Open menu"}
+              aria-label={isOpen ? "Close account menu" : "Open account menu"}
               aria-expanded={isOpen}
-              className={`group absolute bottom-0 right-0 z-10 flex items-center justify-center w-12 h-12 rounded-full font-extrabold text-sm tracking-wide border border-white/20 backdrop-blur-lg transition-all duration-300 hover:shadow-[0_0_45px_rgba(211,47,47,0.5)] ${preferDark ? "text-black" : "text-white"}`}
+              className="group absolute bottom-0 right-0 z-10 flex items-center justify-center w-12 h-12 rounded-full border backdrop-blur-sm bg-white/95 dark:bg-black border-neutral-200 dark:border-transparent"
               style={{
-                background: promoTheme.gradient,
-                boxShadow: `0 0 30px ${promoTheme.shadowRgba}`,
+                ...(!isLightSite ? { borderColor: promoTheme.borderRgba } : {}),
               }}
-              whileHover={{ scale: 1.05 }}
+              animate={{ boxShadow: fabShadow }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              whileHover={{ scale: 1.05, boxShadow: fabShadowHover }}
               whileTap={{ scale: 0.97 }}
             >
               <span
-                className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                style={{ border: `1px solid ${promoTheme.borderRgba}` }}
+                className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                style={{ boxShadow: `inset 0 0 0 1px ${promoTheme.borderRgba}` }}
               />
-              <Menu className="h-6 w-6 relative z-10" />
+              <User className="h-6 w-6 relative z-10 shrink-0" style={{ color: promoTheme.primary }} />
             </motion.button>
           </div>
         </motion.div>
