@@ -82,6 +82,12 @@ const config: Config = {
         agency: ["AgencyFB BlackWide", "sans-serif"],
         acumin: ["Acumin Pro Condensed", "sans-serif"],
       },
+      /* Shift bold utilities up one step so UI “bold” reads heavier (700→800, 800→900). */
+      fontWeight: {
+        bold: "800",
+        extrabold: "900",
+        black: "900",
+      },
       fontSize: {
         "agency-title": ["2.8125rem", { lineHeight: "0.79" }],
         "6xl": ["3.75rem", { lineHeight: "1" }],
