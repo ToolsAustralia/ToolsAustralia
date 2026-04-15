@@ -26,7 +26,7 @@ import {
   Trash2,
   Loader2,
   Move,
-  Pencil,
+  MessageSquare,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
@@ -90,6 +90,7 @@ export default function MiniDrawManagement() {
     winnerName: string;
     drawName: string;
     testimony: string | null;
+    imageUrl: string | null;
     drawResultUrl: string | null;
   } | null>(null);
   // Configure sensors for both mouse and touch input to support mobile devices
@@ -303,6 +304,7 @@ export default function MiniDrawManagement() {
         winnerName: `${data.winner.winnerFirstName} ${data.winner.winnerLastName}`.trim(),
         drawName: draw.name,
         testimony: data.winner.testimony ?? null,
+        imageUrl: data.winner.imageUrl ?? null,
         drawResultUrl: data.winner.drawResultUrl ?? null,
       });
       setMiniWinnerEditOpen(true);
@@ -402,7 +404,9 @@ export default function MiniDrawManagement() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 font-['Poppins']">Mini Draw Management</h1>
-            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Poppins']">Create and manage mini draws</p>
+            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Poppins']">
+              Create and manage mini draws — winner testimony and photos are edited on each card after a winner exists
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -495,6 +499,18 @@ export default function MiniDrawManagement() {
           </div>
         </div>
 
+        {!isReorderMode && (
+          <div className="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/90 dark:bg-blue-950/35 px-4 py-3 text-sm text-blue-950 dark:text-blue-100">
+            <p className="font-semibold mb-1">Editing mini draw winners</p>
+            <p className="text-blue-900/90 dark:text-blue-200/95 leading-relaxed">
+              After you use <span className="font-medium">Winner</span> to record someone, that draw’s card shows{" "}
+              <span className="font-medium">Edit winner & testimony</span> — open it to update photo, rich-text testimony,
+              and the external draw result link. The <span className="font-medium">Draw Results</span> admin tab is for major
+              draws only.
+            </p>
+          </div>
+        )}
+
         {/* Mini Draws List - Always use compact grid layout */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
           {filteredMiniDraws.length === 0 ? (
@@ -574,6 +590,12 @@ export default function MiniDrawManagement() {
             if (winnerData.imageUrl) {
               formData.append("imageUrl", winnerData.imageUrl);
             }
+            if (winnerData.testimony) {
+              formData.append("testimony", winnerData.testimony);
+            }
+            if (winnerData.drawResultUrl) {
+              formData.append("drawResultUrl", winnerData.drawResultUrl);
+            }
 
             const response = await fetch(`/api/admin/mini-draw/${winnerData.drawId}/select-winner`, {
               method: "POST",
@@ -635,7 +657,7 @@ export default function MiniDrawManagement() {
           drawType="mini"
           currentTestimony={miniWinnerEdit.testimony}
           currentSelectedPrize={null}
-          currentImageUrl={null}
+          currentImageUrl={miniWinnerEdit.imageUrl}
           currentDrawResultUrl={miniWinnerEdit.drawResultUrl}
           onUpdate={async () => {
             await fetchMiniDraws();
@@ -804,6 +826,20 @@ function MiniDrawCard({
               />
             </div>
           </div>
+          {!reorderMode && draw.latestWinner && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditLatestWinner();
+              }}
+              className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-300/80 dark:border-amber-700/80 bg-amber-50 dark:bg-amber-950/45 px-2 py-2 text-[10px] sm:text-xs font-semibold text-amber-950 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+              title="Edit winner photo, testimony, and draw result link"
+            >
+              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <span className="leading-tight text-center">Edit winner & testimony</span>
+            </button>
+          )}
           {!reorderMode && (
             <div
               className="flex items-center justify-between gap-2 md:gap-4 pt-2 border-t border-gray-100 dark:border-neutral-700 shrink-0"
@@ -821,20 +857,6 @@ function MiniDrawCard({
                 <Trophy className="w-3.5 h-3.5 shrink-0 text-red-600" />
                 <span className="hidden md:inline truncate">Winner</span>
               </button>
-              {draw.latestWinner ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditLatestWinner();
-                  }}
-                  className={iconBtn}
-                  title="Edit last winner (testimony & draw link)"
-                >
-                  <Pencil className="w-3.5 h-3.5 shrink-0 text-amber-600" />
-                  <span className="hidden md:inline truncate">Edit</span>
-                </button>
-              ) : null}
               <button
                 onClick={(e) => {
                   e.stopPropagation();

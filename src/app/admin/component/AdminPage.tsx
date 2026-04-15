@@ -167,6 +167,8 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
                   {selectedTab === "overview" && "Dashboard overview and key metrics"}
                   {selectedTab === "major-draw" && "Monthly major draw management"}
+                  {selectedTab === "mini-draws" &&
+                    "Create mini draws; edit each winner’s testimony and photo from the draw card (not under Draw Results)"}
                   {selectedTab === "draw-results" && "View and manage draw results"}
                   {selectedTab === "upcoming-draws" && "Manage upcoming mini draws"}
                   {selectedTab === "submissions" && "Partner applications and contact form submissions"}
