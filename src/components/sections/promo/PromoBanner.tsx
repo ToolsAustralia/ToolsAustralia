@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import type { CSSProperties } from "react";
 import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
@@ -30,14 +31,92 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
  */
 const PROMO_BANNER_MULTIPLIER_BADGE = {
   root: "absolute z-30 pointer-events-none select-none object-contain origin-top-right max-w-none",
-  /** Floating pill after scroll */
+  /** Floating pill after scroll — max-[360px] mirrors left-art tighten (see img max-[360px]:h-*) */
   layoutScrolled:
-    "-top-5 -right-5 h-10 w-10 sm:-top-5 sm:-right-5 sm:h-12 sm:w-12 lg:-top-6 lg:-right-6 lg:h-14 lg:w-14",
-  /** Full-width bar (not yet sticky) */
+    "-top-5 -right-4 h-[calc(3rem+2px)] w-[calc(3rem+2px)] max-[400px]:-top-3 max-[360px]:-right-1.5 max-[360px]:h-[calc(2rem+2px)] max-[360px]:w-[calc(2rem+2px)] min-[361px]:max-[500px]:-top-3.5 min-[361px]:max-[500px]:-right-2 min-[361px]:max-[500px]:h-[calc(2.25rem+2px)] min-[361px]:max-[500px]:w-[calc(2.25rem+2px)] sm:-top-7 sm:-right-7 sm:h-[calc(4rem+2px)] sm:w-[calc(4rem+2px)] lg:-top-8 lg:-right-8 lg:h-[calc(4.5rem+2px)] lg:w-[calc(4.5rem+2px)]",
+  /** Full-width bar (not yet sticky) — mobile: keep badge inside safe area */
   layoutBar:
-    "-right-4 -top-4 h-9 w-9 sm:-top-5 sm:-right-5 sm:h-11 sm:w-11 lg:-top-6 lg:-right-6 lg:h-12 lg:w-12",
+    "-top-3.5 -right-2 h-[calc(3rem+2px)] w-[calc(3rem+2px)] max-[400px]:-top-3 max-[360px]:-right-1.5 max-[360px]:h-[calc(2rem+2px)] max-[360px]:w-[calc(2rem+2px)] min-[361px]:max-[500px]:-top-3.5 min-[361px]:max-[500px]:-right-2 min-[361px]:max-[500px]:h-[calc(2.25rem+2px)] min-[361px]:max-[500px]:w-[calc(2.25rem+2px)] sm:-top-7 sm:-right-7 sm:h-[calc(3.5rem+2px)] sm:w-[calc(3.5rem+2px)] lg:-top-8 lg:-right-8 lg:h-[calc(4rem+2px)] lg:w-[calc(4rem+2px)]",
   dropShadow: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))",
 } as const;
+
+type PromoBannerCountdownSegment = { value: string; label: string };
+
+/**
+ * Single timer strip: hairline dividers (reliable on all fonts — avoids “=” glyph bugs from Unicode colons).
+ */
+function PromoBannerUnifiedCountdown({
+  segments,
+  textClassName,
+  labelClassName,
+  surfaceStyle,
+  size = "default",
+}: {
+  segments: PromoBannerCountdownSegment[];
+  textClassName: string;
+  labelClassName: string;
+  surfaceStyle: CSSProperties;
+  size?: "compact" | "default";
+}) {
+  const isCompact = size === "compact";
+  /* Left promo art uses max-[360px]:h-* ~0.87× the base mobile h-* — mirror that on typography + padding below */
+  const numCn = isCompact
+    ? `${textClassName} font-black font-sans tracking-tight tabular-nums text-[13px] leading-none max-[360px]:text-[11px] sm:text-sm md:text-base lg:text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`
+    : `${textClassName} font-black font-sans tracking-tight tabular-nums text-[15px] leading-none max-[360px]:text-[13px] sm:text-xl md:text-2xl lg:text-3xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]`;
+  const labelCn = isCompact
+    ? `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[8px] max-[360px]:text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] mt-0.5 opacity-95`
+    : `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[7.5px] max-[360px]:text-[6.5px] sm:text-[9px] md:text-[10px] lg:text-xs mt-0.5 sm:mt-1 opacity-95`;
+
+  const segmentCount = segments.length;
+  /* Timer: slightly wider cap on mobile than before; ≤360px tighter cap (tracks left column %) */
+  const panelWidthClasses = isCompact
+    ? "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,20rem)] md:min-w-[11.5rem] lg:min-w-[12rem] xl:min-w-[13rem]"
+    : segmentCount >= 4
+      ? "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,24rem)] md:min-w-[15rem] lg:min-w-[19rem] xl:min-w-[22rem]"
+      : "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,22rem)] md:min-w-[13rem] lg:min-w-[17rem] xl:min-w-[21rem]";
+
+  const segmentShell = isCompact
+    ? "flex min-w-0 flex-1 flex-col items-center justify-center px-1.5 py-0 max-[360px]:px-1 sm:px-2.5 md:px-3 lg:px-4"
+    : "flex min-w-0 flex-1 flex-col items-center justify-center px-2 py-0 max-[360px]:px-1.5 sm:px-2.5 md:px-3 lg:px-4";
+
+  return (
+    <div
+      className={[
+        "relative isolate overflow-hidden rounded-lg border border-white/25 sm:rounded-xl md:rounded-2xl",
+        panelWidthClasses,
+        isCompact
+          ? "px-3 py-1 max-[360px]:px-2 max-[360px]:py-0.5 sm:px-5 sm:py-1.5 md:px-6 md:py-2 lg:px-8 lg:py-2.5"
+          : "px-3.5 py-2 max-[360px]:px-2.5 max-[360px]:py-1.5 sm:px-5 sm:py-1.5 md:px-6 md:py-2 lg:px-8 lg:py-2.5",
+        "shadow-[0_1px_0_rgba(255,255,255,0.14)_inset,0_-2px_0_rgba(0,0,0,0.18)_inset,0_8px_24px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.25)]",
+        "ring-1 ring-white/10",
+      ].join(" ")}
+      style={surfaceStyle}
+      role="timer"
+      aria-live="polite"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.15] via-transparent to-black/15"
+        aria-hidden
+      />
+      <div className="relative flex items-stretch justify-center">
+        {segments.map((seg, i) => (
+          <Fragment key={`${seg.label}-${i}`}>
+            {i > 0 ? (
+              <div
+                className="w-px flex-shrink-0 bg-gradient-to-b from-transparent via-white/35 to-transparent sm:w-px sm:via-white/30"
+                aria-hidden
+              />
+            ) : null}
+            <div className={segmentShell}>
+              <span className={numCn}>{seg.value}</span>
+              <span className={labelCn}>{seg.label}</span>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Easing for bar ↔ floating pill morph (scroll state). */
 const SCROLL_STATE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
@@ -746,65 +825,57 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
             }`}
           >
             <div
-              className={`relative z-10 flex w-full flex-row items-center justify-between gap-2.5 sm:gap-4 py-0 sm:py-0.5 pl-1.5 pr-3 sm:pl-4 sm:pr-5 lg:pl-3 lg:pr-7 ${
+              className={`relative z-10 flex w-full min-w-0 flex-row items-center py-0 sm:py-0.5 pl-1 pr-2.5 max-[500px]:px-2 sm:pl-3 sm:pr-4 lg:pl-3 lg:pr-7 ${
+                showPromoCountdownStrip ? "justify-between gap-2 sm:gap-3 md:gap-4" : "justify-start"
+              } ${
                 isScrolled
-                  ? "min-h-[4rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem] max-[360px]:gap-3 max-[360px]:pl-1 max-[360px]:pr-2"
-                  : "min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]"
-              } ${!showPromoCountdownStrip ? "justify-start" : ""}`}
+                  ? "min-h-[3.75rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem]"
+                  : "min-h-[4rem] sm:min-h-[6.5rem] lg:min-h-[6.75rem]"
+              }`}
             >
-              {/* Art sits in flex-1: centered toward countdown when strip shows; left only when no strip. */}
+              {/* Left art: intrinsic width, capped — middle stays empty (same logic as desktop space-between) */}
               <div
-                className={`relative flex min-h-0 min-w-0 flex-1 items-center max-sm:min-w-[40%] ${
-                  isScrolled ? "max-sm:min-h-[4rem]" : "max-sm:min-h-[4.5rem]"
-                } ${
+                className={`relative flex min-h-0 min-w-0 flex-col items-start justify-center ${
                   showPromoCountdownStrip
-                    ? "justify-center sm:justify-center lg:justify-start lg:pl-0"
-                    : "justify-start"
-                }`}
+                    ? "w-auto max-w-[min(58%,19rem)] shrink-0 sm:max-w-[min(52%,22rem)] md:max-w-[min(48%,24rem)] lg:flex-1 lg:max-w-[min(52%,520px)] xl:max-w-[min(50%,560px)]"
+                    : "flex-1"
+                } ${isScrolled ? "max-sm:min-h-[3.5rem]" : ""}`}
               >
                 {isContentReady ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, ease: "easeOut" }}
-                    className={`relative flex shrink-0 ${
-                      showPromoCountdownStrip
-                        ? "justify-center lg:justify-start"
-                        : "justify-start"
-                    } max-sm:absolute max-sm:top-1/2 max-sm:z-10 max-sm:-translate-y-1/2 sm:static sm:left-auto sm:top-auto sm:z-auto sm:translate-y-0 ${
-                      showPromoCountdownStrip
-                        ? "max-sm:left-1/2 max-sm:-translate-x-1/2 sm:translate-x-0"
-                        : "max-sm:left-0 max-sm:translate-x-0 sm:translate-x-0"
-                    }`}
+                    className="relative flex w-auto min-w-0 max-w-full shrink justify-start"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={displayLeftSrc}
                       alt={leftVisual.alt}
                       onError={handleLeftImageError}
-                      className={`w-auto object-contain object-center lg:object-left drop-shadow-md ${
+                      className={`w-auto max-w-full object-contain object-left drop-shadow-md ${
                         isHolidayLeftArt
                           ? isScrolled
                             ? showPromoCountdownStrip
-                              ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-w-[min(640px,calc(100vw-10rem))] sm:max-w-[min(620px,calc(100vw-12rem))] lg:max-w-[min(94vw,640px)] max-[360px]:h-[4rem] max-[360px]:max-w-[min(90vw,400px)]"
+                              ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-lg:max-w-full lg:max-w-[min(94vw,640px)] max-[360px]:h-[4rem]"
                               : "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-w-[min(94vw,600px)] sm:max-w-[min(96vw,640px)] max-[360px]:h-[4rem] max-[360px]:max-w-[min(90vw,380px)]"
                             : showPromoCountdownStrip
-                              ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-w-[min(680px,calc(100vw-10rem))] sm:max-w-[min(660px,calc(100vw-12rem))] lg:max-w-[min(96vw,680px)] max-[360px]:h-[4.25rem] max-[360px]:max-w-[min(92vw,420px)]"
+                              ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-lg:max-w-full lg:max-w-[min(96vw,680px)] max-[360px]:h-[4.25rem]"
                               : "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-w-[min(96vw,680px)]"
                           : isDrawnTomorrowLeftArt
                             ? isScrolled
                               ? showPromoCountdownStrip
-                                ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(310px,calc(100vw-11rem))] sm:max-w-[min(300px,calc(100vw-13rem))] lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,215px)]"
+                                ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-lg:max-w-full lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem]"
                                 : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
                               : showPromoCountdownStrip
-                                ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(400px,calc(100vw-11rem))] sm:max-w-[min(400px,calc(100vw-13rem))] lg:max-w-[min(95vw,400px)]"
+                                ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-lg:max-w-full lg:max-w-[min(95vw,400px)]"
                                 : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
                             : isScrolled
                               ? showPromoCountdownStrip
-                                ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(520px,calc(100vw-11rem))] sm:max-w-[min(500px,calc(100vw-13rem))] lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,360px)]"
+                                ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-lg:max-w-full lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem]"
                                 : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
                               : showPromoCountdownStrip
-                                ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(580px,calc(100vw-11rem))] sm:max-w-[min(580px,calc(100vw-13rem))] lg:max-w-[min(95vw,580px)]"
+                                ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-lg:max-w-full lg:max-w-[min(95vw,580px)]"
                                 : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
                       }`}
                     />
@@ -823,20 +894,15 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                           : isDrawnTomorrowLeftArt
                             ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
                             : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
-                    } shrink-0 rounded bg-white/10 animate-pulse max-sm:absolute max-sm:top-1/2 max-sm:-translate-y-1/2 sm:static sm:translate-x-0 sm:translate-y-0 ${
-                      showPromoCountdownStrip
-                        ? "max-sm:left-1/2 max-sm:-translate-x-1/2"
-                        : "max-sm:left-0 max-sm:-translate-x-0"
-                    }`}
+                    } shrink-0 rounded bg-white/10 animate-pulse max-lg:w-full max-lg:max-w-full`}
                     aria-hidden="true"
                   />
                 )}
               </div>
 
               {showPromoCountdownStrip && (
-                <div className="pointer-events-auto relative z-[15] flex shrink-0 flex-col items-end justify-center [filter:drop-shadow(0_4px_14px_rgba(0,0,0,0.45))]">
-                  {/* Badge anchor: PROMO_BANNER_MULTIPLIER_BADGE positions against this box */}
-                  <div className="relative inline-flex flex-col items-end">
+                <div className="pointer-events-auto relative z-[15] flex min-w-0 w-auto shrink flex-col items-end justify-center overflow-visible pt-0.5 [filter:drop-shadow(0_4px_14px_rgba(0,0,0,0.45))]">
+                  <div className="relative inline-flex w-auto min-w-0 max-w-full flex-col items-end overflow-visible">
                     {!isGapPeriod &&
                       countdownDisplay.type !== "hidden" &&
                       !isNoPromo &&
@@ -862,7 +928,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
               // Gap period: "NEXT DRAW IN" label + countdown timer (compact padding to align with left height)
               if (isGapPeriod) {
-                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-11 sm:w-12 lg:w-16 px-1.5 sm:px-2 lg:px-2 py-0.5 sm:py-0.5 lg:py-1.5";
                 const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
                 return (
                   <motion.div
@@ -872,7 +937,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     className="flex flex-col items-center justify-center"
                   >
                     <div
-                      className="font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider"
+                      className="font-semibold text-[10px] max-[360px]:text-[8px] sm:text-[10px] uppercase tracking-wider"
                       style={{
                         color: theme.primary,
                         textShadow: "0 1px 3px rgba(0,0,0,0.65)",
@@ -880,26 +945,17 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     >
                       NEXT DRAW IN
                     </div>
-                    <div className="flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2">
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>HRS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>MINS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.seconds.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>SECS</div>
-                      </div>
-                    </div>
+                    <PromoBannerUnifiedCountdown
+                      segments={[
+                        { value: gapPeriodTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
+                        { value: gapPeriodTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
+                        { value: gapPeriodTimeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
+                      ]}
+                      textClassName={rightSectionTextClass}
+                      labelClassName={labelClass}
+                      surfaceStyle={rightSectionTileStyle}
+                      size="compact"
+                    />
                   </motion.div>
                 );
               }
@@ -913,7 +969,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={`${rightSectionTextClass} font-black font-sans drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
                       >
                         {NO_PROMO_RIGHT_LABEL}
                       </div>
@@ -930,7 +986,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-sans drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
                       >
                         {countdownDisplay.label}
                         <UrgencyClockIcon className={rightSectionTextClass} size="md" />
@@ -943,8 +999,24 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               // Scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
-                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
                 const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                const scheduledSegments: PromoBannerCountdownSegment[] = [];
+                if (useDays && scheduledEndTimeLeft.days != null) {
+                  scheduledSegments.push({
+                    value: scheduledEndTimeLeft.days.toString().padStart(2, "0"),
+                    label: "DAYS",
+                  });
+                }
+                scheduledSegments.push(
+                  { value: scheduledEndTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
+                  { value: scheduledEndTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" }
+                );
+                if (!useDays) {
+                  scheduledSegments.push({
+                    value: scheduledEndTimeLeft.seconds.toString().padStart(2, "0"),
+                    label: "SECS",
+                  });
+                }
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -952,36 +1024,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      {useDays && scheduledEndTimeLeft.days != null && (
-                        <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                            {scheduledEndTimeLeft.days.toString().padStart(2, "0")}
-                          </div>
-                          <div className={labelClass}>DAYS</div>
-                        </div>
-                      )}
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {scheduledEndTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>HRS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {scheduledEndTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>MINS</div>
-                      </div>
-                      {!useDays && (
-                        <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                            {scheduledEndTimeLeft.seconds.toString().padStart(2, "0")}
-                          </div>
-                          <div className={labelClass}>SECS</div>
-                        </div>
-                      )}
-                    </div>
+                    <PromoBannerUnifiedCountdown
+                      segments={scheduledSegments}
+                      textClassName={rightSectionTextClass}
+                      labelClassName={labelClass}
+                      surfaceStyle={rightSectionTileStyle}
+                    />
                   </motion.div>
                 );
               }
@@ -992,24 +1040,20 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 if (!isContentReady || isDrawLoading) {
                   return (
                     <div className="flex flex-col items-center justify-center gap-1">
-                      <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                        </div>
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                        </div>
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                        </div>
-                      </div>
+                      <PromoBannerUnifiedCountdown
+                        segments={[
+                          { value: "00", label: "HRS" },
+                          { value: "00", label: "MINS" },
+                          { value: "00", label: "SECS" },
+                        ]}
+                        textClassName={rightSectionTextClass}
+                        labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                        surfaceStyle={rightSectionTileStyle}
+                      />
                     </div>
                   );
                 }
-                
+
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -1017,27 +1061,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      {/* Countdown to freeze time */}
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.seconds.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                      </div>
-                    </div>
+                    <PromoBannerUnifiedCountdown
+                      segments={[
+                        { value: freezeTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
+                        { value: freezeTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
+                        { value: freezeTimeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
+                      ]}
+                      textClassName={rightSectionTextClass}
+                      labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                      surfaceStyle={rightSectionTileStyle}
+                    />
                   </motion.div>
                 );
               }
@@ -1046,24 +1079,20 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (!isContentReady || isDrawLoading) {
                 return (
                   <div className="flex flex-col items-center justify-center gap-1">
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                      </div>
-                    </div>
+                    <PromoBannerUnifiedCountdown
+                      segments={[
+                        { value: "00", label: "HRS" },
+                        { value: "00", label: "MINS" },
+                        { value: "00", label: "SECS" },
+                      ]}
+                      textClassName={rightSectionTextClass}
+                      labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                      surfaceStyle={rightSectionTileStyle}
+                    />
                   </div>
                 );
               }
-              
+
               return (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -1071,28 +1100,16 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                   className="flex flex-col items-center justify-center gap-1"
                 >
-                  <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                    {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-                    {/* Fixed width classes to prevent size changes on load */}
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.hours.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                    </div>
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.minutes.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                    </div>
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.seconds.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                    </div>
-                  </div>
+                  <PromoBannerUnifiedCountdown
+                    segments={[
+                      { value: timeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
+                      { value: timeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
+                      { value: timeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
+                    ]}
+                    textClassName={rightSectionTextClass}
+                    labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                    surfaceStyle={rightSectionTileStyle}
+                  />
                 </motion.div>
               );
                     })()}

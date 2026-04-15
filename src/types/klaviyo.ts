@@ -37,6 +37,9 @@ export interface KlaviyoProfileProperties {
   subscription_auto_renew?: boolean;
   subscription_status?: string;
 
+  /** Total entries on next successful renewal; set when subscription is past_due / unpaid; null clears in Klaviyo */
+  past_due_renewal_entries?: number | null;
+
   // Entries and points
   accumulated_entries: number;
   rewards_points: number;
@@ -81,6 +84,11 @@ export interface KlaviyoProfileProperties {
   subscription_previous_tier?: string;
   subscription_last_upgrade_date?: string;
   subscription_last_downgrade_date?: string;
+
+  // Newsletter signup
+  newsletter_subscriber?: boolean;
+  newsletter_subscribed_at?: string;
+  source?: string;
 
   // Brand interest tracking (for users who signed up but haven't purchased)
   brand_interest?: string | null; // Brand name (e.g., "milwaukee", "dewalt", "makita") - set to null when user makes any purchase to remove tag

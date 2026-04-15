@@ -115,7 +115,7 @@ export default function MetallicAccordion({
               aria-expanded={isExpanded}
               aria-controls={`accordion-content-${item.id}`}
             >
-              <span className="font-medium text-sm sm:text-lg font-['Poppins'] pr-4 leading-tight text-white">
+              <span className="font-medium text-sm sm:text-lg font-sans pr-4 leading-tight text-white">
                 {item.title}
               </span>
               <div className="flex-shrink-0">
@@ -140,7 +140,7 @@ export default function MetallicAccordion({
                 role="region"
                 aria-labelledby={`accordion-button-${item.id}`}
               >
-                <div className="text-gray-300 leading-relaxed pt-3 sm:pt-4 font-['Poppins'] text-sm sm:text-base">
+                <div className="text-gray-300 leading-relaxed pt-3 sm:pt-4 font-sans text-sm sm:text-base">
                   {typeof item.content === "string" ? <p>{item.content}</p> : item.content}
                 </div>
               </div>

@@ -213,7 +213,7 @@ export default function UnlockDiscounts({
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-sans mb-3 sm:mb-4 drop-shadow-lg">
             {title}
           </h2>
           <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{description}</p>
@@ -281,7 +281,7 @@ export default function UnlockDiscounts({
                 <div className="h-[50%] bg-white dark:bg-neutral-800 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-hidden">
                   {/* Brand Name Title - Fixed max height with line clamping */}
                   <div className="w-full flex-shrink-0 max-h-[3em] overflow-hidden">
-                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white font-['Poppins'] text-center line-clamp-2 leading-tight">
+                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white font-sans text-center line-clamp-2 leading-tight">
                       {partner.name}
                     </h3>
                   </div>

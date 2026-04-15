@@ -91,6 +91,13 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
+    try {
+      const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+      ensureUserProfileSynced(user);
+    } catch (klaviyoError) {
+      console.error("Klaviyo profile sync error (non-critical):", klaviyoError);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Profile updated successfully",

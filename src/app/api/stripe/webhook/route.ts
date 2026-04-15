@@ -19,6 +19,7 @@ import { handlePaymentCancellation } from "@/utils/payment/payment-cleanup";
 // ✅ WEBHOOK-FIRST: Remove database dependency for event tracking
 import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
+import { getRenewalEntriesPreviewForProfile } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 import {
   createSubscriptionStartedEvent,
   createSubscriptionRenewedEvent,
@@ -1987,6 +1988,28 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         }
 
         user.markModified("subscription");
+      } else if (subscription.status === "unpaid") {
+        // Unpaid = failed payments (similar recovery path to past_due for Klaviyo / app rules)
+        console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: unpaid for user ${user.email}`);
+
+        const periodEndUnpaid = getSubscriptionPeriodEnd(subscription);
+        const endDateUnpaid = periodEndUnpaid != null ? new Date(periodEndUnpaid * 1000) : new Date();
+        const preservedAccumulatedUnpaid = user.subscription.lastMonthAccumulatedEntries;
+
+        user.subscription.isActive = false;
+        user.subscription.status = "unpaid";
+        user.subscription.autoRenew = !subscription.cancel_at_period_end;
+        user.subscription.endDate = endDateUnpaid;
+
+        if (wasStatus !== "unpaid" && wasStatus !== "past_due") {
+          user.subscription.pastDueAt = new Date();
+        }
+
+        if (preservedAccumulatedUnpaid !== undefined) {
+          user.subscription.lastMonthAccumulatedEntries = preservedAccumulatedUnpaid;
+        }
+
+        user.markModified("subscription");
       } else if (subscription.status === "canceled") {
         // Explicit cancellation — set cancelledAt for activity log / product rules
         console.log(`🔄 [SUBSCRIPTION UPDATED] Status changed to: canceled for user ${user.email}`);
@@ -2039,14 +2062,21 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
     await user.save();
 
-    // ✅ Verify save for canceled/past_due status
-    if (subscription.status === "canceled" || subscription.status === "past_due") {
+    // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
+    if (subscription.status === "canceled" || subscription.status === "past_due" || subscription.status === "unpaid") {
       const savedUser = await User.findById(user._id);
       console.log(
         `✅ [SUBSCRIPTION UPDATED] Verified - isActive: ${savedUser?.subscription?.isActive}, status: ${
           savedUser?.subscription?.status
         }, endDate: ${savedUser?.subscription?.endDate?.toISOString() || "undefined"}`
       );
+      if (
+        savedUser &&
+        (savedUser.subscription?.status === "past_due" || savedUser.subscription?.status === "unpaid")
+      ) {
+        ensureUserProfileSynced(savedUser as IUser);
+        webhookLog("info", `Klaviyo profile sync queued after subscription ${savedUser.subscription?.status} for ${savedUser.email}`);
+      }
     }
   } catch (error) {
     console.error(`❌ [SUBSCRIPTION UPDATED] Error: ${error}`);
@@ -2910,20 +2940,11 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         // ✅ BEST PRACTICE: Use renewal-specific event for subscription renewals
         // This is the canonical event for renewal failures (invoice.payment_failed with billing_reason: subscription_cycle)
         
-        // Calculate expected entries for renewal (lastMonthAccumulatedEntries + baseEntries)
-        let expectedEntries: number | undefined = undefined;
-        try {
-          const packageData = await getPackageById(packageId);
-          if (packageData && packageData.entriesPerMonth !== undefined) {
-            const baseEntries = packageData.entriesPerMonth;
-            const lastMonthAccumulatedEntries = user.subscription?.lastMonthAccumulatedEntries || baseEntries;
-            expectedEntries = lastMonthAccumulatedEntries + baseEntries;
-            webhookLog("info", `Calculated expected entries for renewal: ${lastMonthAccumulatedEntries} + ${baseEntries} = ${expectedEntries}`);
-          } else {
-            webhookLog("warn", `Could not get baseEntries from package ${packageId} for entries calculation`);
-          }
-        } catch (error) {
-          webhookLog("warn", `Error calculating expected entries: ${error}`);
+        const expectedEntries = getRenewalEntriesPreviewForProfile(user as IUser) ?? undefined;
+        if (expectedEntries !== undefined) {
+          webhookLog("info", `Calculated expected entries for renewal (shared helper): ${expectedEntries}`);
+        } else {
+          webhookLog("warn", `Could not compute expected entries for renewal (package/status) user=${user._id}`);
         }
         
         try {

@@ -105,12 +105,14 @@ export default function PromoHero({
 
   if (isLoading) {
     return (
-      <section className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0">
+      <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0">
         <div
           className={`main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse ${!PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : ""}`}
         />
-        <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30">
-          <div className="h-12 sm:h-16 w-32 sm:w-48 bg-gray-400 rounded-full animate-pulse" />
+        {/* In-flow reserve: same height as loaded CTA band so layout below doesn’t jump */}
+        <div className="relative z-0 mt-auto w-full shrink-0 max-sm:h-14 sm:h-16" aria-hidden />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center pb-1 sm:pb-2">
+          <div className="pointer-events-auto h-12 w-32 rounded-full bg-gray-400 animate-pulse sm:h-16 sm:w-48" />
         </div>
       </section>
     );
@@ -119,28 +121,18 @@ export default function PromoHero({
   return (
     <section
       ref={heroRef}
-      className="relative flex flex-col justify-between items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0"
+      className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0"
     >
       <div
-        className={`main-banner-image absolute inset-0 z-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${!PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : ""}`}
-        role="button"
-        tabIndex={0}
-        aria-label={`Enter promo - ${resolvedMultiplier}x Entries Active`}
-        onClick={handleEnterNow}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleEnterNow();
-          }
-        }}
+        className={`main-banner-image absolute inset-0 z-0 ${!PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : ""}`}
       >
         <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
           <Image
             src={heroImagePaths.mobile}
             alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
-            unoptimized
             className="object-contain object-top"
+            sizes="100vw"
             onError={() => setImageError(true)}
           />
         </div>
@@ -150,7 +142,6 @@ export default function PromoHero({
             alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
             priority
-            unoptimized
             sizes="100vw"
             className="object-contain object-top"
             onError={() => setImageError(true)}
@@ -159,24 +150,33 @@ export default function PromoHero({
       </div>
 
       {variantConfig?.hero?.messaging && (
-        <div className="relative z-20 w-full text-center px-4" suppressHydrationWarning>
-          <p className="text-white text-lg sm:text-xl font-bold drop-shadow-lg">
+        <div
+          className="absolute left-0 right-0 top-[32%] z-20 px-4 text-center sm:top-[34%]"
+          suppressHydrationWarning
+        >
+          <p className="text-lg font-bold text-white drop-shadow-lg sm:text-xl">
             {variantConfig.hero.messaging}
           </p>
         </div>
       )}
 
-      <div className="absolute -bottom-2 sm:-bottom-2 left-1/2 transform -translate-x-1/2 z-30 overflow-visible">
+      {/* Reserves vertical space in document flow so the CTA doesn’t overlap the trust bar / cause CLS */}
+      <div className="relative z-0 mt-auto w-full shrink-0 max-sm:h-14 sm:h-16" aria-hidden />
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center pb-1 sm:pb-2">
         <button
+          type="button"
           onClick={handleEnterNow}
-          className={`promo-hero-cta-button font-agency inline-flex items-center justify-center px-6 py-3 text-base sm:px-10 sm:py-4 sm:text-2xl rounded-full font-extrabold tracking-wide backdrop-blur-lg ${shouldUseBlackText ? "text-black" : "text-white"}`}
+          className={`promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl ${shouldUseBlackText ? "text-black" : "text-white"}`}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
             ...(isDewaltTheme ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),
           }}
           suppressHydrationWarning
         >
-          <span className="relative z-10" suppressHydrationWarning>{ctaText}</span>
+          <span className="relative z-10" suppressHydrationWarning>
+            {ctaText}
+          </span>
         </button>
       </div>
     </section>

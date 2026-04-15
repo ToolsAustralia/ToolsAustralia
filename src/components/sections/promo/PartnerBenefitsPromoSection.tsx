@@ -66,7 +66,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
   if (!shouldShow) return null;
 
   return (
-    <section className="w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10">
+    <section className="w-full px-3 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-20">
       <div className="max-w-6xl mx-auto">
         <div className="relative rounded-xl sm:rounded-2xl overflow-hidden">
           {/* Background */}
@@ -107,7 +107,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                 </div>
 
                 {/* Headline */}
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold font-poppins leading-[1.15] mb-1.5 sm:mb-2">
+                <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold font-sans leading-[1.15] mb-1.5 sm:mb-2">
                   <span className="text-white">Your Entries Accumulate.</span>
                   <br />
                   <span
@@ -123,7 +123,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                 </h2>
 
                 {/* Sub-headline */}
-                <p className="text-xs sm:text-sm lg:text-[15px] text-gray-300 font-poppins leading-relaxed mb-4 sm:mb-6 max-w-lg">
+                <p className="text-xs sm:text-sm lg:text-[15px] text-gray-300 font-sans leading-relaxed mb-4 sm:mb-6 max-w-lg">
                   Pick a tier — Tradie, Foreman, or Boss — and your entries
                   stack on top of last month&apos;s total every billing cycle.
                   Add promo multipliers on top and your count climbs fast.
@@ -140,10 +140,10 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                         <b.icon className="w-3.5 h-3.5" style={{ color: theme.primaryLight }} />
                       </div>
                       <div>
-                        <p className="text-xs sm:text-[13px] font-bold text-white font-poppins leading-tight mb-0.5">
+                        <p className="text-xs sm:text-[13px] font-bold text-white font-sans leading-tight mb-0.5">
                           {b.title}
                         </p>
-                        <p className="text-[11px] sm:text-xs text-gray-400 font-poppins leading-snug">
+                        <p className="text-[11px] sm:text-xs text-gray-400 font-sans leading-snug">
                           {b.text}
                         </p>
                       </div>
@@ -156,7 +156,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                   <MetallicButton onClick={handleViewPackages} variant="primary" size="sm" borderRadius="lg">
                     VIEW PACKAGES
                   </MetallicButton>
-                  <span className="text-[11px] text-gray-400 font-poppins flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-400 font-sans flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                     Cancel anytime — no lock-in
                   </span>
@@ -175,7 +175,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                           className="object-contain drop-shadow-[0_2px_6px_rgba(238,0,0,0.25)]"
                         />
                       </div>
-                      <span className="text-[9px] sm:text-[10px] text-gray-500 font-poppins font-medium uppercase tracking-wide">
+                      <span className="text-[9px] sm:text-[10px] text-gray-500 font-sans font-medium uppercase tracking-wide">
                         {pkg.name}
                       </span>
                     </div>
@@ -217,10 +217,10 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-white font-poppins uppercase tracking-wide">
+                          <p className="text-sm font-bold text-white font-sans uppercase tracking-wide">
                             {tier.name}
                           </p>
-                          <p className="text-[11px] text-gray-400 font-poppins">
+                          <p className="text-[11px] text-gray-400 font-sans">
                             {tier.entries} entries/mo &middot; {tier.price}/giveaway
                           </p>
                         </div>
@@ -254,19 +254,19 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                             className="object-contain"
                           />
                         </div>
-                        <span className="text-[10px] text-gray-500 font-poppins font-medium uppercase">
+                        <span className="text-[10px] text-gray-500 font-sans font-medium uppercase">
                           {pkg.name}
                         </span>
                       </div>
                     ))}
-                    <span className="text-[10px] text-gray-600 dark:text-neutral-400 font-poppins">
+                    <span className="text-[10px] text-gray-600 dark:text-neutral-400 font-sans">
                       + one-time packs
                     </span>
                   </div>
 
                   {/* Accumulation visual */}
                   <div className="rounded-lg bg-white/[0.04] p-3 mt-1">
-                    <p className="text-[10px] text-gray-500 font-poppins uppercase tracking-wider mb-2 text-center font-semibold">
+                    <p className="text-[10px] text-gray-500 font-sans uppercase tracking-wider mb-2 text-center font-semibold">
                       How entries accumulate
                     </p>
                     <div className="flex items-end justify-center gap-1.5">
@@ -282,7 +282,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                                 opacity: 0.3 + month * 0.14,
                               }}
                             />
-                            <span className="text-[8px] text-gray-600 dark:text-neutral-400 font-poppins">M{month}</span>
+                            <span className="text-[8px] text-gray-600 dark:text-neutral-400 font-sans">M{month}</span>
                           </div>
                         );
                       })}

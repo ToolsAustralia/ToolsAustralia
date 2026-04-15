@@ -140,6 +140,9 @@ export interface IUser extends Document {
   emailVerificationExpires?: Date;
   emailVerificationAttempts?: number;
 
+  /** Previous email to merge from in Klaviyo after verified email change (cleared after merge) */
+  pendingKlaviyoMergeFromEmail?: string;
+
   // SMS OTP for passwordless authentication
   smsOtpCode?: string;
   smsOtpExpires?: Date;
@@ -716,6 +719,12 @@ const UserSchema = new Schema<IUser>(
       type: Number,
       default: 0,
       min: [0, "Email verification attempts cannot be negative"],
+    },
+
+    pendingKlaviyoMergeFromEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
     },
 
     // SMS OTP for passwordless authentication

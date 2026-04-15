@@ -9,6 +9,7 @@ import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
+import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
 
 // Lazy load below-fold components for better performance
 const PromoPackages = dynamic(() => import("@/components/sections/promo/PromoPackages"), {
@@ -177,52 +178,51 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
-          <main className="w-full overflow-hidden ">
-            {/* Ensure hero + brands share the first mobile viewport for better context */}
-            <div className="flex flex-col  lg:min-h-0 w-full ">
+          <main className="w-full overflow-hidden">
+            <div className="flex flex-col lg:min-h-0 w-full">
               <PromoHero
                 initialPromo={membershipPromo}
                 initialMajorDraw={majorDraw}
                 prizeSlug={prize.slug}
               />
-           
             </div>
 
-            {/* Lazy load below-fold components */}
+            <PromoTrustBar />
+
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />
             </Suspense>
 
-          <Suspense fallback={<div className="min-h-[600px]" />}>
-            <PrizeShowcase slug={prize.slug} />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[600px]" />}>
+              <PrizeShowcase slug={prize.slug} />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[300px]" />}>
-            <GiveawayDetails />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <GiveawayDetails />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[400px]" />}>
-            <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[400px]" />}>
+              <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[200px]" />}>
-            <WinnerTestimoniesClientLazy />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[200px]" />}>
+              <WinnerTestimoniesClientLazy />
+            </Suspense>
 
-          <Suspense fallback={null}>
-            <PartnerBenefitsPromoSectionClient />
-          </Suspense>
+            <Suspense fallback={null}>
+              <PartnerBenefitsPromoSectionClient />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[400px]" />}>
-            <PromoFAQs />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[400px]" />}>
+              <PromoFAQs />
+            </Suspense>
 
-          <BrandsShowcase />
+            <BrandsShowcase />
 
-          <Suspense fallback={<div className="min-h-[300px]" />}>
-            <UnlockDiscounts />
-          </Suspense>
-        </main>
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <UnlockDiscounts />
+            </Suspense>
+          </main>
 
         <FloatingGetEntriesButton />
         <Suspense fallback={null}>
