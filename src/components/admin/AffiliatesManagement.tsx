@@ -577,71 +577,71 @@ function CreateAffiliateModal({
       className="flex flex-col !max-w-md max-h-[90dvh] overflow-hidden !border-gray-100 dark:!border-neutral-700 shadow-lg dark:shadow-none !bg-white dark:!bg-neutral-900 rounded-xl"
       preventBackButton={false}
     >
-        <div className="flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-6 pt-6 pb-4">
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Create Affiliate</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Create Affiliate</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Name *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.name}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Email *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Email *</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.email}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Phone</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Phone</label>
             <input
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Username *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Username *</label>
             <input
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.username && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.username}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Password *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Password *</label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
-            {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            {errors.password && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Commission Rate (%) *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Commission Rate (%) *</label>
             <input
               type="number"
               min="0"
@@ -649,27 +649,27 @@ function CreateAffiliateModal({
               step="0.1"
               value={formData.commissionRate}
               onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               placeholder="30"
               required
             />
-            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-neutral-400 sm:text-xs">
               Enter commission rate as percentage (0-100%). Default: 30%
             </p>
             {errors.commissionRate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.commissionRate}</p>}
           </div>
           </div>
-          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 px-6 py-4">
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 px-4 py-2.5 sm:px-5 sm:py-3">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[44px] rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-gray-800 dark:text-neutral-100 px-4 py-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-700 sm:min-h-0"
+              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700 sm:h-8 sm:min-h-8 sm:px-3.5"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="min-h-[44px] rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-white transition-all hover:from-[#cc0000] hover:to-[#e60000] sm:min-h-0"
+              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 text-sm font-semibold text-white transition-all hover:from-[#cc0000] hover:to-[#e60000] sm:h-8 sm:min-h-8 sm:px-3.5"
             >
               Create
             </button>

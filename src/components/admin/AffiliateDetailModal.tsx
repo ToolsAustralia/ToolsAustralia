@@ -19,6 +19,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  UserPlus,
+  UserMinus,
+  Search,
 } from "lucide-react";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 import ClickableUserDisplay from "./ClickableUserDisplay";
@@ -164,6 +167,17 @@ export default function AffiliateDetailModal({
   const [referredOrder, setReferredOrder] = useState<"asc" | "desc">("desc");
   const [activeTab, setActiveTab] = useState<AffiliateDetailTab>("overview");
 
+  // Attach / detach referred user state
+  const [attachSearch, setAttachSearch] = useState("");
+  const [attachResults, setAttachResults] = useState<Array<{ _id: string; firstName: string; lastName: string; email: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ _id: string; firstName: string; lastName: string; email: string } | null>(null);
+  const [backfillChecked, setBackfillChecked] = useState(false);
+  const [isAttaching, setIsAttaching] = useState(false);
+  const [isDetaching, setIsDetaching] = useState<string | null>(null);
+  const [affiliatedError, setAffiliatedError] = useState<string | null>(null);
+  const [attachSuccess, setAttachSuccess] = useState<string | null>(null);
+
   const fetchAffiliateDetails = useCallback(
     async (
       page: number,
@@ -217,6 +231,12 @@ export default function AffiliateDetailModal({
     setReferredOrder("desc");
     setActiveTab("overview");
     setIsEditing(false);
+    setAttachSearch("");
+    setAttachResults([]);
+    setSelectedUser(null);
+    setBackfillChecked(false);
+    setAffiliatedError(null);
+    setAttachSuccess(null);
   }, [isOpen, affiliateId]);
 
   useEffect(() => {
@@ -305,6 +325,107 @@ export default function AffiliateDetailModal({
       console.error(err);
     } finally {
       setIsProcessingPayout(false);
+    }
+  };
+
+  // --- Attach / detach referred users ---
+
+  useEffect(() => {
+    if (!attachSearch.trim() || attachSearch.trim().length < 2) {
+      setAttachResults([]);
+      return;
+    }
+    const controller = new AbortController();
+    const t = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(attachSearch.trim())}&limit=6`, {
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data?.users)) {
+          setAttachResults(json.data.users.map((u: { _id: string; firstName: string; lastName: string; email: string }) => ({
+            _id: u._id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.email,
+          })));
+        }
+      } catch {
+        /* abort or network — ignore */
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+    return () => {
+      window.clearTimeout(t);
+      controller.abort();
+    };
+  }, [attachSearch]);
+
+  const handleAttachUser = async () => {
+    if (!selectedUser) return;
+    setIsAttaching(true);
+    setAffiliatedError(null);
+    setAttachSuccess(null);
+    try {
+      const res = await fetch(`/api/admin/affiliate/${affiliateId}/referred-users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUser._id, backfillCommissions: backfillChecked }),
+      });
+      const json = await res.json();
+      if (res.status === 409 && json.code === "USER_ALREADY_AFFILIATED") {
+        setAffiliatedError(json.error);
+        return;
+      }
+      if (!json.success) {
+        setAffiliatedError(json.error || "Failed to attach user");
+        return;
+      }
+      const backfillMsg = json.data?.backfill
+        ? ` ${json.data.backfill.created} commission(s) backfilled.`
+        : "";
+      setAttachSuccess(
+        json.data?.alreadyLinked
+          ? "User was already linked to this affiliate." + backfillMsg
+          : "User attached successfully." + backfillMsg,
+      );
+      setSelectedUser(null);
+      setAttachSearch("");
+      setAttachResults([]);
+      setBackfillChecked(false);
+      fetchAffiliateDetails(commissionPage, commissionSort, commissionOrder, commissionSearch, referredPage, referredSort, referredOrder);
+      onUpdate();
+    } catch {
+      setAffiliatedError("Failed to attach user. Please try again.");
+    } finally {
+      setIsAttaching(false);
+    }
+  };
+
+  const handleDetachUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to remove this user from this affiliate's referrals? Pending commissions for this user will be cancelled.")) {
+      return;
+    }
+    setIsDetaching(userId);
+    try {
+      const res = await fetch(`/api/admin/affiliate/${affiliateId}/referred-users`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        fetchAffiliateDetails(commissionPage, commissionSort, commissionOrder, commissionSearch, referredPage, referredSort, referredOrder);
+        onUpdate();
+      } else {
+        alert(json.error || "Failed to remove user");
+      }
+    } catch {
+      alert("Failed to remove user. Please try again.");
+    } finally {
+      setIsDetaching(null);
     }
   };
 
@@ -854,9 +975,11 @@ export default function AffiliateDetailModal({
                   </div>
 
                   {pendingCount > 0 && (
-                    <div className="bg-yellow-50 border border-yellow-200 p-3 sm:p-4 rounded-lg">
-                      <h3 className="font-semibold mb-2 text-gray-900 text-sm sm:text-base">Process Payout</h3>
-                      <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-950/35 ring-1 ring-amber-100/80 dark:ring-amber-900/40">
+                      <h3 className="font-semibold mb-2 text-sm sm:text-base text-amber-950 dark:text-amber-100">
+                        Process Payout
+                      </h3>
+                      <p className="mb-3 text-sm text-amber-900/80 dark:text-amber-200/90">
                         {pendingCount} unpaid commissions totaling {formatCurrency(unpaidAmount)}
                       </p>
                       <div className="space-y-3">
@@ -887,94 +1010,204 @@ export default function AffiliateDetailModal({
               {activeTab === "referred" && (
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
                       Referred users
                       {referredTotalCount > 0 && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 align-middle">
+                        <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 align-middle">
                           {referredTotalCount} total
                         </span>
                       )}
                     </h3>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-neutral-400">
                       {data.affiliate.totalSignups} signups (affiliate record)
                     </span>
                   </div>
+
+                  {/* Attach user control */}
+                  <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900 p-3 sm:p-4 space-y-3">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={attachSearch}
+                        onChange={(e) => {
+                          setAttachSearch(e.target.value);
+                          setSelectedUser(null);
+                          setAffiliatedError(null);
+                          setAttachSuccess(null);
+                        }}
+                        placeholder="Search user by name or email to attach..."
+                        className="w-full rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 pl-9 pr-3 py-1.5 text-sm text-gray-900 dark:text-neutral-100 placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:ring-2 focus:ring-[#ee0000]/20 focus:border-[#ee0000] transition-colors"
+                      />
+                      {isSearching && (
+                        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+                      )}
+                    </div>
+
+                    {attachResults.length > 0 && !selectedUser && (
+                      <ul className="rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 divide-y divide-gray-100 dark:divide-neutral-700 max-h-40 overflow-y-auto text-sm">
+                        {attachResults.map((u) => (
+                          <li key={u._id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUser(u);
+                                setAttachSearch(`${u.firstName} ${u.lastName} (${u.email})`);
+                                setAttachResults([]);
+                                setAffiliatedError(null);
+                                setAttachSuccess(null);
+                              }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-neutral-700/60 transition-colors"
+                            >
+                              <span className="font-medium text-gray-900 dark:text-neutral-100">
+                                {u.firstName} {u.lastName}
+                              </span>
+                              <span className="ml-2 text-gray-500 dark:text-neutral-400 text-xs">{u.email}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {selectedUser && (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <Checkbox
+                          id="backfill-commissions"
+                          checked={backfillChecked}
+                          onChange={(e) => setBackfillChecked(e.target.checked)}
+                          label="Backfill commissions from payment history"
+                          description="Create commission rows for this user's past purchases"
+                        />
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={handleAttachUser}
+                          disabled={isAttaching}
+                          loading={isAttaching}
+                          icon={UserPlus}
+                          className="min-h-[36px] sm:min-h-[32px] shrink-0 sm:ml-auto"
+                        >
+                          Attach
+                        </Button>
+                      </div>
+                    )}
+
+                    {affiliatedError && (
+                      <div className="flex items-start gap-2 rounded-md border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{affiliatedError}</span>
+                        <button type="button" onClick={() => setAffiliatedError(null)} className="ml-auto shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-200">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {attachSuccess && (
+                      <div className="flex items-start gap-2 rounded-md border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+                        <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{attachSuccess}</span>
+                        <button type="button" onClick={() => setAttachSuccess(null)} className="ml-auto shrink-0 text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-200">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {data.referredUsers.length === 0 ? (
                     <p className="text-gray-600 dark:text-neutral-400 text-sm">No referred users yet.</p>
                   ) : (
                     <>
-                      <div className="overflow-x-auto rounded-lg border border-gray-200 -mx-1 sm:mx-0 touch-pan-x">
-                        <table className="w-full min-w-[520px] text-[10px] sm:text-sm">
-                          <thead className="border-b-2 border-gray-200 bg-gray-50">
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700 -mx-1 sm:mx-0 touch-pan-x">
+                        <table className="w-full min-w-[580px] text-[10px] sm:text-sm">
+                          <thead className="border-b-2 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60">
                             <tr>
-                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500">
+                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                                 <button
                                   type="button"
                                   onClick={() => handleReferredHeaderClick("name")}
-                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 transition-colors"
+                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 dark:hover:bg-neutral-700/60 transition-colors"
                                 >
                                   Name
                                   <ReferredSortHeaderIcon field="name" />
                                 </button>
                               </th>
-                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500">
+                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                                 <button
                                   type="button"
                                   onClick={() => handleReferredHeaderClick("email")}
-                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 transition-colors"
+                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 dark:hover:bg-neutral-700/60 transition-colors"
                                 >
                                   Email
                                   <ReferredSortHeaderIcon field="email" />
                                 </button>
                               </th>
-                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500">
+                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                                 <button
                                   type="button"
                                   onClick={() => handleReferredHeaderClick("phone")}
-                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 transition-colors"
+                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 dark:hover:bg-neutral-700/60 transition-colors"
                                 >
                                   Phone
                                   <ReferredSortHeaderIcon field="phone" />
                                 </button>
                               </th>
-                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500">
+                              <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                                 <button
                                   type="button"
                                   onClick={() => handleReferredHeaderClick("referredAt")}
-                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 transition-colors"
+                                  className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-4 sm:py-3 hover:bg-gray-100/90 dark:hover:bg-neutral-700/60 transition-colors"
                                 >
                                   Referred
                                   <ReferredSortHeaderIcon field="referredAt" />
                                 </button>
                               </th>
+                              <th className="w-10 sm:w-14" />
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-200">
+                          <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
                             {data.referredUsers.map((user) => (
                               <tr
                                 key={user.id}
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => openUserModal(user.id)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    openUserModal(user.id);
-                                  }
-                                }}
-                                className="hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-inset"
+                                className="hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group"
                               >
-                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap">
-                                  <div className="font-medium text-gray-900">
+                                <td
+                                  className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap cursor-pointer"
+                                  onClick={() => openUserModal(user.id)}
+                                >
+                                  <div className="font-medium text-gray-900 dark:text-neutral-100">
                                     {formatDisplayName(user.firstName, user.lastName)}
                                   </div>
                                 </td>
-                                <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">{user.email}</td>
+                                <td
+                                  className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400 cursor-pointer"
+                                  onClick={() => openUserModal(user.id)}
+                                >
+                                  {user.email}
+                                </td>
                                 <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {user.phone || "N/A"}
                                 </td>
                                 <td className="px-2 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-gray-600 dark:text-neutral-400">
                                   {formatDate(user.referredAt)}
+                                </td>
+                                <td className="px-1 sm:px-2 py-2 sm:py-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDetachUser(user.id);
+                                    }}
+                                    disabled={isDetaching === user.id}
+                                    className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
+                                    title="Remove from referrals"
+                                  >
+                                    {isDetaching === user.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <UserMinus className="w-4 h-4" />
+                                    )}
+                                  </button>
                                 </td>
                               </tr>
                             ))}
@@ -1140,7 +1373,14 @@ export default function AffiliateDetailModal({
                                 </td>
                               </tr>
                             ) : (
-                              <tr key={item.commission.id} className="hover:bg-gray-50 transition-colors even:bg-gray-50/30">
+                              <tr
+                                key={item.commission.id}
+                                className={`transition-colors ${
+                                  item.commission.status !== "paid"
+                                    ? "bg-amber-50/95 hover:bg-amber-100/90 dark:bg-amber-950/30 dark:hover:bg-amber-950/45"
+                                    : "hover:bg-gray-50 dark:hover:bg-neutral-900/75"
+                                }`}
+                              >
                                 <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap">
                                   {item.commission.referredUser ? (
                                     <ClickableUserDisplay
@@ -1274,7 +1514,7 @@ export default function AffiliateDetailModal({
         </ModalContent>
 
         {data && (
-          <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-3 sm:px-5 py-3 sm:py-4">
+          <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-3 sm:px-5 py-3 sm:py-4 dark:border-neutral-700 dark:bg-neutral-900">
             <div className="flex flex-wrap items-center justify-end gap-2">
               {!isEditing ? (
                 <>
