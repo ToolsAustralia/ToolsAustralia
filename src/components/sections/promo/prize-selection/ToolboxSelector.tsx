@@ -119,7 +119,7 @@ export function ToolboxSelector({
                       : "bg-black/50 border border-white/5 opacity-80"
                   }`}
                 >
-                  <p className={`font-agency font-bold text-[10px] sm:text-xs text-center leading-tight truncate transition-colors duration-300 ${isActive ? "text-white" : "text-white/80"}`}>
+                  <p className={`font-sans font-extrabold font-bold text-[10px] sm:text-xs text-center leading-tight truncate transition-colors duration-300 ${isActive ? "text-white" : "text-white/80"}`}>
                     {TOOLBOX_LABELS[type]}
                   </p>
                 </div>

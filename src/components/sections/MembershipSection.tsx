@@ -43,7 +43,7 @@ function packageEnterNowCtaClassName(
   const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
   const textSize = size === "mobile" ? "text-[14px] sm:text-[17px]" : "text-[14px] sm:text-[16px]";
   const base = [
-    "font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5",
+    "font-sans font-extrabold font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5",
     textSize,
     "transition-all duration-300 transform",
     textClass,
@@ -457,7 +457,7 @@ export default function MembershipSection({
               </div>
             ) : (
               <h2
-                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white`}
+                className={`font-sans font-extrabold font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white`}
               >
                 <span style={{ color: theme.primary }}>{effectivePromoMultiplier}X PROMO</span> ACTIVATED
               </h2>
@@ -482,7 +482,7 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
                       : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
@@ -512,7 +512,7 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
                       : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
@@ -632,7 +632,7 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-poppins font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]"}`}
+                                    className={`font-sans font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]"}`}
                                     style={colorScheme.textGradientStyle}
                                   >
                                     {isAdditionalPackage ? (
@@ -648,7 +648,7 @@ export default function MembershipSection({
                               })()}
                               {plan.subtitle && (
                                 <p
-                                  className={`font-poppins text-[14px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  className={`font-sans text-[14px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                                   style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                 >
                                   {plan.subtitle}
@@ -670,7 +670,7 @@ export default function MembershipSection({
                                   const displayEntries = hasMultiplier ? plan.metadata?.entriesCount || parseInt(entriesNumber) : parseInt(entriesNumber);
 
                                   return (
-                                    <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
+                                    <div className={`font-sans ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
                                       {hasMultiplier ? (
                                         <div className="flex items-center justify-center gap-1.5">
                                           <span className={`text-[22px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
@@ -718,7 +718,7 @@ export default function MembershipSection({
                               <div className="pb-0.5 w-full flex justify-center">
                                 <button
                                   type="button"
-                                  className={`font-poppins w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                                  className={`font-sans w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                                   onClick={() => {
                                     if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                                     handlePlanSelect(plan);
@@ -757,7 +757,7 @@ export default function MembershipSection({
                               ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                                 <button
                                   disabled
-                                  className="font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
+                                  className="font-sans font-extrabold font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
                                 >
                                   Subscription or Entries Required
                                 </button>
@@ -913,7 +913,7 @@ export default function MembershipSection({
 
                           return (
                             <h3
-                              className={`font-poppins font-bold mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]"}`}
+                              className={`font-sans font-bold mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]"}`}
                               style={colorScheme.textGradientStyle}
                             >
                               {isAdditionalPackage ? (
@@ -929,7 +929,7 @@ export default function MembershipSection({
                         })()}
                         {plan.subtitle && (
                           <p
-                            className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                            className={`font-sans text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
                             style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                           >
                             {plan.subtitle}
@@ -959,7 +959,7 @@ export default function MembershipSection({
                                 : parseInt(entriesNumber);
 
                               return (
-                                <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text}`}>
+                                <div className={`font-sans ${colorScheme.textGradientStyle ? "" : colorScheme.text}`}>
                                   {hasMultiplier ? (
                                     <div className="flex items-center justify-center gap-2">
                                       <span className={`text-[16px] sm:text-[18px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
@@ -1009,7 +1009,7 @@ export default function MembershipSection({
                         <div className="pb-2 flex justify-center">
                           <button
                             type="button"
-                            className={`font-poppins w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                            className={`font-sans w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                             onClick={() => {
                               if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                               handlePlanSelect(plan);
@@ -1048,7 +1048,7 @@ export default function MembershipSection({
                         ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
                           <button
                             disabled
-                            className="font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
+                            className="font-sans font-extrabold font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 border border-gray-400/30"
                           >
                             Subscription or Entries Required
                           </button>
@@ -1116,7 +1116,7 @@ export default function MembershipSection({
             <button
               suppressHydrationWarning
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
-              className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
+              className={`font-sans w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
                 isInclusionsExpanded
                   ? "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-600 border-slate-500 hover:shadow-xl"
                   : "bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-slate-700 hover:shadow-xl"

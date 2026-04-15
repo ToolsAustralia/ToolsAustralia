@@ -1718,7 +1718,7 @@
   background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
   opacity: 0.7;
   transform: translateX(-130%);
-  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  animation: cta-shimmer-pass 4.5s ease-in-out 3;
   pointer-events: none;
   z-index: 0;
 }

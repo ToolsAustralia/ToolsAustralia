@@ -70,7 +70,7 @@ export default function PromoFAQs() {
       variant="red"
       iconColorHex={theme.primary}
       maxWidth="4xl"
-      className="py-8 sm:py-12 lg:py-16"
+      className="py-10 sm:py-14 lg:py-20"
     />
   );
 }

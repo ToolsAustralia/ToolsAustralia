@@ -13,6 +13,7 @@ import { getStateByCode } from "@/data/australianStates";
 import { getPackageById } from "@/data/membershipPackages";
 import { extractBrandFromSlug } from "./brand-extraction";
 import { calculateDrawSpecificPropertiesForUser, calculateDrawSpecificProperties, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
+import { getRenewalEntriesPreviewForProfile } from "./klaviyo-renewal-entries-preview";
 import type { IMajorDraw } from "@/models/MajorDraw";
 
 /**
@@ -247,6 +248,8 @@ export async function userToKlaviyoProfile(
       subscription_auto_renew: user.subscription?.autoRenew ?? undefined,
       subscription_status:
         user.subscription?.status && user.subscription.status.trim() !== "" ? user.subscription.status : undefined,
+
+      past_due_renewal_entries: getRenewalEntriesPreviewForProfile(user) ?? null,
 
       // Subscription lifecycle tracking
       subscription_has_pending_upgrade: !!user.subscription?.pendingChange,

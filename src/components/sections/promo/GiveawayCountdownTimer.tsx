@@ -238,7 +238,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
             <div className="mb-2 text-center sm:mb-3">
               <h3
-                className={`font-agency text-sm font-[950] uppercase leading-tight tracking-wide sm:text-xl lg:text-2xl ${surfaceText} drop-shadow-sm ${useLightCountdownInner ? "[text-shadow:0_1px_0_rgba(255,255,255,0.6)]" : ""}`}
+                className={`font-sans font-extrabold text-sm font-[950] uppercase leading-tight tracking-wide sm:text-xl lg:text-2xl ${surfaceText} drop-shadow-sm ${useLightCountdownInner ? "[text-shadow:0_1px_0_rgba(255,255,255,0.6)]" : ""}`}
               >
                 {drawTitle}
               </h3>
@@ -299,7 +299,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                           animate={{ rotateX: 0, opacity: 1 }}
                           exit={{ rotateX: 90, opacity: 0 }}
                           transition={{ duration: 0.3 }}
-                          className={`mb-0.5 font-['Poppins'] text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl ${surfaceText}`}
+                          className={`mb-0.5 font-sans text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl ${surfaceText}`}
                         >
                           {String(unit.value).padStart(2, "0")}
                         </motion.div>
@@ -381,10 +381,10 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
           />
 
           <div className="relative z-10 px-3 py-3 text-center sm:px-5 sm:py-4">
-            <p className="font-agency text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-300 sm:text-xs">
+            <p className="font-sans font-extrabold text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-300 sm:text-xs">
               {drawTitle}
             </p>
-            <p className="mt-1.5 font-agency text-base font-bold text-neutral-900 dark:text-white sm:text-xl lg:text-2xl">
+            <p className="mt-1.5 font-sans font-extrabold text-base font-bold text-neutral-900 dark:text-white sm:text-xl lg:text-2xl">
               {drawDateLabel}
             </p>
            

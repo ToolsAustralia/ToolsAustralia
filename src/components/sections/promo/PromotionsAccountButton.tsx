@@ -89,7 +89,7 @@ export default function PromotionsAccountButton() {
                         key={href}
                         href={href}
                         onClick={() => setIsOpen(false)}
-                        className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white/90 hover:bg-[rgba(211,47,47,0.3)] hover:text-white transition-all duration-200 font-['Poppins'] whitespace-nowrap"
+                        className="group flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white/90 hover:bg-[rgba(211,47,47,0.3)] hover:text-white transition-all duration-200 font-sans whitespace-nowrap"
                       >
                         <Icon
                           className="h-4 w-4 min-w-4 min-h-4 shrink-0 transition-colors"

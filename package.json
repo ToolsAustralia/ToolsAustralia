@@ -30,7 +30,10 @@
     "backfill:affiliate-recurring-commissions:all:dry": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts --no-limit",
     "backfill:affiliate-recurring-commissions:repair-dates": "tsx scripts/sync-missing-affiliate-recurring-commissions.ts --live --no-limit --repair-earned-at",
     "reconcile:affiliate-payment-events": "tsx scripts/reconcile-affiliate-membership-from-payment-events.ts",
-    "test:affiliate-attribution": "tsx src/utils/affiliate/__tests__/affiliate-attribution.test.ts"
+    "test:affiliate-attribution": "tsx src/utils/affiliate/__tests__/affiliate-attribution.test.ts",
+    "sync:klaviyo-past-due": "tsx scripts/sync-klaviyo-past-due-profiles.ts",
+    "sync:klaviyo-past-due:dry": "tsx scripts/sync-klaviyo-past-due-profiles.ts --dry-run",
+    "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

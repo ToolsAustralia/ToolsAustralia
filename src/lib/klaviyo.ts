@@ -1769,6 +1769,51 @@ class KlaviyoClient {
   }
 
   /**
+   * Merge source Klaviyo profile into destination (source is deleted after async task).
+   * @see https://developers.klaviyo.com/en/reference/merge_profiles
+   */
+  async mergeProfiles(destinationProfileId: string, sourceProfileId: string): Promise<KlaviyoProfileResponse> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!destinationProfileId?.trim() || !sourceProfileId?.trim() || destinationProfileId === sourceProfileId) {
+      return { success: false, error: "Invalid profile ids for merge" };
+    }
+
+    try {
+      const payload = {
+        data: {
+          type: "profile-merge",
+          id: destinationProfileId,
+          relationships: {
+            profiles: {
+              data: [{ type: "profile", id: sourceProfileId }],
+            },
+          },
+        },
+      };
+
+      const response = await this.retryRequest(
+        () => this.makeRequest("/profile-merge/", "POST", payload),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (response.status === 201 || response.ok) {
+        return { success: true, profile_id: destinationProfileId };
+      }
+
+      const errBody = (await response.json().catch(() => ({}))) as { errors?: Array<{ detail?: string }> };
+      const detail = errBody.errors?.[0]?.detail || `HTTP ${response.status}`;
+      return { success: false, error: detail };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
+  }
+
+  /**
    * Get current configuration status for debugging
    */
   getConfigStatus(): {

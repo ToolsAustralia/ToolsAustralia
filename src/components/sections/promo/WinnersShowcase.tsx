@@ -44,7 +44,7 @@ export default function WinnersShowcase({
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             {title && (
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-['Poppins'] drop-shadow-lg">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-sans drop-shadow-lg">
                 {title}
               </h2>
             )}
@@ -115,7 +115,7 @@ export default function WinnersShowcase({
                     {/* Winner Badge - Name and Location Same Row */}
                     <div className="absolute bottom-3 left-3 right-3 z-20">
                       <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-white font-bold text-sm font-['Poppins']">{formattedName}</p>
+                        <p className="text-white font-bold text-sm font-sans">{formattedName}</p>
                         {winner.winnerState && (
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-slate-300 flex-shrink-0" />
@@ -130,7 +130,7 @@ export default function WinnersShowcase({
                   <div className="p-4 sm:p-5 relative z-10 bg-gradient-to-b from-slate-800/95 to-slate-900/95">
                     {/* Prize Name */}
                     <div className="mb-3">
-                      <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] mb-2 line-clamp-2">
+                      <h3 className="text-sm sm:text-base font-bold text-white font-sans mb-2 line-clamp-2">
                         {winner.prize.name}
                       </h3>
                     </div>
@@ -151,7 +151,7 @@ export default function WinnersShowcase({
                     <div className="rounded-lg p-2" style={{ background: `linear-gradient(to right, ${theme.primary}20, ${theme.primaryDark}20)`, border: `1px solid ${theme.borderRgba}` }}>
                       <div className="flex items-center gap-2">
                         <Award className="w-4 h-4 flex-shrink-0" style={{ color: theme.primary }} />
-                        <span className="text-xs font-semibold text-white font-['Poppins'] line-clamp-1">
+                        <span className="text-xs font-semibold text-white font-sans line-clamp-1">
                           {winner.drawName}
                         </span>
                       </div>
@@ -176,7 +176,7 @@ export default function WinnersShowcase({
                   </div>
                 </div>
 
-                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-['Poppins'] mb-4">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-sans mb-4">
                   Are you our next lucky winner?
                 </h3>
 

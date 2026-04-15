@@ -84,12 +84,12 @@ export default function GiveawayDetails() {
     <section
       id="how-it-works"
       ref={detailsRef}
-      className="py-6 sm:py-12 lg:py-16 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+      className="py-10 sm:py-14 lg:py-20 relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
     >
       <SectionContainer className="relative z-10">
         {/* Section Header */}
         <div className="text-center mb-3 sm:mb-8">
-          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-['Poppins'] mb-4 drop-shadow-lg text-white">
+          <h2 className="text-xl sm:text-3xl lg:text-4xl font-bold font-sans mb-4 drop-shadow-lg text-white">
             HOW IT WORKS
           </h2>
         </div>
@@ -121,7 +121,7 @@ export default function GiveawayDetails() {
 
               {/* Content - Right Side */}
               <div className="flex-1 relative z-10">
-                <h3 className="text-sm sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md">
+                <h3 className="text-sm sm:text-lg font-bold text-white font-sans mb-0.5 sm:mb-1 drop-shadow-md">
                   {detail.title}
                 </h3>
                 <p className="text-gray-200 font-['Inter'] leading-relaxed text-xs sm:text-sm">{detail.description}</p>

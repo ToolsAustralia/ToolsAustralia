@@ -310,3 +310,51 @@ export function ensureUserProfileSynced(user: IUser, brandInterestFromSignup?: s
     // console.log(`📊 Klaviyo is disabled, skipping profile sync for: ${user.email}`);
   }
 }
+
+/**
+ * Merge the Klaviyo profile for `previousEmail` into the profile for `user.email` (after an email change).
+ * Upserts the current user first so the destination profile exists. Non-throwing.
+ */
+export async function mergeKlaviyoProfilesAfterEmailChange(
+  user: IUser,
+  previousEmail: string | null | undefined
+): Promise<{ merged: boolean; error?: string }> {
+  if (process.env.KLAVIYO_ENABLED === "false") {
+    return { merged: false };
+  }
+
+  const prev = previousEmail?.trim().toLowerCase();
+  const next = user.email?.trim().toLowerCase();
+  if (!prev || !next || prev === next) {
+    return { merged: false };
+  }
+
+  try {
+    await syncUserProfileToKlaviyo(user);
+
+    const destId = await klaviyo.findProfileByEmail(next);
+    const sourceId = await klaviyo.findProfileByEmail(prev);
+
+    if (!sourceId) {
+      return { merged: false };
+    }
+
+    if (!destId) {
+      return { merged: false, error: "Destination Klaviyo profile not found after sync" };
+    }
+
+    if (sourceId === destId) {
+      return { merged: true };
+    }
+
+    const result = await klaviyo.mergeProfiles(destId, sourceId);
+    if (!result.success) {
+      return { merged: false, error: result.error };
+    }
+
+    return { merged: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { merged: false, error: message };
+  }
+}
