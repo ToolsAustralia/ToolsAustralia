@@ -17,6 +17,8 @@ const selectWinnerSchema = z.object({
   selectionMethod: z.string().optional(),
   selectedBy: z.string().min(1, "Admin user ID is required"),
   imageUrl: z.string().url("Winner image must be a valid URL").optional(),
+  /** Rich HTML from admin modal; optional */
+  testimony: z.string().optional(),
 });
 
 /**
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
     const selectedByValue = formData.get("selectedBy");
     const existingImageUrlValue = formData.get("imageUrl");
     const drawResultUrlValue = formData.get("drawResultUrl");
+    const testimonyValue = formData.get("testimony");
     const imageFileEntry = formData.get("winnerImage");
 
     if (
@@ -95,6 +98,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const testimony =
+      typeof testimonyValue === "string" && testimonyValue.trim().length > 0 ? testimonyValue : undefined;
+
     const baseData = {
       miniDrawId: miniDrawIdValue,
       winnerUserId: winnerUserIdValue,
@@ -105,6 +111,7 @@ export async function POST(request: NextRequest) {
         typeof existingImageUrlValue === "string" && existingImageUrlValue.trim().length > 0
           ? existingImageUrlValue.trim()
           : undefined,
+      testimony,
     };
 
     const validatedData = selectWinnerSchema.parse(baseData);
@@ -249,6 +256,7 @@ export async function POST(request: NextRequest) {
             },
             imageUrl: imageUrlToSave,
             drawResultUrl,
+            testimony: validatedData.testimony || undefined,
             cycle: currentCycle,
           },
         ],

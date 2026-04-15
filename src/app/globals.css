@@ -486,6 +486,23 @@
     overflow-x: hidden;
   }
 
+  /* Display typography: heavier headings + emphatic bold (Tailwind `font-bold` also extended in tailwind.config). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
+    font-weight: 800;
+    font-synthesis: none;
+  }
+
+  b,
+  strong {
+    font-weight: 800;
+  }
+
   /* Comprehensive focus outline removal for all form elements */
   *:focus {
     outline: none !important;

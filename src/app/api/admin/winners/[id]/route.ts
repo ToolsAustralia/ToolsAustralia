@@ -102,6 +102,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         entryNumber: winner.entryNumber,
         selectedDate: winner.selectedDate,
         imageUrl: winner.imageUrl,
+        drawResultUrl: winner.drawResultUrl ?? null,
         testimony: winner.testimony || null,
         selectedPrize: (winner.selectedPrize || winner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
         selectedPrizeSlug: winner.selectedPrizeSlug || null, // Legacy field

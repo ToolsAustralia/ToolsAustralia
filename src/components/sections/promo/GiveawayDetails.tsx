@@ -123,8 +123,8 @@ export default function GiveawayDetails() {
           </h2>
         </div>
 
-        {/* FAQ-style stack: same spacing as MetallicAccordion in FAQSection */}
-        <div className="space-y-3 sm:space-y-4">
+        {/* Single column on small screens; two columns on large desktops */}
+        <div className="grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-2 lg:gap-4">
           {details.map((detail, index) => (
             <div
               key={index}
@@ -132,15 +132,15 @@ export default function GiveawayDetails() {
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10 rounded-lg" />
 
-              <div className="relative z-20 px-4 py-4 sm:px-6 sm:py-5">
-                <div className="flex items-start gap-3 sm:gap-4">
+              <div className="relative z-20 px-3 py-3 sm:px-4 sm:py-3.5">
+                <div className="flex items-start gap-2 sm:gap-3">
                   <div className="relative flex-shrink-0">
                     <div
-                      className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-lg border border-gray-600 bg-gradient-to-br from-gray-800 via-gray-800/90 to-black shadow-[0_4px_16px_rgba(0,0,0,0.35)] relative overflow-hidden"
+                      className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg border border-gray-600 bg-gradient-to-br from-gray-800 via-gray-800/90 to-black shadow-[0_4px_16px_rgba(0,0,0,0.35)] relative overflow-hidden"
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-transparent rounded-lg pointer-events-none" />
                       <detail.icon
-                        className="relative z-10 h-4 w-4 sm:h-5 sm:w-5"
+                        className="relative z-10 h-3.5 w-3.5 sm:h-4 sm:w-4"
                         style={{ color: theme.primary }}
                       />
                     </div>
@@ -150,8 +150,8 @@ export default function GiveawayDetails() {
                     <h3 className="font-medium text-sm sm:text-lg font-sans leading-tight text-white">
                       {detail.title}
                     </h3>
-                    <div className="mt-3 border-t border-gray-700 pt-3 sm:mt-4 sm:pt-4">
-                      <p className="text-sm leading-relaxed text-gray-300 font-sans sm:text-base">
+                    <div className="mt-2 border-t border-gray-700 pt-2 sm:mt-2.5 sm:pt-2.5">
+                      <p className="text-sm leading-snug text-gray-300 font-sans sm:text-base sm:leading-relaxed">
                         {detail.description}
                       </p>
                     </div>

@@ -97,17 +97,18 @@ export default function WinnerEditModal({
         updateData.selectedPrize = selectedPrize.trim() || null;
       }
 
-      // Resolve image URL for major draws: upload new file or use existing URL; only send if changed
-      if (drawType === "major") {
+      // Resolve image URL for major / mini draws: upload new file or use existing URL; only send if changed
+      if (drawType === "major" || drawType === "mini") {
         const fileImage = winnerImages.find((img): img is File => img instanceof File);
         const existingUrl = winnerImages.find((img): img is string => typeof img === "string");
         const currentImage = currentImageUrl ?? null;
+        const cloudinaryFolder = drawType === "major" ? "major-draw-winners" : "mini-draw-winners";
 
         let resolvedImageUrl: string | null = null;
         if (fileImage) {
           const uploadFormData = new FormData();
           uploadFormData.append("file", fileImage);
-          uploadFormData.append("folder", "major-draw-winners");
+          uploadFormData.append("folder", cloudinaryFolder);
 
           const uploadResponse = await fetch("/api/upload/cloudinary", {
             method: "POST",
@@ -208,8 +209,8 @@ export default function WinnerEditModal({
             </div>
           )}
 
-          {/* Winner Photo - Only for major draws */}
-          {drawType === "major" && (
+          {/* Winner Photo - Major and mini draws */}
+          {(drawType === "major" || drawType === "mini") && (
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                 <div className="flex items-center gap-2">
