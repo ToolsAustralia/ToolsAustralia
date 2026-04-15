@@ -164,7 +164,7 @@ export default function WinnerSelectionModal({
           try {
             const uploadFormData = new FormData();
             uploadFormData.append("file", fileImage);
-            uploadFormData.append("folder", "major-draw-winners");
+            uploadFormData.append("folder", drawType === "mini" ? "mini-draw-winners" : "major-draw-winners");
 
             const response = await fetch("/api/upload/cloudinary", {
               method: "POST",

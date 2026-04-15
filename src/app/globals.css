@@ -414,55 +414,59 @@
 }
 
 @layer base {
-  /* Viewport scrollbar — same brand treatment as admin sidebar */
+  /* Viewport: only the thumb is visible (track/corner transparent) — read as scroll position, not a full rail */
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
     overflow-x: hidden;
     scrollbar-width: thin;
-    scrollbar-color: #ee0000 #fef2f2;
+    scrollbar-color: #ee0000 transparent;
   }
 
   html::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
 
   html::-webkit-scrollbar-track {
-    background: #fef2f2;
-    border-radius: 8px;
+    background: transparent;
   }
 
   html::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #ee0000 0%, #dc2626 100%);
-    border-radius: 8px;
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
   }
 
   html::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+    background-clip: padding-box;
   }
 
   html::-webkit-scrollbar-corner {
-    background: #fef2f2;
+    background: transparent;
   }
 
   html.dark {
-    scrollbar-color: #ee0000 #262626;
+    scrollbar-color: #ee0000 transparent;
   }
 
   html.dark::-webkit-scrollbar-track {
-    background: #262626;
+    background: transparent;
   }
 
   html.dark::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, #ee0000 0%, #b91c1c 100%);
+    background-clip: padding-box;
   }
 
   html.dark::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+    background-clip: padding-box;
   }
 
   html.dark::-webkit-scrollbar-corner {
-    background: #262626;
+    background: transparent;
   }
   
   /* Prevent scroll snapping on mobile during navigation */
@@ -480,6 +484,23 @@
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow-x: hidden;
+  }
+
+  /* Display typography: heavier headings + emphatic bold (Tailwind `font-bold` also extended in tailwind.config). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
+    font-weight: 800;
+    font-synthesis: none;
+  }
+
+  b,
+  strong {
+    font-weight: 800;
   }
 
   /* Comprehensive focus outline removal for all form elements */
@@ -1718,7 +1739,7 @@
   background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
   opacity: 0.7;
   transform: translateX(-130%);
-  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  animation: cta-shimmer-pass 4.5s ease-in-out 3;
   pointer-events: none;
   z-index: 0;
 }

@@ -125,7 +125,7 @@ export default function LatestWinnerHero({
       <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
         <div className="mb-8 text-center">
           <div className="mx-auto mb-3 h-1 w-24 rounded-full" style={{ background: theme.gradient }} />
-          <h2 className="text-3xl font-bold tracking-tight text-slate-950 font-['Poppins'] dark:text-white sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-950 font-sans dark:text-white sm:text-4xl">
             Latest Winners
           </h2>
         </div>

@@ -99,6 +99,9 @@ export async function POST(request: NextRequest) {
     const verificationCode = generateEmailVerificationCode();
     const expiresAt = getEmailVerificationExpiry();
 
+    // Preserve prior email for Klaviyo profile merge after the new address is verified
+    user.pendingKlaviyoMergeFromEmail = user.email.toLowerCase();
+
     // Update user's email and verification status
     user.email = validatedData.newEmail.toLowerCase();
     user.emailVerificationCode = verificationCode;

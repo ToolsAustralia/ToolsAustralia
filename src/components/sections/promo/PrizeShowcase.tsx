@@ -7,8 +7,14 @@ import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Grid, EffectFade } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
-import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import {
+  Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
+  type LucideIcon,
+} from "lucide-react";
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
+};
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
@@ -206,6 +212,9 @@ interface PrizeShowcaseProps {
   showCountdown?: boolean;
 }
 
+/** Temporary: hide branded “First prize” text image strip. Set to `false` to show again. */
+const TEMP_HIDE_FIRST_PRIZE_TEXT_BANNER = true;
+
 const formatIconKey = (iconName: string) =>
   iconName
     .split(/[\s-_]+/)
@@ -213,18 +222,16 @@ const formatIconKey = (iconName: string) =>
     .join("");
 
 const resolveHighlightIcon = (iconName?: string): LucideIcon => {
-  const iconsMap = LucideIcons as unknown as Record<string, LucideIcon>;
-  const fallbackIcon = iconsMap.Star;
-  if (!iconName) return fallbackIcon;
+  if (!iconName) return Star;
 
   const candidates = [iconName, iconName.charAt(0).toUpperCase() + iconName.slice(1), formatIconKey(iconName)];
   for (const key of candidates) {
-    if (iconsMap[key]) {
-      return iconsMap[key];
+    if (ICON_MAP[key]) {
+      return ICON_MAP[key];
     }
   }
 
-  return fallbackIcon;
+  return Star;
 };
 
 // Helper function to get brand logo path based on prize slug (reserved for future use)
@@ -405,6 +412,11 @@ export default function PrizeShowcase({
   firstBannerVariant = "first-prize-text",
   showCountdown = true,
 }: PrizeShowcaseProps = {}) {
+  const effectiveFirstBannerVariant =
+    TEMP_HIDE_FIRST_PRIZE_TEXT_BANNER && firstBannerVariant === "first-prize-text"
+      ? "none"
+      : firstBannerVariant;
+
   const prizeRef = useScrollAnimation();
   const theme = usePromoTheme();
   const themeMode = useThemeStore((s) => s.theme);
@@ -783,13 +795,13 @@ export default function PrizeShowcase({
         }}
       />
       <div className={useParentContainer ? "relative z-10 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-10`}>
-        {(firstBannerVariant !== "none" || showCountdown) && (
+        {(effectiveFirstBannerVariant !== "none" || showCountdown) && (
         <div
           className={`text-center ${
-            firstBannerVariant !== "none" ? "mb-6 sm:mb-12" : "mb-3 sm:mb-6"
+            effectiveFirstBannerVariant !== "none" ? "mb-6 sm:mb-12" : "mb-3 sm:mb-6"
           }`}
         >
-          {firstBannerVariant === "multiplier" ? (
+          {effectiveFirstBannerVariant === "multiplier" ? (
             multiplierForFirstBanner != null &&
             multiplierBannerPath && (
               <div className="flex justify-center mb-1 sm:mb-2">
@@ -804,13 +816,13 @@ export default function PrizeShowcase({
                     onError={() => setMultiplierBannerLoadFailed(true)}
                   />
                 ) : (
-                  <p className="font-agency font-black uppercase text-xl sm:text-2xl text-gray-900 dark:text-white">
+                  <p className="font-sans font-extrabold font-black uppercase text-xl sm:text-2xl text-gray-900 dark:text-white">
                     <span className="text-[#ee0000] dark:text-red-400">{multiplierForFirstBanner}X</span> promo active
                   </p>
                 )}
               </div>
             )
-          ) : firstBannerVariant === "first-prize-text" ? (
+          ) : effectiveFirstBannerVariant === "first-prize-text" ? (
             <div className="flex justify-center">
               <Image
                 src={getFirstPrizeImagePath(activeSlug)}
@@ -834,7 +846,7 @@ export default function PrizeShowcase({
           {/* Prize description section - hidden for now */}
           <div className="hidden">
             <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
-              <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-['Poppins'] drop-shadow-lg`}>
+              <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-sans drop-shadow-lg`}>
                 {activePrize.heroHeading}
               </h2>
             </div>
@@ -863,7 +875,7 @@ export default function PrizeShowcase({
                 transition={{ delay: 0.1, duration: 0.4 }}
                 className="mb-3 sm:mb-4 text-center px-2"
               >
-                <p className="font-agency font-[950] uppercase text-black dark:text-white text-md sm:text-[32px] lg:text-agency-title leading-[1.08] break-words">
+                <p className="font-sans font-extrabold font-[950] uppercase text-black dark:text-white text-md sm:text-[32px] lg:text-agency-title leading-[1.08] break-words">
                   Win your choice of <span style={{ color: theme.primary }}>toolbox</span>
                 </p>
                 <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-400 font-medium break-words whitespace-normal">
@@ -886,7 +898,7 @@ export default function PrizeShowcase({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
-                  className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                  className="font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
                   <span style={{ color: theme.primary }}>
                     {toolsetSlug === "ryobi"
@@ -904,7 +916,7 @@ export default function PrizeShowcase({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2, duration: 0.4 }}
-                  className="font-agency font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
+                  className="font-sans font-extrabold font-[950] uppercase text-black dark:text-white mb-3 sm:mb-4 text-center text-md sm:text-[32px] lg:text-agency-title leading-[1.08]"
                 >
                   Pick your <span style={{ color: theme.primary }}>Power Toolset</span>
                 </motion.p>
@@ -1103,7 +1115,7 @@ export default function PrizeShowcase({
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`}></div>
                   <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
-                  <div className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace('/40', '/25')} blur-xl animate-ping`}></div>
+                  <div className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace('/40', '/25')} blur-xl animate-pulse`}></div>
                   <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace('/40', '/20')} blur-xl`}></div>
                   <div className={`relative z-10 flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} rounded-full`}>
                     <span className={`font-acumin font-[950] text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}>
@@ -1261,7 +1273,7 @@ export default function PrizeShowcase({
                       <Icon className={`relative z-10 w-3.5 h-3.5 sm:w-5 sm:h-5 ${highlightIconClassName}`} strokeWidth={2.25} />
                     </div>
                     <div className="flex-1 relative z-10 min-w-0 flex flex-col justify-center">
-                      <h3 className="text-[11px] sm:text-lg font-bold text-white font-['Poppins'] mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
+                      <h3 className="text-[11px] sm:text-lg font-bold text-white font-sans mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                         {highlight.title}
                       </h3>
                       <p className="text-[10px] sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
@@ -1280,7 +1292,7 @@ export default function PrizeShowcase({
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none group-hover:from-white/10"></div>
               <div className="relative z-10 flex items-center justify-between gap-3">
-                <span className="text-sm sm:text-lg font-bold text-white font-['Poppins'] drop-shadow-md">
+                <span className="text-sm sm:text-lg font-bold text-white font-sans drop-shadow-md">
                   Prize Details
                 </span>
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white/80 group-hover:text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1296,7 +1308,7 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className={`font-agency font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
+                <span className={`font-sans font-extrabold font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
                 <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
@@ -1322,7 +1334,7 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className={`font-agency font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
+                <span className={`font-sans font-extrabold font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
                 <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>

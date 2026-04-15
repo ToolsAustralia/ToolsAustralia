@@ -7,6 +7,7 @@ import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
+import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
 
 import {
   getDefaultPrizeForToolsetSlug,
@@ -121,6 +122,8 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
                 prizeSlug={defaultPrizeSlug}
               />
             </div>
+
+            <PromoTrustBar />
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />

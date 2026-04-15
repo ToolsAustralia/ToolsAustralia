@@ -132,6 +132,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     let transactionError: unknown;
     /** When set after the transaction, sync this preference to Klaviyo */
     let klaviyoPromotionalTarget: boolean | undefined;
+    /** When admin changes email, merge old Klaviyo profile into new */
+    let adminEmailBeforeForKlaviyo: string | undefined;
 
     try {
       await dbSession.withTransaction(async () => {
@@ -143,6 +145,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
 
         if (payload.basicInfo) {
+          if (payload.basicInfo.email !== undefined) {
+            adminEmailBeforeForKlaviyo = user.email?.toLowerCase();
+          }
           if (payload.basicInfo.acceptsPromotionalEmail !== undefined) {
             const beforeOptIn = user.acceptsPromotionalEmail !== false;
             applyBasicInfoUpdate(user, payload.basicInfo);
@@ -200,17 +205,38 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     let warning: string | undefined;
-    if (klaviyoPromotionalTarget !== undefined) {
-      const userDoc = await User.findById(userId);
-      if (userDoc) {
-        const kSync = await syncKlaviyoEmailMarketingFromAdminPreference(
-          userDoc,
-          klaviyoPromotionalTarget
-        );
-        if (!kSync.success) {
-          warning = `Saved in database, but Klaviyo could not update marketing preferences: ${kSync.error ?? "unknown error"}. Verify email/SMS consent in Klaviyo if needed.`;
-          console.error("❌ Klaviyo marketing sync after admin PATCH:", kSync.error);
+    const userDocAfterPatch = await User.findById(userId);
+    if (klaviyoPromotionalTarget !== undefined && userDocAfterPatch) {
+      const kSync = await syncKlaviyoEmailMarketingFromAdminPreference(userDocAfterPatch, klaviyoPromotionalTarget);
+      if (!kSync.success) {
+        warning = `Saved in database, but Klaviyo could not update marketing preferences: ${kSync.error ?? "unknown error"}. Verify email/SMS consent in Klaviyo if needed.`;
+        console.error("❌ Klaviyo marketing sync after admin PATCH:", kSync.error);
+      }
+    }
+
+    if (userDocAfterPatch && adminEmailBeforeForKlaviyo !== undefined && payload.basicInfo?.email !== undefined) {
+      const emailAfter = userDocAfterPatch.email?.toLowerCase();
+      if (emailAfter && adminEmailBeforeForKlaviyo !== emailAfter) {
+        try {
+          const { mergeKlaviyoProfilesAfterEmailChange } = await import(
+            "@/utils/integrations/klaviyo/klaviyo-profile-sync"
+          );
+          const mergeRes = await mergeKlaviyoProfilesAfterEmailChange(userDocAfterPatch, adminEmailBeforeForKlaviyo);
+          if (!mergeRes.merged && mergeRes.error) {
+            console.warn("Klaviyo profile merge after admin email change (non-critical):", mergeRes.error);
+          }
+        } catch (mergeErr) {
+          console.error("Klaviyo merge after admin email change:", mergeErr);
         }
+      }
+    }
+
+    if (userDocAfterPatch && payload.basicInfo) {
+      try {
+        const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+        ensureUserProfileSynced(userDocAfterPatch);
+      } catch (kErr) {
+        console.error("Klaviyo profile sync after admin PATCH (non-critical):", kErr);
       }
     }
 

@@ -75,7 +75,7 @@ export default function FAQSection({
         {(title || subtitle) && (
           <div className="text-center mb-8 sm:mb-12">
             {title && (
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-sans mb-3 sm:mb-4 drop-shadow-lg">
                 {title}
               </h2>
             )}
@@ -92,7 +92,7 @@ export default function FAQSection({
               <button
                 key={category}
                 onClick={() => setActiveCategory(category)}
-                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all duration-300 font-['Poppins'] text-xs sm:text-sm backdrop-blur-sm ${
+                className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg font-medium transition-all duration-300 font-sans text-xs sm:text-sm backdrop-blur-sm ${
                   activeCategory === category
                     ? "bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white shadow-lg shadow-[#ee0000]/50 transform scale-105"
                     : "bg-gradient-to-br from-gray-900 via-gray-800 to-black text-gray-300 border border-gray-700 hover:bg-gradient-to-br hover:from-gray-800 hover:via-gray-700 hover:to-gray-900 hover:border-[#ee0000]/50 hover:shadow-md hover:shadow-[#ee0000]/20"

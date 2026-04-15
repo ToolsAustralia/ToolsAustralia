@@ -168,7 +168,7 @@ export function OtherToolsetsCarousel({
               className="flex-shrink-0 p-2 rounded-b-lg"
               style={{ background: badgeStyle.background, borderTop: badgeStyle.border }}
             >
-              <p className={`font-agency font-[950] text-base sm:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>
+              <p className={`font-sans font-extrabold font-[950] text-base sm:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>
                 {formatToolsetLabel(slug)}
               </p>
             </div>
@@ -183,7 +183,7 @@ export function OtherToolsetsCarousel({
   return (
     <div className={`pt-4 sm:pt-8 sm:mt-8 mt-4 border-t border-gray-200 dark:border-neutral-700 ${className}`}>
       <div className={`${SECTION_CONTAINER_CLASSES} flex flex-col items-center`}>
-        <h3 className="text-center font-agency font-[950] uppercase text-black dark:text-white text-lg sm:text-2xl mb-4 sm:mb-6">
+        <h3 className="text-center font-sans font-extrabold font-[950] uppercase text-black dark:text-white text-lg sm:text-2xl mb-4 sm:mb-6">
           Explore other toolsets
         </h3>
 

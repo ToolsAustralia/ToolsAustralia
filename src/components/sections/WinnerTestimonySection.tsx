@@ -273,7 +273,7 @@ export default function WinnerTestimonySection({
                 onClick={scrollPrev}
                 disabled={!canScrollPrev && winnersWithTestimonies.length <= 1}
                 aria-label="Previous winner story"
-                className="absolute left-0 top-1/2 z-20 hidden h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-slate-950/90 text-white shadow-[0_14px_30px_rgba(0,0,0,0.35)] backdrop-blur winner-motion-button lg:flex"
+                className="absolute left-0 top-1/2 z-20 hidden h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-slate-950/90 text-white shadow-[0_14px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:flex"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronLeft className="h-5 w-5" style={{ color: theme.primaryLight }} />
@@ -283,7 +283,7 @@ export default function WinnerTestimonySection({
                 onClick={scrollNext}
                 disabled={!canScrollNext && winnersWithTestimonies.length <= 1}
                 aria-label="Next winner story"
-                className="absolute right-0 top-1/2 z-20 hidden h-12 w-12 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-slate-950/90 text-white shadow-[0_14px_30px_rgba(0,0,0,0.35)] backdrop-blur winner-motion-button lg:flex"
+                className="absolute right-0 top-1/2 z-20 hidden h-12 w-12 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-slate-950/90 text-white shadow-[0_14px_30px_rgba(0,0,0,0.35)] backdrop-blur lg:flex"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronRight className="h-5 w-5" style={{ color: theme.primaryLight }} />
@@ -310,7 +310,7 @@ export default function WinnerTestimonySection({
                 type="button"
                 onClick={scrollPrev}
                 aria-label="Previous winner story"
-                className="flex h-11 w-11 items-center justify-center rounded-full border bg-slate-950/70 text-white winner-motion-button lg:hidden"
+                className="flex h-11 w-11 items-center justify-center rounded-full border bg-slate-950/70 text-white lg:hidden"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronLeft className="h-5 w-5" style={{ color: theme.primaryLight }} />
@@ -324,7 +324,7 @@ export default function WinnerTestimonySection({
                 type="button"
                 onClick={scrollNext}
                 aria-label="Next winner story"
-                className="flex h-11 w-11 items-center justify-center rounded-full border bg-slate-950/70 text-white winner-motion-button lg:hidden"
+                className="flex h-11 w-11 items-center justify-center rounded-full border bg-slate-950/70 text-white lg:hidden"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronRight className="h-5 w-5" style={{ color: theme.primaryLight }} />

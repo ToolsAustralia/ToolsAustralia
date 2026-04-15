@@ -214,7 +214,7 @@ export default function Footer() {
               {/* Copyright */}
               <div className="text-center lg:text-right">
                 <p className="text-gray-400 text-xs sm:text-sm lg:text-[14px]">
-                  © 2025 Tools Australia Pty Ltd. All Rights Reserved
+                  © {new Date().getFullYear()} Tools Australia Pty Ltd. All Rights Reserved
                 </p>
               </div>
             </div>
