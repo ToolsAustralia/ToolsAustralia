@@ -158,6 +158,10 @@ async function backfillCommissionsForUser(
   userId: string,
 ): Promise<{ created: number; skipped: number }> {
   const userOid = new mongoose.Types.ObjectId(userId);
+  const affiliateOid = new mongoose.Types.ObjectId(affiliateId);
+
+  const userDoc = await User.findById(userId).select("stripeSubscriptionId").lean();
+  const userStripeSub = typeof userDoc?.stripeSubscriptionId === "string" ? userDoc.stripeSubscriptionId.trim() : "";
 
   const events = await PaymentEvent.find({
     userId: userOid,
@@ -166,28 +170,44 @@ async function backfillCommissionsForUser(
     .sort({ timestamp: 1 })
     .lean();
 
-  let created = 0;
   let skipped = 0;
 
   const existingBefore = await AffiliateCommission.countDocuments({
-    affiliateId: new mongoose.Types.ObjectId(affiliateId),
+    affiliateId: affiliateOid,
     referredUserId: userOid,
   });
 
   for (const evt of events) {
-    const price = evt.data?.price;
-    if (typeof price !== "number" || price <= 0) {
+    const rawPrice = evt.data?.price;
+    const price =
+      typeof rawPrice === "number"
+        ? rawPrice
+        : typeof rawPrice === "string"
+          ? parseFloat(rawPrice)
+          : NaN;
+    if (!Number.isFinite(price) || price <= 0) {
       skipped++;
       continue;
     }
 
     const purchaseAmount = Math.round(price * 100);
-    const paymentIntentId = evt.paymentIntentId;
+    const paymentIntentId = (evt.paymentIntentId || "").trim();
+    if (!paymentIntentId) {
+      skipped++;
+      continue;
+    }
+
     const packageId = evt.packageId || "";
     const packageName = evt.packageName || "";
     const earnedAt = evt.timestamp;
-    const subscriptionId =
-      typeof evt.data?.subscriptionId === "string" ? evt.data.subscriptionId : "";
+    const data = evt.data as Record<string, unknown> | undefined;
+    const subscriptionIdFromEvent =
+      typeof data?.subscriptionId === "string" ? data.subscriptionId.trim() : "";
+    const subscriptionId = subscriptionIdFromEvent || userStripeSub;
+    const billingReason = typeof data?.billingReason === "string" ? data.billingReason : undefined;
+
+    const looksLikeInvoice =
+      paymentIntentId.startsWith("invoice_") || paymentIntentId.startsWith("in_");
 
     try {
       if (evt.packageType === "one-time") {
@@ -218,7 +238,22 @@ async function backfillCommissionsForUser(
           earnedAt,
         });
       } else if (evt.packageType === "membership") {
-        if (paymentIntentId.startsWith("invoice_") || paymentIntentId.startsWith("in_")) {
+        /**
+         * Initial subscription checkout often uses an invoice id (`invoice_in_…` / `in_…`), not `pi_…`.
+         * Previously we treated any invoice-shaped id as a renewal; renewals require `membership-first`
+         * or `membershipTied`, so first invoice payments were skipped after admin attach.
+         */
+        const hasMembershipFirstForThisAffiliate = await AffiliateCommission.exists({
+          referredUserId: userOid,
+          affiliateId: affiliateOid,
+          commissionType: "membership-first",
+        });
+
+        const isRecurring =
+          billingReason === "subscription_cycle" ||
+          (looksLikeInvoice && !!hasMembershipFirstForThisAffiliate);
+
+        if (isRecurring) {
           await processMembershipRecurringCommission({
             userId,
             invoiceId: paymentIntentId,
@@ -246,12 +281,11 @@ async function backfillCommissionsForUser(
   }
 
   const existingAfter = await AffiliateCommission.countDocuments({
-    affiliateId: new mongoose.Types.ObjectId(affiliateId),
+    affiliateId: affiliateOid,
     referredUserId: userOid,
   });
 
-  created = existingAfter - existingBefore;
-  skipped = events.length - created;
+  const created = existingAfter - existingBefore;
 
   return { created, skipped };
 }
