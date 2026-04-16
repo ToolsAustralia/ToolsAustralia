@@ -169,6 +169,8 @@ export type PayFailedInvoiceFailureCode = "invoice_not_payable" | "payment_inten
 export interface PayFailedInvoiceResponse {
   success: boolean;
   requiresPaymentConfirmation?: boolean;
+  /** Customer has no default PM (e.g. cards removed); client should collect a card then retry pay-failed-invoice */
+  requiresNewCardPreflight?: boolean;
   message?: string;
   error?: string;
   details?: string;

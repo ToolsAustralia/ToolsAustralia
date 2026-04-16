@@ -11,14 +11,25 @@ import {
   useSetDefaultPaymentMethod,
 } from "@/hooks/queries";
 import { useUserContext } from "@/contexts/UserContext";
-import type { SavedPaymentMethod } from "@/hooks/queries";
+import type { SavedPaymentMethod, PaymentMethodsQueryResult } from "@/hooks/queries";
+import { ApiError } from "@/lib/queries";
+
+export type DeletePaymentMethodOutcome =
+  | { status: "deleted" }
+  | { status: "needs_billing_confirm" }
+  | { status: "failed"; message?: string };
 
 interface UseSavedPaymentMethodsReturn {
   paymentMethods: SavedPaymentMethod[];
+  /** Stripe subscription default PM id when user has an active subscription; null otherwise. */
+  subscriptionDefaultPaymentMethodId: string | null;
   loading: boolean;
   error: string | null;
   savePaymentMethod: (paymentMethodId: string, setAsDefault?: boolean) => Promise<boolean>;
-  deletePaymentMethod: (paymentMethodId: string) => Promise<boolean>;
+  deletePaymentMethod: (
+    paymentMethodId: string,
+    options?: { confirmBillingRisk?: boolean }
+  ) => Promise<DeletePaymentMethodOutcome>;
   setDefaultPaymentMethod: (paymentMethodId: string) => Promise<boolean>;
   refreshPaymentMethods: () => Promise<void>;
 }
@@ -32,7 +43,16 @@ export function useSavedPaymentMethods(): UseSavedPaymentMethodsReturn {
   const userId = userData?._id;
 
   // Use React Query hooks
-  const { data: paymentMethods = [], isLoading, error } = usePaymentMethods(userData?._id);
+  const { data: paymentMethodsData, isLoading, error } = usePaymentMethods(userData?._id);
+  const paymentMethods: SavedPaymentMethod[] = !paymentMethodsData
+    ? []
+    : Array.isArray(paymentMethodsData)
+      ? paymentMethodsData
+      : (paymentMethodsData as PaymentMethodsQueryResult).paymentMethods;
+  const subscriptionDefaultPaymentMethodId: string | null =
+    !paymentMethodsData || Array.isArray(paymentMethodsData)
+      ? null
+      : (paymentMethodsData as PaymentMethodsQueryResult).subscriptionDefaultPaymentMethodId ?? null;
   const addPaymentMethodMutation = useAddPaymentMethod();
   const deletePaymentMethodMutation = useDeletePaymentMethod();
   const setDefaultPaymentMethodMutation = useSetDefaultPaymentMethod();
@@ -56,18 +76,34 @@ export function useSavedPaymentMethods(): UseSavedPaymentMethodsReturn {
   );
 
   const deletePaymentMethod = useCallback(
-    async (paymentMethodId: string): Promise<boolean> => {
+    async (
+      paymentMethodId: string,
+      options?: { confirmBillingRisk?: boolean }
+    ): Promise<DeletePaymentMethodOutcome> => {
       if (!userId) {
         console.error("Cannot delete payment method without an authenticated user.");
-        return false;
+        return { status: "failed", message: "Not signed in" };
       }
 
       try {
-        await deletePaymentMethodMutation.mutateAsync({ paymentMethodId, userId });
-        return true;
+        await deletePaymentMethodMutation.mutateAsync({
+          paymentMethodId,
+          userId,
+          confirmBillingRisk: options?.confirmBillingRisk,
+        });
+        return { status: "deleted" };
       } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          const data = error.data as { code?: string } | undefined;
+          if (data && typeof data === "object" && data.code === "REQUIRES_BILLING_RISK_CONFIRMATION") {
+            return { status: "needs_billing_confirm" };
+          }
+        }
         console.error("Failed to delete payment method:", error);
-        return false;
+        return {
+          status: "failed",
+          message: error instanceof Error ? error.message : "Failed to delete payment method",
+        };
       }
     },
     [deletePaymentMethodMutation, userId]
@@ -98,6 +134,7 @@ export function useSavedPaymentMethods(): UseSavedPaymentMethodsReturn {
 
   return {
     paymentMethods,
+    subscriptionDefaultPaymentMethodId,
     loading: isLoading,
     error: error?.message || null,
     savePaymentMethod,

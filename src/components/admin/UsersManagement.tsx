@@ -49,6 +49,7 @@ import defaultLogo from "../../../public/images/Tools Australia Logo/Social Medi
 import Dropdown from "@/components/modals/ui/Dropdown";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
 
 function AdminStatesMultiSelect({
   selected,
@@ -378,87 +379,6 @@ export default function UsersManagement() {
     if (!packageName) return null;
     // Try subscription first, then one-time as fallback
     return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
-  };
-
-  // Get subscription status badge
-  const getSubscriptionBadge = (user: AdminUserListItem) => {
-    const badgeBase =
-      "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-semibold shadow-sm ring-1 transition-colors";
-
-    if (!user.subscription) {
-      return (
-        <span
-          className={`${badgeBase} bg-gradient-to-br from-slate-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 text-slate-700 dark:text-neutral-200 ring-slate-200/80 dark:ring-neutral-600 border border-slate-200/90 dark:border-neutral-600`}
-        >
-          <Ban className="w-3 h-3 opacity-70 shrink-0" aria-hidden />
-          No Subscription
-        </span>
-      );
-    }
-
-    const status = user.subscription.status?.toLowerCase();
-    if (status === "incomplete" || status === "cancelled" || status === "canceled") {
-      return (
-        <span
-          className={`${badgeBase} bg-gradient-to-br from-slate-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 text-slate-700 dark:text-neutral-200 ring-slate-200/80 dark:ring-neutral-600 border border-slate-200/90 dark:border-neutral-600`}
-        >
-          <Ban className="w-3 h-3 opacity-70 shrink-0" aria-hidden />
-          No Subscription
-        </span>
-      );
-    }
-
-    if (user.subscription.isActive) {
-      return (
-        <span
-          className={`${badgeBase} bg-gradient-to-br from-emerald-50 via-teal-50/80 to-emerald-100/60 dark:from-emerald-950/55 dark:via-emerald-900/35 dark:to-teal-950/45 text-emerald-800 dark:text-emerald-300 ring-emerald-200/90 dark:ring-emerald-500/35 border border-emerald-200/80 dark:border-emerald-500/30`}
-        >
-          <CreditCard className="w-3 h-3 shrink-0 opacity-90 text-emerald-600 dark:text-emerald-400" aria-hidden />
-          <span className="relative flex h-1.5 w-1.5 shrink-0">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40 dark:bg-emerald-500" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-          </span>
-          Active
-        </span>
-      );
-    }
-
-    if (status === "past_due") {
-      return (
-        <span
-          className={`${badgeBase} bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/50 dark:to-yellow-950/35 text-amber-900 dark:text-amber-300 ring-amber-200/90 dark:ring-amber-500/35 border border-amber-200/80 dark:border-amber-500/25`}
-        >
-          <AlertTriangle className="w-3 h-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-          Past Due
-        </span>
-      );
-    }
-
-    return (
-      <span
-        className={`${badgeBase} bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/45 dark:to-rose-950/35 text-red-800 dark:text-red-300 ring-red-200/90 dark:ring-red-500/30 border border-red-200/80 dark:border-red-500/25`}
-      >
-        <PauseCircle className="w-3 h-3 shrink-0 text-red-600 dark:text-red-400" aria-hidden />
-        Inactive
-      </span>
-    );
-  };
-
-  // Get user status badge
-  const getUserStatusBadge = (user: AdminUserListItem) => {
-    if (user.isActive) {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
-          Active
-        </span>
-      );
-    }
-
-    return (
-      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-        Inactive
-      </span>
-    );
   };
 
   return (
@@ -819,9 +739,6 @@ export default function UsersManagement() {
                         {getSortIcon("lastLogin")}
                       </div>
                     </th>
-                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider hidden sm:table-cell">
-                      Status
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
@@ -900,7 +817,7 @@ export default function UsersManagement() {
                           </div>
                         </td>
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
-                          {getSubscriptionBadge(user)}
+                          {renderAdminSubscriptionBadge(user)}
                         </td>
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 dark:text-white tabular-nums">
                           {formatCurrency(user.totalSpent)}
@@ -930,9 +847,6 @@ export default function UsersManagement() {
                           ) : (
                             <span className="text-gray-400 dark:text-neutral-500">Never</span>
                           )}
-                        </td>
-                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
-                          {getUserStatusBadge(user)}
                         </td>
                       </tr>
                     );

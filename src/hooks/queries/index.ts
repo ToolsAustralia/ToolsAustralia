@@ -55,6 +55,7 @@ export {
   usePaymentMethodPrefetch,
   type SavedPaymentMethod,
   type PaymentMethodResponse,
+  type PaymentMethodsQueryResult,
   type AddPaymentMethodData,
   type PaymentStatusResponse,
 } from "./usePaymentQueries";

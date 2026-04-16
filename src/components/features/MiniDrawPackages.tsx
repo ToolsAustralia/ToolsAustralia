@@ -36,7 +36,12 @@ export default function MiniDrawPackages({
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
   const attribution = useAttribution();
-  const { data: paymentMethods } = usePaymentMethods(userData?._id);
+  const { data: paymentMethodsData } = usePaymentMethods(userData?._id);
+  const paymentMethods = !paymentMethodsData
+    ? undefined
+    : Array.isArray(paymentMethodsData)
+      ? paymentMethodsData
+      : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
 
   /**

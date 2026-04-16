@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { CreditCard, Plus, Trash2, Star, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
+import {
+  getPaymentMethodDeleteFlowKind,
+  getPaymentMethodDeleteMessages,
+  type PaymentMethodDeleteFlowKind,
+} from "@/utils/payment/payment-method-delete-flow";
 import { useUpdateSubscriptionPaymentMethod } from "@/hooks/queries";
 import { useToast } from "@/components/ui/Toast";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -27,6 +33,8 @@ interface PaymentMethodsTabProps {
     stripeSubscriptionId?: string;
   };
 }
+
+type DeleteFlowState = { paymentMethodId: string; kind: PaymentMethodDeleteFlowKind };
 
 // Stripe Card Form Component for adding new payment methods
 const AddPaymentMethodForm: React.FC<{
@@ -172,8 +180,15 @@ const AddPaymentMethodForm: React.FC<{
 
 const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
   const { showToast } = useToast();
-  const { paymentMethods, loading, error, deletePaymentMethod, setDefaultPaymentMethod, savePaymentMethod } =
-    useSavedPaymentMethods();
+  const {
+    paymentMethods,
+    subscriptionDefaultPaymentMethodId,
+    loading,
+    error,
+    deletePaymentMethod,
+    setDefaultPaymentMethod,
+    savePaymentMethod,
+  } = useSavedPaymentMethods();
   const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
   const [showAddForm, setShowAddForm] = useState(false);
   const [setupIntentClientSecret, setSetupIntentClientSecret] = useState<string | null>(null);
@@ -181,8 +196,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [paymentMethodToDelete, setPaymentMethodToDelete] = useState<string | null>(null);
+  const [deleteFlow, setDeleteFlow] = useState<DeleteFlowState | null>(null);
 
   // Get subscription info
   const hasActiveSubscription = user.subscription?.isActive && user.stripeSubscriptionId;
@@ -248,32 +262,44 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
   };
 
   const handleDeleteClick = (paymentMethodId: string) => {
-    setPaymentMethodToDelete(paymentMethodId);
-    setShowDeleteModal(true);
+    const kind = getPaymentMethodDeleteFlowKind(
+      paymentMethodId,
+      paymentMethods,
+      subscriptionDefaultPaymentMethodId,
+      Boolean(hasActiveSubscription)
+    );
+    setDeleteFlow({ paymentMethodId, kind });
   };
 
   const handleConfirmDelete = async () => {
-    if (!paymentMethodToDelete) return;
+    if (!deleteFlow) return;
 
-    setDeletingId(paymentMethodToDelete);
-    setShowDeleteModal(false);
-    const success = await deletePaymentMethod(paymentMethodToDelete);
+    setDeletingId(deleteFlow.paymentMethodId);
+    const confirmBillingRisk = deleteFlow.kind === "billing-last";
+    const result = await deletePaymentMethod(deleteFlow.paymentMethodId, confirmBillingRisk ? { confirmBillingRisk: true } : {});
     setDeletingId(null);
-    setPaymentMethodToDelete(null);
 
-    if (success) {
+    if (result.status === "deleted") {
+      setDeleteFlow(null);
       showToast({
         type: "success",
-        title: "Payment method deleted",
-        message: "The payment method has been removed.",
+        title: "Payment method removed",
+        message: "The card was detached from your account.",
       });
-    } else {
-      showToast({
-        type: "error",
-        title: "Error",
-        message: "Failed to delete payment method. Please try again.",
-      });
+      return;
     }
+
+    if (result.status === "needs_billing_confirm") {
+      setDeleteFlow({ paymentMethodId: deleteFlow.paymentMethodId, kind: "billing-last" });
+      return;
+    }
+
+    setDeleteFlow(null);
+    showToast({
+      type: "error",
+      title: "Error",
+      message: result.message || "Failed to delete payment method. Please try again.",
+    });
   };
 
   const handleSetDefault = async (paymentMethodId: string) => {
@@ -372,13 +398,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
     return `${month.toString().padStart(2, "0")}/${year.toString().slice(-2)}`;
   };
 
-  // Get the payment method currently used by subscription (if any)
-  const getSubscriptionPaymentMethodId = () => {
-    // This would ideally come from the subscription data, but for now we'll use the default
-    return paymentMethods.find((pm) => pm.isDefault)?.paymentMethodId;
-  };
-
-  const subscriptionPaymentMethodId = getSubscriptionPaymentMethodId();
+  const deleteModalCopy = deleteFlow ? getPaymentMethodDeleteMessages(deleteFlow.kind) : null;
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -386,6 +406,14 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
         <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100 mb-1 sm:mb-2">Payment Methods</h3>
         <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           Manage your saved payment methods and update your subscription payment method.
+        </p>
+        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-neutral-500 mt-2 leading-relaxed">
+          Card details are stored securely by Stripe; we only keep payment method references. Removing a card detaches it
+          from your account. See our{" "}
+          <Link href="/privacy" className="text-[#ee0000] dark:text-red-400 underline hover:opacity-90">
+            Privacy Policy
+          </Link>{" "}
+          for more.
         </p>
       </div>
 
@@ -502,7 +530,9 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             const uniquePaymentMethods = Array.from(uniquePaymentMethodsMap.values());
             
             return uniquePaymentMethods.map((paymentMethod) => {
-            const isSubscriptionPaymentMethod = subscriptionPaymentMethodId === paymentMethod.paymentMethodId;
+            const isSubscriptionBillingCard =
+              Boolean(hasActiveSubscription) &&
+              subscriptionDefaultPaymentMethodId === paymentMethod.paymentMethodId;
             const _isUpdating = updatingSubscriptionId === paymentMethod.paymentMethodId;
 
             return (
@@ -511,7 +541,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                 className={`border-2 rounded-lg sm:rounded-xl p-2.5 sm:p-4 transition-all shadow-sm hover:shadow-md ${
                   paymentMethod.isDefault
                     ? "border-blue-500 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30"
-                    : isSubscriptionPaymentMethod
+                    : isSubscriptionBillingCard
                     ? "border-green-500 dark:border-green-600 bg-green-50 dark:bg-green-900/30"
                     : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 hover:border-gray-300 dark:hover:border-neutral-600"
                 }`}
@@ -533,10 +563,10 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                             DEFAULT
                           </span>
                         )}
-                        {isSubscriptionPaymentMethod && hasActiveSubscription && (
+                        {isSubscriptionBillingCard && (
                           <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 shadow-sm">
                             <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                            SUBSCRIPTION
+                            RENEWALS
                           </span>
                         )}
                       </div>
@@ -566,14 +596,14 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
                     <div
                       title={
-                        isSubscriptionPaymentMethod
-                          ? "Cannot delete payment method currently used by subscription"
-                          : "Delete payment method"
+                        isSubscriptionBillingCard
+                          ? "Remove payment method (used for subscription renewals in Stripe)"
+                          : "Remove saved payment method"
                       }
                     >
                       <Button
                         onClick={() => handleDeleteClick(paymentMethod.paymentMethodId)}
-                        disabled={deletingId === paymentMethod.paymentMethodId || isSubscriptionPaymentMethod}
+                        disabled={deletingId === paymentMethod.paymentMethodId}
                         className="bg-red-600 hover:bg-red-700 text-white p-0 sm:p-2 rounded text-[9px] sm:text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 h-6 sm:h-8 w-6 sm:w-8 flex items-center justify-center"
                       >
                         {deletingId === paymentMethod.paymentMethodId ? (
@@ -614,18 +644,19 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
-        isOpen={showDeleteModal}
+        isOpen={deleteFlow !== null}
         onClose={() => {
-          setShowDeleteModal(false);
-          setPaymentMethodToDelete(null);
+          if (deletingId) return;
+          setDeleteFlow(null);
         }}
         onConfirm={handleConfirmDelete}
         type="delete"
-        title="Delete Payment Method"
-        message="Are you sure you want to delete this payment method? This action cannot be undone."
-        confirmText="Delete"
+        title={deleteModalCopy?.title ?? "Remove payment method"}
+        message={deleteModalCopy?.message ?? ""}
+        confirmText={deleteModalCopy?.confirmText ?? "Remove"}
         cancelText="Cancel"
         isLoading={deletingId !== null}
+        requireCheckboxToConfirm={deleteModalCopy?.requireCheckbox}
       />
     </div>
   );

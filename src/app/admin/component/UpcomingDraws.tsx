@@ -5,10 +5,7 @@ import {
   Calendar,
   Edit,
   Eye,
-  Clock,
   AlertCircle,
-  CheckCircle,
-  XCircle,
   Users,
   DollarSign,
   Trophy,
@@ -22,6 +19,7 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { useToast } from "@/components/ui/Toast";
 import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
 import { formatDateInLocal } from "@/utils/common/timezone";
+import { AdminBadge, MajorDrawTableStatusBadge } from "@/components/admin/ui/AdminBadge";
 
 // Import the MajorDrawData type from the modal
 interface MajorDrawData {
@@ -379,38 +377,6 @@ export default function UpcomingDraws() {
     }).format(amount);
   };
 
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "frozen":
-        return "bg-blue-100 text-blue-800";
-      case "queued":
-        return "bg-yellow-100 text-yellow-800";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
-    }
-  };
-
-  // Get status icon
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return CheckCircle;
-      case "frozen":
-        return Clock;
-      case "queued":
-        return Clock;
-      case "cancelled":
-        return XCircle;
-      default:
-        return Clock;
-    }
-  };
-
   // Check if draw can be edited
   const canEditDraw = (draw: UpcomingDraw) => {
     // Allow editing of queued and active draws, but not if configuration is locked
@@ -525,24 +491,19 @@ export default function UpcomingDraws() {
       {/* Draws List */}
       <div className="space-y-3 sm:space-y-4">
         {draws.map((draw) => {
-          const StatusIcon = getStatusIcon(draw.status);
           const canEdit = canEditDraw(draw);
 
           return (
             <div key={draw._id} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(draw.status)}`}>
-                          <StatusIcon className="w-3 h-3 inline mr-1" />
-                          {draw.status.charAt(0).toUpperCase() + draw.status.slice(1)}
-                        </span>
+                        <MajorDrawTableStatusBadge status={draw.status} />
                         {draw.configurationLocked && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <AlertCircle className="w-3 h-3 inline mr-1" />
+                          <AdminBadge variant="danger" icon={AlertCircle} iconClassName="text-red-600 dark:text-red-400">
                             Locked
-                          </span>
+                          </AdminBadge>
                         )}
                       </div>
 

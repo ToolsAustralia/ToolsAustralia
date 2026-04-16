@@ -181,9 +181,6 @@ export default function UserList({
                   {getSortIcon("lastLogin", filters.sortBy || "createdAt", filters.sortOrder || "desc")}
                 </div>
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider hidden sm:table-cell">
-                Status
-              </th>
               <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
                 Actions
               </th>

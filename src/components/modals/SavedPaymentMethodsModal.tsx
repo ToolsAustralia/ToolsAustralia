@@ -3,7 +3,14 @@
 import React, { useState } from "react";
 import { CreditCard, Trash2, Star, Plus } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
+import ConfirmationModal from "./ConfirmationModal";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
+import { useUserContext } from "@/contexts/UserContext";
+import {
+  getPaymentMethodDeleteFlowKind,
+  getPaymentMethodDeleteMessages,
+  type PaymentMethodDeleteFlowKind,
+} from "@/utils/payment/payment-method-delete-flow";
 
 interface SavedPaymentMethodsModalProps {
   isOpen: boolean;
@@ -14,6 +21,8 @@ interface SavedPaymentMethodsModalProps {
   isAuthenticated?: boolean;
 }
 
+type DeleteFlowState = { paymentMethodId: string; kind: PaymentMethodDeleteFlowKind };
+
 const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
   isOpen,
   onClose,
@@ -22,23 +31,43 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
   onAddNew,
   // isAuthenticated = false, // TODO: Use for authentication checks
 }) => {
-  const { paymentMethods, loading, error, deletePaymentMethod, setDefaultPaymentMethod } = useSavedPaymentMethods();
+  const { hasActiveSubscription } = useUserContext();
+  const { paymentMethods, subscriptionDefaultPaymentMethodId, loading, error, deletePaymentMethod, setDefaultPaymentMethod } =
+    useSavedPaymentMethods();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+  const [deleteFlow, setDeleteFlow] = useState<DeleteFlowState | null>(null);
 
-  const handleDelete = async (paymentMethodId: string) => {
-    if (!confirm("Are you sure you want to delete this payment method?")) {
-      return;
-    }
+  const deleteModalCopy = deleteFlow ? getPaymentMethodDeleteMessages(deleteFlow.kind) : null;
 
-    setDeletingId(paymentMethodId);
-    const success = await deletePaymentMethod(paymentMethodId);
+  const handleDeleteClick = (paymentMethodId: string) => {
+    const kind = getPaymentMethodDeleteFlowKind(
+      paymentMethodId,
+      paymentMethods,
+      subscriptionDefaultPaymentMethodId,
+      Boolean(hasActiveSubscription)
+    );
+    setDeleteFlow({ paymentMethodId, kind });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteFlow) return;
+    setDeletingId(deleteFlow.paymentMethodId);
+    const confirmBillingRisk = deleteFlow.kind === "billing-last";
+    const result = await deletePaymentMethod(deleteFlow.paymentMethodId, confirmBillingRisk ? { confirmBillingRisk: true } : {});
     setDeletingId(null);
 
-    if (!success) {
-      alert("Failed to delete payment method. Please try again.");
+    if (result.status === "deleted") {
+      setDeleteFlow(null);
+      return;
     }
+    if (result.status === "needs_billing_confirm") {
+      setDeleteFlow({ paymentMethodId: deleteFlow.paymentMethodId, kind: "billing-last" });
+      return;
+    }
+    setDeleteFlow(null);
+    alert(result.message || "Failed to delete payment method. Please try again.");
   };
 
   const handleSetDefault = async (paymentMethodId: string) => {
@@ -69,6 +98,7 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
   };
 
   return (
+    <>
     <ModalContainer isOpen={isOpen} onClose={onClose}>
       <div className="bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-2xl shadow-2xl max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full mx-2 sm:mx-4 max-h-[85dvh] sm:max-h-[90dvh] overflow-hidden">
         <ModalHeader title="Payment Methods" onClose={onClose} />
@@ -169,7 +199,7 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
                       )}
 
                       <Button
-                        onClick={() => handleDelete(paymentMethod.paymentMethodId)}
+                        onClick={() => handleDeleteClick(paymentMethod.paymentMethodId)}
                         disabled={deletingId === paymentMethod.paymentMethodId}
                         className="bg-red-600 hover:bg-red-700 text-white px-0.5 sm:px-3 py-0.5 sm:py-2 rounded text-xs sm:text-sm font-medium transition-colors disabled:opacity-50 w-8 h-6 sm:w-auto sm:h-auto"
                       >
@@ -200,6 +230,23 @@ const SavedPaymentMethodsModal: React.FC<SavedPaymentMethodsModalProps> = ({
         </ModalContent>
       </div>
     </ModalContainer>
+
+    <ConfirmationModal
+      isOpen={deleteFlow !== null}
+      onClose={() => {
+        if (deletingId) return;
+        setDeleteFlow(null);
+      }}
+      onConfirm={handleConfirmDelete}
+      type="delete"
+      title={deleteModalCopy?.title ?? "Remove payment method"}
+      message={deleteModalCopy?.message ?? ""}
+      confirmText={deleteModalCopy?.confirmText ?? "Remove"}
+      cancelText="Cancel"
+      isLoading={deletingId !== null}
+      requireCheckboxToConfirm={deleteModalCopy?.requireCheckbox}
+    />
+    </>
   );
 };
 

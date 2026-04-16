@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { AlertTriangle, XCircle, CheckCircle, X, Loader2 } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { Button } from "../modals/ui";
+import { ChargeJobResultStatusBadge } from "@/components/admin/ui/AdminBadge";
 
 export interface ChargePastDueUserModalProps {
   isOpen: boolean;
@@ -413,17 +414,7 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
                                   {result.invoiceId ? `${result.invoiceId.slice(0, 12)}…` : "—"}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <span
-                                    className={`px-2 py-1 rounded text-xs font-medium ${
-                                      result.status === "success"
-                                        ? "bg-green-100 dark:bg-green-950/45 text-green-700 dark:text-green-300"
-                                        : result.status === "failed"
-                                        ? "bg-red-100 dark:bg-red-950/45 text-red-700 dark:text-red-300"
-                                        : "bg-yellow-100 dark:bg-yellow-950/45 text-yellow-700 dark:text-yellow-300"
-                                    }`}
-                                  >
-                                    {result.status}
-                                  </span>
+                                  <ChargeJobResultStatusBadge status={result.status} />
                                 </td>
                                 <td className="px-3 py-2 text-right text-gray-900 dark:text-neutral-100">
                                   {result.amount ? formatCurrency(result.amount) : "-"}

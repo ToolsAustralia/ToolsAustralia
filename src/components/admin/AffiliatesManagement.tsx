@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import AffiliateDetailModal from "./AffiliateDetailModal";
+import { AccountActiveBadge } from "@/components/admin/ui/AdminBadge";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 interface Affiliate {
@@ -399,15 +400,7 @@ export default function AffiliatesManagement() {
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
-                        {affiliate.isActive ? (
-                          <span className="inline-flex rounded-full bg-green-100 dark:bg-green-950/50 px-2 py-0.5 text-[9px] sm:text-xs font-medium text-green-800 dark:text-green-300 border border-green-200/80 dark:border-green-800/50">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-red-100 dark:bg-red-950/40 px-2 py-0.5 text-[9px] sm:text-xs font-medium text-red-800 dark:text-red-300 border border-red-200/80 dark:border-red-800/50">
-                            Inactive
-                          </span>
-                        )}
+                        <AccountActiveBadge isActive={affiliate.isActive} />
                       </td>
                       <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-[10px] sm:text-xs font-medium">
                         <div className="flex items-center gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
