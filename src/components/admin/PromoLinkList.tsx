@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import { usePromoLinks, useDeletePromoLink } from "@/hooks/queries/usePromoQueries";
 import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import type { PromoLink } from "@/types/admin";
-import { Link2, Edit2, Trash2, Calendar, Loader2, RefreshCw, Copy, Check } from "lucide-react";
+import { Link2, Edit2, Trash2, Calendar, Loader2, RefreshCw, Copy, Check, CheckCircle } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 
 interface PromoLinkListProps {
@@ -70,24 +71,16 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
 
   const getStatusBadge = (promoLink: PromoLink) => {
     if (!promoLink.isActive) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          Inactive
-        </span>
-      );
-    } else if (promoLink.isExpired) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:text-neutral-100">
-          Expired
-        </span>
-      );
-    } else {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          Active
-        </span>
-      );
+      return <AdminBadge variant="warning">Inactive</AdminBadge>;
     }
+    if (promoLink.isExpired) {
+      return <AdminBadge variant="neutral">Expired</AdminBadge>;
+    }
+    return (
+      <AdminBadge variant="success" icon={CheckCircle} iconClassName="text-emerald-600 dark:text-emerald-400">
+        Active
+      </AdminBadge>
+    );
   };
 
   if (isLoading) {

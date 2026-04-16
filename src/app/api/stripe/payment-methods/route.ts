@@ -5,7 +5,11 @@ import { stripe } from "@/lib/stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { savePaymentMethodToUser, deduplicatePaymentMethods } from "@/utils/payment/payment-method-manager";
+import {
+  savePaymentMethodToUser,
+  deduplicatePaymentMethods,
+  getStripeSubscriptionDefaultPaymentMethodId,
+} from "@/utils/payment/payment-method-manager";
 
 const savePaymentMethodSchema = z.object({
   paymentMethodId: z.string().min(1, "Payment method ID is required"),
@@ -104,9 +108,17 @@ export async function GET() {
       })
     );
 
+    let subscriptionDefaultPaymentMethodId: string | null = null;
+    if (user.subscription?.isActive && user.stripeSubscriptionId) {
+      subscriptionDefaultPaymentMethodId = await getStripeSubscriptionDefaultPaymentMethodId(
+        user.stripeSubscriptionId
+      );
+    }
+
     return NextResponse.json({
       success: true,
       paymentMethods: paymentMethodsWithDetails,
+      subscriptionDefaultPaymentMethodId,
     });
   } catch (error) {
     console.error("Error fetching payment methods:", error);

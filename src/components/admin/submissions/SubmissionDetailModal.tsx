@@ -7,7 +7,7 @@ import SubmissionBusinessInfo from "./SubmissionBusinessInfo";
 import ConversationThread from "./ConversationThread";
 import type { ThreadMessage } from "./ConversationThread";
 import ReplyForm from "./ReplyForm";
-import { getStatusColor } from "./StatusSelect";
+import { SubmissionStatusBadge } from "./StatusSelect";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 interface Reply {
@@ -229,12 +229,8 @@ export default function SubmissionDetailModal({
                 ? "Partner Application"
                 : "Contact Submission"}
             </h3>
-            <span
-              className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${getStatusColor(
-                submission.status
-              )}`}
-            >
-              {submission.status.replace("_", " ")}
+            <span className="flex-shrink-0">
+              <SubmissionStatusBadge status={submission.status} />
             </span>
           </div>
           <button

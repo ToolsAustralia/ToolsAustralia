@@ -1,8 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
-import { CheckCircle, CreditCard } from "lucide-react";
+import { CheckCircle, CreditCard, Loader2 } from "lucide-react";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
+import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
+import { formatDisplayName } from "@/utils/display-name";
+import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import { UpsellModalProps } from "@/types/upsell";
 import { useUserContext } from "@/contexts/UserContext";
 import { usePaymentMethods } from "@/hooks/queries";
@@ -20,6 +25,10 @@ import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type"
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
+
+const stripePromise = getStripePromise();
 
 /**
  * UpsellModal Component
@@ -60,9 +69,21 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
   // Get user context and payment methods
   const { userData } = useUserContext();
+  const { savePaymentMethod } = useSavedPaymentMethods();
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const membershipStripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
   // const { isAuthenticated } = useUserContext(); // TODO: Use for authentication checks
   // ✅ Get refetch function and loading state to poll for payment methods when modal opens
-  const { data: paymentMethods, refetch: refetchPaymentMethods, isLoading: isLoadingPaymentMethods } = usePaymentMethods(userData?._id);
+  const { data: paymentMethodsData, refetch: refetchPaymentMethods, isLoading: isLoadingPaymentMethods } =
+    usePaymentMethods(userData?._id);
+  const paymentMethods = !paymentMethodsData
+    ? undefined
+    : Array.isArray(paymentMethodsData)
+      ? paymentMethodsData
+      : paymentMethodsData.paymentMethods;
+
+  const [setupIntentSecret, setSetupIntentSecret] = useState<string | null>(null);
+  const [loadingSetupIntent, setLoadingSetupIntent] = useState(false);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -83,12 +104,22 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const purchaseUpsell = usePurchaseUpsell();
   const { showToast } = useToast();
 
-  // Get default payment method
-  const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault);
-  
+  /** Prefer default; else first saved card (matches server fallback). */
+  const resolvedChargePm =
+    paymentMethods?.find((pm) => pm.isDefault) ??
+    (paymentMethods && paymentMethods.length > 0 ? paymentMethods[0] : undefined);
+
+  /** Empty list after at least one fetch — show SetupIntent without waiting for poll to finish. */
+  const showInlineCardSetup =
+    Boolean(isOpen) &&
+    !isLoadingPaymentMethods &&
+    paymentMethods !== undefined &&
+    paymentMethods.length === 0;
+
   // ✅ Determine if we should show loading state
   // Show loading if: actively polling OR initial load AND no payment method found yet
-  const isCheckingPaymentMethod = isPollingPaymentMethods || (isLoadingPaymentMethods && !defaultPaymentMethod);
+  const isCheckingPaymentMethod =
+    isPollingPaymentMethods || (isLoadingPaymentMethods && !resolvedChargePm && (paymentMethods?.length ?? 0) === 0);
 
   /**
    * Finalize invoice and send to Klaviyo
@@ -184,6 +215,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const handleClose = useCallback(() => {
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
+    setSetupIntentSecret(null);
+    setLoadingSetupIntent(false);
 
     // Clear the timeout since we're closing
     if (finalizationTimeoutIdRef.current) {
@@ -243,7 +276,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
       refetchPaymentMethods().then((result) => {
         // Check if payment method already exists after initial fetch
-        const methods = result.data;
+        const raw = result.data;
+        const methods = !raw
+          ? undefined
+          : Array.isArray(raw)
+            ? raw
+            : raw.paymentMethods;
         const hasDefault = methods?.find((pm) => pm.isDefault);
         if (hasDefault) {
           console.log("✅ Payment method found on initial fetch, skipping poll");
@@ -277,7 +315,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           const refetchResult = await refetchPaymentMethods();
           
           // Check payment methods from refetched data
-          const freshPaymentMethods = refetchResult.data;
+          const rawFresh = refetchResult.data;
+          const freshPaymentMethods = !rawFresh
+            ? undefined
+            : Array.isArray(rawFresh)
+              ? rawFresh
+              : rawFresh.paymentMethods;
           const freshDefaultMethod = freshPaymentMethods?.find((pm) => pm.isDefault);
           
           // ✅ CRITICAL: Stop polling immediately if payment method is found
@@ -325,6 +368,48 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
   }, [isOpen, userData?._id, refetchPaymentMethods, queryClient]);
 
+  useEffect(() => {
+    setSetupIntentSecret(null);
+  }, [offer.id]);
+
+  useEffect(() => {
+    if (!isOpen || !showInlineCardSetup || setupIntentSecret) return;
+    let cancelled = false;
+    setLoadingSetupIntent(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/stripe/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = (await res.json()) as { success?: boolean; client_secret?: string; error?: string };
+        if (cancelled) return;
+        if (res.ok && data.success && data.client_secret) {
+          setSetupIntentSecret(data.client_secret);
+        } else {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: data.error || "Try again or add a card in account settings.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: "Please try again.",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingSetupIntent(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, showInlineCardSetup, setupIntentSecret, showToast]);
+
   // Reset payment processing state when modal opens / invoice timeout
   useEffect(() => {
     if (isOpen) {
@@ -332,6 +417,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
       upsellPurchaseLockRef.current = false;
+      setSetupIntentSecret(null);
+      setLoadingSetupIntent(false);
 
       // CRITICAL: Log context to help debug invoice finalization issues
       console.log("🔍 UpsellModal opened:", {
@@ -346,7 +433,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         invoiceFinalized,
         hasUserContextUserId: !!userContext?.userId,
         hasUserDataId: !!userData?._id,
-        hasPaymentMethod: !!defaultPaymentMethod,
+        hasPaymentMethod: !!resolvedChargePm,
       });
 
       // CRITICAL: Start 30-second timeout for invoice finalization if we have purchase context
@@ -379,7 +466,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         }
       };
     }
-  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, defaultPaymentMethod]); // eslint-disable-line react-hooks/exhaustive-deps -- userContext/userData omitted to avoid visibility flicker
+  }, [isOpen, originalPurchaseContext, invoiceFinalized, finalizeInvoice, resolvedChargePm]); // eslint-disable-line react-hooks/exhaustive-deps -- userContext/userData omitted to avoid visibility flicker
 
   // Countdown timer for urgency - TODO: Implement countdown timer
   // useEffect(() => {
@@ -420,8 +507,19 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     };
   }, [isOpen]);
 
-  const handleAccept = async () => {
+  const runUpsellPurchase = async (explicitPaymentMethodId?: string) => {
     if (isProcessing || upsellPurchaseLockRef.current) return;
+
+    const paymentMethodIdToUse = explicitPaymentMethodId ?? resolvedChargePm?.paymentMethodId;
+    if (!paymentMethodIdToUse) {
+      showToast({
+        type: "error",
+        title: "Payment method required",
+        message: "Add a card below to complete this purchase.",
+        duration: 6000,
+      });
+      return;
+    }
 
     upsellPurchaseLockRef.current = true;
     setIsProcessing(true);
@@ -435,14 +533,10 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     ]);
 
     try {
-      if (!defaultPaymentMethod) {
-        throw new Error("No default payment method found. Please select a payment method.");
-      }
-
       const result = await purchaseUpsell.mutateAsync({
         offerId: offer.id,
         useDefaultPayment: true,
-        paymentMethodId: defaultPaymentMethod.paymentMethodId,
+        paymentMethodId: paymentMethodIdToUse,
         userId: userData?._id || "",
         idempotencyKey: crypto.randomUUID(),
         originalPurchaseContext: originalPurchaseContext
@@ -487,6 +581,36 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     } finally {
       upsellPurchaseLockRef.current = false;
       setIsProcessing(false);
+    }
+  };
+
+  const handleAccept = () => {
+    void runUpsellPurchase();
+  };
+
+  const handleUpsellInlineCardSaved = async (paymentMethodId: string) => {
+    try {
+      const saved = await savePaymentMethod(paymentMethodId, true);
+      if (!saved) {
+        showToast({
+          type: "error",
+          title: "Could not save card",
+          message: "Please try again or add a card in account settings.",
+        });
+        return;
+      }
+      if (userData?._id) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+        await refetchPaymentMethods();
+      }
+      setSetupIntentSecret(null);
+      await runUpsellPurchase(paymentMethodId);
+    } catch (e) {
+      showToast({
+        type: "error",
+        title: "Could not complete purchase",
+        message: e instanceof Error ? e.message : "Please try again.",
+      });
     }
   };
 
@@ -701,21 +825,55 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
         {/* Main Content - Ultra Compact */}
         <div className="px-3 sm:px-6 pb-2 sm:pb-4 pt-2 sm:pt-4">
+          {showInlineCardSetup && (
+            <div className="mb-3 space-y-3 rounded-lg border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/90 shadow-sm">
+              <div className="flex items-start gap-2">
+                <CreditCard className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Add a payment method</h4>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                    No saved card on file. Enter your card below — we&apos;ll save it and charge this offer.
+                  </p>
+                </div>
+              </div>
+              {loadingSetupIntent && (
+                <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-600 dark:text-neutral-400">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Preparing secure form…
+                </div>
+              )}
+              {setupIntentSecret && !loadingSetupIntent && (
+                <Elements
+                  key={`${setupIntentSecret}-up-${isDarkMode ? "d" : "l"}`}
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: setupIntentSecret,
+                    locale: "en",
+                    appearance: membershipStripeAppearance,
+                  }}
+                >
+                  <StripeInlineCardSetupForm
+                    clientSecret={setupIntentSecret}
+                    userEmail={userData?.email}
+                    userName={formatDisplayName(userData?.firstName, userData?.lastName) || undefined}
+                    userPhone={userData?.mobile}
+                    onSuccess={handleUpsellInlineCardSaved}
+                    disabled={isProcessing}
+                    submitLabel={`Save card & purchase — $${offer.discountedPrice}`}
+                  />
+                </Elements>
+              )}
+            </div>
+          )}
+
           {/* Action Buttons - Stacked Vertically */}
           <div className="flex flex-col gap-2 mb-2">
             {/* Primary CTA - Purchase with Default Card */}
             <button
               onClick={() => {
-                // console.log("🟢 Upsell primary CTA clicked", {
-                //   offerId: offer.id,
-                //   isProcessing,
-                //   hasDefaultPaymentMethod: !!defaultPaymentMethod,
-                //   paymentMethodId: defaultPaymentMethod?.paymentMethodId,
-                //   hasOriginalPurchaseContext: !!originalPurchaseContext,
-                // });
                 handleAccept();
               }}
-              disabled={isProcessing || !defaultPaymentMethod || isCheckingPaymentMethod}
+              disabled={isProcessing || !resolvedChargePm || isCheckingPaymentMethod}
               className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isProcessing ? (
@@ -730,15 +888,17 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  {defaultPaymentMethod ? (
+                  {resolvedChargePm ? (
                     <>
                       <span>Purchase - ${offer.discountedPrice}</span>
 
                       <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-lg px-2 py-1">
                         <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
-                        <span className="text-xs sm:text-sm">•••• {defaultPaymentMethod.card?.last4}</span>
+                        <span className="text-xs sm:text-sm">•••• {resolvedChargePm.card?.last4}</span>
                       </div>
                     </>
+                  ) : showInlineCardSetup ? (
+                    <span className="text-sm font-medium">Use the secure form above</span>
                   ) : (
                     "No Payment Method Available"
                   )}

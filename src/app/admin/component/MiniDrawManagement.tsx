@@ -28,6 +28,7 @@ import {
   Move,
   MessageSquare,
 } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
 import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
@@ -365,28 +366,33 @@ export default function MiniDrawManagement() {
   };
 
   const getStatusBadge = (status: string) => {
-    const badges = {
-      active: {
-        bg: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
-        icon: CheckCircle,
-      },
-      completed: {
-        bg: "bg-gray-100 text-gray-800 dark:text-neutral-100 dark:bg-neutral-700 dark:text-neutral-200",
-        icon: Trophy,
-      },
-      cancelled: {
-        bg: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
-        icon: XCircle,
-      },
-    };
-    const badge = badges[status as keyof typeof badges] || badges.active;
-    const Icon = badge.icon;
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.bg}`}>
-        <Icon className="w-3 h-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
+    const label = status.charAt(0).toUpperCase() + status.slice(1);
+    switch (status) {
+      case "active":
+        return (
+          <AdminBadge variant="success" icon={CheckCircle} iconClassName="text-emerald-600 dark:text-emerald-400">
+            {label}
+          </AdminBadge>
+        );
+      case "completed":
+        return (
+          <AdminBadge variant="neutral" icon={Trophy}>
+            {label}
+          </AdminBadge>
+        );
+      case "cancelled":
+        return (
+          <AdminBadge variant="danger" icon={XCircle} iconClassName="text-red-600 dark:text-red-400">
+            {label}
+          </AdminBadge>
+        );
+      default:
+        return (
+          <AdminBadge variant="success" icon={CheckCircle}>
+            {label}
+          </AdminBadge>
+        );
+    }
   };
 
   if (isLoading) {

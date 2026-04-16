@@ -21,6 +21,7 @@ import {
   RefreshCw,
   UserPlus,
 } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 export default function MajorDrawManagement() {
   const { showToast } = useToast();
@@ -235,44 +236,45 @@ export default function MajorDrawManagement() {
     ? Math.max(0, new Date(majorDraw.drawDate).getTime() - new Date().getTime())
     : 0;
 
-  // Get status badge
   const getStatusBadge = () => {
     switch (majorDraw.status) {
       case "active":
         return (
-          <div className="flex items-center gap-2 bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300 px-3 py-1.5 rounded-lg border border-green-200/80 dark:border-green-800/60">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Active</span>
-          </div>
+          <AdminBadge
+            variant="success"
+            icon={CheckCircle}
+            iconClassName="text-emerald-600 dark:text-emerald-400"
+            className="text-sm py-1.5 px-3"
+          >
+            Active
+          </AdminBadge>
         );
       case "frozen":
         return (
-          <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-200/80 dark:border-blue-800/60">
-            <Lock className="w-4 h-4" />
-            <span className="text-sm font-semibold">Frozen</span>
-          </div>
+          <AdminBadge variant="info" icon={Lock} iconClassName="text-sky-600 dark:text-sky-300" className="text-sm py-1.5 px-3">
+            Frozen
+          </AdminBadge>
         );
       case "completed":
         return (
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-600">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Completed</span>
-          </div>
+          <AdminBadge variant="neutral" icon={CheckCircle} className="text-sm py-1.5 px-3">
+            Completed
+          </AdminBadge>
         );
       case "queued":
         return (
-          <div className="flex items-center gap-2 bg-yellow-100 dark:bg-amber-950/40 text-yellow-800 dark:text-amber-300 px-3 py-1.5 rounded-lg border border-yellow-200/80 dark:border-amber-800/60">
-            <Clock className="w-4 h-4" />
-            <span className="text-sm font-semibold">Queued</span>
-          </div>
+          <AdminBadge variant="warning" icon={Clock} className="text-sm py-1.5 px-3">
+            Queued
+          </AdminBadge>
         );
       case "cancelled":
         return (
-          <div className="flex items-center gap-2 bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 px-3 py-1.5 rounded-lg border border-red-200/80 dark:border-red-800/60">
-            <XCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Cancelled</span>
-          </div>
+          <AdminBadge variant="danger" icon={XCircle} className="text-sm py-1.5 px-3">
+            Cancelled
+          </AdminBadge>
         );
+      default:
+        return null;
     }
   };
 

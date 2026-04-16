@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import { useScheduledPromos, useDeleteScheduledPromo } from "@/hooks/queries/useScheduledPromoQueries";
 import type { ScheduledPromo } from "@/types/admin";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
-import { Calendar, Edit2, Trash2, Loader2, RefreshCw } from "lucide-react";
+import { Calendar, Edit2, Trash2, Loader2, RefreshCw, CheckCircle } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 
 interface ScheduledPromoListProps {
@@ -63,54 +64,43 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
   const getStatusBadge = (promo: ScheduledPromo) => {
     if (promo.isCurrentlyActive) {
       return (
-        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-950/55 dark:text-green-300">
+        <AdminBadge variant="success" icon={CheckCircle} iconClassName="text-emerald-600 dark:text-emerald-400">
           Active Now
-        </span>
+        </AdminBadge>
       );
     }
     if (promo.isUpcoming) {
-      return (
-        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">
-          Upcoming
-        </span>
-      );
+      return <AdminBadge variant="info">Upcoming</AdminBadge>;
     }
     if (promo.isExpired) {
-      return (
-        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-neutral-800 dark:text-neutral-300">
-          Expired
-        </span>
-      );
+      return <AdminBadge variant="neutral">Expired</AdminBadge>;
     }
-    return (
-      <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-950/45 dark:text-yellow-200">
-        Inactive
-      </span>
-    );
+    return <AdminBadge variant="warning">Inactive</AdminBadge>;
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+        <Loader2 className="w-6 h-6 animate-spin text-red-600 dark:text-red-400" />
       </div>
     );
   }
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-3 sm:p-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700">
+        <div className="p-3 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-red-600" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
               Scheduled Phases
             </h3>
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+              className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800"
               title="Refresh"
+              type="button"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>

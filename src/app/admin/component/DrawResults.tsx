@@ -11,8 +11,6 @@ import {
   UserPlus,
   UserX,
   CheckCircle,
-  XCircle,
-  Clock,
   AlertCircle,
   Edit,
   ChevronLeft,
@@ -28,6 +26,7 @@ import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/mod
 import WinnerEditModal from "@/components/modals/WinnerEditModal";
 import ExportModal from "@/components/modals/ExportModal";
 import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
+import { DrawWinnerOutcomeBadge, MajorDrawTableStatusBadge } from "@/components/admin/ui/AdminBadge";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 
@@ -565,51 +564,6 @@ export default function DrawResults() {
     }).format(amount);
   };
 
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "frozen":
-        return "bg-blue-100 text-blue-800";
-      case "active":
-        return "bg-yellow-100 text-yellow-800";
-      case "queued":
-        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
-      case "cancelled":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800 dark:text-neutral-100";
-    }
-  };
-
-  // Get winner status
-  const getWinnerStatus = (draw: DrawResult) => {
-    // Check if there's actually a valid winner with userId
-    if (draw.winner && draw.winner.userId) {
-      return {
-        icon: CheckCircle,
-        color: "text-green-600",
-        text: "Winner Selected",
-        bgColor: "bg-green-50 border-green-200",
-      };
-    } else if (draw.status === "completed" || draw.status === "frozen") {
-      return {
-        icon: XCircle,
-        color: "text-red-600",
-        text: "No Winner",
-        bgColor: "bg-red-50 border-red-200",
-      };
-    } else {
-      return {
-        icon: Clock,
-        color: "text-gray-600 dark:text-neutral-400",
-        text: "Pending",
-        bgColor: "bg-gray-50 border-gray-200",
-      };
-    }
-  };
-
   if (isLoading && draws.length === 0) {
     return (
       <div className="space-y-4 sm:space-y-6">
@@ -727,22 +681,17 @@ export default function DrawResults() {
       {/* Draws List */}
       <div className="space-y-3 sm:space-y-4">
         {draws.map((draw) => {
-            const winnerStatus = getWinnerStatus(draw);
-            const StatusIcon = winnerStatus.icon;
-
             return (
               <div key={draw._id} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{draw.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(draw.status)}`}>
-                          {draw.status.charAt(0).toUpperCase() + draw.status.slice(1)}
-                        </span>
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium border ${winnerStatus.bgColor}`}>
-                          <StatusIcon className={`w-3 h-3 inline mr-1 ${winnerStatus.color}`} />
-                          {winnerStatus.text}
-                        </div>
+                        <MajorDrawTableStatusBadge status={draw.status} />
+                        <DrawWinnerOutcomeBadge
+                          status={draw.status}
+                          hasWinnerUserId={!!(draw.winner && draw.winner.userId)}
+                        />
                       </div>
 
                       <div

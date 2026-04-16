@@ -1,8 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
-import { Gift, Zap, CheckCircle, CreditCard, Sparkles, Check } from "lucide-react";
+import { Gift, Zap, CheckCircle, CreditCard, Sparkles, Check, Loader2 } from "lucide-react";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
+import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
+import { formatDisplayName } from "@/utils/display-name";
+import { useToast } from "@/components/ui/Toast";
 import { useUserContext } from "@/contexts/UserContext";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,7 +33,11 @@ import { useReferralCode } from "@/hooks/useReferralCode";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+
+const stripePromise = getStripePromise();
 
 const hexToRgba = (hex: string, alpha: number) => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -101,7 +110,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   // Get user context and payment methods
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { paymentMethods } = useSavedPaymentMethods();
+  const { paymentMethods, savePaymentMethod, loading: paymentMethodsLoading } = useSavedPaymentMethods();
+  const { showToast } = useToast();
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const membershipStripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
 
   // Get promo link code from URL/sessionStorage (for bonus entries)
   const { promoCode: promoLinkCode, setPromoCode, clearPromoCode } = usePromoLink();
@@ -152,8 +164,15 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const { showLoading, hideLoading, showSuccess } = useLoading();
   const purchaseMembership = usePurchaseMembership();
 
-  // Get default payment method
-  const defaultPaymentMethod = paymentMethods.find((pm) => pm.isDefault);
+  /** Prefer default flag; otherwise first saved card (matches one-time purchase API fallback). */
+  const resolvedChargePm =
+    paymentMethods.find((pm) => pm.isDefault) ?? (paymentMethods.length > 0 ? paymentMethods[0] : undefined);
+
+  const needsInlineCardSetup = Boolean(
+    selectedPackage && !paymentMethodsLoading && paymentMethods.length === 0
+  );
+  const [setupIntentSecret, setSetupIntentSecret] = useState<string | null>(null);
+  const [loadingSetupIntent, setLoadingSetupIntent] = useState(false);
 
   // Custom close handler that resets payment processing state
   const handleClose = useCallback(() => {
@@ -161,6 +180,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     setPaymentIntentId(null);
     setProcessingPackageName("");
     setOriginalPurchaseContext(null);
+    setSetupIntentSecret(null);
+    setLoadingSetupIntent(false);
     onClose();
   }, [onClose]);
 
@@ -174,6 +195,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       setUpsellTriggered(false);
       lastAutoAppliedCodeRef.current = null;
       specialPackagePurchaseLockRef.current = false;
+      setSetupIntentSecret(null);
+      setLoadingSetupIntent(false);
 
       const normalizedInitialCode = initialCouponCode?.trim().toUpperCase();
       if (normalizedInitialCode) {
@@ -271,6 +294,48 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     handleCouponApply(normalizedInitialCode);
   }, [isOpen, initialCouponCode, handleCouponApply]);
 
+  useEffect(() => {
+    setSetupIntentSecret(null);
+  }, [selectedPackage?._id]);
+
+  useEffect(() => {
+    if (!isOpen || !needsInlineCardSetup || setupIntentSecret) return;
+    let cancelled = false;
+    setLoadingSetupIntent(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/stripe/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = (await res.json()) as { success?: boolean; client_secret?: string; error?: string };
+        if (cancelled) return;
+        if (res.ok && data.success && data.client_secret) {
+          setSetupIntentSecret(data.client_secret);
+        } else {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: data.error || "Try again or add a card in account settings.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: "Please try again.",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingSetupIntent(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, needsInlineCardSetup, setupIntentSecret, showToast]);
+
   // Verify user is authenticated and has access to additional packages
   if (
     isOpen &&
@@ -286,8 +351,18 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     onPackageSelect(pkg);
   };
 
-  const handlePurchase = async (pkg: StaticMembershipPackage) => {
+  const handlePurchase = async (pkg: StaticMembershipPackage, freshPaymentMethodId?: string) => {
     if (isProcessing || specialPackagePurchaseLockRef.current) return;
+
+    const paymentMethodIdToCharge = freshPaymentMethodId ?? resolvedChargePm?.paymentMethodId;
+    if (!paymentMethodIdToCharge) {
+      showToast({
+        type: "error",
+        title: "Payment method required",
+        message: "Add a card below to complete your purchase.",
+      });
+      return;
+    }
 
     specialPackagePurchaseLockRef.current = true;
     setIsProcessing(true);
@@ -301,13 +376,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     ]);
 
     try {
-      if (!defaultPaymentMethod) {
-        throw new Error("No default payment method found. Please select a payment method.");
-      }
-
       const result = await purchaseMembership.mutateAsync({
         packageId: pkg._id,
         userId: userData?._id || "",
+        paymentMethodId: paymentMethodIdToCharge,
         idempotencyKey: crypto.randomUUID(),
         referralCode: couponApplied && couponType === "referral" ? couponCode.trim().toUpperCase() : undefined,
         promoLinkCode:
@@ -353,10 +425,43 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     } catch (error) {
       console.error("Special package purchase failed:", error);
       hideLoading();
-      console.error(`Purchase failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Purchase failed: ${msg}`);
+      showToast({
+        type: "error",
+        title: "Purchase failed",
+        message: msg,
+        duration: 8000,
+      });
     } finally {
       specialPackagePurchaseLockRef.current = false;
       setIsProcessing(false);
+    }
+  };
+
+  const handleInlineCardSaved = async (paymentMethodId: string) => {
+    if (!selectedPackage) return;
+    try {
+      const saved = await savePaymentMethod(paymentMethodId, true);
+      if (!saved) {
+        showToast({
+          type: "error",
+          title: "Could not save card",
+          message: "Please try again or add a card in account settings.",
+        });
+        return;
+      }
+      if (userData?._id) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+      }
+      setSetupIntentSecret(null);
+      await handlePurchase(selectedPackage, paymentMethodId);
+    } catch (e) {
+      showToast({
+        type: "error",
+        title: "Could not complete purchase",
+        message: e instanceof Error ? e.message : "Please try again.",
+      });
     }
   };
 
@@ -862,6 +967,48 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
             )}
           </div>
 
+          {needsInlineCardSetup && selectedPackage && (
+            <div className="mb-4 sm:mb-6 space-y-3 rounded-lg border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/90 shadow-sm">
+              <div className="flex items-start gap-2">
+                <CreditCard className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Add a payment method</h4>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                    You don&apos;t have a saved card yet. Enter your card below — we&apos;ll save it and complete your
+                    purchase.
+                  </p>
+                </div>
+              </div>
+              {loadingSetupIntent && (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-600 dark:text-neutral-400">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Preparing secure form…
+                </div>
+              )}
+              {setupIntentSecret && !loadingSetupIntent && (
+                <Elements
+                  key={`${setupIntentSecret}-sp-${isDarkMode ? "d" : "l"}`}
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: setupIntentSecret,
+                    locale: "en",
+                    appearance: membershipStripeAppearance,
+                  }}
+                >
+                  <StripeInlineCardSetupForm
+                    clientSecret={setupIntentSecret}
+                    userEmail={userData?.email}
+                    userName={formatDisplayName(userData?.firstName, userData?.lastName) || undefined}
+                    userPhone={userData?.mobile}
+                    onSuccess={handleInlineCardSaved}
+                    disabled={isProcessing}
+                    submitLabel={`Save card & buy — $${selectedPackage.price}`}
+                  />
+                </Elements>
+              )}
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="space-y-2 sm:space-y-3">
             {/* Buy Button - uses package badgeStyle when package selected (same as Enter Now) */}
@@ -879,14 +1026,18 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
               return (
                 <button
                   type="button"
-                  onClick={() => defaultPaymentMethod && handlePurchase(selectedPackage)}
-                  disabled={isProcessing || !defaultPaymentMethod}
+                  onClick={() => resolvedChargePm && handlePurchase(selectedPackage)}
+                  disabled={isProcessing || !resolvedChargePm || needsInlineCardSetup || paymentMethodsLoading}
                   className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden`}
                   style={buttonStyle}
                 >
                   {isProcessing ? (
                     <span className="relative z-10">Processing...</span>
-                  ) : defaultPaymentMethod ? (
+                  ) : needsInlineCardSetup ? (
+                    <span className="relative z-10 text-xs sm:text-sm font-semibold normal-case">
+                      Use the card form above to complete purchase
+                    </span>
+                  ) : resolvedChargePm ? (
                     <>
                       <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 relative z-10" />
                       <span className="relative z-10">
@@ -895,10 +1046,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                       <div className="flex items-center gap-1.5 bg-white/20 rounded px-2 sm:px-3 py-1 sm:py-1.5 relative z-10">
                         <CreditCard className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                         <span className="text-xs">
-                          •••• {defaultPaymentMethod.card?.last4}
+                          •••• {resolvedChargePm.card?.last4}
                         </span>
                       </div>
                     </>
+                  ) : paymentMethodsLoading ? (
+                    <span className="relative z-10 text-xs sm:text-sm font-semibold normal-case">Checking saved cards…</span>
                   ) : (
                     <span className="relative z-10">No Payment Method</span>
                   )}

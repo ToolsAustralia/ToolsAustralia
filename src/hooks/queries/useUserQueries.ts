@@ -70,6 +70,8 @@ export interface UserData {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   savedPaymentMethods?: Array<{
     paymentMethodId: string;
     isDefault: boolean;

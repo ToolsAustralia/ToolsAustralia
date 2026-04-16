@@ -65,8 +65,10 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "No Stripe subscription ID found" }, { status: 400 });
     }
 
-    // Check if subscription status is past_due (failed renewal)
-    if (user.subscription.status !== "past_due" || user.subscription.isActive) {
+    // Failed renewal: Stripe uses past_due (most common) or unpaid — Mongo isActive may still be true or false
+    const renewalStatus = (user.subscription.status ?? "").toLowerCase();
+    const isFailedRenewalState = renewalStatus === "past_due" || renewalStatus === "unpaid";
+    if (!isFailedRenewalState) {
       return NextResponse.json(
         { error: "Subscription is not in a failed renewal state" },
         { status: 400 }
@@ -337,6 +339,44 @@ export async function POST(_request: NextRequest) {
               }
             }
 
+            // invoices.pay() can fail when the Customer has no default payment method — the open invoice may still reference a PaymentIntent
+            if (!paymentIntent && invoiceData.invoice.id) {
+              const msg = isStripeError(payError) ? String(payError.message || "") : "";
+              const likelyMissingDefault =
+                msg.includes("default_payment_method") ||
+                msg.includes("Default payment method") ||
+                msg.toLowerCase().includes("no default payment method");
+
+              if (likelyMissingDefault) {
+                try {
+                  const refreshed = await stripe.invoices.retrieve(invoiceData.invoice.id, {
+                    expand: ["payment_intent", "latest_payment_intent"],
+                  });
+                  let pi = extractPaymentIntentFromInvoice(refreshed);
+                  if (!pi) {
+                    const inv = refreshed as Stripe.Invoice & {
+                      latest_payment_intent?: string | Stripe.PaymentIntent;
+                      payment_intent?: string | Stripe.PaymentIntent;
+                    };
+                    const piIdStr =
+                      typeof inv.latest_payment_intent === "string"
+                        ? inv.latest_payment_intent
+                        : typeof inv.payment_intent === "string"
+                          ? inv.payment_intent
+                          : null;
+                    if (piIdStr) {
+                      pi = await stripe.paymentIntents.retrieve(piIdStr, { expand: ["payment_method"] });
+                    }
+                  }
+                  if (pi) {
+                    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, pi);
+                  }
+                } catch (refreshErr) {
+                  console.error("Invoice refresh after invoices.pay default PM error:", refreshErr);
+                }
+              }
+            }
+
             // If we still don't have a PaymentIntent, return error
             if (!paymentIntent) {
               const classified = classifyStripeInvoicePayInitFailure(payError);
@@ -354,6 +394,23 @@ export async function POST(_request: NextRequest) {
               const errorMessage = isStripeError(payError)
                 ? payError.message
                 : "Unable to process payment. Please contact support.";
+              const msgLower = String(errorMessage).toLowerCase();
+              const noDefaultPm =
+                msgLower.includes("default_payment_method") || msgLower.includes("default payment method");
+
+              if (noDefaultPm) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    requiresNewCardPreflight: true,
+                    error: "Payment method required",
+                    details:
+                      "No saved card is on file for this renewal. Add a new card in this window, then try again — or add a card below and we will retry automatically.",
+                  },
+                  { status: 400 }
+                );
+              }
+
               return NextResponse.json(
                 {
                   success: false,

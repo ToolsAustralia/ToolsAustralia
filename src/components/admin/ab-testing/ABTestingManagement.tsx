@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import ExperimentFormModal from "./ExperimentFormModal";
 import ExperimentDetailModal from "./ExperimentDetailModal";
 import { format } from "date-fns";
+import { ExperimentStatusBadge } from "@/components/admin/ui/AdminBadge";
 
 /**
  * A/B Testing Management Component
@@ -42,20 +43,6 @@ export default function ABTestingManagement() {
   const endMutation = useEndExperiment();
 
   const experiments = experimentsData || [];
-
-  const getStatusBadge = (status: string) => {
-    const badges = {
-      draft:
-        "bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 border border-gray-200 dark:border-neutral-600",
-      active:
-        "bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300 border border-green-200/80 dark:border-green-800/60",
-      paused:
-        "bg-yellow-100 dark:bg-amber-950/40 text-yellow-800 dark:text-amber-300 border border-yellow-200/80 dark:border-amber-800/60",
-      ended:
-        "bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-200/80 dark:border-red-800/60",
-    };
-    return badges[status as keyof typeof badges] || badges.draft;
-  };
 
   const handleViewExperiment = (experimentId: string) => {
     setSelectedExperimentId(experimentId);
@@ -210,13 +197,7 @@ export default function ABTestingManagement() {
                       <div className="font-medium text-sm sm:text-base text-gray-900 dark:text-white">{experiment.name}</div>
                     </td>
                     <td className="whitespace-nowrap px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusBadge(
-                          experiment.status
-                        )}`}
-                      >
-                        {experiment.status}
-                      </span>
+                      <ExperimentStatusBadge status={experiment.status} />
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
                       <div className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400">
