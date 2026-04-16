@@ -25,6 +25,28 @@ export interface SavedPaymentMethod {
 
 export interface PaymentMethodResponse {
   paymentMethods: SavedPaymentMethod[];
+  subscriptionDefaultPaymentMethodId?: string | null;
+}
+
+/** Cached shape for `queryKeys.paymentMethods.all` — includes Stripe subscription billing PM id. */
+export interface PaymentMethodsQueryResult {
+  paymentMethods: SavedPaymentMethod[];
+  subscriptionDefaultPaymentMethodId: string | null;
+}
+
+function normalizePaymentMethodsCache(
+  cached: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined
+): PaymentMethodsQueryResult {
+  if (cached === undefined) {
+    return { paymentMethods: [], subscriptionDefaultPaymentMethodId: null };
+  }
+  if (Array.isArray(cached)) {
+    return { paymentMethods: cached, subscriptionDefaultPaymentMethodId: null };
+  }
+  return {
+    paymentMethods: cached.paymentMethods,
+    subscriptionDefaultPaymentMethodId: cached.subscriptionDefaultPaymentMethodId ?? null,
+  };
 }
 
 export interface AddPaymentMethodData {
@@ -36,6 +58,8 @@ export interface AddPaymentMethodData {
 interface DeletePaymentMethodVariables {
   paymentMethodId: string;
   userId: string;
+  /** Set when server returns 409 REQUIRES_BILLING_RISK_CONFIRMATION (remove only billing PM on active sub). */
+  confirmBillingRisk?: boolean;
 }
 
 interface SetDefaultPaymentMethodVariables {
@@ -74,9 +98,12 @@ const PAYMENT_STATUS_TIMEOUT_MS = 90000;
 export const usePaymentMethods = (userId?: string) => {
   return useQuery({
     queryKey: queryKeys.paymentMethods.all(userId!),
-    queryFn: async () => {
+    queryFn: async (): Promise<PaymentMethodsQueryResult> => {
       const response = await apiGet<PaymentMethodResponse>("/api/stripe/payment-methods");
-      return response.paymentMethods;
+      return {
+        paymentMethods: response.paymentMethods,
+        subscriptionDefaultPaymentMethodId: response.subscriptionDefaultPaymentMethodId ?? null,
+      };
     },
     enabled: !!userId,
     ...paymentMethodQueryOptions, // Use optimized caching options
@@ -154,7 +181,9 @@ export const useAddPaymentMethod = () => {
 
       await queryClient.cancelQueries({ queryKey: paymentMethodsKey });
 
-      const previousPaymentMethods = queryClient.getQueryData<SavedPaymentMethod[]>(paymentMethodsKey);
+      const previousPaymentMethods = queryClient.getQueryData<PaymentMethodsQueryResult | SavedPaymentMethod[]>(
+        paymentMethodsKey
+      );
       const previousDefault = queryClient.getQueryData<SavedPaymentMethod | null>(defaultKey);
 
       const optimisticPaymentMethod: SavedPaymentMethod = {
@@ -163,12 +192,17 @@ export const useAddPaymentMethod = () => {
         createdAt: new Date(),
       };
 
-      queryClient.setQueryData(paymentMethodsKey, (old: SavedPaymentMethod[] = []) => {
-        const base = setAsDefault ? old.map((method) => ({ ...method, isDefault: false })) : [...old];
+      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
+        const base = setAsDefault ? prev.map((method) => ({ ...method, isDefault: false })) : [...prev];
         const withoutCurrent = base.filter((method) => method.paymentMethodId !== paymentMethodId);
-        return setAsDefault
+        const nextList = setAsDefault
           ? [optimisticPaymentMethod, ...withoutCurrent]
           : [...withoutCurrent, optimisticPaymentMethod];
+        return {
+          paymentMethods: nextList,
+          subscriptionDefaultPaymentMethodId,
+        };
       });
 
       if (setAsDefault) {
@@ -191,10 +225,15 @@ export const useAddPaymentMethod = () => {
       if (!context) return;
       const { paymentMethodsKey, defaultKey } = context;
 
-      queryClient.setQueryData(paymentMethodsKey, (old: SavedPaymentMethod[] = []) => {
-        const withoutCurrent = old.filter((method) => method.paymentMethodId !== data.paymentMethodId);
+      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
+        const withoutCurrent = prev.filter((method) => method.paymentMethodId !== data.paymentMethodId);
         const normalised = withoutCurrent.map((method) => (data.isDefault ? { ...method, isDefault: false } : method));
-        return data.isDefault ? [data, ...normalised] : [...normalised, data];
+        const nextList = data.isDefault ? [data, ...normalised] : [...normalised, data];
+        return {
+          paymentMethods: nextList,
+          subscriptionDefaultPaymentMethodId,
+        };
       });
 
       if (data.isDefault) {
@@ -214,8 +253,9 @@ export const useDeletePaymentMethod = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ paymentMethodId }: DeletePaymentMethodVariables) => {
-      await apiDelete(`/api/stripe/payment-methods/${paymentMethodId}`);
+    mutationFn: async ({ paymentMethodId, confirmBillingRisk }: DeletePaymentMethodVariables) => {
+      const q = confirmBillingRisk ? "?confirmBillingRisk=1" : "";
+      await apiDelete(`/api/stripe/payment-methods/${paymentMethodId}${q}`);
       return { paymentMethodId };
     },
     onMutate: async ({ paymentMethodId, userId }) => {
@@ -224,11 +264,23 @@ export const useDeletePaymentMethod = () => {
 
       await queryClient.cancelQueries({ queryKey: paymentMethodsKey });
 
-      const previousPaymentMethods = queryClient.getQueryData<SavedPaymentMethod[]>(paymentMethodsKey);
+      const previousPaymentMethods = queryClient.getQueryData<PaymentMethodsQueryResult | SavedPaymentMethod[]>(
+        paymentMethodsKey
+      );
       const previousDefault = queryClient.getQueryData<SavedPaymentMethod | null>(defaultKey);
 
-      queryClient.setQueryData(paymentMethodsKey, (old: SavedPaymentMethod[] = []) => {
-        return old.filter((method) => method.paymentMethodId !== paymentMethodId);
+      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
+        const filtered = prev.filter((method) => method.paymentMethodId !== paymentMethodId);
+        let nextSubDefault = subscriptionDefaultPaymentMethodId;
+        if (subscriptionDefaultPaymentMethodId === paymentMethodId) {
+          const nextDefaultPm = filtered.find((m) => m.isDefault) ?? filtered[0];
+          nextSubDefault = nextDefaultPm?.paymentMethodId ?? null;
+        }
+        return {
+          paymentMethods: filtered,
+          subscriptionDefaultPaymentMethodId: nextSubDefault,
+        };
       });
 
       return { previousPaymentMethods, previousDefault, paymentMethodsKey, defaultKey };
@@ -250,11 +302,14 @@ export const useDeletePaymentMethod = () => {
         return old?.paymentMethodId === data.paymentMethodId ? null : old;
       });
     },
-    onSettled: (_data, _error, _variables, context) => {
+    onSettled: (_data, _error, variables, context) => {
       if (!context) return;
       const { paymentMethodsKey, defaultKey } = context;
       queryClient.invalidateQueries({ queryKey: paymentMethodsKey });
       queryClient.invalidateQueries({ queryKey: defaultKey });
+      if (variables.userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(variables.userId) });
+      }
     },
   });
 };
@@ -276,15 +331,22 @@ export const useSetDefaultPaymentMethod = () => {
 
       await queryClient.cancelQueries({ queryKey: paymentMethodsKey });
 
-      const previousPaymentMethods = queryClient.getQueryData<SavedPaymentMethod[]>(paymentMethodsKey);
+      const previousPaymentMethods = queryClient.getQueryData<PaymentMethodsQueryResult | SavedPaymentMethod[]>(
+        paymentMethodsKey
+      );
       const previousDefault = queryClient.getQueryData<SavedPaymentMethod | null>(defaultKey);
 
-      queryClient.setQueryData(paymentMethodsKey, (old: SavedPaymentMethod[] = []) => {
-        const selected = old.find((method) => method.paymentMethodId === paymentMethodId);
-        const others = old
+      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
+        const selected = prev.find((method) => method.paymentMethodId === paymentMethodId);
+        const others = prev
           .filter((method) => method.paymentMethodId !== paymentMethodId)
           .map((method) => ({ ...method, isDefault: false }));
-        return selected ? [{ ...selected, isDefault: true }, ...others] : old;
+        const nextList = selected ? [{ ...selected, isDefault: true }, ...others] : prev;
+        return {
+          paymentMethods: nextList,
+          subscriptionDefaultPaymentMethodId,
+        };
       });
 
       return { previousPaymentMethods, previousDefault, paymentMethodsKey, defaultKey };
@@ -303,10 +365,14 @@ export const useSetDefaultPaymentMethod = () => {
       if (!context) return;
       const { paymentMethodsKey, defaultKey } = context;
 
-      queryClient.setQueryData(paymentMethodsKey, (old: SavedPaymentMethod[] = []) => {
-        const withoutCurrent = old.filter((method) => method.paymentMethodId !== data.paymentMethodId);
+      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
+        const withoutCurrent = prev.filter((method) => method.paymentMethodId !== data.paymentMethodId);
         const reset = withoutCurrent.map((method) => ({ ...method, isDefault: false }));
-        return [data, ...reset];
+        return {
+          paymentMethods: [data, ...reset],
+          subscriptionDefaultPaymentMethodId,
+        };
       });
 
       queryClient.setQueryData(defaultKey, data);
@@ -327,9 +393,12 @@ export const usePaymentMethodPrefetch = () => {
   const prefetchPaymentMethods = (userId: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.paymentMethods.all(userId),
-      queryFn: async () => {
+      queryFn: async (): Promise<PaymentMethodsQueryResult> => {
         const response = await apiGet<PaymentMethodResponse>("/api/stripe/payment-methods");
-        return response.paymentMethods;
+        return {
+          paymentMethods: response.paymentMethods,
+          subscriptionDefaultPaymentMethodId: response.subscriptionDefaultPaymentMethodId ?? null,
+        };
       },
       staleTime: 5 * 60 * 1000,
     });

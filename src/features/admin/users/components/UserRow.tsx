@@ -13,9 +13,8 @@ import {
   getPackageIconImage,
   getPackageColorScheme,
   getGradientColor,
-  getSubscriptionBadgeConfig,
-  getUserStatusBadgeConfig,
 } from "../utils/userHelpers";
+import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
@@ -36,9 +35,6 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
   const isPremiumPackage =
     user.subscription?.packageName?.toLowerCase().includes("boss") ||
     user.subscription?.packageName?.toLowerCase().includes("power");
-
-  const subscriptionBadge = getSubscriptionBadgeConfig(user.subscription);
-  const statusBadge = getUserStatusBadgeConfig(user.isActive);
 
   return (
     <tr
@@ -101,7 +97,7 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
         </div>
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
-        <span className={subscriptionBadge.className}>{subscriptionBadge.label}</span>
+        {renderAdminSubscriptionBadge(user)}
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900 dark:text-white tabular-nums">
         {formatCurrency(user.totalSpent)}
@@ -131,9 +127,6 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
         ) : (
           <span className="text-gray-400">Never</span>
         )}
-      </td>
-      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
-        <span className={statusBadge.className}>{statusBadge.label}</span>
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium">
         <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2">

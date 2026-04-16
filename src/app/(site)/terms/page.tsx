@@ -276,9 +276,9 @@ export default async function TermsPage() {
                   basis to ensure fairness. Members affected by such technical issues should contact{" "}
                   <a
                     className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                    href="mailto:hello@toolsaustralia.com.au"
+                    href="mailto:support@toolsaustralia.com.au"
                   >
-                    hello@toolsaustralia.com.au
+                    support@toolsaustralia.com.au
                   </a>{" "}
                   for assistance.
                 </p>
@@ -394,9 +394,9 @@ export default async function TermsPage() {
                 Your rights: access, correct, or request deletion via{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href="mailto:support@toolsaustralia.com.au"
                 >
-                  hello@toolsaustralia.com.au
+                  support@toolsaustralia.com.au
                 </a>
               </li>
               <li>
@@ -456,9 +456,9 @@ export default async function TermsPage() {
                 Assistance available: Gambling Help 1800 858 858 or{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href="mailto:support@toolsaustralia.com.au"
                 >
-                  hello@toolsaustralia.com.au
+                  support@toolsaustralia.com.au
                 </a>{" "}
                 for self-exclusion options
               </li>
@@ -534,9 +534,9 @@ export default async function TermsPage() {
               For questions:{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
+                href="mailto:support@toolsaustralia.com.au"
               >
-                hello@toolsaustralia.com.au
+                support@toolsaustralia.com.au
               </a>
             </p>
           </section>

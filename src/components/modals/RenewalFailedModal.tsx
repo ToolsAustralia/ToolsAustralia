@@ -15,14 +15,19 @@
  * - Can be closed and reopened from settings
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getStripePromise } from "@/lib/stripe-client";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
 import { AlertTriangle, CreditCard, Loader2, CheckCircle, XCircle, Mail } from "lucide-react";
-import { usePayFailedInvoice, type PayFailedInvoiceFailureCode } from "@/hooks/queries/useSubscriptionQueries";
+import {
+  usePayFailedInvoice,
+  useUpdateSubscriptionPaymentMethod,
+  type PayFailedInvoiceFailureCode,
+} from "@/hooks/queries/useSubscriptionQueries";
 import { ApiError } from "@/lib/queries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { paymentIntentIdFromClientSecret } from "@/utils/payment/stripe/stripe-excessive-retry";
@@ -32,12 +37,28 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useUserContext } from "@/contexts/UserContext";
 import { formatDisplayName } from "@/utils/display-name";
 import { SUPPORT_EMAIL } from "@/lib/email/sender-identities";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 
 const stripePromise = getStripePromise();
 
 const RENEWAL_BILLING_SUPPORT_SUBJECT = encodeURIComponent("Subscription renewal – cannot pay invoice");
 function renewalBillingSupportMailto(): string {
   return `mailto:${SUPPORT_EMAIL}?subject=${RENEWAL_BILLING_SUPPORT_SUBJECT}`;
+}
+
+function errorPayloadSuggestsMissingDefaultPm(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  if (d.requiresNewCardPreflight === true) return true;
+  const details = typeof d.details === "string" ? d.details : "";
+  const err = typeof d.error === "string" ? d.error : "";
+  const combined = `${details} ${err}`;
+  return (
+    combined.includes("default_payment_method") ||
+    combined.includes("Default payment method") ||
+    combined.includes("no `default_payment_method`")
+  );
 }
 
 interface RenewalFailedModalProps {
@@ -306,7 +327,11 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const payFailedInvoiceMutation = usePayFailedInvoice();
-  const { paymentMethods, loading: _paymentMethodsLoading } = useSavedPaymentMethods();
+  const updateSubscriptionPaymentMethod = useUpdateSubscriptionPaymentMethod();
+  const { paymentMethods, loading: _paymentMethodsLoading, savePaymentMethod } = useSavedPaymentMethods();
+  const { userData } = useUserContext();
+  const isDarkMode = useThemeStore((s) => s.theme === "dark");
+  const membershipStripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
 
   // State management
   const [paymentState, setPaymentState] = useState<{
@@ -327,6 +352,10 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   /** invoice_not_payable / payment_intent_not_payable: same API cannot collect without billing repair */
   const [terminalCollectionFailure, setTerminalCollectionFailure] =
     useState<PayFailedInvoiceFailureCode | null>(null);
+  /** No default PM on Stripe Customer (e.g. user removed all cards) — show SetupIntent inline before retry */
+  const [showInlineCardSetup, setShowInlineCardSetup] = useState(false);
+  const [setupIntentSecret, setSetupIntentSecret] = useState<string | null>(null);
+  const [loadingSetupIntent, setLoadingSetupIntent] = useState(false);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -340,9 +369,50 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       setShowPaymentMethods(false);
       setRequiresDifferentPaymentMethod(false);
       setTerminalCollectionFailure(null);
+      setShowInlineCardSetup(false);
+      setSetupIntentSecret(null);
+      setLoadingSetupIntent(false);
       // Don't auto-trigger - let user click "Resolve Payment Issue" button
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !showInlineCardSetup || setupIntentSecret) return;
+    let cancelled = false;
+    setLoadingSetupIntent(true);
+    void (async () => {
+      try {
+        const res = await fetch("/api/stripe/create-setup-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = (await res.json()) as { success?: boolean; client_secret?: string; error?: string };
+        if (cancelled) return;
+        if (res.ok && data.success && data.client_secret) {
+          setSetupIntentSecret(data.client_secret);
+        } else {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: data.error || "Try again or add a card in account settings.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          showToast({
+            type: "error",
+            title: "Could not load card form",
+            message: "Please try again.",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingSetupIntent(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, showInlineCardSetup, setupIntentSecret, showToast]);
 
   // Handle "Resolve Payment Issue" button click
   const handleResolvePayment = async () => {
@@ -385,6 +455,18 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
     } catch (err: unknown) {
       if (err instanceof ApiError && err.data && typeof err.data === "object" && err.data !== null) {
         const d = err.data as Record<string, unknown>;
+        if (
+          d.requiresNewCardPreflight === true ||
+          (errorPayloadSuggestsMissingDefaultPm(err.data) && d.requiresDifferentPaymentMethod !== true)
+        ) {
+          setShowInlineCardSetup(true);
+          setError(null);
+          setErrorDetails(null);
+          setTerminalCollectionFailure(null);
+          setRequiresDifferentPaymentMethod(false);
+          setIsLoading(false);
+          return;
+        }
         if (d.requiresDifferentPaymentMethod === true) {
           setRequiresDifferentPaymentMethod(true);
           const formatted = formatPaymentError(err.data);
@@ -464,6 +546,39 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           duration: 10000,
         });
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInlineCardSaved = async (paymentMethodId: string) => {
+    setIsLoading(true);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      const saved = await savePaymentMethod(paymentMethodId, true);
+      if (!saved) {
+        throw new Error("Could not save payment method");
+      }
+      await updateSubscriptionPaymentMethod.mutateAsync(paymentMethodId);
+      if (userData?._id) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+      }
+      setShowInlineCardSetup(false);
+      setSetupIntentSecret(null);
+      showToast({
+        type: "success",
+        title: "Card saved",
+        message: "Retrying your renewal payment…",
+        duration: 3000,
+      });
+      await handleResolvePayment();
+    } catch (e) {
+      showToast({
+        type: "error",
+        title: "Could not save card",
+        message: e instanceof Error ? e.message : "Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -746,7 +861,49 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           </div>
         )}
 
+        {showInlineCardSetup && (
+          <div className="mb-4 sm:mb-6 space-y-3 rounded-lg border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/90 shadow-sm">
+            <div className="flex items-start gap-2">
+              <CreditCard className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">Add a payment method</h4>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-1">
+                  There is no card on file for this renewal. Enter your new card below — we&apos;ll save it and retry your payment automatically.
+                </p>
+              </div>
+            </div>
+            {loadingSetupIntent && (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-600 dark:text-neutral-400">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Preparing secure form…
+              </div>
+            )}
+            {setupIntentSecret && !loadingSetupIntent && (
+              <Elements
+                key={`${setupIntentSecret}-inline-${isDarkMode ? "d" : "l"}`}
+                stripe={stripePromise}
+                options={{
+                  clientSecret: setupIntentSecret,
+                  locale: "en",
+                  appearance: membershipStripeAppearance,
+                }}
+              >
+                <StripeInlineCardSetupForm
+                  clientSecret={setupIntentSecret}
+                  userEmail={userData?.email}
+                  userName={formatDisplayName(userData?.firstName, userData?.lastName) || undefined}
+                  userPhone={userData?.mobile}
+                  onSuccess={handleInlineCardSaved}
+                  disabled={isLoading}
+                  submitLabel="Save card & retry payment"
+                />
+              </Elements>
+            )}
+          </div>
+        )}
+
         {/* Alert Banner — shorter when terminal billing: detailed guidance is in error box below */}
+        {!showInlineCardSetup && (
         <div
           className={
             terminalCollectionFailure
@@ -784,9 +941,10 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
             </div>
           </div>
         </div>
+        )}
 
         {/* Error Display - Show both error and details */}
-        {(error || errorDetails) && (
+        {(error || errorDetails) && !showInlineCardSetup && (
           <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-start gap-2">
               <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -838,15 +996,32 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
           </div>
         ) : (
           <div className="space-y-2 sm:space-y-3">
-            <Button
-              onClick={handleResolvePayment}
-              disabled={isLoading}
-              className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base"
-              size="sm"
-            >
-              <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
-              Resolve Payment Issue
-            </Button>
+            {!showInlineCardSetup && (
+              <Button
+                onClick={handleResolvePayment}
+                disabled={isLoading}
+                className="w-full bg-red-600 hover:bg-red-700 text-sm sm:text-base"
+                size="sm"
+              >
+                <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
+                Resolve Payment Issue
+              </Button>
+            )}
+            {showInlineCardSetup && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowInlineCardSetup(false);
+                  setSetupIntentSecret(null);
+                }}
+                disabled={isLoading}
+                className="w-full text-sm sm:text-base border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-100"
+                size="sm"
+              >
+                Back
+              </Button>
+            )}
             <Button 
               onClick={onClose} 
               variant="outline" 
@@ -862,7 +1037,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         <div className="mt-4 sm:mt-6 text-[10px] sm:text-xs text-gray-500 dark:text-neutral-500 text-center">
           {terminalCollectionFailure
             ? "Our team may need to fix your invoice in billing before you can pay. You can still update saved cards under your account."
-            : "You can close this modal and resolve the payment issue later from your account settings."}
+            : showInlineCardSetup
+              ? "You can also close this modal and add a card later under account settings."
+              : "You can close this modal and resolve the payment issue later from your account settings."}
         </div>
       </ModalContent>
     </ModalContainer>

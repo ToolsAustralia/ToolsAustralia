@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Search, Building, MessageSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatDateInAEST } from "@/utils/common/timezone";
 import { formatDisplayName } from "@/utils/display-name";
 import {
   SubmissionDetailModal,
-  getStatusColor,
+  SubmissionStatusBadge,
   type PartnerApplication,
   type ContactSubmission,
 } from "@/components/admin/submissions";
+import { SubmissionReadBadge } from "@/components/admin/ui/AdminBadge";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -43,6 +44,7 @@ export default function SubmissionsManagement() {
   const [readFilter, setReadFilter] = useState<string>("all");
   const [selectedItem, setSelectedItem] = useState<PartnerApplication | ContactSubmission | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const initialTabFromUnreadResolvedRef = useRef(false);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
 
@@ -114,8 +116,40 @@ export default function SubmissionsManagement() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await Promise.all([fetchPartnerApplications(1), fetchContactSubmissions(1)]);
-      setLoading(false);
+      try {
+        await Promise.all([fetchPartnerApplications(1), fetchContactSubmissions(1)]);
+
+        if (!initialTabFromUnreadResolvedRef.current) {
+          try {
+            const [partnerUnreadRes, contactUnreadRes] = await Promise.all([
+              fetch("/api/partner-applications?page=1&limit=1&readFilter=unread"),
+              fetch("/api/contact-submissions?page=1&limit=1&readFilter=unread"),
+            ]);
+            if (partnerUnreadRes.ok && contactUnreadRes.ok) {
+              const [partnerUnreadJson, contactUnreadJson] = await Promise.all([
+                partnerUnreadRes.json(),
+                contactUnreadRes.json(),
+              ]);
+              const partnerUnread = partnerUnreadJson?.data?.pagination?.total ?? 0;
+              const contactUnread = contactUnreadJson?.data?.pagination?.total ?? 0;
+              initialTabFromUnreadResolvedRef.current = true;
+              if (contactUnread > partnerUnread && contactUnread > 0) {
+                setActiveTab("contact");
+              } else if (partnerUnread > contactUnread && partnerUnread > 0) {
+                setActiveTab("partner");
+              } else if (partnerUnread > 0) {
+                setActiveTab("partner");
+              } else if (contactUnread > 0) {
+                setActiveTab("contact");
+              }
+            }
+          } catch (e) {
+            console.error("Error resolving default submissions tab:", e);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
   }, [fetchPartnerApplications, fetchContactSubmissions]);
@@ -233,7 +267,7 @@ export default function SubmissionsManagement() {
 
       {/* Content */}
       {activeTab === "partner" ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none sm:rounded-xl">
           <div className="border-b border-gray-200 px-4 py-2 dark:border-neutral-700">
             <p className="text-xs text-gray-600 dark:text-neutral-400 sm:text-sm">
               {partnerPagination.total > 0
@@ -242,65 +276,53 @@ export default function SubmissionsManagement() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+              <thead className="bg-gray-50 dark:bg-neutral-800">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Contact
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Business
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Read
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                     Submitted
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-200 dark:divide-neutral-700">
+              <tbody className="divide-y divide-gray-200 bg-white dark:divide-neutral-700 dark:bg-neutral-950/90">
                 {partnerApplications.map((app) => (
                   <tr
                     key={app._id}
                     onClick={() => handleViewDetails(app)}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-900 dark:text-neutral-100">
                           {formatDisplayName(app.firstName, app.lastName)}
                         </div>
-                        <div className="text-sm text-gray-500">{app.email}</div>
-                        <div className="text-sm text-gray-500">{app.phone}</div>
+                        <div className="text-sm text-gray-500 dark:text-neutral-400">{app.email}</div>
+                        <div className="text-sm text-gray-500 dark:text-neutral-400">{app.phone}</div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{app.businessName}</div>
-                      {app.abn && <div className="text-sm text-gray-500">ABN: {app.abn}</div>}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                          app.status
-                        )}`}
-                      >
-                        {app.status.replace("_", " ")}
-                      </span>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <div className="text-sm text-gray-900 dark:text-neutral-100">{app.businessName}</div>
+                      {app.abn && (
+                        <div className="text-sm text-gray-500 dark:text-neutral-500">ABN: {app.abn}</div>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          app.readAt
-                            ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300"
-                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
-                        }`}
-                      >
-                        {app.readAt ? "Read" : "Unread"}
-                      </span>
+                      <SubmissionStatusBadge status={app.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <SubmissionReadBadge readAt={app.readAt} />
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
                       {formatDateInAEST(new Date(app.submittedAt), "dd MMM yyyy")}
@@ -406,15 +428,7 @@ export default function SubmissionsManagement() {
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          submission.readAt
-                            ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300"
-                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
-                        }`}
-                      >
-                        {submission.readAt ? "Read" : "Unread"}
-                      </span>
+                      <SubmissionReadBadge readAt={submission.readAt} />
                     </td>
                     <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-neutral-400">
                       {formatDateInAEST(new Date(submission.submittedAt), "dd MMM yyyy")}

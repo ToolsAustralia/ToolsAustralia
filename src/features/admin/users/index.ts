@@ -29,9 +29,9 @@ export {
   getPackageIconImage,
   getPackageColorScheme,
   getGradientColor,
-  getSubscriptionBadgeConfig,
-  getUserStatusBadgeConfig,
 } from "./utils/userHelpers";
+
+export { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
 
 
 

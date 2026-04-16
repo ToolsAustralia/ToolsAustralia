@@ -1,4 +1,7 @@
+"use client";
+
 import { Clock, Package, User } from "lucide-react";
+import { OrderStatusBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateInAEST } from "@/utils/common/timezone";
 import { formatDisplayName } from "@/utils/display-name";
 
@@ -27,21 +30,6 @@ interface RecentOrdersProps {
 }
 
 export default function RecentOrders({ orders }: RecentOrdersProps) {
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200";
-      case "processing":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200";
-      case "cancelled":
-        return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 dark:text-neutral-100 dark:bg-neutral-700 dark:text-neutral-200";
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return formatDateInAEST(new Date(dateString), "dd MMM yyyy");
   };
@@ -74,13 +62,7 @@ export default function RecentOrders({ orders }: RecentOrdersProps) {
                 <div>
                   <div className="flex items-center space-x-2">
                     <p className="font-medium text-gray-900 dark:text-white">#{order.orderNumber}</p>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        order.status
-                      )}`}
-                    >
-                      {order.status}
-                    </span>
+                    <OrderStatusBadge status={order.status} />
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-neutral-400">
                     <div className="flex items-center space-x-1">

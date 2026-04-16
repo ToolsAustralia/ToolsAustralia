@@ -62,6 +62,18 @@ import {
   getAdminPaymentKindLabel,
   resolveAdminPaymentEventTitle,
 } from "@/utils/admin/adminPaymentEventDisplay";
+import {
+  AccountActiveBadge,
+  ActiveOrInactiveBadge,
+  AdminBadge,
+  DrawParticipationStatusBadge,
+  EntrySourceBadge,
+  MiniDrawParticipationStatusBadge,
+  OrderStatusBadge,
+  renderSubscriptionStateBadge,
+  SubscriptionHistoryStatusBadge,
+  VerificationBadge,
+} from "@/components/admin/ui/AdminBadge";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -1752,15 +1764,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
                               {user.email}
                             </p>
-                            <div className="flex items-center gap-1">
-                              {user.isEmailVerified ? (
-                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
-                              )}
-                              <span className="text-xs text-gray-500">
-                                {user.isEmailVerified ? "Verified" : "Unverified"}
-                              </span>
+                            <div className="mt-0.5">
+                              <VerificationBadge verified={user.isEmailVerified} />
                             </div>
                           </div>
                         </div>
@@ -1772,15 +1777,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
                               {user.mobile || "Not provided"}
                             </p>
-                            <div className="flex items-center gap-1">
-                              {user.isMobileVerified ? (
-                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
-                              )}
-                              <span className="text-xs text-gray-500">
-                                {user.isMobileVerified ? "Verified" : "Unverified"}
-                              </span>
+                            <div className="mt-0.5">
+                              <VerificationBadge verified={!!user.isMobileVerified} />
                             </div>
                           </div>
                         </div>
@@ -1799,13 +1797,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <Shield className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Account Status</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {user.isActive ? "Active" : "Inactive"}
-                            </span>
+                            <AccountActiveBadge isActive={user.isActive} />
                           </div>
                         </div>
 
@@ -1815,9 +1807,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">
                               Klaviyo marketing
                             </p>
-                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                            <AdminBadge variant={user.acceptsPromotionalEmail !== false ? "success" : "neutral"}>
                               {user.acceptsPromotionalEmail !== false ? "Subscribed (app)" : "Unsubscribed (app)"}
-                            </p>
+                            </AdminBadge>
                           </div>
                         </div>
 
@@ -1828,17 +1820,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             {user.savedPaymentMethods && user.savedPaymentMethods.length > 0 ? (
                               <div className="flex flex-wrap gap-2">
                                 {user.savedPaymentMethods.map((pm) => (
-                                  <span
+                                  <AdminBadge
                                     key={pm.paymentMethodId}
-                                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-neutral-200"
+                                    variant="neutral"
+                                    icon={CreditCard}
+                                    iconClassName="opacity-70 shrink-0"
+                                    className="max-w-[min(100%,280px)] flex-wrap"
                                   >
                                     <span className="truncate max-w-[140px]">{pm.paymentMethodId}</span>
                                     {pm.isDefault && (
-                                      <span className="ml-1 inline-flex items-center rounded-full bg-green-100 px-1 text-[10px] font-semibold text-green-700">
+                                      <AdminBadge variant="success" className="!px-1.5 !py-0 !text-[10px] !gap-1">
                                         Default
-                                      </span>
+                                      </AdminBadge>
                                     )}
-                                  </span>
+                                  </AdminBadge>
                                 ))}
                               </div>
                             ) : (
@@ -2269,13 +2264,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </div>
                           <div>
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Status</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                user.subscription.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {user.subscription.status}
-                            </span>
+                            {renderSubscriptionStateBadge(user.subscription)}
                           </div>
                           <div>
                             <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Start Date</p>
@@ -2413,15 +2402,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <p className="font-semibold text-xs sm:text-sm text-gray-900">
                                 {formatCurrency(sub.price || 0)}
                               </p>
-                              <span
-                                className={`inline-block mt-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
-                                  sub.status === "BenefitsGranted"
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
-                                {sub.status || "—"}
-                              </span>
+                              <div className="mt-1 flex justify-end">
+                                <SubscriptionHistoryStatusBadge status={sub.status} />
+                              </div>
                             </div>
                           </div>
                         );
@@ -2914,17 +2897,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-semibold text-xs sm:text-sm text-gray-900">
                               {formatCurrency(order.totalAmount || order.total || 0)}
                             </p>
-                            <span
-                              className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
-                                order.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : order.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-gray-100 text-gray-800 dark:text-neutral-100"
-                              }`}
-                            >
-                              {order.status || "Unspecified"}
-                            </span>
+                            <div className="mt-0.5 flex justify-end">
+                              <OrderStatusBadge status={order.status} />
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -3019,13 +2994,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {formatCurrency(pkg.price)}
                                 </p>
                               )}
-                              <span
-                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
-                                  pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800 dark:text-neutral-100"
-                                }`}
-                              >
-                                {pkg.isActive ? "Active" : "Expired"}
-                              </span>
+                              <div className="mt-0.5 flex justify-end">
+                                <ActiveOrInactiveBadge active={!!pkg.isActive} activeLabel="Active" inactiveLabel="Expired" />
+                              </div>
                             </div>
                           </div>
                         );
@@ -3082,13 +3053,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {formatCurrency(Number(md.price))}
                                 </p>
                               )}
-                              <span
-                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
-                                  md.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800 dark:text-neutral-100"
-                                }`}
-                              >
-                                {md.isActive ? "Active" : "Expired"}
-                              </span>
+                              <div className="mt-0.5 flex justify-end">
+                                <ActiveOrInactiveBadge active={!!md.isActive} activeLabel="Active" inactiveLabel="Expired" />
+                              </div>
                             </div>
                           </div>
                         );
@@ -3341,17 +3308,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <div className="text-right flex-shrink-0 ml-3">
                                 <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
                                 <p className="text-xs text-gray-500">entries</p>
-                                <span
-                                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    draw.status === "completed"
-                                      ? "bg-green-100 text-green-800"
-                                      : draw.status === "active"
-                                      ? "bg-blue-100 text-blue-800"
-                                      : "bg-gray-100 text-gray-800 dark:text-neutral-100"
-                                  }`}
-                                >
-                                  {draw.status || "Unspecified"}
-                                </span>
+                                <div className="mt-1 flex justify-end">
+                                  <DrawParticipationStatusBadge status={draw.status} />
+                                </div>
                               </div>
                             </div>
                             {hasBreakdown && (
@@ -3359,34 +3318,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="text-xs font-medium text-gray-500 mb-1.5">Entries by source</p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {entriesBySource.membership != null && entriesBySource.membership > 0 && (
-                                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="membership">
                                       Membership: {entriesBySource.membership}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                   {entriesBySource["one-time-package"] != null && entriesBySource["one-time-package"] > 0 && (
-                                    <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="one-time-package">
                                       One-time: {entriesBySource["one-time-package"]}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                   {entriesBySource.upsell != null && entriesBySource.upsell > 0 && (
-                                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="upsell">
                                       Upsell: {entriesBySource.upsell}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                   {entriesBySource["mini-draw"] != null && entriesBySource["mini-draw"] > 0 && (
-                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="mini-draw">
                                       Mini-draw: {entriesBySource["mini-draw"]}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                   {entriesBySource.referral != null && entriesBySource.referral > 0 && (
-                                    <span className="px-2 py-0.5 bg-pink-100 text-pink-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="referral">
                                       Referral: {entriesBySource.referral}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                   {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
-                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs">
+                                    <EntrySourceBadge sourceKey="bonus-entry-promo">
                                       Campaign/Promo: {entriesBySource["bonus-entry-promo"]}
-                                    </span>
+                                    </EntrySourceBadge>
                                   )}
                                 </div>
                               </div>
@@ -3428,17 +3387,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <div className="text-right flex-shrink-0 ml-3">
                               <p className="font-semibold text-sm sm:text-base">{entry.totalEntries || 0}</p>
                               <p className="text-xs text-gray-500">entries</p>
-                              <span
-                                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  miniDrawStatus === "completed"
-                                    ? "bg-green-100 text-green-800"
-                                    : entry.isActive
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-gray-100 text-gray-800 dark:text-neutral-100"
-                                }`}
-                              >
-                                {miniDrawStatus || (entry.isActive ? "Active" : "Inactive")}
-                              </span>
+                              <div className="mt-1 flex justify-end">
+                                <MiniDrawParticipationStatusBadge
+                                  miniDrawStatus={miniDrawStatus}
+                                  isActive={entry.isActive}
+                                />
+                              </div>
                             </div>
                           </div>
                         );
@@ -3553,9 +3507,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     {formatCurrency(price)}
                                   </p>
                                 )}
-                                <span className="inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium bg-slate-100 text-slate-700">
-                                  {kind}
-                                </span>
+                                <div className="mt-0.5 flex justify-end">
+                                  <AdminBadge variant="neutral" className="!text-[8px] sm:!text-[9px] lg:!text-xs">
+                                    {kind}
+                                  </AdminBadge>
+                                </div>
                               </div>
                             </div>
                           );

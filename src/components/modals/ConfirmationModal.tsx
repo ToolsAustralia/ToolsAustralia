@@ -57,6 +57,10 @@ export interface ConfirmationModalProps {
     requireEmailConfirmation?: boolean;
     userEmail?: string;
   };
+  /** When set, user must check the box before Confirm is enabled (e.g. payment method removal risk). */
+  requireCheckboxToConfirm?: {
+    label: string;
+  };
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -70,14 +74,17 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   cancelText = "Cancel",
   isLoading = false,
   details,
+  requireCheckboxToConfirm,
 }) => {
   // Email confirmation state for deletions
   const [emailConfirmation, setEmailConfirmation] = useState("");
+  const [riskCheckbox, setRiskCheckbox] = useState(false);
 
   // Reset email confirmation when modal closes
   React.useEffect(() => {
     if (!isOpen) {
       setEmailConfirmation("");
+      setRiskCheckbox(false);
     }
   }, [isOpen]);
   const getIcon = () => {
@@ -139,6 +146,18 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Main message */}
           <p className="text-sm sm:text-base text-gray-700 dark:text-neutral-200 leading-relaxed">{message}</p>
+
+          {requireCheckboxToConfirm && (
+            <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-800 dark:text-neutral-200">
+              <input
+                type="checkbox"
+                className="mt-1 rounded border-gray-300 dark:border-neutral-600"
+                checked={riskCheckbox}
+                onChange={(e) => setRiskCheckbox(e.target.checked)}
+              />
+              <span>{requireCheckboxToConfirm.label}</span>
+            </label>
+          )}
 
           {/* Details section */}
           {details && (
@@ -333,7 +352,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             loading={isLoading}
             disabled={
               isLoading ||
-              !!(details?.requireEmailConfirmation && details?.userEmail && emailConfirmation !== details.userEmail)
+              !!(details?.requireEmailConfirmation && details?.userEmail && emailConfirmation !== details.userEmail) ||
+              !!(requireCheckboxToConfirm && !riskCheckbox)
             }
           >
             {confirmText}

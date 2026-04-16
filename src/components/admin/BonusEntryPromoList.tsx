@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import { useBonusEntryPromos, useDeleteBonusEntryPromo } from "@/hooks/queries/usePromoQueries";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import type { BonusEntryPromo } from "@/types/admin";
-import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw } from "lucide-react";
+import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw, CheckCircle } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
 
 interface BonusEntryPromoListProps {
@@ -73,29 +74,18 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
   const getStatusBadge = (promo: BonusEntryPromo) => {
     if (promo.isCurrentlyActive) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <AdminBadge variant="success" icon={CheckCircle} iconClassName="text-emerald-600 dark:text-emerald-400">
           Active Now
-        </span>
-      );
-    } else if (promo.isUpcoming) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          Upcoming
-        </span>
-      );
-    } else if (promo.isExpired) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:text-neutral-100">
-          Expired
-        </span>
-      );
-    } else {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          Inactive
-        </span>
+        </AdminBadge>
       );
     }
+    if (promo.isUpcoming) {
+      return <AdminBadge variant="info">Upcoming</AdminBadge>;
+    }
+    if (promo.isExpired) {
+      return <AdminBadge variant="neutral">Expired</AdminBadge>;
+    }
+    return <AdminBadge variant="warning">Inactive</AdminBadge>;
   };
 
   if (isLoading) {
