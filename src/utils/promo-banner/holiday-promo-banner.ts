@@ -21,10 +21,10 @@ export type HolidayPromoSlot =
   | "easter-extended";
 
 const SLOT_TO_FILE: Record<HolidayPromoSlot, string> = {
-  "good-friday": "good-friday-promo.png",
-  "good-friday-extended": "good-friday-promo-extended.png",
-  easter: "easter-promo.png",
-  "easter-extended": "easter-promo-extended.png",
+  "good-friday": "good-friday-promo.webp",
+  "good-friday-extended": "good-friday-promo-extended.webp",
+  easter: "easter-promo.webp",
+  "easter-extended": "easter-promo-extended.webp",
 };
 
 const HOLIDAY_ALT: Record<HolidayPromoSlot, string> = {

@@ -4,7 +4,7 @@
  */
 export const TOOLBOX_IMAGES = {
   milwaukee: "/images/majordraws/toolbox/milwaukeeTB.webp",
-  sidchrome: "/images/majordraws/toolbox/sidchromeTB.png",
+  sidchrome: "/images/majordraws/toolbox/sidchromeTB.webp",
 } as const;
 
 /** Add new toolsets here - slug format: "{toolset}-{toolbox}" (e.g. ryobi-milwaukee) */
@@ -17,10 +17,10 @@ export const POWERSET_IMAGES: Record<string, string> = {
 
 /** Brand name logo images - overlay on power toolset images */
 export const POWERSET_BRAND_TEXT: Record<string, string> = {
-  milwaukee: "/images/brands/name/milwaukeeText.png",
-  dewalt: "/images/brands/name/dewaltText.png",
-  makita: "/images/brands/name/makitaText.png",
-  ryobi: "/images/brands/name/ryobiText.png",
+  milwaukee: "/images/brands/name/milwaukeeText.webp",
+  dewalt: "/images/brands/name/dewaltText.webp",
+  makita: "/images/brands/name/makitaText.webp",
+  ryobi: "/images/brands/name/ryobiText.webp",
 };
 
 /** Toolset display labels - short pc kit format for carousel badges (all caps). Add label when adding new toolset. */

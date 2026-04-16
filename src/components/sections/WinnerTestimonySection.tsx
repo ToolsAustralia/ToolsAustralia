@@ -144,7 +144,7 @@ export default function WinnerTestimonySection({
     const excerpt = getWinnerTestimonyExcerpt(winner.testimony, 340);
     const isTruncated = fullStory.length > 340;
     const displayImage =
-      winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+      winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
 
     return (
       <article
@@ -409,7 +409,7 @@ export default function WinnerTestimonySection({
                     src={
                      storyModalWinner.imageUrl ||
                      storyModalWinner.prize.images[0] ||
-                     "/images/placeholders/prize-placeholder.png"
+                     "/images/promotion/PrizeHeader/PrizeHeader.webp"
                     }
                     alt={`${formatWinnerName(storyModalWinner.winnerFirstName, storyModalWinner.winnerLastName)} — winner photo`}
                     width={1400}

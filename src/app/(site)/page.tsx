@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     url: "/",
     images: [
       {
-        url: "/Social Media Profile_Black Background.png",
+        url: "/images/Tools Australia Logo/Social Media Profile_Black Background.webp",
         width: 1200,
         height: 630,
         alt: "Tools Australia",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
     description: "Shop professional tools, mini draws, and exclusive partner deals across Australia.",
-    images: ["/Social Media Profile_Black Background.png"],
+    images: ["/images/Tools Australia Logo/Social Media Profile_Black Background.webp"],
   },
   alternates: {
     canonical: "/",

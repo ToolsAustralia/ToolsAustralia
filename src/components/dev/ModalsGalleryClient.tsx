@@ -1227,7 +1227,7 @@ export default function ModalsGalleryClient() {
         isOpen={isOpen("fullscreen-image")}
         onClose={close}
         initialIndex={0}
-        images={[{ src: "/images/Tools Australia Logo/Primary Logo.png", alt: "Gallery image" }]}
+        images={[{ src: "/images/Tools Australia Logo/Primary Logo.webp", alt: "Gallery image" }]}
         title="Fullscreen viewer (dev)"
       />
 

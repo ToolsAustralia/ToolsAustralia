@@ -70,7 +70,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
       images: [
         "/images/SampleProducts/dewalt1.jpg",
         "/images/SampleProducts/dewalt2.jpg",
-        "/images/SampleProducts/dewalttools.png",
+        "/images/SampleProducts/dewalttools.webp",
       ],
       category: "Power Tools",
       specifications: {
@@ -116,7 +116,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
       value: 450,
       images: [
         "/images/SampleProducts/makita1.jpg",
-        "/images/SampleProducts/makita2.png",
+        "/images/SampleProducts/makita2.webp",
         "/images/SampleProducts/makitatools.jpg",
       ],
       category: "Power Tools",
@@ -158,7 +158,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
       images: [
         "/images/SampleProducts/milwaukee1.jpg",
         "/images/SampleProducts/milwaukee2.jpg",
-        "/images/SampleProducts/milwaukeetools.png",
+        "/images/SampleProducts/milwaukeetools.webp",
       ],
       category: "Power Tools",
       specifications: {
@@ -347,7 +347,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
       description:
         "Complete professional tool set with drill, impact driver, circular saw, and comprehensive accessories",
       value: 1200,
-      images: ["/images/SampleProducts/dewalttools.png"],
+      images: ["/images/SampleProducts/dewalttools.webp"],
       category: "Power Tools",
       specifications: {
         count: "8 tools",
@@ -421,7 +421,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
       name: "Makita Impact Driver",
       description: "Professional impact driver with variable speed control and ergonomic design",
       value: 190,
-      images: ["/images/SampleProducts/makita2.png"],
+      images: ["/images/SampleProducts/makita2.webp"],
       category: "Power Tools",
       specifications: {
         power: "18V",

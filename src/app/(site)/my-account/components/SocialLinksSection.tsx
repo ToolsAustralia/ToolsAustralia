@@ -13,7 +13,7 @@ export default function SocialLinksSection({ className = "" }: SocialLinksProps)
     {
       id: "facebook",
       name: "Facebook",
-      image: "/images/facebook-profile.png",
+      image: "/images/facebook-profile.webp",
       url: "https://www.facebook.com/toolsaust",
       buttonLabel: "Visit Facebook",
       Icon: Facebook,
@@ -21,7 +21,7 @@ export default function SocialLinksSection({ className = "" }: SocialLinksProps)
     {
       id: "instagram",
       name: "Instagram",
-      image: "/images/instagram-profile.png",
+      image: "/images/instagram-profile.webp",
       url: "https://www.instagram.com/toolsaustralia/",
       buttonLabel: "Visit Instagram",
       Icon: Instagram,

@@ -22,13 +22,13 @@ export function getMultiplierBannerPath(multiplier: number | null | undefined): 
   // Map multiplier to banner filename
   switch (multiplier) {
     case 2:
-      return `${BANNER_BASE_PATH}/2x-banner.png`;
+      return `${BANNER_BASE_PATH}/2x-banner.webp`;
     case 3:
-      return `${BANNER_BASE_PATH}/3x-banner.png`;
+      return `${BANNER_BASE_PATH}/3x-banner.webp`;
     case 5:
-      return `${BANNER_BASE_PATH}/5x-banner.png`;
+      return `${BANNER_BASE_PATH}/5x-banner.webp`;
     case 10:
-      return `${BANNER_BASE_PATH}/10x-banner.png`;
+      return `${BANNER_BASE_PATH}/10x-banner.webp`;
     default:
       return null;
   }

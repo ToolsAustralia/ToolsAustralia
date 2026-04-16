@@ -1426,7 +1426,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then transport and organise everything with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
-    cardBackgroundImage: "/images/majordraws/milwaukee-set/sidchrome-milwaukee-toggle.png",
+    cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukeeSet-sidchrome.webp",
     gallery: [
       { src: "/images/majordraws/milwaukee-set/milwaukeeSet-sidchrome.webp", alt: "Milwaukee set with Sidchrome toolbox" },
       { src: "/images/majordraws/milwaukee-set/MILWAUKEE.webp", alt: "Milwaukee prize collection" },
@@ -2035,7 +2035,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     detailedDescription:
       "Win $10,000 in cold hard cash! No tools, no equipment, no strings attached. Just a straight $10,000 cash prize deposited directly to your bank account. Use it however you want - pay bills, take a vacation, invest in your future, or buy whatever you need. The choice is yours.",
     prizeValueLabel: "$10,000 Cash",
-    gallery: [{ src: "/images/majordraws/cash-prize/cash-prize-10000.png", alt: "$10,000 cash prize" }],
+    gallery: [{ src: "/images/majordraws/cash-prize/cash-prize-10000.webp", alt: "$10,000 cash prize" }],
     highlights: [
       {
         icon: "DollarSign",

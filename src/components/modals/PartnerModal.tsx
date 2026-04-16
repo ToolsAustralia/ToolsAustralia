@@ -194,7 +194,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
 
         <div className="relative z-10 flex items-center justify-center sm:justify-between">
           {/* <Image
-            src="/images/Tools Australia Logo/Primary Logo.png"
+            src="/images/Tools Australia Logo/Primary Logo.webp"
             alt="Tools Australia"
             width={120}
             height={120}

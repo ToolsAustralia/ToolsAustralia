@@ -9,8 +9,8 @@ const partnerBrands = [
   {
     id: "milwaukee",
     name: "Milwaukee",
-    logo: "/images/brands/milwaukee.png",
-    productImage: "/images/brands/toolset/milwaukeetools.png",
+    logo: "/images/brands/milwaukee.webp",
+    productImage: "/images/brands/toolset/milwaukeetools.webp",
     description: "Professional-grade power tools and accessories",
     productCount: "View All Products",
     color: "bg-red-600",
@@ -21,8 +21,8 @@ const partnerBrands = [
   {
     id: "dewalt",
     name: "DeWalt",
-    logo: "/images/brands/dewalt-black.png",
-    productImage: "/images/brands/toolset/dewalttools.png",
+    logo: "/images/brands/dewalt-black.webp",
+    productImage: "/images/brands/toolset/dewalttools.webp",
     description: "Heavy-duty construction and woodworking tools",
     productCount: "View All Products",
     color: "bg-yellow-600",
@@ -33,7 +33,7 @@ const partnerBrands = [
   {
     id: "makita",
     name: "Makita",
-    logo: "/images/brands/Makita-red.png",
+    logo: "/images/brands/Makita-red.webp",
     productImage: "/images/brands/toolset/makitatools.jpg",
     description: "Innovative cordless and corded power tools",
     productCount: "View All Products",
@@ -45,7 +45,7 @@ const partnerBrands = [
   {
     id: "kincrome",
     name: "Kincrome",
-    logo: "/images/brands/kincrome.png",
+    logo: "/images/brands/kincrome.webp",
     productImage: "/images/brands/toolset/kincrometools.jpg",
     description: "Premium hand tools and tool storage solutions",
     productCount: "View All Products",
@@ -57,7 +57,7 @@ const partnerBrands = [
   {
     id: "sidchrome",
     name: "Sidchrome",
-    logo: "/images/brands/sidchrome.png",
+    logo: "/images/brands/sidchrome.webp",
     productImage: "/images/brands/toolset/sidchrometools.jpg",
     description: "Professional automotive and industrial tools",
     productCount: "View All Products",
@@ -69,7 +69,7 @@ const partnerBrands = [
   {
     id: "chicago-pneumatic",
     name: "Chicago Pneumatic",
-    logo: "/images/brands/chicagoPneumatic.png",
+    logo: "/images/brands/chicagoPneumatic.webp",
     productImage: "/images/brands/toolset/chicagopneumatictools.jpg",
     description: "Professional pneumatic tools and compressors",
     productCount: "View All Products",
@@ -81,7 +81,7 @@ const partnerBrands = [
   {
     id: "gearwrench",
     name: "GearWrench",
-    logo: "/images/brands/gearWrench.png",
+    logo: "/images/brands/gearWrench.webp",
     productImage: "/images/brands/toolset/gearWrenchtools.jpg",
     description: "Professional hand tools and tool sets",
     productCount: "View All Products",
@@ -93,7 +93,7 @@ const partnerBrands = [
   {
     id: "ingersoll-rand",
     name: "Ingersoll Rand",
-    logo: "/images/brands/Ingersoll-Rand.png",
+    logo: "/images/brands/Ingersoll-Rand.webp",
     productImage: "/images/brands/toolset/ingersollRandtools.jpg",
     description: "Industrial air compressors and tools",
     productCount: "View All Products",
@@ -105,7 +105,7 @@ const partnerBrands = [
   {
     id: "knipex",
     name: "Knipex",
-    logo: "/images/brands/knipex.png",
+    logo: "/images/brands/knipex.webp",
     productImage: "/images/brands/toolset/knipextools.jpg",
     description: "Premium pliers and cutting tools",
     productCount: "View All Products",
@@ -117,7 +117,7 @@ const partnerBrands = [
   {
     id: "koken",
     name: "Koken",
-    logo: "/images/brands/koken.png",
+    logo: "/images/brands/koken.webp",
     productImage: "/images/brands/toolset/kokentools.jpg",
     description: "Precision measuring and inspection tools",
     productCount: "View All Products",
@@ -130,7 +130,7 @@ const partnerBrands = [
     id: "mitutoyo",
     name: "Mitutoyo",
     logo: "/images/brands/mitutoyo.webp",
-    productImage: "/images/brands/toolset/mitutoyotools.png",
+    productImage: "/images/brands/toolset/mitutoyotools.webp",
     description: "Precision measuring instruments and tools",
     productCount: "View All Products",
     color: "bg-orange-600",
@@ -141,7 +141,7 @@ const partnerBrands = [
   {
     id: "stahlwille",
     name: "Stahlwille",
-    logo: "/images/brands/stahlwille.png",
+    logo: "/images/brands/stahlwille.webp",
     productImage: "/images/brands/toolset/stahlwilletools.jpg",
     description: "Professional wrenches and hand tools",
     productCount: "View All Products",
@@ -153,7 +153,7 @@ const partnerBrands = [
   {
     id: "warren-brown",
     name: "Warren & Brown",
-    logo: "/images/brands/warrenBrown.png",
+    logo: "/images/brands/warrenBrown.webp",
     productImage: "/images/brands/toolset/warrenBrowntools.jpg",
     description: "Professional torque wrenches and tools",
     productCount: "View All Products",

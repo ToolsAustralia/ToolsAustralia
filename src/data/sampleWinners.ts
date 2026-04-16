@@ -94,7 +94,7 @@ export const allRecentWinners: Winner[] = [
     prize: "Makita Cordless Combo Kit",
     value: 329,
     date: "2023-12-20",
-    image: "/images/SampleProducts/makita2.png",
+    image: "/images/SampleProducts/makita2.webp",
     membershipTier: "FOREMAN",
     testimonial:
       "Fast delivery and excellent customer service. The Makita kit is exactly what I needed for my projects.",

@@ -179,7 +179,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                         const displayImage =
                           winner.imageUrl ||
                           miniDraw.prize.images?.[0] ||
-                          "/images/placeholders/prize-placeholder.png";
+                          "/images/promotion/PrizeHeader/PrizeHeader.webp";
                         const isLatest = index === 0;
 
                         return (

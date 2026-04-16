@@ -41,7 +41,7 @@ export default function ContactPage() {
             fill
             className="object-cover "
             priority
-            unoptimized
+            sizes="100vw"
           />
           <div className="absolute inset-0 " />
         </div>
@@ -80,7 +80,7 @@ export default function ContactPage() {
                   fill
                   className="object-cover opacity-30"
                   priority
-                  unoptimized
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                 />
                 <div className="absolute inset-0 bg-black/60" />
               </div>

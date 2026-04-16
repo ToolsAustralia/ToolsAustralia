@@ -36,7 +36,7 @@ export default function MobileNavSidebarPreview({
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 flex items-center justify-center relative">
               <Image
-                src="/Social Media Profile_Primary.png"
+                src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
                 alt="Tools Australia"
                 width={40}
                 height={40}

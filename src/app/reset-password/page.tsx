@@ -167,7 +167,7 @@ function ResetPasswordContent() {
         <div className="mb-4 flex items-center gap-3">
           <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative">
             <Image
-              src="/images/Tools Australia Logo/Social Media Profile_Primary.png"
+              src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
               alt="Tools Australia Logo"
               fill
               className="object-contain"

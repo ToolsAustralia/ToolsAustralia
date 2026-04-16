@@ -17,7 +17,7 @@ import {
   getUserStatusBadgeConfig,
 } from "../utils/userHelpers";
 import { formatDisplayName } from "@/utils/display-name";
-import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
 interface UserRowProps {
   user: AdminUserListItem;

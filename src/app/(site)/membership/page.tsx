@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     url: "/membership",
     images: [
       {
-        url: "/Social Media Profile_Black Background.png",
+        url: "/images/Tools Australia Logo/Social Media Profile_Black Background.webp",
         width: 1200,
         height: 630,
         alt: "Tools Australia Membership",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Membership | Tools Australia - Exclusive Perks & Member Deals",
     description: "Unlock exclusive member-only deals and extra entries for the Major Giveaway.",
-    images: ["/Social Media Profile_Black Background.png"],
+    images: ["/images/Tools Australia Logo/Social Media Profile_Black Background.webp"],
   },
   alternates: { canonical: "/membership" },
   robots: { index: true, follow: true },

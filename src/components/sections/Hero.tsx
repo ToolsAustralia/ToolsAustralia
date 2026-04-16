@@ -55,7 +55,7 @@ export default function Hero() {
             alt="Tools background"
             fill
             className="object-cover"
-            unoptimized
+            sizes="100vw"
           />
         </div>
         {/* Desktop Background */}
@@ -66,7 +66,7 @@ export default function Hero() {
             fill
             className="object-cover"
             priority
-            unoptimized
+            sizes="100vw"
           />
         </div>
         {/* Dark overlay for better text readability */}
