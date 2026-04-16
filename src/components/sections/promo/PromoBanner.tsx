@@ -166,7 +166,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const toolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
   const preferDark = theme.preferDarkBackground ?? false;
   const rightSectionTextClass = preferDark ? "text-black" : "text-white";
-  const rightSectionLabelClass = preferDark ? "text-gray-800 dark:text-neutral-100" : "text-red-100";
+  /** Bright gradient tile (e.g. Ryobi lime): keep labels dark in light + dark site theme — `dark:text-neutral-100` was near-white on lime and unreadable. */
+  const rightSectionLabelClass = preferDark ? "text-black" : "text-red-100";
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
