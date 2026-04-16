@@ -558,7 +558,7 @@ export default function MembershipSection({
                         {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                           <div className="absolute -top-6 -right-8 z-30">
                             <Image
-                              src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
+                              src={`/images/badge/X${plan.metadata.promoMultiplier}.webp`}
                               alt={`${plan.metadata.promoMultiplier}x entries`}
                               width={96}
                               height={96}
@@ -859,7 +859,7 @@ export default function MembershipSection({
                   {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                     <div className="absolute -top-10 -right-8 z-30">
                       <Image
-                        src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
+                        src={`/images/badge/X${plan.metadata.promoMultiplier}.webp`}
                         alt={`${plan.metadata.promoMultiplier}x entries`}
                         width={120}
                         height={120}

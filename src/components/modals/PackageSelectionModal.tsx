@@ -606,7 +606,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
                   <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
                     <Image
-                      src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
+                      src={`/images/badge/X${plan.metadata.promoMultiplier}.webp`}
                       alt={`${plan.metadata.promoMultiplier}x entries`}
                       width={64}
                       height={64}

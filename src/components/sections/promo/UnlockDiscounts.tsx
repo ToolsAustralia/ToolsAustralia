@@ -130,7 +130,7 @@ const partnerDiscounts = [
   {
     id: "superbad",
     name: "Super Bad",
-    logo: "/images/partnerBrandLogos/SuperBad.png",
+    logo: "/images/partnerBrandLogos/SuperBad.webp",
     discount: "90% OFF",
     discountMessage: "Mention Tools Australia for 90% off your trial shoot",
     gradient: "from-red-900 via-red-800 to-amber-100",
@@ -139,7 +139,7 @@ const partnerDiscounts = [
   {
     id: "multihub",
     name: "Multi Hub",
-    logo: "/images/partnerBrandLogos/multiHub.png",
+    logo: "/images/partnerBrandLogos/multiHub.webp",
     discount: "VIP PROMOS",
     discountMessage: "Mention Tools Australia for VIP promos",
     gradient: "from-pink-500 via-pink-600 to-fuchsia-600",
@@ -148,7 +148,7 @@ const partnerDiscounts = [
   {
     id: "artc",
     name: "All Round Trade Constructions",
-    logo: "/images/partnerBrandLogos/ARTC.png",
+    logo: "/images/partnerBrandLogos/ARTC.webp",
     discount: "10% OFF",
     discountMessage: "Mention Tools Australia for 10% off quote",
     gradient: "from-gray-900 via-gray-800 to-black",
@@ -157,7 +157,7 @@ const partnerDiscounts = [
   {
     id: "sealmotors",
     name: "Seal Motors",
-    logo: "/images/partnerBrandLogos/sealMotors.png",
+    logo: "/images/partnerBrandLogos/sealMotors.webp",
     discount: "10% OFF",
     discountMessage: "Mention Tools Australia for 10% off car services",
     gradient: "from-gray-900 via-gray-800 to-black",
@@ -250,7 +250,7 @@ export default function UnlockDiscounts({
                     partner.id === "toolmanlane" ||
                     partner.id === "bal"
                       ? {
-                          backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.png')",
+                          backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.webp')",
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           backgroundRepeat: "no-repeat",
@@ -273,7 +273,6 @@ export default function UnlockDiscounts({
                         ? { transform: "scale(1.5)" }
                         : undefined
                     }
-                    unoptimized
                   />
                 </div>
 
@@ -303,7 +302,6 @@ export default function UnlockDiscounts({
                       width={48}
                       height={48}
                       className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
-                      unoptimized
                     />
                   </div>
                 </div>

@@ -131,6 +131,7 @@ export default function PromoHero({
             src={heroImagePaths.mobile}
             alt={`Promo Hero - ${resolvedMultiplier}x Entries Active`}
             fill
+            priority
             className="object-contain object-top"
             sizes="100vw"
             onError={() => setImageError(true)}

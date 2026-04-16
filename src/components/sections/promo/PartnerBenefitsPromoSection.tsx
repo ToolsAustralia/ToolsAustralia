@@ -72,11 +72,10 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
           {/* Background */}
           <div className="absolute inset-0 z-0">
             <Image
-              src="/images/faqImage.png"
+              src="/images/faqImage.webp"
               alt="Tools Australia workshop"
               fill
               className="object-cover"
-              unoptimized
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/90 to-black/85 lg:via-black/88 lg:to-black/80" />
             <div
