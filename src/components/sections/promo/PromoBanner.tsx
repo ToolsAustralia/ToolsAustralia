@@ -23,6 +23,7 @@ import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import Image from "next/image";
 
 /**
  * X2 / X10 multiplier badge — only used here. Anchored to the countdown cluster’s
@@ -315,103 +316,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
   }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]); // eslint-disable-line react-hooks/exhaustive-deps -- activeTab only used in dev log; effectivePromoTypeForBanner captures tab
 
-  // Countdown strategy:
-  // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
-  // - Otherwise keep the 24h business-day loop to next midnight AEST.
-  useEffect(() => {
-    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
-    const updateCountdown = () => {
-      const now = Date.now();
-      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
-      const nextWithin48 =
-        !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
-      setWithin48HoursOfFreeze((prev) => (prev === nextWithin48 ? prev : nextWithin48));
-
-      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
-        // Business-day loop to next midnight AEST
-        const nextMidnight = getNextMidnightAEST();
-        const diffMs = Math.max(0, nextMidnight.getTime() - now);
-        const totalSeconds = Math.floor(diffMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-
-        setTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s
-            ? prev
-            : { days: 0, hours: h, minutes: m, seconds: s }
-        );
-        return;
-      }
-
-      // Within 48h: precise freeze countdown (aggregate hours for clarity)
-      const totalSeconds = Math.floor(freezeMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s
-          ? prev
-          : { days: 0, hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateCountdown();
-    const timer = setInterval(updateCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [targetDateMs]);
-
-  // Countdown to next draw activation during gap period (gates closed)
-  useEffect(() => {
-    if (!nextDraw?.activationDate) return;
-
-    const updateGapCountdown = () => {
-      const now = Date.now();
-      const activationMs = new Date(nextDraw.activationDate!).getTime();
-      const remainingMs = Math.max(0, activationMs - now);
-      const totalSeconds = Math.floor(remainingMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setGapPeriodTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s ? prev : { hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateGapCountdown();
-    const timer = setInterval(updateGapCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [nextDraw?.activationDate]);
-
-  // Separate countdown for freeze time when draw is tonight
-  useEffect(() => {
-    if (!currentDraw?.freezeEntriesAt) return;
-
-    const updateFreezeCountdown = () => {
-      const now = Date.now();
-      const freezeDate = new Date(currentDraw.freezeEntriesAt!).getTime();
-      const freezeMs = Math.max(0, freezeDate - now);
-
-      const totalSeconds = Math.floor(freezeMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setFreezeTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s
-          ? prev
-          : { hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateFreezeCountdown();
-    const timer = setInterval(updateFreezeCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [currentDraw?.freezeEntriesAt]);
-
   // Listen for tab changes from MembershipSection
   useEffect(() => {
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
@@ -677,19 +581,86 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     effectiveEntryForCountdown?.durationMs,
   ]);
 
-  // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")
+  // Single 1s ticker for all countdown surfaces (React 18 batches updates from one tick).
   useEffect(() => {
-    if (countdownDisplay.type !== "scheduled_end" || countdownDisplay.endMs == null) return;
-    const update = () => {
+    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+
+    const tick = () => {
       const now = Date.now();
-      const remainingMs = Math.max(0, countdownDisplay.endMs! - now);
-      const useDays = countdownDisplay.useDays ?? false;
-      setScheduledEndTimeLeft(formatTimeLeft(remainingMs, useDays));
+
+      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
+      const nextWithin48 =
+        !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
+      setWithin48HoursOfFreeze((prev) => (prev === nextWithin48 ? prev : nextWithin48));
+
+      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
+        const nextMidnight = getNextMidnightAEST();
+        const diffMs = Math.max(0, nextMidnight.getTime() - now);
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        setTimeLeft((prev) =>
+          prev.hours === h && prev.minutes === m && prev.seconds === s
+            ? prev
+            : { days: 0, hours: h, minutes: m, seconds: s }
+        );
+      } else {
+        const totalSeconds = Math.floor(freezeMs / 1000);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        setTimeLeft((prev) =>
+          prev.hours === h && prev.minutes === m && prev.seconds === s
+            ? prev
+            : { days: 0, hours: h, minutes: m, seconds: s }
+        );
+      }
+
+      if (nextDraw?.activationDate) {
+        const activationMs = new Date(nextDraw.activationDate).getTime();
+        const remainingMs = Math.max(0, activationMs - now);
+        const totalSeconds = Math.floor(remainingMs / 1000);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        setGapPeriodTimeLeft((prev) =>
+          prev.hours === h && prev.minutes === m && prev.seconds === s ? prev : { hours: h, minutes: m, seconds: s }
+        );
+      }
+
+      if (currentDraw?.freezeEntriesAt) {
+        const freezeDate = new Date(currentDraw.freezeEntriesAt).getTime();
+        const untilFreezeMs = Math.max(0, freezeDate - now);
+        const totalSeconds = Math.floor(untilFreezeMs / 1000);
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        setFreezeTimeLeft((prev) =>
+          prev.hours === h && prev.minutes === m && prev.seconds === s
+            ? prev
+            : { hours: h, minutes: m, seconds: s }
+        );
+      }
+
+      if (countdownDisplay.type === "scheduled_end" && countdownDisplay.endMs != null) {
+        const remainingMs = Math.max(0, countdownDisplay.endMs - now);
+        const useDays = countdownDisplay.useDays ?? false;
+        setScheduledEndTimeLeft(formatTimeLeft(remainingMs, useDays));
+      }
     };
-    update();
-    const timer = setInterval(update, 1000);
+
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [countdownDisplay.type, countdownDisplay.endMs, countdownDisplay.useDays]);
+  }, [
+    targetDateMs,
+    nextDraw?.activationDate,
+    currentDraw?.freezeEntriesAt,
+    countdownDisplay.type,
+    countdownDisplay.endMs,
+    countdownDisplay.useDays,
+  ]);
 
   useEffect(() => {
     if (isDrawLoading) {
@@ -848,11 +819,12 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut" }}
                     className="relative flex w-auto min-w-0 max-w-full shrink justify-start"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={displayLeftSrc}
                       alt={leftVisual.alt}
-                      onError={handleLeftImageError}
+                      width={640}
+                      height={280}
+                      sizes="(max-width: 360px) 90vw, (max-width: 640px) 58vw, 520px"
                       className={`w-auto max-w-full object-contain object-left drop-shadow-md ${
                         isHolidayLeftArt
                           ? isScrolled
@@ -878,6 +850,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                                 ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-lg:max-w-full lg:max-w-[min(95vw,580px)]"
                                 : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
                       }`}
+                      onError={handleLeftImageError}
+                      priority
                     />
                   </motion.div>
                 ) : (
@@ -910,7 +884,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       [2, 3, 5, 10].includes(multiplier) && (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
-                          src={`/images/badge/X${multiplier}.png`}
+                          src={`/images/badge/X${multiplier}.webp`}
+                          loading="lazy"
                           alt={`${multiplier}X entries`}
                           className={`${PROMO_BANNER_MULTIPLIER_BADGE.root} ${
                             isScrolled

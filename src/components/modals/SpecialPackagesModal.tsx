@@ -747,7 +747,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                   {pkg.isPromoActive && pkg.promoMultiplier && (
                     <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
                       <Image
-                        src={`/images/badge/X${pkg.promoMultiplier}.png`}
+                        src={`/images/badge/X${pkg.promoMultiplier}.webp`}
                         alt={`${pkg.promoMultiplier}x entries`}
                         width={64}
                         height={64}

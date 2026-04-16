@@ -24,7 +24,7 @@ const sizeClassMap = {
 };
 
 /**
- * Displays the promo badge image (e.g. /images/badge/X10.png) instead of the styled PromoBadge component.
+ * Displays the promo badge image (e.g. /images/badge/X10.webp) instead of the styled PromoBadge component.
  * Used in admin promo management for consistent visual representation.
  */
 const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
@@ -32,7 +32,7 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
   size = "medium",
   className = "",
 }) => {
-  const src = `/images/badge/X${multiplier}.png`;
+  const src = `/images/badge/X${multiplier}.webp`;
   const dimensions = sizeMap[size];
 
   return (

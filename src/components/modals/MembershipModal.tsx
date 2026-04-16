@@ -4771,7 +4771,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     ? (promoEnhancedPlan.metadata.promoMultiplier as number)
     : 0;
   const packageBadgeSrc = promoMultiplier >= 2 && promoMultiplier <= 10 && [2, 3, 5, 10].includes(promoMultiplier)
-    ? `/images/badge/X${promoMultiplier}.png`
+    ? `/images/badge/X${promoMultiplier}.webp`
     : null;
 
   return (

@@ -10,11 +10,11 @@
 import type { StaticImageData } from "next/image";
 
 // Import all package icons
-import apprentice from "../../../public/images/packageIcons/apprentice.png";
-import tradie from "../../../public/images/packageIcons/tradie.png";
-import foreman from "../../../public/images/packageIcons/foreman.png";
-import boss from "../../../public/images/packageIcons/boss.png";
-import power from "../../../public/images/packageIcons/power.png";
+import apprentice from "../../../public/images/packageIcons/apprentice.webp";
+import tradie from "../../../public/images/packageIcons/tradie.webp";
+import foreman from "../../../public/images/packageIcons/foreman.webp";
+import boss from "../../../public/images/packageIcons/boss.webp";
+import power from "../../../public/images/packageIcons/power.webp";
 
 /**
  * Type alias for package icon data (StaticImageData from Next.js)
