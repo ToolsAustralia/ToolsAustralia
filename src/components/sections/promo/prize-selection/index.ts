@@ -17,6 +17,7 @@ export {
   TOOLBOX_IMAGES,
   POWERSET_IMAGES,
   TOOLBOX_SIZES,
+  TOOLBOX_UNIFIED_FRAME,
   POWERSET_SIZES,
   type ToolboxType,
   type ToolsetType,
