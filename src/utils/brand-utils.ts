@@ -19,7 +19,7 @@ export const brandOptions = [...brandLogos]
 export const defaultBrandLogo: BrandLogo = {
   id: "tools-australia",
   name: "Tools Australia",
-  logo: "/images/Tools Australia Logo/Primary Logo.png",
+  logo: "/images/Tools Australia Logo/Primary Logo.webp",
   gradient: "from-red-700 via-red-600 to-red-700",
   gradientDirection: "r",
   imageScale: 1,

@@ -36,9 +36,9 @@ Order (`resolve-promo-banner-left-visual.ts`):
 2. **Active scheduled row `imageUrl`** if set.
 3. **Static** under `/images/promoBanner/{Brand}/`:
    - **Brand folder** (`Dewalt`, `Makita`, `Milwaukee`, `Ryobi`) comes from promo theme context: `usePromoThemeStore` **`toolsetSlug`** if it is a toolset landing slug, else the first segment of **`slug`** when that segment is a toolset slug, else **`Milwaukee`**.
-   - Draw **today** → `{Brand}/DrawnTonight/drawn-tonight-{2\|3\|5\|10}x.png`
-   - Scheduled promo **`>= 24h`** to end → `{Brand}/LastChance/last-chance-{m}x.png`
-   - Scheduled promo **`< 24h`** to end → `{Brand}/EndsTonight/ends-tonight-{m}x.png`
+   - Draw **today** → `{Brand}/DrawnTonight/drawn-tonight-{2\|3\|5\|10}x.webp`
+   - Scheduled promo **`>= 24h`** to end → `{Brand}/LastChance/last-chance-{m}x.webp`
+   - Scheduled promo **`< 24h`** to end → `{Brand}/EndsTonight/ends-tonight-{m}x.webp`
    - Otherwise → **LastChance** (same filename pattern under `{Brand}/`)
 
 **Fallback order** (implemented in `buildStaticPromoBannerPaths`; `PromoBanner` advances the `<img src>` on `onError`):

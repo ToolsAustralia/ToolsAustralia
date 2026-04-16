@@ -54,8 +54,8 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
             src={heroImagePaths.mobile}
             alt="Tools and prizes collage"
             fill
-            unoptimized
             priority
+            sizes="100vw"
             className="object-cover"
             style={{ objectPosition: "50% 35%" }}
             onError={() => setImageError(true)}
@@ -66,7 +66,6 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
             src={heroImagePaths.desktop}
             alt="Tools and prizes collage"
             fill
-            unoptimized
             priority
             sizes="100vw"
             className="object-cover"

@@ -32,7 +32,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
 interface AdminSidebarProps {
   selectedTab: string;

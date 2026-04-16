@@ -112,36 +112,36 @@ function extractPackageInfo(offerId: string): {
 function getBaseImagePath(offerId: string): string {
   const baseImageMap: Record<string, string> = {
     // === SUBSCRIPTION PLUS PACKAGES ===
-    "tradie-plus-package": "Tradie Package.png",
-    "foreman-plus-package": "Foreman Package.png",
-    "boss-plus-package": "Boss Package.png",
+    "tradie-plus-package": "Tradie Package.webp",
+    "foreman-plus-package": "Foreman Package.webp",
+    "boss-plus-package": "Boss Package.webp",
 
     // === ONE-TIME PLUS PACKAGES ===
-    "apprentice-plus-pack": "Apprentice Plus.png",
-    "tradie-plus-pack": "Tradie Plus.png",
-    "foreman-plus-pack": "Foreman Plus.png",
-    "boss-plus-pack": "Boss Plus.png",
-    "power-plus-pack": "Power Plus.png",
+    "apprentice-plus-pack": "Apprentice Plus.webp",
+    "tradie-plus-pack": "Tradie Plus.webp",
+    "foreman-plus-pack": "Foreman Plus.webp",
+    "boss-plus-pack": "Boss Plus.webp",
+    "power-plus-pack": "Power Plus.webp",
 
     // === ADDITIONAL UPGRADE PACKAGES ===
-    "additional-apprentice-pack-upgrade": "Apprentice Upgrade.png",
-    "additional-tradie-pack-upgrade": "Tradie Upgrade.png",
-    "additional-foreman-pack-upgrade": "Foreman Upgrade.png",
-    "additional-boss-pack-upgrade": "Boss Upgrade.png",
-    "additional-power-pack-upgrade": "Power Upgrade.png",
+    "additional-apprentice-pack-upgrade": "Apprentice Upgrade.webp",
+    "additional-tradie-pack-upgrade": "Tradie Upgrade.webp",
+    "additional-foreman-pack-upgrade": "Foreman Upgrade.webp",
+    "additional-boss-pack-upgrade": "Boss Upgrade.webp",
+    "additional-power-pack-upgrade": "Power Upgrade.webp",
 
     // === MINI PACK UPGRADES ===
-    "mini-pack-1-upgrade": "Mini Pack 1.png",
-    "mini-pack-2-upgrade": "Mini Pack 2.png",
-    "mini-pack-3-upgrade": "Mini Pack 3.png",
-    "mini-pack-4-upgrade": "Mini Pack 4.png",
-    "mini-pack-5-upgrade": "Mini Pack 5.png",
-    "mini-pack-6-upgrade": "Mini Pack 6.png",
-    "mini-pack-7-upgrade": "Mini Pack 7.png",
-    "mini-pack-8-upgrade": "Mini Pack 8.png",
+    "mini-pack-1-upgrade": "Mini Pack 1.webp",
+    "mini-pack-2-upgrade": "Mini Pack 2.webp",
+    "mini-pack-3-upgrade": "Mini Pack 3.webp",
+    "mini-pack-4-upgrade": "Mini Pack 4.webp",
+    "mini-pack-5-upgrade": "Mini Pack 5.webp",
+    "mini-pack-6-upgrade": "Mini Pack 6.webp",
+    "mini-pack-7-upgrade": "Mini Pack 7.webp",
+    "mini-pack-8-upgrade": "Mini Pack 8.webp",
   };
 
-  return baseImageMap[offerId] || "Tradie Plus.png";
+  return baseImageMap[offerId] || "Tradie Plus.webp";
 }
 
 /**
@@ -168,22 +168,22 @@ function getPromoImagePath(
 
   // Construct image filename based on category
   // File naming convention:
-  // - Packages (membership): "10X Tradie Package.png" (uppercase X)
-  // - Plus (one-time packs): "2X Apprentice Plus.png" (uppercase X, use "Plus" not "Pack")
-  // - Upgrades (additional packs): "2X Apprentice Upgrade.png" (uppercase X for consistency)
+  // - Packages (membership): "10X Tradie Package.webp" (uppercase X)
+  // - Plus (one-time packs): "2X Apprentice Plus.webp" (uppercase X, use "Plus" not "Pack")
+  // - Upgrades (additional packs): "2X Apprentice Upgrade.webp" (uppercase X for consistency)
   let imageFileName: string;
   if (imageCategory === "Package") {
-    // Membership packages: "2X/3X/5X/10X {Package} Package.png" (e.g. 3X Boss Package.png, 5X Tradie Package.png; 2X images upcoming)
-    imageFileName = `${multiplier}X ${normalizedPackageName} Package.png`;
+    // Membership packages: "2X/3X/5X/10X {Package} Package.webp" (e.g. 3X Boss Package.webp, 5X Tradie Package.webp; 2X images upcoming)
+    imageFileName = `${multiplier}X ${normalizedPackageName} Package.webp`;
   } else if (imageCategory === "Pack") {
-    // One-time packs: "2X Apprentice Plus.png" or "3X Tradie Plus.png"
+    // One-time packs: "2X Apprentice Plus.webp" or "3X Tradie Plus.webp"
     // Note: Category is "Pack" internally but filename uses "Plus"
     // Uses uppercase X for consistency with Package images
-    imageFileName = `${multiplier}X ${normalizedPackageName} Plus.png`;
+    imageFileName = `${multiplier}X ${normalizedPackageName} Plus.webp`;
   } else {
-    // Upgrades (additional packs): "2X Apprentice Upgrade.png" or "3X Tradie Upgrade.png"
+    // Upgrades (additional packs): "2X Apprentice Upgrade.webp" or "3X Tradie Upgrade.webp"
     // Uses uppercase X for consistency with Package and Plus images
-    imageFileName = `${multiplier}X ${normalizedPackageName} ${imageCategory}.png`;
+    imageFileName = `${multiplier}X ${normalizedPackageName} ${imageCategory}.webp`;
   }
 
   return `/images/upsells/active-promo/${imageFileName}`;
@@ -209,13 +209,13 @@ export function getUpsellImagePath(params: UpsellImageParams): string {
   const membershipPromoMultipliers = [2, 3, 5, 10] as const;
 
   // Handle membership packages with 2x, 3x, 5x, or 10x promo FIRST (before the null check)
-  // This ensures membership packages get the correct promo image (e.g. 3X Boss Package.png, 5X Tradie Package.png)
+  // This ensures membership packages get the correct promo image (e.g. 3X Boss Package.webp, 5X Tradie Package.webp)
   if (
     packageType === "membership" &&
     promoMultiplier != null &&
     (membershipPromoMultipliers as readonly number[]).includes(promoMultiplier)
   ) {
-    // Only subscription-plus packages have promo Package images (2X/3X/5X/10X {Package} Package.png)
+    // Only subscription-plus packages have promo Package images (2X/3X/5X/10X {Package} Package.webp)
     const isSubscriptionPlus =
       category === "subscription-plus" ||
       extractedInfo.imageCategory === "Package" ||

@@ -56,7 +56,7 @@ function AffiliateLoginContent() {
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative shrink-0">
               <Image
-                src="/images/Tools Australia Logo/Social Media Profile_Primary.png"
+                src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
                 alt="Tools Australia Logo"
                 fill
                 className="object-contain"
@@ -175,7 +175,7 @@ function AffiliateLoginContent() {
               {/* Card Image - Positioned absolutely on top of blur effect */}
               <div className="absolute -right-[25px] sm:-right-[35px] lg:-right-[50px] top-[40px] sm:top-[70px] lg:top-[105px] w-[150px] sm:w-[200px] lg:w-[276px] h-[90px] sm:h-[130px] lg:h-[170px] z-20">
                 <Image
-                  src="/images/loginCardImage.png"
+                  src="/images/loginCardImage.webp"
                   alt="Tools collection"
                   fill
                   className="object-contain"

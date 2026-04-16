@@ -79,7 +79,7 @@ export default function WinnersShowcase({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {displayWinners.map((winner) => {
               const displayImage =
-                winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+                winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
               const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
               const wonOnDate = new Date(winner.drawDate ?? winner.selectedDate);
 

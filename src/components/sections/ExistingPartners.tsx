@@ -5,7 +5,7 @@ export default function ExistingPartners() {
   const partnerTestimonials = [
     {
       company: "PowerTool Pro",
-      logo: "/images/SampleProducts/dewalttools.png", // Using existing images
+      logo: "/images/SampleProducts/dewalttools.webp", // Using existing images
       representative: "Mark Thompson",
       position: "Sales Director",
       testimonial:
@@ -25,7 +25,7 @@ export default function ExistingPartners() {
     },
     {
       company: "TradeMax Equipment",
-      logo: "/images/SampleProducts/milwaukeetools.png",
+      logo: "/images/SampleProducts/milwaukeetools.webp",
       representative: "David Wilson",
       position: "Business Owner",
       testimonial:
@@ -36,11 +36,11 @@ export default function ExistingPartners() {
   ];
 
   const partnerBrands = [
-    { name: "DeWalt", logo: "/images/brands/dewalt.png", category: "Power Tools", color: "bg-yellow-600" },
-    { name: "Makita", logo: "/images/brands/Makita-red.png", category: "Professional Tools", color: "bg-makita-500" }, // Makita brand cyan
-    { name: "Milwaukee", logo: "/images/brands/milwaukee.png", category: "Heavy Duty", color: "bg-red-600" },
-    { name: "Sidchrome", logo: "/images/brands/sidchrome.png", category: "Hand Tools", color: "bg-red-700" },
-    { name: "Kincrome", logo: "/images/brands/kincrome.png", category: "Tool Storage", color: "bg-blue-700" },
+    { name: "DeWalt", logo: "/images/brands/dewalt.webp", category: "Power Tools", color: "bg-yellow-600" },
+    { name: "Makita", logo: "/images/brands/Makita-red.webp", category: "Professional Tools", color: "bg-makita-500" }, // Makita brand cyan
+    { name: "Milwaukee", logo: "/images/brands/milwaukee.webp", category: "Heavy Duty", color: "bg-red-600" },
+    { name: "Sidchrome", logo: "/images/brands/sidchrome.webp", category: "Hand Tools", color: "bg-red-700" },
+    { name: "Kincrome", logo: "/images/brands/kincrome.webp", category: "Tool Storage", color: "bg-blue-700" },
   ];
 
   return (

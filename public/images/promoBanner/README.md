@@ -5,7 +5,7 @@ Left-column images when neither A/B **`leftImageUrl`** nor scheduled admin **`im
 ## Path pattern
 
 ```
-/images/promoBanner/{Brand}/{State}/{stem}-{multiplier}x.png
+/images/promoBanner/{Brand}/{State}/{stem}-{multiplier}x.webp
 ```
 
 | Part | Values |
@@ -15,7 +15,7 @@ Left-column images when neither A/B **`leftImageUrl`** nor scheduled admin **`im
 | **stem** | `drawn-tonight`, `last-chance`, `ends-tonight` |
 | **multiplier** | `2`, `3`, `5`, or `10` (unknown/null effective multiplier maps to **10**) |
 
-Example: `Milwaukee/DrawnTonight/drawn-tonight-10x.png`.
+Example: `Milwaukee/DrawnTonight/drawn-tonight-10x.webp`.
 
 ## Resolution order (code)
 

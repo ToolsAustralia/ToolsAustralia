@@ -21,7 +21,7 @@ const inter = Inter({
 
 const poppins = Poppins({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "900"],
   variable: "--font-poppins",
 });
 
@@ -33,8 +33,15 @@ export const metadata: Metadata = {
   keywords: "tools, australia, giveaways, professional tools, power tools, hand tools",
   authors: [{ name: "Tools Australia" }],
   icons: {
-    icon: [{ url: "/Social%20Media%20Profile_Primary.png", type: "image/png", sizes: "192x192" }, { url: "/icon.ico" }],
-    shortcut: "/Social%20Media%20Profile_Primary.png",
+    icon: [
+      {
+        url: "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Primary.webp",
+        type: "image/webp",
+        sizes: "192x192",
+      },
+      { url: "/icon.ico" },
+    ],
+    shortcut: "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Primary.webp",
     apple: "/apple-icon.png",
   },
   manifest: "/manifest.json",
@@ -46,7 +53,7 @@ export const metadata: Metadata = {
     locale: "en_AU",
     images: [
       {
-        url: "/Social Media Profile_Black Background.png",
+        url: "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp",
         width: 1200,
         height: 630,
         alt: "Tools Australia Logo",
@@ -58,7 +65,7 @@ export const metadata: Metadata = {
     title: "Tools Australia - Your Go-To for Tools and Giveaways",
     description:
       "Shop the best tools, find exclusive partner deals, and win big with Australia's biggest tool giveaways.",
-    images: ["/Social Media Profile_Black Background.png"],
+    images: ["/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp"],
   },
 };
 
@@ -94,7 +101,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <OrganizationJsonLd
           name="Tools Australia"
           url={siteUrl}
-          logo={`${siteUrl}/Social%20Media%20Profile_Black%20Background.png`}
+          logo={`${siteUrl}/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp`}
           // Listing social profiles here helps search engines connect verified brand entities.
           sameAs={["https://www.facebook.com/toolsaust", "https://www.instagram.com/toolsaustralia/"]}
           nonce={nonce}

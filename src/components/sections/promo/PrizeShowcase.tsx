@@ -56,9 +56,6 @@ import "swiper/css/effect-fade";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
-/** Matches landing assets: desktop on lg+, dedicated `-mobile` files below `1024px` (see PromoHero). */
-const PRIZE_GALLERY_MOBILE_MEDIA = "(max-width: 1023px)";
-
 type GallerySlideImage = { src: string; alt?: string; mobileSrc?: string };
 
 /** Catalog `PrizeMedia` plus optional landing flag (first slide may be injected). */
@@ -171,18 +168,30 @@ function PrizeShowcaseResponsiveImage({
   const mobile = image.mobileSrc;
   if (mobile && mobile !== image.src) {
     return (
-      <picture className="absolute inset-0 block h-full w-full">
-        <source media={PRIZE_GALLERY_MOBILE_MEDIA} srcSet={mobile} />
-        <img
-          src={image.src}
-          alt={resolvedAlt}
-          className={`absolute inset-0 h-full w-full object-contain ${scaleClass} ${translateClass}`}
-          style={objectPosition}
-          loading={priority ? "eager" : "lazy"}
-          decoding="async"
-          fetchPriority={priority ? "high" : "auto"}
-        />
-      </picture>
+      <>
+        <div className="absolute inset-0 z-0 lg:hidden">
+          <Image
+            src={mobile}
+            alt={resolvedAlt}
+            fill
+            className={`object-contain ${scaleClass} ${translateClass}`}
+            style={objectPosition}
+            priority={priority}
+            sizes={sizes}
+          />
+        </div>
+        <div className="absolute inset-0 z-0 hidden lg:block">
+          <Image
+            src={image.src}
+            alt={resolvedAlt}
+            fill
+            className={`object-contain ${scaleClass} ${translateClass}`}
+            style={objectPosition}
+            priority={priority}
+            sizes={sizes}
+          />
+        </div>
+      </>
     );
   }
   return (
@@ -239,16 +248,16 @@ const _getBrandLogoPath = (slug: string): string | null => {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
-      return "/images/brands/milwaukee.png";
+      return "/images/brands/milwaukee.webp";
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
-      return "/images/brands/dewalt-black.png";
+      return "/images/brands/dewalt-black.webp";
     case "makita-sidchrome":
     case "makita-milwaukee":
-      return "/images/brands/Makita-red.png";
+      return "/images/brands/Makita-red.webp";
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
-      return "/images/brands/name/ryobiText.png";
+      return "/images/brands/name/ryobiText.webp";
     case "cash-prize":
       return null; // No watermark for cash prize
     default:
@@ -261,19 +270,19 @@ const getFirstPrizeImagePath = (slug: string): string => {
   switch (slug) {
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
-      return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
+      return "/images/promotion/FirstPrizeText/1stprice-dewalt.webp";
     case "makita-sidchrome":
     case "makita-milwaukee":
-      return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+      return "/images/promotion/FirstPrizeText/1stprice-makita.webp";
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
-      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png"; // Fallback until 1stprice-ryobi.png exists
+      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp"; // Fallback until 1stprice-ryobi.webp exists
     case "cash-prize":
-      return "/images/promotion/FirstPrizeText/1stprice-cash.png";
+      return "/images/promotion/FirstPrizeText/1stprice-cash.webp";
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
     default:
-      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
+      return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp";
   }
 };
 
@@ -973,7 +982,7 @@ export default function PrizeShowcase({
                       ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
                       : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 border-gray-300 dark:border-neutral-600 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
                   }`}
-                  style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.png')` } : undefined}
+                  style={toolboxType === "cash" ? { backgroundImage: `url('/images/majordraws/cash-prize/cash-prize-10000.webp')` } : undefined}
                   suppressHydrationWarning
                 >
                   {toolboxType === "cash" && (
@@ -1321,7 +1330,7 @@ export default function PrizeShowcase({
 
             <div className="w-full hidden lg:block bg-white rounded-lg p-2">
               <Image
-                src="/images/safe-checkout-stripe.png"
+                src="/images/safe-checkout-stripe.webp"
                 alt="Guaranteed safe & secure checkout powered by Stripe"
                 width={600}
                 height={160}
@@ -1347,7 +1356,7 @@ export default function PrizeShowcase({
 
             <div className="w-full lg:hidden bg-white rounded-lg p-2">
               <Image
-                src="/images/safe-checkout-stripe.png"
+                src="/images/safe-checkout-stripe.webp"
                 alt="Guaranteed safe & secure checkout powered by Stripe"
                 width={600}
                 height={160}

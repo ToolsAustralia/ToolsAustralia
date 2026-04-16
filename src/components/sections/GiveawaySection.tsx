@@ -17,7 +17,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
         <div className="absolute lg:top-0 top-14 left-5 sm:left-3 lg:left-20 w-40 h-40 sm:w-60 sm:h-60 lg:w-[500px] lg:h-[500px] z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl shadow-2xl"></div>
           <Image
-            src="/images/giveAway.png"
+            src="/images/giveAway.webp"
             alt="Red Cantilever Toolbox - Next Giveaway"
             fill
             className="object-contain drop-shadow-2xl relative z-10"

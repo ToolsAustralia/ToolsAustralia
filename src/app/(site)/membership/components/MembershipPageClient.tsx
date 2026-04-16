@@ -163,7 +163,7 @@ export default function MembershipPageClient() {
             fill
             className="object-cover opacity-20"
             priority
-            unoptimized
+            sizes="100vw"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/30" />
         </div>

@@ -8,13 +8,13 @@ const DEFAULT_BRAND: PromoBannerAssetBrand = "Milwaukee";
 function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFamily, m: 2 | 3 | 5 | 10): string {
   switch (family) {
     case "drawn-tonight":
-      return `/images/promoBanner/${brand}/DrawnTonight/drawn-tonight-${m}x.png`;
+      return `/images/promoBanner/${brand}/DrawnTonight/drawn-tonight-${m}x.webp`;
     case "drawn-tomorrow":
-      return `/images/promoBanner/${brand}/DrawnTomorrow/drawn-tomorrow-${m}x.png`;
+      return `/images/promoBanner/${brand}/DrawnTomorrow/drawn-tomorrow-${m}x.webp`;
     case "last-chance":
-      return `/images/promoBanner/${brand}/LastChance/last-chance-${m}x.png`;
+      return `/images/promoBanner/${brand}/LastChance/last-chance-${m}x.webp`;
     case "ends-tonight":
-      return `/images/promoBanner/${brand}/EndsTonight/ends-tonight-${m}x.png`;
+      return `/images/promoBanner/${brand}/EndsTonight/ends-tonight-${m}x.webp`;
     default: {
       const _exhaustive: never = family;
       return _exhaustive;
@@ -26,13 +26,13 @@ function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFami
 function legacyUnbrandedPath(family: StaticPromoBannerFamily, m: 2 | 3 | 5 | 10): string {
   switch (family) {
     case "drawn-tonight":
-      return `/images/promoBanner/DrawnTonight/drawn-tonight-${m}x.png`;
+      return `/images/promoBanner/DrawnTonight/drawn-tonight-${m}x.webp`;
     case "drawn-tomorrow":
-      return `/images/promoBanner/DrawnTomorrow/drawn-tomorrow-${m}x.png`;
+      return `/images/promoBanner/DrawnTomorrow/drawn-tomorrow-${m}x.webp`;
     case "last-chance":
-      return `/images/promoBanner/LastChance/last-chance-${m}x.png`;
+      return `/images/promoBanner/LastChance/last-chance-${m}x.webp`;
     case "ends-tonight":
-      return `/images/promoBanner/EndsTonight/ends-tonight-${m}x.png`;
+      return `/images/promoBanner/EndsTonight/ends-tonight-${m}x.webp`;
     default: {
       const _exhaustive: never = family;
       return _exhaustive;

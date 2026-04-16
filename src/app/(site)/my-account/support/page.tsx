@@ -60,7 +60,7 @@ export default function SupportPage() {
                   alt="Tools Australia Support"
                   fill
                   className="object-cover opacity-30"
-                  unoptimized
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                 />
                 <div className="absolute inset-0 bg-black/60" />
               </div>
