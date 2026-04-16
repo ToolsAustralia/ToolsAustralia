@@ -26,7 +26,7 @@ export default function DrawResultCard({ winner }: DrawResultCardProps) {
   const theme = usePromoTheme();
   const ctaColor = getContrastText(theme.primary);
   const selectedDate = new Date(winner.selectedDate);
-  const displayImage = winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+  const displayImage = winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
   const winnerDisplayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
 
   const formatDate = (date: Date) =>

@@ -151,7 +151,7 @@ export default function WinnersSection({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
               {visibleWinners.map((winner) => {
                 const displayImage =
-                  winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+                  winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
                 const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
                 const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
 

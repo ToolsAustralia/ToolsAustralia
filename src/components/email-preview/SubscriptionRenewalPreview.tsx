@@ -59,7 +59,7 @@ const SubscriptionRenewalPreview: React.FC = () => {
     <div class="wrapper">
       <div class="card">
         <div class="header">
-          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia Logo" class="header-logo" />
+          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia Logo" class="header-logo" />
           <h1>Membership Renewed</h1>
           <p>Payment received and confirmed</p>
         </div>

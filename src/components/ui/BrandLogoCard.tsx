@@ -226,7 +226,6 @@ export default function BrandLogoCard({
             fill
             className="object-contain drop-shadow-md"
             sizes={`${Math.ceil(overlayWidth)}px`}
-            unoptimized
           />
         </div>
       </div>
@@ -253,7 +252,6 @@ export default function BrandLogoCard({
             fill
             className="object-contain drop-shadow-md"
             sizes="150px"
-            unoptimized
             style={
               cardScale !== 1
                 ? {

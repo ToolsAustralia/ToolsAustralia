@@ -22,9 +22,9 @@ This system ensures that the correct promotional images are displayed based on t
 3. **Category Mismatch**: The system relied solely on `extractPackageInfo(offerId)` to determine image category, which didn't account for the actual business category (`subscription-plus`, `one-time-plus`, `additional-upgrade`).
 
 4. **File Naming Inconsistencies**: The system uses consistent uppercase X for all promo images:
-   - Membership packages: `10X {Package} Package.png`
-   - One-time plus: `2X {Package} Plus.png`
-   - Additional upgrades: `2X {Package} Upgrade.png`
+   - Membership packages: `10X {Package} Package.webp`
+   - One-time plus: `2X {Package} Plus.webp`
+   - Additional upgrades: `2X {Package} Upgrade.webp`
 
 ---
 
@@ -163,9 +163,9 @@ additional-upgrade + one-time → "Upgrade" (for upgrade images)
 **Purpose**: Constructs image filenames with correct casing.
 
 **Conventions**:
-- **Membership/Package**: `${multiplier}X ${packageName} Package.png` (uppercase X)
-- **One-time Plus**: `${multiplier}X ${packageName} Plus.png` (uppercase X)
-- **Additional Upgrade**: `${multiplier}X ${packageName} Upgrade.png` (uppercase X)
+- **Membership/Package**: `${multiplier}X ${packageName} Package.webp` (uppercase X)
+- **One-time Plus**: `${multiplier}X ${packageName} Plus.webp` (uppercase X)
+- **Additional Upgrade**: `${multiplier}X ${packageName} Upgrade.webp` (uppercase X)
 
 **Why**: Matches actual file naming in `public/images/upsells/active-promo/`.
 
@@ -232,33 +232,33 @@ Return: /images/upsells/active-promo/{filename}
 ```
 public/images/upsells/
 ├── {Base Images}                    # No promo active
-│   ├── Tradie Package.png
-│   ├── Tradie Plus.png
-│   └── Tradie Upgrade.png
+│   ├── Tradie Package.webp
+│   ├── Tradie Plus.webp
+│   └── Tradie Upgrade.webp
 └── active-promo/                    # Promo active
-    ├── 2X Boss Package.png          # Membership 2X (upcoming)
-    ├── 3X Boss Package.png          # Membership 3X
-    ├── 5X Boss Package.png          # Membership 5X
-    ├── 10X Boss Package.png         # Membership 10X
-    ├── 3X Foreman Package.png
-    ├── 5X Foreman Package.png
-    ├── 10X Foreman Package.png
-    ├── 3X Tradie Package.png
-    ├── 5X Tradie Package.png
-    ├── 10X Tradie Package.png
-    ├── 2X Tradie Plus.png           # One-time 2X
-    ├── 3X Tradie Plus.png           # One-time 3X
-    ├── 2X Tradie Upgrade.png        # Additional 2X
-    └── 3X Tradie Upgrade.png        # Additional 3X
+    ├── 2X Boss Package.webp          # Membership 2X (upcoming)
+    ├── 3X Boss Package.webp          # Membership 3X
+    ├── 5X Boss Package.webp          # Membership 5X
+    ├── 10X Boss Package.webp         # Membership 10X
+    ├── 3X Foreman Package.webp
+    ├── 5X Foreman Package.webp
+    ├── 10X Foreman Package.webp
+    ├── 3X Tradie Package.webp
+    ├── 5X Tradie Package.webp
+    ├── 10X Tradie Package.webp
+    ├── 2X Tradie Plus.webp           # One-time 2X
+    ├── 3X Tradie Plus.webp           # One-time 3X
+    ├── 2X Tradie Upgrade.webp        # Additional 2X
+    └── 3X Tradie Upgrade.webp        # Additional 3X
 ```
 
 ### Naming Rules
 
 | Package Type | Category | Multiplier | Filename Pattern | Example |
 |-------------|----------|------------|------------------|---------|
-| Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.png` | `3X Boss Package.png`, `5X Tradie Package.png`, `10X Foreman Package.png` (2X upcoming) |
-| One-time | one-time-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Plus.png` | `2X Tradie Plus.png`, `10X Boss Plus.png` |
-| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}X {Package} Upgrade.png` | `2X Tradie Upgrade.png`, `10X Boss Upgrade.png` |
+| Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.webp` | `3X Boss Package.webp`, `5X Tradie Package.webp`, `10X Foreman Package.webp` (2X upcoming) |
+| One-time | one-time-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Plus.webp` | `2X Tradie Plus.webp`, `10X Boss Plus.webp` |
+| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}X {Package} Upgrade.webp` | `2X Tradie Upgrade.webp`, `10X Boss Upgrade.webp` |
 
 **Note**: All promo images use uppercase `X` for consistency (e.g., `2X`, `3X`, `5X`, `10X`).
 
@@ -323,7 +323,7 @@ interface UpsellImageParams {
 }
 ```
 
-**Returns**: Image path string (e.g., `/images/upsells/active-promo/10X Tradie Package.png`)
+**Returns**: Image path string (e.g., `/images/upsells/active-promo/10X Tradie Package.webp`)
 
 **Behavior**:
 - Returns promo image if multiplier is active and matches package type

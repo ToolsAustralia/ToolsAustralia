@@ -15,7 +15,7 @@ export default function NotFound() {
           fill
           className="object-cover"
           priority
-          unoptimized
+          sizes="100vw"
         />
         {/* Dark gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/30" />
@@ -35,7 +35,7 @@ export default function NotFound() {
             <div className="mb-6 relative">
               <div className="inline-block  ">
                 <Image
-                  src="/images/Tools Australia Logo/White-Text Logo.png"
+                  src="/images/Tools Australia Logo/White-Text Logo.webp"
                   alt="Tools Australia"
                   width={180}
                   height={60}

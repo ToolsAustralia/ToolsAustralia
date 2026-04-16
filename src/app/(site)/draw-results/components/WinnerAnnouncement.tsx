@@ -11,7 +11,7 @@ interface WinnerAnnouncementProps {
 
 export default function WinnerAnnouncement({ latestWinner }: WinnerAnnouncementProps) {
   const heroImage =
-    latestWinner.imageUrl || latestWinner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+    latestWinner.imageUrl || latestWinner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
 
   return (
     <div className="bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 rounded-2xl shadow-xl p-6 sm:p-8 mb-8 text-white relative overflow-hidden">

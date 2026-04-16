@@ -45,7 +45,7 @@ import { membershipPackages } from "@/data/membershipPackages";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/utils/userHelpers";
 import { formatDisplayName } from "@/utils/display-name";
-import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 import Dropdown from "@/components/modals/ui/Dropdown";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";

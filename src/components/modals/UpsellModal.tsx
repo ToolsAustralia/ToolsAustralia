@@ -597,8 +597,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
    *
    * Logic:
    * - If no promo active (null): Use base images from /images/upsells/
-   * - If 2x/3x/5x/10x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.png or {multiplier}x {Package} Upgrade.png
-   * - If 2x/3x/5x/10x promo active (membership packages): Use /images/upsells/active-promo/{multiplier}X {Package} Package.png (e.g. 3X Boss Package.png, 5X Tradie Package.png; 2X upcoming)
+   * - If 2x/3x/5x/10x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.webp or {multiplier}x {Package} Upgrade.webp
+   * - If 2x/3x/5x/10x promo active (membership packages): Use /images/upsells/active-promo/{multiplier}X {Package} Package.webp (e.g. 3X Boss Package.webp, 5X Tradie Package.webp; 2X upcoming)
    * - Falls back to base images if promo-specific image is unavailable
    */
   const getUpsellImagePathValue = (): string => {

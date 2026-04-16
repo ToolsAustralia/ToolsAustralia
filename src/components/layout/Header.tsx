@@ -51,8 +51,8 @@ import {
 } from "lucide-react";
 
 /** Full wordmark: light UI uses default PNG; dark UI uses high-contrast white artwork */
-const HEADER_LOGO_LIGHT_SRC = "/images/logo.png";
-const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.png";
+const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
+const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.webp";
 
 type HeaderProps = {
   /**
@@ -1170,7 +1170,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 flex items-center justify-center">
                   <Image
-                    src="/Social Media Profile_Primary.png"
+                    src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
                     alt="Tools Australia"
                     width={40}
                     height={40}

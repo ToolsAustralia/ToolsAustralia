@@ -5333,7 +5333,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 <div className="flex justify-center w-full">
                   <div className="w-full max-w-full bg-[#ffffff] rounded-lg p-2">
                     <Image
-                      src="/images/safe-checkout-stripe.png"
+                      src="/images/safe-checkout-stripe.webp"
                       alt="Guaranteed safe & secure checkout powered by Stripe"
                       width={600}
                       height={160}
@@ -5358,7 +5358,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       const displayImage =
                         winner.imageUrl ||
                         (winner.prize?.images?.[0]) ||
-                        "/images/placeholders/prize-placeholder.png";
+                        "/images/promotion/PrizeHeader/PrizeHeader.webp";
                       const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
                       const displayDate = (
                         winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)

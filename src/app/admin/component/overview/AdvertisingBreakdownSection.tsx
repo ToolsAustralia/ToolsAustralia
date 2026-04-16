@@ -105,10 +105,10 @@ export default function AdvertisingBreakdownSection({
     if (!data?.rows) return [];
 
     const promotionBrands = [
-      { brand: "Ryobi", slug: "ryobi", logoPath: "/images/brands/name/ryobiText.png" },
-      { brand: "Milwaukee", slug: "milwaukee", logoPath: "/images/brands/name/milwaukeeText.png", logoScale: "scale-125" },
-      { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.png" },
-      { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.png" },
+      { brand: "Ryobi", slug: "ryobi", logoPath: "/images/brands/name/ryobiText.webp" },
+      { brand: "Milwaukee", slug: "milwaukee", logoPath: "/images/brands/name/milwaukeeText.webp", logoScale: "scale-125" },
+      { brand: "Dewalt", slug: "dewalt", logoPath: "/images/brands/name/dewaltText.webp" },
+      { brand: "Makita", slug: "makita", logoPath: "/images/brands/name/makitaText.webp" },
     ];
 
     return promotionBrands

@@ -3,7 +3,7 @@
  * Holiday takeover wins whenever the AEST calendar is Apr 3–6 2026 (or dev preview is set).
  * No network calls — returns relative paths or full URLs only.
  *
- * Static filenames: `{base}-{multiplier}x.png` where multiplier is 2|3|5|10. Missing assets should use 10x
+ * Static filenames: `{base}-{multiplier}x.webp` where multiplier is 2|3|5|10. Missing assets should use 10x
  * until 2x/3x/5x exist in repo; `bannerMultiplierFileKey` maps unknown/null multipliers to 10.
  */
 
@@ -48,7 +48,7 @@ export interface ResolvePromoBannerLeftVisualResult {
   srcFallbacks?: string[];
   /** Set only for brand assets under `public/images/promoBanner` (not variant/scheduled URLs). */
   staticFamily?: StaticPromoBannerFamily;
-  /** True when using `{Brand}/Holiday/*.png` for the long-weekend campaign. */
+  /** True when using `{Brand}/Holiday/*.webp` for the long-weekend campaign. */
   isHolidayVisual?: boolean;
 }
 

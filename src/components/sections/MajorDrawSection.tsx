@@ -317,16 +317,16 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
-        return "/images/brands/milwaukee.png";
+        return "/images/brands/milwaukee.webp";
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
-        return "/images/brands/dewalt-black.png";
+        return "/images/brands/dewalt-black.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
-        return "/images/brands/Makita-red.png";
+        return "/images/brands/Makita-red.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
-        return "/images/brands/name/ryobiText.png";
+        return "/images/brands/name/ryobiText.webp";
       case "cash-prize":
         return null;
       default:
@@ -339,19 +339,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
+        return "/images/promotion/FirstPrizeText/1stprice-dewalt.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+        return "/images/promotion/FirstPrizeText/1stprice-makita.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png"; // Fallback until 1stprice-ryobi.png exists
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp"; // Fallback until 1stprice-ryobi.webp exists
       case "cash-prize":
-        return "/images/promotion/FirstPrizeText/1stprice-cash.png";
+        return "/images/promotion/FirstPrizeText/1stprice-cash.webp";
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
       default:
-        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp";
     }
   };
 
@@ -1121,7 +1121,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
               <div className="w-full">
                 <Image
-                  src="/images/safe-checkout-stripe.png"
+                  src="/images/safe-checkout-stripe.webp"
                   alt="Guaranteed safe & secure checkout powered by Stripe"
                   width={600}
                   height={160}
@@ -1381,7 +1381,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
                 <div className="w-full">
                   <Image
-                    src="/images/safe-checkout-stripe.png"
+                    src="/images/safe-checkout-stripe.webp"
                     alt="Guaranteed safe & secure checkout powered by Stripe"
                     width={600}
                     height={160}
@@ -1468,7 +1468,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
                 <div className="w-full">
                   <Image
-                    src="/images/safe-checkout-stripe.png"
+                    src="/images/safe-checkout-stripe.webp"
                     alt="Guaranteed safe & secure checkout powered by Stripe"
                     width={600}
                     height={160}

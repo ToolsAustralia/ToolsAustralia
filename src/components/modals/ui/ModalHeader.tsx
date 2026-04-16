@@ -45,7 +45,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   subtitle,
   onClose,
   showLogo = false,
-  logoSrc = "/images/Tools Australia Logo/White-Text Logo.png",
+  logoSrc = "/images/Tools Australia Logo/White-Text Logo.webp",
   logoAlt = "Tools Australia",
   className = "",
   variant = "auto",

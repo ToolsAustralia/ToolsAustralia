@@ -67,7 +67,7 @@ export const InvoiceComponent: React.FC<InvoiceComponentProps> = ({
     phone: "+61 2 1234 5678",
     email: getContactEmail(),
     website: "www.toolsaustralia.com.au",
-    logo: "/images/logo.png",
+    logo: "/images/logo.webp",
   },
 }) => {
   // Parse items from JSON string

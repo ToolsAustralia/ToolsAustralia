@@ -115,7 +115,7 @@ function highlightDiscountMessage(message: string, gradientStyle?: React.CSSProp
   return <>{parts}</>;
 }
 
-const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.png";
+const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.webp";
 
 const partnerDiscounts = [
   {

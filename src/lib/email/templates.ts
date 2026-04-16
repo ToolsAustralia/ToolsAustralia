@@ -228,7 +228,7 @@ export function createVerificationEmailTemplate(userName: string, verificationCo
             <div class="container">
                 <div class="header">
                     <div class="logo-container">
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                         <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Email Verification: ${safeCode}</h1>
                     </div>
                 </div>
@@ -460,7 +460,7 @@ export function createPasswordResetEmailTemplate(
             <div class="container">
                 <div class="header">
                     <div class="logo-container">
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                         <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Password Reset</h1>
                     </div>
                 </div>
@@ -593,7 +593,7 @@ export function createContactSubmissionEmailTemplate(data: {
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                     <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">New Contact Form Submission</h1>
                 </div>
             
@@ -720,7 +720,7 @@ export function createPartnerApplicationEmailTemplate(data: {
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <img src="${getBaseUrl()}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                     <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">New Partner Application</h1>
                 </div>
             
@@ -869,7 +869,7 @@ export function createLoginCodeEmailTemplate(userName: string, loginCode: string
             <div class="container">
                 <div class="header">
                     <div>
-                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                        <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                         <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Login Code: ${safeCode}</h1>
                     </div>
                 </div>
@@ -978,7 +978,7 @@ export function createAdminReplyEmailTemplate(
         <div class="email-wrapper">
             <div class="container">
                 <div class="header">
-                    <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
+                    <img src="${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia" class="logo"${LOGO_IMG_TAG_SUFFIX} />
                     <h1 class="header-title" style="${HEADER_TITLE_INLINE_STYLE}">Reply to Your ${typeLabel}</h1>
                 </div>
                 <div class="content">
@@ -1023,7 +1023,7 @@ export function createMiniDrawFullCapacityTemplate(data: {
   const adminLink = `${data.adminUrl}/admin/mini-draws`;
 
   const baseUrl = getBaseUrl();
-  const logoUrl = `${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.png`;
+  const logoUrl = `${baseUrl}/images/Tools%20Australia%20Logo/White-Text%20Logo.webp`;
 
   return `
 <!DOCTYPE html>

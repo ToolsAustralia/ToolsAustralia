@@ -57,7 +57,7 @@ import Select from "@/components/modals/ui/Select";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
-import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 import {
   getAdminPaymentKindLabel,
   resolveAdminPaymentEventTitle,

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
 
     // Download the logo
-    const logoResponse = await fetch(_logoUrl || "/images/Tools Australia Logo/White-Text Logo.png");
+    const logoResponse = await fetch(_logoUrl || "/images/Tools Australia Logo/White-Text Logo.webp");
     const logoBuffer = Buffer.from(await logoResponse.arrayBuffer());
 
     // Create watermarked image

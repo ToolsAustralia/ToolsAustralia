@@ -36,7 +36,7 @@ export default function WinnerCard({
   const themeTextColor = getContrastText(theme.primary);
 
   const displayImage =
-    winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+    winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
   const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
   const prizeLabel = winner.selectedPrize || winner.prize.name;
   const prizeLine = prizeLabel.length > 34 ? `${prizeLabel.slice(0, 34).trim()}...` : prizeLabel;
