@@ -14,6 +14,7 @@ import {
   markRewardsSpotlightSeen,
 } from "@/utils/rewards-widget-spotlight-storage";
 import { MODAL_DURATION_ENTER_S } from "@/utils/motion/modalPresets";
+import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
 
 interface RewardsFloatingWidgetProps {
   userId: string;
@@ -177,6 +178,50 @@ export default function RewardsFloatingWidget({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showSpotlight, dismissSpotlight]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Match ModalContainer / mobile menu: `overflow: hidden` alone is not enough on iOS Safari;
+    // fixed body + negative top preserves scroll position and removes the viewport scrollbar.
+    const isBodyAlreadyLocked = document.body.style.position === "fixed";
+    if (isBodyAlreadyLocked) {
+      return () => {};
+    }
+
+    const savedScrollY = window.scrollY;
+    const html = document.documentElement;
+    const prevHtmlScrollbarGutter = html.style.scrollbarGutter;
+
+    html.style.scrollbarGutter = "auto";
+    const scrollbarWidth = getViewportScrollbarWidthPx();
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.width = "100%";
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+      html.style.setProperty("--scrollbar-width", `${scrollbarWidth}px`);
+      html.setAttribute("data-modal-scroll-lock", "");
+    }
+
+    return () => {
+      if (document.body.style.position === "fixed") {
+        html.style.scrollbarGutter = prevHtmlScrollbarGutter;
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.width = "";
+        document.body.style.paddingRight = "";
+        html.style.removeProperty("--scrollbar-width");
+        html.removeAttribute("data-modal-scroll-lock");
+
+        window.scrollTo(0, savedScrollY);
+      }
+    };
+  }, [isOpen]);
+
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -313,7 +358,8 @@ export default function RewardsFloatingWidget({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 touch-none overscroll-none bg-black/50 backdrop-blur-sm"
+            style={{ touchAction: "none" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -321,7 +367,7 @@ export default function RewardsFloatingWidget({
             onClick={() => setIsOpen(false)}
           >
             <motion.div
-              className="absolute right-0 top-0 flex h-full w-full flex-col bg-gradient-to-br from-gray-50 to-white shadow-[-8px_0_32px_rgba(0,0,0,0.12)] dark:from-neutral-950 dark:to-neutral-900 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.45)] sm:w-[480px]"
+              className="absolute right-0 top-0 flex h-full w-full max-h-[100dvh] touch-auto flex-col bg-gradient-to-br from-gray-50 to-white shadow-[-8px_0_32px_rgba(0,0,0,0.12)] dark:from-neutral-950 dark:to-neutral-900 dark:shadow-[-8px_0_32px_rgba(0,0,0,0.45)] sm:w-[480px]"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -387,7 +433,7 @@ export default function RewardsFloatingWidget({
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-2 sm:py-3 space-y-2 sm:space-y-3 pb-safe">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-2 sm:py-3 space-y-2 sm:space-y-3 pb-safe">
                 {currentQuery.isLoading ? (
                   <div className="flex flex-col items-center justify-center gap-3 py-16 text-gray-500 dark:text-neutral-400">
                     <Loader2 className="h-6 w-6 animate-spin text-red-600 dark:text-red-400" />
