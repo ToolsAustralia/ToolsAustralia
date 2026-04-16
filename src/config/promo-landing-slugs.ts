@@ -32,7 +32,7 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug]>
 
 /**
  * Prize slug -> landing hero image paths with light/dark support.
- * Uses the new .png assets with brand-specific folders.
+ * Uses the new .webp assets with brand-specific folders.
  * null = use standard promo hero.
  */
 const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {

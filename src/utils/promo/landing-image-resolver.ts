@@ -17,10 +17,10 @@ export type LandingHeroToolboxSuffix = "milTB" | "sidTB";
 
 /**
  * Image naming conventions for landing pages:
- * - Desktop light: {brand}-{milTB|sidTB}-no-promo.png
- * - Desktop dark: {brand}-{milTB|sidTB}-no-promo-dark.png
- * - Mobile light: {brand}-{milTB|sidTB}-no-promo-mobile.png
- * - Mobile dark: {brand}-{milTB|sidTB}-no-promo-dark-mobile.png
+ * - Desktop light: {brand}-{milTB|sidTB}-no-promo.webp
+ * - Desktop dark: {brand}-{milTB|sidTB}-no-promo-dark.webp
+ * - Mobile light: {brand}-{milTB|sidTB}-no-promo-mobile.webp
+ * - Mobile dark: {brand}-{milTB|sidTB}-no-promo-dark-mobile.webp
  */
 
 /**
@@ -40,7 +40,7 @@ export function resolveLandingHeroImage(
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
 
   // For multiplier variants, we fallback to "no promo" images since multiplier assets don't exist yet
-  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}.png`;
+  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}.webp`;
 }
 
 /**
@@ -74,7 +74,7 @@ export function resolveEvergreenHeroImage(
   const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
   
-  return `${LANDING_IMAGE_BASE}/all-prizes/all-no-promo${darkSuffix}${mobileSuffix}.png`;
+  return `${LANDING_IMAGE_BASE}/all-prizes/all-no-promo${darkSuffix}${mobileSuffix}.webp`;
 }
 
 /**

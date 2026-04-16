@@ -10,7 +10,7 @@ This document describes how the **PromoBanner** component behaves: left image, r
 |------|-------------|
 | **Left** | Single image: variant URL → scheduled admin URL → static files under `public/images/promoBanner` (brand + state + multiplier tier, with fallbacks). See `resolvePromoBannerLeftVisual` and `public/images/promoBanner/README.md`. |
 | **Right** | Countdown tiles, static urgency label, gap countdown, or `NEXT DRAW` when no promo — from `resolveCountdownDisplay`. |
-| **Corner** | Optional `X{m}` badge image (`/images/badge/X{m}.png`) when multiplier is 2, 3, 5, or 10. |
+| **Corner** | Optional `X{m}` badge image (`/images/badge/X{m}.webp`) when multiplier is 2, 3, 5, or 10. |
 
 **Draw tomorrow** is not a special case: there is no separate badge or right-side “DRAWN TOMORROW” block; behaviour follows the same rules as other non-today draw days (scheduled / midnight / static urgency per variant).
 

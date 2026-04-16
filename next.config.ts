@@ -40,8 +40,9 @@ const nextConfig: NextConfig = {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 
-  // Image optimization
+  // Image optimization (AVIF first, then WebP fallback; sharp recommended for runtime optimization)
   images: {
+    formats: ["image/avif", "image/webp"],
     domains: ["localhost", ...imageDomains],
     remotePatterns: imageRemotePatterns,
   },

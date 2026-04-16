@@ -784,15 +784,19 @@ export default function PrizeShowcase({
         } : {}),
       }}
     >
-      {/* Crack texture overlay - visible only in dark mode */}
+      {/* Crack texture overlay - visible only in dark mode; URL only when dark to avoid loading in light mode */}
       <div
         className="absolute inset-0 z-0 pointer-events-none opacity-0 dark:opacity-[0.3] transition-opacity duration-300"
         aria-hidden="true"
-        style={{
-          backgroundImage: "url('/images/background/promo/FX/crack.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
+        style={
+          themeMode === "dark"
+            ? {
+                backgroundImage: "url('/images/background/promo/FX/crack.webp')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
       />
       <div className={useParentContainer ? "relative z-10 w-full" : `${SECTION_CONTAINER_CLASSES} relative z-10`}>
         {(effectiveFirstBannerVariant !== "none" || showCountdown) && (

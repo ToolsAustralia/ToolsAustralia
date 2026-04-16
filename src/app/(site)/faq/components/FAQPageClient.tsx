@@ -23,7 +23,7 @@ export default function FAQPageClient({ faqs, categories }: FAQPageClientProps) 
       <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
-          <Image src="/images/faqImage.png" alt="Tools Australia" fill className="object-cover " priority />
+          <Image src="/images/faqImage.webp" alt="Tools Australia" fill className="object-cover " priority />
           <div className="absolute inset-0  " />
         </div>
 

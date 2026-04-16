@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
@@ -77,6 +77,8 @@ export function PowerToolsetCarousel({
   onSelect,
   className = "",
 }: PowerToolsetCarouselProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   // When activeSlug is null (e.g. cash-prize), nothing is selected — no fallback to first prize
   const activePrize =
     activeSlug != null
@@ -233,15 +235,23 @@ export function PowerToolsetCarousel({
           <div className="relative flex-shrink-0 flex items-center justify-center px-1 sm:px-2">
             <motion.div
               className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
-              animate={{
-                opacity: [0.4, 0.6, 0.4],
-                scale: [1, 1.02, 1],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
+              animate={
+                prefersReducedMotion
+                  ? { opacity: 0.5, scale: 1 }
+                  : {
+                      opacity: [0.4, 0.6, 0.4],
+                      scale: [1, 1.02, 1],
+                    }
+              }
+              transition={
+                prefersReducedMotion
+                  ? {}
+                  : {
+                      duration: 4,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }
+              }
               style={{
                 background: `radial-gradient(ellipse 80% 70% at 50% 50%, ${glowColor}, transparent 70%)`,
               }}
@@ -265,14 +275,18 @@ export function PowerToolsetCarousel({
                   className="relative w-full h-full"
                 >
                   <motion.div
-                    animate={{ y: [0, -6, 0] }}
-                    transition={{
-                      y: {
-                        duration: 4,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      },
-                    }}
+                    animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
+                    transition={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            y: {
+                              duration: 4,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                            },
+                          }
+                    }
                     className="relative w-full h-full"
                   >
                     <div className="absolute inset-0">
