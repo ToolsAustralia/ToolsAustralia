@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
       const userEvents = userEventsMap.get(userId) || [];
       const purchases = userEvents.map((event) => ({
         paymentEventId: event._id,
-        timestamp: event.timestamp.toISOString(),
+        timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : "",
         amount: event.data?.price || 0,
         packageId: event.packageId,
         packageName: event.packageName,
