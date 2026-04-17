@@ -28,6 +28,10 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { rewardsEnabled } from "@/config/featureFlags";
+import {
+  getPartnerCatalogAccessPercentForPlanId,
+  getPartnerDiscountBenefitTextForPackageId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -544,6 +548,14 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       benefits.push({
         text: `${status.data.points} reward points earned`,
         icon: "zap" as const,
+      });
+    }
+
+    const partnerLineSpecial = getPartnerDiscountBenefitTextForPackageId(selectedPackage?._id);
+    if (partnerLineSpecial) {
+      benefits.push({
+        text: partnerLineSpecial,
+        icon: "tag" as const,
       });
     }
 
@@ -1076,6 +1088,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
 
           {/* Additional Benefits - Only shown when package is selected (uses package color scheme) */}
           {selectedPackage && (() => {
+            const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(selectedPackage._id || "");
             const colorScheme = getPackageColorSchemeForPromo(selectedPackage._id || "", false, variantConfig);
             const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
             // Use solid accent color - gradient styles (packageInclusionTextStyle/textGradientStyle) can make text invisible on dark card backgrounds
@@ -1094,16 +1107,16 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                 </h4>
                 <div className="space-y-2 sm:space-y-2.5">
                   <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
-                    <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
-                    <span>{selectedPackage.totalEntries || 0} Free Entries</span>
+                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
+                    <span>{partnerCatalogPct}% of Partner Discounts Available</span>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
                     <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
                     <span>{selectedPackage.partnerDiscountDays || 0} Days Partner Discounts</span>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
-                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
-                    <span>100% Partner Discounts Available</span>
+                    <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
+                    <span>{selectedPackage.totalEntries || 0} Free Entries</span>
                   </div>
                 </div>
               </div>

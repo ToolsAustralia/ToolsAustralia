@@ -195,9 +195,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 20,
             period: "mo",
             features: [
-              { text: "15 Free Accumulated Entries" },
+              { text: "50% Access to Partner Discounts" },
               // { text: "5% Off Shop" },
-              { text: "100% Access to Partner Discounts" },
+              { text: "15 Free Accumulated Entries" },
             ],
             buttonText: "Get Started",
             buttonStyle: "secondary",
@@ -210,9 +210,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 40,
             period: "mo",
             features: [
-              { text: "40 Free Accumulated Entries" },
+              { text: "75% Access to Partner Discounts" },
               // { text: "10% Off Shop" },
-              { text: "100% Access to Partner Discounts" },
+              { text: "40 Free Accumulated Entries" },
             ],
             isPopular: true,
             buttonText: "Go Pro",
@@ -226,9 +226,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 80,
             period: "mo",
             features: [
-              { text: "100 Free Accumulated Entries" },
-              // { text: "20% Off Shop" },
               { text: "100% Access to Partner Discounts" },
+              // { text: "20% Off Shop" },
+              { text: "100 Free Accumulated Entries" },
             ],
             buttonText: "Become Boss",
             buttonStyle: "secondary",
@@ -245,9 +245,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 25,
             period: "one-time",
             features: [
-              { text: "3 Free Entries" },
+              { text: "25% of Partner Discounts Available" },
               { text: "1 Days Access to Partner Discounts" },
-              { text: "100% of Partner Discounts Available" },
+              { text: "3 Free Entries" },
             ],
             buttonText: "Buy Now",
             buttonStyle: "secondary" as const,
@@ -262,9 +262,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 50,
             period: "one-time",
             features: [
-              { text: "15 Free Entries" },
+              { text: "40% of Partner Discounts Available" },
               { text: "2 Days Access to Partner Discounts" },
-              { text: "100% of Partner Discounts Available" },
+              { text: "15 Free Entries" },
             ],
             isPopular: true,
             buttonText: "Get Tradie",
@@ -281,9 +281,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 100,
             period: "one-time",
             features: [
-              { text: "30 Free Entries" },
+              { text: "55% of Partner Discounts Available" },
               { text: "4 Days Access to Partner Discounts" },
-              { text: "100% of Partner Discounts Available" },
+              { text: "30 Free Entries" },
             ],
             buttonText: "Go Foreman",
             buttonStyle: "secondary" as const,
@@ -300,7 +300,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             features: [
               { text: "150 Free Entries" },
               { text: "10 Days Access to Partner Discounts" },
-              { text: "100% of Partner Discounts Available" },
+              { text: "70% of Partner Discounts Available" },
             ],
             buttonText: "Get Boss",
             buttonStyle: "secondary" as const,
@@ -315,9 +315,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 500,
             period: "one-time",
             features: [
-              { text: "600 Free Entries" },
-              { text: "20 Days Access to Partner Discounts" },
               { text: "100% of Partner Discounts Available" },
+              { text: "20 Days Access to Partner Discounts" },
+              { text: "600 Free Entries" },
             ],
             buttonText: "Get Power",
             buttonStyle: "secondary" as const,
@@ -564,6 +564,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             const isMembershipTab = plan.period !== "one-time";
             const colorScheme = getPackageColorSchemeForPromo(plan.id, isMembershipTab, variantConfig);
             const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
+            const showBestValueRibbon =
+              (isMembershipTab && plan.id === "boss-subscription") ||
+              (!isMembershipTab && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
             return (
               <div
                 key={plan.id}
@@ -631,11 +634,11 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   </div>
                 </div>
 
-                {/* Corner ribbon badges - Top Right (Best Value, Popular, or Current) */}
-                {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                {/* Best Value = last tier only: Boss subscription, or Power one-time (incl. member additional) */}
+                {showBestValueRibbon && (
                   <BestValueBadge position="top-right" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                 )}
-                {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentPlan(plan) || (plan.isPopular && !isCurrentPlan(plan))) && (
+                {!showBestValueRibbon && (isCurrentPlan(plan) || (plan.isPopular && !isCurrentPlan(plan))) && (
                   <CornerRibbonBadge
                     position="top-right"
                     size="small"

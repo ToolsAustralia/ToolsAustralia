@@ -82,7 +82,7 @@ export default function MembershipPageClient() {
               membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
             }`,
           },
-          { text: "100% Access to Partner Discounts" },
+          { text: "50% Access to Partner Discounts" },
           { text: "Mini Draws" },
         ],
         buttonText: "Get Started",

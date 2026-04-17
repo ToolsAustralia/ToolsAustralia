@@ -36,7 +36,9 @@ export interface MiniDrawUpsell {
 }
 
 /**
- * Mini Draw Packages - Complete set of 8 packages from $5 to $500
+ * Mini Draw Packages - Complete set of 8 packages ($1 to $500).
+ * Partner catalog % (see getPartnerCatalogAccessPercentForPlanId in partner-catalog-visibility.ts):
+ *   mini-pack-1–2 → 25% | 3–4 → 40% | 5–6 → 55% | 7 → 70% | 8 → 100%
  * These are one-time packages for members who participate in major draws
  */
 export const miniDrawPackages: MiniDrawPackage[] = [
@@ -141,9 +143,9 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     name: "Mini Pack 5",
     price: 50,
     entries: 50,
-    partnerDiscountHours: 480,
-    partnerDiscountDays: 20,
-    description: "50 Free Entries with 20 Days Access to Partner Discounts",
+    partnerDiscountHours: 48,
+    partnerDiscountDays: 2,
+    description: "50 Free Entries with 2 Days Access to Partner Discounts",
     isActive: true,
     stripeProductId: "prod_mini_pack_5",
     stripePriceId: "price_mini_pack_5",
@@ -152,9 +154,9 @@ export const miniDrawPackages: MiniDrawPackage[] = [
       name: "Mini Pack 5 Upgrade",
       price: 19.99,
       entries: 100,
-      partnerDiscountHours: 480,
-      partnerDiscountDays: 20,
-      description: "100 Free Entries with 20 Days Access to Partner Discounts",
+      partnerDiscountHours: 48,
+      partnerDiscountDays: 2,
+      description: "100 Free Entries with 2 Days Access to Partner Discounts",
       isActive: true,
       stripeProductId: "prod_mini_pack_5_upgrade",
       stripePriceId: "price_mini_pack_5_upgrade",

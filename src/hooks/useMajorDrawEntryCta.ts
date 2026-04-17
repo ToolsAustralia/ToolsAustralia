@@ -72,9 +72,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           price: 25,
           period: "one-time",
           features: [
-            { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
+            { text: "25% of Partner Discounts Available" },
             { text: "1 Days Access to Partner Discounts" },
-            { text: "100% of Partner Discounts Available" },
+            { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
@@ -101,9 +101,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           price: 25,
           period: "one-time",
           features: [
-            { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
+            { text: "25% of Partner Discounts Available" },
             { text: "1 Days Access to Partner Discounts" },
-            { text: "100% of Partner Discounts Available" },
+            { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
@@ -168,7 +168,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               }`,
             },
             // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "100% Access to Partner Discounts" },
+            { text: "50% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
           buttonText: "Get Started",
@@ -202,7 +202,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               }`,
             },
             // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "100% Access to Partner Discounts" },
+            { text: "50% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
           buttonText: "Get Started",

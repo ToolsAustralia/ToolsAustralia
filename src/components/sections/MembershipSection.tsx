@@ -538,6 +538,9 @@ export default function MembershipSection({
                 const highlighted = isHighlighted(plan.id);
                 const isAdditionalPackage =
                   plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
+                const showBestValueRibbon =
+                  (activeTab === "membership" && plan.id === "boss-subscription") ||
+                  (activeTab === "one-time" && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
                 return (
                   <div
                     key={plan.id}
@@ -566,11 +569,12 @@ export default function MembershipSection({
                             />
                           </div>
                         )}
-                        {/* Corner ribbon badges - Top Left (Best Value, Popular, or Current) */}
-                        {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                        {/* Best Value = last tier only: Boss subscription, or Power one-time (incl. member additional) */}
+                        {showBestValueRibbon && (
                           <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                         )}
-                        {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
+                        {!showBestValueRibbon &&
+                          (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
                           <CornerRibbonBadge
                             position="top-left"
                             size="medium"
@@ -822,6 +826,9 @@ export default function MembershipSection({
               const highlighted = isHighlighted(plan.id);
               const isAdditionalPackage =
                 plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
+              const showBestValueRibbon =
+                (activeTab === "membership" && plan.id === "boss-subscription") ||
+                (activeTab === "one-time" && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
               return (
                 <div
                   key={plan.id}
@@ -840,11 +847,12 @@ export default function MembershipSection({
                       : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
                   }
                 >
-                  {/* Corner ribbon badges - Top Left (Best Value, Popular, or Current) */}
-                  {(plan.id.includes("boss") || plan.id.includes("power")) && (
+                  {/* Best Value = last tier only: Boss subscription, or Power one-time (incl. member additional) */}
+                  {showBestValueRibbon && (
                     <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                   )}
-                  {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
+                  {!showBestValueRibbon &&
+                    (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
                     <CornerRibbonBadge
                       position="top-left"
                       size="medium"
