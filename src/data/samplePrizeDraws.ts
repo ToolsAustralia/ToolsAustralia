@@ -150,7 +150,7 @@ export const sampleMiniDraws: MiniDrawData[] = [
     id: "draw3",
     name: "Milwaukee Heavy Duty Kit",
     description:
-      "Enter for a chance to win this professional Milwaukee tool kit. Built for the toughest jobs with superior durability and performance.",
+      "Enter to win this professional Milwaukee tool kit. Built for the toughest jobs with superior durability and performance.",
     prize: {
       name: "Milwaukee Heavy Duty Kit",
       description: "Professional Milwaukee tool kit with impact driver, drill, and premium accessories",

@@ -134,7 +134,7 @@ export default function AboutToolsAustralia() {
             </h3>
 
             <p className="text-[16px] sm:text-[18px] lg:text-[20px] text-gray-300 leading-relaxed font-['Inter']">
-              To give every Australian – from weekend DIY warriors to hard-working tradies – the chance to own the best
+              To give every Australian – from weekend DIY warriors to hard-working tradies – the opportunity to own the best
               tools on the market. Through epic tool giveaways, exclusive rewards, and community-driven promotions,
               we’re changing the way Aussies gear up for work and play.
             </p>

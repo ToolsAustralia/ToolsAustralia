@@ -11,7 +11,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
-import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import BestValueBadge from "@/components/ui/BestValueBadge";
 import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -566,9 +566,9 @@ export default function MembershipSection({
                             />
                           </div>
                         )}
-                        {/* Corner ribbon badges - Top Left (Best Chance, Popular, or Current) */}
+                        {/* Corner ribbon badges - Top Left (Best Value, Popular, or Current) */}
                         {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                          <BestChanceBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+                          <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                         )}
                         {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
                           <CornerRibbonBadge
@@ -840,9 +840,9 @@ export default function MembershipSection({
                       : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
                   }
                 >
-                  {/* Corner ribbon badges - Top Left (Best Chance, Popular, or Current) */}
+                  {/* Corner ribbon badges - Top Left (Best Value, Popular, or Current) */}
                   {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                    <BestChanceBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+                    <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                   )}
                   {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentSubscription(plan) || (plan.isPopular && !isCurrentSubscription(plan))) && (
                     <CornerRibbonBadge

@@ -202,7 +202,7 @@ export default function DrawsPage() {
         </div>
 
         <div>
-          <MembershipSection title="BOOST YOUR ODDS 50%" />
+          <MembershipSection title="BOOST YOUR VALUE 50%" />
         </div>
 
         <div

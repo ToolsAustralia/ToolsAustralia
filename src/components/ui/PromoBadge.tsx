@@ -17,7 +17,7 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
   showPromoText = true,
   customText,
 }) => {
-  // Size configurations - matching BestChanceBadge text sizes
+  // Size configurations - matching BestValueBadge text sizes
   const sizeConfig = {
     small: {
       container: "px-2 py-1 text-[8px]",
