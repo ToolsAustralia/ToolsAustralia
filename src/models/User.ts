@@ -254,7 +254,7 @@ export interface IUser extends Document {
 
   // Partner Discount Queue System
   // Manages stacking of partner discount access periods from multiple purchases
-  // Follows FIFO (First In, First Out) principle for automatic activation
+  // One-time access: higher partner tier first, then FIFO within tier; subscriptions override one-time
   partnerDiscountQueue?: Array<{
     _id?: mongoose.Types.ObjectId; // Auto-generated ID for queue item
     packageId: string; // Package ID that granted this benefit

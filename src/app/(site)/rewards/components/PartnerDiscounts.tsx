@@ -349,6 +349,9 @@ export default function PartnerDiscounts() {
 
   const { activePeriod, queuedItems, totalQueuedDays, totalQueuedItems, summary } = queueData;
 
+  const displayTotalDaysRemaining = Math.max(0, Math.round(summary.totalDaysOfAccessRemaining));
+  const displayQueuedDaysTotal = Math.max(0, Math.round(totalQueuedDays));
+
   return (
     <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-2xl shadow-lg border-2 border-gray-200 relative overflow-hidden">
       {/* Premium Background Effects */}
@@ -386,9 +389,9 @@ export default function PartnerDiscounts() {
                   </p>
                 );
               })()
-            ) : summary.totalDaysOfAccessRemaining > 0 ? (
+            ) : displayTotalDaysRemaining > 0 ? (
               <p className="text-sm text-gray-600 dark:text-neutral-400">
-                <span className="font-bold text-orange-600">{summary.totalDaysOfAccessRemaining} days</span> total
+                <span className="font-bold text-orange-600">{displayTotalDaysRemaining} days</span> total
                 access
                 {activePeriod.isActive && <span className="ml-2 text-green-600 font-semibold">• Active</span>}
               </p>
@@ -413,12 +416,12 @@ export default function PartnerDiscounts() {
                 </div>
               );
             })()
-          ) : summary.totalDaysOfAccessRemaining > 0 ? (
+          ) : displayTotalDaysRemaining > 0 ? (
             <div
               className={`bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg px-2.5 py-1.5 border-2 border-yellow-300 shadow-sm`}
             >
               <p className="text-lg font-bold bg-gradient-to-r from-yellow-700 to-orange-600 bg-clip-text text-transparent leading-none">
-                {summary.totalDaysOfAccessRemaining}
+                {displayTotalDaysRemaining}
               </p>
             </div>
           ) : null}
@@ -551,8 +554,8 @@ export default function PartnerDiscounts() {
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-gray-900 text-sm truncate">{item.packageName}</h4>
                           <p className="text-xs text-gray-600 dark:text-neutral-400 font-medium truncate">
-                            <span className="text-orange-600 font-bold">{item.daysOfAccess}</span> day
-                            {item.daysOfAccess !== 1 ? "s" : ""} access
+                            <span className="text-orange-600 font-bold">{Math.round(item.daysOfAccess)}</span> day
+                            {Math.round(item.daysOfAccess) !== 1 ? "s" : ""} access
                           </p>
                         </div>
                       </div>
@@ -589,8 +592,8 @@ export default function PartnerDiscounts() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-orange-900 font-semibold mb-0.5">
-                    <strong>Total:</strong> {totalQueuedDays} day
-                    {totalQueuedDays !== 1 ? "s" : ""}
+                    <strong>Total:</strong> {displayQueuedDaysTotal} day
+                    {displayQueuedDaysTotal !== 1 ? "s" : ""}
                   </p>
                   <p className="text-xs text-orange-800">Activates automatically when current period ends</p>
                 </div>

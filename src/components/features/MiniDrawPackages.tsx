@@ -12,6 +12,7 @@ import type { PaymentStatusResponse } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -577,6 +578,7 @@ export default function MiniDrawPackages({
             purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
           const isProcessing = purchasingPackageId === pkg._id;
           const isHighValue = pkg.price >= 100;
+          const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(pkg._id);
 
           return (
             <div key={pkg._id} className="relative" data-package-id={pkg._id}>
@@ -588,6 +590,7 @@ export default function MiniDrawPackages({
                   }}
                   onClick={() => setSelectedPackageId(pkg._id)}
                   disabled={disabled}
+                  title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} entries · $${pkg.price}`}
                   className={`
                     w-full relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-300
                     ${disabled
@@ -660,12 +663,16 @@ export default function MiniDrawPackages({
                     <div className="text-gray-300 text-xs">
                       ${pkg.price} &middot; {pkg.entries} Entries
                     </div>
-                    {pkg.partnerDiscountDays > 0 && (
+                    <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
+                      {partnerCatalogPct}% of partner catalog
+                    </div>
+                    {(pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0) && (
                       <div className="text-green-400 text-xs mt-1.5 flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-green-400 inline-block" />
+                        <span className="w-1 h-1 rounded-full bg-green-400 inline-block shrink-0" />
                         {pkg.partnerDiscountDays >= 1
-                          ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} partner discounts`
-                          : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner discounts`}
+                          ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} partner access`
+                          : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner access`}
                       </div>
                     )}
                     <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />

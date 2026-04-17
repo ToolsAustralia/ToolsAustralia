@@ -39,8 +39,8 @@ const subscriptionPackages: PackageData[] = [
     icon: tradie,
     description: "For tradies getting started",
     benefits: [
+      { text: "50% access to partner discounts" },
       { text: "15 Free Entries Major Giveaway/month that accumulate" },
-      { text: "100% access to partner discounts" },
     ],
   },
   {
@@ -53,8 +53,8 @@ const subscriptionPackages: PackageData[] = [
     icon: foreman,
     description: "Popular with serious tool enthusiasts",
     benefits: [
+      { text: "75% access to partner discounts" },
       { text: "40 Free Entries Major Giveaway/month that accumulate" },
-      { text: "100% access to partner discounts" },
     ],
   },
   {
@@ -67,26 +67,26 @@ const subscriptionPackages: PackageData[] = [
     icon: boss,
     description: "Maximum entries, maximum value",
     benefits: [
-      { text: "100 Free Entries Major Giveaway/month that accumulate" },
       { text: "100% access to partner discounts" },
+      { text: "100 Free Entries Major Giveaway/month that accumulate" },
     ],
   },
 ];
 
 const oneTimeNonMemberPackages: PackageData[] = [
-  { id: "apprentice-pack", name: "Apprentice Pack", price: 25, entries: 3, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "3 Free Entries Major Giveaway" }, { text: "1 day partner discounts" }] },
-  { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "15 Free Entries Major Giveaway" }, { text: "2 days partner discounts" }] },
-  { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "30 Free Entries Major Giveaway" }, { text: "4 days partner discounts" }] },
-  { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "150 Free Entries Major Giveaway" }, { text: "10 days partner discounts" }] },
-  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "600 Free Entries Major Giveaway" }, { text: "20 days partner discounts" }] },
+  { id: "apprentice-pack", name: "Apprentice Pack", price: 25, entries: 3, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "25% of partner offers" }, { text: "1 day partner discounts" }, { text: "3 Free Entries Major Giveaway" }] },
+  { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "15 Free Entries Major Giveaway" }] },
+  { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "30 Free Entries Major Giveaway" }] },
+  { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "150 Free Entries Major Giveaway" }] },
+  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "100% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 Free Entries Major Giveaway" }] },
 ];
 
 const oneTimeMemberPackages: PackageData[] = [
-  { id: "additional-apprentice-pack-member", name: "Additional Apprentice", price: 25, entries: 10, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "10 Free Entries Major Giveaway" }, { text: "1 day partner discounts" }] },
-  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "30 Free Entries Major Giveaway" }, { text: "2 days partner discounts" }] },
-  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 100, entries: 100, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "100 Free Entries Major Giveaway" }, { text: "4 days partner discounts" }] },
-  { id: "additional-boss-pack-member", name: "Additional Boss", price: 250, entries: 400, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "400 Free Entries Major Giveaway" }, { text: "10 days partner discounts" }] },
-  { id: "additional-power-pack-member", name: "Additional Power", price: 500, entries: 1200, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "1,200 Free Entries Major Giveaway" }, { text: "20 days partner discounts" }] },
+  { id: "additional-apprentice-pack-member", name: "Additional Apprentice", price: 25, entries: 10, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "25% of partner offers" }, { text: "1 day partner discounts" }, { text: "10 Free Entries Major Giveaway" }] },
+  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "30 Free Entries Major Giveaway" }] },
+  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 100, entries: 100, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "100 Free Entries Major Giveaway" }] },
+  { id: "additional-boss-pack-member", name: "Additional Boss", price: 250, entries: 400, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "400 Free Entries Major Giveaway" }] },
+  { id: "additional-power-pack-member", name: "Additional Power", price: 500, entries: 1200, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "100% of partner offers" }, { text: "20 days partner discounts" }, { text: "1,200 Free Entries Major Giveaway" }] },
 ];
 
 type TimePeriod = 3 | 6 | 12;

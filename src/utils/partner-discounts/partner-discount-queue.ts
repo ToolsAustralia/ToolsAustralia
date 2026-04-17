@@ -4,9 +4,11 @@
  * This module manages the stacking and activation of partner discount access periods
  * from multiple package purchases following e-commerce best practices:
  *
- * - FIFO (First In, First Out) queue system
+ * - One-time / mini-draw / upsell: higher partner-catalog tier is always consumed first
+ *   (tier-priority); FIFO within the same tier. New higher tier can preempt an active lower tier
+ *   (remaining time is preserved and queued).
  * - Automatic activation when previous period ends
- * - Subscription priority (subscriptions always take precedence)
+ * - Subscription priority (subscriptions always take precedence over one-time stacking)
  * - 12-month expiry on queued benefits
  * - Real-time calculation for flexibility
  *
@@ -17,6 +19,81 @@
 import mongoose from "mongoose";
 import { IUser } from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+
+const MIN_HOURS_TO_REQUEUE_PREEMPTED = 1 / 60; // < 1 min remaining → expire instead of re-queue
+
+function partnerTierPercentForQueueItem(item: { packageId: string }): number {
+  return getPartnerCatalogAccessPercentForPlanId(item.packageId);
+}
+
+/** Among queued items, pick highest catalog tier; ties → older purchase first (FIFO). */
+function pickHighestTierQueuedItem(queued: PartnerDiscountQueueItem[]): PartnerDiscountQueueItem | null {
+  if (queued.length === 0) return null;
+  return queued.reduce((best, cur) => {
+    const bt = partnerTierPercentForQueueItem(best);
+    const ct = partnerTierPercentForQueueItem(cur);
+    if (ct > bt) return cur;
+    if (ct < bt) return best;
+    return new Date(cur.purchaseDate).getTime() < new Date(best.purchaseDate).getTime() ? cur : best;
+  });
+}
+
+/**
+ * If a lower one-time / mini / upsell tier is active but a strictly higher tier is queued,
+ * promote the queued item (legacy FIFO states, or preemption missed). No-op when subscription is active.
+ */
+function rebalanceHigherTierQueuedOverActiveLower(user: IUser): boolean {
+  if (user.subscription?.isActive) {
+    return false;
+  }
+
+  const queue = user.partnerDiscountQueue;
+  if (!queue?.length) return false;
+
+  const activeOt = queue.find(
+    (item) => item.status === "active" && item.packageType !== "membership"
+  );
+  if (!activeOt) {
+    return false;
+  }
+
+  const queued = queue.filter((item) => item.status === "queued");
+  const bestQueued = pickHighestTierQueuedItem(queued);
+  if (!bestQueued) return false;
+
+  const activeTier = partnerTierPercentForQueueItem(activeOt);
+  const bestTier = partnerTierPercentForQueueItem(bestQueued);
+  if (bestTier <= activeTier) {
+    return false;
+  }
+
+  const remainingMs =
+    activeOt.endDate && activeOt.status === "active"
+      ? new Date(activeOt.endDate).getTime() - Date.now()
+      : 0;
+  const remainingHours = Math.max(0, remainingMs / (1000 * 60 * 60));
+
+  activeOt.status = "queued";
+  activeOt.startDate = undefined;
+  activeOt.endDate = undefined;
+
+  if (remainingHours <= MIN_HOURS_TO_REQUEUE_PREEMPTED) {
+    activeOt.status = "expired";
+  } else {
+    activeOt.discountHours = remainingHours;
+    activeOt.discountDays = remainingHours / 24;
+  }
+
+  bestQueued.status = "active";
+  bestQueued.queuePosition = 0;
+  bestQueued.startDate = new Date();
+  const endDate = new Date(bestQueued.startDate);
+  endDate.setHours(endDate.getHours() + bestQueued.discountHours);
+  bestQueued.endDate = endDate;
+
+  return true;
+}
 
 /**
  * Interface for partner discount queue item
@@ -43,9 +120,9 @@ export interface PartnerDiscountQueueItem {
  *
  * This function:
  * 1. Creates a queue item from the package purchase
- * 2. Determines correct queue position
+ * 2. Determines correct queue position (tier-priority among one-time; higher tier can preempt lower)
  * 3. Auto-activates if no active subscription/period exists
- * 4. Otherwise queues it for future activation
+ * 4. Otherwise queues it, or preempts a lower active tier when applicable
  *
  * @param user - User document to update
  * @param packageData - Information about the purchased package
@@ -119,19 +196,46 @@ export async function addToPartnerDiscountQueue(
     }
 
     // console.log(`✅ Subscription activated immediately with priority`);
-  } else if (hasActiveSubscription || activeQueueItem) {
-    // Queue this item behind the active period
-    // Find the last item in queue to determine position
+  } else if (hasActiveSubscription) {
+    // Subscription always takes precedence — queue new one-time / mini / upsell behind membership access
     const maxQueuePosition = Math.max(0, ...user.partnerDiscountQueue.map((item) => item.queuePosition));
 
     queueItem.queuePosition = maxQueuePosition + 1;
     queueItem.status = "queued";
+  } else if (activeQueueItem) {
+    const newPct = partnerTierPercentForQueueItem(queueItem);
+    const activePct = partnerTierPercentForQueueItem(activeQueueItem);
 
-    // console.log(
-    //   `📋 Item queued at position ${queueItem.queuePosition} (behind ${
-    //     hasActiveSubscription ? "active subscription" : "active period"
-    //   })`
-    // );
+    if (newPct > activePct) {
+      const remainingMs =
+        activeQueueItem.endDate && activeQueueItem.status === "active"
+          ? new Date(activeQueueItem.endDate).getTime() - Date.now()
+          : 0;
+      const remainingHours = Math.max(0, remainingMs / (1000 * 60 * 60));
+
+      activeQueueItem.status = "queued";
+      activeQueueItem.startDate = undefined;
+      activeQueueItem.endDate = undefined;
+
+      if (remainingHours <= MIN_HOURS_TO_REQUEUE_PREEMPTED) {
+        activeQueueItem.status = "expired";
+      } else {
+        activeQueueItem.discountHours = remainingHours;
+        activeQueueItem.discountDays = remainingHours / 24;
+      }
+
+      queueItem.status = "active";
+      queueItem.queuePosition = 0;
+      queueItem.startDate = new Date();
+      const endDate = new Date(queueItem.startDate);
+      endDate.setHours(endDate.getHours() + queueItem.discountHours);
+      queueItem.endDate = endDate;
+    } else {
+      const maxQueuePosition = Math.max(0, ...user.partnerDiscountQueue.map((item) => item.queuePosition));
+
+      queueItem.queuePosition = maxQueuePosition + 1;
+      queueItem.status = "queued";
+    }
   } else {
     // No active subscription or period - activate immediately
     queueItem.status = "active";
@@ -320,6 +424,11 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
     }
   });
 
+  // Step 2b: Queued higher tier must not sit behind an active lower tier (repair legacy FIFO + edge cases)
+  if (rebalanceHigherTierQueuedOverActiveLower(user)) {
+    hasChanges = true;
+  }
+
   // Step 3: Check if we need to activate next item in queue
   const hasActiveNonSubscription = user.partnerDiscountQueue.some(
     (item) => item.status === "active" && item.packageType !== "membership"
@@ -331,7 +440,12 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
   if (!hasActiveSubscription && !hasActiveNonSubscription) {
     const nextQueued = user.partnerDiscountQueue
       .filter((item) => item.status === "queued")
-      .sort((a, b) => a.queuePosition - b.queuePosition)[0];
+      .sort((a, b) => {
+        const tierDiff = partnerTierPercentForQueueItem(b) - partnerTierPercentForQueueItem(a);
+        if (tierDiff !== 0) return tierDiff;
+        if (a.queuePosition !== b.queuePosition) return a.queuePosition - b.queuePosition;
+        return new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime();
+      })[0];
 
     if (nextQueued) {
       // console.log(`✅ Activating next queued item: ${nextQueued.packageName}`);
@@ -390,20 +504,20 @@ export async function reorderQueue(user: IUser): Promise<void> {
     return;
   }
 
-  // Sort by current queue position, then by purchase date
   const sortedQueue = user.partnerDiscountQueue
     .filter((item) => item.status !== "expired" && item.status !== "cancelled")
     .sort((a, b) => {
-      // Active items first
       if (a.status === "active" && b.status !== "active") return -1;
       if (a.status !== "active" && b.status === "active") return 1;
 
-      // Then by queue position
-      if (a.queuePosition !== b.queuePosition) {
-        return a.queuePosition - b.queuePosition;
+      if (a.status === "active" && b.status === "active") {
+        if (a.packageType === "membership" && b.packageType !== "membership") return -1;
+        if (a.packageType !== "membership" && b.packageType === "membership") return 1;
+        return partnerTierPercentForQueueItem(b) - partnerTierPercentForQueueItem(a);
       }
 
-      // Then by purchase date (FIFO)
+      const tierDiff = partnerTierPercentForQueueItem(b) - partnerTierPercentForQueueItem(a);
+      if (tierDiff !== 0) return tierDiff;
       return new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime();
     });
 
@@ -524,7 +638,7 @@ export async function cancelQueueItem(user: IUser, paymentIntentId: string): Pro
   // console.log(`❌ Cancelling queue item: ${itemToCancel.packageName} (refund)`);
 
   // Check if this was the active item before cancelling
-  const wasActive = itemToCancel.queuePosition === 0 && itemToCancel.status === "active";
+  const wasActive = itemToCancel.status === "active";
 
   itemToCancel.status = "cancelled";
 
@@ -550,12 +664,17 @@ export function getQueueSummary(user: IUser) {
   const queuedItems =
     user.partnerDiscountQueue
       ?.filter((item) => item.status === "queued")
-      .sort((a, b) => a.queuePosition - b.queuePosition)
-      .slice(0, 5) // Show next 5 items
+      .sort((a, b) => {
+        const tierDiff = partnerTierPercentForQueueItem(b) - partnerTierPercentForQueueItem(a);
+        if (tierDiff !== 0) return tierDiff;
+        if (a.queuePosition !== b.queuePosition) return a.queuePosition - b.queuePosition;
+        return new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime();
+      })
+      .slice(0, 5) // Show next 5 items (highest tier first, then FIFO)
       .map((item) => ({
         packageName: item.packageName,
         packageType: item.packageType,
-        daysOfAccess: item.discountDays,
+        daysOfAccess: Math.round(item.discountDays),
         hoursOfAccess: item.discountHours,
         purchaseDate: item.purchaseDate,
         queuePosition: item.queuePosition,
@@ -565,7 +684,7 @@ export function getQueueSummary(user: IUser) {
   return {
     activePeriod,
     queuedItems,
-    totalQueuedDays: queuedItems.reduce((sum, item) => sum + item.daysOfAccess, 0),
+    totalQueuedDays: Math.round(queuedItems.reduce((sum, item) => sum + item.daysOfAccess, 0)),
     totalQueuedItems: user.partnerDiscountQueue?.filter((item) => item.status === "queued").length || 0,
   };
 }

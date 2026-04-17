@@ -257,7 +257,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
             }`,
           },
-          { text: "100% Access to Partner Discounts" },
+          { text: "50% Access to Partner Discounts" },
         ],
         buttonText: "Get Started",
         buttonStyle: "secondary",

@@ -1,12 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
 import { clsx } from "clsx";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { PromoLandingTheme } from "@/stores/usePromoThemeStore";
+import { useUserContext } from "@/contexts/UserContext";
+import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
+import {
+  getPartnerCatalogVisibleSliceLength,
+  resolvePartnerCatalogPlanId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 
 /**
  * Highlights key parts of discount messages (codes and amounts) with gradient text
@@ -117,72 +123,6 @@ function highlightDiscountMessage(message: string, gradientStyle?: React.CSSProp
 
 const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.webp";
 
-const partnerDiscounts = [
-  {
-    id: "zjwraps",
-    name: "ZJWRAPS",
-    logo: "/images/partnerBrandLogos/ZJWRAPS.webp",
-    discount: "250 OFF",
-    discountMessage: "$250 off a wrap when you mention Tools Australia",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.zjwraps.com/",
-  },
-  {
-    id: "superbad",
-    name: "Super Bad",
-    logo: "/images/partnerBrandLogos/SuperBad.webp",
-    discount: "90% OFF",
-    discountMessage: "Mention Tools Australia for 90% off your trial shoot",
-    gradient: "from-red-900 via-red-800 to-amber-100",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "multihub",
-    name: "Multi Hub",
-    logo: "/images/partnerBrandLogos/multiHub.webp",
-    discount: "VIP PROMOS",
-    discountMessage: "Mention Tools Australia for VIP promos",
-    gradient: "from-pink-500 via-pink-600 to-fuchsia-600",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "artc",
-    name: "All Round Trade Constructions",
-    logo: "/images/partnerBrandLogos/ARTC.webp",
-    discount: "10% OFF",
-    discountMessage: "Mention Tools Australia for 10% off quote",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.facebook.com/share/16kRKXkcVa/?mibextid=wwXIfr",
-  },
-  {
-    id: "sealmotors",
-    name: "Seal Motors",
-    logo: "/images/partnerBrandLogos/sealMotors.webp",
-    discount: "10% OFF",
-    discountMessage: "Mention Tools Australia for 10% off car services",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.sealmotors.com.au/",
-  },
-  {
-    id: "toolmanlane",
-    name: "Toolman Lane",
-    logo: "/images/partnerBrandLogos/ToolmanLane.jpg",
-    discount: "10% OFF",
-    discountMessage: "10% off all purchases when you mention Tools Australia",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "bal",
-    name: "BAL Building Services",
-    logo: "/images/partnerBrandLogos/BAL.jpg",
-    discount: "FREE QUOTE",
-    discountMessage: "Free quote when you mention Tools Australia.",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.facebook.com/BALbuilding/",
-  },
-];
-
 interface UnlockDiscountsProps {
   showUnlockButton?: boolean;
   title?: string;
@@ -204,9 +144,25 @@ export default function UnlockDiscounts({
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const { userData } = useUserContext();
   const storeTheme = usePromoTheme();
   const theme = packageTheme ?? storeTheme;
   const preferDark = theme.preferDarkBackground ?? false;
+
+  const { visiblePartners, totalPartnerOffers, showPartialCatalogNote } = useMemo(() => {
+    const total = PARTNER_BRAND_OFFERS.length;
+    if (!hasAccess) {
+      return { visiblePartners: [] as typeof PARTNER_BRAND_OFFERS, totalPartnerOffers: total, showPartialCatalogNote: false };
+    }
+    const planId = resolvePartnerCatalogPlanId(userData ?? undefined);
+    const k = getPartnerCatalogVisibleSliceLength(total, planId);
+    const showPartialCatalogNote = k < total;
+    return {
+      visiblePartners: PARTNER_BRAND_OFFERS.slice(0, k),
+      totalPartnerOffers: total,
+      showPartialCatalogNote,
+    };
+  }, [hasAccess, userData]);
 
   return (
     <section ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
@@ -217,12 +173,20 @@ export default function UnlockDiscounts({
             {title}
           </h2>
           <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{description}</p>
+          {hasAccess && showPartialCatalogNote && (
+            <p
+              className="text-sm sm:text-base font-medium mt-3 font-['Inter'] max-w-2xl mx-auto"
+              style={{ color: theme.primaryDark }}
+            >
+              Showing {visiblePartners.length} of {totalPartnerOffers} partner offers for your current plan.
+            </p>
+          )}
         </div>
 
         {/* Partner Discounts Grid - Only show when user has access */}
         {hasAccess && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-12 stagger-animation">
-            {partnerDiscounts.map((partner) => (
+            {visiblePartners.map((partner) => (
               <a
                 key={partner.id}
                 href={partner.businessLink}

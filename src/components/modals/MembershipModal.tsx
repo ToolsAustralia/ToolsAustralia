@@ -52,6 +52,7 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
@@ -2249,6 +2250,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       });
     }
 
+    const partnerLine = getPartnerDiscountBenefitTextForPackageId(activePlan.id);
+    if (partnerLine) {
+      benefits.push({ text: partnerLine, icon: "tag" as const });
+    }
+
     appendCodeBenefits(benefits);
 
     // Show success modal with entry information
@@ -2620,6 +2626,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             icon: "gift" as const,
           });
         }
+      }
+
+      const partnerLineExisting = getPartnerDiscountBenefitTextForPackageId(activePlan.id);
+      if (partnerLineExisting) {
+        benefits.push({ text: partnerLineExisting, icon: "tag" as const });
       }
 
       appendCodeBenefits(benefits);
