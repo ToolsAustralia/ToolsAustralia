@@ -5,7 +5,10 @@
  */
 
 import User from "@/models/User";
-import PaymentEvent from "@/models/PaymentEvent";
+import {
+  aggregateNetCountWithMatch,
+  fetchNetBenefitsGrantedInRange,
+} from "@/utils/payment/payment-event-net-queries";
 import ReferralEvent from "@/models/ReferralEvent";
 import connectDB from "@/lib/mongodb";
 import type { UserMetrics, UserMetricsQuery } from "@/types/metrics/UserMetrics";
@@ -132,17 +135,10 @@ export class UserMetricsService {
       }
     }
 
-    // Get purchase history from PaymentEvents
-    const paymentEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
-      timestamp: {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    })
-      .select("packageType data.price")
-      .lean()
-      .exec();
+    const paymentEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
+      packageType: 1,
+      data: 1,
+    });
 
     const purchaseHistory = {
       totalPurchases: paymentEvents.length,
@@ -163,22 +159,14 @@ export class UserMetricsService {
       purchaseHistory.averageOrderValue = purchaseHistory.totalRevenue / purchaseHistory.totalPurchases;
     }
 
-    // Count renewals using PaymentEvent billingReason (matches activity logs logic)
-    // This is the most accurate way to count renewals
-    const renewalEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
+    membershipStatus.renewed = await aggregateNetCountWithMatch({
       packageType: "membership",
       "data.billingReason": "subscription_cycle",
       timestamp: {
         $gte: startDate,
         $lte: endDate,
       },
-    })
-      .select("_id")
-      .lean()
-      .exec();
-
-    membershipStatus.renewed = renewalEvents.length;
+    });
 
     return {
       signupSource,

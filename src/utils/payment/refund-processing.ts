@@ -131,7 +131,7 @@ export async function processRefundReversal(
       }
     }
 
-    // Step 2: Try payment intent ID (for one-time payments)
+    // Step 2: Try payment intent ID (for one-time payments and PI-keyed records)
     if (!originalPaymentEvent) {
       attemptedLookups.push(`payment intent: ${paymentIntentId}`);
       originalPaymentEvent = await PaymentEvent.findOne({
@@ -144,31 +144,8 @@ export async function processRefundReversal(
       }
     }
 
-    // Step 3: Fallback - if payment intent starts with pi_ and not found, search user's subscription events
-    if (!originalPaymentEvent && paymentIntentId.startsWith("pi_")) {
-      // console.log(`⚠️ Not found by ID lookup, searching user's subscription PaymentEvents as fallback...`);
-      const user = await User.findById(userId);
-
-      if (user) {
-        attemptedLookups.push(`user subscription events fallback`);
-        const subscriptionEvents = await PaymentEvent.find({
-          userId: user._id,
-          packageType: "membership",
-          eventType: "BenefitsGranted",
-        })
-          .sort({ timestamp: -1 })
-          .limit(10);
-
-        // console.log(`Found ${subscriptionEvents.length} subscription PaymentEvents for user`);
-
-        // Use the most recent subscription event as fallback
-        // Note: This is a best-effort match and may not be 100% accurate
-        if (subscriptionEvents.length > 0) {
-          // console.log(`⚠️ Using most recent subscription PaymentEvent as fallback (may not be exact match)`);
-          originalPaymentEvent = subscriptionEvents[0];
-        }
-      }
-    }
+    // Fail closed: do not guess "most recent membership" — wrong invoice could reverse the wrong month.
+    // Webhooks pass invoiceId from Stripe when available; fix data or reconcile manually if lookup fails.
 
     if (!originalPaymentEvent) {
       const lookupAttempts = attemptedLookups.join(", ");

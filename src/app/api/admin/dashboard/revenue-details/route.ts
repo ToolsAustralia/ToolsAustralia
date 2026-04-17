@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import PaymentEvent from "@/models/PaymentEvent";
+import { fetchNetBenefitsGrantedWithMatch } from "@/utils/payment/payment-event-net-queries";
 import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
@@ -167,11 +167,19 @@ export async function GET(request: NextRequest) {
       eventQuery.packageType = "upsell";
     }
 
-    // Get all matching payment events
-    const paymentEvents = await PaymentEvent.find(eventQuery)
-      .select("userId packageType packageId packageName data timestamp _id")
-      .lean()
-      .sort({ timestamp: -1 });
+    // Net revenue: same filters but exclude BenefitsGranted with RefundProcessed (Option B)
+    const paymentEventsRaw = await fetchNetBenefitsGrantedWithMatch(eventQuery, {
+      userId: 1,
+      packageType: 1,
+      packageId: 1,
+      packageName: 1,
+      data: 1,
+      timestamp: 1,
+      _id: 1,
+    });
+    const paymentEvents = [...paymentEventsRaw].sort(
+      (a, b) => new Date(b.timestamp ?? 0).getTime() - new Date(a.timestamp ?? 0).getTime()
+    );
 
     // Group events by user
     const userEventsMap = new Map<string, typeof paymentEvents>();
