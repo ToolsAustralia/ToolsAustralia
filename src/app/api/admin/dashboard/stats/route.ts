@@ -245,7 +245,9 @@ export async function GET(request: NextRequest) {
     // Categorize revenue by package type and context
     // Sort events by timestamp to process them chronologically
     const sortedEvents = [...revenueEvents].sort((a, b) => {
-      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return ta - tb;
     });
 
     for (const event of sortedEvents) {
