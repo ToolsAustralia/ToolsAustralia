@@ -495,7 +495,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     return null;
   }, [currentDraw?.drawDate]);
 
-  // Scheduled promo state: badge "LAST CHANCE"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
+  // Scheduled promo state: badge (e.g. ends-tonight family) + right "PROMO ENDING"/countdown (split-test winner default)
   // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
   const scheduledPromoState = useMemo(() => {
     const hasScheduledPromo = effectiveEntryForCountdown?.source === "scheduled" && effectiveEntryForCountdown?.scheduledEndDate;

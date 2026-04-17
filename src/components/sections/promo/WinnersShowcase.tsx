@@ -181,8 +181,8 @@ export default function WinnersShowcase({
                 </h3>
 
                 <p className="text-sm sm:text-base text-slate-300 font-['Inter'] leading-relaxed">
-                  Join thousands of members who are already in the draw. The more entries you have, the better your
-                  chances of winning incredible prizes!
+                  Join thousands of members who are already in the draw. The more entries you have, the more
+                  representation you carry into each draw for incredible prizes!
                 </p>
               </div>
             </div>

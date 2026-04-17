@@ -2,6 +2,7 @@ import connectDB from "@/lib/mongodb";
 import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
+import { excludeRefundedBenefitsGrantedStages } from "@/utils/payment/payment-event-net-queries";
 import { listPrizes, getPrizeLabel } from "@/config/prizes";
 import { TOOLSET_LANDING_SLUGS } from "@/config/promo-landing-slugs";
 import { getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
@@ -200,6 +201,7 @@ export class PromoAnalyticsRepository {
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $group: {
           _id: {
@@ -371,6 +373,7 @@ export class PromoAnalyticsRepository {
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $addFields: {
           _utmKey: {
@@ -510,6 +513,7 @@ export class PromoAnalyticsRepository {
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $group: {
           _id: {
@@ -686,6 +690,7 @@ export class PromoAnalyticsRepository {
           ...sourceMatch("data.utmSource"),
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $group: {
           _id: { pageType: { $ifNull: ["$data.promotionPageType", "evergreen"] }, slug: "$data.promotionSlug" },
@@ -798,6 +803,7 @@ export class PromoAnalyticsRepository {
           ...sourceMatch("data.utmSource"),
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $group: {
           _id: {

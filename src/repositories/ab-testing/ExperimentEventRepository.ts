@@ -1,7 +1,6 @@
 import connectDB from "@/lib/mongodb";
 import ExperimentEvent, { IExperimentEvent, ExperimentEventType } from "@/models/ab-testing/ExperimentEvent";
 import ExperimentDailyMetricsRepository from "./ExperimentDailyMetricsRepository";
-import PaymentEvent from "@/models/PaymentEvent";
 import mongoose from "mongoose";
 
 interface DateRange {
@@ -203,28 +202,18 @@ export class ExperimentEventRepository {
       range?: DateRange
     ): Promise<number> => {
       try {
-        const paymentQuery: Record<string, unknown> = {
+        const { aggregateNetRevenueSumWithMatch } = await import("@/utils/payment/payment-event-net-queries");
+        const match: Record<string, unknown> = {
           experimentId: expId,
           variantId: varId,
-          eventType: "BenefitsGranted",
         };
-
         if (range) {
-          paymentQuery.timestamp = {
+          match.timestamp = {
             $gte: range.startDate,
             $lte: range.endDate,
           };
         }
-
-        const paymentEvents = await PaymentEvent.find(paymentQuery).lean();
-        return paymentEvents.reduce((sum, event) => {
-          // Handle edge cases: missing data, null price, invalid price
-          const price = event.data?.price;
-          if (typeof price === "number" && !isNaN(price) && price >= 0) {
-            return sum + price;
-          }
-          return sum;
-        }, 0);
+        return aggregateNetRevenueSumWithMatch(match);
       } catch (error) {
         // Log error but don't fail - return 0 revenue to prevent blocking analytics
         console.error(`Error fetching revenue for experiment ${expId}, variant ${varId}:`, error);

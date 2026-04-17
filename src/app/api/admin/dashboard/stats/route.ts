@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import PaymentEvent from "@/models/PaymentEvent";
+import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import MajorDraw from "@/models/MajorDraw";
 import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
@@ -221,17 +221,15 @@ export async function GET(request: NextRequest) {
     const profileCompletionRate = totalUsers > 0 ? Math.round((usersWithCompletedProfiles / totalUsers) * 100) : 0;
 
     // ========================================
-    // REVENUE STATISTICS
+    // REVENUE STATISTICS (net: exclude BenefitsGranted with RefundProcessed — Option B)
     // ========================================
-    // Get revenue from PaymentEvent model filtered by date range
-    // Use aggregation for better performance, especially for large date ranges
-    const revenueEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted", // Only count successful payments
-      timestamp: { $gte: startDate, $lte: endDate },
-    })
-      .select("userId packageType packageId data timestamp")
-      .lean()
-      .limit(10000); // Safety limit to prevent memory issues
+    const revenueEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
+      userId: 1,
+      packageType: 1,
+      packageId: 1,
+      data: 1,
+      timestamp: 1,
+    });
 
     // Initialize detailed revenue breakdown with counts
     let totalRevenue = 0;
@@ -513,13 +511,13 @@ export async function GET(request: NextRequest) {
         }),
         User.countDocuments(cancelledMembershipsComparisonQuery),
         User.countDocuments(previousTotalScheduledCancellationQuery),
-        PaymentEvent.find({
-          eventType: "BenefitsGranted",
-          timestamp: { $gte: comparisonStartDate, $lte: comparisonEndDate },
-        })
-          .select("userId packageType packageId data timestamp")
-          .lean()
-          .limit(10000),
+        fetchNetBenefitsGrantedInRange(comparisonStartDate, comparisonEndDate, {
+          userId: 1,
+          packageType: 1,
+          packageId: 1,
+          data: 1,
+          timestamp: 1,
+        }),
       ]);
 
       let previousTotalRevenue = 0;

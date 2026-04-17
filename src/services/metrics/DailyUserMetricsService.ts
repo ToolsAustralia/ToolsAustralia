@@ -6,7 +6,10 @@
  */
 
 import User from "@/models/User";
-import PaymentEvent from "@/models/PaymentEvent";
+import {
+  aggregateNetCountWithMatch,
+  aggregateNetRevenueSumWithMatch,
+} from "@/utils/payment/payment-event-net-queries";
 import ReferralEvent from "@/models/ReferralEvent";
 import connectDB from "@/lib/mongodb";
 import type { IDailyUserMetrics, DailyUserMetricsQuery, DailyUserMetricsResult } from "@/types/metrics/DailyUserMetrics";
@@ -199,41 +202,29 @@ export class DailyUserMetricsService {
       }
     }
 
-    // Get renewals for this day using PaymentEvent billingReason
-    const renewalEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
+    // Renewals (net: exclude subscription_cycle payments that were refunded)
+    const renewedMemberships = await aggregateNetCountWithMatch({
       packageType: "membership",
       "data.billingReason": "subscription_cycle",
       timestamp: {
         $gte: startOfDay,
         $lte: endOfDay,
       },
-    })
-      .select("_id")
-      .lean()
-      .exec();
+    });
 
-    const renewedMemberships = renewalEvents.length;
-
-    // Get purchase history from PaymentEvents for this day
-    const paymentEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
+    const totalRevenue = await aggregateNetRevenueSumWithMatch({
       timestamp: {
         $gte: startOfDay,
         $lte: endOfDay,
       },
-    })
-      .select("data.price")
-      .lean()
-      .exec();
+    });
 
-    const totalPurchases = paymentEvents.length;
-    let totalRevenue = 0;
-
-    for (const event of paymentEvents) {
-      const price = event.data?.price || 0;
-      totalRevenue += price;
-    }
+    const totalPurchases = await aggregateNetCountWithMatch({
+      timestamp: {
+        $gte: startOfDay,
+        $lte: endOfDay,
+      },
+    });
 
     const averageOrderValue = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;
 

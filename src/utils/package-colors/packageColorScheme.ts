@@ -85,7 +85,7 @@ export interface PackageColorScheme {
   hoverShadow: string;
   /** Border glow animation class */
   borderGlow: string;
-  /** Badge style for Popular/Current/Best Chance, price badge, and Enter Now button */
+  /** Badge style for Popular/Current/Best Value, price badge, and Enter Now button */
   badgeStyle: {
     background: string;
     boxShadow: string;

@@ -8,10 +8,18 @@
  * - Stripe amounts are in cents, but are converted to dollars when PaymentEvent is created
  * - Example: Stripe amount 5000 cents → PaymentEvent.data.price = 50.00 dollars
  * - This matches the format used throughout the application for revenue calculations
+ *
+ * Revenue methods exclude payments that have a RefundProcessed row (same paymentIntentId) — Option B net revenue.
  */
 
 import PaymentEvent from "@/models/PaymentEvent";
 import type { IPaymentEvent } from "@/models/PaymentEvent";
+import {
+  aggregateNetCountWithMatch,
+  aggregateNetRevenueSum,
+  excludeRefundedBenefitsGrantedStages,
+  fetchNetBenefitsGrantedInRange,
+} from "@/utils/payment/payment-event-net-queries";
 
 export class PaymentEventRepository {
   /**
@@ -21,22 +29,14 @@ export class PaymentEventRepository {
    * @returns Array of payment events
    */
   async findByDateRange(startDate: Date, endDate: Date): Promise<IPaymentEvent[]> {
-    const query = {
-      eventType: "BenefitsGranted", // Only successful payments
-      timestamp: {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    };
-    
-    console.log(`[PaymentEventRepo] Querying payment events:`, {
+    console.log(`[PaymentEventRepo] Querying net payment events:`, {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
     });
-    
-    const results = await PaymentEvent.find(query).lean().exec();
-    
-    console.log(`[PaymentEventRepo] Found ${results.length} payment events`);
+
+    const results = (await fetchNetBenefitsGrantedInRange(startDate, endDate)) as unknown as IPaymentEvent[];
+
+    console.log(`[PaymentEventRepo] Found ${results.length} net payment events`);
     if (results.length > 0) {
       console.log(`[PaymentEventRepo] Sample event:`, {
         _id: results[0]._id,
@@ -45,7 +45,7 @@ export class PaymentEventRepository {
         packageType: results[0].packageType,
       });
     }
-    
+
     return results;
   }
 
@@ -56,27 +56,7 @@ export class PaymentEventRepository {
    * @returns Total revenue in DOLLARS (PaymentEvent.data.price is already in dollars)
    */
   async getRevenueSum(startDate: Date, endDate: Date): Promise<number> {
-    const result = await PaymentEvent.aggregate([
-      {
-        $match: {
-          eventType: "BenefitsGranted",
-          timestamp: {
-            $gte: startDate,
-            $lte: endDate,
-          },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: {
-            $sum: { $ifNull: ["$data.price", 0] },
-          },
-        },
-      },
-    ]).exec();
-
-    return result[0]?.totalRevenue || 0;
+    return aggregateNetRevenueSum(startDate, endDate);
   }
 
   /**
@@ -86,13 +66,12 @@ export class PaymentEventRepository {
    * @returns Total number of sales
    */
   async getSalesCount(startDate: Date, endDate: Date): Promise<number> {
-    return PaymentEvent.countDocuments({
-      eventType: "BenefitsGranted",
+    return aggregateNetCountWithMatch({
       timestamp: {
         $gte: startDate,
         $lte: endDate,
       },
-    }).exec();
+    });
   }
 
   /**
@@ -112,6 +91,7 @@ export class PaymentEventRepository {
           },
         },
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $group: {
           _id: "$packageType",
@@ -166,6 +146,7 @@ export class PaymentEventRepository {
       {
         $match: matchQuery,
       },
+      ...excludeRefundedBenefitsGrantedStages(),
       {
         $project: {
           // Convert timestamp to AEST and extract hour (0-23)

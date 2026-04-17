@@ -537,7 +537,7 @@ export default async function MajorGiveawayTermsPage() {
               <div>
                 <h3 className="text-xl font-semibold text-white">17. No Refunds Based on Outcomes</h3>
                 <p>
-                  Participation involves chance; no refunds, credits, or compensation are provided for non-winning
+                  Participation does not guarantee a prize; no refunds, credits, or compensation are provided for non-winning
                   outcomes. Refunds are only available for genuine technical errors or system failures occurring before
                   the draw and as required by law.
                 </p>

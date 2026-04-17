@@ -65,7 +65,7 @@ const subscriptionPackages: PackageData[] = [
     entriesUnit: "mo",
     partnerDiscounts: "30 days",
     icon: boss,
-    description: "Maximum entries, maximum chances",
+    description: "Maximum entries, maximum value",
     benefits: [
       { text: "100 Free Entries Major Giveaway/month that accumulate" },
       { text: "100% access to partner discounts" },
