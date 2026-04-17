@@ -13,7 +13,7 @@ interface LatestWinnersBadgeProps {
 /**
  * LatestWinnersBadge Component (Major Draw Winner badge)
  * Displays major draw name + "Winner" (e.g. "January Draw Winner")
- * Red theme with animating gradient/glow, similar to BestChanceBadge
+ * Red theme with animating gradient/glow, similar to BestValueBadge
  */
 const LatestWinnersBadge: React.FC<LatestWinnersBadgeProps> = ({
   drawName,

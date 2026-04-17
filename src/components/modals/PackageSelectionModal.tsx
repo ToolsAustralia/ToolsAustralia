@@ -11,7 +11,7 @@ import { useUserData } from "@/hooks/queries";
 import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
-import BestChanceBadge from "@/components/ui/BestChanceBadge";
+import BestValueBadge from "@/components/ui/BestValueBadge";
 import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
@@ -631,9 +631,9 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   </div>
                 </div>
 
-                {/* Corner ribbon badges - Top Right (Best Chance, Popular, or Current) */}
+                {/* Corner ribbon badges - Top Right (Best Value, Popular, or Current) */}
                 {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                  <BestChanceBadge position="top-right" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+                  <BestValueBadge position="top-right" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
                 )}
                 {!(plan.id.includes("boss") || plan.id.includes("power")) && (isCurrentPlan(plan) || (plan.isPopular && !isCurrentPlan(plan))) && (
                   <CornerRibbonBadge

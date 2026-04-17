@@ -450,7 +450,7 @@ export default async function TermsPage() {
           >
             <h2 className="text-2xl font-semibold text-white">12. Responsible Participation</h2>
             <ul className="list-inside list-disc space-y-2 text-gray-300">
-              <li>Competitions involve chance; prizes not guaranteed</li>
+              <li>Prizes are not guaranteed; an entry does not guarantee selection</li>
               <li>Only spend what you can afford</li>
               <li>
                 Assistance available: Gambling Help 1800 858 858 or{" "}

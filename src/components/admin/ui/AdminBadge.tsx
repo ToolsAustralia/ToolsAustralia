@@ -31,7 +31,7 @@ export const adminBadgeVariants = {
   tagBlue:
     "bg-gradient-to-br from-blue-50 to-sky-50 dark:from-blue-950/50 dark:to-sky-950/35 text-blue-900 dark:text-blue-200 ring-blue-200/90 dark:ring-blue-500/30 border border-blue-200/80 dark:border-blue-500/25",
   tagEmerald:
-    "bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/45 dark:to-teal-950/35 text-emerald-900 dark:text-emerald-200 ring-emerald-200/90 dark:ring-emerald-500/30 border border-emerald-200/80 dark:border-emerald-500/25",
+    "bg-gradient-to-br from-emerald-50 to-teal-50 dark: from-emerald-950/45 dark:to-teal-950/35 text-emerald-900 dark:text-emerald-200 ring-emerald-200/90 dark:ring-emerald-500/30 border border-emerald-200/80 dark:border-emerald-500/25",
   tagViolet:
     "bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/45 dark:to-purple-950/35 text-violet-900 dark:text-violet-200 ring-violet-200/90 dark:ring-violet-500/30 border border-violet-200/80 dark:border-violet-500/25",
   tagOrange:

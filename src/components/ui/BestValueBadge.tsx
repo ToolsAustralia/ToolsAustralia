@@ -4,7 +4,7 @@ import React from "react";
 import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 import CornerRibbonBadge, { type CornerRibbonPosition } from "@/components/ui/CornerRibbonBadge";
 
-interface BestChanceBadgeProps {
+interface BestValueBadgeProps {
   size?: "xs" | "small" | "medium" | "large";
   className?: string;
   /** Corner position: top-left, top-right, bottom-left, bottom-right */
@@ -18,11 +18,11 @@ interface BestChanceBadgeProps {
 const SIZE_MAP = { xs: "small" as const, small: "small" as const, medium: "medium" as const, large: "large" as const };
 
 /**
- * BestChanceBadge Component
- * Premium corner ribbon badge for "BEST CHANCE" on boss/power packages.
+ * BestValueBadge Component
+ * Premium corner ribbon badge for "BEST VALUE" on boss/power packages.
  * Uses configurable corner position and package-themed or default brand red style.
  */
-const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
+const BestValueBadge: React.FC<BestValueBadgeProps> = ({
   size = "medium",
   className = "",
   position = "top-left",
@@ -36,8 +36,7 @@ const BestChanceBadge: React.FC<BestChanceBadgeProps> = ({
     colorScheme={colorScheme}
     className={className}
   >
-    BEST CHANCE
+    BEST VALUE
   </CornerRibbonBadge>
 );
-export default BestChanceBadge;
-
+export default BestValueBadge;

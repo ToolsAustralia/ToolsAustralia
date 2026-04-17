@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
-import PaymentEvent from "@/models/PaymentEvent";
+import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import MajorDraw from "@/models/MajorDraw";
 import { formatInTimeZone } from "date-fns-tz";
 import { startOfMonth, subDays, subMonths, subYears } from "date-fns";
@@ -110,11 +110,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get all successful payments in the date range
-    const revenueEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted",
-      timestamp: { $gte: startDate, $lte: endDate },
-    }).sort({ timestamp: 1 });
+    // Net revenue: BenefitsGranted in range excluding rows with RefundProcessed (Option B)
+    const revenueEventsRaw = await fetchNetBenefitsGrantedInRange(startDate, endDate);
+    const revenueEvents = [...revenueEventsRaw].sort(
+      (a, b) => new Date(a.timestamp ?? 0).getTime() - new Date(b.timestamp ?? 0).getTime()
+    );
 
     // Initialize chart data based on period
     const chartData: ChartData[] = [];

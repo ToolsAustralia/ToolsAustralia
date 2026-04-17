@@ -148,7 +148,7 @@ export default async function DrawResultsPage() {
                 How Winners Are Selected
               </h2>
               <p className="text-gray-600 dark:text-slate-300 max-w-2xl mx-auto">
-                Our fair and transparent selection process ensures every participant has an equal chance
+                Our fair and transparent selection process ensures every valid entry is treated equally in the draw
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8">

@@ -25,7 +25,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ExperimentEvent from "@/models/ab-testing/ExperimentEvent";
 import ExperimentDailyMetricsRepository from "@/repositories/ab-testing/ExperimentDailyMetricsRepository";
-import PaymentEvent from "@/models/PaymentEvent";
+import { aggregateNetRevenueSumWithMatch } from "@/utils/payment/payment-event-net-queries";
 import mongoose from "mongoose";
 import { waitForPoolCapacity } from "@/utils/database/connection-health";
 
@@ -156,28 +156,14 @@ export async function GET() {
         if (aggregated.length > 0 && aggregated[0].eventCount > 0) {
           const metrics = aggregated[0];
 
-          // ✅ OPTIMIZATION: Use lean() for read-only query
-          // Get revenue from PaymentEvents for this date range
-          const paymentEvents = await PaymentEvent.find({
+          const revenue = await aggregateNetRevenueSumWithMatch({
             experimentId,
             variantId,
-            eventType: "BenefitsGranted",
             timestamp: {
               $gte: yesterday,
               $lte: endOfYesterday,
             },
-          }).lean();
-
-          // ✅ Calculate revenue from PaymentEvents
-          // Only count events that have valid price data and are for this variant
-          const revenue = paymentEvents.reduce((sum, event) => {
-            const price = event.data?.price;
-            // Validate price: must be a number, not NaN, and >= 0
-            if (typeof price === "number" && !isNaN(price) && price >= 0) {
-              return sum + price;
-            }
-            return sum;
-          }, 0);
+          });
 
           // Upsert daily metrics
           await ExperimentDailyMetricsRepository.upsertDailyMetrics({

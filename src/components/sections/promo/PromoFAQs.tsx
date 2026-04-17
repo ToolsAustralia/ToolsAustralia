@@ -8,7 +8,7 @@ const faqs: FAQItem[] = [
     id: "1",
     question: "How do I enter the giveaway?",
     answer:
-      "Simply purchase any One Time Package or Membership from our website. A One Time Package will specifically enter you with one time entries into the giveaway and a membership will automatically enter you into all of our giveaways. The more entries you have, the better your chances of winning!",
+      "Simply purchase any One Time Package or Membership from our website. A One Time Package will specifically enter you with one time entries into the giveaway and a membership will automatically enter you into all of our giveaways. The more entries you have, the stronger your position in each draw!",
   },
   {
     id: "2",
@@ -20,7 +20,7 @@ const faqs: FAQItem[] = [
     id: "3",
     question: "Can I win if I've entered before?",
     answer:
-      "Absolutely! Previous entries don't affect your chances. Each is independent, and all valid entries have an equal chance of winning. Many of our winners have been loyal customers for years.",
+      "Absolutely! Previous entries don't affect new ones. Each draw is independent, and all valid entries are weighted equally. Many of our winners have been loyal customers for years.",
   },
   {
     id: "4",
@@ -44,7 +44,7 @@ const faqs: FAQItem[] = [
     id: "7",
     question: "What if I'm already a member?",
     answer:
-      "As a member, you accumulate entries for the Major Giveaway with your subscription. For mini draws, only mini pack purchases count—you can buy mini packs to enter. You can also purchase one-time or other packages for more chances in the major draw.",
+      "As a member, you accumulate entries for the Major Giveaway with your subscription. For mini draws, only mini pack purchases count—you can buy mini packs to enter. You can also purchase one-time or other packages for more entries in the major draw.",
   },
   {
     id: "8",
@@ -56,7 +56,7 @@ const faqs: FAQItem[] = [
     id: "9",
     question: "Can I enter multiple times?",
     answer:
-      "Yes! You can purchase multiple packages to increase your chances. Each package gives you additional entries, and there's no limit to how many you can purchase.",
+      "Yes! You can purchase multiple packages to add more entries. Each package gives you additional entries, and there's no limit to how many you can purchase.",
   },
 ];
 
