@@ -4,7 +4,7 @@
  * Displays the user's current partner discount access status and queued future benefits.
  * Shows:
  * - Active discount period with countdown
- * - List of upcoming queued discount periods (FIFO order)
+ * - List of upcoming queued discount periods (highest partner tier first, then FIFO)
  * - Total days of access remaining
  * - Visual timeline of benefits
  *
@@ -23,6 +23,7 @@ import {
   derivePlanIdFromPackage,
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -30,7 +31,7 @@ type StaticImageData = PackageIconData;
 // Interface for active period data from API
 interface ActivePeriod {
   isActive: boolean;
-  source: "subscription" | "one-time" | "mini-draw" | "upsell" | null;
+  source: "membership" | "one-time" | "mini-draw" | "upsell" | null;
   packageName: string | null;
   endsAt: Date | null;
   daysRemaining: number;
@@ -66,6 +67,25 @@ interface QueueSummary {
       subscriptionType: string;
     };
   };
+}
+
+function partnerCatalogPercentForQueueDisplay(
+  summary: QueueSummary["summary"],
+  activePeriod: ActivePeriod
+): number {
+  if (summary.isActiveSubscription && summary.subscriptionBenefits?.packageName) {
+    const planId = derivePlanIdFromPackage(
+      { name: summary.subscriptionBenefits.packageName, type: "subscription" },
+      "subscription"
+    );
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  if (activePeriod.isActive && activePeriod.packageName) {
+    const membershipType = activePeriod.source === "membership" ? "subscription" : "one-time";
+    const planId = derivePlanIdFromPackage({ name: activePeriod.packageName }, membershipType);
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  return 100;
 }
 
 // Export the component and optimistic update function for external use
@@ -410,13 +430,18 @@ export default function PartnerDiscountQueue({
 
   const { activePeriod, queuedItems, totalQueuedDays, totalQueuedItems, summary } = queueData;
 
+  const partnerCatalogPct = partnerCatalogPercentForQueueDisplay(summary, activePeriod);
+
+  const displayTotalDaysRemaining = Math.max(0, Math.round(summary.totalDaysOfAccessRemaining));
+  const displayQueuedDaysTotal = Math.max(0, Math.round(totalQueuedDays));
+
   const queueHeading = titleOverride ?? "Partner Discounts";
   const queueSubtitle =
     subtitleOverride ??
     (summary.isActiveSubscription && summary.subscriptionBenefits
-      ? `100% partner discount • Active subscription`
-      : summary.totalDaysOfAccessRemaining > 0
-      ? `${summary.totalDaysOfAccessRemaining} days of access `
+      ? `${partnerCatalogPct}% of partner catalog • Active subscription`
+      : displayTotalDaysRemaining > 0
+      ? `${partnerCatalogPct}% of partner catalog • ${displayTotalDaysRemaining} days of access `
       : "You have no partner access yet");
 
   const handleToggle = () => {
@@ -517,14 +542,14 @@ export default function PartnerDiscountQueue({
                 </span>
               );
             })()
-          ) : summary.totalDaysOfAccessRemaining > 0 ? (
+          ) : displayTotalDaysRemaining > 0 ? (
             <div
               className={`bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 border-2 border-yellow-300 shadow-sm ${
                 isOptimisticUpdate ? "animate-pulse" : ""
               }`}
             >
               <p className="text-sm sm:text-2xl font-bold bg-gradient-to-r from-yellow-700 to-orange-600 bg-clip-text text-transparent leading-none">
-                {summary.totalDaysOfAccessRemaining}
+                {displayTotalDaysRemaining}
               </p>
             </div>
           ) : null}
@@ -543,7 +568,7 @@ export default function PartnerDiscountQueue({
               },
               {
                 label: "Queued Days",
-                value: totalQueuedDays,
+                value: displayQueuedDaysTotal,
                 hint: "Auto-activates when current period ends.",
                 accent: "from-yellow-400/40 to-orange-500/10 border-yellow-400/30",
               },
@@ -601,7 +626,7 @@ export default function PartnerDiscountQueue({
                       </p>
                       {summary.isActiveSubscription && summary.subscriptionBenefits && (
                         <p className="text-emerald-200 font-bold text-xs sm:text-sm mt-1">
-                          100% partner discount on all purchases
+                          {partnerCatalogPct}% of partner offers included with your subscription
                         </p>
                       )}
                     </div>
@@ -695,8 +720,8 @@ export default function PartnerDiscountQueue({
                             {item.packageName}
                           </h4>
                           <p className="text-[10px] sm:text-xs lg:text-sm text-white/70 font-medium truncate">
-                            <span className="text-orange-300 font-bold">{item.daysOfAccess}</span> day
-                            {item.daysOfAccess !== 1 ? "s" : ""} access
+                            <span className="text-orange-300 font-bold">{Math.round(item.daysOfAccess)}</span> day
+                            {Math.round(item.daysOfAccess) !== 1 ? "s" : ""} access
                           </p>
                         </div>
                       </div>
@@ -730,8 +755,8 @@ export default function PartnerDiscountQueue({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm text-white font-semibold mb-0.5 sm:mb-1">
-                      <strong className="text-sm sm:text-base">Total:</strong> {totalQueuedDays} day
-                      {totalQueuedDays !== 1 ? "s" : ""}
+                      <strong className="text-sm sm:text-base">Total:</strong> {displayQueuedDaysTotal} day
+                      {displayQueuedDaysTotal !== 1 ? "s" : ""}
                     </p>
                     <p className="text-[10px] sm:text-xs text-white/70">
                       Activates automatically when current period ends

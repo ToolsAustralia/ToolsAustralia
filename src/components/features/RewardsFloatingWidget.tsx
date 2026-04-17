@@ -32,7 +32,7 @@ const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
   period: "mo",
   features: [
     { text: "15 Free Accumulated Entries" },
-    { text: "100% Access to Partner Discounts" },
+    { text: "50% Access to Partner Discounts" },
     { text: "Mini Draws" },
   ],
   buttonText: "Get Started",

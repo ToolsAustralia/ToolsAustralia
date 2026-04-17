@@ -7,6 +7,8 @@
  * @module utils/integrations/klaviyo/klaviyo-invoice-helpers
  */
 
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+
 export type PackageType = "membership" | "one-time" | "mini-draw" | "upsell";
 
 /**
@@ -29,6 +31,8 @@ export interface InvoiceData {
   packageId: string;
   packageName: string;
   packageTier?: string;
+  /** Partner catalog access % for the primary line item (Klaviyo transactional templates). */
+  partnerDiscountCatalogPercent?: number;
   totalAmount: number;
   paymentIntentId: string;
   billingReason?: string;
@@ -132,6 +136,7 @@ export function buildInvoiceData(packageData: PackageData, paymentIntentId: stri
     packageId: packageData.packageId,
     packageName: packageData.packageName,
     packageTier,
+    partnerDiscountCatalogPercent: getPartnerCatalogAccessPercentForPlanId(packageData.packageId),
     totalAmount: packageData.price,
     paymentIntentId,
     billingReason: packageData.packageType === "membership" ? "subscription_create" : undefined,
@@ -195,6 +200,7 @@ export function buildCombinedInvoiceData(
     packageId: originalPurchase.packageId,
     packageName: originalPurchase.packageName,
     packageTier,
+    partnerDiscountCatalogPercent: getPartnerCatalogAccessPercentForPlanId(originalPurchase.packageId),
     totalAmount,
     paymentIntentId: originalPurchase.paymentIntentId,
     billingReason: originalPurchase.packageType === "membership" ? "subscription_create" : undefined,

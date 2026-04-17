@@ -11,6 +11,10 @@ import type { IUser } from "@/models/User";
 import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
 import { getPackageById } from "@/data/membershipPackages";
+import {
+  getPartnerCatalogAccessPercentForPlanId,
+  getPartnerDiscountCatalogSummaryForPackageId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 import { extractBrandFromSlug } from "./brand-extraction";
 import { calculateDrawSpecificPropertiesForUser, calculateDrawSpecificProperties, type DrawSpecificProperties } from "./klaviyo-draw-calculator";
 import { getRenewalEntriesPreviewForProfile } from "./klaviyo-renewal-entries-preview";
@@ -587,6 +591,7 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
   packageId: string;
   packageName: string;
   packageTier?: string;
+  partnerDiscountCatalogPercent?: number;
   totalAmount: number;
   paymentIntentId: string;
   billingReason?: string;
@@ -619,6 +624,9 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
     total_price: item.total_price.toFixed(2),
   }));
 
+  const partnerDiscountCatalogPercent =
+    invoiceData.partnerDiscountCatalogPercent ?? getPartnerCatalogAccessPercentForPlanId(invoiceData.packageId);
+
   return {
     invoice_id: invoiceData.invoiceId,
     invoice_number: invoiceData.invoiceNumber,
@@ -627,6 +635,8 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
     package_id: invoiceData.packageId,
     package_name: formattedPackageName,
     package_tier: invoiceData.packageTier?.trim() || "",
+    partner_discount_catalog_percent: partnerDiscountCatalogPercent,
+    partner_discount_catalog_summary: getPartnerDiscountCatalogSummaryForPackageId(invoiceData.packageId),
     total_amount: formattedTotalAmount, // Formatted as "49.99"
     payment_intent_id: invoiceData.paymentIntentId,
     billing_reason: invoiceData.billingReason || "",

@@ -20,6 +20,7 @@ import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
@@ -651,6 +652,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         text: `${status.data.points} reward points earned`,
         icon: "zap" as const,
       });
+    }
+
+    const partnerLineUpsell = getPartnerDiscountBenefitTextForPackageId(offer.id);
+    if (partnerLineUpsell) {
+      benefits.push({ text: partnerLineUpsell, icon: "tag" as const });
     }
 
     // Show success modal with entry information

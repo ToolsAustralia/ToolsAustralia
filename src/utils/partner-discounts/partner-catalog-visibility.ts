@@ -1,0 +1,145 @@
+import type { IUser } from "@/models/User";
+import type { UserData } from "@/hooks/queries/useUserQueries";
+import { getPackageById } from "@/data/membershipPackages";
+import { getUpsellPackageById } from "@/data/upsellPackages";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
+
+type QueueItem = { packageId: string; packageType: string; status: string };
+
+type UserWithPartnerCatalogContext = (Partial<UserData> | Partial<IUser>) & {
+  subscription?: { isActive?: boolean };
+  subscriptionPackageData?: UserData["subscriptionPackageData"];
+  enrichedOneTimePackages?: UserData["enrichedOneTimePackages"];
+  partnerDiscountQueue?: QueueItem[];
+};
+
+/**
+ * Partner catalog access percent for a package/plan id (subscriptions, one-time, plus upsells).
+ * Subscriptions: Tradie 50%, Foreman 75%, Boss 100%.
+ * One-time ladder: Apprentice 25%, Tradie 40%, Foreman 55%, Boss 70%, Power 100%.
+ * Subscription-plus upsells align with base subscription tiers.
+ */
+export function getPartnerCatalogAccessPercentForPlanId(planId: string): number {
+  const l = planId.toLowerCase();
+
+  if (l.includes("plus-package") || l.endsWith("-plus-pack")) {
+    if (l.includes("foreman")) return 75;
+    if (l.includes("boss")) return 100;
+    if (l.includes("tradie")) return 50;
+  }
+
+  if (l.includes("subscription")) {
+    if (l.includes("foreman")) return 75;
+    if (l.includes("boss")) return 100;
+    if (l.includes("tradie")) return 50;
+    return 100;
+  }
+
+  if (l.includes("power")) return 100;
+  if (l.includes("boss")) return 70;
+  if (l.includes("foreman")) return 55;
+  if (l.includes("tradie")) return 40;
+  if (l.includes("apprentice")) return 25;
+
+  // Mini draw packs (mini-pack-1 … mini-pack-8, incl. *-upgrade): ladder aligned to one-time tiers
+  const miniMatch = l.match(/mini-pack-(\d+)/);
+  if (miniMatch) {
+    const n = parseInt(miniMatch[1], 10);
+    if (n <= 2) return 25;
+    if (n <= 4) return 40;
+    if (n <= 6) return 55;
+    if (n === 7) return 70;
+    return 100;
+  }
+
+  return 100;
+}
+
+function partnerCatalogSummaryFromPercent(pct: number): string {
+  return `${pct}% of partner offers`;
+}
+
+/**
+ * Visible partner-offer count (deterministic: first k in catalog order).
+ * Foreman subscription uses round(75% N); other fractional tiers use ceil.
+ */
+export function getPartnerCatalogVisibleSliceLength(totalPartners: number, planId: string | null): number {
+  if (totalPartners <= 0) return 0;
+  if (!planId) return totalPartners;
+
+  const pct = getPartnerCatalogAccessPercentForPlanId(planId);
+  if (pct >= 100) return totalPartners;
+
+  const l = planId.toLowerCase();
+  if (pct === 75 && l.includes("foreman") && l.includes("subscription")) {
+    return Math.round(totalPartners * 0.75);
+  }
+  return Math.ceil(totalPartners * (pct / 100));
+}
+
+/**
+ * Same precedence as package theme on membership / benefits pages: active subscription package first,
+ * else active one-time / mini-draw / upsell from queue + enriched one-time packages.
+ */
+export function resolvePartnerCatalogPlanId(user: UserWithPartnerCatalogContext | null | undefined): string | null {
+  if (!user) return null;
+
+  if (user.subscription?.isActive && user.subscriptionPackageData) {
+    return derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+  }
+
+  const enriched = user.enrichedOneTimePackages;
+  if (enriched?.length) {
+    const queue = user.partnerDiscountQueue ?? [];
+    const activeIds = new Set(
+      queue
+        .filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType))
+        .map((i) => String(i.packageId))
+    );
+    const pkg = enriched
+      .filter((p) => p.isActive && p.packageData && activeIds.has(String(p.packageId)))
+      .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+    if (pkg?.packageData) {
+      return derivePlanIdFromPackage(pkg.packageData, "one-time");
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Klaviyo / UI: short summary for transactional copy.
+ */
+export function getPartnerDiscountCatalogSummaryForPackageId(packageId: string): string {
+  return partnerCatalogSummaryFromPercent(getPartnerCatalogAccessPercentForPlanId(packageId));
+}
+
+/**
+ * Single benefit line for post-purchase success UI when the package includes partner discount access.
+ */
+export function getPartnerDiscountBenefitTextForPackageId(packageId: string | undefined): string | null {
+  if (!packageId?.trim()) return null;
+
+  const l = packageId.toLowerCase();
+  if (l.includes("mini-draw") && !l.includes("mini-pack")) {
+    return null;
+  }
+
+  const staticPkg = getPackageById(packageId);
+  const upsellPkg = getUpsellPackageById(packageId);
+
+  if (staticPkg) {
+    const grantsPartner =
+      staticPkg.type === "subscription" || (staticPkg.partnerDiscountDays ?? 0) > 0;
+    if (!grantsPartner) return null;
+  } else if (upsellPkg) {
+    const days = upsellPkg.partnerDiscountDays ?? 0;
+    const hours = "partnerDiscountHours" in upsellPkg ? Number((upsellPkg as { partnerDiscountHours?: number }).partnerDiscountHours ?? 0) : 0;
+    if (days <= 0 && hours <= 0) return null;
+  } else if (!/mini-pack-\d+/i.test(packageId)) {
+    return null;
+  }
+
+  const pct = getPartnerCatalogAccessPercentForPlanId(packageId);
+  return `${pct}% access to partner discount offers`;
+}
