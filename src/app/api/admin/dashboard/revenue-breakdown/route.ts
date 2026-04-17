@@ -145,6 +145,7 @@ export async function GET(request: NextRequest) {
 
       // Process each payment event and assign to draw period
       revenueEvents.forEach((event) => {
+        if (!event.timestamp) return;
         const eventTimestamp = new Date(event.timestamp);
         const price = event.data?.price || 0;
 
@@ -205,6 +206,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Process each payment event for days/months/years periods
       revenueEvents.forEach((event) => {
+        if (!event.timestamp) return;
         const eventDate = new Date(event.timestamp);
         const price = event.data?.price || 0;
 
