@@ -70,7 +70,7 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
                 </div>
               )}
               <div className="flex items-center justify-between border-b border-gray-700 py-1.5">
-                <span className="text-gray-300 text-sm sm:text-base">Entries:</span>
+                <span className="text-gray-300 text-sm sm:text-base">Free entries:</span>
                 <span className="font-semibold text-yellow-400 text-base sm:text-lg">{pkg.entries}</span>
               </div>
               <div className="flex items-center justify-between border-b border-gray-700 py-1.5">

@@ -370,6 +370,17 @@ async function buildAdminUserProfile(userId: string) {
       .filter((e) => e.eventType === "RefundProcessed")
       .map((e) => e.paymentIntentId)
   );
+
+  const refundProcessedAtByPaymentIntentId = new Map<string, string>();
+  for (const e of paymentEvents) {
+    if (e.eventType !== "RefundProcessed" || typeof e.paymentIntentId !== "string" || !e.timestamp) continue;
+    const iso =
+      e.timestamp instanceof Date ? e.timestamp.toISOString() : new Date(e.timestamp).toISOString();
+    const prev = refundProcessedAtByPaymentIntentId.get(e.paymentIntentId);
+    if (!prev || new Date(iso) > new Date(prev)) {
+      refundProcessedAtByPaymentIntentId.set(e.paymentIntentId, iso);
+    }
+  }
   const totalSpent = paymentEvents
     .filter(
       (event) =>
@@ -656,15 +667,23 @@ async function buildAdminUserProfile(userId: string) {
     }),
     orders,
     paymentEventsTotal: paymentEvents.length,
-    paymentEvents: paymentEvents.slice(0, 25).map((event) => ({
-      _id: event._id,
-      eventType: event.eventType,
-      timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
-      packageType: event.packageType,
-      packageId: event.packageId != null ? String(event.packageId) : undefined,
-      packageName: typeof event.packageName === "string" ? event.packageName : undefined,
-      data: event.data,
-    })),
+    paymentEvents: paymentEvents.slice(0, 25).map((event) => {
+      const pi = typeof event.paymentIntentId === "string" ? event.paymentIntentId : undefined;
+      const isRefundedBenefits =
+        event.eventType === "BenefitsGranted" && pi != null && refundedPaymentIntentIds.has(pi);
+      return {
+        _id: event._id,
+        eventType: event.eventType,
+        paymentIntentId: pi,
+        hasRefundProcessed: isRefundedBenefits,
+        refundProcessedAt: isRefundedBenefits ? refundProcessedAtByPaymentIntentId.get(pi) : undefined,
+        timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
+        packageType: event.packageType,
+        packageId: event.packageId != null ? String(event.packageId) : undefined,
+        packageName: typeof event.packageName === "string" ? event.packageName : undefined,
+        data: event.data,
+      };
+    }),
     referral: referralSummary,
     savedPaymentMethods: savedPaymentMethodsSummary,
   };

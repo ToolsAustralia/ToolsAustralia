@@ -8,7 +8,7 @@
  *   (tier-priority); FIFO within the same tier. New higher tier can preempt an active lower tier
  *   (remaining time is preserved and queued).
  * - Automatic activation when previous period ends
- * - Subscription priority (subscriptions always take precedence over one-time stacking)
+ * - Subscription vs one-time: higher partner-catalog tier % wins; if equal, membership wins
  * - 12-month expiry on queued benefits
  * - Real-time calculation for flexibility
  *
@@ -39,13 +39,144 @@ function pickHighestTierQueuedItem(queued: PartnerDiscountQueueItem[]): PartnerD
   });
 }
 
+/** Queued or in-flight one-time / mini / upsell periods (excludes expired/cancelled). */
+function eligibleNonMembershipPartnerItems(
+  queue: PartnerDiscountQueueItem[],
+  now: Date
+): PartnerDiscountQueueItem[] {
+  return queue.filter(
+    (i) =>
+      i.packageType !== "membership" &&
+      i.status !== "expired" &&
+      i.status !== "cancelled" &&
+      (i.status === "queued" ||
+        (i.status === "active" && i.endDate && new Date(i.endDate) > now))
+  );
+}
+
+/** Highest-tier non-membership candidate; ties → older purchase first (FIFO). */
+function pickHighestTierNonMembershipItem(items: PartnerDiscountQueueItem[]): PartnerDiscountQueueItem | null {
+  if (items.length === 0) return null;
+  return items.reduce((best, cur) => {
+    const bt = partnerTierPercentForQueueItem(best);
+    const ct = partnerTierPercentForQueueItem(cur);
+    if (ct > bt) return cur;
+    if (ct < bt) return best;
+    return new Date(cur.purchaseDate).getTime() < new Date(best.purchaseDate).getTime() ? cur : best;
+  });
+}
+
+function subscriptionPartnerCatalogPercent(user: IUser): number {
+  if (!user.subscription?.isActive || !user.subscription.packageId) return 0;
+  return getPartnerCatalogAccessPercentForPlanId(user.subscription.packageId);
+}
+
+/**
+ * When a subscription is active, align queue rows with catalog rules: one-time / mini / upsell
+ * beats membership only if its tier % is strictly greater; ties and higher membership % keep membership leading.
+ */
+function reconcilePartnerDiscountSubscriptionVsQueue(user: IUser): boolean {
+  const queue = user.partnerDiscountQueue;
+  if (!queue?.length || !user.subscription?.isActive) {
+    return false;
+  }
+
+  let changed = false;
+  const now = new Date();
+  const subPct = subscriptionPartnerCatalogPercent(user);
+
+  const eligible = eligibleNonMembershipPartnerItems(queue, now);
+  const bestOt = pickHighestTierNonMembershipItem(eligible);
+  const oneTimeOutranksMembership = bestOt !== null && partnerTierPercentForQueueItem(bestOt) > subPct;
+
+  const pauseActiveOneTime = (ot: PartnerDiscountQueueItem) => {
+    const remainingMs =
+      ot.endDate && ot.status === "active" ? new Date(ot.endDate).getTime() - Date.now() : 0;
+    const remainingHours = Math.max(0, remainingMs / (1000 * 60 * 60));
+
+    ot.status = "queued";
+    ot.startDate = undefined;
+    ot.endDate = undefined;
+
+    if (remainingHours <= MIN_HOURS_TO_REQUEUE_PREEMPTED) {
+      ot.status = "expired";
+    } else {
+      ot.discountHours = remainingHours;
+      ot.discountDays = remainingHours / 24;
+    }
+    changed = true;
+  };
+
+  if (oneTimeOutranksMembership) {
+    for (const item of queue) {
+      if (item.packageType === "membership" && item.status === "active") {
+        item.status = "queued";
+        item.startDate = undefined;
+        item.endDate = undefined;
+        changed = true;
+      }
+    }
+
+    for (const ot of queue) {
+      if (ot.status !== "active" || ot.packageType === "membership" || ot === bestOt) continue;
+      const bt = partnerTierPercentForQueueItem(bestOt);
+      const otT = partnerTierPercentForQueueItem(ot);
+      if (bt >= otT) {
+        pauseActiveOneTime(ot);
+      }
+    }
+
+    if (bestOt.status !== "active") {
+      bestOt.status = "active";
+      bestOt.queuePosition = 0;
+      bestOt.startDate = new Date();
+      const endDate = new Date(bestOt.startDate);
+      endDate.setHours(endDate.getHours() + bestOt.discountHours);
+      bestOt.endDate = endDate;
+      changed = true;
+    }
+  } else {
+    for (const item of queue) {
+      if (item.packageType !== "membership" && item.status === "active") {
+        pauseActiveOneTime(item);
+      }
+    }
+
+    const membershipRows = queue.filter((i) => i.packageType === "membership" && i.status !== "cancelled");
+    const subEnd = user.subscription?.endDate ? new Date(user.subscription.endDate) : undefined;
+    for (const m of membershipRows) {
+      if (m.status === "expired") continue;
+      m.status = "active";
+      m.queuePosition = 0;
+      m.startDate = m.startDate ?? new Date();
+      if (subEnd) m.endDate = subEnd;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 /**
  * If a lower one-time / mini / upsell tier is active but a strictly higher tier is queued,
- * promote the queued item (legacy FIFO states, or preemption missed). No-op when subscription is active.
+ * promote the queued item (legacy FIFO states, or preemption missed).
+ * When a subscription is active, only runs if a one-time period outranks the membership catalog tier.
  */
 function rebalanceHigherTierQueuedOverActiveLower(user: IUser): boolean {
   if (user.subscription?.isActive) {
-    return false;
+    const subPct = subscriptionPartnerCatalogPercent(user);
+    const now = new Date();
+    const dominates = (user.partnerDiscountQueue ?? []).some(
+      (i) =>
+        i.status === "active" &&
+        i.packageType !== "membership" &&
+        i.endDate &&
+        new Date(i.endDate) > now &&
+        partnerTierPercentForQueueItem(i) > subPct
+    );
+    if (!dominates) {
+      return false;
+    }
   }
 
   const queue = user.partnerDiscountQueue;
@@ -197,7 +328,7 @@ export async function addToPartnerDiscountQueue(
 
     // console.log(`✅ Subscription activated immediately with priority`);
   } else if (hasActiveSubscription) {
-    // Subscription always takes precedence — queue new one-time / mini / upsell behind membership access
+    // Tier vs membership is resolved after push via reconcilePartnerDiscountSubscriptionVsQueue
     const maxQueuePosition = Math.max(0, ...user.partnerDiscountQueue.map((item) => item.queuePosition));
 
     queueItem.queuePosition = maxQueuePosition + 1;
@@ -253,6 +384,10 @@ export async function addToPartnerDiscountQueue(
   // Add to queue
   user.partnerDiscountQueue.push(queueItem);
 
+  if (hasActiveSubscription) {
+    reconcilePartnerDiscountSubscriptionVsQueue(user);
+  }
+
   // Reorder queue positions to maintain consistency
   await reorderQueue(user);
 
@@ -284,7 +419,35 @@ export function calculateActivePartnerDiscountPeriod(user: IUser): {
 } {
   const now = new Date();
 
-  // Check for active subscription first (highest priority)
+  // Active one-time / mini / upsell that outranks the membership catalog tier takes display priority
+  if (user.subscription?.isActive && user.partnerDiscountQueue?.length) {
+    const subPct = subscriptionPartnerCatalogPercent(user);
+    const activeOt = user.partnerDiscountQueue.find(
+      (item) =>
+        item.status === "active" &&
+        item.packageType !== "membership" &&
+        item.endDate &&
+        new Date(item.endDate) > now &&
+        partnerTierPercentForQueueItem(item) > subPct
+    );
+    if (activeOt?.endDate) {
+      const endsAt = new Date(activeOt.endDate);
+      const msRemaining = endsAt.getTime() - now.getTime();
+      const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+      const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
+      return {
+        isActive: true,
+        source: activeOt.packageType as "membership" | "one-time" | "mini-draw" | "upsell" | null,
+        packageName: activeOt.packageName,
+        endsAt,
+        daysRemaining,
+        hoursRemaining,
+        queuedItems: user.partnerDiscountQueue.filter((item) => item.status === "queued").length,
+      };
+    }
+  }
+
+  // Check for active subscription (membership leads when tier ≥ best one-time, or tie)
   if (user.subscription?.isActive) {
     // Handle subscriptions with endDate (billing cycle based)
     if (user.subscription.endDate) {
@@ -424,7 +587,12 @@ export async function processPartnerDiscountQueue(user: IUser): Promise<boolean>
     }
   });
 
-  // Step 2b: Queued higher tier must not sit behind an active lower tier (repair legacy FIFO + edge cases)
+  // Step 2b: Align membership vs one-time catalog tiers when subscription is active
+  if (reconcilePartnerDiscountSubscriptionVsQueue(user)) {
+    hasChanges = true;
+  }
+
+  // Step 2c: Queued higher tier must not sit behind an active lower tier (repair legacy FIFO + edge cases)
   if (rebalanceHigherTierQueuedOverActiveLower(user)) {
     hasChanges = true;
   }
@@ -596,6 +764,8 @@ export async function handleSubscriptionQueueUpdate(
     }
 
     await reorderQueue(user);
+    reconcilePartnerDiscountSubscriptionVsQueue(user);
+    await reorderQueue(user);
     // console.log(`✅ Subscription activated in queue`);
   } else if (action === "end") {
     // console.log(`🛑 Ending subscription in partner discount queue`);
@@ -648,6 +818,9 @@ export async function cancelQueueItem(user: IUser, paymentIntentId: string): Pro
   }
 
   await reorderQueue(user);
+
+  user.markModified("partnerDiscountQueue");
+  await user.save();
 
   return true;
 }

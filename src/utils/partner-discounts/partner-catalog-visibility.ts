@@ -4,7 +4,13 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 
-type QueueItem = { packageId: string; packageType: string; status: string };
+type QueueItem = {
+  packageId: string;
+  packageType: string;
+  status: string;
+  endDate?: Date | string;
+  purchaseDate?: Date | string;
+};
 
 type UserWithPartnerCatalogContext = (Partial<UserData> | Partial<IUser>) & {
   subscription?: { isActive?: boolean };
@@ -78,19 +84,68 @@ export function getPartnerCatalogVisibleSliceLength(totalPartners: number, planI
 }
 
 /**
- * Same precedence as package theme on membership / benefits pages: active subscription package first,
- * else active one-time / mini-draw / upsell from queue + enriched one-time packages.
+ * Same precedence as partner discount queue: higher catalog tier % wins between membership and one-time;
+ * ties favor membership. Otherwise active one-time from queue + enriched one-time packages.
  */
 export function resolvePartnerCatalogPlanId(user: UserWithPartnerCatalogContext | null | undefined): string | null {
   if (!user) return null;
 
-  if (user.subscription?.isActive && user.subscriptionPackageData) {
+  const queue = user.partnerDiscountQueue ?? [];
+  const now = new Date();
+
+  const hasSub = Boolean(user.subscription?.isActive && user.subscriptionPackageData);
+  const subPct = hasSub
+    ? getPartnerCatalogAccessPercentForPlanId(
+        derivePlanIdFromPackage(user.subscriptionPackageData!, "subscription")
+      )
+    : -1;
+
+  const competing = queue.filter((i) => {
+    if (!["one-time", "mini-draw", "upsell"].includes(i.packageType)) return false;
+    if (i.status === "expired" || i.status === "cancelled") return false;
+    if (i.status === "queued") return true;
+    if (i.status === "active") {
+      const end = i.endDate ? new Date(i.endDate) : null;
+      return Boolean(end && end > now);
+    }
+    return false;
+  });
+
+  let best: QueueItem | null = null;
+  let bestTier = -1;
+  for (const i of competing) {
+    const t = getPartnerCatalogAccessPercentForPlanId(i.packageId);
+    if (t > bestTier) {
+      bestTier = t;
+      best = i;
+    } else if (t === bestTier && best) {
+      const iPd = i.purchaseDate ? new Date(i.purchaseDate).getTime() : 0;
+      const bPd = best.purchaseDate ? new Date(best.purchaseDate).getTime() : 0;
+      if (iPd < bPd) best = i;
+    }
+  }
+
+  if (hasSub && best && bestTier > subPct) {
+    const enriched = user.enrichedOneTimePackages;
+    const fromEnriched = enriched
+      ?.filter((p) => p.isActive && p.packageData && String(p.packageId) === String(best!.packageId))
+      .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+    if (fromEnriched?.packageData) {
+      return derivePlanIdFromPackage(fromEnriched.packageData, "one-time");
+    }
+    const staticPkg = getPackageById(best.packageId);
+    if (staticPkg) {
+      return derivePlanIdFromPackage(staticPkg, "one-time");
+    }
+    return best.packageId;
+  }
+
+  if (hasSub && user.subscriptionPackageData) {
     return derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
   }
 
   const enriched = user.enrichedOneTimePackages;
   if (enriched?.length) {
-    const queue = user.partnerDiscountQueue ?? [];
     const activeIds = new Set(
       queue
         .filter((i) => i.status === "active" && ["one-time", "mini-draw", "upsell"].includes(i.packageType))
