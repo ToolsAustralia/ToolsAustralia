@@ -766,6 +766,7 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     barColorVertical: "bg-gradient-to-t from-[#e0ff00] via-[#f2ff4d] to-[#c8eb00]",
     barColorLightVertical: "bg-gradient-to-t from-[#f2ff4d] via-[#e0ff00] to-[#f2ff4d]",
     barGradientCss: "linear-gradient(to top, #c8eb00 0%, #e0ff00 45%, #f5ff5a 100%)",
+    packageInclusionTextStyle: { color: "#000000" },
   },
   // Makita: align with BRAND_THEMES.makita (#5ca9ec / #00c2ed) — MembershipSection, modals, charts
   "makita-teal": {

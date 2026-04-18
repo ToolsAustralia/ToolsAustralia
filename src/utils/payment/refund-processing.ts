@@ -8,6 +8,8 @@
  * We listen to webhook events and sync our database accordingly.
  */
 
+import mongoose from "mongoose";
+import type Stripe from "stripe";
 import PaymentEvent, { IPaymentEvent } from "@/models/PaymentEvent";
 import User, { IUser } from "@/models/User";
 import connectDB from "@/lib/mongodb";
@@ -18,6 +20,40 @@ import { reverseAffiliateCommissions } from "../affiliate/reverse-commission";
 import { getPackageById } from "@/data/membershipPackages";
 import { trackRefundedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import { extractOrderIdFromPaymentIntent, type PackageType } from "@/utils/integrations/klaviyo/klaviyo-order-helpers";
+import {
+  cancelQueueItem,
+  handleSubscriptionQueueUpdate,
+} from "@/utils/partner-discounts/partner-discount-queue";
+
+function paymentIntentIdsOnStripeInvoice(inv: Stripe.Invoice): string[] {
+  const typed = inv as Stripe.Invoice & {
+    payment_intent?: string | Stripe.PaymentIntent | null;
+    latest_payment_intent?: string | Stripe.PaymentIntent | null;
+    payments?: {
+      data?: Array<{
+        payment?: {
+          payment_intent?: string | Stripe.PaymentIntent | null;
+        } | null;
+      }>;
+    };
+  };
+  const ids: string[] = [];
+  if (typed.payment_intent) {
+    ids.push(typeof typed.payment_intent === "string" ? typed.payment_intent : typed.payment_intent.id);
+  }
+  if (typed.latest_payment_intent) {
+    ids.push(
+      typeof typed.latest_payment_intent === "string"
+        ? typed.latest_payment_intent
+        : typed.latest_payment_intent.id
+    );
+  }
+  for (const row of typed.payments?.data ?? []) {
+    const pi = row?.payment?.payment_intent;
+    if (pi) ids.push(typeof pi === "string" ? pi : pi.id);
+  }
+  return [...new Set(ids.filter(Boolean))];
+}
 
 /**
  * Result of refund processing
@@ -33,6 +69,10 @@ export interface RefundProcessingResult {
   };
 }
 
+export interface ProcessRefundReversalOptions {
+  invoiceId?: string;
+}
+
 /**
  * Process refund reversal for all purchase types
  *
@@ -46,6 +86,7 @@ export interface RefundProcessingResult {
  * @param userId - User ID who received the original payment
  * @param refundAmount - Amount refunded (in cents)
  * @param isFullRefund - Whether this is a full refund
+ * @param options - Optional invoiceId for subscription refunds (invoice-keyed BenefitsGranted rows)
  * @returns Processing result with success status
  */
 export async function processRefundReversal(
@@ -53,8 +94,9 @@ export async function processRefundReversal(
   userId: string,
   refundAmount: number,
   isFullRefund: boolean = true,
-  invoiceId?: string // Optional invoice ID for subscription refunds
+  options?: ProcessRefundReversalOptions
 ): Promise<RefundProcessingResult> {
+  const invoiceId = options?.invoiceId;
   // console.log(`🔄 processRefundReversal called with:`, {
   //   paymentIntentId,
   //   userId,
@@ -141,6 +183,52 @@ export async function processRefundReversal(
 
       if (originalPaymentEvent) {
         // console.log(`✅ Found payment event by payment intent ID: ${paymentIntentId}`);
+      }
+    }
+
+    // Step 3: Subscription rows use paymentIntentId invoice_in_…; if Stripe did not give us invoiceId,
+    // match this user's recent invoice-keyed BenefitsGranted to this pi_ via Stripe (bounded).
+    if (!originalPaymentEvent && paymentIntentId.startsWith("pi_") && mongoose.Types.ObjectId.isValid(userId)) {
+      attemptedLookups.push("invoice-keyed events for user vs Stripe payment_intent (fallback)");
+      const candidates = await PaymentEvent.find({
+        userId: new mongoose.Types.ObjectId(userId),
+        eventType: "BenefitsGranted",
+        paymentIntentId: { $regex: "^invoice_" },
+      })
+        .sort({ timestamp: -1 })
+        .limit(25)
+        .select("_id paymentIntentId")
+        .lean();
+
+      for (const doc of candidates) {
+        const stored = doc.paymentIntentId;
+        if (!stored?.startsWith("invoice_")) continue;
+        const invStripeId = stored.slice("invoice_".length);
+        try {
+          // Expand payments + payment_intent so the new Billing Invoice model surfaces the PI
+          // under invoice.payments.data[].payment.payment_intent (string id, no extra expand needed).
+          // Note: `latest_payment_intent` is NOT expandable on Invoice (it lives on Subscription).
+          const inv = await stripe.invoices.retrieve(invStripeId, {
+            expand: ["payments.data.payment", "payment_intent"],
+          });
+          if (paymentIntentIdsOnStripeInvoice(inv).includes(paymentIntentId)) {
+            originalPaymentEvent = await PaymentEvent.findOne({
+              _id: doc._id,
+              eventType: "BenefitsGranted",
+            });
+            if (originalPaymentEvent) {
+              console.log(
+                `✅ Refund lookup matched BenefitsGranted ${stored} to ${paymentIntentId} via Stripe invoice`
+              );
+            }
+            break;
+          }
+        } catch (invErr) {
+          console.warn(
+            `⚠️ Refund DB fallback: failed to retrieve Stripe invoice ${invStripeId}: ${invErr}`
+          );
+          continue;
+        }
       }
     }
 
@@ -282,6 +370,14 @@ export async function processRefundReversal(
         };
     }
 
+    // Partner discount catalog access (queue): revoke periods tied to this payment
+    try {
+      await reversePartnerDiscountQueueOnRefund(user._id, packageType, paymentIntentId);
+    } catch (pdErr) {
+      console.error("❌ Partner discount queue reversal failed (refund):", pdErr);
+      throw pdErr;
+    }
+
     // Reverse user benefits (entries and points) - common for all types EXCEPT memberships
     // Memberships handle their own reversal in reverseSubscriptionPackage() with correct entriesToRemove calculation
     if (!isMembership) {
@@ -365,6 +461,31 @@ export async function processRefundReversal(
       alreadyProcessed: false,
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
+  }
+}
+
+/**
+ * Revoke partner discount catalog access granted with this payment.
+ * - Membership: same as subscription ended (expire membership queue rows, activate next eligible).
+ * - One-time / mini-draw / upsell: cancel the queue row keyed by Stripe payment intent (if present).
+ */
+async function reversePartnerDiscountQueueOnRefund(
+  userId: string | mongoose.Types.ObjectId,
+  packageType: string,
+  paymentIntentId: string
+): Promise<void> {
+  const user = await User.findById(userId);
+  if (!user) return;
+
+  if (packageType === "membership") {
+    await handleSubscriptionQueueUpdate(user as unknown as IUser, "end");
+    user.markModified("partnerDiscountQueue");
+    await user.save();
+    return;
+  }
+
+  if (packageType === "one-time" || packageType === "mini-draw" || packageType === "upsell") {
+    await cancelQueueItem(user as unknown as IUser, paymentIntentId);
   }
 }
 
@@ -548,10 +669,6 @@ async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEv
   console.log(
     `✅ [REFUND] Verified - isActive: ${savedUser?.subscription?.isActive}, accumulatedEntries: ${savedUser?.accumulatedEntries}`
   );
-
-  // Update partner discount queue (if needed)
-  // Note: This will be handled by the partner discount queue system
-  // when subscription ends, but we should mark it as canceled
 
   // Remove entries from Major Draw (only the specific month's entries)
   if (entriesToRemove > 0) {

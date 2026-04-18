@@ -348,6 +348,10 @@ export interface AdminUserDetail {
   paymentEvents: Array<{
     _id?: string;
     eventType?: string;
+    paymentIntentId?: string;
+    hasRefundProcessed?: boolean;
+    /** ISO timestamp of matching RefundProcessed (same paymentIntentId), when refunded */
+    refundProcessedAt?: string;
     timestamp?: string;
     packageType?: string;
     packageId?: string;

@@ -33,7 +33,8 @@
     "test:affiliate-attribution": "tsx src/utils/affiliate/__tests__/affiliate-attribution.test.ts",
     "sync:klaviyo-past-due": "tsx scripts/sync-klaviyo-past-due-profiles.ts",
     "sync:klaviyo-past-due:dry": "tsx scripts/sync-klaviyo-past-due-profiles.ts --dry-run",
-    "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts"
+    "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts",
+    "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

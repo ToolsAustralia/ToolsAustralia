@@ -4084,41 +4084,164 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
  * @param refund - Optional refund object (for refund.updated events)
  * @returns Invoice ID if found, undefined otherwise
  */
+/** Invoice id (in_…) from expanded charge / expanded payment_intent on charge. */
+function tryInvoiceIdFromChargeOrExpandedPi(charge: Stripe.Charge): string | undefined {
+  const withInv = charge as Stripe.Charge & { invoice?: string | Stripe.Invoice | null };
+  if (withInv.invoice) {
+    return typeof withInv.invoice === "string" ? withInv.invoice : withInv.invoice.id;
+  }
+  const pi = charge.payment_intent;
+  if (pi && typeof pi === "object") {
+    const inv = (pi as Stripe.PaymentIntent & { invoice?: string | Stripe.Invoice | null }).invoice;
+    if (inv) {
+      return typeof inv === "string" ? inv : inv.id;
+    }
+  }
+  return undefined;
+}
+
+/** PI ids on an invoice (top-level + Invoice Payments — Billing refresh / invoice_payment.paid flow). */
+function paymentIntentIdsOnInvoice(inv: Stripe.Invoice): string[] {
+  const typed = inv as Stripe.Invoice & {
+    payment_intent?: string | Stripe.PaymentIntent | null;
+    latest_payment_intent?: string | Stripe.PaymentIntent | null;
+    payments?: {
+      data?: Array<{
+        payment?: {
+          type?: string;
+          payment_intent?: string | Stripe.PaymentIntent | null;
+          charge?: string | Stripe.Charge | null;
+        } | null;
+      }>;
+    };
+  };
+  const ids: string[] = [];
+  const pi = typed.payment_intent;
+  const lpi = typed.latest_payment_intent;
+  if (pi) ids.push(typeof pi === "string" ? pi : pi.id);
+  if (lpi) ids.push(typeof lpi === "string" ? lpi : lpi.id);
+  for (const row of typed.payments?.data ?? []) {
+    const p = row?.payment;
+    if (!p) continue;
+    if (p.payment_intent) {
+      ids.push(typeof p.payment_intent === "string" ? p.payment_intent : p.payment_intent.id);
+    }
+  }
+  return [...new Set(ids.filter(Boolean))];
+}
+
+/** Paginate customer invoices until we find one whose payment_intent matches (subscription refunds). */
+async function findInvoiceIdByCustomerAndPaymentIntent(
+  customerId: string,
+  paymentIntentId: string
+): Promise<string | undefined> {
+  let startingAfter: string | undefined;
+  const maxPages = 15;
+
+  for (let page = 0; page < maxPages; page++) {
+    const invoices = await stripe.invoices.list({
+      customer: customerId,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    const matchingInvoice = invoices.data.find((inv) => {
+      return paymentIntentIdsOnInvoice(inv).includes(paymentIntentId);
+    });
+
+    if (matchingInvoice) {
+      return matchingInvoice.id;
+    }
+
+    let deepRetrieves = 0;
+    const maxDeepPerPage = 40;
+    for (const inv of invoices.data) {
+      if (deepRetrieves >= maxDeepPerPage) break;
+      const shallow = paymentIntentIdsOnInvoice(inv);
+      if (shallow.includes(paymentIntentId)) {
+        return inv.id;
+      }
+      if (shallow.length > 0) {
+        continue;
+      }
+      deepRetrieves += 1;
+      if (!inv.id) continue;
+      try {
+        const full = await stripe.invoices.retrieve(inv.id, {
+          expand: ["payments.data.payment", "payment_intent"],
+        });
+        if (paymentIntentIdsOnInvoice(full).includes(paymentIntentId)) {
+          return full.id;
+        }
+      } catch (deepErr) {
+        webhookLog("warn", `Deep invoice retrieve failed for ${inv.id}: ${deepErr}`);
+        continue;
+      }
+    }
+
+    if (!invoices.has_more || invoices.data.length === 0) {
+      break;
+    }
+    startingAfter = invoices.data[invoices.data.length - 1]?.id;
+    if (!startingAfter) {
+      break;
+    }
+  }
+
+  return undefined;
+}
+
 async function resolveInvoiceIdFromRefund(
   paymentIntentId: string,
   charge?: Stripe.Charge,
   refund?: Stripe.Refund
 ): Promise<string | undefined> {
-  // Method 1: Try to get invoice from charge object if available
+  // Method 1: Invoice on charge, or on expanded payment_intent embedded in charge
   if (charge) {
-    const chargeWithInvoice = charge as Stripe.Charge & { invoice?: string | Stripe.Invoice };
-    if (chargeWithInvoice.invoice) {
-      const invoiceId =
-        typeof chargeWithInvoice.invoice === "string" ? chargeWithInvoice.invoice : chargeWithInvoice.invoice.id;
-      webhookLog("info", `✅ Found invoice ID from charge: ${invoiceId}`);
-      return invoiceId;
+    const fromCharge = tryInvoiceIdFromChargeOrExpandedPi(charge);
+    if (fromCharge) {
+      webhookLog("info", `✅ Found invoice ID from charge / expanded payment intent: ${fromCharge}`);
+      return fromCharge;
     }
   }
 
-  // Method 2: Retrieve payment intent and check invoice field
+  // Method 2: Retrieve payment intent with invoice expanded (needed when charge was not expanded)
   try {
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["invoice"] });
     const paymentIntentWithInvoice = paymentIntent as Stripe.PaymentIntent & {
-      invoice?: string | Stripe.Invoice;
+      invoice?: string | Stripe.Invoice | null;
     };
     if (paymentIntentWithInvoice.invoice) {
       const invoiceId =
         typeof paymentIntentWithInvoice.invoice === "string"
           ? paymentIntentWithInvoice.invoice
           : paymentIntentWithInvoice.invoice.id;
-      webhookLog("info", `✅ Found invoice ID from payment intent: ${invoiceId}`);
+      webhookLog("info", `✅ Found invoice ID from payment intent retrieve: ${invoiceId}`);
       return invoiceId;
     }
   } catch (piError) {
     webhookLog("warn", `Could not retrieve payment intent to get invoice: ${piError}`);
   }
 
-  // Method 3: Search customer's invoices if we have customer info
+  // Method 2b: PI → latest_charge → invoice (subscription PI often omits invoice on PI object but charge has it)
+  try {
+    const piWithCharge = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge", "latest_charge.invoice"],
+    });
+    const lc = piWithCharge.latest_charge;
+    if (lc && typeof lc === "object") {
+      const ch = lc as Stripe.Charge & { invoice?: string | Stripe.Invoice | null };
+      if (ch.invoice) {
+        const invoiceId = typeof ch.invoice === "string" ? ch.invoice : ch.invoice.id;
+        webhookLog("info", `✅ Found invoice ID from payment intent latest_charge: ${invoiceId}`);
+        return invoiceId;
+      }
+    }
+  } catch (piChargeError) {
+    webhookLog("warn", `Could not resolve invoice from payment intent latest_charge: ${piChargeError}`);
+  }
+
+  // Method 3: Paginate customer invoices (older invoices are often beyond the first page)
   let customerId: string | undefined;
   if (charge?.customer) {
     customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
@@ -4138,31 +4261,20 @@ async function resolveInvoiceIdFromRefund(
   if (customerId) {
     try {
       webhookLog("info", `Searching customer invoices to find invoice for payment: ${paymentIntentId}`);
-      const invoices = await stripe.invoices.list({
-        customer: customerId,
-        limit: 20,
-      });
-
-      const matchingInvoice = invoices.data.find((inv) => {
-        const invPaymentIntent = (
-          inv as Stripe.Invoice & {
-            payment_intent?: string | Stripe.PaymentIntent;
-          }
-        ).payment_intent;
-        const invPaymentIntentId = typeof invPaymentIntent === "string" ? invPaymentIntent : invPaymentIntent?.id;
-        return invPaymentIntentId === paymentIntentId;
-      });
-
-      if (matchingInvoice) {
-        webhookLog("info", `✅ Found invoice by searching customer invoices: ${matchingInvoice.id}`);
-        return matchingInvoice.id;
+      const matchingId = await findInvoiceIdByCustomerAndPaymentIntent(customerId, paymentIntentId);
+      if (matchingId) {
+        webhookLog("info", `✅ Found invoice by searching customer invoices: ${matchingId}`);
+        return matchingId;
       }
     } catch (searchError) {
       webhookLog("warn", `Could not search invoices: ${searchError}`);
     }
   }
 
-  webhookLog("info", `Could not resolve invoice ID for payment intent: ${paymentIntentId}`);
+  webhookLog(
+    "info",
+    `Could not resolve invoice ID for payment intent: ${paymentIntentId} (BenefitsGranted for subscriptions use invoice_in_… in DB)`
+  );
   return undefined;
 }
 
@@ -4171,7 +4283,26 @@ async function resolveInvoiceIdFromRefund(
  * on this charge. Idempotent via PaymentEvent RefundProcessed.
  */
 async function runRefundReversalFromChargeId(chargeId: string): Promise<void> {
-  const fullCharge = await stripe.charges.retrieve(chargeId, { expand: ["refunds"] });
+  // Stripe enforces a 4-level expand limit. From a Charge, `invoice.payments.data.payment` is the
+  // deepest legal path; `payment.payment_intent` then comes back as a string ID by default, which
+  // is all we need to match against stored `BenefitsGranted-invoice_in_…` events.
+  const richExpand = [
+    "refunds",
+    "invoice",
+    "invoice.payment_intent",
+    "invoice.payments.data.payment",
+    "payment_intent",
+    "payment_intent.invoice",
+  ];
+  let fullCharge: Stripe.Charge;
+  try {
+    fullCharge = await stripe.charges.retrieve(chargeId, { expand: richExpand });
+  } catch (err) {
+    webhookLog("warn", `Rich charge expand failed, retrying with conservative expand: ${err}`);
+    fullCharge = await stripe.charges.retrieve(chargeId, {
+      expand: ["refunds", "invoice", "invoice.payment_intent", "payment_intent", "payment_intent.invoice"],
+    });
+  }
 
   const paymentIntentId =
     typeof fullCharge.payment_intent === "string" ? fullCharge.payment_intent : fullCharge.payment_intent?.id;
@@ -4209,16 +4340,30 @@ async function runRefundReversalFromChargeId(chargeId: string): Promise<void> {
     return;
   }
 
-  const invoiceId = await resolveInvoiceIdFromRefund(paymentIntentId, fullCharge);
+  // If charge already expanded a full Invoice, match PI to that invoice (Invoice Payments API omits top-level payment_intent on list)
+  let invoiceIdQuick: string | undefined;
+  const chargeTyped = fullCharge as unknown as Stripe.Charge & {
+    invoice?: string | Stripe.Invoice | null;
+  };
+  const invOnCharge = chargeTyped.invoice;
+  if (invOnCharge && typeof invOnCharge === "object") {
+    const invObj = invOnCharge as Stripe.Invoice;
+    if (paymentIntentIdsOnInvoice(invObj).includes(paymentIntentId)) {
+      invoiceIdQuick = invObj.id;
+      webhookLog("info", `✅ Matched refund PI to expanded charge.invoice: ${invoiceIdQuick}`);
+    }
+  } else if (invOnCharge && typeof invOnCharge === "string") {
+    invoiceIdQuick = invOnCharge;
+    webhookLog("info", `✅ Using invoice id from charge.invoice string: ${invoiceIdQuick}`);
+  }
+
+  const invoiceId =
+    invoiceIdQuick ?? (await resolveInvoiceIdFromRefund(paymentIntentId, fullCharge));
 
   const { processRefundReversal } = await import("@/utils/payment/refund-processing");
-  const result = await processRefundReversal(
-    paymentIntentId,
-    user._id.toString(),
-    succeededCents,
-    isFullRefund,
-    invoiceId
-  );
+  const result = await processRefundReversal(paymentIntentId, user._id.toString(), succeededCents, isFullRefund, {
+    invoiceId,
+  });
 
   if (result.success) {
     webhookLog(
@@ -4248,11 +4393,12 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 
 /**
  * When a refund transitions to succeeded (e.g. async methods), apply the same reversal as charge.refunded.
+ * Shared by refund.updated, refund.created, and charge.refund.updated (succeeded refunds only).
  * Idempotent: duplicate events no-op via RefundProcessed.
  */
 async function handleRefundUpdated(refund: Stripe.Refund) {
   try {
-    webhookLog("info", `Processing refund.updated: ${refund.id}, status: ${refund.status}`);
+    webhookLog("info", `Processing refund object: ${refund.id}, status: ${refund.status}`);
 
     if (refund.status !== "succeeded") {
       webhookLog("info", `Refund ${refund.id} status is ${refund.status}, skipping reversal`);
@@ -4352,13 +4498,9 @@ async function handleChargeDisputeClosed(dispute: Stripe.Dispute) {
 
     // Process refund reversal
     const { processRefundReversal } = await import("@/utils/payment/refund-processing");
-    const result = await processRefundReversal(
-      paymentIntentId,
-      user._id.toString(),
-      refundAmount,
-      isFullRefund,
-      invoiceId
-    );
+    const result = await processRefundReversal(paymentIntentId, user._id.toString(), refundAmount, isFullRefund, {
+      invoiceId,
+    });
 
     if (result.success) {
       webhookLog("info", `✅ Dispute refund reversal processed successfully for payment: ${paymentIntentId}`);
@@ -4621,13 +4763,20 @@ export async function POST(request: NextRequest) {
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(event.data.object);
         break;
-      // ✅ REFUND HANDLERS: React to refunds processed in Stripe Dashboard
-      // Note: invoice.refunded doesn't exist in Stripe - invoice refunds trigger charge.refunded instead
-      // So we only need to handle charge.refunded which covers both one-time and subscription refunds
+      // ✅ REFUND HANDLERS: Dashboard / API refunds (subscribe in Stripe to these events for the env you use):
+      // charge.refunded, refund.updated, refund.created (optional), charge.refund.updated
+      // invoice.refunded does not exist — invoice refunds still emit charge/refund events.
       case "charge.refunded":
         await handleChargeRefunded(event.data.object);
         break;
       case "charge.refund.updated":
+        await handleRefundUpdated(event.data.object as Stripe.Refund);
+        break;
+      // Stripe recommends refund.updated for all refund lifecycle updates; refund.created for new refunds.
+      case "refund.updated":
+        await handleRefundUpdated(event.data.object as Stripe.Refund);
+        break;
+      case "refund.created":
         await handleRefundUpdated(event.data.object as Stripe.Refund);
         break;
       case "charge.dispute.created":

@@ -126,6 +126,9 @@ interface MajorDrawParticipationItem {
 interface PaymentEventItem {
   _id?: string;
   eventType?: string;
+  paymentIntentId?: string;
+  hasRefundProcessed?: boolean;
+  refundProcessedAt?: string;
   timestamp?: string;
   price?: number;
   status?: string;
@@ -3489,6 +3492,22 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     {title}
                                   </p>
                                   <p className="text-[9px] sm:text-[10px] text-slate-600 mt-0.5">{kind}</p>
+                                  {event.eventType === "BenefitsGranted" &&
+                                    event.hasRefundProcessed &&
+                                    (event.refundProcessedAt ? (
+                                      <p className="text-[9px] sm:text-[10px] mt-0.5">
+                                        <span className="font-semibold text-amber-800 dark:text-amber-200">
+                                          Refunded
+                                        </span>
+                                        <span className="text-gray-600 dark:text-neutral-400 ml-1">
+                                          {formatDate(event.refundProcessedAt)}
+                                        </span>
+                                      </p>
+                                    ) : (
+                                      <p className="text-[9px] sm:text-[10px] font-semibold text-amber-800 dark:text-amber-200 mt-0.5">
+                                        Refunded
+                                      </p>
+                                    ))}
                                   <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
                                     {formatDate(event.timestamp || new Date().toISOString())}
                                   </p>

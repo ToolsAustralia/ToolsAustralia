@@ -385,7 +385,7 @@ export default function MiniDrawPackages({
       showToast({
         type: "success",
         title: `Successfully purchased ${processingPackageName}!`,
-        message: "Your entries have been added to the mini draw.",
+        message: "Your free entries have been added to the mini draw.",
       });
 
       // Trigger upsell after successful payment processing (only after webhook confirms)
@@ -552,7 +552,8 @@ export default function MiniDrawPackages({
         {calculatedUserEntryCount > 0 && (
           <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
             <span className="text-[10px] sm:text-xs font-bold text-green-700">
-              {calculatedUserEntryCount.toLocaleString()} {calculatedUserEntryCount === 1 ? "entry" : "entries"}
+              {calculatedUserEntryCount.toLocaleString()}{" "}
+              {calculatedUserEntryCount === 1 ? "free entry" : "free entries"}
             </span>
           </div>
         )}
@@ -567,7 +568,9 @@ export default function MiniDrawPackages({
               : "bg-gray-50 dark:bg-neutral-800/80 text-gray-600 dark:text-neutral-300 border border-gray-100 dark:border-neutral-700"
           }`}
         >
-          {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining.toLocaleString()} entries remaining`}
+          {isSoldOut
+            ? "Sold out — no more free entries available."
+            : `Only ${entriesRemaining.toLocaleString()} free entries remaining`}
         </div>
       )}
 
@@ -590,7 +593,7 @@ export default function MiniDrawPackages({
                   }}
                   onClick={() => setSelectedPackageId(pkg._id)}
                   disabled={disabled}
-                  title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} entries · $${pkg.price}`}
+                  title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} free entries · $${pkg.price}`}
                   className={`
                     w-full relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-300
                     ${disabled
@@ -619,9 +622,9 @@ export default function MiniDrawPackages({
                           ${pkg.price}
                         </span>
 
-                        {/* Entries */}
+                        {/* Free entries */}
                         <span className="text-[9px] sm:text-xs font-bold leading-tight text-black/70">
-                          {pkg.entries} {pkg.entries === 1 ? "Entry" : "Entries"}
+                          {pkg.entries} {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
                         </span>
 
                         {/* Capacity warning */}
@@ -661,7 +664,8 @@ export default function MiniDrawPackages({
                   <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-56 bg-gray-900 text-white text-sm rounded-xl p-3 shadow-2xl pointer-events-none">
                     <div className="font-bold text-yellow-400 mb-1">{pkg.name}</div>
                     <div className="text-gray-300 text-xs">
-                      ${pkg.price} &middot; {pkg.entries} Entries
+                      ${pkg.price} &middot; {pkg.entries}{" "}
+                      {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
                     </div>
                     <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
                       <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
