@@ -13,14 +13,19 @@ type LooseEvent = {
  * Human-readable payment / billing kind for admin user detail.
  */
 export function getAdminPaymentKindLabel(event: LooseEvent): string {
-  if (event.eventType === "RefundProcessed") return "Refund processed";
+  if (event.eventType === "RefundProcessed") {
+    if (event.packageType === "membership") return "Refund";
+    return "Refund processed";
+  }
   if (event.eventType === "BenefitsReversed") return "Benefits reversed";
 
   const br = typeof event.data?.billingReason === "string" ? event.data.billingReason : undefined;
 
   switch (event.packageType) {
     case "membership": {
-      if (br === "subscription_cycle") return "Subscription renewal";
+      if (br === "subscription_cycle") {
+        return "Subscription renewal";
+      }
       if (br === "subscription_create") return "Initial subscription";
       if (br === "subscription_update") return "Subscription update";
       if (br === "manual") return "Manual / admin";

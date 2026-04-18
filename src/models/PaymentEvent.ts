@@ -21,7 +21,7 @@ export interface IPaymentEvent extends Document {
     price?: number;
     [key: string]: string | number | boolean | undefined;
   };
-  processedBy: "api" | "webhook";
+  processedBy: "api" | "webhook" | "admin";
   timestamp: Date;
   // A/B Testing fields (optional)
   experimentId?: string;
@@ -81,7 +81,7 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     processedBy: {
       type: String,
       required: true,
-      enum: ["api", "webhook"],
+      enum: ["api", "webhook", "admin"],
     },
     timestamp: {
       type: Date,

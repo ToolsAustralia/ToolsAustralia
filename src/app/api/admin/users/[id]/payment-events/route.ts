@@ -48,15 +48,52 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       PaymentEvent.countDocuments({ userId: userObjectId }),
     ]);
 
-    const mapped = events.map((event) => ({
-      _id: event._id,
-      eventType: event.eventType,
-      timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : String(event.timestamp),
-      packageType: event.packageType,
-      packageId: event.packageId != null ? String(event.packageId) : undefined,
-      packageName: typeof event.packageName === "string" ? event.packageName : undefined,
-      data: event.data,
-    }));
+    const benefitsPaymentIntentIds = events
+      .filter((e) => e.eventType === "BenefitsGranted" && typeof e.paymentIntentId === "string")
+      .map((e) => e.paymentIntentId as string);
+
+    const refundRows =
+      benefitsPaymentIntentIds.length > 0
+        ? await PaymentEvent.find({
+            userId: userObjectId,
+            eventType: "RefundProcessed",
+            paymentIntentId: { $in: benefitsPaymentIntentIds },
+          })
+            .select("paymentIntentId timestamp")
+            .lean()
+        : [];
+
+    const refundProcessedAtByPi = new Map<string, string>();
+    for (const row of refundRows) {
+      const pi = row.paymentIntentId;
+      if (typeof pi !== "string" || !row.timestamp) continue;
+      const iso =
+        row.timestamp instanceof Date ? row.timestamp.toISOString() : new Date(row.timestamp).toISOString();
+      const prev = refundProcessedAtByPi.get(pi);
+      if (!prev || new Date(iso) > new Date(prev)) {
+        refundProcessedAtByPi.set(pi, iso);
+      }
+    }
+
+    const refundedSet = new Set(refundProcessedAtByPi.keys());
+
+    const mapped = events.map((event) => {
+      const pi = typeof event.paymentIntentId === "string" ? event.paymentIntentId : undefined;
+      const isRefundedBenefits =
+        event.eventType === "BenefitsGranted" && pi != null && refundedSet.has(pi);
+      return {
+        _id: event._id,
+        eventType: event.eventType,
+        paymentIntentId: pi,
+        hasRefundProcessed: isRefundedBenefits,
+        refundProcessedAt: isRefundedBenefits ? refundProcessedAtByPi.get(pi) : undefined,
+        timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : String(event.timestamp),
+        packageType: event.packageType,
+        packageId: event.packageId != null ? String(event.packageId) : undefined,
+        packageName: typeof event.packageName === "string" ? event.packageName : undefined,
+        data: event.data,
+      };
+    });
 
     return NextResponse.json({
       success: true,
