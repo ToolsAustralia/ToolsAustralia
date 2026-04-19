@@ -76,7 +76,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
         "100 free entries added to your account",
         [
           {
-            text: "100 entries added to your account",
+            text: "100 free entries added to your account",
             icon: "star" as const,
           },
           {

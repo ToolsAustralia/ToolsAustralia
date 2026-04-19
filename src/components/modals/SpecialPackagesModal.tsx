@@ -110,6 +110,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
   const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
+  /** PM id used for the charge (for upsell before webhook saves to DB). */
+  const [purchasePaymentMethodId, setPurchasePaymentMethodId] = useState<string | null>(null);
 
   // Get user context and payment methods
   const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
@@ -182,6 +184,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const handleClose = useCallback(() => {
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
+    setPurchasePaymentMethodId(null);
     setProcessingPackageName("");
     setOriginalPurchaseContext(null);
     setSetupIntentSecret(null);
@@ -194,6 +197,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     if (isOpen) {
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
+      setPurchasePaymentMethodId(null);
       setProcessingPackageName("");
       setOriginalPurchaseContext(null);
       setUpsellTriggered(false);
@@ -404,11 +408,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         (result as { paymentIntent?: { id: string } }).paymentIntent?.id || result.data?.paymentIntent?.id;
       if (resolvedPaymentIntentId) {
         setPaymentIntentId(resolvedPaymentIntentId);
+        setPurchasePaymentMethodId(paymentMethodIdToCharge);
         setProcessingPackageName(pkg.name);
         setShowPaymentProcessing(true);
       } else {
         const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
-          { text: `${pkg.totalEntries || 0} entries added to your wallet`, icon: "gift" },
+          { text: `${pkg.totalEntries || 0} free entries added to your wallet`, icon: "gift" },
         ];
         if (couponApplied && couponCode) {
           const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
@@ -420,7 +425,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         }
         showSuccess(
           "Purchase Successful!",
-          `${pkg.totalEntries || 0} entries added to your account`,
+          `${pkg.totalEntries || 0} free entries added to your account`,
           fallbackBenefits,
           3000
         );
@@ -501,6 +506,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         1;
 
       // Create context object in local variable to pass directly (avoids closure issue)
+      const pm = purchasePaymentMethodId
+        ? paymentMethods.find((p) => p.paymentMethodId === purchasePaymentMethodId)
+        : undefined;
       contextToPass = {
         paymentIntentId,
         packageId: selectedPackage._id || "",
@@ -510,6 +518,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         entries: status.data?.entries || 0,
         baseEntries,
         promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
+        ...(purchasePaymentMethodId ? { paymentMethodId: purchasePaymentMethodId } : {}),
+        ...(pm?.card?.last4 ? { cardLast4: pm.card.last4 } : {}),
+        ...(pm?.card?.brand ? { cardBrand: pm.card.brand } : {}),
       };
       
       // Also update state for other component uses
@@ -538,7 +549,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     // Add entry count if available
     if (status.data?.entries && status.data.entries > 0) {
       benefits.push({
-        text: `${status.data.entries} entries added to your account`,
+        text: `${status.data.entries} free entries added to your account`,
         icon: "star" as const,
       });
     }
@@ -785,6 +796,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           paymentIntentId={paymentIntentId}
           packageName={processingPackageName}
           packageType="one-time"
+          packageId={selectedPackage?._id}
           isVisible={showPaymentProcessing}
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}

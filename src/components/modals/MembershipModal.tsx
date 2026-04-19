@@ -18,7 +18,7 @@ const stripePromise = getStripePromise();
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
-import { getPackageId } from "@/utils/membership/membership-adapters";
+import { convertToAPIPlan, getPackageId } from "@/utils/membership/membership-adapters";
 import { useUserContext } from "@/contexts/UserContext";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { useRouter, usePathname } from "next/navigation";
@@ -52,6 +52,7 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { getPackageById } from "@/data/membershipPackages";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
@@ -311,6 +312,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Hooks for API integration
   const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
+  /** Static catalog _id (e.g. tradie-subscription) for getPackageById + partner copy */
+  const catalogPackageIdForBenefits = useMemo(() => {
+    const api = convertToAPIPlan(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+    return (api?._id || activePlan.id).trim();
+  }, [activePlan, subscriptionPackages, oneTimePackages]);
+
+  const purchaseSuccessSubtitle = useMemo(
+    () =>
+      activePlan.period === "mo"
+        ? `${activePlan.name} membership activated`
+        : `${activePlan.name} activated`,
+    [activePlan.name, activePlan.period]
+  );
+
   const { userData: _userDataForPromo, isMember: isMemberForPromo } = useUserContext();
 
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
@@ -1226,6 +1241,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           const successData: Parameters<typeof handlePaymentSuccess>[0] = isNewUser
             ? {
                 paymentIntentId: result.paymentIntentId,
+                ...(result.paymentMethodId ? { paymentMethodId: result.paymentMethodId } : {}),
                 user: {
                   id: userId,
                   email: guestUserData?.email ?? "",
@@ -1246,6 +1262,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
             : {
                 paymentIntentId: result.paymentIntentId,
+                ...(result.paymentMethodId ? { paymentMethodId: result.paymentMethodId } : {}),
                 subscriptionId: subscriptionCreatedRef.current || undefined,
                 status: "active",
                 paymentIntentStatus: "succeeded",
@@ -2216,6 +2233,56 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     [couponApplied, couponCode, couponType, normalizedCouponCode]
   );
 
+  /** Same benefit lines as post-purchase success (entries, points, partner) for new and existing users */
+  const buildActivationBenefits = useCallback(
+    (options?: { entriesOverride?: number }): { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag" }[] => {
+      const benefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag" }[] = [];
+      benefits.push({
+        text:
+          activePlan.period === "mo"
+            ? `${activePlan.name} membership activated`
+            : `${activePlan.name} activated`,
+        icon: "gift",
+      });
+      let entriesCount = options?.entriesOverride ?? activePlan.metadata?.entriesCount ?? 0;
+      if (entriesCount <= 0) {
+        const staticPkg = getPackageById(catalogPackageIdForBenefits);
+        if (staticPkg?.type === "subscription" && staticPkg.entriesPerMonth) {
+          entriesCount = staticPkg.entriesPerMonth;
+        } else if (staticPkg?.type === "one-time" && staticPkg.totalEntries) {
+          entriesCount = staticPkg.totalEntries;
+        }
+      }
+      if (entriesCount > 0) {
+        benefits.push({
+          text:
+            activePlan.period === "mo"
+              ? `${entriesCount} free entries added every month`
+              : `${entriesCount} free entries added to your account`,
+          icon: "star",
+        });
+      }
+      if (rewardsEnabled()) {
+        const rewardPoints = Math.floor(activePlan.price);
+        if (rewardPoints > 0) {
+          benefits.push({
+            text:
+              activePlan.period === "mo"
+                ? `${rewardPoints} reward points earned every month`
+                : `${rewardPoints} reward points earned`,
+            icon: "gift",
+          });
+        }
+      }
+      const partnerLine = getPartnerDiscountBenefitTextForPackageId(catalogPackageIdForBenefits);
+      if (partnerLine) {
+        benefits.push({ text: partnerLine, icon: "tag" });
+      }
+      return benefits;
+    },
+    [activePlan, catalogPackageIdForBenefits]
+  );
+
   // Payment processing handlers
   const handlePaymentProcessingSuccess = async (status: PaymentStatusResponse) => {
     // console.log("🎉 Payment processing completed:", status);
@@ -2237,7 +2304,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // Add entry count if available
     if (status.data?.entries && status.data.entries > 0) {
       benefits.push({
-        text: `${status.data.entries} entries added to your account`,
+        text:
+          processingPackageType === "membership"
+            ? `${status.data.entries} free entries added every month`
+            : `${status.data.entries} free entries added to your account`,
         icon: "star" as const,
       });
     }
@@ -2250,7 +2320,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       });
     }
 
-    const partnerLine = getPartnerDiscountBenefitTextForPackageId(activePlan.id);
+    const partnerLine = getPartnerDiscountBenefitTextForPackageId(
+      convertToAPIPlan(activePlan, [...subscriptionPackages, ...oneTimePackages])?._id || activePlan.id
+    );
     if (partnerLine) {
       benefits.push({ text: partnerLine, icon: "tag" as const });
     }
@@ -2258,7 +2330,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     appendCodeBenefits(benefits);
 
     // Show success modal with entry information
-    showSuccess("Purchase Successful!", `${processingPackageName} activated`, benefits);
+    const purchaseProcessingSubtitle =
+      processingPackageType === "membership"
+        ? `${processingPackageName} membership activated`
+        : `${processingPackageName} activated`;
+    showSuccess("Purchase Successful!", purchaseProcessingSubtitle, benefits);
 
     // ✅ Store original purchase context for combined invoice (if needed for upsells)
     // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2380,7 +2456,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // Show fallback success message since payment was successful
     showSuccess(
       "Purchase Complete!",
-      `${processingPackageName} activated`,
+      processingPackageType === "membership"
+        ? `${processingPackageName} membership activated`
+        : `${processingPackageName} activated`,
       [
         { text: `${processingPackageName} activated successfully`, icon: "gift" },
         { text: "Your payment was successful", icon: "star" },
@@ -2409,7 +2487,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     status?: string;
     paymentIntentStatus?: string;
     paymentIntentId?: string;
+    paymentMethodId?: string;
+    cardLast4?: string;
+    cardBrand?: string;
   }) => {
+    const upsellPmFields = {
+      ...(data?.paymentMethodId ? { paymentMethodId: data.paymentMethodId } : {}),
+      ...(data?.cardLast4 ? { cardLast4: data.cardLast4 } : {}),
+      ...(data?.cardBrand ? { cardBrand: data.cardBrand } : {}),
+    };
     const effectivePaymentIntentId = data?.paymentIntentId ?? paymentIntentId;
 
     // Check if this is a new user registration
@@ -2454,12 +2540,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
             // Show global success screen instead of alert
             hideLoading();
-            showSuccess(
-              "Successful!",
-              `${activePlan.name} activated`,
-              [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-              3000
-            );
+            {
+              const benefits = buildActivationBenefits();
+              appendCodeBenefits(benefits);
+              showSuccess("Successful!", purchaseSuccessSubtitle, benefits, 3000);
+            }
 
             // Store original purchase context for combined invoice (if paymentIntentId is available)
             // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2503,6 +2588,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 entries: entriesCount,
                 baseEntries,
                 promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
+                ...upsellPmFields,
               };
 
               // Also update state for other component uses
@@ -2542,34 +2628,31 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // console.log("❌ Auto-login failed:", signInResult?.error);
             // Show global success screen for account creation
             hideLoading();
-            showSuccess(
-              "Account Created!",
-              `${activePlan.name} activated`,
-              [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-              3000
-            );
+            {
+              const benefits = buildActivationBenefits();
+              appendCodeBenefits(benefits);
+              showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+            }
           }
         } else {
           // console.log("❌ Failed to get auto-login token:", autoLoginData.error);
           // Show global success screen for account creation
           hideLoading();
-          showSuccess(
-            "Account Created!",
-            `${activePlan.name} activated`,
-            [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-            3000
-          );
+          {
+            const benefits = buildActivationBenefits();
+            appendCodeBenefits(benefits);
+            showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+          }
         }
       } catch (error) {
         console.error("❌ Auto-login error:", error);
         // Show global success screen for account creation
         hideLoading();
-        showSuccess(
-          "Account Created!",
-          `${activePlan.name} activated`,
-          [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-          3000
-        );
+        {
+          const benefits = buildActivationBenefits();
+          appendCodeBenefits(benefits);
+          showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+        }
       }
 
       onClose();
@@ -2591,50 +2674,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Show global success screen
       hideLoading();
 
-      // Build benefits array with entry and reward information
-      const benefits = [];
+      const benefits = buildActivationBenefits();
+      appendCodeBenefits(benefits);
+      showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
 
-      // Add package activation message
-      benefits.push({
-        text: `${activePlan.name} activated`,
-        icon: "gift" as const,
-      });
-
-      // Add entries if available (with "every month" for subscriptions)
-      const entriesCount = activePlan.metadata?.entriesCount || 0;
-      if (entriesCount > 0) {
-        const entryText =
-          activePlan.period === "mo"
-            ? `${entriesCount} entries added every month`
-            : `${entriesCount} entries added to your account`;
-        benefits.push({
-          text: entryText,
-          icon: "star" as const,
-        });
-      }
-
-      // Add reward points if available and rewards are enabled (with "every month" for subscriptions)
-      if (rewardsEnabled()) {
-        const rewardPoints = Math.floor(activePlan.price);
-        if (rewardPoints > 0) {
-          const pointsText =
-            activePlan.period === "mo"
-              ? `${rewardPoints} reward points earned every month`
-              : `${rewardPoints} reward points earned`;
-          benefits.push({
-            text: pointsText,
-            icon: "gift" as const,
-          });
+      let entriesCount = activePlan.metadata?.entriesCount ?? 0;
+      if (entriesCount <= 0) {
+        const staticPkg = getPackageById(catalogPackageIdForBenefits);
+        if (staticPkg?.type === "subscription" && staticPkg.entriesPerMonth) {
+          entriesCount = staticPkg.entriesPerMonth;
+        } else if (staticPkg?.type === "one-time" && staticPkg.totalEntries) {
+          entriesCount = staticPkg.totalEntries;
         }
       }
-
-      const partnerLineExisting = getPartnerDiscountBenefitTextForPackageId(activePlan.id);
-      if (partnerLineExisting) {
-        benefits.push({ text: partnerLineExisting, icon: "tag" as const });
-      }
-
-      appendCodeBenefits(benefits);
-      showSuccess("Successful!", `${activePlan.name} activated`, benefits);
 
       // Store original purchase context for combined invoice (if needed for upsells)
       // CRITICAL FIX: Create local variable to avoid React state closure issue
@@ -2674,6 +2726,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           entries: entriesCount,
           baseEntries,
           promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
+          ...upsellPmFields,
         };
         // Also update state for other component uses
         setOriginalPurchaseContext(contextToPass);
@@ -2705,6 +2758,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           packageName: activePlan.name,
           packageType: "membership",
           price: activePlan.price,
+          ...upsellPmFields,
           entries: entriesCount,
           baseEntries,
           promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined, // Only store if multiplier > 1
@@ -2865,8 +2919,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           hideLoading();
           showSuccess(
             "Successful!",
-            `${entriesAdded} entries added to your account`,
-            [{ text: `${entriesAdded} entries added to your wallet`, icon: "gift" }],
+            `${entriesAdded} free entries added to your account`,
+            [{ text: `${entriesAdded} free entries added to your wallet`, icon: "gift" }],
             3000
           );
           onClose();
@@ -2955,6 +3009,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           const successData: Parameters<typeof handlePaymentSuccess>[0] = isNewUser
             ? {
                 paymentIntentId: result.paymentIntentId,
+                ...(result.paymentMethodId ? { paymentMethodId: result.paymentMethodId } : {}),
                 user: {
                   id: userId,
                   email: guestUserData?.email || "",
@@ -2971,6 +3026,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
             : {
                 paymentIntentId: result.paymentIntentId,
+                ...(result.paymentMethodId ? { paymentMethodId: result.paymentMethodId } : {}),
                 subscriptionId: subscriptionCreatedRef.current || undefined,
                 status: "active",
                 paymentIntentStatus: "succeeded",
@@ -3477,7 +3533,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             const entriesCount = activePlan.metadata?.entriesCount || 0;
             if (entriesCount > 0) {
               benefits.push({
-                text: `${entriesCount} entries added to your account`,
+                text: `${entriesCount} free entries added to your account`,
                 icon: "star" as const,
               });
             }
@@ -3494,7 +3550,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             }
 
             appendCodeBenefits(benefits);
-            showSuccess("Successful!", `${activePlan.name} activated`, benefits);
+            showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
 
             // Trigger upsell modal after a delay with duplicate prevention
             setTimeout(() => {
@@ -3626,11 +3682,24 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           const resultSub = (result as { subscription?: { id?: string; status?: string } })?.subscription;
           if (resultSub?.status === "active" && paymentMethodId) {
             hideLoading();
-            await handlePaymentSuccess({
-              subscriptionId: resultSub.id,
-              status: "active",
-              paymentIntentStatus: "succeeded",
-            });
+            const piFromResult = (result as { paymentIntent?: { id?: string } })?.paymentIntent?.id;
+            const piFromSecret = subscriptionData.clientSecret?.split("_secret_")[0];
+            const resolvedPi = piFromResult || paymentIntentId || piFromSecret;
+            await handlePaymentSuccess(
+              resolvedPi
+                ? {
+                    subscriptionId: resultSub.id,
+                    status: "active",
+                    paymentIntentStatus: "succeeded",
+                    paymentIntentId: resolvedPi,
+                    paymentMethodId,
+                  }
+                : {
+                    subscriptionId: resultSub.id,
+                    status: "active",
+                    paymentIntentStatus: "succeeded",
+                  }
+            );
             return;
           }
 
@@ -3720,7 +3789,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             const entriesCount = activePlan.metadata?.entriesCount || 0;
             if (entriesCount > 0) {
               benefits.push({
-                text: `${entriesCount} entries added to your account`,
+                text: `${entriesCount} free entries added to your account`,
                 icon: "star" as const,
               });
             }
@@ -3738,7 +3807,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             }
 
             appendCodeBenefits(benefits);
-            showSuccess("Successful!", `${activePlan.name} activated`, benefits);
+            showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
 
             // Attempt to recover paymentIntentId even in fallback path
             let fallbackPaymentIntentId: string | null = null;
@@ -3820,8 +3889,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           hideLoading();
           showSuccess(
             "Successful!",
-            `${activePlan.name} activated`,
-            [{ text: "Entries have been added to your wallet", icon: "gift" }],
+            purchaseSuccessSubtitle,
+            [{ text: "Free entries have been added to your wallet", icon: "gift" }],
             3000
           );
 
@@ -4158,37 +4227,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                     // Show global success screen
                     hideLoading();
-                    // Build benefits array with entry and reward information
-                    const benefits = [];
-
-                    // Add package activation message
-                    benefits.push({
-                      text: `${activePlan.name} activated`,
-                      icon: "gift" as const,
-                    });
-
-                    // Add entries if available (use activePlan metadata first, then fallback to oneTimeData)
-                    const entriesCount = activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0;
-                    if (entriesCount > 0) {
-                      benefits.push({
-                        text: `${entriesCount} entries added to your account`,
-                        icon: "star" as const,
-                      });
-                    }
-
-                    // Add reward points if available and rewards are enabled
-                    if (rewardsEnabled()) {
-                      const rewardPoints = Math.floor(activePlan.price);
-                      if (rewardPoints > 0) {
-                        benefits.push({
-                          text: `${rewardPoints} reward points earned`,
-                          icon: "gift" as const,
-                        });
-                      }
-                    }
-
+                    const oneTimeEntries =
+                      activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0;
+                    const benefits = buildActivationBenefits({ entriesOverride: oneTimeEntries });
                     appendCodeBenefits(benefits);
-                    showSuccess("Welcome!", `${activePlan.name} activated`, benefits);
+                    showSuccess("Welcome!", purchaseSuccessSubtitle, benefits);
 
                     // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
                     const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
@@ -4275,12 +4318,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     // console.log("✅ Auto-login successful for one-time purchase");
                     // Show global success screen
                     hideLoading();
-                    showSuccess(
-                      "Welcome!",
-                      `${activePlan.name} activated`,
-                      [{ text: `${oneTimeData.user.entryWallet || 0} entries ready to use`, icon: "gift" }],
-                      3000
-                    );
+                    const oneTimeEntries2 =
+                      activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0;
+                    const benefits2 = buildActivationBenefits({ entriesOverride: oneTimeEntries2 });
+                    appendCodeBenefits(benefits2);
+                    showSuccess("Welcome!", purchaseSuccessSubtitle, benefits2, 3000);
 
                     // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
                     const oneTimePaymentIntentId2 =
@@ -4320,45 +4362,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     // console.log("❌ Auto-login failed:", signInResult?.error);
                     // Show global success screen for account creation
                     hideLoading();
-                    showSuccess(
-                      "Account Created!",
-                      `${activePlan.name} activated`,
-                      [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-                      3000
-                    );
+                    {
+                      const benefits = buildActivationBenefits({
+                        entriesOverride:
+                          activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                      });
+                      appendCodeBenefits(benefits);
+                      showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                    }
                   }
                 } else {
                   // console.log("❌ Failed to get auto-login token:", autoLoginData.error);
                   // Show global success screen for account creation
                   hideLoading();
-                  showSuccess(
-                    "Account Created!",
-                    `${activePlan.name} activated`,
-                    [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-                    3000
-                  );
+                  {
+                    const benefits = buildActivationBenefits({
+                      entriesOverride:
+                        activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                    });
+                    appendCodeBenefits(benefits);
+                    showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                  }
                 }
               } catch (autoLoginError) {
                 console.error("❌ Auto-login error:", autoLoginError);
                 // Show global success screen for account creation
                 hideLoading();
-                showSuccess(
-                  "Account Created!",
-                  `${activePlan.name} activated`,
-                  [{ text: `${activePlan.name} membership activated`, icon: "gift" }],
-                  3000
-                );
+                {
+                  const benefits = buildActivationBenefits({
+                    entriesOverride:
+                      activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                  });
+                  appendCodeBenefits(benefits);
+                  showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                }
               }
             } else {
               // Fallback for cases without auto-login data
               // Show global success screen for account creation
               hideLoading();
-              showSuccess(
-                "Account Created!",
-                `${oneTimeData?.totalEntries || 0} entries added`,
-                [{ text: `${oneTimeData?.totalEntries || 0} entries added to your wallet`, icon: "gift" }],
-                3000
-              );
+              {
+                const benefits = buildActivationBenefits({
+                  entriesOverride: oneTimeData?.totalEntries || 0,
+                });
+                appendCodeBenefits(benefits);
+                showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+              }
             }
 
             // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
@@ -5229,6 +5278,24 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                             : undefined;
                         const bonusBorderColor = isPackageCard ? `${accentHex}4D` : `${promoTheme.primary}4D`;
                         const bonusTextColor = isPackageCard ? accentHex : promoTheme.primary;
+                        const selectedCatalogId = (() => {
+                          const api = convertToAPIPlan(promoEnhancedPlan, [...subscriptionPackages, ...oneTimePackages]);
+                          return (api?._id || promoEnhancedPlan.id).trim();
+                        })();
+                        const parseSelectedEntries = (value: unknown) => {
+                          if (typeof value === "number") return value;
+                          const parsed = parseInt(String(value ?? 0), 10);
+                          return Number.isNaN(parsed) ? 0 : parsed;
+                        };
+                        let selectedEntriesCount = parseSelectedEntries(promoEnhancedPlan?.metadata?.entriesCount);
+                        if (selectedEntriesCount <= 0) {
+                          const staticPkg = getPackageById(selectedCatalogId);
+                          if (staticPkg?.type === "subscription" && staticPkg.entriesPerMonth) {
+                            selectedEntriesCount = staticPkg.entriesPerMonth;
+                          } else if (staticPkg?.type === "one-time" && staticPkg.totalEntries) {
+                            selectedEntriesCount = staticPkg.totalEntries;
+                          }
+                        }
                         return (
                       <>
                         <h3
@@ -5277,6 +5344,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                   ? promoEnhancedPlan.features[0].text
                                   : promoEnhancedPlan?.subtitle || "No package selected"}
                               </p>
+                              {selectedEntriesCount > 0 ? (
+                                <p
+                                  className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
+                                  style={
+                                    isPackageCard && pkgScheme.textGradientStyle
+                                      ? { ...pkgScheme.textGradientStyle, opacity: 0.85 }
+                                      : isPackageCard
+                                        ? { color: accentHex }
+                                        : undefined
+                                  }
+                                >
+                                  {promoEnhancedPlan?.period === "mo"
+                                    ? `${selectedEntriesCount} free entries every month`
+                                    : `${selectedEntriesCount} free entries`}
+                                </p>
+                              ) : null}
                             </div>
                             <div className="flex flex-col gap-0.5 items-end shrink-0">
                               <div
@@ -5298,12 +5381,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                               {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
                                 <button
                                   onClick={handlePackageChange}
-                                  className={`relative z-10 text-xs sm:text-sm leading-tight underline hover:no-underline transition-all duration-200 cursor-pointer ${!isPackageCard ? "text-blue-600 hover:text-blue-800" : ""}`}
-                                  style={
-                                    isPackageCard
-                                      ? { color: pkgScheme.changeButtonTextWhite ? "white" : accentHex }
-                                      : undefined
-                                  }
+                                  type="button"
+                                  className="relative z-10 text-xs sm:text-sm leading-tight text-white underline decoration-white underline-offset-2 hover:no-underline hover:text-white transition-all duration-200 cursor-pointer"
                                 >
                                   Change
                                 </button>
@@ -5447,6 +5526,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           paymentIntentId={paymentIntentId}
           packageName={processingPackageName}
           packageType={processingPackageType}
+          packageId={catalogPackageIdForBenefits}
           isVisible={showPaymentProcessing}
           onSuccess={handlePaymentProcessingSuccess}
           onError={handlePaymentProcessingError}
