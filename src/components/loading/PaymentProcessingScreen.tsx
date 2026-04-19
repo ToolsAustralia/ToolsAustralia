@@ -1,16 +1,20 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Check, Gift, Star, Zap, AlertCircle } from "lucide-react";
+import { Check, Gift, Star, Zap, AlertCircle, Tag } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { trackPurchaseWithEventId } from "@/components/FacebookPixel";
+import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getPackageById } from "@/data/membershipPackages";
 
 interface PaymentProcessingScreenProps {
   paymentIntentId: string;
   packageName: string;
   packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+  /** When set, success state can show partner-discount and (for membership) shop discount lines even before poll returns. */
+  packageId?: string;
   isVisible?: boolean;
   onSuccess?: (status: PaymentStatusResponse) => void;
   onError?: (error: string) => void;
@@ -25,6 +29,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   paymentIntentId,
   packageName,
   packageType,
+  packageId,
   isVisible = true,
   onSuccess,
   onError,
@@ -217,28 +222,38 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   // Show success screen if payment is processed - using SuccessScreen design
   if (status?.processed && status.data) {
-    const benefits = [];
+    type BenefitIcon = "gift" | "star" | "zap" | "tag";
+    const benefits: { text: string; icon: BenefitIcon }[] = [];
 
-    if (status.data.entries && status.data.entries > 0) {
-      benefits.push({
-        text: `${status.data.entries} entries added to your account`,
-        icon: "star" as const,
-      });
+    const entries = status.data.entries;
+    if (entries && entries > 0) {
+      const entryText =
+        packageType === "membership"
+          ? `${entries} free entries added every month`
+          : `${entries} free entries added to your account`;
+      benefits.push({ text: entryText, icon: "star" });
     }
 
-    // Add reward points if available and rewards are enabled
     if (rewardsEnabled() && status.data.points && status.data.points > 0) {
-      benefits.push({
-        text: `${status.data.points} reward points earned`,
-        icon: "gift" as const,
-      });
+      const pointsText =
+        packageType === "membership"
+          ? `${status.data.points} reward points earned every month`
+          : `${status.data.points} reward points earned`;
+      benefits.push({ text: pointsText, icon: "zap" });
     }
 
-    if (status.data.entries && status.data.entries > 0) {
-      benefits.push({
-        text: `${status.data.entries} entries added to major draw`,
-        icon: "zap" as const,
-      });
+    if (packageId?.trim()) {
+      const partnerLine = getPartnerDiscountBenefitTextForPackageId(packageId);
+      if (partnerLine) {
+        benefits.push({ text: partnerLine, icon: "tag" });
+      }
+      if (packageType === "membership") {
+        const pkg = getPackageById(packageId);
+        const shopPct = pkg?.shopDiscountPercent ?? 0;
+        if (shopPct > 0) {
+          benefits.push({ text: `${shopPct}% off Tools Australia shop`, icon: "tag" });
+        }
+      }
     }
 
     return (
@@ -259,24 +274,27 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
             </p>
           </div>
 
-          <div className="bg-gradient-to-br from-green-800 to-green-900 border border-green-700 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-xl">
-            <div className="text-xs sm:text-sm text-white space-y-2 sm:space-y-3">
-              {benefits.map((benefit, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 sm:gap-3 animate-in slide-in-from-left-4 duration-500"
-                  style={{ animationDelay: `${index * 100 + 800}ms` }}
-                >
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-600 rounded-full flex items-center justify-center shadow-md flex-shrink-0">
-                    {benefit.icon === "gift" && <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                    {benefit.icon === "star" && <Star className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
-                    {benefit.icon === "zap" && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+          {benefits.length > 0 ? (
+            <div className="bg-gradient-to-br from-green-800 to-green-900 border border-green-700 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-xl">
+              <div className="text-xs sm:text-sm text-white space-y-2 sm:space-y-3">
+                {benefits.map((benefit, index) => (
+                  <div
+                    key={`${benefit.text}-${index}`}
+                    className="flex items-center gap-2 sm:gap-3 animate-in slide-in-from-left-4 duration-500"
+                    style={{ animationDelay: `${index * 100 + 800}ms` }}
+                  >
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-600 rounded-full flex items-center justify-center shadow-md flex-shrink-0">
+                      {benefit.icon === "gift" && <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                      {benefit.icon === "star" && <Star className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                      {benefit.icon === "zap" && <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                      {benefit.icon === "tag" && <Tag className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                    </div>
+                    <span className="font-medium text-xs sm:text-sm">{benefit.text}</span>
                   </div>
-                  <span className="font-medium text-xs sm:text-sm">{benefit.text}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     );

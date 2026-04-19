@@ -59,6 +59,11 @@ export interface OriginalPurchaseContext {
   promoMultiplier?: number; // Promo multiplier that was actually applied during the original purchase
   miniDrawId?: string; // For mini-draw package purchases, link to the specific mini-draw
   miniDrawName?: string; // Optional mini-draw name for display in upsell modal
+  /** Stripe PM id from confirmPayment — avoids upsell modal waiting on webhook → DB */
+  paymentMethodId?: string;
+  /** Card last4 from confirmPayment (optional; avoids extra PI fetch for CTA label) */
+  cardLast4?: string;
+  cardBrand?: string;
 }
 
 export interface UpsellManagerProps {

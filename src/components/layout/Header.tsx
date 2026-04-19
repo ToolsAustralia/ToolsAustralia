@@ -1655,7 +1655,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                   {/* Checkout Button */}
                   <Link
-                    href="/checkout"
+                    href="/shop"
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 mb-2"
                     onClick={handleCloseCart}
                   >
