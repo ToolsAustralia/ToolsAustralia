@@ -731,9 +731,9 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       "subscription_upgraded",
       JSON.stringify({
         packageName: selectedUpgrade?.name || "subscription",
+        packageId: selectedUpgrade?.packageId || "",
         entriesPerMonth: selectedUpgrade?.entriesPerMonth || 0,
         totalEntriesAfterUpgrade: totalEntriesAfterUpgrade, // Total entries user will have after upgrade
-        shopDiscountPercent: selectedUpgrade?.shopDiscountPercent || 0,
         partnerDiscountDays: selectedUpgrade?.partnerDiscountDays || 0,
         timestamp: Date.now(),
       })

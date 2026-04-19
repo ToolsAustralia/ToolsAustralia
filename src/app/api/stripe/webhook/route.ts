@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
+import ProcessedStripeEvent from "@/models/ProcessedStripeEvent";
 // import { Types } from "mongoose"; // No longer needed with Option 1
 import Order from "@/models/Order";
 import MajorDraw from "@/models/MajorDraw";
@@ -80,6 +81,22 @@ async function isEventProcessed(paymentIntentId: string): Promise<boolean> {
  */
 async function markEventProcessed(paymentIntentId: string): Promise<void> {
   webhookLog("info", `Payment ${paymentIntentId} will be marked as processed by processPaymentBenefits`);
+}
+
+/** Persist Stripe webhook event id so duplicate deliveries short-circuit (TTL on collection). */
+async function ackProcessedStripeEventOnce(event: Stripe.Event): Promise<void> {
+  try {
+    await ProcessedStripeEvent.create({
+      eventId: event.id,
+      type: event.type,
+      processedAt: new Date(),
+    });
+  } catch (err: unknown) {
+    const code = err && typeof err === "object" && "code" in err ? (err as { code: number }).code : undefined;
+    if (code !== 11000) {
+      webhookLog("warn", `ProcessedStripeEvent create failed: ${err}`);
+    }
+  }
 }
 
 /**
@@ -223,7 +240,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     let freshPaymentIntent: Stripe.PaymentIntent;
     try {
       freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
-        expand: ["customer", "payment_method", "latest_charge"],
+        expand: ["customer", "payment_method", "latest_charge.payment_method"],
       });
       webhookLog("info", `📋 Retrieved fresh PaymentIntent metadata:`, {
         id: freshPaymentIntent.id,
@@ -520,64 +537,49 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
     }
     
     // ✅ ENHANCED: For existing users, ensure payment method is saved if not already saved
-    // For new users, payment method is already saved during account creation
-    // Check multiple sources for payment method ID to handle all edge cases
     if (user) {
       let paymentMethodId: string | null = null;
       let paymentMethodSource = "none";
+      let resolvedPm: Stripe.PaymentMethod | null = null;
 
-      // Try multiple sources in order of reliability
-      // 1. PaymentIntent.payment_method (most direct)
-      if (paymentIntent.payment_method) {
-        paymentMethodId = typeof paymentIntent.payment_method === "string"
-          ? paymentIntent.payment_method
-          : paymentIntent.payment_method.id;
-        if (paymentMethodId) {
-          paymentMethodSource = "paymentIntent";
-        }
+      const pmDirect = paymentIntent.payment_method;
+      if (typeof pmDirect === "string") {
+        paymentMethodId = pmDirect;
+        paymentMethodSource = "paymentIntent";
+      } else if (pmDirect && typeof pmDirect === "object" && "id" in pmDirect) {
+        resolvedPm = pmDirect as Stripe.PaymentMethod;
+        paymentMethodId = resolvedPm.id;
+        paymentMethodSource = "paymentIntent";
       }
 
-      // 2. PaymentIntent.metadata.paymentMethodId (from one-time purchase API)
       if (!paymentMethodId && paymentIntent.metadata.paymentMethodId) {
         paymentMethodId = paymentIntent.metadata.paymentMethodId;
         paymentMethodSource = "metadata";
         webhookLog("info", `💳 Found payment method in metadata: ${paymentMethodId}`);
       }
 
-      // 3. Charge's payment method (some payment methods are on charges)
       if (!paymentMethodId && paymentIntent.latest_charge) {
-        try {
-          const chargeId = typeof paymentIntent.latest_charge === "string"
-            ? paymentIntent.latest_charge
-            : paymentIntent.latest_charge.id;
-          const charge = await stripe.charges.retrieve(chargeId);
-          
-          if (charge.payment_method) {
-            const pm = charge.payment_method;
-            if (typeof pm === "string") {
-              paymentMethodId = pm;
-            } else if (pm && typeof pm === "object") {
-              const pmObj = pm as { id?: string };
-              paymentMethodId = pmObj.id || null;
-            }
-            if (paymentMethodId) {
-              paymentMethodSource = "charge";
-              webhookLog("info", `💳 Found payment method on charge: ${paymentMethodId}`);
-            }
+        const lc = paymentIntent.latest_charge as Stripe.Charge | string;
+        if (typeof lc === "object" && lc.payment_method) {
+          const cpm = lc.payment_method;
+          if (typeof cpm === "string") {
+            paymentMethodId = cpm;
+            paymentMethodSource = "latest_charge.payment_method";
+          } else if (cpm && typeof cpm === "object" && "id" in cpm) {
+            resolvedPm = resolvedPm ?? (cpm as Stripe.PaymentMethod);
+            paymentMethodId = (cpm as Stripe.PaymentMethod).id;
+            paymentMethodSource = "latest_charge.payment_method";
+            webhookLog("info", `💳 Found payment method on expanded charge: ${paymentMethodId}`);
           }
-        } catch (chargeError) {
-          webhookLog("warn", `Failed to retrieve charge for payment method: ${chargeError}`);
         }
       }
 
-      // 4. Customer's default payment method (last resort)
       if (!paymentMethodId && paymentIntent.customer) {
         try {
-          const customerId = typeof paymentIntent.customer === "string"
-            ? paymentIntent.customer
-            : paymentIntent.customer.id;
+          const customerId =
+            typeof paymentIntent.customer === "string" ? paymentIntent.customer : paymentIntent.customer.id;
           const customer = await stripe.customers.retrieve(customerId);
-          
+
           if (!("deleted" in customer) && customer.invoice_settings?.default_payment_method) {
             const defaultPm = customer.invoice_settings.default_payment_method;
             paymentMethodId = typeof defaultPm === "string" ? defaultPm : defaultPm?.id || null;
@@ -591,36 +593,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         }
       }
 
-      // 5. ✅ NEW: List customer's payment methods (critical for setup_future_usage)
-      // When setup_future_usage is used, Stripe attaches the payment method to the customer
-      // but it might not be immediately available on PaymentIntent.payment_method
-      // This is especially important in production/staging where timing can be different
-      if (!paymentMethodId && paymentIntent.customer) {
-        try {
-          const customerId = typeof paymentIntent.customer === "string"
-            ? paymentIntent.customer
-            : paymentIntent.customer.id;
-          
-          // List all payment methods for this customer
-          const paymentMethods = await stripe.paymentMethods.list({
-            customer: customerId,
-            type: "card",
-            limit: 10, // Get recent payment methods
-          });
-          
-          if (paymentMethods.data.length > 0) {
-            // Use the most recently created payment method (should be the one from this purchase)
-            // Sort by created timestamp descending
-            const sortedMethods = paymentMethods.data.sort((a, b) => b.created - a.created);
-            paymentMethodId = sortedMethods[0].id;
-            paymentMethodSource = "customerList";
-            webhookLog("info", `💳 Found payment method from customer payment methods list: ${paymentMethodId} (${paymentMethods.data.length} total)`);
-          }
-        } catch (listError) {
-          webhookLog("warn", `Failed to list customer payment methods: ${listError}`);
-        }
-      }
-
       if (paymentMethodId) {
         // Check if payment method is already saved
         const hasPaymentMethod = user.savedPaymentMethods?.some(
@@ -628,16 +600,13 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
         );
         
         if (!hasPaymentMethod) {
-          // ✅ ENHANCED: Save payment method with retry logic for transient failures
           webhookLog("info", `💳 Saving payment method to user account (source: ${paymentMethodSource}): ${paymentMethodId}`);
           
-          // ✅ CRITICAL: Verify payment method is attached to customer before saving
-          // This is especially important with setup_future_usage in production/staging
           if (user.stripeCustomerId) {
             try {
-              const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+              const pm = resolvedPm ?? (await stripe.paymentMethods.retrieve(paymentMethodId));
               const pmCustomerId = typeof pm.customer === "string" ? pm.customer : pm.customer?.id;
-              
+
               if (!pmCustomerId || pmCustomerId !== user.stripeCustomerId) {
                 webhookLog("info", `🔄 Payment method not attached to customer, attaching now: ${paymentMethodId}`);
                 await stripe.paymentMethods.attach(paymentMethodId, {
@@ -649,7 +618,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent): Promis
               }
             } catch (attachError) {
               webhookLog("warn", `⚠️ Failed to verify/attach payment method, continuing anyway: ${attachError}`);
-              // Continue - ensurePaymentMethodAttached in savePaymentMethodToUser will try again
             }
           }
           
@@ -4567,11 +4535,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
-    // ✅ CRITICAL: Webhook handlers must be idempotent using event.id or a processed-events table.
-    // This avoids double benefit granting if Stripe retries the same event.
     const stripeEventId = event.id;
-    const stripeEventAlreadyProcessed = await isEventProcessed(`stripe_event_${stripeEventId}`);
-    if (stripeEventAlreadyProcessed) {
+    const existingStripeEvent = await ProcessedStripeEvent.findOne({ eventId: stripeEventId });
+    if (existingStripeEvent) {
       webhookLog("info", `Stripe event ${stripeEventId} already processed, skipping duplicate webhook`);
       return NextResponse.json({ received: true, skipped: true, reason: "duplicate_stripe_event" });
     }
@@ -4602,6 +4568,7 @@ export async function POST(request: NextRequest) {
           const paymentAlreadyProcessed = await isEventProcessed(paymentIntentId);
           if (paymentAlreadyProcessed) {
             webhookLog("info", `Payment ${paymentIntentId} already processed, skipping`);
+            await ackProcessedStripeEventOnce(event);
             return NextResponse.json({ received: true, skipped: true });
           }
 
@@ -4634,6 +4601,7 @@ export async function POST(request: NextRequest) {
                     "info",
                     `Invoice ${invoiceId} already processed in user's processedPayments, skipping webhook`
                   );
+                  await ackProcessedStripeEventOnce(event);
                   return NextResponse.json({ received: true, skipped: true });
                 }
               }
@@ -4647,6 +4615,7 @@ export async function POST(request: NextRequest) {
           const paymentAlreadyProcessed = await isEventProcessed(paymentIntentId);
           if (paymentAlreadyProcessed) {
             webhookLog("info", `Payment ${paymentIntentId} already processed, skipping`);
+            await ackProcessedStripeEventOnce(event);
             return NextResponse.json({ received: true, skipped: true });
           }
         }
@@ -4804,8 +4773,7 @@ export async function POST(request: NextRequest) {
       // ✅ CRITICAL: Don't mark unhandled events as processed!
     }
 
-    // ✅ CRITICAL: Mark the Stripe event as processed to prevent duplicate webhook processing
-    await markEventProcessed(`stripe_event_${stripeEventId}`);
+    await ackProcessedStripeEventOnce(event);
 
     // ✅ WEBHOOK-FIRST: Mark this payment as processed ONLY if we actually processed it
     if (paymentIntentId && shouldMarkAsProcessed) {

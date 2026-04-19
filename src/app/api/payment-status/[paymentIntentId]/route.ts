@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PaymentEvent, { type IPaymentEvent } from "@/models/PaymentEvent";
+import type Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 
 type PaymentStatusPayload =
   | {
@@ -57,10 +59,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     await connectDB();
 
-    const eventId = `BenefitsGranted-${paymentIntentId}`;
-    const paymentEvent = await PaymentEvent.findById(eventId)
-      .select("_id paymentIntentId eventType packageType packageName data processedBy timestamp")
-      .lean<PaymentEventLean | null>();
+    const paymentEvent = await findBenefitsGrantedEvent(paymentIntentId);
 
     let payload: PaymentStatusPayload;
 
@@ -100,6 +99,42 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     console.error("Error checking payment status:", error);
     return NextResponse.json({ error: "Failed to check payment status" }, { status: 500 });
+  }
+}
+
+/**
+ * Subscription benefits are recorded as BenefitsGranted-invoice_{invoiceId} with paymentIntentId invoice_{invoiceId}.
+ * The client polls with the Stripe PaymentIntent id (pi_…); resolve the invoice-linked event when the direct id misses.
+ */
+async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<PaymentEventLean | null> {
+  const directId = `BenefitsGranted-${paymentIntentId}`;
+  const direct = await PaymentEvent.findById(directId)
+    .select("_id paymentIntentId eventType packageType packageName data processedBy timestamp")
+    .lean<PaymentEventLean | null>();
+  if (direct) {
+    return direct;
+  }
+
+  if (!paymentIntentId.startsWith("pi_")) {
+    return null;
+  }
+
+  try {
+    const pi = (await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["invoice"],
+    })) as Stripe.PaymentIntent & { invoice?: string | Stripe.Invoice | null };
+    const inv = pi.invoice;
+    const invoiceId = typeof inv === "string" ? inv : inv?.id;
+    if (!invoiceId) {
+      return null;
+    }
+    const invoiceEventId = `BenefitsGranted-invoice_${invoiceId}`;
+    return PaymentEvent.findById(invoiceEventId)
+      .select("_id paymentIntentId eventType packageType packageName data processedBy timestamp")
+      .lean<PaymentEventLean | null>();
+  } catch (err) {
+    console.warn("[payment-status] Could not map PaymentIntent to invoice BenefitsGranted event:", paymentIntentId, err);
+    return null;
   }
 }
 

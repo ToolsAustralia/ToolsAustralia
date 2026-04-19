@@ -629,6 +629,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
         paymentIntentId={paymentIntentId}
         packageName={packageName}
         packageType="membership"
+        packageId={packageId || undefined}
         isVisible={showPaymentProcessing}
         onSuccess={handleProcessingSuccess}
         onError={handleProcessingError}

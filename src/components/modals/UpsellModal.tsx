@@ -15,7 +15,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useLoading } from "@/contexts/LoadingContext";
 import { PaymentProcessingScreen } from "@/components/loading";
-import { type PaymentStatusResponse } from "@/hooks/queries";
+import { type PaymentStatusResponse, type SavedPaymentMethod } from "@/hooks/queries";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
@@ -30,6 +30,25 @@ import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 
 const stripePromise = getStripePromise();
+
+function syntheticSavedPaymentMethod(
+  paymentMethodId: string,
+  card?: { brand: string; last4: string }
+): SavedPaymentMethod {
+  return {
+    paymentMethodId,
+    isDefault: true,
+    createdAt: new Date(),
+    card: card
+      ? {
+          brand: card.brand,
+          last4: card.last4,
+          expMonth: 0,
+          expYear: 0,
+        }
+      : undefined,
+  };
+}
 
 /**
  * UpsellModal Component
@@ -55,9 +74,9 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const isFinalizingRef = React.useRef<boolean>(false);
   /** Ref updates synchronously so a second tap cannot start another charge before isProcessing re-renders. */
   const upsellPurchaseLockRef = React.useRef(false);
-  // ✅ Track polling state to show loading instead of "No Payment Method"
-  const [isPollingPaymentMethods, setIsPollingPaymentMethods] = useState(false);
-  const pollingStoppedRef = React.useRef<boolean>(false);
+  /** PM from original purchase context or one-shot PI lookup (webhook may not have written to DB yet). */
+  const [purchaseResolvedPm, setPurchaseResolvedPm] = useState<SavedPaymentMethod | null>(null);
+  const [isResolvingPurchasePm, setIsResolvingPurchasePm] = useState(false);
   // const [timeLeft, setTimeLeft] = useState({ // TODO: Implement countdown timer
   //   hours: 0,
   //   minutes: 0,
@@ -105,22 +124,28 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const purchaseUpsell = usePurchaseUpsell();
   const { showToast } = useToast();
 
-  /** Prefer default; else first saved card (matches server fallback). */
-  const resolvedChargePm =
-    paymentMethods?.find((pm) => pm.isDefault) ??
-    (paymentMethods && paymentMethods.length > 0 ? paymentMethods[0] : undefined);
+  /** Prefer saved cards from React Query; else PM from this purchase (context or PI API). */
+  const resolvedChargePm = useMemo(() => {
+    const fromQuery =
+      paymentMethods?.find((pm) => pm.isDefault) ??
+      (paymentMethods && paymentMethods.length > 0 ? paymentMethods[0] : undefined);
+    return fromQuery ?? purchaseResolvedPm ?? undefined;
+  }, [paymentMethods, purchaseResolvedPm]);
 
-  /** Empty list after at least one fetch — show SetupIntent without waiting for poll to finish. */
+  const isResolvingPaymentMethod =
+    Boolean(isOpen) &&
+    Boolean(userData?._id) &&
+    (isResolvingPurchasePm || (isLoadingPaymentMethods && paymentMethods === undefined));
+
+  /** Empty list after resolution — show SetupIntent only when we truly have no PM to charge. */
   const showInlineCardSetup =
     Boolean(isOpen) &&
-    !isLoadingPaymentMethods &&
+    !isResolvingPaymentMethod &&
     paymentMethods !== undefined &&
-    paymentMethods.length === 0;
+    paymentMethods.length === 0 &&
+    !resolvedChargePm;
 
-  // ✅ Determine if we should show loading state
-  // Show loading if: actively polling OR initial load AND no payment method found yet
-  const isCheckingPaymentMethod =
-    isPollingPaymentMethods || (isLoadingPaymentMethods && !resolvedChargePm && (paymentMethods?.length ?? 0) === 0);
+  const isCheckingPaymentMethod = isResolvingPaymentMethod && !resolvedChargePm;
 
   /**
    * Finalize invoice and send to Klaviyo
@@ -218,6 +243,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     setPaymentIntentId(null);
     setSetupIntentSecret(null);
     setLoadingSetupIntent(false);
+    setPurchaseResolvedPm(null);
+    setIsResolvingPurchasePm(false);
 
     // Clear the timeout since we're closing
     if (finalizationTimeoutIdRef.current) {
@@ -262,112 +289,98 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     onClose();
   }, [onClose, userData, invoiceFinalized, originalPurchaseContext, finalizeInvoice]);
 
-  // ✅ OPTIMIZED: Smart payment method polling with loading state and efficient intervals
-  // Polls only when needed and stops immediately when payment method is found
-  // Uses reasonable intervals to prevent database/API overload
   useEffect(() => {
-    if (isOpen && userData?._id && !pollingStoppedRef.current) {
-      const userId = userData._id;
-      
-      // Reset polling state when modal opens
-      setIsPollingPaymentMethods(true);
-      pollingStoppedRef.current = false;
-      
-      // ✅ Step 1: Invalidate cache and do initial fetch immediately
-      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
-      refetchPaymentMethods().then((result) => {
-        // Check if payment method already exists after initial fetch
-        const raw = result.data;
+    if (!isOpen || !userData?._id) {
+      setPurchaseResolvedPm(null);
+      setIsResolvingPurchasePm(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsResolvingPurchasePm(true);
+    setPurchaseResolvedPm(null);
+
+    void (async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userData._id) });
+        const refetchResult = await refetchPaymentMethods();
+        if (cancelled) return;
+
+        const raw = refetchResult.data;
         const methods = !raw
           ? undefined
           : Array.isArray(raw)
             ? raw
             : raw.paymentMethods;
-        const hasDefault = methods?.find((pm) => pm.isDefault);
-        if (hasDefault) {
-          console.log("✅ Payment method found on initial fetch, skipping poll");
-          setIsPollingPaymentMethods(false);
-          pollingStoppedRef.current = true;
-          return; // Exit early if payment method already exists
-        }
-      }).catch((error) => {
-        console.error("Error during initial payment method fetch:", error);
-        // Continue with polling even if initial fetch fails
-      });
 
-      // ✅ Step 2: Set up efficient polling with reasonable intervals
-      // Poll every 2 seconds (not 500ms) to reduce database load
-      // Total duration: ~30 seconds max (15 polls × 2 seconds)
-      let pollCount = 0;
-      const maxPolls = 15; // 15 polls × 2 seconds = 30 seconds max
-      const pollIntervalMs = 2000; // 2 seconds - reasonable interval to prevent overload
-      
-      const pollInterval = setInterval(async () => {
-        // ✅ Early exit if already found (prevents unnecessary refetches)
-        if (pollingStoppedRef.current) {
-          clearInterval(pollInterval);
+        if (methods && methods.length > 0) {
+          setPurchaseResolvedPm(null);
+          setIsResolvingPurchasePm(false);
           return;
         }
-        
-        pollCount++;
-        
-        try {
-          // ✅ Refetch to get latest payment methods
-          const refetchResult = await refetchPaymentMethods();
-          
-          // Check payment methods from refetched data
-          const rawFresh = refetchResult.data;
-          const freshPaymentMethods = !rawFresh
-            ? undefined
-            : Array.isArray(rawFresh)
-              ? rawFresh
-              : rawFresh.paymentMethods;
-          const freshDefaultMethod = freshPaymentMethods?.find((pm) => pm.isDefault);
-          
-          // ✅ CRITICAL: Stop polling immediately if payment method is found
-          if (freshDefaultMethod) {
-            console.log(`✅ Payment method found after ${pollCount} poll(s), stopping`);
-            pollingStoppedRef.current = true;
-            setIsPollingPaymentMethods(false);
-            
-            // Final cache invalidation to ensure UI updates
-            queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
-            
-            clearInterval(pollInterval);
-            return;
-          }
-          
-          // Continue polling if not found and haven't exceeded max polls
-          if (pollCount < maxPolls) {
-            console.log(`🔄 Polling for payment methods (attempt ${pollCount}/${maxPolls})...`);
-          } else {
-            // Max polls reached - stop polling
-            console.log("⏰ Stopped polling for payment methods (max attempts reached)");
-            pollingStoppedRef.current = true;
-            setIsPollingPaymentMethods(false);
-            clearInterval(pollInterval);
-          }
-        } catch (error) {
-          console.error("Error polling for payment methods:", error);
-          // On error, stop polling to prevent infinite retries
-          pollingStoppedRef.current = true;
-          setIsPollingPaymentMethods(false);
-          clearInterval(pollInterval);
-        }
-      }, pollIntervalMs); // 2 second interval - optimized for performance
 
-      // Cleanup interval when modal closes or component unmounts
-      return () => {
-        clearInterval(pollInterval);
-        setIsPollingPaymentMethods(false);
-      };
-    } else if (!isOpen) {
-      // Reset polling state when modal closes
-      pollingStoppedRef.current = false;
-      setIsPollingPaymentMethods(false);
-    }
-  }, [isOpen, userData?._id, refetchPaymentMethods, queryClient]);
+        if (originalPurchaseContext?.paymentMethodId) {
+          const last4 = originalPurchaseContext.cardLast4;
+          setPurchaseResolvedPm(
+            syntheticSavedPaymentMethod(
+              originalPurchaseContext.paymentMethodId,
+              last4
+                ? {
+                    brand: originalPurchaseContext.cardBrand ?? "",
+                    last4,
+                  }
+                : undefined
+            )
+          );
+          setIsResolvingPurchasePm(false);
+          return;
+        }
+
+        if (originalPurchaseContext?.paymentIntentId) {
+          const res = await fetch(
+            `/api/stripe/payment-intent/${encodeURIComponent(originalPurchaseContext.paymentIntentId)}/payment-method`
+          );
+          const data = (await res.json()) as {
+            success?: boolean;
+            paymentMethodId?: string | null;
+            card?: { brand: string; last4: string } | null;
+          };
+          if (cancelled) return;
+          if (res.ok && data.paymentMethodId) {
+            setPurchaseResolvedPm(
+              syntheticSavedPaymentMethod(data.paymentMethodId, data.card ?? undefined)
+            );
+          } else {
+            setPurchaseResolvedPm(null);
+          }
+          setIsResolvingPurchasePm(false);
+          return;
+        }
+
+        setPurchaseResolvedPm(null);
+        setIsResolvingPurchasePm(false);
+      } catch (e) {
+        console.error("UpsellModal: payment method resolution failed:", e);
+        if (!cancelled) {
+          setPurchaseResolvedPm(null);
+          setIsResolvingPurchasePm(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    userData?._id,
+    originalPurchaseContext?.paymentIntentId,
+    originalPurchaseContext?.paymentMethodId,
+    originalPurchaseContext?.cardLast4,
+    originalPurchaseContext?.cardBrand,
+    queryClient,
+    refetchPaymentMethods,
+  ]);
 
   useEffect(() => {
     setSetupIntentSecret(null);
@@ -641,7 +654,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // Add entry count if available
     if (status.data?.entries && status.data.entries > 0) {
       benefits.push({
-        text: `${status.data.entries} entries added to your account`,
+        text: `${status.data.entries} free entries added to your account`,
         icon: "star" as const,
       });
     }
@@ -831,6 +844,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
         {/* Main Content - Ultra Compact */}
         <div className="px-3 sm:px-6 pb-2 sm:pb-4 pt-2 sm:pt-4">
+          {isResolvingPaymentMethod && (
+            <div className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 py-4 text-sm text-gray-600 dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-400">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Loading payment method…
+            </div>
+          )}
           {showInlineCardSetup && (
             <div className="mb-3 space-y-3 rounded-lg border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/90 shadow-sm">
               <div className="flex items-start gap-2">
@@ -900,7 +919,11 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
 
                       <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-lg px-2 py-1">
                         <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
-                        <span className="text-xs sm:text-sm">•••• {resolvedChargePm.card?.last4}</span>
+                        <span className="text-xs sm:text-sm">
+                          {resolvedChargePm.card?.last4
+                            ? `•••• ${resolvedChargePm.card.last4}`
+                            : "Saved card"}
+                        </span>
                       </div>
                     </>
                   ) : showInlineCardSetup ? (
@@ -953,6 +976,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           paymentIntentId={paymentIntentId}
           packageName={offer.title}
           packageType="upsell"
+          packageId={offer.id}
           isVisible={showPaymentProcessing}
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}
