@@ -285,7 +285,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Power Plus - $249.99",
     conditions: [
       "$249.99 One Time Payment",
-      "100% of Partner Discounts Available",
+      "85% of Partner Discounts Available",
       "20 Days Access to Partner Discounts",
       "1200 Free One Time Entries",
     ],
@@ -437,7 +437,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Power Upgrade - $249.99",
     conditions: [
       "$249.99 One Time Payment",
-      "100% of Partner Discounts Available",
+      "85% of Partner Discounts Available",
       "20 Days Access to Partner Discounts",
       "2400 Free One Time Entries",
     ],

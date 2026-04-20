@@ -2,9 +2,10 @@
 
 import React from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 interface HexagonalPromoBadgeProps {
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   size?: "xs" | "small" | "medium" | "large" | "compact" | "tiny";
   className?: string;
 }

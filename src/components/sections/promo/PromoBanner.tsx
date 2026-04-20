@@ -24,6 +24,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import Image from "next/image";
+import { hasBundledMultiplierAssets, isPromoMultiplier } from "@/types/promo-multiplier";
 
 /**
  * X2 / X10 multiplier badge — only used here. Anchored to the countdown cluster’s
@@ -882,7 +883,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       countdownDisplay.type !== "hidden" &&
                       !isNoPromo &&
                       multiplier &&
-                      [2, 3, 5, 10].includes(multiplier) && (
+                      isPromoMultiplier(multiplier) &&
+                      (hasBundledMultiplierAssets(multiplier) ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                           src={`/images/badge/X${multiplier}.webp`}
@@ -895,7 +897,18 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                           }`}
                           style={{ filter: PROMO_BANNER_MULTIPLIER_BADGE.dropShadow }}
                         />
-                      )}
+                      ) : (
+                        <span
+                          className={`${PROMO_BANNER_MULTIPLIER_BADGE.root} flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-xs sm:text-sm font-black text-white border-2 border-amber-300/70 ${
+                            isScrolled
+                              ? PROMO_BANNER_MULTIPLIER_BADGE.layoutScrolled
+                              : PROMO_BANNER_MULTIPLIER_BADGE.layoutBar
+                          }`}
+                          style={{ filter: PROMO_BANNER_MULTIPLIER_BADGE.dropShadow }}
+                        >
+                          {multiplier}x
+                        </span>
+                      ))}
                     {(() => {
                 const rightSectionTileStyle = {
                   background: theme.gradientSolid,

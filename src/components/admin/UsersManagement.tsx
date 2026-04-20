@@ -42,7 +42,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
-import { getPackageIconByName } from "@/utils/images/package-icons";
+import { getPackageIconByName, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/utils/userHelpers";
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
@@ -744,6 +745,13 @@ export default function UsersManagement() {
                 <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
                   {usersData.users.map((user) => {
                     const packageIcon = getPackageIconImage(user.subscription?.packageName);
+                    const packageIconScaleClass = getPackageIconWrapperScaleClass(
+                      derivePlanIdFromPackage(
+                        { name: user.subscription?.packageName ?? "", type: "subscription" },
+                        "subscription"
+                      ),
+                      "badge"
+                    );
                     const colorScheme = getPackageColorScheme(user.subscription?.packageName);
                     const hasActiveSubscription = user.subscription?.isActive;
                     const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
@@ -773,7 +781,9 @@ export default function UsersManagement() {
                                   padding: "2px",
                                 }}
                               >
-                                <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                                <div
+                                  className={`relative w-full h-full flex-shrink-0 flex items-center justify-center ${packageIconScaleClass}`}
+                                >
                                   <Image
                                     src={packageIcon}
                                     alt={user.subscription?.packageName || "Package"}

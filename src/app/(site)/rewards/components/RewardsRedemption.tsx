@@ -12,6 +12,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { isPromoMultiplier, type PromoMultiplier } from "@/types/promo-multiplier";
 
 interface RewardsRedemptionProps {
   user: UserData;
@@ -49,17 +50,14 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  const isValidMultiplier = (n: number): n is 2 | 3 | 5 | 10 =>
-    n === 2 || n === 3 || n === 5 || n === 10;
-
   // Apply correct promo per package: membership multiplier for member-only, one-time for regular
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
     return packages.map((pkg) => {
-      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isValidMultiplier(resolvedMembershipMultiplier)) {
+      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isPromoMultiplier(resolvedMembershipMultiplier)) {
         return applyPromoToPackage(pkg, resolvedMembershipMultiplier);
       }
-      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isValidMultiplier(resolvedOneTimeMultiplier)) {
+      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isPromoMultiplier(resolvedOneTimeMultiplier)) {
         return applyPromoToPackage(pkg, resolvedOneTimeMultiplier);
       }
       return pkg;
@@ -68,7 +66,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
 
   const miniDrawPackages = useMemo(() => {
     const packages = getMiniDrawPackages();
-    if (resolvedMiniMultiplier != null && isValidMultiplier(resolvedMiniMultiplier)) {
+    if (resolvedMiniMultiplier != null && isPromoMultiplier(resolvedMiniMultiplier)) {
       return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
     }
     return packages;
@@ -420,7 +418,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                           {option.name}
                         </h3>
                         {option.isPromoActive && option.promoMultiplier && (
-                          <PromoBadge multiplier={option.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                          <PromoBadge multiplier={option.promoMultiplier as PromoMultiplier} size="small" />
                         )}
                       </div>
                     </div>

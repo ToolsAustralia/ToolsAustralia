@@ -57,6 +57,7 @@ import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-disco
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import { hasBundledMultiplierAssets, isPromoMultiplier, type PromoMultiplier } from "@/types/promo-multiplier";
 import { autoLogPaymentError, type PaymentErrorDetails } from "@/utils/error-reporting/auto-log-error";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { extractSubscriptionData, validateSubscriptionResponse } from "@/utils/payment/subscription-response-handler";
@@ -2959,11 +2960,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       if (isAuthenticated && hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
         // Simple mapping for non-member to member packages
         const packageMapping: Record<string, string> = {
-          "apprentice-pack": "additional-apprentice-pack",
+          "apprentice-pack": "additional-tradie-pack",
           "tradie-pack": "additional-tradie-pack",
           "foreman-pack": "additional-foreman-pack",
           "boss-pack": "additional-boss-pack",
           "power-pack": "additional-power-pack",
+          "vip-pack": "additional-vip-pack",
         };
 
         const adjustedPackageId = packageMapping[packageId] || packageId;
@@ -4830,9 +4832,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const promoMultiplier = promoEnhancedPlan?.metadata?.isPromoActive && typeof promoEnhancedPlan?.metadata?.promoMultiplier === "number"
     ? (promoEnhancedPlan.metadata.promoMultiplier as number)
     : 0;
-  const packageBadgeSrc = promoMultiplier >= 2 && promoMultiplier <= 10 && [2, 3, 5, 10].includes(promoMultiplier)
-    ? `/images/badge/X${promoMultiplier}.webp`
-    : null;
+  const showHeaderPromoBadge =
+    (currentStep === 1 || currentStep === 2) &&
+    promoMultiplier >= 2 &&
+    isPromoMultiplier(promoMultiplier);
+  const packageBadgeSrc =
+    showHeaderPromoBadge && hasBundledMultiplierAssets(promoMultiplier)
+      ? `/images/badge/X${promoMultiplier}.webp`
+      : null;
 
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
@@ -4890,19 +4897,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl relative">
           <div className="relative">
             {/* Package badge - show when step 1 or step 2 is active */}
-            {packageBadgeSrc && (currentStep === 1 || currentStep === 2) && (
+            {showHeaderPromoBadge && (
   <div
     className={`absolute -top-4 z-20 pointer-events-none
       ${currentStep === 2 ? "-right-[12px]" : "-left-[12px]"}
     `}
   >
-    <Image
-      src={packageBadgeSrc}
-      alt={`${promoMultiplier}x bonus entries`}
-      width={72}
-      height={72}
-      className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
-    />
+    {packageBadgeSrc ? (
+      <Image
+        src={packageBadgeSrc}
+        alt={`${promoMultiplier}x bonus entries`}
+        width={72}
+        height={72}
+        className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
+      />
+    ) : (
+      <div
+        className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border-2 border-amber-300/70"
+        aria-label={`${promoMultiplier}x bonus entries`}
+      >
+        {promoMultiplier}x
+      </div>
+    )}
   </div>
 )}
             {/* Step indicator: only for guests (2-step). Hidden for authenticated users to avoid redundant button-like UI. */}
@@ -5268,7 +5284,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                               promoEnhancedPlan.id.includes("tradie") ||
                               promoEnhancedPlan.id.includes("foreman") ||
                               promoEnhancedPlan.id.includes("boss") ||
-                              promoEnhancedPlan.id.includes("power-pack"))
+                              promoEnhancedPlan.id.includes("power-pack") ||
+                              promoEnhancedPlan.id.includes("vip"))
                         );
                         const cardBorderColor = isPackageCard ? `${accentHex}${pkgScheme.cardBorderOpacity}` : undefined;
                         const nameStyle = isPackageCard && pkgScheme.textGradientStyle
@@ -5398,7 +5415,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                                 <div className="flex items-center justify-center gap-2">
                                   <span className="text-xs sm:text-sm font-semibold" style={{ color: bonusTextColor }}>
                                     <HexagonalPromoBadge
-                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as 2 | 3 | 5 | 10}
+                                      multiplier={promoEnhancedPlan.metadata.promoMultiplier as PromoMultiplier}
                                       size="xs"
                                     />
                                   </span>

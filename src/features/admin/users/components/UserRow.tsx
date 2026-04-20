@@ -14,6 +14,8 @@ import {
   getPackageColorScheme,
   getGradientColor,
 } from "../utils/userHelpers";
+import { getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
@@ -29,6 +31,13 @@ interface UserRowProps {
  */
 export default function UserRow({ user, onUserClick, onQuickAction }: UserRowProps) {
   const packageIcon = getPackageIconImage(user.subscription?.packageName);
+  const packageIconScaleClass = getPackageIconWrapperScaleClass(
+    derivePlanIdFromPackage(
+      { name: user.subscription?.packageName ?? "", type: "subscription" },
+      "subscription"
+    ),
+    "badge"
+  );
   const colorScheme = getPackageColorScheme(user.subscription?.packageName);
   const hasActiveSubscription = user.subscription?.isActive;
   const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
@@ -57,7 +66,9 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
                 padding: "2px",
               }}
             >
-              <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+              <div
+                className={`relative w-full h-full flex-shrink-0 flex items-center justify-center ${packageIconScaleClass}`}
+              >
                 <Image
                   src={packageIcon}
                   alt={user.subscription?.packageName || "Package"}

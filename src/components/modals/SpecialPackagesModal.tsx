@@ -34,7 +34,7 @@ import {
 } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
-import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -898,7 +898,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                   {/* Package Icon - Centered at top */}
                   {getPackageIcon(pkg._id) && (
                     <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 z-20">
-                      <div className="w-8 h-8 sm:w-12 sm:h-12 relative">
+                      <div
+                        className={`w-8 h-8 sm:w-12 sm:h-12 relative ${getPackageIconWrapperScaleClass(String(pkg._id), "modal")}`}
+                      >
                         <Image
                           src={getPackageIcon(pkg._id)!}
                           alt={`${pkg.name} icon`}

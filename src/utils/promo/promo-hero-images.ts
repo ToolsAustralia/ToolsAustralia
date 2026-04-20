@@ -74,6 +74,10 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
       return "mar-x3";
     case 2:
       return "mar-no-badge"; // No mar-x2; use no-badge fallback
+    case 12:
+    case 15:
+    case 20:
+      return DEFAULT_VARIANT; // Dedicated hero variants can be wired when assets ship
     default:
       return DEFAULT_VARIANT;
   }

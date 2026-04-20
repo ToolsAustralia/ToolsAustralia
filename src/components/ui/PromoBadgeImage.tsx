@@ -2,11 +2,10 @@
 
 import React from "react";
 import Image from "next/image";
-
-type ValidMultiplier = 2 | 3 | 5 | 10;
+import { hasBundledMultiplierAssets, type PromoMultiplier } from "@/types/promo-multiplier";
 
 interface PromoBadgeImageProps {
-  multiplier: ValidMultiplier;
+  multiplier: PromoMultiplier;
   size?: "small" | "medium" | "large";
   className?: string;
 }
@@ -32,17 +31,30 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
   size = "medium",
   className = "",
 }) => {
-  const src = `/images/badge/X${multiplier}.webp`;
   const dimensions = sizeMap[size];
 
+  if (hasBundledMultiplierAssets(multiplier)) {
+    const src = `/images/badge/X${multiplier}.webp`;
+    return (
+      <Image
+        src={src}
+        alt={`${multiplier}x promo`}
+        width={dimensions.width}
+        height={dimensions.height}
+        className={`object-contain ${sizeClassMap[size]} ${className}`}
+      />
+    );
+  }
+
   return (
-    <Image
-      src={src}
-      alt={`${multiplier}x promo`}
-      width={dimensions.width}
-      height={dimensions.height}
-      className={`object-contain ${sizeClassMap[size]} ${className}`}
-    />
+    <div
+      role="img"
+      aria-label={`${multiplier}x promo`}
+      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 font-black text-white shadow-lg border-2 border-amber-300/60 ${sizeClassMap[size]} ${className}`}
+      style={{ minWidth: dimensions.width, minHeight: dimensions.height }}
+    >
+      <span className="text-sm sm:text-base">{multiplier}x</span>
+    </div>
   );
 };
 

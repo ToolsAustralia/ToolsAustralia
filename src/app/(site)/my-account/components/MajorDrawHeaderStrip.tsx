@@ -11,10 +11,7 @@ import { getLandingPageThemeFromSlug, hexToRgbString } from "@/utils/package-col
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { formatMajorDrawStripSchedule } from "@/utils/draws/major-draw-strip-schedule";
-
-function isPromoBadgeMultiplier(n: number): n is 2 | 3 | 5 | 10 {
-  return n === 2 || n === 3 || n === 5 || n === 10;
-}
+import { isPromoMultiplier } from "@/types/promo-multiplier";
 
 /** How long each slide stays visible before cross-fading to the other */
 const ROTATE_MS = 10_000;
@@ -161,7 +158,7 @@ export default function MajorDrawHeaderStrip({
             50% OFF
           </span>
         </div>
-        {displayMultiplier != null && isPromoBadgeMultiplier(displayMultiplier) ? (
+        {displayMultiplier != null && isPromoMultiplier(displayMultiplier) ? (
           <div className="absolute -top-3 -right-4  z-20 pointer-events-none flex flex-col items-end">
             <PromoBadgeImage
               multiplier={displayMultiplier}

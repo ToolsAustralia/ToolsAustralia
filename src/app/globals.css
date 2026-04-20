@@ -1647,6 +1647,97 @@
   animation: border-glow-boss-red 2s ease-in-out infinite;
 }
 
+/* VIP / black theme — warm gold pulse (replaces animate-border-glow-silver, which is Kincrome blue) */
+@keyframes border-glow-premium-gold {
+  0%,
+  100% {
+    box-shadow:
+      0 0 6px rgba(212, 175, 55, 0.28),
+      0 0 14px rgba(212, 175, 55, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(212, 175, 55, 0.42),
+      0 0 26px rgba(255, 210, 140, 0.12);
+  }
+}
+.animate-border-glow-premium-gold {
+  animation: border-glow-premium-gold 3s ease-in-out infinite;
+}
+
+@keyframes vip-shell-aura {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 14px rgba(212, 175, 55, 0.2)) drop-shadow(0 0 32px rgba(212, 175, 55, 0.06));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgba(212, 175, 55, 0.32)) drop-shadow(0 0 48px rgba(212, 175, 55, 0.1));
+  }
+}
+.vip-premium-shell-glow {
+  animation: vip-shell-aura 3.4s ease-in-out infinite;
+}
+
+@keyframes vip-inner-wash {
+  0%,
+  100% {
+    opacity: 0.26;
+  }
+  50% {
+    opacity: 0.48;
+  }
+}
+.vip-premium-inner-luminosity {
+  pointer-events: none;
+  background: radial-gradient(ellipse 88% 60% at 50% 38%, rgba(212, 175, 55, 0.1) 0%, transparent 58%);
+  animation: vip-inner-wash 4s ease-in-out infinite;
+}
+
+@keyframes vip-price-aura {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(212, 175, 55, 0.26),
+      0 0 0 1px rgba(212, 175, 55, 0.22),
+      inset 0 0 10px rgba(212, 175, 55, 0.03);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(232, 200, 120, 0.28),
+      0 0 0 1px rgba(255, 228, 170, 0.26),
+      inset 0 0 16px rgba(212, 175, 55, 0.06);
+  }
+}
+.animate-vip-premium-price-halo {
+  animation: vip-price-aura 2.8s ease-in-out infinite;
+}
+
+@keyframes vip-enter-wrap-aura {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.26)) drop-shadow(0 0 24px rgba(212, 175, 55, 0.08));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(212, 175, 55, 0.36)) drop-shadow(0 0 36px rgba(212, 175, 55, 0.12));
+  }
+}
+.animate-vip-premium-enter-wrap {
+  animation: vip-enter-wrap-aura 3s ease-in-out infinite;
+}
+
+@keyframes vip-icon-halo {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(212, 175, 55, 0.48));
+  }
+}
+.animate-vip-icon-halo {
+  animation: vip-icon-halo 3.2s ease-in-out infinite;
+}
+
 /* Metallic silver Enter Now button - same prominent glow for all packs */
 @keyframes border-glow-metallic {
   0%, 100% {

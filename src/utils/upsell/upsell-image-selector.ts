@@ -1,3 +1,5 @@
+import { isPromoMultiplier } from "@/types/promo-multiplier";
+
 /**
  * Upsell Image Selector Utility
  *
@@ -79,6 +81,7 @@ function extractPackageInfo(offerId: string): {
     "foreman-plus-pack": { packageName: "Foreman", imageCategory: "Pack" },
     "boss-plus-pack": { packageName: "Boss", imageCategory: "Pack" },
     "power-plus-pack": { packageName: "Power", imageCategory: "Pack" },
+    "vip-plus-pack": { packageName: "VIP", imageCategory: "Pack" },
 
     // === ADDITIONAL UPGRADE PACKAGES ===
     "additional-apprentice-pack-upgrade": { packageName: "Apprentice", imageCategory: "Upgrade" },
@@ -86,6 +89,7 @@ function extractPackageInfo(offerId: string): {
     "additional-foreman-pack-upgrade": { packageName: "Foreman", imageCategory: "Upgrade" },
     "additional-boss-pack-upgrade": { packageName: "Boss", imageCategory: "Upgrade" },
     "additional-power-pack-upgrade": { packageName: "Power", imageCategory: "Upgrade" },
+    "additional-vip-pack-upgrade": { packageName: "VIP", imageCategory: "Upgrade" },
 
     // === MINI PACK UPGRADES ===
     "mini-pack-1-upgrade": { packageName: "Mini Pack 1", imageCategory: "Pack" },
@@ -122,6 +126,7 @@ function getBaseImagePath(offerId: string): string {
     "foreman-plus-pack": "Foreman Plus.webp",
     "boss-plus-pack": "Boss Plus.webp",
     "power-plus-pack": "Power Plus.webp",
+    "vip-plus-pack": "Power Plus.webp",
 
     // === ADDITIONAL UPGRADE PACKAGES ===
     "additional-apprentice-pack-upgrade": "Apprentice Upgrade.webp",
@@ -129,6 +134,7 @@ function getBaseImagePath(offerId: string): string {
     "additional-foreman-pack-upgrade": "Foreman Upgrade.webp",
     "additional-boss-pack-upgrade": "Boss Upgrade.webp",
     "additional-power-pack-upgrade": "Power Upgrade.webp",
+    "additional-vip-pack-upgrade": "Power Upgrade.webp",
 
     // === MINI PACK UPGRADES ===
     "mini-pack-1-upgrade": "Mini Pack 1.webp",
@@ -205,15 +211,12 @@ export function getUpsellImagePath(params: UpsellImageParams): string {
   // Determine image category from the category parameter (primary source of truth)
   const imageCategory = getImageCategoryFromUpsellCategory(category, packageType);
 
-  // Supported membership promo multipliers for Package images: 2x, 3x, 5x, 10x (2X images upcoming)
-  const membershipPromoMultipliers = [2, 3, 5, 10] as const;
-
-  // Handle membership packages with 2x, 3x, 5x, or 10x promo FIRST (before the null check)
+  // Handle membership packages with active promo FIRST (before the null check)
   // This ensures membership packages get the correct promo image (e.g. 3X Boss Package.webp, 5X Tradie Package.webp)
   if (
     packageType === "membership" &&
     promoMultiplier != null &&
-    (membershipPromoMultipliers as readonly number[]).includes(promoMultiplier)
+    isPromoMultiplier(promoMultiplier)
   ) {
     // Only subscription-plus packages have promo Package images (2X/3X/5X/10X {Package} Package.webp)
     const isSubscriptionPlus =
@@ -246,8 +249,8 @@ export function getUpsellImagePath(params: UpsellImageParams): string {
     return `/images/upsells/${baseImageName}`;
   }
 
-  // Handle one-time packages with 2x, 3x, 5x, or 10x promo
-  if (packageType === "one-time" && (promoMultiplier === 2 || promoMultiplier === 3 || promoMultiplier === 5 || promoMultiplier === 10)) {
+  // Handle one-time packages with an active promo multiplier
+  if (packageType === "one-time" && promoMultiplier != null && isPromoMultiplier(promoMultiplier)) {
     // Check if this is a mini-pack (they don't have promo images, use base)
     if (offerId.startsWith("mini-pack-")) {
       const baseImageName = getBaseImagePath(offerId);

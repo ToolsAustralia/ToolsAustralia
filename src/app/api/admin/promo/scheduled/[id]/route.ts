@@ -6,12 +6,13 @@ import ScheduledPromo from "@/models/ScheduledPromo";
 import { z } from "zod";
 import mongoose from "mongoose";
 import { validateScheduledPromoOverlap } from "@/utils/promo/validate-scheduled-promo-overlap";
+import { zPromoMultiplier } from "@/lib/zod/promo-multiplier-schema";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 const updateScheduledPromoSchema = z.object({
   type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]).optional(),
-  multiplier: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10)]).optional(),
+  multiplier: zPromoMultiplier.optional(),
   startDate: z.string().datetime("Invalid start date format").optional(),
   endDate: z.string().datetime("Invalid end date format").optional(),
   name: z.string().max(200, "Name cannot exceed 200 characters").optional().nullable(),

@@ -1,11 +1,12 @@
 import type { PromoBannerAssetBrand } from "./resolve-promo-banner-asset-brand";
 import { bannerMultiplierFileKey } from "./banner-multiplier-file-key";
+import type { PromoMultiplierWithAssets } from "@/types/promo-multiplier";
 
 export type StaticPromoBannerFamily = "drawn-tonight" | "drawn-tomorrow" | "last-chance" | "ends-tonight";
 
 const DEFAULT_BRAND: PromoBannerAssetBrand = "Milwaukee";
 
-function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFamily, m: 2 | 3 | 5 | 10): string {
+function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFamily, m: PromoMultiplierWithAssets): string {
   switch (family) {
     case "drawn-tonight":
       return `/images/promoBanner/${brand}/DrawnTonight/drawn-tonight-${m}x.webp`;
@@ -23,7 +24,7 @@ function brandedPath(brand: PromoBannerAssetBrand, family: StaticPromoBannerFami
 }
 
 /** Pre–brand-layout root folders under `public/images/promoBanner/`. */
-function legacyUnbrandedPath(family: StaticPromoBannerFamily, m: 2 | 3 | 5 | 10): string {
+function legacyUnbrandedPath(family: StaticPromoBannerFamily, m: PromoMultiplierWithAssets): string {
   switch (family) {
     case "drawn-tonight":
       return `/images/promoBanner/DrawnTonight/drawn-tonight-${m}x.webp`;

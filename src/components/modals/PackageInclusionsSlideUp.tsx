@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -44,6 +44,9 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
     if (normalizedId.includes("foreman")) {
       return getPackageIcon("additional-foreman-pack");
     }
+    if (normalizedId.includes("vip")) {
+      return getPackageIcon("additional-vip-pack");
+    }
     if (normalizedId.includes("boss")) {
       return getPackageIcon("additional-boss-pack");
     }
@@ -72,7 +75,9 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
         {/* Package Name with Icon - uses package accent color */}
         <div className="flex items-center gap-3">
           {packageIcon && (
-            <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative">
+            <div
+              className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 relative ${getPackageIconWrapperScaleClass(plan.id, "modal")}`}
+            >
               <Image
                 src={packageIcon}
                 alt={plan.name}

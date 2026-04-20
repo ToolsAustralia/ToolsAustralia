@@ -5,10 +5,11 @@ import connectDB from "@/lib/mongodb";
 import ScheduledPromo from "@/models/ScheduledPromo";
 import { z } from "zod";
 import { validateScheduledPromoOverlap } from "@/utils/promo/validate-scheduled-promo-overlap";
+import { zPromoMultiplier } from "@/lib/zod/promo-multiplier-schema";
 
 const createScheduledPromoSchema = z.object({
   type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]),
-  multiplier: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10)]),
+  multiplier: zPromoMultiplier,
   startDate: z.string().datetime("Invalid start date format"),
   endDate: z.string().datetime("Invalid end date format"),
   name: z.string().max(200, "Name cannot exceed 200 characters").optional(),

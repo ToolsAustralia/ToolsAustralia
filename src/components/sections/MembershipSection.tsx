@@ -16,9 +16,13 @@ import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import {
+  isOneTimeBestValuePlanId,
+  isVipTierPlanId,
+} from "@/utils/membership/member-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
-import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
@@ -29,6 +33,7 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 /** Per-package Enter Now — same building blocks as Schedule Downgrade in subscription management (gradient panel + border glow + shimmer). */
 function packageEnterNowButtonStyle(colorScheme: PackageColorScheme): React.CSSProperties {
@@ -62,6 +67,27 @@ function packageEnterNowCtaClassName(
 /** Outer halo uses package `glow` (filter) so it isn’t clipped by the CTA’s overflow-hidden shimmer. */
 function packageEnterNowGlowWrapClassName(colorScheme: PackageColorScheme): string {
   return `w-full rounded-2xl ${colorScheme.glow}`;
+}
+
+function isVipPackPlan(planId: string): boolean {
+  return isVipTierPlanId(planId);
+}
+
+/** Extra gold aura outside the card (stacks with tier highlight / popular shadows). */
+function vipCardOuterShadow(base: React.CSSProperties): React.CSSProperties {
+  const bs = base.boxShadow;
+  if (typeof bs !== "string") return base;
+  return {
+    ...base,
+    boxShadow: `${bs}, 0 0 28px rgba(212, 175, 55, 0.16), 0 0 48px rgba(212, 175, 55, 0.06), 0 0 0 1px rgba(212, 175, 55, 0.18)`,
+  };
+}
+
+function membershipEnterGlowWrap(colorScheme: PackageColorScheme, isVip: boolean): string {
+  if (isVip) {
+    return "w-full rounded-2xl animate-vip-premium-enter-wrap";
+  }
+  return packageEnterNowGlowWrapClassName(colorScheme);
 }
 
 interface MembershipSectionProps {
@@ -493,10 +519,10 @@ export default function MembershipSection({
                   {isMounted && activeTab === "one-time" &&
                     (hasAccessToAdditionalPackages && hasActiveSubscription
                       ? resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
-                          <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                          <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as PromoMultiplier} />
                         )
                       : resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
-                          <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
+                          <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as PromoMultiplier} />
                         ))}
                 </button>
                 <button
@@ -522,7 +548,7 @@ export default function MembershipSection({
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {/* Show badge if there's an active promo OR an alternating multiplier */}
                   {isMounted && activeTab === "membership" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
-                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as PromoMultiplier} />
                   )}
                 </button>
               </div>
@@ -540,22 +566,24 @@ export default function MembershipSection({
                   plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
                 const showBestValueRibbon =
                   (activeTab === "membership" && plan.id === "boss-subscription") ||
-                  (activeTab === "one-time" && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
+                  (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
+                const isVip = isVipPackPlan(plan.id);
                 return (
                   <div
                     key={plan.id}
                     className={`relative w-full ${
                       isAdditionalPackage ? "h-[300px] sm:h-[370px]" : "h-[275px] sm:h-[355px]"
-                    } rounded-3xl transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""}`}
-                    style={
-                      highlighted
+                    } ${isVip ? "rounded-2xl" : "rounded-3xl"} transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""} ${isVip ? "vip-premium-shell-glow" : ""}`}
+                    style={(() => {
+                      const base: React.CSSProperties = highlighted
                         ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
                         : isCurrentSubscription(plan)
-                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                        : plan.isPopular
-                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                        : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
-                    }
+                          ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                          : plan.isPopular
+                            ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                            : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` };
+                      return isVip ? vipCardOuterShadow(base) : base;
+                    })()}
                       >
                         {/* Promo Badge - Pin overlay at top-right, outside card */}
                         {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
@@ -587,7 +615,7 @@ export default function MembershipSection({
 
                         {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                         <div
-                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
+                          className={`h-full ${isVip ? "rounded-2xl" : "rounded-3xl"} p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
                           style={
                             {
                               background: colorScheme.bgGradient,
@@ -596,20 +624,26 @@ export default function MembershipSection({
                             } as React.CSSProperties
                           }
                         >
+                          {isVip && (
+                            <div
+                              className="vip-premium-inner-luminosity absolute inset-0 z-0 rounded-2xl"
+                              aria-hidden
+                            />
+                          )}
                           {/* Inside Glow - Whole Card with Margin */}
                           <div
                             className={`absolute inset-2 sm:inset-0.5 ${getMembershipSectionInnerSheenClassNames(
                               plan.id,
                               activeTab === "membership",
                               contextVariantConfig
-                            )} pointer-events-none rounded-2xl z-0`}
+                            )} pointer-events-none ${isVip ? "rounded-xl" : "rounded-2xl"} ${isVip ? "z-[1]" : "z-0"}`}
                           ></div>
 
                           {/* Package Icon - Centered at top */}
                           {getPackageIcon(plan.id) && (
                             <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 z-20">
                               <div
-                                className={`w-20 h-20 sm:w-24 sm:h-24 relative ${plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""}`}
+                                className={`w-20 h-20 sm:w-24 sm:h-24 relative ${getPackageIconWrapperScaleClass(plan.id, "modal")}`}
                               >
                                 <Image
                                   src={getPackageIcon(plan.id)!}
@@ -617,14 +651,14 @@ export default function MembershipSection({
                                   fill
                                   sizes="(max-width: 640px) 56px, (max-width: 1024px) 64px, 96px"
                                   priority={index === 0}
-                                  className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                                  className={`w-full h-full object-contain ${isVip ? "animate-vip-icon-halo" : `${colorScheme.glow}`} opacity-90`}
                                 />
                                 {/* Promo Badge removed from mobile view - now shown on toggle instead */}
                               </div>
                             </div>
                           )}
 
-                          <div className="h-full flex flex-col pt-6 px-4 py-1.5 uppercase">
+                          <div className={`h-full flex flex-col pt-6 px-4 py-1.5 uppercase ${isVip ? "relative z-10" : ""}`}>
                             {/* Plan Header - Centered */}
                             <div className="text-center mb-0.5">
                               {(() => {
@@ -715,14 +749,20 @@ export default function MembershipSection({
                             </div>
 
                             {/* Horizontal Divider */}
-                            <div className="w-full p-[0.25px] bg-white/80 dark:bg-neutral-600/50 mb-2"></div>
+                            <div
+                              className={`w-full p-[0.25px] mb-2 rounded-full ${
+                                isVip
+                                  ? "bg-gradient-to-r from-transparent via-[#D4AF37]/55 to-transparent"
+                                  : "bg-white/80 dark:bg-neutral-600/50"
+                              }`}
+                            ></div>
 
                             {/* Price / Prize section - original Enter Now design (package gradient), clickable to open payment flow */}
                             <div className="flex-1 min-h-0 overflow-visible flex justify-center mb-2">
                               <div className="pb-0.5 w-full flex justify-center">
                                 <button
                                   type="button"
-                                  className={`font-sans w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                                  className={`font-sans w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                                   onClick={() => {
                                     if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                                     handlePlanSelect(plan);
@@ -746,7 +786,7 @@ export default function MembershipSection({
                             {/* Action Button - In flow, no overlay (8px below price for grouped feel) */}
                             <div className="flex-shrink-0 mt-auto pt-0">
                               {isCurrentSubscription(plan) ? (
-                                <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                                <div className={membershipEnterGlowWrap(colorScheme, isVip)}>
                                   <button
                                     type="button"
                                     disabled
@@ -783,7 +823,7 @@ export default function MembershipSection({
                                   const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;
 
                                   return (
-                                    <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                                    <div className={membershipEnterGlowWrap(colorScheme, isVip)}>
                                       <button
                                         type="button"
                                         className={packageEnterNowCtaClassName(colorScheme, "mobile", isCtaDisabled)}
@@ -814,10 +854,8 @@ export default function MembershipSection({
       {!loading && !error && (
         <div className="hidden lg:block overflow-visible">
           <div
-            className={`grid gap-3 sm:gap-4 overflow-visible pt-8 ${
-              activeTab === "membership"
-                ? "max-w-7xl mx-auto grid-cols-3 w-full"
-                : "max-w-[96rem] mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
+            className={`grid gap-3 sm:gap-4 overflow-visible pt-8 max-w-7xl mx-auto grid-cols-1 w-full ${
+              membershipPlans.length === 5 ? "lg:grid-cols-5" : "md:grid-cols-3"
             }`}
           >
             {membershipPlans.length > 0 ? (
@@ -828,24 +866,22 @@ export default function MembershipSection({
                 plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
               const showBestValueRibbon =
                 (activeTab === "membership" && plan.id === "boss-subscription") ||
-                (activeTab === "one-time" && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
+                (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
+              const isVip = isVipPackPlan(plan.id);
               return (
                 <div
                   key={plan.id}
-                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} rounded-3xl transition-all duration-300 overflow-visible ${
-                    activeTab === "membership"
-                      ? "w-full min-w-0"
-                      : "w-full min-w-0 max-w-[320px] justify-self-center"
-                  } ${highlighted ? "scale-105" : ""}`}
-                  style={
-                    highlighted
+                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} ${isVip ? "rounded-2xl" : "rounded-3xl"} transition-all duration-300 overflow-visible w-full min-w-0 ${highlighted ? "scale-105" : ""} ${isVip ? "vip-premium-shell-glow" : ""}`}
+                  style={(() => {
+                    const base: React.CSSProperties = highlighted
                       ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
                       : isCurrentSubscription(plan)
-                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                      : plan.isPopular
-                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                      : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
-                  }
+                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                        : plan.isPopular
+                          ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
+                          : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` };
+                    return isVip ? vipCardOuterShadow(base) : base;
+                  })()}
                 >
                   {/* Best Value = last tier only: Boss subscription, or Power one-time (incl. member additional) */}
                   {showBestValueRibbon && (
@@ -878,11 +914,16 @@ export default function MembershipSection({
                   {/* Package Icon - Centered at top */}
                   {getPackageIcon(plan.id) && (
                     <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 z-20">
-                      <div className={`w-24 h-24 relative ${activeTab === "one-time" ? "scale-[0.8]" : plan.id.includes("boss") ? "scale-110" : ""}`}>
+                      <div
+                        className={`w-24 h-24 relative ${getPackageIconWrapperScaleClass(
+                          plan.id,
+                          activeTab === "one-time" ? "membership-desktop-one-time" : "membership-desktop-subscription"
+                        )}`}
+                      >
                         <Image
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}
-                          className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                          className={`w-full h-full object-contain ${isVip ? "animate-vip-icon-halo" : colorScheme.glow} opacity-90`}
                         />
                         {/* Promo Badge positioned on top of the image icon */}
                         {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}
@@ -892,7 +933,7 @@ export default function MembershipSection({
 
                   {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                   <div
-                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
+                    className={`h-full ${isVip ? "rounded-2xl" : "rounded-3xl"} p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
                     style={
                       {
                         background: colorScheme.bgGradient,
@@ -901,14 +942,20 @@ export default function MembershipSection({
                       } as React.CSSProperties
                     }
                   >
-                    <div className="h-full flex flex-col pt-10 relative px-4 py-2 uppercase">
+                    {isVip && (
+                      <div
+                        className="vip-premium-inner-luminosity absolute inset-0 z-0 rounded-2xl"
+                        aria-hidden
+                      />
+                    )}
+                    <div className={`h-full flex flex-col pt-10 relative px-4 py-2 uppercase ${isVip ? "z-10" : ""}`}>
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
                         className={`absolute inset-0.5 ${getMembershipSectionInnerSheenClassNames(
                               plan.id,
                               activeTab === "membership",
                               contextVariantConfig
-                            )} pointer-events-none rounded-2xl z-0`}
+                            )} pointer-events-none ${isVip ? "rounded-xl" : "rounded-2xl"} ${isVip ? "z-[1]" : "z-0"}`}
                       ></div>
                       {/* Plan Header - Centered */}
                       <div className="text-center ">
@@ -1009,7 +1056,13 @@ export default function MembershipSection({
                       </div>
 
                       {/* Horizontal Divider */}
-                      <div className="w-full p-[0.5px] bg-white dark:bg-neutral-600/50 mb-4 lg:mb-2 rounded-full"></div>
+                      <div
+                        className={`w-full p-[0.5px] mb-4 lg:mb-2 rounded-full ${
+                          isVip
+                            ? "bg-gradient-to-r from-transparent via-[#D4AF37]/55 to-transparent"
+                            : "bg-white dark:bg-neutral-600/50"
+                        }`}
+                      ></div>
 
                       {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
                       <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
@@ -1017,7 +1070,7 @@ export default function MembershipSection({
                         <div className="pb-2 flex justify-center">
                           <button
                             type="button"
-                            className={`font-sans w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                            className={`font-sans w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                             onClick={() => {
                               if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                               handlePlanSelect(plan);
@@ -1041,7 +1094,7 @@ export default function MembershipSection({
                       {/* Action Button - Inside card at bottom (8px below price for grouped feel) */}
                       <div className="flex-shrink-0 pt-0">
                         {isCurrentSubscription(plan) ? (
-                          <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                          <div className={membershipEnterGlowWrap(colorScheme, isVip)}>
                             <button
                               type="button"
                               disabled
@@ -1078,7 +1131,7 @@ export default function MembershipSection({
                             const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;
 
                             return (
-                              <div className={packageEnterNowGlowWrapClassName(colorScheme)}>
+                              <div className={membershipEnterGlowWrap(colorScheme, isVip)}>
                                 <button
                                   type="button"
                                   className={packageEnterNowCtaClassName(colorScheme, "desktop", isCtaDisabled)}

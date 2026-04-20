@@ -6,7 +6,16 @@ import MetallicDivider from "@/components/ui/MetallicDivider";
 import { Check, ArrowRight } from "lucide-react";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
-import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
+import {
+  apprentice,
+  tradie,
+  foreman,
+  boss,
+  power,
+  vip,
+  getPackageIconWrapperScaleClass,
+  type PackageIconData,
+} from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 
@@ -78,15 +87,42 @@ const oneTimeNonMemberPackages: PackageData[] = [
   { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "15 Free Entries Major Giveaway" }] },
   { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "30 Free Entries Major Giveaway" }] },
   { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "150 Free Entries Major Giveaway" }] },
-  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "100% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 Free Entries Major Giveaway" }] },
+  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "85% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 Free Entries Major Giveaway" }] },
+  {
+    id: "vip-pack",
+    name: "VIP Pack",
+    price: 1000,
+    entries: 1500,
+    entriesUnit: "",
+    partnerDiscounts: "30 days",
+    icon: vip,
+    benefits: [
+      { text: "100% of partner offers" },
+      { text: "30 days partner discounts" },
+      { text: "1,500 Free Entries Major Giveaway" },
+    ],
+  },
 ];
 
 const oneTimeMemberPackages: PackageData[] = [
-  { id: "additional-apprentice-pack-member", name: "Additional Apprentice", price: 25, entries: 10, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "25% of partner offers" }, { text: "1 day partner discounts" }, { text: "10 Free Entries Major Giveaway" }] },
-  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "30 Free Entries Major Giveaway" }] },
-  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 100, entries: 100, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "100 Free Entries Major Giveaway" }] },
-  { id: "additional-boss-pack-member", name: "Additional Boss", price: 250, entries: 400, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "400 Free Entries Major Giveaway" }] },
-  { id: "additional-power-pack-member", name: "Additional Power", price: 500, entries: 1200, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "100% of partner offers" }, { text: "20 days partner discounts" }, { text: "1,200 Free Entries Major Giveaway" }] },
+  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 25, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "15 Free Entries Major Giveaway" }] },
+  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "30 Free Entries Major Giveaway" }] },
+  { id: "additional-boss-pack-member", name: "Additional Boss", price: 125, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "150 Free Entries Major Giveaway" }] },
+  { id: "additional-power-pack-member", name: "Additional Power", price: 250, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "85% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 Free Entries Major Giveaway" }] },
+  {
+    id: "additional-vip-pack-member",
+    name: "Additional VIP",
+    price: 500,
+    entries: 1500,
+    entriesUnit: "",
+    partnerDiscounts: "30 days",
+    icon: vip,
+    benefits: [
+      { text: "100% of partner offers" },
+      { text: "30 days partner discounts" },
+      { text: "1,500 Free Entries Major Giveaway" },
+    ],
+  },
 ];
 
 type TimePeriod = 3 | 6 | 12;
@@ -277,7 +313,9 @@ export default function MembershipPackagesChart() {
                 <div className="flex items-center gap-3 sm:gap-4">
                   {/* Package icon + info: fixed width on mobile so bar column aligns for all rows */}
                   <div className="flex items-center gap-2 sm:gap-3 w-[90px] flex-shrink-0 sm:w-auto sm:min-w-[160px] lg:min-w-[200px]">
-                    <div className={`w-9 h-9 sm:w-12 sm:h-12 relative flex-shrink-0 ${pkg.id.includes("boss") ? "scale-110" : ""}`}>
+                    <div
+                      className={`w-9 h-9 sm:w-12 sm:h-12 relative flex-shrink-0 ${getPackageIconWrapperScaleClass(pkg.id, "chart-row")}`}
+                    >
                       <Image
                         src={pkg.icon}
                         alt={`${pkg.name} icon`}
