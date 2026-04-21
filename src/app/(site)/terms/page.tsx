@@ -520,10 +520,7 @@ export default async function TermsPage() {
             <ul className="list-inside list-disc space-y-2 text-gray-300">
               <li>You have read and agree to these terms</li>
               <li>You meet eligibility requirements</li>
-              <li>
-                You understand One-Time Packages provide entries to both Major Giveaway and Mini Draw competitions for
-                the specified period
-              </li>
+             
               <li>
                 You understand Membership Package entries are accumulated monthly and apply exclusively to Major
                 Giveaway competitions.
