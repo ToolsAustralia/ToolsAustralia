@@ -4,6 +4,7 @@ import { UserData } from "@/hooks/queries/useUserQueries";
 import { Star, Trophy } from "lucide-react";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 interface RewardsOverviewProps {
   user: UserData;
@@ -41,10 +42,22 @@ export default function RewardsOverview({ user }: RewardsOverviewProps) {
             </div>
             {isRewardsFeatureEnabled ? (
               <>
-                <h3 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 mb-1 sm:mb-2 font-['Poppins']">
-                  {user.rewardsPoints.toLocaleString()}
+                <h3 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-gray-900 mb-1 sm:mb-2 font-['Poppins'] tabular-nums">
+                  <AnimatedNumber
+                    value={user.rewardsPoints}
+                    className="font-['Poppins'] font-bold text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl text-gray-900"
+                  />
                 </h3>
                 <p className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-600 dark:text-neutral-400 font-medium">Available Points</p>
+                <div className="mt-4 sm:mt-6 pt-4 border-t border-gray-100">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-500 font-medium mb-1">Accumulated entries</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 dark:text-neutral-200 font-['Poppins'] tabular-nums">
+                    <AnimatedNumber
+                      value={user.accumulatedEntries}
+                      className="font-['Poppins'] font-bold text-lg sm:text-xl md:text-2xl text-gray-800 dark:text-neutral-200"
+                    />
+                  </p>
+                </div>
               </>
             ) : (
               <div className="max-w-md">

@@ -5,8 +5,11 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost, apiDelete } from "@/lib/queries";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
 import { MiniDrawType } from "@/types/mini-draw";
 
 // Types
@@ -203,6 +206,10 @@ export const useUserMiniDrawEntries = (userId?: string) => {
 // Mutations
 export const useEnterMiniDraw = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
+  const showEntryReward = useEntryRewardToast();
 
   return useMutation({
     mutationFn: async ({ miniDrawId, entryCount, paymentMethodId }: EntryData) => {
@@ -214,11 +221,12 @@ export const useEnterMiniDraw = () => {
       return response;
     },
     onSuccess: (data, variables) => {
-      // Invalidate mini draw entries
       queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.entries(variables.miniDrawId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
+      if (userId) {
+        invalidatePurchaseCaches(userId);
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries(userId) });
+      }
 
-      // Update mini draw total entries in cache
       queryClient.setQueryData(queryKeys.miniDraws.detail(variables.miniDrawId), (old: MiniDrawType | undefined) => {
         if (old) {
           return {
@@ -228,6 +236,14 @@ export const useEnterMiniDraw = () => {
         }
         return old;
       });
+
+      if (variables.entryCount > 0) {
+        showEntryReward({
+          entries: variables.entryCount,
+          drawType: "mini",
+          source: "useEnterMiniDraw",
+        });
+      }
     },
     onError: (error) => {
       console.error("Failed to enter mini draw:", error);
@@ -237,6 +253,8 @@ export const useEnterMiniDraw = () => {
 
 export const useCancelMiniDrawEntry = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (entryId: string) => {
@@ -244,9 +262,10 @@ export const useCancelMiniDrawEntry = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.entries(data.miniDrawId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries(userId) });
+      }
 
       // Update mini draw total entries in cache
       queryClient.setQueryData(queryKeys.miniDraws.detail(data.miniDrawId), (old: MiniDrawType | undefined) => {

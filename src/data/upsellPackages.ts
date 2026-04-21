@@ -14,8 +14,22 @@
  * - For new purchases, entries are calculated dynamically based on the triggering package
  */
 
+export type UpsellImageGroup =
+  | "membership-pack"
+  | "one-time-pack"
+  | "additional-one-time-pack"
+  | "mini-pack";
+
+export interface UpsellImageDescriptor {
+  group: UpsellImageGroup;
+  /** Base file stem under group/, no extension and no multiplier prefix (e.g. tradie-package, apprentice-plus, mini-pack-3). */
+  slug: string;
+}
+
 export interface StaticUpsellPackage {
   id: string;
+  /** Maps this offer to files under public/images/upsells/{group}/{slug}.webp (and Nx-{slug}.webp promo variants). */
+  image: UpsellImageDescriptor;
   name: string;
   description: string;
   category: "subscription-plus" | "one-time-plus" | "additional-upgrade";
@@ -58,6 +72,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   // === SUBSCRIPTION PLUS PACKAGES ===
   {
     id: "tradie-plus-package",
+    image: { group: "membership-pack", slug: "tradie-package" },
     name: "Tradie Plus Package",
     description: "Enhance your Tradie membership with bonus entries and extended benefits",
     category: "subscription-plus",
@@ -89,17 +104,18 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "foreman-plus-package",
+    image: { group: "membership-pack", slug: "foreman-package" },
     name: "Foreman Plus Package",
     description: "Supercharge your Foreman membership with extra entries and premium benefits",
     category: "subscription-plus",
-    originalPrice: 40,
-    discountedPrice: 19.99,
+    originalPrice: 80,
+    discountedPrice: 39.99,
     discountPercentage: 50,
     entriesCount: 80,
     shopDiscountPercent: 10,
     partnerDiscountDays: 30,
     accessAfterExpiry: 2,
-    buttonText: "Add Foreman Plus - $19.99",
+    buttonText: "Add Foreman Plus - $39.99",
     conditions: [
       "75% Access to Partner Discounts",
       "2 Days access after membership expires",
@@ -120,6 +136,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "boss-plus-package",
+    image: { group: "membership-pack", slug: "boss-package" },
     name: "Boss Plus Package",
     description: "Ultimate Boss enhancement with maximum entries and exclusive benefits",
     category: "subscription-plus",
@@ -153,21 +170,22 @@ export const upsellPackages: StaticUpsellPackage[] = [
   // === ONE-TIME PLUS PACKAGES ===
   {
     id: "apprentice-plus-pack",
+    image: { group: "one-time-pack", slug: "apprentice-plus" },
     name: "Apprentice Plus Pack",
     description: "Boost your Apprentice Pack with additional entries and extended benefits",
     category: "one-time-plus",
     originalPrice: 25,
     discountedPrice: 12.5,
     discountPercentage: 50,
-    entriesCount: 6,
+    entriesCount: 18,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
     buttonText: "Add Apprentice Plus - $12.50",
     conditions: [
-      "$9.99 One Time Payment",
+      "$12.50 One Time Payment",
       "25% of Partner Discounts Available",
       "1 Days Access to Partner Discounts",
-      "6 Free One Time Entries",
+      "18 Free One Time Entries",
     ],
     urgencyText: "Quick boost available!",
     priority: 8,
@@ -183,6 +201,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "tradie-plus-pack",
+    image: { group: "one-time-pack", slug: "tradie-plus" },
     name: "Tradie Plus Pack",
     description: "Enhance your Tradie Pack with bonus entries and extended access",
     category: "one-time-plus",
@@ -213,6 +232,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "foreman-plus-pack",
+    image: { group: "one-time-pack", slug: "foreman-plus" },
     name: "Foreman Plus Pack",
     description: "Power up your Foreman Pack with maximum entries and premium benefits",
     category: "one-time-plus",
@@ -243,6 +263,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "boss-plus-pack",
+    image: { group: "one-time-pack", slug: "boss-plus" },
     name: "Boss Plus Pack",
     description: "Ultimate enhancement for your Boss Pack with massive entries",
     category: "one-time-plus",
@@ -273,6 +294,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "power-plus-pack",
+    image: { group: "one-time-pack", slug: "power-plus" },
     name: "Power Plus Pack",
     description: "Maximum power enhancement for your Power Pack with elite entries",
     category: "one-time-plus",
@@ -285,7 +307,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     buttonText: "Add Power Plus - $249.99",
     conditions: [
       "$249.99 One Time Payment",
-      "100% of Partner Discounts Available",
+      "85% of Partner Discounts Available",
       "20 Days Access to Partner Discounts",
       "1200 Free One Time Entries",
     ],
@@ -301,10 +323,42 @@ export const upsellPackages: StaticUpsellPackage[] = [
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
+  {
+    id: "vip-plus-pack",
+    image: { group: "one-time-pack", slug: "vip-plus" },
+    name: "VIP Plus Pack",
+    description: "Ultimate VIP enhancement with maximum entries and elite partner access",
+    category: "one-time-plus",
+    originalPrice: 1000,
+    discountedPrice: 499.99,
+    discountPercentage: 50,
+    entriesCount: 3000,
+    shopDiscountPercent: 0,
+    partnerDiscountDays: 30,
+    buttonText: "Add VIP Plus - $499.99",
+    conditions: [
+      "$499.99 One Time Payment",
+      "90% of Partner Discounts Available",
+      "30 Days Access to Partner Discounts",
+      "3000 Free One Time Entries",
+    ],
+    urgencyText: "VIP boost available!",
+    priority: 8,
+    isActive: true,
+    targetAudience: ["one-time-purchase"],
+    userSegments: ["new-user", "returning-user"],
+    maxShowsPerUser: 3,
+    cooldownHours: 12,
+    triggersOnPackageIds: ["vip-pack"],
+    triggersOnPackageTypes: ["one-time"],
+    showAfterPurchase: true,
+    showAfterDelay: 2,
+  },
 
   // === ADDITIONAL UPGRADE PACKAGES ===
   {
     id: "additional-apprentice-pack-upgrade",
+    image: { group: "one-time-pack", slug: "apprentice-plus" },
     name: "Additional Apprentice Pack Upgrade",
     description: "Get additional entries with your Apprentice Pack purchase",
     category: "additional-upgrade",
@@ -335,21 +389,22 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "additional-tradie-pack-upgrade",
+    image: { group: "additional-one-time-pack", slug: "tradie-upgrade" },
     name: "Additional Tradie Pack Upgrade",
     description: "Enhance your Tradie Pack with additional entries",
     category: "additional-upgrade",
-    originalPrice: 50,
-    discountedPrice: 24.99,
+    originalPrice: 25,
+    discountedPrice: 12.5,
     discountPercentage: 50,
-    entriesCount: 60,
+    entriesCount: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
-    buttonText: "Add Tradie Upgrade - $24.99",
+    buttonText: "Add Tradie Upgrade - $12.50",
     conditions: [
-      "$24.99 One Time Payment",
+      "$12.50 One Time Payment",
       "40% of Partner Discounts Available",
       "2 Days Access to Partner Discounts",
-      "60 Free One Time Entries",
+      "30 Free One Time Entries",
     ],
     urgencyText: "Tradie upgrade available!",
     priority: 6,
@@ -365,19 +420,20 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "additional-foreman-pack-upgrade",
+    image: { group: "additional-one-time-pack", slug: "foreman-upgrade" },
     name: "Additional Foreman Pack Upgrade",
     description: "Power up your Foreman Pack with bonus entries",
     category: "additional-upgrade",
-    originalPrice: 100,
-    discountedPrice: 49.99,
+    originalPrice: 50,
+    discountedPrice: 24.99,
     discountPercentage: 50,
-    entriesCount: 200,
+    entriesCount: 60,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
-    buttonText: "Add Foreman Upgrade - $49.99",
+    buttonText: "Add Foreman Upgrade - $24.99",
     conditions: [
-      "$49.99 One Time Payment",
-      "200 Free One Time Entries",
+      "$24.99 One Time Payment",
+      "60 Free One Time Entries",
       "4 Days Access to Partner Discounts",
       "55% of Partner Discounts Available",
     ],
@@ -395,21 +451,22 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "additional-boss-pack-upgrade",
+    image: { group: "additional-one-time-pack", slug: "boss-upgrade" },
     name: "Additional Boss Pack Upgrade",
     description: "Ultimate enhancement for your Boss Pack",
     category: "additional-upgrade",
-    originalPrice: 250,
-    discountedPrice: 124.99,
+    originalPrice: 125,
+    discountedPrice: 62.5,
     discountPercentage: 50,
-    entriesCount: 800,
+    entriesCount: 300,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
-    buttonText: "Add Boss Upgrade - $124.99",
+    buttonText: "Add Boss Upgrade - $62.50",
     conditions: [
-      "$124.99 One Time Payment",
+      "$62.50 One Time Payment",
       "70% of Partner Discounts Available",
       "10 Days Access to Partner Discounts",
-      "800 Free One Time Entries",
+      "300 Free One Time Entries",
     ],
     urgencyText: "Boss upgrade available!",
     priority: 6,
@@ -425,21 +482,22 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "additional-power-pack-upgrade",
+    image: { group: "additional-one-time-pack", slug: "power-upgrade" },
     name: "Additional Power Pack Upgrade",
     description: "Maximum power enhancement for your Power Pack",
     category: "additional-upgrade",
-    originalPrice: 500,
-    discountedPrice: 249.99,
+    originalPrice: 250,
+    discountedPrice: 124.99,
     discountPercentage: 50,
-    entriesCount: 2400,
+    entriesCount: 1200,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
-    buttonText: "Add Power Upgrade - $249.99",
+    buttonText: "Add Power Upgrade - $124.99",
     conditions: [
-      "$249.99 One Time Payment",
-      "100% of Partner Discounts Available",
+      "$124.99 One Time Payment",
+      "85% of Partner Discounts Available",
       "20 Days Access to Partner Discounts",
-      "2400 Free One Time Entries",
+      "1200 Free One Time Entries",
     ],
     urgencyText: "Power upgrade available!",
     priority: 6,
@@ -453,9 +511,41 @@ export const upsellPackages: StaticUpsellPackage[] = [
     showAfterPurchase: true,
     showAfterDelay: 3,
   },
+  {
+    id: "additional-vip-pack-upgrade",
+    image: { group: "additional-one-time-pack", slug: "vip-upgrade" },
+    name: "Additional VIP Pack Upgrade",
+    description: "Maximum VIP enhancement with elite entries",
+    category: "additional-upgrade",
+    originalPrice: 500,
+    discountedPrice: 249.99,
+    discountPercentage: 50,
+    entriesCount: 3000,
+    shopDiscountPercent: 0,
+    partnerDiscountDays: 30,
+    buttonText: "Add VIP Upgrade - $249.99",
+    conditions: [
+      "$249.99 One Time Payment",
+      "90% of Partner Discounts Available",
+      "30 Days Access to Partner Discounts",
+      "3000 Free One Time Entries",
+    ],
+    urgencyText: "VIP upgrade available!",
+    priority: 6,
+    isActive: true,
+    targetAudience: ["one-time-purchase"],
+    userSegments: ["new-user", "returning-user", "special-package-buyer"],
+    maxShowsPerUser: 2,
+    cooldownHours: 24,
+    triggersOnPackageIds: ["vip-pack", "additional-vip-pack"],
+    triggersOnPackageTypes: ["one-time"],
+    showAfterPurchase: true,
+    showAfterDelay: 3,
+  },
   // Mini Draw Upsells
   {
     id: "mini-pack-1-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-1" },
     name: "Mini Pack 1 Upgrade",
     description: "Get 10 Free Entries with 12 Hours Access to Partner Discounts!",
     category: "one-time-plus",
@@ -486,6 +576,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-2-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-2" },
     name: "Mini Pack 2 Upgrade",
     description: "Get 10 Free Entries with 6 Hours Access to Partner Discounts!",
     category: "one-time-plus",
@@ -516,6 +607,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-3-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-3" },
     name: "Mini Pack 3 Upgrade",
     description: "Get 20 Free Entries with 12 Hours Access to Partner Discounts!",
     category: "one-time-plus",
@@ -546,6 +638,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-4-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-4" },
     name: "Mini Pack 4 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
@@ -571,6 +664,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-5-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-5" },
     name: "Mini Pack 5 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
@@ -596,6 +690,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-6-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-6" },
     name: "Mini Pack 6 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
@@ -621,6 +716,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-7-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-7" },
     name: "Mini Pack 7 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",
@@ -646,6 +742,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
   },
   {
     id: "mini-pack-8-upgrade",
+    image: { group: "mini-pack", slug: "mini-pack-8" },
     name: "Mini Pack 8 Upgrade",
     description: "Double your entries with this exclusive upgrade!",
     category: "one-time-plus",

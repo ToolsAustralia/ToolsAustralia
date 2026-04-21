@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
             success: true,
             message: `Your ${targetPackage.name} subscription is already active!`,
             data: {
+              grantEntryRewardToast: false,
               subscription: {
                 id: existingSubscription.id,
                 packageId: targetPackage._id,
@@ -256,6 +257,8 @@ export async function POST(request: NextRequest) {
           success: true,
           message: `Payment successful! Your ${targetPackage.name} subscription is now active.`,
           data: {
+            /** Invoice paid — webhook grants cycle entries; client may celebrate approximate monthly grant */
+            grantEntryRewardToast: true,
             subscription: {
               id: existingSubscription.id,
               packageId: targetPackage._id,
@@ -301,6 +304,7 @@ export async function POST(request: NextRequest) {
             requiresPaymentConfirmation: true,
             message: "Payment requires confirmation",
             data: {
+              grantEntryRewardToast: false,
               paymentIntent: {
                 id: paymentIntent.id,
                 clientSecret: paymentIntent.client_secret,
@@ -382,6 +386,8 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Subscription reactivated! Your ${targetPackage.name} membership is now active.`,
         data: {
+          /** Uncancel only — same billing period, no new charge, no new entry grant from this action */
+          grantEntryRewardToast: false,
           subscription: {
             id: reactivatedSubscription.id,
             packageId: targetPackage._id,
@@ -488,6 +494,8 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Welcome back! Your ${targetPackage.name} subscription is now active.`,
         data: {
+          /** New subscription first invoice paid — entries granted via webhook */
+          grantEntryRewardToast: true,
           subscription: {
             id: newSubscription.id,
             packageId: targetPackage._id,
@@ -525,6 +533,7 @@ export async function POST(request: NextRequest) {
       requiresPaymentConfirmation: true,
       message: "Complete payment to renew your subscription",
       data: {
+        grantEntryRewardToast: false,
         paymentIntent: {
           id: paymentIntent.id,
           clientSecret: paymentIntent.client_secret,

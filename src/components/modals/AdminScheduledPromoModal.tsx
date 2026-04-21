@@ -21,6 +21,7 @@ import {
   convertLocalToUTC,
   resolveLocalDisplayTimeZone,
 } from "@/utils/common/timezone";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 interface AdminScheduledPromoModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ interface ScheduledPromoFormData {
   description: string;
 }
 
-const MULTIPLIER_OPTIONS: ScheduledPromoMultiplier[] = [2, 3, 5, 10];
+const MULTIPLIER_OPTIONS: ScheduledPromoMultiplier[] = [...PROMO_MULTIPLIERS];
 
 const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
   isOpen,

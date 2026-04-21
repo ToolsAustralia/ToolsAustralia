@@ -23,7 +23,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
-import { getUpsellImagePath } from "@/utils/upsell/upsell-image-selector";
+import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -734,43 +734,26 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  /**
-   * Dynamically selects upsell image based on resolved promo multiplier (includes alternating)
-   * Returns the image path for the upsell promotional image
-   *
-   * Logic:
-   * - If no promo active (null): Use base images from /images/upsells/
-   * - If 2x/3x/5x/10x promo active (one-time packages): Use /images/upsells/active-promo/{multiplier}X {Package} Plus.webp or {multiplier}x {Package} Upgrade.webp
-   * - If 2x/3x/5x/10x promo active (membership packages): Use /images/upsells/active-promo/{multiplier}X {Package} Package.webp (e.g. 3X Boss Package.webp, 5X Tradie Package.webp; 2X upcoming)
-   * - Falls back to base images if promo-specific image is unavailable
-   */
-  const getUpsellImagePathValue = (): string => {
-    // Get full upsell package data to access category
+  /** Resolved promo multiplier for hero art (same rules as before — drives which `{n}x-*.webp` exists). */
+  const upsellImageSrc = useMemo(() => {
     const upsellPackage = getUpsellPackageById(offer.id);
     const category = upsellPackage?.category;
 
-    // Determine package type from originalPurchaseContext, upsell category, or offer category
-    // Priority: originalPurchaseContext > upsell category > offer category > default
     let packageType: "membership" | "one-time" | "mini-draw" | undefined;
     if (originalPurchaseContext?.packageType) {
-      // Use original purchase context if available (most reliable)
       packageType = originalPurchaseContext.packageType;
     } else if (category === "subscription-plus") {
-      // Subscription-plus upsells are triggered by membership purchases
       packageType = "membership";
     } else if (category === "one-time-plus" || category === "additional-upgrade") {
-      // One-time-plus and additional-upgrade upsells are triggered by one-time purchases
       packageType = "one-time";
     } else if (offer.category === "membership") {
       packageType = "membership";
     } else if (offer.category === "mini-draw") {
       packageType = "mini-draw";
     } else {
-      // Default to one-time for unknown cases
       packageType = "one-time";
     }
 
-    // Get resolved multiplier: member-only one-time uses membership promo
     let promoMultiplier: number | null = null;
     if (packageType === "membership") {
       promoMultiplier = resolvedMembershipMultiplier;
@@ -782,38 +765,46 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       promoMultiplier = resolvedMiniMultiplier;
     }
 
-    // 🔍 DEBUG: Log image path calculation parameters
-    console.log("🖼️ Upsell Image Debug:", {
+    const resolved = resolveUpsellImage({
       offerId: offer.id,
-      packageType,
       promoMultiplier,
-      category,
-      resolvedMembershipMultiplier,
-      resolvedOneTimeMultiplier,
-      resolvedMiniMultiplier,
-      originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
-      upsellPackageCategory: upsellPackage?.category,
-      offerCategory: offer.category,
-      determinedFrom: originalPurchaseContext?.packageType 
-        ? "originalPurchaseContext" 
-        : category === "subscription-plus" 
-        ? "upsellCategory" 
-        : "fallback",
     });
 
-    // Use the utility function to get the correct image path
-    const imagePath = getUpsellImagePath({
-      offerId: offer.id,
-      packageType,
-      promoMultiplier: promoMultiplier ?? undefined, // Pass undefined if null (no promo)
-      category,
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🖼️ Upsell Image Debug:", {
+        offerId: offer.id,
+        packageType,
+        promoMultiplier,
+        category,
+        resolvedMembershipMultiplier,
+        resolvedOneTimeMultiplier,
+        resolvedMiniMultiplier,
+        originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
+        upsellPackageCategory: upsellPackage?.category,
+        offerCategory: offer.category,
+        determinedFrom: originalPurchaseContext?.packageType
+          ? "originalPurchaseContext"
+          : category === "subscription-plus"
+            ? "upsellCategory"
+            : "fallback",
+        finalSrc: resolved.src,
+        isPromoVariant: resolved.isPromoVariant,
+      });
+    }
 
-    // 🔍 DEBUG: Log final image path
-    console.log("🖼️ Final Image Path:", imagePath);
+    return resolved.src;
+  }, [
+    offer.id,
+    offer.category,
+    originalPurchaseContext?.packageType,
+    originalPurchaseContext?.packageId,
+    resolvedMembershipMultiplier,
+    resolvedOneTimeMultiplier,
+    resolvedMiniMultiplier,
+  ]);
 
-    return imagePath;
-  };
+  /** Matches hero artwork and Stripe charge (two decimal places). */
+  const upsellPriceLabel = offer.discountedPrice.toFixed(2);
 
   // Global loading and success screens are now handled by LoadingContext
 
@@ -831,13 +822,14 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         <div className="relative w-full overflow-hidden">
           <div className="relative w-full">
             <Image
-              src={getUpsellImagePathValue()}
+              src={upsellImageSrc}
               alt={offer.title || "Special Offer"}
               width={600}
               height={800}
               className="w-full h-auto"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 600px"
               priority
+              placeholder="empty"
             />
           </div>
         </div>
@@ -884,7 +876,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                     userPhone={userData?.mobile}
                     onSuccess={handleUpsellInlineCardSaved}
                     disabled={isProcessing}
-                    submitLabel={`Save card & purchase — $${offer.discountedPrice}`}
+                    submitLabel={`Save card & purchase — $${upsellPriceLabel}`}
                   />
                 </Elements>
               )}
@@ -915,7 +907,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 <div className="flex items-center justify-center gap-2">
                   {resolvedChargePm ? (
                     <>
-                      <span>Purchase - ${offer.discountedPrice}</span>
+                      <span>Purchase - ${upsellPriceLabel}</span>
 
                       <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-lg px-2 py-1">
                         <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />

@@ -2,9 +2,10 @@
 
 import React from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 interface PromoMultiplierBadgeProps {
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   className?: string;
   showPromoText?: boolean; // Controls visibility of "PROMO" text, default true
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 interface PromoBadgeProps {
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   size?: "small" | "medium" | "large";
   className?: string;
   showPromoText?: boolean; // Controls visibility of "PROMO" text, default true

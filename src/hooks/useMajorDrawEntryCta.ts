@@ -28,7 +28,7 @@ interface UseMajorDrawEntryCtaResult {
  *
  * Package Selection Logic:
  * - Non-members: Returns Tradie subscription package (15 entries/month, with promo support)
- * - Members: Returns additional-apprentice-pack one-time package (10 entries, $25, with promo support) - lowest member package
+ * - Members: Returns additional-tradie-pack one-time package (lowest active additional tier; with promo support)
  */
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
@@ -51,29 +51,28 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
     // For users without access: Use Tradie subscription package
-    // For users with access: Use additional-apprentice-pack (member-only one-time)
+    // For users with access: Use additional-tradie-pack (lowest active additional one-time)
     // Membership multiplier only for active members; one-time multiplier for non-members with entries
     if (hasAccess) {
+      const targetPackageId = "additional-tradie-pack";
       const promoMultiplier =
-        getEffectivePromoType("additional-apprentice-pack", "one-time", hasActiveSubscription) === "membership-packages"
+        getEffectivePromoType(targetPackageId, "one-time", hasActiveSubscription) === "membership-packages"
           ? membershipPromoMultiplier
           : oneTimePromoMultiplier;
-      // Use additional-apprentice-pack one-time package (lowest price/entry option)
-      const targetPackageId = "additional-apprentice-pack";
 
       if (safeOneTimePackages.length === 0) {
         // Fallback if packages aren't loaded yet
-        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
+        const baseEntries = 15;
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Apprentice Pack",
+          name: "Additional Tradie Pack",
           price: 25,
           period: "one-time",
           features: [
-            { text: "25% of Partner Discounts Available" },
-            { text: "1 Days Access to Partner Discounts" },
+            { text: "40% of Partner Discounts Available" },
+            { text: "2 Days Access to Partner Discounts" },
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
           ],
           buttonText: "Get Started",
@@ -92,17 +91,17 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
       if (!packageData) {
         // Fallback if package not found
-        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
+        const baseEntries = 15;
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Apprentice Pack",
+          name: "Additional Tradie Pack",
           price: 25,
           period: "one-time",
           features: [
-            { text: "25% of Partner Discounts Available" },
-            { text: "1 Days Access to Partner Discounts" },
+            { text: "40% of Partner Discounts Available" },
+            { text: "2 Days Access to Partner Discounts" },
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
           ],
           buttonText: "Get Started",

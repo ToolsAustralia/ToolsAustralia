@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 
 import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
@@ -36,6 +37,7 @@ import PackageDetailModal, {
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import RewardsFloatingWidget from "@/components/features/RewardsFloatingWidget";
+import { useDashboardEntryDisplay } from "@/hooks/useDashboardEntryDisplay";
 
 import DashboardHeader from "./components/DashboardHeader";
 import CoverBanner from "./components/CoverBanner";
@@ -53,11 +55,12 @@ type PendingEntriesData = {
 
 function PartnerDiscountsSection({ user, className }: { user: import("@/hooks/queries/useUserQueries").UserData; className?: string }) {
   const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+  const activePackage = getActivePackage(user as ActivePackageUserInput);
 
   let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
   if (hasAccess) {
-    if (user?.subscription?.isActive && user.subscriptionPackageData) {
-      const planId = derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+    if (activePackage.source === "subscription" && activePackage.packageData) {
+      const planId = derivePlanIdFromPackage(activePackage.packageData, "subscription");
       packageTheme = getLandingPageThemeFromPlanId(planId, true);
     } else if (user?.enrichedOneTimePackages?.length) {
       const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
@@ -104,6 +107,11 @@ export default function MyAccountPage() {
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
 
+  const isDrawCompletedForDashboard = currentMajorDraw?.status === "completed";
+  const dashboardEntries = useDashboardEntryDisplay(majorDrawStats, {
+    isDrawCompleted: Boolean(isDrawCompletedForDashboard),
+  });
+
   const { requestModal } = useModalPriorityStore();
   const { allowSecondaryModals, suppressRewardsSpotlight } = useDashboardLandingOrchestration(
     status === "authenticated"
@@ -113,6 +121,12 @@ export default function MyAccountPage() {
 
   useMemberships();
   useResolvedMultiplier("membership-packages", "display");
+
+  const activePackage = React.useMemo(() => {
+    const u = accountData?.user;
+    if (!u) return null;
+    return getActivePackage(u as ActivePackageUserInput);
+  }, [accountData]);
 
   const [isReferFriendModalOpen, setIsReferFriendModalOpen] = useState(false);
   const [isPastDrawsModalOpen, setIsPastDrawsModalOpen] = useState(false);
@@ -211,7 +225,7 @@ export default function MyAccountPage() {
     if (sessionStorage.getItem("pendingUpsellFlag") === "true") return;
     if (shouldDeferSubscriptionExplainerThisSession()) return;
 
-    const pkg = accountData.user?.subscriptionPackageData || accountData.user?.enrichedOneTimePackages?.find((p: { isActive: boolean }) => p.isActive)?.packageData;
+    const pkg = activePackage?.packageData;
     const entriesPerMonth = (pkg && "entriesPerMonth" in pkg && pkg.entriesPerMonth) || 0;
     const packageName = pkg && "name" in pkg ? (pkg.name as string) : undefined;
     const sub = accountData.user?.subscription as { lastMonthAccumulatedEntries?: number; packageId?: string } | undefined;
@@ -233,7 +247,7 @@ export default function MyAccountPage() {
     }, 2500);
 
     return () => clearTimeout(t);
-  }, [userId, profileSetupCompleted, status, loading, allowSecondaryModals, accountData, requestModal]);
+  }, [userId, profileSetupCompleted, status, loading, allowSecondaryModals, accountData, requestModal, activePackage?.packageData]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -313,7 +327,8 @@ export default function MyAccountPage() {
   const hasActiveMembership = user?.subscription?.isActive === true;
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
 
-  const membershipPackage = user.subscriptionPackageData ?? null;
+  const membershipPackage = activePackage?.packageData ?? null;
+  const showMembershipBadge = Boolean(activePackage?.isActive && membershipPackage);
 
   const isCompleted = currentMajorDraw?.status === "completed";
   const _isFrozen = currentMajorDraw?.status === "frozen";
@@ -321,9 +336,9 @@ export default function MyAccountPage() {
   const _isQueued = currentMajorDraw?.status === "queued";
 
   const userSubscription = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-  const displayMembershipEntries = isCompleted ? 0 : majorDrawStats?.membershipEntries ?? 0;
-  const displayOneTimeEntries = majorDrawStats?.oneTimeEntries || 0;
-  const displayTotalEntries = majorDrawStats?.currentDrawEntries || 0;
+  const displayMembershipEntries = dashboardEntries.membershipEntries;
+  const displayOneTimeEntries = dashboardEntries.oneTimeEntries;
+  const displayTotalEntries = dashboardEntries.currentDrawEntries;
 
   const getProjectionData = () => {
     if (!hasActiveMembership || !membershipPackage || !userSubscription) return null;
@@ -421,7 +436,7 @@ export default function MyAccountPage() {
         lastName={user.lastName}
         email={user.email}
         membershipPackage={membershipPackage}
-        hasActiveSubscription={hasActiveMembership}
+        showMembershipBadge={showMembershipBadge}
       />
 
       <QuickActions

@@ -30,6 +30,8 @@ interface LoadingContextType {
   hideLoading: () => void;
   showSuccess: (title: string, subtitle: string, benefits: Benefit[], autoCloseDelay?: number) => void;
   hideSuccess: () => void;
+  /** True while the full-screen success overlay is visible (purchase celebration). */
+  isSuccessScreenVisible: boolean;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -99,6 +101,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
         hideLoading,
         showSuccess,
         hideSuccess,
+        isSuccessScreenVisible: successState.isVisible,
       }}
     >
       {children}

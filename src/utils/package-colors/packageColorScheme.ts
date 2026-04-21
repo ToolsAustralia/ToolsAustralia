@@ -131,6 +131,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "foreman-pack": "makita-teal",
   "boss-pack": "dewalt-yellow",
   "power-pack": "milwaukee-red",
+  "vip-pack": "black",
   "boss-red": "boss-red",
   "black-pack": "black",
   "mint-pack": "mint-green",
@@ -149,6 +150,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
 /** Normalize planId or color key to COLOR_KEYS */
 function toColorKey(planId: string): COLOR_KEYS {
   if (planId in PLAN_ID_TO_COLOR_KEY) return PLAN_ID_TO_COLOR_KEY[planId as keyof typeof PLAN_ID_TO_COLOR_KEY];
+  if (planId.includes("vip")) return "black";
   if (planId.includes("apprentice")) return "kincrome-blue";
   if (planId.includes("tradie")) return "ryobi-green";
   if (planId.includes("foreman")) return "makita-teal";
@@ -432,6 +434,7 @@ const MEMBERSHIP_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
   "foreman-pack": "dewalt-yellow",
   "boss-pack": "boss-red",
   "power-pack": "milwaukee-red",
+  "vip-pack": "black",
 };
 
 /** One-time tab: kincrome, ryobi, makita, dewalt, milwaukee (split-test winner) */
@@ -441,6 +444,7 @@ const ONE_TIME_TAB_COLOR_MAP: Record<string, COLOR_KEYS> = {
   "foreman-pack": "makita-teal",
   "boss-pack": "dewalt-yellow",
   "power-pack": "milwaukee-red",
+  "vip-pack": "black",
 };
 
 /**
@@ -457,6 +461,7 @@ export type PackageColorsVariantConfig = {
 /** Normalize planId to slot key for package color lookup */
 function planIdToSlotKey(planId: string, isMembershipTab: boolean): string {
   const lower = planId.toLowerCase();
+  if (lower.includes("vip")) return "vip-pack";
   if (lower.includes("apprentice")) return "apprentice-pack";
   if (lower.includes("tradie")) return "tradie-pack";
   if (lower.includes("foreman")) return "foreman-pack";
@@ -560,7 +565,8 @@ export function derivePlanIdFromPackage(
       lower.includes("boss") ||
       lower.includes("foreman") ||
       lower.includes("power") ||
-      lower.includes("apprentice")
+      lower.includes("apprentice") ||
+      lower.includes("vip")
     ) {
       return lower;
     }
@@ -572,6 +578,7 @@ export function derivePlanIdFromPackage(
   if (name.includes("tradie")) return `tradie${suffix}`;
   if (name.includes("foreman")) return `foreman${suffix}`;
   if (name.includes("boss")) return `boss${suffix}`;
+  if (name.includes("vip")) return `vip-pack`;
   if (name.includes("power")) return `power-pack`;
   return "power-pack";
 }
@@ -600,6 +607,7 @@ export function getLandingPageThemeFromPlanId(planId: string, isMembershipTab: b
     planId.includes("tradie") ? "tradie-pack" :
     planId.includes("foreman") ? "foreman-pack" :
     planId.includes("boss") ? "boss-pack" :
+    planId.includes("vip") ? "vip-pack" :
     planId.includes("power") ? "power-pack" : "power-pack";
   const colorKey = isMembershipTab
     ? (MEMBERSHIP_TAB_COLOR_MAP[packKey] ?? toColorKey(packKey))
@@ -932,11 +940,11 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.4)]",
     buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(212,175,55,0.25)]",
     buttonText: "text-premium-gold",
-    glow: "drop-shadow-[0_0_16px_rgba(212,175,55,0.3)]",
+    glow: "drop-shadow-[0_0_22px_rgba(212,175,55,0.5)] drop-shadow-[0_0_40px_rgba(212,175,55,0.22)]",
     border: "border-premium-gold/40",
     shadow: "shadow-[#D4AF37]/20",
     hoverShadow: "hover:shadow-[#D4AF37]/30",
-    borderGlow: "animate-border-glow-silver",
+    borderGlow: "animate-border-glow-premium-gold",
     badgeStyle: {
       background: "#0a0a0a",
       boxShadow: "0 0 35px rgba(212, 175, 55, 0.15), 0 4px 20px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(212, 175, 55, 0.2)",

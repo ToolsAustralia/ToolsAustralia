@@ -8,7 +8,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
-import { isNonMemberPackage } from "@/utils/membership/member-package-mapping";
+import { isNonMemberPackage, isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import BestValueBadge from "@/components/ui/BestValueBadge";
@@ -16,10 +16,11 @@ import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
-import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -315,7 +316,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 500,
             period: "one-time",
             features: [
-              { text: "100% of Partner Discounts Available" },
+              { text: "85% of Partner Discounts Available" },
               { text: "20 Days Access to Partner Discounts" },
               { text: "600 Free Entries" },
             ],
@@ -533,7 +534,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   One-Time
                   {/* Multiplier Badge - Upper right */}
                   {resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && oneTimeSubTab === "one-time" && (
-                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
+                    <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as PromoMultiplier} />
                   )}
                 </button>
                 <button
@@ -550,7 +551,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                   Membership Packs
                   {/* Multiplier Badge - Upper right */}
                   {resolvedMembershipMultiplier != null && resolvedMembershipMultiplier > 1 && oneTimeSubTab === "membership" && (
-                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as PromoMultiplier} />
                   )}
                 </button>
               </div>
@@ -566,7 +567,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
             const showBestValueRibbon =
               (isMembershipTab && plan.id === "boss-subscription") ||
-              (!isMembershipTab && (plan.id === "power-pack" || plan.id === "additional-power-pack"));
+              (!isMembershipTab && isOneTimeBestValuePlanId(plan.id));
             return (
               <div
                 key={plan.id}
@@ -664,9 +665,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {getPackageIcon(plan.id) && (
                   <div className="absolute -top-4 sm:-top-5 left-1/2 transform -translate-x-1/2 z-20">
                     <div
-                      className={`w-8 h-8 sm:w-12 sm:h-12 relative ${
-                        plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""
-                      }`}
+                      className={`w-8 h-8 sm:w-12 sm:h-12 relative ${getPackageIconWrapperScaleClass(plan.id, "modal")}`}
                     >
                       <Image
                         src={getPackageIcon(plan.id)!}

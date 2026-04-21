@@ -6,7 +6,7 @@ import MembershipByPackageDetailModal from "@/components/modals/MembershipByPack
 import { useMembershipByPackage } from "@/hooks/queries/useAdminQueries";
 import { RefreshCw, Package } from "lucide-react";
 import Image from "next/image";
-import { getPackageIcon } from "@/utils/images/package-icons";
+import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 
 interface MembershipBreakdownSectionProps {
   isExpanded: boolean;
@@ -122,7 +122,7 @@ export default function MembershipBreakdownSection({
                                 alt=""
                                 width={32}
                                 height={32}
-                                className="w-7 h-7 object-contain"
+                                className={`w-7 h-7 object-contain ${getPackageIconWrapperScaleClass(pkg.packageId, "badge")}`}
                               />
                             ) : (
                               <div className="w-7 h-7 rounded flex items-center justify-center bg-gray-100">
@@ -224,7 +224,7 @@ export default function MembershipBreakdownSection({
                         alt={pkg.packageName}
                         width={48}
                         height={48}
-                        className="flex-shrink-0 rounded w-10 h-10 sm:w-12 sm:h-12 object-contain"
+                        className={`flex-shrink-0 rounded w-10 h-10 sm:w-12 sm:h-12 object-contain ${getPackageIconWrapperScaleClass(pkg.packageId, "badge")}`}
                       />
                     ) : (
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded flex items-center justify-center bg-gray-100 flex-shrink-0">

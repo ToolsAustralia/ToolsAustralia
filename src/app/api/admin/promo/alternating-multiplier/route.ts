@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { z } from "zod";
+import { zPromoMultiplier } from "@/lib/zod/promo-multiplier-schema";
 import type {
   AlternatingPromoMultiplier as AlternatingPromoMultiplierType,
   AlternatingPromoMultiplierListResponse,
@@ -14,7 +15,7 @@ import type {
 const createAlternatingMultiplierSchema = z.object({
   type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]),
   multipliers: z
-    .array(z.number().refine((n) => [2, 3, 5, 10].includes(n), "Multiplier must be 2, 3, 5, or 10"))
+    .array(zPromoMultiplier)
     .length(2, "Must have exactly 2 multipliers")
     .refine((arr) => arr[0] !== arr[1], "Multipliers must be different"),
   isEnabled: z.boolean().optional(),

@@ -9,10 +9,11 @@ import {
   validateFullMonthDayGrid,
 } from "@/services/admin/scheduled-promo-month-apply.service";
 import { parseAestDateKey } from "@/utils/promo/scheduled-promo-calendar";
+import { zPromoMultiplierOrNull } from "@/lib/zod/promo-multiplier-schema";
 
 const calendarDaySchema = z.object({
   dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  multiplier: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10), z.null()]),
+  multiplier: zPromoMultiplierOrNull,
 });
 
 const bodySchema = z.object({

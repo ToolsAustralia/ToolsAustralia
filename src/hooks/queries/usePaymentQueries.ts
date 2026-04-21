@@ -83,6 +83,8 @@ export interface PaymentStatusResponse {
     processedBy?: string;
     timestamp?: string;
     message?: string;
+    latestEventType?: string;
+    latestEventAt?: string;
   };
 }
 

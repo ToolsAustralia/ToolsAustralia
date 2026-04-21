@@ -29,6 +29,8 @@ type PaymentStatusPayload =
       data: {
         paymentIntentId: string;
         message: string;
+        latestEventType?: string;
+        latestEventAt?: string;
       };
     };
 
@@ -83,6 +85,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         },
       };
     } else {
+      const hint = await getStripeProcessingHint(paymentIntentId);
       payload = {
         success: true,
         processed: false,
@@ -90,6 +93,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         data: {
           paymentIntentId,
           message: "Payment is being processed...",
+          ...hint,
         },
       };
     }
@@ -106,6 +110,35 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
  * Subscription benefits are recorded as BenefitsGranted-invoice_{invoiceId} with paymentIntentId invoice_{invoiceId}.
  * The client polls with the Stripe PaymentIntent id (pi_…); resolve the invoice-linked event when the direct id misses.
  */
+/**
+ * Map live PaymentIntent status to pseudo–webhook labels for deterministic client step UI.
+ */
+async function getStripeProcessingHint(
+  paymentIntentId: string
+): Promise<{ latestEventType?: string; latestEventAt?: string }> {
+  if (!paymentIntentId.startsWith("pi_")) {
+    return {};
+  }
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const statusMap: Record<string, string> = {
+      requires_payment_method: "payment_intent.created",
+      requires_confirmation: "payment_intent.processing",
+      requires_action: "payment_intent.processing",
+      processing: "payment_intent.processing",
+      succeeded: "payment_intent.succeeded",
+      canceled: "payment_intent.canceled",
+    };
+    return {
+      latestEventType: statusMap[pi.status] ?? "payment_intent.processing",
+      latestEventAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.warn("[payment-status] Could not retrieve PaymentIntent for hint:", paymentIntentId, err);
+    return {};
+  }
+}
+
 async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<PaymentEventLean | null> {
   const directId = `BenefitsGranted-${paymentIntentId}`;
   const direct = await PaymentEvent.findById(directId)

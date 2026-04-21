@@ -10,6 +10,8 @@ import { stripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { getPackageById } from "@/data/membershipPackages";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { ensureIndexesOnce } from "@/utils/database/ensure-indexes";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
@@ -967,8 +969,10 @@ async function handleUpsellWebhook(user: { _id: { toString: () => string } }, pa
  */
 async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, paymentIntent: Stripe.PaymentIntent) {
   webhookLog("info", `🎯 handleOneTimeWebhook called for PaymentIntent: ${paymentIntent.id}`);
-  const packageId = paymentIntent.metadata.packageId;
-  const packageName = paymentIntent.metadata.packageName || `One-Time Package ${packageId}`;
+  /** Canonical id (matches static `membershipPackages`); `-member` suffix from useMemberships breaks getPackageById + promo parity with UI. */
+  const rawPackageId = paymentIntent.metadata.packageId || "";
+  const packageId = rawPackageId ? normalizeMembershipPlanId(rawPackageId) : "";
+  const packageName = paymentIntent.metadata.packageName || `One-Time Package ${packageId || rawPackageId}`;
   const entriesCount = parseInt(paymentIntent.metadata.entriesCount || "0");
   
   // ✅ FIX: Parse and validate price - ensure it's always a valid number
@@ -1012,17 +1016,26 @@ async function handleOneTimeWebhook(user: { _id: { toString: () => string } }, p
     return;
   }
 
-  // Member-only one-time packages use membership promo when purchaser is a member
-  const pkg = packageId ? getPackageById(packageId) : undefined;
+  // Match SpecialPackagesModal / getEffectivePromoType (handles `-member` ids via resolvePackageForPromo)
   const userWithSub = await User.findById(user._id).select("subscription").lean();
   const isMember = userWithSub?.subscription?.isActive === true;
-  const useMembershipMultiplier = !!(pkg?.isMemberOnly && isMember);
-  const effectiveType = useMembershipMultiplier ? "membership" : "one-time";
-  const promoMultiplier = await getActivePromoMultiplier(effectiveType);
+  const effectivePromoKind = packageId
+    ? getEffectivePromoType(packageId, "one-time", isMember)
+    : "one-time-packages";
+  const promoTypeShort: "membership" | "one-time" | "mini-draw" =
+    effectivePromoKind === "membership-packages"
+      ? "membership"
+      : effectivePromoKind === "mini-packages"
+        ? "mini-draw"
+        : "one-time";
+  const promoMultiplier = await getActivePromoMultiplier(promoTypeShort);
   const finalEntriesCount = entriesCount * promoMultiplier;
 
-  if (useMembershipMultiplier) {
-    webhookLog("info", `Member-only one-time package ${packageId} for member: using membership multiplier`);
+  if (effectivePromoKind === "membership-packages") {
+    webhookLog(
+      "info",
+      `One-time package ${packageId}: using membership promo multiplier (${promoMultiplier}x) — aligns with member-only UI`
+    );
   }
   webhookLog(
     "info",

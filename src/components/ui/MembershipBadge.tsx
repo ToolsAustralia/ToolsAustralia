@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+import { getPackageIconByName, getPackageIconWrapperScaleClass, type PackageIconData } from "@/utils/images/package-icons";
 import {
   getMembershipSectionColorScheme,
   derivePlanIdFromPackage,
@@ -117,6 +117,7 @@ export default function MembershipBadge({
 
   // Derive planId for package-themed styling
   const planId = derivePlanIdFromPackage(packageData, finalMembershipType);
+  const iconScaleClass = getPackageIconWrapperScaleClass(planId, "badge");
   const isMembershipTab = finalMembershipType === "subscription";
   const colorScheme = getMembershipSectionColorScheme(planId, isMembershipTab);
   const badgeStyle = colorScheme.badgeStyle ?? {};
@@ -151,7 +152,7 @@ export default function MembershipBadge({
         <Image
           src={packageIcon}
           alt={`${packageData.name} icon`}
-          className="w-5 h-5 object-contain"
+          className={`w-5 h-5 object-contain ${iconScaleClass}`}
           width={20}
           height={20}
         />
@@ -189,7 +190,7 @@ export default function MembershipBadge({
     >
       {/* Package Icon */}
       {packageIcon && (
-        <div className="relative w-5 h-5 flex-shrink-0">
+        <div className={`relative w-5 h-5 flex-shrink-0 ${iconScaleClass}`}>
           <Image
             src={packageIcon}
             alt={`${packageData.name} icon`}

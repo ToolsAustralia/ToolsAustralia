@@ -13,7 +13,8 @@ interface UserInfoBarProps {
     name: string;
     type?: "subscription" | "one-time";
   } | null;
-  hasActiveSubscription?: boolean;
+  /** When true, show the membership badge (subscription or active one-time pack). */
+  showMembershipBadge?: boolean;
   className?: string;
 }
 
@@ -22,7 +23,7 @@ export default function UserInfoBar({
   lastName,
   email,
   membershipPackage,
-  hasActiveSubscription = false,
+  showMembershipBadge = false,
   className = "",
 }: UserInfoBarProps) {
   return (
@@ -38,12 +39,12 @@ export default function UserInfoBar({
             </p>
           </div>
 
-          {membershipPackage && hasActiveSubscription && (
+          {membershipPackage && showMembershipBadge && (
             <div className="flex items-center flex-shrink-0 ml-2">
               <MembershipBadge
                 packageData={membershipPackage}
                 isActive={true}
-                membershipType="subscription"
+                membershipType={membershipPackage.type === "one-time" ? "one-time" : "subscription"}
               />
             </div>
           )}

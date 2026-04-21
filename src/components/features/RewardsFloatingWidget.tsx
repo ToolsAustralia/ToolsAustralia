@@ -15,6 +15,12 @@ import {
 } from "@/utils/rewards-widget-spotlight-storage";
 import { MODAL_DURATION_ENTER_S } from "@/utils/motion/modalPresets";
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+
+const claimableCountFormat = (n: number) => {
+  const r = Math.round(n);
+  return r > 99 ? "99+" : r.toLocaleString();
+};
 
 interface RewardsFloatingWidgetProps {
   userId: string;
@@ -347,7 +353,7 @@ export default function RewardsFloatingWidget({
                   : { duration: 1.5, repeat: Infinity, repeatDelay: 1.5, ease: [0.25, 0.1, 0.25, 1] }
               }
             >
-              {claimableCount > 99 ? "99+" : claimableCount}
+              <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
             </motion.span>
           )}
         </span>
@@ -384,7 +390,9 @@ export default function RewardsFloatingWidget({
                       {claimableCount > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
                           <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-300" />
-                          <span className="text-[10px] sm:text-xs font-bold text-white">{claimableCount}</span>
+                          <span className="text-[10px] sm:text-xs font-bold text-white tabular-nums">
+                            <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
+                          </span>
                         </span>
                       )}
                     </div>
@@ -413,7 +421,10 @@ export default function RewardsFloatingWidget({
                   >
                     <span className="inline-flex items-center gap-2">
                       <Gift className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                      <span className="truncate">Claimable ({claimableQuery.data?.total || 0})</span>
+                      <span className="truncate tabular-nums">
+                        Claimable (
+                        <AnimatedNumber value={claimableQuery.data?.total || 0} />)
+                      </span>
                     </span>
                   </button>
                   <button
