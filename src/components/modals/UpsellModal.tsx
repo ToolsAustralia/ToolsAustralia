@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
-import { CheckCircle, CreditCard, Loader2 } from "lucide-react";
+import { CheckCircle, ChevronDown, CreditCard, Loader2 } from "lucide-react";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
 import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
@@ -25,11 +25,38 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
+import {
+  calculateUpsellEntries,
+  calculateUpsellEntriesFromContext,
+  getPackageBaseEntries,
+} from "@/utils/payment/upsell-entries-calculator";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 
 const stripePromise = getStripePromise();
+
+/** Swap static catalog entry counts in inclusion lines for promo-adjusted upsell entries (2 × base × multiplier). */
+function applyDynamicUpsellEntryCountToLines(lines: string[], calculatedEntries: number): string[] {
+  return lines.map((line) => {
+    const trimmed = line.trim();
+    if (!/(?:entry|entries)/i.test(trimmed)) return line;
+    const m = trimmed.match(/^(\d+)(\s+.+(?:entry|entries))/i);
+    if (!m) return line;
+    return `${calculatedEntries}${m[2]}`;
+  });
+}
+
+/** Omit price/payment rows and prize copy from “what’s included” (benefits only). */
+function filterPackageInclusionLines(lines: string[]): string[] {
+  return lines.filter((line) => {
+    const t = line.trim();
+    if (!t) return false;
+    if (t.startsWith("$")) return false;
+    if (/\bprizes?\b/i.test(t)) return false;
+    return true;
+  });
+}
 
 function syntheticSavedPaymentMethod(
   paymentMethodId: string,
@@ -86,6 +113,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [showFullInclusions, setShowFullInclusions] = useState(false);
 
   // Get user context and payment methods
   const { userData } = useUserContext();
@@ -146,6 +174,12 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     !resolvedChargePm;
 
   const isCheckingPaymentMethod = isResolvingPaymentMethod && !resolvedChargePm;
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowFullInclusions(false);
+    }
+  }, [isOpen, offer.id]);
 
   /**
    * Finalize invoice and send to Klaviyo
@@ -806,6 +840,98 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   /** Matches hero artwork and Stripe charge (two decimal places). */
   const upsellPriceLabel = offer.discountedPrice.toFixed(2);
 
+  /**
+   * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else current
+   * resolved multiplier (membership vs one-time vs mini; member-only one-time → membership promo).
+   */
+  const computedUpsellEntries = useMemo(() => {
+    const staticPkg = getUpsellPackageById(offer.id);
+    const category = staticPkg?.category;
+
+    let packageType: "membership" | "one-time" | "mini-draw" | undefined;
+    if (originalPurchaseContext?.packageType) {
+      packageType = originalPurchaseContext.packageType;
+    } else if (category === "subscription-plus") {
+      packageType = "membership";
+    } else if (category === "one-time-plus" || category === "additional-upgrade") {
+      packageType = "one-time";
+    } else if (offer.category === "membership") {
+      packageType = "membership";
+    } else if (offer.category === "mini-draw") {
+      packageType = "mini-draw";
+    } else {
+      packageType = "one-time";
+    }
+
+    const triggeringPackageId =
+      originalPurchaseContext?.packageId ?? staticPkg?.triggersOnPackageIds?.[0];
+
+    const baseEntries =
+      originalPurchaseContext?.baseEntries ??
+      (triggeringPackageId && packageType
+        ? getPackageBaseEntries({ packageId: triggeringPackageId, packageType })
+        : 0);
+
+    if (!packageType || baseEntries <= 0) {
+      return null;
+    }
+
+    let promoMultiplier = 1;
+    if (
+      originalPurchaseContext?.promoMultiplier != null &&
+      originalPurchaseContext.promoMultiplier > 1
+    ) {
+      promoMultiplier = originalPurchaseContext.promoMultiplier;
+    } else if (packageType === "membership") {
+      promoMultiplier = resolvedMembershipMultiplier ?? 1;
+    } else if (packageType === "mini-draw") {
+      promoMultiplier = resolvedMiniMultiplier ?? 1;
+    } else {
+      const pid = triggeringPackageId ?? originalPurchaseContext?.packageId;
+      promoMultiplier =
+        pid && isMemberOnlyPackageById(pid)
+          ? (resolvedMembershipMultiplier ?? 1)
+          : (resolvedOneTimeMultiplier ?? 1);
+    }
+
+    if (triggeringPackageId) {
+      return calculateUpsellEntriesFromContext(
+        {
+          packageId: triggeringPackageId,
+          packageType,
+          baseEntries: originalPurchaseContext?.baseEntries,
+        },
+        promoMultiplier
+      );
+    }
+
+    return calculateUpsellEntries({
+      baseEntries,
+      packageType,
+      promoMultiplier,
+    });
+  }, [
+    offer.id,
+    offer.category,
+    originalPurchaseContext?.packageId,
+    originalPurchaseContext?.packageType,
+    originalPurchaseContext?.baseEntries,
+    originalPurchaseContext?.promoMultiplier,
+    resolvedMembershipMultiplier,
+    resolvedOneTimeMultiplier,
+    resolvedMiniMultiplier,
+  ]);
+
+  const packageInclusionLines = useMemo(() => {
+    const fromOffer = offer.conditions?.filter(Boolean) ?? [];
+    const base = fromOffer.length > 0 ? fromOffer : getUpsellPackageById(offer.id)?.conditions?.filter(Boolean) ?? [];
+    const withEntries =
+      computedUpsellEntries != null && computedUpsellEntries > 0
+        ? applyDynamicUpsellEntryCountToLines(base, computedUpsellEntries)
+        : base;
+    return filterPackageInclusionLines(withEntries);
+  }, [offer.id, offer.conditions, computedUpsellEntries]);
+
   // Global loading and success screens are now handled by LoadingContext
 
   return (
@@ -926,6 +1052,39 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 </div>
               )}
             </button>
+
+            {packageInclusionLines.length > 0 && (
+              <div className="overflow-hidden rounded-xl border border-gray-300 shadow-sm dark:border-neutral-600">
+                <button
+                  type="button"
+                  onClick={() => setShowFullInclusions((v) => !v)}
+                  aria-expanded={showFullInclusions}
+                  className="flex w-full items-center justify-center gap-2 bg-white py-2.5 px-4 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:bg-neutral-800/80 dark:text-neutral-100 dark:hover:bg-neutral-700/80 sm:py-3 sm:text-base"
+                >
+                  <span>{showFullInclusions ? "Hide package inclusions" : "See full package inclusions"}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 transition-transform duration-200 sm:h-5 sm:w-5 ${showFullInclusions ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </button>
+                {showFullInclusions && (
+                  <div
+                    className="border-t border-gray-200 bg-gray-50/95 px-3 py-3 dark:border-neutral-700 dark:bg-neutral-900/60 sm:px-4"
+                    role="region"
+                    aria-label="Package inclusions"
+                  >
+                    <ul className="space-y-2 text-left text-sm text-gray-700 dark:text-neutral-300 sm:text-base">
+                      {packageInclusionLines.map((line, idx) => (
+                        <li key={`${idx}-${line}`} className="flex gap-2">
+                          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-500" aria-hidden />
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Secondary Action */}
             <button

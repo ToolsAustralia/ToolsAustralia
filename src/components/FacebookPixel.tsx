@@ -4,6 +4,11 @@ import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
 
+/** Production-only hostnames for the browser pixel (must match server CAPI prod routing). */
+export function isProductionBrowserHostname(hostname: string): boolean {
+  return hostname === "toolsaustralia.com.au" || hostname === "www.toolsaustralia.com.au";
+}
+
 declare global {
   interface Window {
     fbq: (
@@ -63,6 +68,8 @@ export default function FacebookPixel({
   dataProcessingState,
 }: FacebookPixelProps) {
   const pathname = usePathname();
+  /** False until client mount; then true only on production hostnames. */
+  const [browserPixelHostAllowed, setBrowserPixelHostAllowed] = useState(false);
   const [isInitialized, setIsInitialized] = useState(pixelInitialized); // Initialize from global state
   const hasTrackedInitialPageView = React.useRef(false); // Track if we've sent initial PageView
   const scriptLoadedRef = React.useRef(false); // Track if script has been loaded
@@ -70,6 +77,15 @@ export default function FacebookPixel({
 
   // Store pixel ID globally for use in tracking functions
   globalPixelId = pixelId;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const allowed = isProductionBrowserHostname(window.location.hostname);
+    setBrowserPixelHostAllowed(allowed);
+    if (!allowed) {
+      console.warn("[FB Pixel] Browser pixel disabled on non-prod host:", window.location.hostname);
+    }
+  }, []);
 
   // Note: We don't use useUserContext here because FacebookPixel is rendered before UserProvider
   // User type will default to "guest" for PageView events in this component
@@ -92,7 +108,7 @@ export default function FacebookPixel({
   // Track page view on route change (only if pixel is loaded and not initial load)
   useEffect(() => {
     // Only track on route changes, not initial load (initial PageView is queued in inline script)
-    if (!isInitialized || !hasTrackedInitialPageView.current) {
+    if (!browserPixelHostAllowed || !isInitialized || !hasTrackedInitialPageView.current) {
       return;
     }
 
@@ -121,7 +137,7 @@ export default function FacebookPixel({
   // Fallback: Verify PageView fired after pixel loads (safety net)
   // Moved before early returns to satisfy React Hooks rules
   useEffect(() => {
-    if (!isInitialized || hasTrackedInitialPageView.current) {
+    if (!browserPixelHostAllowed || !isInitialized || hasTrackedInitialPageView.current) {
       return;
     }
 
@@ -158,7 +174,7 @@ export default function FacebookPixel({
     }, 2000);
 
     return () => clearTimeout(verifyPageView);
-  }, [isInitialized, pathname]);
+  }, [browserPixelHostAllowed, isInitialized, pathname]);
 
   // Inject script with nonce support (replaces Next.js Script component for CSP compliance)
   // Moved before early returns to satisfy React Hooks rules
@@ -169,7 +185,7 @@ export default function FacebookPixel({
     }
 
     // Don't inject if disabled, no pixel ID, already initialized, or already injected
-    if (disabled || !pixelId || pixelInitialized || scriptInjectedRef.current) {
+    if (!browserPixelHostAllowed || disabled || !pixelId || pixelInitialized || scriptInjectedRef.current) {
       return;
     }
 
@@ -193,6 +209,13 @@ export default function FacebookPixel({
 
       // Set inline script content
       script.innerHTML = `
+        (function(){
+        var host = typeof window !== 'undefined' ? window.location.hostname : '';
+        var isProdHost = host === 'toolsaustralia.com.au' || host === 'www.toolsaustralia.com.au';
+        if (!isProdHost) {
+          console.warn('[FB Pixel] Inline init skipped on non-prod host:', host);
+          return;
+        }
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
         n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -201,14 +224,8 @@ export default function FacebookPixel({
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
-        // Queue init and PageView only once - these will execute when fbevents.js loads
-        // Note: fbq function queues commands automatically if library not loaded yet
-        // Remove window.fbq check to avoid race condition - fbq is created in this script
         if(typeof window !== 'undefined' && !window._fbPixelInit) {
-          window._fbPixelInit = true; // Global flag to prevent multiple inits
-          
-          // Initialize pixel with optional data processing options for GDPR/CCPA compliance
-          // fbq will queue these commands if fbevents.js hasn't loaded yet
+          window._fbPixelInit = true;
           ${
             dataProcessingOptions
               ? `window.fbq('init', '${pixelId}', ${JSON.stringify(dataProcessingOptions)});`
@@ -216,7 +233,6 @@ export default function FacebookPixel({
               ? `window.fbq('init', '${pixelId}', null, ${dataProcessingCountry}, ${dataProcessingState || 0});`
               : `window.fbq('init', '${pixelId}');`
           }
-          // Track initial PageView with basic parameters (full parameters added on route changes)
           const initialPageUrl = typeof window !== 'undefined' ? window.location.href : '';
           const initialPathname = typeof window !== 'undefined' ? window.location.pathname : '';
           const pageType = initialPathname === '/' ? 'home' : initialPathname.split('/').filter(Boolean)[0] || 'unknown';
@@ -226,6 +242,7 @@ export default function FacebookPixel({
             platform: 'tools-australia-website'
           });
         }
+        })();
       `;
 
       // Append script to document head
@@ -265,10 +282,18 @@ export default function FacebookPixel({
         console.error("❌ Facebook Pixel: Error injecting script:", error);
       }
     }
-  }, [pixelId, disabled, nonce, dataProcessingOptions, dataProcessingCountry, dataProcessingState]);
+  }, [
+    browserPixelHostAllowed,
+    pixelId,
+    disabled,
+    nonce,
+    dataProcessingOptions,
+    dataProcessingCountry,
+    dataProcessingState,
+  ]);
 
-  // Don't load if disabled or no pixel ID
-  if (disabled || !pixelId) {
+  // Don't load if disabled or no pixel ID, or non-production hostname
+  if (disabled || !pixelId || !browserPixelHostAllowed) {
     return null;
   }
 
@@ -319,6 +344,10 @@ export const trackFacebookEvent = (
 ) => {
   if (typeof window === "undefined") {
     // console.warn("❌ Facebook Pixel: Window not available");
+    return;
+  }
+
+  if (!isProductionBrowserHostname(window.location.hostname)) {
     return;
   }
 
@@ -449,6 +478,10 @@ export const trackPurchaseWithEventId = (
   orderId?: string
 ) => {
   if (typeof window === "undefined") return;
+
+  if (!isProductionBrowserHostname(window.location.hostname)) {
+    return;
+  }
 
   if (!window.fbq) {
     setTimeout(() => trackPurchaseWithEventId(value, currency, eventId, orderId), 500);

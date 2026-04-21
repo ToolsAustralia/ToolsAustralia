@@ -8,7 +8,7 @@ export type PromoMultiplier = 2 | 3 | 5 | 10 | 12 | 15 | 20;
 export const PROMO_MULTIPLIERS = [2, 3, 5, 10, 12, 15, 20] as const;
 
 /** Multipliers that have bundled image assets (badges, some banners) shipped in-repo */
-export const PROMO_MULTIPLIERS_WITH_ASSETS = [2, 3, 5, 10] as const;
+export const PROMO_MULTIPLIERS_WITH_ASSETS = [2, 3, 5, 10, 12, 15, 20] as const;
 
 export type PromoMultiplierWithAssets = (typeof PROMO_MULTIPLIERS_WITH_ASSETS)[number];
 
