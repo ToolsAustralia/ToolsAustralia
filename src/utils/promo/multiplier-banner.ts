@@ -1,60 +1,92 @@
 /**
- * Multiplier Banner Utility
- * 
- * Maps promo multiplier values to banner image paths.
- * Used by MembershipSection to display multiplier banners.
- * 
- * @module multiplier-banner
+ * Multiplier banner paths under `public/images/banners/multiplier`.
+ * Generic (root) art when no toolset brand is active; branded subfolders when it is.
  */
+
+import { isToolsetLandingSlug, type ToolsetLandingSlug } from "@/config/promo-landing-slugs";
 
 const BANNER_BASE_PATH = "/images/banners/multiplier";
 
 /**
- * Get banner image path for a multiplier value
- * @param multiplier - Promo multiplier (2, 3, 5, or 10)
- * @returns Banner image path, or null if no banner exists for this multiplier
+ * Same toolset detection as static promo banner brand folders, but **no default brand**:
+ * `null` means use generic (unbranded) multiplier art.
  */
-export function getMultiplierBannerPath(multiplier: number | null | undefined): string | null {
+export function resolveMultiplierBannerBrandFolder(
+  slug: string | null | undefined,
+  toolsetSlug: string | null | undefined
+): ToolsetLandingSlug | null {
+  if (toolsetSlug && isToolsetLandingSlug(toolsetSlug)) {
+    return toolsetSlug;
+  }
+  if (slug) {
+    const first = slug.split("-")[0]?.toLowerCase();
+    if (first && isToolsetLandingSlug(first)) {
+      return first as ToolsetLandingSlug;
+    }
+  }
+  return null;
+}
+
+/**
+ * Unbranded banner (root) — fallback when no brand theme is active, or as second choice after branded.
+ */
+export function getGenericMultiplierBannerPath(multiplier: number | null | undefined): string | null {
   if (!multiplier || multiplier <= 1) {
     return null;
   }
 
-  // Map multiplier to banner filename (12/15/20 paths reserved for when assets are added)
   switch (multiplier) {
     case 2:
-      return `${BANNER_BASE_PATH}/2x-banner.webp`;
     case 3:
-      return `${BANNER_BASE_PATH}/3x-banner.webp`;
     case 5:
-      return `${BANNER_BASE_PATH}/5x-banner.webp`;
     case 10:
-      return `${BANNER_BASE_PATH}/10x-banner.webp`;
     case 12:
-      return `${BANNER_BASE_PATH}/12x-banner.webp`;
     case 15:
-      return `${BANNER_BASE_PATH}/15x-banner.webp`;
     case 20:
-      return `${BANNER_BASE_PATH}/20x-banner.webp`;
+      return `${BANNER_BASE_PATH}/${multiplier}x-banner.webp`;
     default:
       return null;
   }
 }
 
-/**
- * Check if a banner exists for the given multiplier
- * @param multiplier - Promo multiplier
- * @returns True if a banner exists
- */
-export function hasMultiplierBanner(multiplier: number | null | undefined): boolean {
-  return getMultiplierBannerPath(multiplier) !== null;
+export function getBrandedMultiplierBannerPath(multiplier: number, brand: ToolsetLandingSlug): string {
+  return `${BANNER_BASE_PATH}/${brand}/${multiplier}x-banner-${brand}.webp`;
 }
 
 /**
- * Get banner dimensions for responsive sizing
- * Banners are designed with a specific aspect ratio
+ * Ordered URLs: branded first when a toolset/theme is active, then generic.
  */
+export function getMultiplierBannerImagePaths(
+  multiplier: number | null | undefined,
+  slug: string | null | undefined,
+  toolsetSlug: string | null | undefined
+): string[] {
+  const generic = getGenericMultiplierBannerPath(multiplier);
+  if (!generic || multiplier == null) {
+    return [];
+  }
+
+  const brand = resolveMultiplierBannerBrandFolder(slug ?? null, toolsetSlug ?? null);
+  if (!brand) {
+    return [generic];
+  }
+
+  return [getBrandedMultiplierBannerPath(multiplier, brand), generic];
+}
+
+/**
+ * Primary generic path (backward compatible name).
+ */
+export function getMultiplierBannerPath(multiplier: number | null | undefined): string | null {
+  return getGenericMultiplierBannerPath(multiplier);
+}
+
+export function hasMultiplierBanner(multiplier: number | null | undefined): boolean {
+  return getGenericMultiplierBannerPath(multiplier) !== null;
+}
+
 export const BANNER_DIMENSIONS = {
   width: 800,
   height: 200,
-  aspectRatio: 4, // 4:1 aspect ratio
+  aspectRatio: 4,
 } as const;

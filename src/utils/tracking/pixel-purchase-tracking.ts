@@ -68,6 +68,8 @@ export interface PixelPurchaseParams {
   experimentId?: string;
   variantId?: string;
   anonymousId?: string; // Anonymous ID for A/B testing tracking (for users who visited before logging in)
+  /** When true, sets CAPI custom_data.content_category to "resubscribe" for segmentation. */
+  isResubscribe?: boolean;
 }
 
 /** Server-side fallback for event_source_url when not in request context (Meta requires it for website events). */
@@ -122,10 +124,16 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       experimentId,
       variantId,
       anonymousId,
+      isResubscribe,
     } = params;
 
+    if (!orderId?.trim()) {
+      console.error("CAPI Purchase skipped: missing orderId (event_id)");
+      return false;
+    }
+
     // Use orderId as event_id for Purchase (deterministic; enables Pixel+CAPI deduplication if Pixel is added later)
-    const eventID = orderId;
+    const eventID = orderId.trim();
 
     // Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
     // Browser pixel removed - using CAPI-only approach per documentation
@@ -144,6 +152,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       package_type: packageType,
       package_id: packageId,
       package_name: packageName,
+      ...(isResubscribe && { resubscribe: true }),
       entries_added: entriesAdded,
       points_earned: pointsEarned,
       subscription_id: subscriptionId,
@@ -242,6 +251,8 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
           order_id: orderId,
           content_ids: content_ids || (packageId ? [packageId] : []),
           content_type: content_type || getContentType(packageType),
+          ...(isResubscribe && { content_category: "resubscribe" }),
+          package_type: packageType,
           num_items: num_items ?? 1,
         },
       });
@@ -643,9 +654,37 @@ export async function trackPixelSubscriptionUpgrade(params: {
       platform: "tools-australia",
     };
 
-    // Track Facebook Pixel - Use Subscribe event for upgrade
-    await trackFacebookEvent("Subscribe", commonParams);
-    // console.log(`📘 Facebook Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    const capiEventId = paymentIntentId
+      ? `upgrade-${subscriptionId}-${paymentIntentId}`
+      : `upgrade-${subscriptionId}-${Date.now()}`;
+    const hashed = prepareUserData({
+      email: userEmail,
+      country: "AU",
+      ...(userId && { externalId: userId }),
+    });
+
+    const upgradeFacebookEvent: FacebookEvent = {
+      event_name: "Subscribe",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: capiEventId,
+      action_source: "website",
+      user_data: {
+        ...hashed,
+        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
+      },
+      custom_data: {
+        currency,
+        value: Math.abs(newValue - oldValue),
+        content_type: "product",
+        content_ids: [newPackageId],
+        content_name: newPackageName,
+        package_type: "subscription_upgrade",
+        ...(paymentIntentId && { order_id: paymentIntentId }),
+      },
+      event_source_url: getServerEventSourceUrlFallback(),
+    };
+
+    await sendFacebookEvent(upgradeFacebookEvent);
 
     // Track TikTok Pixel - Use Subscribe event for upgrade
     await trackTikTokEvent("Subscribe", commonParams);
@@ -710,9 +749,35 @@ export async function trackPixelSubscriptionDowngrade(params: {
       platform: "tools-australia",
     };
 
-    // Track Facebook Pixel - Use Subscribe event for downgrade (still a subscription)
-    await trackFacebookEvent("Subscribe", commonParams);
-    // console.log(`📘 Facebook Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
+    const capiEventId = `downgrade-${subscriptionId}-${Date.now()}`;
+    const hashedDown = prepareUserData({
+      email: userEmail,
+      country: "AU",
+      ...(userId && { externalId: userId }),
+    });
+
+    const downgradeFacebookEvent: FacebookEvent = {
+      event_name: "Subscribe",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: capiEventId,
+      action_source: "website",
+      user_data: {
+        ...hashedDown,
+        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
+      },
+      custom_data: {
+        currency,
+        value: Math.abs(newValue - oldValue),
+        content_type: "product",
+        content_ids: [newPackageId],
+        content_name: newPackageName,
+        package_type: "subscription_downgrade",
+        ...(paymentIntentId && { order_id: paymentIntentId }),
+      },
+      event_source_url: getServerEventSourceUrlFallback(),
+    };
+
+    await sendFacebookEvent(downgradeFacebookEvent);
 
     // Track TikTok Pixel - Use Subscribe event for downgrade (still a subscription)
     await trackTikTokEvent("Subscribe", commonParams);
@@ -725,19 +790,8 @@ export async function trackPixelSubscriptionDowngrade(params: {
 /**
  * Get content type based on package type
  */
-function getContentType(packageType: string): string {
-  switch (packageType) {
-    case "subscription":
-      return "subscription";
-    case "one-time":
-      return "membership_package";
-    case "mini-draw":
-      return "mini_draw_package";
-    case "upsell":
-      return "upsell_package";
-    default:
-      return "product";
-  }
+function getContentType(_packageType: string): string {
+  return "product";
 }
 
 /**
@@ -770,9 +824,34 @@ export async function trackPixelCancellation(params: {
       platform: "tools-australia",
     };
 
-    // Track Facebook Pixel
-    await trackFacebookEvent("Unsubscribe", commonParams);
-    // console.log(`📘 Facebook Pixel: Cancellation tracked - ${packageName}`);
+    const cancelEventId = `cancel-${subscriptionId}`;
+    const hashedCancel = prepareUserData({
+      email: userEmail,
+      country: "AU",
+      ...(userId && { externalId: userId }),
+    });
+
+    const cancelFacebookEvent: FacebookEvent = {
+      event_name: "Unsubscribe",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: cancelEventId,
+      action_source: "website",
+      user_data: {
+        ...hashedCancel,
+        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
+      },
+      custom_data: {
+        currency,
+        value,
+        content_type: "product",
+        content_ids: [packageId],
+        content_name: packageName,
+        package_type: "subscription_cancellation",
+      },
+      event_source_url: getServerEventSourceUrlFallback(),
+    };
+
+    await sendFacebookEvent(cancelFacebookEvent);
 
     // Track TikTok Pixel
     await trackTikTokEvent("Unsubscribe", commonParams);

@@ -3556,7 +3556,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       sessionAttribution,
       {
         skipMembershipFirstCommission: recordMembershipRecurringAffiliate,
-      }
+      },
+      isResubscribe
     );
     webhookLog("info", `Affiliate recurring eligibility`, {
       invoiceId: expandedInvoice.id,

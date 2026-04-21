@@ -31,8 +31,9 @@ import {
   getCardBorderStyle,
   type PackageColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
-import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
+import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 /** Per-package Enter Now — same building blocks as Schedule Downgrade in subscription management (gradient panel + border glow + shimmer). */
@@ -107,6 +108,8 @@ export default function MembershipSection({
 }: MembershipSectionProps) {
   const router = useRouter();
   const theme = usePromoTheme();
+  const promoThemeSlug = usePromoThemeStore((s) => s.slug);
+  const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
 
   // Get variant config from context for A/B testing (membershipModal config)
   const { variantConfig: contextVariantConfig } = useVariantContext();
@@ -178,7 +181,7 @@ export default function MembershipSection({
 
   useEffect(() => {
     setMultiplierBannerLoadFailed(false);
-  }, [effectivePromoMultiplier, activeTab]);
+  }, [effectivePromoMultiplier, activeTab, promoThemeSlug, promoToolsetSlug]);
 
   // Update default tab: no active subscription → membership tab; with subscription and access → one-time
   useEffect(() => {
@@ -458,10 +461,10 @@ export default function MembershipSection({
     return variantConfig?.highlightPackage === planId;
   };
 
-  const promoHeaderBannerPath =
-    effectivePromoMultiplier !== null && effectivePromoMultiplier > 1
-      ? getMultiplierBannerPath(effectivePromoMultiplier)
-      : null;
+  const showPromoHeaderBanner =
+    effectivePromoMultiplier !== null &&
+    effectivePromoMultiplier > 1 &&
+    hasMultiplierBanner(effectivePromoMultiplier);
 
   return (
     <section id="membership" className={`${padding} w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10`}>
@@ -469,16 +472,16 @@ export default function MembershipSection({
         {/* Section Header - Promo-based: show banner image when active promo */}
         {effectivePromoMultiplier !== null && effectivePromoMultiplier > 1 && (
           <div className="text-center mb-2 sm:mb-3 lg:mb-4">
-            {promoHeaderBannerPath && !multiplierBannerLoadFailed ? (
+            {showPromoHeaderBanner && !multiplierBannerLoadFailed ? (
               <div className="flex justify-center">
-                <Image
-                  src={promoHeaderBannerPath}
+                <MultiplierBannerImage
+                  multiplier={effectivePromoMultiplier}
+                  slug={promoThemeSlug}
+                  toolsetSlug={promoToolsetSlug}
                   alt={`${effectivePromoMultiplier}X Promo Activated`}
-                  width={BANNER_DIMENSIONS.width}
-                  height={BANNER_DIMENSIONS.height}
                   className="w-full max-w-2xl lg:max-w-md h-auto object-contain"
                   priority
-                  onError={() => setMultiplierBannerLoadFailed(true)}
+                  onExhausted={() => setMultiplierBannerLoadFailed(true)}
                 />
               </div>
             ) : (

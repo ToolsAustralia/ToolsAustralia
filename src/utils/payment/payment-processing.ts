@@ -153,7 +153,9 @@ export async function processPaymentBenefits(
   billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
   sessionAttribution?: AttributionParams, // Optional attribution from Stripe metadata (session) - takes priority over signup
   /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
-  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
+  isResubscribe?: boolean
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -201,7 +203,8 @@ export async function processPaymentBenefits(
     requestContext,
     billingReason,
     sessionAttribution,
-    affiliateOptions
+    affiliateOptions,
+    isResubscribe
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -235,7 +238,8 @@ async function processPaymentBenefitsInternal(
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
   sessionAttribution?: AttributionParams,
-  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  isResubscribe?: boolean
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -506,7 +510,8 @@ async function processPaymentBenefitsInternal(
         paymentIntentId,
         requestContext,
         billingReason,
-        affiliateOptions
+        affiliateOptions,
+        isResubscribe
       );
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
@@ -933,7 +938,8 @@ async function grantBenefits(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
-  affiliateOptions?: { skipMembershipFirstCommission?: boolean }
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  isResubscribe?: boolean
 ): Promise<void> {
   const majorDrawRoutingMode: "renewal" | "new_purchase" =
     packageData.packageType === "membership" && billingReason === "subscription_cycle"
@@ -1225,8 +1231,13 @@ async function grantBenefits(
   
   if (!isRenewal) {
     // Only track new purchases to Facebook (not renewals)
-    // ✅ DEFENSIVE LOGGING: Track when Facebook tracking is called
-    const trackingId = paymentIntentId || "unknown";
+    const trackingId = paymentIntentId?.trim() || "unknown";
+    if (!paymentIntentId?.trim()) {
+      console.error(`❌ [Facebook Tracking] CAPI Purchase skipped: missing paymentIntentId`, {
+        userId: user._id.toString(),
+        packageType: packageData.packageType,
+      });
+    } else {
     console.log(`📊 [Facebook Tracking] Calling trackPixelPurchase:`, {
       paymentIntentId: trackingId,
       packageType: packageData.packageType,
@@ -1234,6 +1245,7 @@ async function grantBenefits(
       price: packageData.price,
       isRenewal: isRenewal,
       billingReason: billingReason || "N/A",
+      isResubscribe: !!isResubscribe,
     });
 
     try {
@@ -1271,7 +1283,7 @@ async function grantBenefits(
       const pixelTracked = await trackPixelPurchase({
         value: packageData.price,
         currency: "AUD",
-        orderId: paymentIntentId || `order-${Date.now()}`,
+        orderId: paymentIntentId.trim(),
         packageType: packageData.packageType,
         packageId: packageData.packageId,
         packageName: packageData.packageName,
@@ -1285,20 +1297,12 @@ async function grantBenefits(
         userBirthdate: user.birthdate ?? undefined,
         entriesAdded: packageData.entries,
         pointsEarned: packageData.points,
-        paymentIntentId: paymentIntentId,
-        content_type:
-          packageData.packageType === "membership"
-            ? "subscription"
-            : packageData.packageType === "one-time"
-            ? "membership_package"
-            : packageData.packageType === "mini-draw"
-            ? "mini_draw_package"
-            : packageData.packageType === "upsell"
-            ? "upsell_package"
-            : "product",
+        paymentIntentId: paymentIntentId.trim(),
+        content_type: "product",
         content_ids: packageData.packageId ? [packageData.packageId] : [],
         num_items: 1,
         requestContext: requestContext, // Pass request context for improved match quality
+        ...(isResubscribe && { isResubscribe: true }),
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,
           variantId: experimentAssignment.variantId,
@@ -1329,6 +1333,7 @@ async function grantBenefits(
     } catch (_pixelError) {
       console.error(`❌ [Facebook Tracking] Failed to track purchase ${trackingId}:`, _pixelError);
       // Don't throw - pixel tracking should not break purchase flow
+    }
     }
   } else {
     // ✅ DEFENSIVE LOGGING: Log when skipping Facebook tracking for renewal

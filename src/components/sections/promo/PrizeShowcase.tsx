@@ -47,7 +47,8 @@ import FullscreenImageViewer, {
 } from "@/components/ui/FullscreenImageViewer";
 import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { getMultiplierBannerPath, BANNER_DIMENSIONS } from "@/utils/promo/multiplier-banner";
+import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
+import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 
 import "swiper/css";
 import "swiper/css/thumbs";
@@ -454,11 +455,6 @@ export default function PrizeShowcase({
           ? resolvedOneTimeMultiplier
           : null
       : null;
-  const multiplierBannerPath =
-    multiplierForFirstBanner != null ? getMultiplierBannerPath(multiplierForFirstBanner) : null;
-  useEffect(() => {
-    setMultiplierBannerLoadFailed(false);
-  }, [multiplierForFirstBanner, firstBannerVariant]);
   const { openEntryFlow } = useMajorDrawEntryCta();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -513,6 +509,10 @@ export default function PrizeShowcase({
   })();
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
+
+  useEffect(() => {
+    setMultiplierBannerLoadFailed(false);
+  }, [multiplierForFirstBanner, firstBannerVariant, activeSlug, toolsetMode, toolsetSlug]);
 
   // Toolset mode: init to Milwaukee toolbox (second prize slug) to match default toolset landing
   useEffect(() => {
@@ -816,17 +816,17 @@ export default function PrizeShowcase({
         >
           {effectiveFirstBannerVariant === "multiplier" ? (
             multiplierForFirstBanner != null &&
-            multiplierBannerPath && (
+            hasMultiplierBanner(multiplierForFirstBanner) && (
               <div className="flex justify-center mb-1 sm:mb-2">
                 {!multiplierBannerLoadFailed ? (
-                  <Image
-                    src={multiplierBannerPath}
+                  <MultiplierBannerImage
+                    multiplier={multiplierForFirstBanner}
+                    slug={activeSlug}
+                    toolsetSlug={toolsetMode ? toolsetSlug ?? null : null}
                     alt={`${multiplierForFirstBanner}X promo entries`}
-                    width={BANNER_DIMENSIONS.width}
-                    height={BANNER_DIMENSIONS.height}
                     className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
                     priority
-                    onError={() => setMultiplierBannerLoadFailed(true)}
+                    onExhausted={() => setMultiplierBannerLoadFailed(true)}
                   />
                 ) : (
                   <p className="font-sans font-extrabold font-black uppercase text-xl sm:text-2xl text-gray-900 dark:text-white">
