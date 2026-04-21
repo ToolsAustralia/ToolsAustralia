@@ -129,7 +129,6 @@ export {
   useCreateOrder,
   useCancelOrder,
   useUpdateOrderStatus,
-  useRequestRefund,
   useOrderStats,
   useOrderPrefetch,
   type Order,

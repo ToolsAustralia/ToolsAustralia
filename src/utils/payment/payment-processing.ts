@@ -30,6 +30,21 @@ import type { AttributionParams } from "@/types/tracking";
 import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
 import { RedemptionService } from "@/services/redeemables/RedemptionService";
 import { MilestoneService } from "@/services/milestones";
+import { createEmptyGrants, benefitsGrantedEventId } from "@/types/payment-ledger";
+import type { SubscriptionCalculationType } from "@/types/payment-ledger";
+import {
+  addMilestoneIssuanceIds,
+  incLedgerGrants,
+  pushDrawGrant,
+  setLedgerCampaign,
+  setLedgerPromoLink,
+} from "@/utils/payment/ledger-helpers";
+
+/** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
+export type SubscriptionLedgerContext = {
+  lastMonthDelta: number;
+  calculationType: SubscriptionCalculationType;
+};
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -155,7 +170,9 @@ export async function processPaymentBenefits(
   /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
   /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
-  isResubscribe?: boolean
+  isResubscribe?: boolean,
+  /** Membership invoice payments: contribution to lastMonthAccumulatedEntries (refund ledger). */
+  subscriptionLedgerContext?: SubscriptionLedgerContext
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
@@ -204,7 +221,8 @@ export async function processPaymentBenefits(
     billingReason,
     sessionAttribution,
     affiliateOptions,
-    isResubscribe
+    isResubscribe,
+    subscriptionLedgerContext
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -239,7 +257,8 @@ async function processPaymentBenefitsInternal(
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
   sessionAttribution?: AttributionParams,
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
-  isResubscribe?: boolean
+  isResubscribe?: boolean,
+  subscriptionLedgerContext?: SubscriptionLedgerContext
 ): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
@@ -357,10 +376,19 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
-        const paymentEventData = {
+        const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
           points: packageData.points,
           price: packageData.price,
+          grants: createEmptyGrants(
+            { entries: packageData.entries, points: packageData.points },
+            packageData.packageType === "membership" && subscriptionLedgerContext
+              ? {
+                  lastMonthDelta: subscriptionLedgerContext.lastMonthDelta,
+                  calculationType: subscriptionLedgerContext.calculationType,
+                }
+              : undefined
+          ),
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
           ...(packageData.packageType === "mini-draw" &&
             paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
@@ -503,6 +531,7 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
+      const benefitsEventId = benefitsGrantedEventId(paymentIntentId);
       await grantBenefits(
         user as UserDocument,
         packageData,
@@ -511,7 +540,8 @@ async function processPaymentBenefitsInternal(
         requestContext,
         billingReason,
         affiliateOptions,
-        isResubscribe
+        isResubscribe,
+        benefitsEventId
       );
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
@@ -582,7 +612,10 @@ async function processPaymentBenefitsInternal(
       }
 
       try {
-        await MilestoneService.checkAndIssueMilestones(userId);
+        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId);
+        if (milestoneResult.issuanceIds.length > 0) {
+          await addMilestoneIssuanceIds(benefitsGrantedEventId(paymentIntentId), milestoneResult.issuanceIds);
+        }
       } catch (milestoneError) {
         console.error("Milestone evaluation failed after payment processing:", milestoneError);
       }
@@ -804,15 +837,15 @@ async function checkAndApplyPromoLink(
   packageType: "one-time" | "membership" | "upsell" | "mini-draw",
   paymentMetadata?: PaymentMetadata,
   packageId?: string
-): Promise<number> {
+): Promise<{ bonusEntries: number; promoLinkId?: string; code?: string }> {
   try {
     if (!paymentMetadata?.promoLinkCode) {
-      return 0;
+      return { bonusEntries: 0 };
     }
 
     const rawCode = paymentMetadata.promoLinkCode;
     if (!rawCode || typeof rawCode !== "string" || !rawCode.trim()) {
-      return 0;
+      return { bonusEntries: 0 };
     }
 
     // Member-only one-time counts as membership for promo link applicability
@@ -826,7 +859,7 @@ async function checkAndApplyPromoLink(
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
 
     if (packageType === "mini-draw" || packageType === "upsell") {
-      return 0;
+      return { bonusEntries: 0 };
     }
 
     const redemption = await PromoRedemptionService.redeem({
@@ -846,7 +879,7 @@ async function checkAndApplyPromoLink(
         packageType,
         promoLinkCode: rawCode.trim().toUpperCase(),
       });
-      return 0;
+      return { bonusEntries: 0 };
     }
 
     console.log(`🎁 [PROMO LINK] Promo link redeemed successfully:`, {
@@ -863,7 +896,11 @@ async function checkAndApplyPromoLink(
       newUsageCount: redemption.promoLink?.usageCount,
     });
 
-    return redemption.bonusEntries;
+    return {
+      bonusEntries: redemption.bonusEntries,
+      promoLinkId: redemption.promoLink?._id?.toString(),
+      code: redemption.promoLink?.code,
+    };
   } catch (error) {
     console.error("❌ [PROMO LINK] Error checking promo link:", {
       error: error instanceof Error ? error.message : String(error),
@@ -873,7 +910,7 @@ async function checkAndApplyPromoLink(
       packageType,
       paymentMetadata,
     });
-    return 0;
+    return { bonusEntries: 0 };
   }
 }
 
@@ -881,7 +918,12 @@ async function checkAndApplyPromoLink(
 async function checkAndRedeemCampaign(
   user: UserDocument,
   paymentMetadata?: PaymentMetadata
-): Promise<{ entriesGranted: number; code: string } | null> {
+): Promise<{
+  entriesGranted: number;
+  code: string;
+  issuanceId?: string;
+  redemptionKind?: "monthly-coupon" | "milestone";
+} | null> {
   const code = paymentMetadata?.campaignCode;
   if (!code) return null;
 
@@ -897,7 +939,12 @@ async function checkAndRedeemCampaign(
         code,
         entriesGranted: result.entriesGranted,
       });
-      return { entriesGranted: result.entriesGranted, code };
+      return {
+        entriesGranted: result.entriesGranted,
+        code,
+        issuanceId: result.issuanceId,
+        redemptionKind: result.redemptionKind,
+      };
     }
 
     console.warn(`⚠️ [CAMPAIGN] Campaign redemption did not grant entries:`, {
@@ -939,7 +986,8 @@ async function grantBenefits(
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
   affiliateOptions?: { skipMembershipFirstCommission?: boolean },
-  isResubscribe?: boolean
+  isResubscribe?: boolean,
+  benefitsEventId?: string
 ): Promise<void> {
   const majorDrawRoutingMode: "renewal" | "new_purchase" =
     packageData.packageType === "membership" && billingReason === "subscription_cycle"
@@ -996,15 +1044,15 @@ async function grantBenefits(
   if (packageData.packageType === "mini-draw") {
     // Add to specific MiniDraw instead of MajorDraw
     // addToMiniDraw is the ONLY function that grants entries to MiniDraw model
-    await addToMiniDraw(user, packageData, paymentMetadata);
+    await addToMiniDraw(user, packageData, paymentMetadata, undefined, benefitsEventId);
   } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
     // Upsell for mini-draw: route to mini-draw instead of major draw
     // console.log(`🎲 Routing upsell entries to mini-draw: ${paymentMetadata.miniDrawId}`);
     // addToMiniDraw is the ONLY function that grants entries to MiniDraw model
-    await addToMiniDraw(user, packageData, paymentMetadata);
+    await addToMiniDraw(user, packageData, paymentMetadata, undefined, benefitsEventId);
   } else {
     // Add to major draw entries with payment metadata for freeze period handling
-    await addToMajorDraw(user, packageData, paymentMetadata, undefined, majorDrawRoutingMode);
+    await addToMajorDraw(user, packageData, paymentMetadata, undefined, majorDrawRoutingMode, benefitsEventId);
   }
 
   // ✅ BONUS ENTRY PROMO: Check for active bonus entry promos and grant bonus entries
@@ -1019,6 +1067,13 @@ async function grantBenefits(
     );
 
     if (bonusEntries > 0) {
+      if (benefitsEventId) {
+        try {
+          await incLedgerGrants(benefitsEventId, { bonusPromoEntries: bonusEntries });
+        } catch (e) {
+          console.error("incLedgerGrants bonusPromo failed:", e);
+        }
+      }
       console.log(`🎁 [BONUS ENTRY PROMO] Processing bonus entries from date-based promo:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
@@ -1059,13 +1114,20 @@ async function grantBenefits(
       let targetDraw: "mini-draw" | "major-draw";
       if (packageData.packageType === "mini-draw") {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", benefitsEventId);
       } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", benefitsEventId);
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", majorDrawRoutingMode);
+        await addToMajorDraw(
+          user,
+          bonusPackageData,
+          paymentMetadata,
+          "bonus-entry-promo",
+          majorDrawRoutingMode,
+          benefitsEventId
+        );
       }
 
       console.log(`✅ [BONUS ENTRY PROMO] Successfully granted bonus entries:`, {
@@ -1104,14 +1166,28 @@ async function grantBenefits(
   // This happens after regular bonus entry promos
   // Promo links are checked separately and can apply simultaneously with bonus entry promos
   try {
-    const promoLinkEntries = await checkAndApplyPromoLink(
+    const promoLinkResult = await checkAndApplyPromoLink(
       user,
       packageData.packageType,
       paymentMetadata,
       packageData.packageId
     );
+    const promoLinkEntries = promoLinkResult.bonusEntries;
 
     if (promoLinkEntries > 0) {
+      if (benefitsEventId) {
+        try {
+          await incLedgerGrants(benefitsEventId, { promoLinkEntries: promoLinkEntries });
+          if (promoLinkResult.promoLinkId && promoLinkResult.code) {
+            await setLedgerPromoLink(benefitsEventId, {
+              promoLinkId: promoLinkResult.promoLinkId,
+              code: promoLinkResult.code,
+            });
+          }
+        } catch (e) {
+          console.error("promo link ledger failed:", e);
+        }
+      }
       console.log(`🎁 [PROMO LINK] Processing ${promoLinkEntries} bonus entries from promo link:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
@@ -1155,13 +1231,20 @@ async function grantBenefits(
       let targetDraw: "mini-draw" | "major-draw";
       if (packageData.packageType === "mini-draw") {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", benefitsEventId);
       } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", benefitsEventId);
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", majorDrawRoutingMode);
+        await addToMajorDraw(
+          user,
+          promoLinkPackageData,
+          paymentMetadata,
+          "promo-link",
+          majorDrawRoutingMode,
+          benefitsEventId
+        );
       }
 
       console.log(`✅ [PROMO LINK] Successfully granted bonus entries from promo link:`, {
@@ -1192,6 +1275,38 @@ async function grantBenefits(
   // ✅ Campaign code redemption (MonthlyEntryCampaign bonus entries)
   try {
     const campaignResult = await checkAndRedeemCampaign(user, paymentMetadata);
+    if (campaignResult && benefitsEventId) {
+      try {
+        await incLedgerGrants(benefitsEventId, { campaignEntries: campaignResult.entriesGranted });
+        const campaignLedger: {
+          code: string;
+          monthlyIssuanceId?: string;
+          milestoneIssuanceId?: string;
+          redemptionKind?: "monthly-coupon" | "milestone";
+        } = { code: campaignResult.code, redemptionKind: campaignResult.redemptionKind };
+        if (campaignResult.redemptionKind === "monthly-coupon" && campaignResult.issuanceId) {
+          campaignLedger.monthlyIssuanceId = campaignResult.issuanceId;
+        }
+        if (campaignResult.redemptionKind === "milestone" && campaignResult.issuanceId) {
+          campaignLedger.milestoneIssuanceId = campaignResult.issuanceId;
+        }
+        await setLedgerCampaign(benefitsEventId, campaignLedger);
+        const MajorDraw = (await import("@/models/MajorDraw")).default;
+        const activeMdRaw = await MajorDraw.findOne({ status: "active", isActive: true }).select("_id").lean();
+        const activeMd = Array.isArray(activeMdRaw) ? null : activeMdRaw;
+        const majorDrawId = activeMd && "_id" in activeMd && activeMd._id != null ? String(activeMd._id) : undefined;
+        if (majorDrawId) {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "major",
+            drawId: majorDrawId,
+            sourceKey: "bonus-entry-promo",
+            entries: campaignResult.entriesGranted,
+          });
+        }
+      } catch (campLedgerErr) {
+        console.error("campaign ledger update failed:", campLedgerErr);
+      }
+    }
     if (campaignResult) {
       console.log(`✅ [CAMPAIGN] Campaign bonus entries granted via webhook:`, {
         userId: user._id?.toString(),
@@ -1846,7 +1961,8 @@ async function addToMajorDraw(
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
   paymentMetadata?: PaymentMetadata,
   sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
-  majorDrawRoutingMode: "renewal" | "new_purchase" = "new_purchase"
+  majorDrawRoutingMode: "renewal" | "new_purchase" = "new_purchase",
+  benefitsEventId?: string
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -1887,7 +2003,13 @@ async function addToMajorDraw(
 
     // ✅ OPTION 1: Determine source type for major draw entries (single source of truth)
     // Use override if provided (for bonus entries), otherwise determine from package type
-    let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw" | "bonus-entry-promo";
+    let sourceType:
+      | "membership"
+      | "one-time-package"
+      | "upsell"
+      | "mini-draw"
+      | "bonus-entry-promo"
+      | "promo-link";
     if (sourceTypeOverride) {
       sourceType = sourceTypeOverride as typeof sourceType;
     } else {
@@ -1920,18 +2042,13 @@ async function addToMajorDraw(
       // Each payment gets its own entry in the major draw
 
       // Create new user entry atomically
-      const entriesBySource: {
-        membership?: number;
-        "one-time-package"?: number;
-        upsell?: number;
-        "mini-draw"?: number;
-        "bonus-entry-promo"?: number;
-      } = {
+      const entriesBySource: Record<string, number> = {
         membership: 0,
         "one-time-package": 0,
         upsell: 0,
         "mini-draw": 0,
         "bonus-entry-promo": 0,
+        "promo-link": 0,
       };
       entriesBySource[sourceType] = packageData.entries;
 
@@ -2012,6 +2129,19 @@ async function addToMajorDraw(
           totalEntriesInDraw: totalEntries,
         })
       );
+
+      if (benefitsEventId) {
+        try {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "major",
+            drawId: String(majorDraw._id),
+            sourceKey: sourceType,
+            entries: packageData.entries,
+          });
+        } catch (ledgerErr) {
+          console.error("pushDrawGrant (major) failed:", ledgerErr);
+        }
+      }
     } else {
       // console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
     }
@@ -2057,7 +2187,8 @@ async function addToMiniDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
   paymentMetadata?: PaymentMetadata,
-  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
+  sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
+  benefitsEventId?: string
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -2118,16 +2249,14 @@ async function addToMiniDraw(
 
       // Create new user entry atomically
       // Use override source type if provided (for bonus entries), otherwise use "mini-draw-package"
-      const sourceType: "mini-draw-package" | "free-entry" | "bonus-entry-promo" =
-        (sourceTypeOverride as "mini-draw-package" | "free-entry" | "bonus-entry-promo") || "mini-draw-package";
-      const entriesBySource: {
-        "mini-draw-package"?: number;
-        "free-entry"?: number;
-        "bonus-entry-promo"?: number;
-      } = {
+      const sourceType: "mini-draw-package" | "free-entry" | "bonus-entry-promo" | "promo-link" =
+        (sourceTypeOverride as "mini-draw-package" | "free-entry" | "bonus-entry-promo" | "promo-link") ||
+        "mini-draw-package";
+      const entriesBySource: Record<string, number> = {
         "mini-draw-package": 0,
         "free-entry": 0,
         "bonus-entry-promo": 0,
+        "promo-link": 0,
       };
       entriesBySource[sourceType] = packageData.entries;
 
@@ -2289,6 +2418,19 @@ async function addToMiniDraw(
             }
           );
           // console.log(`🎲 Created new user mini draw participation for ${miniDraw.name}`);
+        }
+      }
+
+      if (benefitsEventId) {
+        try {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "mini",
+            drawId: String(miniDraw._id),
+            sourceKey: sourceType,
+            entries: packageData.entries,
+          });
+        } catch (ledgerErr) {
+          console.error("pushDrawGrant (mini) failed:", ledgerErr);
         }
       }
 

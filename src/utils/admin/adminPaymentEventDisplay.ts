@@ -13,6 +13,9 @@ type LooseEvent = {
  * Human-readable payment / billing kind for admin user detail.
  */
 export function getAdminPaymentKindLabel(event: LooseEvent): string {
+  if (event.eventType === "RefundPartial") {
+    return "Partial refund (skipped)";
+  }
   if (event.eventType === "RefundProcessed") {
     if (event.packageType === "membership") return "Refund";
     return "Refund processed";
@@ -46,6 +49,9 @@ export function getAdminPaymentKindLabel(event: LooseEvent): string {
  * Best display name for a payment event (uses root packageName, data, then catalog lookup).
  */
 export function resolveAdminPaymentEventTitle(event: LooseEvent): string {
+  if (event.eventType === "RefundPartial") {
+    return "Partial refund — benefits not reversed";
+  }
   const fromRoot = typeof event.packageName === "string" && event.packageName.trim() ? event.packageName.trim() : "";
   if (fromRoot) return fromRoot;
 

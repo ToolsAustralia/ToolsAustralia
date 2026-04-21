@@ -8,7 +8,7 @@ import { getStripePromise } from "@/lib/stripe-client";
 import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCardSetupForm";
 import { formatDisplayName } from "@/utils/display-name";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
-import { UpsellModalProps } from "@/types/upsell";
+import type { UpsellOffer, UpsellModalProps } from "@/types/upsell";
 import { useUserContext } from "@/contexts/UserContext";
 import { usePaymentMethods } from "@/hooks/queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,7 +22,6 @@ import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import {
@@ -30,6 +29,10 @@ import {
   calculateUpsellEntriesFromContext,
   getPackageBaseEntries,
 } from "@/utils/payment/upsell-entries-calculator";
+import {
+  pickTriggeringPackageIdForUpsell,
+  resolveUpsellPromoMultiplierForDisplay,
+} from "@/utils/payment/upsell-promo-multiplier";
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
@@ -56,6 +59,31 @@ function filterPackageInclusionLines(lines: string[]): string[] {
     if (/\bprizes?\b/i.test(t)) return false;
     return true;
   });
+}
+
+function deriveUpsellPackageType(
+  offer: UpsellOffer,
+  originalPurchaseContext: UpsellModalProps["originalPurchaseContext"]
+): "membership" | "one-time" | "mini-draw" {
+  const upsellPackage = getUpsellPackageById(offer.id);
+  const category = upsellPackage?.category;
+
+  if (originalPurchaseContext?.packageType) {
+    return originalPurchaseContext.packageType;
+  }
+  if (category === "subscription-plus") {
+    return "membership";
+  }
+  if (category === "one-time-plus" || category === "additional-upgrade") {
+    return "one-time";
+  }
+  if (offer.category === "membership") {
+    return "membership";
+  }
+  if (offer.category === "mini-draw") {
+    return "mini-draw";
+  }
+  return "one-time";
 }
 
 function syntheticSavedPaymentMethod(
@@ -116,7 +144,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const [showFullInclusions, setShowFullInclusions] = useState(false);
 
   // Get user context and payment methods
-  const { userData } = useUserContext();
+  const { userData, isMember } = useUserContext();
   const { savePaymentMethod } = useSavedPaymentMethods();
   const isDarkMode = useThemeStore((s) => s.theme === "dark");
   const membershipStripeAppearance = useMemo(() => buildMembershipStripeAppearance(isDarkMode), [isDarkMode]);
@@ -768,47 +796,49 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  /** Resolved promo multiplier for hero art (same rules as before — drives which `{n}x-*.webp` exists). */
+  const upsellPackageType = useMemo(
+    () => deriveUpsellPackageType(offer, originalPurchaseContext),
+    [offer.id, offer.category, originalPurchaseContext?.packageType, originalPurchaseContext?.packageId]
+  );
+
+  /** Same multiplier for hero art and entry lines (aligned with checkout: getEffectivePromoType). */
+  const effectiveUpsellPromoMultiplier = useMemo(
+    () =>
+      resolveUpsellPromoMultiplierForDisplay({
+        packageType: upsellPackageType,
+        packageId: originalPurchaseContext?.packageId,
+        storedPromoMultiplier: originalPurchaseContext?.promoMultiplier,
+        resolvedMembership: resolvedMembershipMultiplier,
+        resolvedOneTime: resolvedOneTimeMultiplier,
+        resolvedMini: resolvedMiniMultiplier,
+        isMember: Boolean(isMember),
+      }),
+    [
+      upsellPackageType,
+      originalPurchaseContext?.packageId,
+      originalPurchaseContext?.promoMultiplier,
+      resolvedMembershipMultiplier,
+      resolvedOneTimeMultiplier,
+      resolvedMiniMultiplier,
+      isMember,
+    ]
+  );
+
+  /** Resolved promo multiplier for hero art (drives which `{n}x-*.webp` exists). */
   const upsellImageSrc = useMemo(() => {
     const upsellPackage = getUpsellPackageById(offer.id);
     const category = upsellPackage?.category;
 
-    let packageType: "membership" | "one-time" | "mini-draw" | undefined;
-    if (originalPurchaseContext?.packageType) {
-      packageType = originalPurchaseContext.packageType;
-    } else if (category === "subscription-plus") {
-      packageType = "membership";
-    } else if (category === "one-time-plus" || category === "additional-upgrade") {
-      packageType = "one-time";
-    } else if (offer.category === "membership") {
-      packageType = "membership";
-    } else if (offer.category === "mini-draw") {
-      packageType = "mini-draw";
-    } else {
-      packageType = "one-time";
-    }
-
-    let promoMultiplier: number | null = null;
-    if (packageType === "membership") {
-      promoMultiplier = resolvedMembershipMultiplier;
-    } else if (packageType === "one-time") {
-      const packageId = originalPurchaseContext?.packageId;
-      promoMultiplier =
-        packageId && isMemberOnlyPackageById(packageId) ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
-    } else if (packageType === "mini-draw") {
-      promoMultiplier = resolvedMiniMultiplier;
-    }
-
     const resolved = resolveUpsellImage({
       offerId: offer.id,
-      promoMultiplier,
+      promoMultiplier: effectiveUpsellPromoMultiplier,
     });
 
     if (process.env.NODE_ENV !== "production") {
       console.log("🖼️ Upsell Image Debug:", {
         offerId: offer.id,
-        packageType,
-        promoMultiplier,
+        packageType: upsellPackageType,
+        promoMultiplier: effectiveUpsellPromoMultiplier,
         category,
         resolvedMembershipMultiplier,
         resolvedOneTimeMultiplier,
@@ -827,44 +857,23 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     }
 
     return resolved.src;
-  }, [
-    offer.id,
-    offer.category,
-    originalPurchaseContext?.packageType,
-    originalPurchaseContext?.packageId,
-    resolvedMembershipMultiplier,
-    resolvedOneTimeMultiplier,
-    resolvedMiniMultiplier,
-  ]);
+  }, [offer.id, offer.category, upsellPackageType, effectiveUpsellPromoMultiplier, originalPurchaseContext?.packageType]);
 
   /** Matches hero artwork and Stripe charge (two decimal places). */
   const upsellPriceLabel = offer.discountedPrice.toFixed(2);
 
   /**
-   * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else current
-   * resolved multiplier (membership vs one-time vs mini; member-only one-time → membership promo).
+   * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else
+   * resolveUpsellPromoMultiplierForDisplay (getEffectivePromoType + current promo hooks).
    */
   const computedUpsellEntries = useMemo(() => {
     const staticPkg = getUpsellPackageById(offer.id);
-    const category = staticPkg?.category;
+    const packageType = upsellPackageType;
 
-    let packageType: "membership" | "one-time" | "mini-draw" | undefined;
-    if (originalPurchaseContext?.packageType) {
-      packageType = originalPurchaseContext.packageType;
-    } else if (category === "subscription-plus") {
-      packageType = "membership";
-    } else if (category === "one-time-plus" || category === "additional-upgrade") {
-      packageType = "one-time";
-    } else if (offer.category === "membership") {
-      packageType = "membership";
-    } else if (offer.category === "mini-draw") {
-      packageType = "mini-draw";
-    } else {
-      packageType = "one-time";
-    }
-
-    const triggeringPackageId =
-      originalPurchaseContext?.packageId ?? staticPkg?.triggersOnPackageIds?.[0];
+    const triggeringPackageId = pickTriggeringPackageIdForUpsell(
+      staticPkg?.triggersOnPackageIds,
+      originalPurchaseContext?.packageId
+    );
 
     const baseEntries =
       originalPurchaseContext?.baseEntries ??
@@ -876,23 +885,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
       return null;
     }
 
-    let promoMultiplier = 1;
-    if (
-      originalPurchaseContext?.promoMultiplier != null &&
-      originalPurchaseContext.promoMultiplier > 1
-    ) {
-      promoMultiplier = originalPurchaseContext.promoMultiplier;
-    } else if (packageType === "membership") {
-      promoMultiplier = resolvedMembershipMultiplier ?? 1;
-    } else if (packageType === "mini-draw") {
-      promoMultiplier = resolvedMiniMultiplier ?? 1;
-    } else {
-      const pid = triggeringPackageId ?? originalPurchaseContext?.packageId;
-      promoMultiplier =
-        pid && isMemberOnlyPackageById(pid)
-          ? (resolvedMembershipMultiplier ?? 1)
-          : (resolvedOneTimeMultiplier ?? 1);
-    }
+    const promoMultiplier = effectiveUpsellPromoMultiplier;
 
     if (triggeringPackageId) {
       return calculateUpsellEntriesFromContext(
@@ -912,14 +905,10 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     });
   }, [
     offer.id,
-    offer.category,
+    upsellPackageType,
     originalPurchaseContext?.packageId,
-    originalPurchaseContext?.packageType,
     originalPurchaseContext?.baseEntries,
-    originalPurchaseContext?.promoMultiplier,
-    resolvedMembershipMultiplier,
-    resolvedOneTimeMultiplier,
-    resolvedMiniMultiplier,
+    effectiveUpsellPromoMultiplier,
   ]);
 
   const packageInclusionLines = useMemo(() => {

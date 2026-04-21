@@ -12,7 +12,7 @@ export interface RedeemableWalletItem {
   code?: string;
   campaignCode?: string;
   entriesAmount: number;
-  status: "active" | "redeemed" | "expired" | "cancelled";
+  status: "active" | "redeemed" | "expired" | "cancelled" | "revoked";
   issuedAt: Date;
   redeemedAt?: Date;
   expiresAt: Date;

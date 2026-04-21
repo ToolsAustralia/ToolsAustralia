@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import MilestoneReward, { IMilestoneReward } from "@/models/MilestoneReward";
 import MilestoneIssuance from "@/models/MilestoneIssuance";
 import User from "@/models/User";
+import { RedemptionService } from "@/services/redeemables/RedemptionService";
 import { MilestoneEvaluator } from "./MilestoneEvaluator";
 
 export class MilestoneService {
@@ -109,9 +110,9 @@ export class MilestoneService {
     }).sort({ threshold: 1, createdAt: -1 });
   }
 
-  static async checkAndIssueMilestones(userId: string): Promise<{ issuedCount: number }> {
+  static async checkAndIssueMilestones(userId: string): Promise<{ issuedCount: number; issuanceIds: string[] }> {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return { issuedCount: 0 };
+      return { issuedCount: 0, issuanceIds: [] };
     }
 
     const now = new Date();
@@ -121,6 +122,7 @@ export class MilestoneService {
     ]);
 
     let issuedCount = 0;
+    const issuanceIds: string[] = [];
     for (const reward of activeRewards) {
       const currentMetric = (() => {
         if (reward.milestoneType === "spend-amount") return metrics.spendAmount;
@@ -144,7 +146,7 @@ export class MilestoneService {
           .lean();
         if (existing) continue;
 
-        await MilestoneIssuance.create({
+        const created = await MilestoneIssuance.create({
           milestoneRewardId: reward._id,
           userId: new mongoose.Types.ObjectId(userId),
           milestoneType: reward.milestoneType,
@@ -156,10 +158,62 @@ export class MilestoneService {
           expiresAt: reward.neverExpires ? undefined : reward.endsAt,
         });
         issuedCount++;
+        issuanceIds.push(String(created._id));
       }
     }
 
-    return { issuedCount };
+    return { issuedCount, issuanceIds };
+  }
+
+  /**
+   * Revoke milestone issuances issued because of a refunded payment (audit trail — status revoked).
+   * If an issuance was redeemed, un-redeems entries first via RedemptionService.unredeemMilestoneRedemption.
+   */
+  static async revokeIssuancesFromPaymentEvent(
+    userId: string,
+    milestoneIssuanceIds: string[]
+  ): Promise<{ revoked: string[]; errors: string[] }> {
+    const revoked: string[] = [];
+    const errors: string[] = [];
+
+    for (const id of milestoneIssuanceIds) {
+      if (!mongoose.Types.ObjectId.isValid(id)) continue;
+      try {
+        const doc = await MilestoneIssuance.findOne({
+          _id: new mongoose.Types.ObjectId(id),
+          userId: new mongoose.Types.ObjectId(userId),
+        });
+        if (!doc) {
+          errors.push(`issuance ${id} not found`);
+          continue;
+        }
+        if (doc.status === "redeemed") {
+          const ur = await RedemptionService.unredeemMilestoneRedemption({
+            userId,
+            milestoneIssuanceId: id,
+          });
+          if (!ur.success) {
+            errors.push(`unredeem milestone ${id}: ${ur.error || "unknown"}`);
+            continue;
+          }
+        }
+        await MilestoneIssuance.updateOne(
+          { _id: doc._id },
+          {
+            $set: {
+              status: "revoked",
+              revokedAt: new Date(),
+              revocationReason: "refund",
+            },
+            $unset: { redeemedAt: 1 },
+          }
+        );
+        revoked.push(id);
+      } catch (e) {
+        errors.push(`revoke ${id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return { revoked, errors };
   }
 
   static async evaluateAllUsersAndIssueMilestones(): Promise<{ issuedCount: number; evaluatedUsers: number }> {

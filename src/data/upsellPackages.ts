@@ -382,7 +382,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["apprentice-pack", "additional-apprentice-pack"], // Apprentice Pack (both non-member and member-only)
+    triggersOnPackageIds: ["additional-apprentice-pack", "apprentice-pack"], // Prefer canonical id used after checkout remap
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
@@ -413,7 +413,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["tradie-pack", "additional-tradie-pack"], // Tradie Pack (both non-member and member-only)
+    triggersOnPackageIds: ["additional-tradie-pack", "tradie-pack"], // Prefer additional id (matches charged package when remapped)
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
@@ -444,7 +444,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["foreman-pack", "additional-foreman-pack"], // Foreman Pack (both non-member and member-only)
+    triggersOnPackageIds: ["additional-foreman-pack", "foreman-pack"],
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
@@ -475,7 +475,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["boss-pack", "additional-boss-pack"], // Boss Pack (both non-member and member-only)
+    triggersOnPackageIds: ["additional-boss-pack", "boss-pack"],
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
@@ -506,7 +506,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["power-pack", "additional-power-pack"], // Power Pack (both non-member and member-only)
+    triggersOnPackageIds: ["additional-power-pack", "power-pack"],
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
@@ -537,7 +537,7 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user", "special-package-buyer"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["vip-pack", "additional-vip-pack"],
+    triggersOnPackageIds: ["additional-vip-pack", "vip-pack"],
     triggersOnPackageTypes: ["one-time"],
     showAfterPurchase: true,
     showAfterDelay: 3,
