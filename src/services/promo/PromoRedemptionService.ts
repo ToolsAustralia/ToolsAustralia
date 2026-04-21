@@ -120,4 +120,12 @@ export class PromoRedemptionService {
       promoLink: redeemedPromo,
     };
   }
+
+  /** Reverse a successful promo-link redemption (refund path). */
+  static async unredeem(params: { promoLinkId: string; userId: string }): Promise<void> {
+    const uid =
+      typeof params.userId === "string" ? params.userId : (params.userId as { toString(): string }).toString();
+    await PromoLink.updateOne({ _id: params.promoLinkId }, { $pull: { usedBy: uid }, $inc: { usageCount: -1 } });
+    await PromoLink.updateOne({ _id: params.promoLinkId, usageCount: { $lt: 0 } }, { $set: { usageCount: 0 } });
+  }
 }

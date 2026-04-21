@@ -59,11 +59,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             eventType: "RefundProcessed",
             paymentIntentId: { $in: benefitsPaymentIntentIds },
           })
-            .select("paymentIntentId timestamp")
+            .select("paymentIntentId timestamp data")
+            .lean()
+        : [];
+
+    const partialRows =
+      benefitsPaymentIntentIds.length > 0
+        ? await PaymentEvent.find({
+            userId: userObjectId,
+            eventType: "RefundPartial",
+            paymentIntentId: { $in: benefitsPaymentIntentIds },
+          })
+            .select("paymentIntentId timestamp data")
             .lean()
         : [];
 
     const refundProcessedAtByPi = new Map<string, string>();
+    const refundReversedByPi = new Map<string, unknown>();
+    const refundReversalIssuesByPi = new Map<string, unknown>();
     for (const row of refundRows) {
       const pi = row.paymentIntentId;
       if (typeof pi !== "string" || !row.timestamp) continue;
@@ -73,6 +86,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (!prev || new Date(iso) > new Date(prev)) {
         refundProcessedAtByPi.set(pi, iso);
       }
+      const data = row.data as { reversed?: unknown; reversalIssues?: unknown } | undefined;
+      if (data?.reversed !== undefined) {
+        refundReversedByPi.set(pi, data.reversed);
+      }
+      if (data?.reversalIssues !== undefined) {
+        refundReversalIssuesByPi.set(pi, data.reversalIssues);
+      }
+    }
+
+    const partialRefundByPi = new Map<string, { refundAmount?: number; status?: string }>();
+    for (const row of partialRows) {
+      const pi = row.paymentIntentId;
+      if (typeof pi !== "string") continue;
+      const data = row.data as { status?: string; refundAmount?: number } | undefined;
+      partialRefundByPi.set(pi, {
+        refundAmount: typeof data?.refundAmount === "number" ? data.refundAmount : undefined,
+        status: typeof data?.status === "string" ? data.status : undefined,
+      });
     }
 
     const refundedSet = new Set(refundProcessedAtByPi.keys());
@@ -81,12 +112,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const pi = typeof event.paymentIntentId === "string" ? event.paymentIntentId : undefined;
       const isRefundedBenefits =
         event.eventType === "BenefitsGranted" && pi != null && refundedSet.has(pi);
+      const partial = pi != null ? partialRefundByPi.get(pi) : undefined;
       return {
         _id: event._id,
         eventType: event.eventType,
         paymentIntentId: pi,
         hasRefundProcessed: isRefundedBenefits,
         refundProcessedAt: isRefundedBenefits ? refundProcessedAtByPi.get(pi) : undefined,
+        hasPartialRefundSkipped:
+          event.eventType === "BenefitsGranted" && pi != null && partial?.status === "partial-skipped",
+        partialRefundAmountCents:
+          event.eventType === "BenefitsGranted" && pi != null && partial?.status === "partial-skipped"
+            ? partial.refundAmount
+            : undefined,
+        refundReversedSummary: isRefundedBenefits && pi ? refundReversedByPi.get(pi) : undefined,
+        refundReversalIssues: isRefundedBenefits && pi ? refundReversalIssuesByPi.get(pi) : undefined,
         timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : String(event.timestamp),
         packageType: event.packageType,
         packageId: event.packageId != null ? String(event.packageId) : undefined,

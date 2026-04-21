@@ -521,7 +521,7 @@ export default async function TermsPage() {
               <li>You have read and agree to these terms</li>
               <li>You meet eligibility requirements</li>
               <li>
-                You understand One-Time Packages provide entries to both Major Giveaway and Mini Draw competitions for
+                You understand One-Time Packages provide entries Major Giveaway for
                 the specified period
               </li>
               <li>
