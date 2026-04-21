@@ -13,6 +13,7 @@ import { createCachedQuery } from "./server-queries";
 import connectDB from "@/lib/mongodb";
 import Promo, { IPromo } from "@/models/Promo";
 import { PromoMultiplierResolverService } from "@/services/admin/PromoMultiplierResolverService";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 /**
  * Interface for promo data returned from server queries
@@ -21,7 +22,7 @@ import { PromoMultiplierResolverService } from "@/services/admin/PromoMultiplier
 export interface ServerPromo {
   id: string;
   type: "membership-packages" | "one-time-packages" | "mini-packages";
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   startDate: Date;
   endDate: Date;
   duration: number;
@@ -129,7 +130,7 @@ export const getEffectivePromosForDisplay = createCachedQuery(async (): Promise<
       result.push({
         id: `effective-${type}`,
         type,
-        multiplier: multiplier as 2 | 3 | 5 | 10,
+        multiplier: multiplier as PromoMultiplier,
         startDate: new Date(),
         endDate: new Date(),
         duration: 24,

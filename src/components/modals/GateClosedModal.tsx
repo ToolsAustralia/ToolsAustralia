@@ -6,7 +6,7 @@ import { Calendar, Gift } from "lucide-react";
 import Link from "next/link";
 import { useUserContext } from "@/contexts/UserContext";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
-import { apprentice, tradie, foreman, boss, power } from "@/utils/images/package-icons";
+import { apprentice, tradie, foreman, boss, power, vip } from "@/utils/images/package-icons";
 import { formatActivationDate } from "@/utils/promo-banner/format-activation-date";
 import { getPackageColorSchemeForPromo, hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -48,6 +48,7 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
     { icon: foreman, planId: "foreman-pack" },
     { icon: boss, planId: "boss-pack" },
     { icon: power, planId: "power-pack" },
+    { icon: vip, planId: "vip-pack" },
   ].map(({ icon, planId }) => {
     const colorScheme = getPackageColorSchemeForPromo(planId, false, variantConfig);
     return {

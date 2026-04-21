@@ -1,5 +1,7 @@
 // Admin Dashboard Types for Tools Australia
 
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+
 export interface AdminUser {
   id: string;
   name: string;
@@ -592,7 +594,7 @@ export interface BonusEntryPromoConflict {
 // ========================================
 
 export type ScheduledPromoType = "membership-packages" | "one-time-packages" | "mini-packages";
-export type ScheduledPromoMultiplier = 2 | 3 | 5 | 10;
+export type ScheduledPromoMultiplier = PromoMultiplier;
 
 export interface ScheduledPromo {
   id: string;

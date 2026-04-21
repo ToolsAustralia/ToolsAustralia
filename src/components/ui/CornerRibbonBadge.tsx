@@ -21,6 +21,14 @@ const DEFAULT_STYLE = {
   border: "none",
 };
 
+/** Black / VIP cards use a near-black badgeStyle — ribbon fill would match the card. Use a gold strip so the folded ribbon reads clearly. */
+const PREMIUM_BLACK_CARD_RIBBON_STYLE = {
+  background:
+    "linear-gradient(135deg, #7a5c12 0%, #b8860b 22%, #d4af37 50%, #b8860b 78%, #5c4510 100%)",
+  boxShadow: "0 5px 14px rgba(0,0,0,0.35), 0 0 1px rgba(212,175,55,0.75)",
+  border: "none",
+} as const;
+
 function getFoldColor(bg: string): string {
   const hex = bg.match(/#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})/);
   if (hex) {
@@ -53,7 +61,9 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
 }) => {
   const box = BOX[size];
   const base = badgeStyle ?? DEFAULT_STYLE;
-  const foldColor = getFoldColor(base.background);
+  const usePremiumBlackRibbon = colorScheme?.text === "text-premium-gold";
+  const ribbonFill = usePremiumBlackRibbon ? PREMIUM_BLACK_CARD_RIBBON_STYLE : base;
+  const foldColor = getFoldColor(ribbonFill.background);
 
   const stripW = Math.round(box * 1.5);
   const containerOff = Math.round(box * -0.1);
@@ -63,9 +73,11 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
   const fb = Math.max(5, Math.round(box * 0.09));
 
   const ribbonBg =
-    colorScheme?.cardBorderGradient && badgeStyle
-      ? { ...getCardBorderStyle(colorScheme, badgeStyle.background), boxShadow: base.boxShadow }
-      : { background: base.background, boxShadow: base.boxShadow };
+    usePremiumBlackRibbon
+      ? { background: ribbonFill.background, boxShadow: ribbonFill.boxShadow }
+      : colorScheme?.cardBorderGradient && badgeStyle
+        ? { ...getCardBorderStyle(colorScheme, badgeStyle.background), boxShadow: base.boxShadow }
+        : { background: base.background, boxShadow: base.boxShadow };
 
   // Wrapper: NO z-index so it doesn't create a stacking context.
   // This lets z-index:-1 on folds push them behind the CARD, not just behind the wrapper.
@@ -97,13 +109,20 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
     width: stripW,
     padding: `${pad}px 0`,
     textAlign: "center",
-    color: "#fff",
     fontWeight: 800,
     fontSize: FONT[size],
     lineHeight: 1,
     textTransform: "uppercase",
     letterSpacing: "0.04em",
-    textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+    ...(usePremiumBlackRibbon
+      ? {
+          color: "#141414",
+          textShadow: "0 1px 0 rgba(255,255,255,0.35)",
+        }
+      : {
+          color: "#fff",
+          textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+        }),
     ...ribbonBg,
     boxShadow: "0 5px 10px rgba(0,0,0,.2)",
   };

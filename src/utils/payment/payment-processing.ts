@@ -21,6 +21,7 @@ import {
   handleSubscriptionQueueUpdate,
 } from "@/utils/partner-discounts/partner-discount-queue";
 import { getPackageById } from "@/data/membershipPackages";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
@@ -1573,8 +1574,10 @@ async function handleOneTimePackage(
 ): Promise<void> {
   if (!packageData.packageId) return;
 
+  const canonicalPackageId = normalizeMembershipPlanId(packageData.packageId);
+
   const oneTimePackage = {
-    packageId: packageData.packageId, // Already a string, no conversion needed
+    packageId: canonicalPackageId,
     purchaseDate: new Date(),
     startDate: new Date(),
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
@@ -1598,7 +1601,7 @@ async function handleOneTimePackage(
   // console.log(`📦 Added one-time package atomically: ${packageData.packageName}`);
 
   // Add to partner discount queue if package includes partner discount days
-  const packageInfo = getPackageById(packageData.packageId);
+  const packageInfo = getPackageById(canonicalPackageId);
   if (packageInfo && packageInfo.partnerDiscountDays && packageInfo.partnerDiscountDays > 0) {
     // console.log(`🎁 Adding one-time package to partner discount queue: ${packageInfo.partnerDiscountDays} days access`);
 
@@ -1612,7 +1615,7 @@ async function handleOneTimePackage(
     }
 
     await addToPartnerDiscountQueue(user as unknown as IUser, {
-      packageId: packageData.packageId,
+      packageId: canonicalPackageId,
       packageName: packageData.packageName || packageInfo.name,
       packageType: "one-time",
       discountDays: packageInfo.partnerDiscountDays,
@@ -1625,7 +1628,7 @@ async function handleOneTimePackage(
     // console.log(`✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length} items)`);
 
     // Dispatch purchase event for optimistic updates
-    dispatchPackagePurchase(packageData.packageId, "one-time");
+    dispatchPackagePurchase(canonicalPackageId, "one-time");
   }
 }
 

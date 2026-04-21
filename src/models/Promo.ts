@@ -1,8 +1,10 @@
 import mongoose, { Document, Schema } from "mongoose";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 export interface IPromo extends Document {
   type: "membership-packages" | "one-time-packages" | "mini-packages";
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   startDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
   endDate?: Date; // Optional - kept for backward compatibility but not used in toggle system
   duration?: number; // Optional - in hours, kept for backward compatibility
@@ -21,7 +23,7 @@ const PromoSchema = new Schema<IPromo>(
     },
     multiplier: {
       type: Number,
-      enum: [2, 3, 5, 10],
+      enum: [...PROMO_MULTIPLIERS],
       required: [true, "Multiplier is required"],
     },
     startDate: {

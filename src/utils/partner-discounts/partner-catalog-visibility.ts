@@ -22,7 +22,7 @@ type UserWithPartnerCatalogContext = (Partial<UserData> | Partial<IUser>) & {
 /**
  * Partner catalog access percent for a package/plan id (subscriptions, one-time, plus upsells).
  * Subscriptions: Tradie 50%, Foreman 75%, Boss 100%.
- * One-time ladder: Apprentice 25%, Tradie 40%, Foreman 55%, Boss 70%, Power 100%.
+ * One-time ladder (6 tiers): VIP 100%, Power 85%, Boss 70%, Foreman 55%, Tradie 40%, Apprentice 25%.
  * Subscription-plus upsells align with base subscription tiers.
  */
 export function getPartnerCatalogAccessPercentForPlanId(planId: string): number {
@@ -41,24 +41,40 @@ export function getPartnerCatalogAccessPercentForPlanId(planId: string): number 
     return 100;
   }
 
-  if (l.includes("power")) return 100;
+  if (l.includes("vip")) return 100;
+  if (l.includes("power")) return 85;
   if (l.includes("boss")) return 70;
   if (l.includes("foreman")) return 55;
   if (l.includes("tradie")) return 40;
   if (l.includes("apprentice")) return 25;
 
-  // Mini draw packs (mini-pack-1 … mini-pack-8, incl. *-upgrade): ladder aligned to one-time tiers
+  // Mini draw: 8 packs map to 6 partner tiers (same % as one-time ladder). Tier 1 = best → mini-pack-8, tier 2 → mini-pack-7.
   const miniMatch = l.match(/mini-pack-(\d+)/);
   if (miniMatch) {
     const n = parseInt(miniMatch[1], 10);
-    if (n <= 2) return 25;
-    if (n <= 4) return 40;
-    if (n <= 6) return 55;
-    if (n === 7) return 70;
-    return 100;
+    if (n === 8) return 100; // Tier 1
+    if (n === 7) return 85; // Tier 2
+    if (n === 6) return 70; // Tier 3
+    if (n === 5) return 55; // Tier 4
+    if (n === 3 || n === 4) return 40; // Tier 5 (two price points)
+    return 25; // Tier 6 — mini-pack-1 & 2
   }
 
   return 100;
+}
+
+/**
+ * Partner catalog access % for membership package ids used in subscription UI.
+ * Prefer resolving via {@link getPackageById} + {@link derivePlanIdFromPackage} so slug ids
+ * and DB-shaped ids both map to the same tier rules as {@link getPartnerCatalogAccessPercentForPlanId}.
+ */
+export function getPartnerCatalogAccessPercentForMembershipPackageId(packageId: string): number {
+  const pkg = getPackageById(packageId);
+  if (pkg) {
+    const planId = derivePlanIdFromPackage(pkg, pkg.type === "subscription" ? "subscription" : "one-time");
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  return getPartnerCatalogAccessPercentForPlanId(packageId);
 }
 
 function partnerCatalogSummaryFromPercent(pct: number): string {

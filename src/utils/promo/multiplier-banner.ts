@@ -19,7 +19,7 @@ export function getMultiplierBannerPath(multiplier: number | null | undefined): 
     return null;
   }
 
-  // Map multiplier to banner filename
+  // Map multiplier to banner filename (12/15/20 paths reserved for when assets are added)
   switch (multiplier) {
     case 2:
       return `${BANNER_BASE_PATH}/2x-banner.webp`;
@@ -29,6 +29,12 @@ export function getMultiplierBannerPath(multiplier: number | null | undefined): 
       return `${BANNER_BASE_PATH}/5x-banner.webp`;
     case 10:
       return `${BANNER_BASE_PATH}/10x-banner.webp`;
+    case 12:
+      return `${BANNER_BASE_PATH}/12x-banner.webp`;
+    case 15:
+      return `${BANNER_BASE_PATH}/15x-banner.webp`;
+    case 20:
+      return `${BANNER_BASE_PATH}/20x-banner.webp`;
     default:
       return null;
   }

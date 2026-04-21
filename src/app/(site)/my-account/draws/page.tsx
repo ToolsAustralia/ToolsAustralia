@@ -21,6 +21,7 @@ import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniD
 import DashboardHeader from "../components/DashboardHeader";
 import MajorDrawHeaderStrip from "../components/MajorDrawHeaderStrip";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { useDashboardEntryDisplay } from "@/hooks/useDashboardEntryDisplay";
 
 export default function DrawsPage() {
   const { data: session, status } = useSession();
@@ -28,6 +29,9 @@ export default function DrawsPage() {
   const { data: accountData, isLoading: loading } = useMyAccountData(session?.user?.id);
   const { data: majorDrawStats, isLoading: majorDrawStatsLoading } = useUserMajorDrawStats(session?.user?.id);
   const { data: currentMajorDraw, isLoading: currentMajorDrawLoading } = useCurrentMajorDraw();
+  const dashboardEntries = useDashboardEntryDisplay(majorDrawStats, {
+    isDrawCompleted: currentMajorDraw?.status === "completed",
+  });
   useMemberships();
   const { openEntryFlow, membershipModal } = useMajorDrawEntryCta();
 
@@ -173,7 +177,7 @@ export default function DrawsPage() {
 
   const isMajorDrawCompleted = currentMajorDraw?.status === "completed";
   const isMajorDrawActive = currentMajorDraw?.status === "active";
-  const majorDrawEntryTotal = majorDrawStats?.currentDrawEntries ?? 0;
+  const majorDrawEntryTotal = dashboardEntries.currentDrawEntries;
   const userInMajorDrawContext = majorDrawEntryTotal > 0 || hasActiveMembership;
   const showMajorDrawHeaderStrip =
     Boolean(isMajorDrawActive) && !isMajorDrawCompleted && userInMajorDrawContext;

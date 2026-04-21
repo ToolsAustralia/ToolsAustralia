@@ -8,6 +8,7 @@
  */
 
 import type { StaticImageData } from "next/image";
+import { isBossTierPlanId, isVipTierPlanId } from "@/utils/membership/member-package-mapping";
 
 // Import all package icons
 import apprentice from "../../../public/images/packageIcons/apprentice.webp";
@@ -15,6 +16,7 @@ import tradie from "../../../public/images/packageIcons/tradie.webp";
 import foreman from "../../../public/images/packageIcons/foreman.webp";
 import boss from "../../../public/images/packageIcons/boss.webp";
 import power from "../../../public/images/packageIcons/power.webp";
+import vip from "../../../public/images/packageIcons/vip.webp";
 
 /**
  * Type alias for package icon data (StaticImageData from Next.js)
@@ -41,6 +43,7 @@ export const PACKAGE_ICONS: Record<string, PackageIconData> = {
   "foreman-pack": foreman,
   "boss-pack": boss,
   "power-pack": power,
+  "vip-pack": vip,
 
   // Additional packages (non-member)
   "additional-apprentice-pack": apprentice,
@@ -48,6 +51,7 @@ export const PACKAGE_ICONS: Record<string, PackageIconData> = {
   "additional-foreman-pack": foreman,
   "additional-boss-pack": boss,
   "additional-power-pack": power,
+  "additional-vip-pack": vip,
 
   // Additional packages (member exclusive)
   "additional-apprentice-pack-member": apprentice,
@@ -55,6 +59,7 @@ export const PACKAGE_ICONS: Record<string, PackageIconData> = {
   "additional-foreman-pack-member": foreman,
   "additional-boss-pack-member": boss,
   "additional-power-pack-member": power,
+  "additional-vip-pack-member": vip,
 
   // Subscription packages (using generated IDs from useMemberships hook)
   tradie: tradie,
@@ -82,6 +87,63 @@ export const PACKAGE_ICONS: Record<string, PackageIconData> = {
  */
 export function getPackageIcon(planId: string): PackageIconData | null {
   return PACKAGE_ICONS[planId] || null;
+}
+
+/** Tailwind scale classes — adjust Boss/VIP emphasis in one place sitewide. */
+const PACKAGE_ICON_WRAPPER_SCALE = {
+  bossResponsive: "scale-110 sm:scale-110",
+  vipResponsive: "scale-105 sm:scale-105",
+  bossCompact: "scale-110",
+  vipCompact: "scale-105",
+  desktopOneTimeDefault: "scale-[0.8]",
+  desktopOneTimeVip: "scale-[0.88]",
+  desktopSubscriptionBoss: "scale-110",
+} as const;
+
+/**
+ * Where the icon sits in the UI (drives responsive vs compact vs membership desktop rules).
+ * - `modal`: package cards in modals / mobile membership (Boss/VIP with sm: breakpoint)
+ * - `chart-row` | `badge`: charts, admin tables, small chips (single scale class)
+ * - `membership-desktop-*`: large desktop cards in MembershipSection only
+ */
+export type PackageIconWrapperScalePlacement =
+  | "modal"
+  | "chart-row"
+  | "badge"
+  | "membership-desktop-one-time"
+  | "membership-desktop-subscription";
+
+/**
+ * Tailwind `scale-*` classes for the element wrapping a package icon `Image`.
+ * Use with any fixed width/height icon so Boss/VIP sizing stays consistent everywhere.
+ */
+export function getPackageIconWrapperScaleClass(
+  planId: string,
+  placement: PackageIconWrapperScalePlacement
+): string {
+  const id = String(planId);
+  const boss = isBossTierPlanId(id);
+  const vip = isVipTierPlanId(id);
+
+  if (placement === "membership-desktop-one-time") {
+    return vip ? PACKAGE_ICON_WRAPPER_SCALE.desktopOneTimeVip : PACKAGE_ICON_WRAPPER_SCALE.desktopOneTimeDefault;
+  }
+  if (placement === "membership-desktop-subscription") {
+    return boss ? PACKAGE_ICON_WRAPPER_SCALE.desktopSubscriptionBoss : "";
+  }
+
+  const isResponsive = placement === "modal";
+  const isCompact = placement === "chart-row" || placement === "badge";
+
+  if (boss) {
+    if (isResponsive) return PACKAGE_ICON_WRAPPER_SCALE.bossResponsive;
+    if (isCompact) return PACKAGE_ICON_WRAPPER_SCALE.bossCompact;
+  }
+  if (vip) {
+    if (isResponsive) return PACKAGE_ICON_WRAPPER_SCALE.vipResponsive;
+    if (isCompact) return PACKAGE_ICON_WRAPPER_SCALE.vipCompact;
+  }
+  return "";
 }
 
 /**
@@ -116,6 +178,7 @@ export function getPackageIconByName(
 
   // For one-time packages, check for pack names
   if (!isSubscription || membershipType === undefined) {
+    if (lowerName.includes("vip pack") || lowerName === "vip") return vip;
     if (lowerName.includes("power pack") || lowerName.includes("power")) return power;
     if (lowerName.includes("boss pack") || lowerName.includes("boss")) return boss;
     if (lowerName.includes("foreman pack") || lowerName.includes("foreman")) return foreman;
@@ -127,4 +190,4 @@ export function getPackageIconByName(
 }
 
 // Export individual icons for direct use (e.g., in MembershipPackagesChart)
-export { apprentice, tradie, foreman, boss, power };
+export { apprentice, tradie, foreman, boss, power, vip };

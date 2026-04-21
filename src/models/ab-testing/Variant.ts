@@ -10,6 +10,7 @@ export type OneTimePackageSlot =
   | "foreman-pack"
   | "boss-pack"
   | "power-pack"
+  | "vip-pack"
   | "black-pack"
   | "mint-pack"
   | "cash-prize";
@@ -20,7 +21,8 @@ export type MembershipPackageSlot =
   | "tradie-pack"
   | "foreman-pack"
   | "boss-pack"
-  | "power-pack";
+  | "power-pack"
+  | "vip-pack";
 
 /**
  * Variant Configuration Interface

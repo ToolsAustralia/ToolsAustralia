@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
@@ -118,12 +119,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the package (check both regular membership packages and mini draw packages)
-    let membershipPackage = getPackageById(validatedData.packageId);
+    const canonicalPackageId = normalizeMembershipPlanId(validatedData.packageId);
+    let membershipPackage = getPackageById(canonicalPackageId);
+    if (!membershipPackage && validatedData.packageId !== canonicalPackageId) {
+      membershipPackage = getPackageById(validatedData.packageId);
+    }
     let isMiniDrawPackage = false;
 
     // If not found in regular packages, check mini draw packages
     if (!membershipPackage) {
-      const miniDrawPackage = getMiniDrawPackageById(validatedData.packageId);
+      const miniDrawPackage =
+        getMiniDrawPackageById(validatedData.packageId) ?? getMiniDrawPackageById(canonicalPackageId);
       if (miniDrawPackage && miniDrawPackage.isActive) {
         // Convert mini draw package to membership package format for compatibility
         membershipPackage = {

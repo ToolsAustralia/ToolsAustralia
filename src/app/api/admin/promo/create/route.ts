@@ -4,11 +4,12 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import Promo from "@/models/Promo";
 import { z } from "zod";
+import { zPromoMultiplierFromStringEnum } from "@/lib/zod/promo-multiplier-schema";
 
 // Validation schema
 const createPromoSchema = z.object({
   type: z.enum(["membership-packages", "one-time-packages", "mini-packages"]),
-  multiplier: z.enum(["2", "3", "5", "10"]).transform((val) => parseInt(val) as 2 | 3 | 5 | 10),
+  multiplier: zPromoMultiplierFromStringEnum,
   startDate: z.string().datetime("Invalid start date format"),
   endDate: z.string().datetime("Invalid end date format"),
   duration: z.number().min(1, "Duration must be at least 1 hour"),

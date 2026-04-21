@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 /**
  * FloatingPromoBanner Component
@@ -212,7 +213,7 @@ const FloatingPromoBanner: React.FC = () => {
             {/* Centered badge only - no text */}
             <div className="flex items-center justify-center">
               <PromoBadge
-                multiplier={activeMultiplier as 2 | 3 | 5 | 10}
+                multiplier={activeMultiplier as PromoMultiplier}
                 size="small"
                 customText="ENTRY BOOST ENDING SOON"
               />

@@ -59,6 +59,7 @@ export function useMemberships() {
       "Foreman Pack": "Get Foreman",
       "Boss Pack": "Get Boss",
       "Power Pack": "Get Power",
+      "VIP Pack": "Get VIP",
     };
     return buttonTexts[name] || "Select";
   }, []);

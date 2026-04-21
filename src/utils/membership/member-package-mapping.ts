@@ -10,13 +10,53 @@
 
 import { StaticMembershipPackage } from "@/data/membershipPackages";
 
-// Mapping from non-member packages to member packages
+/**
+ * `useMemberships` builds synthetic `plan.id` as `${slug-from-package-name}-member` for member-only rows.
+ * Static data / icons / UI flags use canonical ids (e.g. `additional-vip-pack`). Strip the suffix for comparisons.
+ */
+export function normalizeMembershipPlanId(planId: string): string {
+  return planId.replace(/-member$/u, "");
+}
+
+/** VIP one-time tiers (canonical ids after normalization). */
+export function isVipTierPlanId(planId: string): boolean {
+  const n = normalizeMembershipPlanId(planId);
+  return n === "vip-pack" || n === "additional-vip-pack";
+}
+
+/** Boss tier (subscriptions, boss-pack, additional-boss-pack, etc.). */
+export function isBossTierPlanId(planId: string): boolean {
+  return normalizeMembershipPlanId(planId).toLowerCase().includes("boss");
+}
+
+/** Boss subscription, or Power/VIP one-time (incl. additional * packs) — Best Value ribbon. */
+export function isOneTimeBestValuePlanId(planId: string): boolean {
+  const n = normalizeMembershipPlanId(planId);
+  return (
+    n === "vip-pack" ||
+    n === "additional-vip-pack" ||
+    n === "power-pack" ||
+    n === "additional-power-pack"
+  );
+}
+
+/** One-time packs shown on the public tab; used to filter/hide duplicates when user has additional-package access */
+export const NON_MEMBER_ONE_TIME_PACKAGE_IDS: readonly string[] = [
+  "apprentice-pack",
+  "tradie-pack",
+  "foreman-pack",
+  "boss-pack",
+  "power-pack",
+  "vip-pack",
+];
+
+// Mapping from non-member packages to additional (member) packages — omit tiers with no active additional pack
 export const NON_MEMBER_TO_MEMBER_PACKAGE_MAP: Record<string, string> = {
-  "apprentice-pack": "additional-apprentice-pack",
   "tradie-pack": "additional-tradie-pack",
   "foreman-pack": "additional-foreman-pack",
   "boss-pack": "additional-boss-pack",
   "power-pack": "additional-power-pack",
+  "vip-pack": "additional-vip-pack",
 };
 
 /**
@@ -34,7 +74,7 @@ export const getMemberPackageForNonMember = (nonMemberPackageId: string): string
  * @returns True if it's a non-member package
  */
 export const isNonMemberPackage = (packageId: string): boolean => {
-  return Object.keys(NON_MEMBER_TO_MEMBER_PACKAGE_MAP).includes(packageId);
+  return NON_MEMBER_ONE_TIME_PACKAGE_IDS.includes(packageId);
 };
 
 /**

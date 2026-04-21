@@ -17,71 +17,59 @@ import {
 } from "lucide-react";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 import { getContactEmail } from "@/lib/email/sender-identities";
+import { useOrder } from "@/hooks/queries/useOrderQueries";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CheckoutSuccessClientProps {
   orderId: string;
 }
 
-// Mock order data - matches the cart items from header/checkout
-const mockOrderData = {
-  id: "ORD-2024-001",
-  date: "2024-01-15",
-  status: "confirmed",
-  total: 1199.97,
-  items: [
-    {
-      id: "1",
-      name: "DeWalt Cordless Drill",
-      price: 299.99,
-      quantity: 1,
-      image: "/images/SampleProducts/dewalt1.jpg",
-      brand: "DeWalt",
-    },
-    {
-      id: "2",
-      name: "Milwaukee Impact Driver",
-      price: 199.99,
-      quantity: 2,
-      image: "/images/SampleProducts/milwaukee1.jpg",
-      brand: "Milwaukee",
-    },
-    {
-      id: "3",
-      name: "Makita Circular Saw",
-      price: 449.99,
-      quantity: 1,
-      image: "/images/SampleProducts/makita1.jpg",
-      brand: "Makita",
-    },
-  ],
-  shipping: {
-    method: "Express Shipping",
-    estimatedDelivery: "2024-01-17",
-    address: {
-      name: "John Smith",
-      street: "123 Main Street",
-      city: "Sydney",
-      state: "NSW",
-      zipCode: "2000",
-      country: "Australia",
-    },
-  },
-  payment: {
-    method: "Visa ending in 4242",
-    amount: 1199.97,
-  },
-};
+const PLACEHOLDER_IMG = "/images/SampleProducts/dewalt1.jpg";
 
 export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClientProps) {
-  // Use mock data for now
-  const order = mockOrderData;
+  const { data: order, isLoading, isError, error } = useOrder(orderId);
   const contactEmail = getContactEmail();
+
+  if (isLoading) {
+    return (
+      <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Skeleton className="h-96 rounded-2xl" />
+            <Skeleton className="h-96 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !order) {
+    return (
+      <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Couldn&apos;t load order</h1>
+          <p className="text-gray-600 mb-6">{error instanceof Error ? error.message : "Please check your order ID or try again later."}</p>
+          <Link href="/my-account" className="text-red-600 font-medium hover:underline">
+            Go to My Account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const paymentMethodLabel = order.paymentMethod
+    ? `${order.paymentMethod.brand ?? order.paymentMethod.type} ending in ${order.paymentMethod.last4 ?? "••••"}`
+    : "Card";
+
+  const addr = order.shippingAddress;
+  const shipName = `${addr.firstName} ${addr.lastName}`.trim();
 
   return (
     <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Payment Status Handler - Handles 3DS redirects */}
-        <PaymentSuccessHandler paymentType="subscription" successMessage="Your subscription has been activated successfully!">
+        <PaymentSuccessHandler paymentType="one-time" successMessage="Your payment was successful!">
           {/* Success Header */}
           <div className="text-center mb-8">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -90,7 +78,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Order Confirmed!</h1>
             <p className="text-gray-600 dark:text-neutral-400 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
             <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-              Order ID: {orderId}
+              Order: {order.orderNumber}
             </div>
           </div>
 
@@ -109,33 +97,32 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             </div>
 
             <div className="space-y-4">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
-                    <Image
-                      src={item.image}
-                      alt={item.name}
-                      width={64}
-                      height={64}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{item.name}</h3>
-                    <p className="text-xs text-gray-500">{item.brand}</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-sm text-gray-600 dark:text-neutral-400">Qty: {item.quantity}</span>
-                      <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
+              {order.items.map((item) => {
+                const img = item.product?.images?.[0] ?? PLACEHOLDER_IMG;
+                const name = item.product?.name ?? "Product";
+                const brand = item.product?.brand ?? "";
+                return (
+                  <div key={`${item.productId}-${item.quantity}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
+                      <Image src={img} alt={name} width={64} height={64} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{name}</h3>
+                      {brand ? <p className="text-xs text-gray-500">{brand}</p> : null}
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-sm text-gray-600 dark:text-neutral-400">Qty: {item.quantity}</span>
+                        <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between text-lg font-semibold">
                 <span>Total Paid:</span>
-                <span className="text-green-600">${order.total.toFixed(2)}</span>
+                <span className="text-green-600">${order.totalAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -158,27 +145,28 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 <div className="flex items-center gap-2">
                   <Truck className="w-4 h-4 text-gray-400" />
                   <span className="text-sm text-gray-600 dark:text-neutral-400">
-                    <strong>{order.shipping.method}</strong>
+                    <strong>Shipping</strong>
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600 dark:text-neutral-400">
-                    Estimated delivery:{" "}
-                    <strong>{new Date(order.shipping.estimatedDelivery).toLocaleDateString()}</strong>
-                  </span>
-                </div>
+                {order.estimatedDelivery ? (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-600 dark:text-neutral-400">
+                      Estimated delivery: <strong>{new Date(order.estimatedDelivery).toLocaleDateString()}</strong>
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                   <div className="text-sm text-gray-600 dark:text-neutral-400">
                     <div>
-                      <strong>{order.shipping.address.name}</strong>
+                      <strong>{shipName}</strong>
                     </div>
-                    <div>{order.shipping.address.street}</div>
+                    <div>{addr.address}</div>
                     <div>
-                      {order.shipping.address.city}, {order.shipping.address.state} {order.shipping.address.zipCode}
+                      {addr.city}, {addr.state} {addr.postalCode}
                     </div>
-                    <div>{order.shipping.address.country}</div>
+                    <div>{addr.country}</div>
                   </div>
                 </div>
               </div>
@@ -199,15 +187,15 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600 dark:text-neutral-400">Payment Method:</span>
-                  <span className="text-sm font-medium text-gray-900">{order.payment.method}</span>
+                  <span className="text-sm font-medium text-gray-900">{paymentMethodLabel}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600 dark:text-neutral-400">Amount Paid:</span>
-                  <span className="text-sm font-medium text-gray-900">${order.payment.amount.toFixed(2)}</span>
+                  <span className="text-sm font-medium text-gray-900">${order.totalAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600 dark:text-neutral-400">Status:</span>
-                  <span className="text-sm font-medium text-green-600">Paid</span>
+                  <span className="text-sm font-medium text-green-600 capitalize">{order.paymentStatus}</span>
                 </div>
               </div>
             </div>

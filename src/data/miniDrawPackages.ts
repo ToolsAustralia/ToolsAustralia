@@ -4,6 +4,8 @@
  * Optimized for fast loading without backend calls
  */
 
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+
 export interface MiniDrawPackage {
   _id: string;
   name: string;
@@ -37,8 +39,8 @@ export interface MiniDrawUpsell {
 
 /**
  * Mini Draw Packages - Complete set of 8 packages ($1 to $500).
- * Partner catalog % (see getPartnerCatalogAccessPercentForPlanId in partner-catalog-visibility.ts):
- *   mini-pack-1–2 → 25% | 3–4 → 40% | 5–6 → 55% | 7 → 70% | 8 → 100%
+ * Partner catalog % — 6 tiers across 8 mini packs (see getPartnerCatalogAccessPercentForPlanId):
+ *   mini-pack-8 → 100% (tier 1) | 7 → 85% (tier 2) | 6 → 70% (tier 3) | 5 → 55% (tier 4) | 3–4 → 40% (tier 5) | 1–2 → 25% (tier 6)
  * These are one-time packages for members who participate in major draws
  */
 export const miniDrawPackages: MiniDrawPackage[] = [
@@ -264,7 +266,7 @@ export const getMiniDrawUpsell = (packageId: string): MiniDrawUpsell | undefined
  * @param multiplier - Promo multiplier (2, 3, 5, 10)
  * @returns Package with updated entries and promo information
  */
-export const applyPromoToMiniPackage = (pkg: MiniDrawPackage, multiplier: 2 | 3 | 5 | 10): MiniDrawPackage => {
+export const applyPromoToMiniPackage = (pkg: MiniDrawPackage, multiplier: PromoMultiplier): MiniDrawPackage => {
   const originalEntries = pkg.entries;
   const newEntries = originalEntries * multiplier;
 
@@ -305,7 +307,7 @@ export const removePromoFromMiniPackage = (pkg: MiniDrawPackage): MiniDrawPackag
  */
 export const getMiniPackagesWithPromo = (
   packages: MiniDrawPackage[],
-  promoMultiplier: 2 | 3 | 5 | 10
+  promoMultiplier: PromoMultiplier
 ): MiniDrawPackage[] => {
   return packages.map((pkg) => applyPromoToMiniPackage(pkg, promoMultiplier));
 };

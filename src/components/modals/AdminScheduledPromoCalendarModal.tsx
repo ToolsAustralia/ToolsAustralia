@@ -25,6 +25,7 @@ import {
   type ScheduledPromoCalendarDay,
 } from "@/utils/promo/scheduled-promo-calendar";
 import { createAESTDateAsUTC } from "@/utils/common/timezone";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 const AEST = "Australia/Sydney";
 
@@ -34,7 +35,7 @@ const PACKAGE_TYPES: { value: ScheduledPromoType; label: string }[] = [
   { value: "mini-packages", label: "Mini draw packages" },
 ];
 
-const MULTIPLIERS: ScheduledPromoMultiplier[] = [2, 3, 5, 10];
+const MULTIPLIERS: ScheduledPromoMultiplier[] = [...PROMO_MULTIPLIERS];
 
 function getCurrentAestYearMonth(): { year: number; month: number } {
   const now = new Date();

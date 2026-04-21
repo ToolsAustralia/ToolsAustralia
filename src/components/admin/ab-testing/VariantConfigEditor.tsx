@@ -28,6 +28,7 @@ const ONE_TIME_SLOTS: { key: OneTimePackageSlot; label: string }[] = [
   { key: "foreman-pack", label: "Foreman" },
   { key: "boss-pack", label: "Boss" },
   { key: "power-pack", label: "Power" },
+  { key: "vip-pack", label: "VIP" },
   { key: "black-pack", label: "Black" },
   { key: "mint-pack", label: "Mint" },
   { key: "cash-prize", label: "Cash" },
@@ -39,6 +40,7 @@ const MEMBERSHIP_SLOTS: { key: MembershipPackageSlot; label: string }[] = [
   { key: "foreman-pack", label: "Foreman" },
   { key: "boss-pack", label: "Boss" },
   { key: "power-pack", label: "Power" },
+  { key: "vip-pack", label: "VIP" },
 ];
 
 const VARIANT_BANNER_CLOUDINARY_FOLDER = "promo-banner";

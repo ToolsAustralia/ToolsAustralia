@@ -9,13 +9,14 @@ import type {
   CreatePromoLinkPayload,
   UpdatePromoLinkPayload,
 } from "@/types/admin";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 import { useCurrentAlternatingMultipliers } from "./useAlternatingMultiplierQueries";
 
 // Types
 export interface ActivePromo {
   id: string;
   type: "one-time-packages" | "mini-packages" | "membership-packages";
-  multiplier: 2 | 3 | 5 | 10; // 2x, 3x, 5x, 10x supported
+  multiplier: PromoMultiplier;
   startDate: string;
   endDate: string;
   duration: number;
@@ -37,7 +38,7 @@ export interface ActivePromo {
 
 export interface TogglePromoData {
   type: "one-time-packages" | "mini-packages" | "membership-packages";
-  multiplier: 2 | 3 | 5 | 10 | null; // 2x, 3x, 5x, 10x, or null (OFF)
+  multiplier: PromoMultiplier | null;
 }
 
 // API functions

@@ -5,6 +5,7 @@ import { useTogglePromo, useAdminActivePromos, type TogglePromoData } from "@/ho
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { Loader2, Zap } from "lucide-react";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 interface AdminPromoToggleProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ interface AdminPromoToggleProps {
  * Simple toggle interface for managing promos (3x, 5x, 10x, or OFF)
  * Replaces the old date-based promo creation system
  */
-const promoMultipliers: (2 | 3 | 5 | 10)[] = [10, 5, 3, 2];
+const promoMultipliers: PromoMultiplier[] = [20, 15, 12, 10, 5, 3, 2];
 
 const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) => {
   const { data: activePromos = [], isLoading, refetch } = useAdminActivePromos();
@@ -30,7 +31,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
 
   const handleToggle = async (
     type: "membership-packages" | "one-time-packages" | "mini-packages",
-    multiplier: 2 | 3 | 5 | 10 | null
+    multiplier: PromoMultiplier | null
   ) => {
     const toggleKey = `${type}-${multiplier}`;
     setTogglingPromo(toggleKey);
@@ -61,13 +62,13 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           {currentPromo && (
             <div className="flex items-center gap-2">
               <span className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Current:</span>
-              <PromoBadgeImage multiplier={currentPromo.multiplier} size="small" />
+              <PromoBadgeImage multiplier={currentPromo.multiplier as PromoMultiplier} size="small" />
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {/* Toggle buttons: 10x, 5x, 3x, 2x, OFF */}
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 sm:gap-3">
+          {/* Toggle buttons: 20x–2x, then OFF */}
           {promoMultipliers.map((multiplier) => {
             const isActive = currentMultiplier === multiplier;
             const toggleKey = `${type}-${multiplier}`;
