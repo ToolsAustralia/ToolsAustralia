@@ -5,8 +5,10 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost, apiPut } from "@/lib/queries";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 
 // Types
 export interface OrderItem {
@@ -210,6 +212,9 @@ export const useOrderAnalytics = (userId?: string) => {
 // Mutations
 export const useCreateOrder = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   return useMutation({
     mutationFn: async (orderData: CreateOrderData) => {
@@ -217,13 +222,12 @@ export const useCreateOrder = () => {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.analytics("current-user") });
-
-      // Clear cart after successful order
-      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all("current-user") });
+      if (!userId) return;
+      invalidatePurchaseCaches(userId);
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.analytics(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all(userId) });
     },
     onError: (error) => {
       console.error("Failed to create order:", error);
@@ -233,6 +237,8 @@ export const useCreateOrder = () => {
 
 export const useCancelOrder = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (orderId: string) => {
@@ -240,19 +246,19 @@ export const useCancelOrder = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update order in cache
       queryClient.setQueryData(queryKeys.orders.detail(data._id), data);
-
-      // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.analytics("current-user") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.analytics(userId) });
     },
   });
 };
 
 export const useUpdateOrderStatus = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: Order["status"] }) => {
@@ -260,18 +266,18 @@ export const useUpdateOrderStatus = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update order in cache
       queryClient.setQueryData(queryKeys.orders.detail(data._id), data);
-
-      // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent("current-user") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent(userId) });
     },
   });
 };
 
 export const useRequestRefund = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
@@ -279,12 +285,10 @@ export const useRequestRefund = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update order in cache
       queryClient.setQueryData(queryKeys.orders.detail(data._id), data);
-
-      // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent("current-user") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent(userId) });
     },
   });
 };

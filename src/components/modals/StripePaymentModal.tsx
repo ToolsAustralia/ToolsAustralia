@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Stripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { useSession } from "next-auth/react";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "@/components/modals/ui";
 import { useToast } from "@/components/ui/Toast";
 import { CreditCard, Loader2, CheckCircle } from "lucide-react";
@@ -8,8 +9,13 @@ import PaymentMethodSelector from "./PaymentMethodSelector";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import { type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { getStripePromise } from "@/lib/stripe-client";
+import { paymentIntentIdFromClientSecret } from "@/lib/payment/payment-intent-id";
+import { resolveBillingAddress, type StripeBillingAddress } from "@/lib/payment/defaultBillingAddress";
 
 const stripePromise = getStripePromise();
+
+/** Upgrade completed server-side with no PaymentIntent to poll */
+export const IMMEDIATE_UPGRADE_NO_PI = "IMMEDIATE_UPGRADE_NO_PI";
 
 // Debug: Log Stripe configuration
 // console.log("Stripe publishable key:", process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? "✅ Set" : "❌ Missing");
@@ -46,6 +52,7 @@ interface PaymentFormProps {
   setShowCardForm: (show: boolean) => void;
   selectedPaymentMethod: SavedPaymentMethod | null;
   setSelectedPaymentMethod: (method: SavedPaymentMethod | null) => void;
+  stripeBillingAddress: StripeBillingAddress;
   // Upgrade information (no proration)
   upgradeInfo?: {
     fromPackage: { name: string; price: number };
@@ -71,6 +78,7 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
   setShowCardForm,
   selectedPaymentMethod,
   setSelectedPaymentMethod,
+  stripeBillingAddress: _stripeBillingAddress,
   upgradeInfo, // ✅ NEW: Upgrade information
 }) => {
   const { showToast } = useToast();
@@ -91,8 +99,6 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
       return;
     }
 
-    // Show PaymentProcessingScreen immediately when Pay button is clicked
-    onPaymentSuccess("processing_upgrade");
     setIsProcessing(true);
 
     try {
@@ -135,9 +141,8 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
           // Check if payment was processed immediately (no PaymentIntent needed)
           if (result.data?.subscription && !result.data?.paymentIntent) {
-            // console.log("✅ Payment processed immediately - webhook will handle activation");
-            // Payment processed, but webhook will handle final activation
-            onPaymentSuccess("processing_upgrade");
+            setIsProcessing(false);
+            onPaymentSuccess(IMMEDIATE_UPGRADE_NO_PI);
             return;
           }
 
@@ -146,6 +151,11 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
         }
         if (!finalClientSecret) {
           throw new Error("No payment intent received from server");
+        }
+
+        const piFromSecret = paymentIntentIdFromClientSecret(finalClientSecret);
+        if (piFromSecret) {
+          onPaymentSuccess(piFromSecret);
         }
 
         // Import client-side return URL utility
@@ -170,8 +180,6 @@ const PaymentFormWithoutElements: React.FC<PaymentFormProps> = ({
 
         if (paymentIntent && paymentIntent.status === "succeeded") {
           setIsSuccess(true);
-          // PaymentProcessingScreen will handle success display
-          onPaymentSuccess(paymentIntent.id);
         }
       } else {
         // If user wants to add new card, switch to Elements version
@@ -275,6 +283,7 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
   amount,
   onPaymentSuccess,
   onClose,
+  stripeBillingAddress,
   upgradeInfo, // ✅ NEW: Upgrade information
 }) => {
   const stripe = useStripe();
@@ -315,11 +324,11 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
       return;
     }
 
-    // Show PaymentProcessingScreen immediately when Pay button is clicked
-    onPaymentSuccess("processing_upgrade");
     setIsProcessing(true);
 
     try {
+      let secretToConfirm = clientSecret;
+
       // ✅ NEW: Check if payment intent already exists (created when modal opened)
       if (clientSecret && clientSecret.length > 0) {
         // console.log("✅ Using existing payment intent from modal opening (Elements)");
@@ -352,16 +361,22 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
 
         // Check if payment was processed immediately (no PaymentIntent needed)
         if (result.data?.subscription && !result.data?.paymentIntent) {
-          // console.log("✅ Payment processed immediately - webhook will handle activation");
-          // Payment processed, but webhook will handle final activation
-          onPaymentSuccess("processing_upgrade");
+          setIsProcessing(false);
+          onPaymentSuccess(IMMEDIATE_UPGRADE_NO_PI);
           return;
         }
+
+        secretToConfirm = result.data?.paymentIntent?.clientSecret ?? "";
       }
 
       // Now confirm the payment with the client secret
-      if (!clientSecret) {
+      if (!secretToConfirm) {
         throw new Error("No payment intent received from server");
+      }
+
+      const piFromSecret = paymentIntentIdFromClientSecret(secretToConfirm);
+      if (piFromSecret) {
+        onPaymentSuccess(piFromSecret);
       }
 
       // ✅ CRITICAL: PaymentElement requires elements.submit() before confirmPayment()
@@ -379,16 +394,16 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
       const { getReturnUrlForPaymentTypeClient } = await import("@/utils/payment/stripe/payment-intent-config");
       
       const confirmResult = await stripe.confirmPayment({
-        clientSecret,
+        clientSecret: secretToConfirm,
         confirmParams: {
           payment_method_data: {
             billing_details: {
               address: {
-                country: "AU", // ✅ Required when billingDetails: "never", default to Australia
-                state: "NSW", // ✅ Required when billingDetails: "never", default to New South Wales
-                city: "Sydney", // ✅ Required when billingDetails: "never", default to Sydney
-                postal_code: "2000", // ✅ Required when billingDetails: "never", default to Sydney CBD
-                line1: "1 Martin Place", // ✅ Required when billingDetails: "never", default address
+                country: stripeBillingAddress.country,
+                state: stripeBillingAddress.state,
+                city: stripeBillingAddress.city,
+                postal_code: stripeBillingAddress.postal_code,
+                line1: stripeBillingAddress.line1,
               },
             },
           },
@@ -403,8 +418,6 @@ const PaymentFormWithElements: React.FC<PaymentFormProps> = ({
       const paymentIntent = confirmResult.paymentIntent;
       if (paymentIntent && paymentIntent.status === "succeeded") {
         setIsSuccess(true);
-        // PaymentProcessingScreen will handle success display
-        onPaymentSuccess(paymentIntent.id);
       }
     } catch (err: unknown) {
       console.error("Payment failed:", err);
@@ -583,6 +596,10 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
   onPaymentSuccess,
   upgradeInfo, // ✅ NEW: Proration info
 }) => {
+  const { data: session } = useSession();
+  const stripeBillingAddress = resolveBillingAddress(session?.user);
+  const activePaymentIntentRef = useRef<string | null>(null);
+
   const [showCardForm, setShowCardForm] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<SavedPaymentMethod | null>(null);
 
@@ -590,35 +607,40 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
-  // Handle payment success with PaymentProcessingScreen
-  const handlePaymentSuccess = (paymentIntentId: string) => {
-    // For immediate payments, use a dummy payment intent ID for PaymentProcessingScreen
-    const processingId = paymentIntentId === "immediate_payment" ? "immediate_upgrade" : paymentIntentId;
-    setPaymentIntentId(processingId);
+  const handlePaymentSuccess = (id: string) => {
+    if (id === IMMEDIATE_UPGRADE_NO_PI) {
+      activePaymentIntentRef.current = null;
+      setShowPaymentProcessing(false);
+      setPaymentIntentId(null);
+      onPaymentSuccess(id);
+      onClose();
+      return;
+    }
+    activePaymentIntentRef.current = id;
+    setPaymentIntentId(id);
     setShowPaymentProcessing(true);
   };
 
-  // Handle PaymentProcessingScreen success
   const handleProcessingSuccess = () => {
+    const pi = activePaymentIntentRef.current;
+    activePaymentIntentRef.current = null;
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
-    onPaymentSuccess(paymentIntentId || "");
+    onPaymentSuccess(pi || "");
     onClose();
   };
 
-  // Handle PaymentProcessingScreen error
   const handleProcessingError = (error: string) => {
     console.error("Payment processing error:", error);
+    activePaymentIntentRef.current = null;
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
   };
 
-  // Handle PaymentProcessingScreen timeout
   const handleProcessingTimeout = () => {
-    // console.log("Payment processing timeout - showing success anyway");
+    activePaymentIntentRef.current = null;
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
-    onPaymentSuccess(paymentIntentId || "");
     onClose();
   };
 
@@ -674,6 +696,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
               setShowCardForm={setShowCardForm}
               selectedPaymentMethod={selectedPaymentMethod}
               setSelectedPaymentMethod={setSelectedPaymentMethod}
+              stripeBillingAddress={stripeBillingAddress}
               upgradeInfo={upgradeInfo} // ✅ Pass upgrade info
             />
           </Elements>
@@ -689,6 +712,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
             setShowCardForm={setShowCardForm}
             selectedPaymentMethod={selectedPaymentMethod}
             setSelectedPaymentMethod={setSelectedPaymentMethod}
+            stripeBillingAddress={stripeBillingAddress}
             upgradeInfo={upgradeInfo} // ✅ Pass upgrade info
           />
         )}

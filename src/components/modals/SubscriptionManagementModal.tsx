@@ -19,6 +19,9 @@ import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
+import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { useLoading } from "@/contexts/LoadingContext";
+import { rewardsEnabled } from "@/config/featureFlags";
 
 interface User {
   _id: string;
@@ -191,6 +194,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   } | null>(null);
   const [subscriptionBenefits, setSubscriptionBenefits] = useState<SubscriptionBenefits | null>(null);
   const [benefitsLoading, setBenefitsLoading] = useState(false);
+  const { showSuccess } = useLoading();
 
   // Stripe payment confirmation state
   const [showStripePaymentModal, setShowStripePaymentModal] = useState(false);
@@ -432,6 +436,54 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       `${selectedDowngrade.partnerDiscountDays} days partner access`,
     ];
   }, [selectedDowngrade, user.subscription]);
+
+  /** Pending plan change banner: accumulated entries + partner access % (same rules as confirmation copy) */
+  const pendingBenefitCountdownProps = useMemo(() => {
+    const pending = subscriptionBenefits?.currentBenefits?.pendingChange;
+    if (!subscriptionBenefits?.currentBenefits?.isPendingChange || !pending) {
+      return null;
+    }
+    const cb = subscriptionBenefits.currentBenefits;
+    const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const currentBase = cb.entriesPerMonth;
+    const lastAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? currentBase;
+
+    const newPackageId = pending.newPackageId;
+    const targetPkg =
+      pending.changeType === "downgrade"
+        ? subscriptionBenefits.availableDowngrades.find((d) => d.packageId === newPackageId)
+        : subscriptionBenefits.availableUpgrades.find((u) => u.packageId === newPackageId);
+
+    let newAccumulated = 0;
+    if (targetPkg) {
+      if (pending.changeType === "downgrade") {
+        newAccumulated = calculateRenewalEntries(targetPkg.entriesPerMonth, lastAccumulated).newLastMonthAccumulatedEntries;
+      } else {
+        newAccumulated = calculateUpgradeEntries(
+          targetPkg.entriesPerMonth,
+          lastAccumulated,
+          membershipPromoMultiplier
+        ).newLastMonthAccumulatedEntries;
+      }
+    }
+
+    return {
+      effectiveDate: new Date(pending.effectiveDate),
+      changeType: pending.changeType as "upgrade" | "downgrade",
+      currentBenefits: {
+        packageName: cb.packageName,
+        accumulatedEntries: lastAccumulated,
+        partnerDiscountAccessPercent: getPartnerCatalogAccessPercentForMembershipPackageId(cb.packageId),
+        partnerDiscountDays: cb.partnerDiscountDays,
+      },
+      newBenefits: {
+        packageName: pending.newPackageName,
+        accumulatedEntries: newAccumulated,
+        partnerDiscountAccessPercent: getPartnerCatalogAccessPercentForMembershipPackageId(newPackageId),
+        partnerDiscountDays: targetPkg?.partnerDiscountDays ?? 0,
+      },
+    };
+  }, [subscriptionBenefits, user.subscription, membershipPromoMultiplier]);
 
   const handleUpgradeSubscription = async () => {
     if (!selectedUpgrade || !membershipPackage) return;
@@ -706,45 +758,77 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   // Handle Stripe payment confirmation for upgrades
   const handleStripePaymentConfirm = async () => {
-    // console.log("✅ Payment confirmed, webhook will handle subscription activation");
+    const upgrade = selectedUpgrade;
+    const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
+    const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
 
-    // Calculate the total entries after upgrade for the toast message
-    // This matches what's displayed in the upgrade cards
-    let totalEntriesAfterUpgrade = selectedUpgrade?.entriesPerMonth || 0;
-    if (selectedUpgrade) {
-      const subscriptionWithEntries = user.subscription as {
-        lastMonthAccumulatedEntries?: number;
-      } | undefined;
-      const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
-      // Use active promo multiplier for membership packages (same as upgrade cards)
+    let totalEntriesAfterUpgrade = upgrade?.entriesPerMonth ?? 0;
+    let entriesFromUpgrade = 0;
+    if (upgrade) {
       const upgradeCalculation = calculateUpgradeEntries(
-        selectedUpgrade.entriesPerMonth,
+        upgrade.entriesPerMonth,
         lastMonthAccumulated,
         membershipPromoMultiplier
       );
       totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
+      entriesFromUpgrade = upgradeCalculation.entriesToGrant;
     }
 
-    // Set flag in localStorage to show enhanced success toast after page reload
-    // Include comprehensive upgrade information for the toast
     localStorage.setItem(
       "subscription_upgraded",
       JSON.stringify({
-        packageName: selectedUpgrade?.name || "subscription",
-        packageId: selectedUpgrade?.packageId || "",
-        entriesPerMonth: selectedUpgrade?.entriesPerMonth || 0,
-        totalEntriesAfterUpgrade: totalEntriesAfterUpgrade, // Total entries user will have after upgrade
-        partnerDiscountDays: selectedUpgrade?.partnerDiscountDays || 0,
+        packageName: upgrade?.name || "subscription",
+        packageId: upgrade?.packageId || "",
+        entriesPerMonth: upgrade?.entriesPerMonth || 0,
+        totalEntriesAfterUpgrade,
+        partnerDiscountDays: upgrade?.partnerDiscountDays || 0,
         timestamp: Date.now(),
       })
     );
 
-    // Close Stripe payment modal
     setShowStripePaymentModal(false);
     setUpgradeData(null);
 
-    // Refresh the page immediately to show updated subscription data
-    window.location.reload();
+    const benefits: {
+      text: string;
+      icon: "gift" | "star" | "zap" | "ticket" | "tag";
+      highlight?: boolean;
+    }[] = [];
+
+    if (upgrade) {
+      benefits.push({ text: `${upgrade.name} is now your plan`, icon: "gift" });
+      if (entriesFromUpgrade > 0) {
+        benefits.push({
+          text:
+            membershipPromoMultiplier > 1
+              ? `+${entriesFromUpgrade.toLocaleString()} entries from this upgrade (${membershipPromoMultiplier}× promo on monthly grant)`
+              : `+${entriesFromUpgrade.toLocaleString()} entries from this upgrade`,
+          icon: "star",
+        });
+      }
+      benefits.push({
+        text: `Accumulated major draw entries: about ${totalEntriesAfterUpgrade.toLocaleString()}`,
+        icon: "star",
+      });
+      if (upgrade.partnerDiscountDays > 0) {
+        benefits.push({ text: `${upgrade.partnerDiscountDays} days partner discounts`, icon: "tag" });
+      }
+      if (rewardsEnabled()) {
+        const pts = Math.floor(upgrade.price);
+        if (pts > 0) {
+          benefits.push({ text: `${pts} reward points earned`, icon: "zap" });
+        }
+      }
+    } else {
+      benefits.push({ text: "Your subscription has been upgraded", icon: "gift" });
+    }
+
+    const subtitle = upgrade ? `${upgrade.name} activated` : "Your plan has been updated";
+    showSuccess("Upgrade successful!", subtitle, benefits, 3400);
+
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 3600);
   };
 
   if (!isOpen && !renderAsPanel) return null;
@@ -938,41 +1022,15 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             )}
 
             {/* Pending Changes Countdown */}
-            {subscriptionBenefits?.currentBenefits?.isPendingChange &&
-              subscriptionBenefits.currentBenefits.pendingChange && (
-                <BenefitCountdown
-                  effectiveDate={new Date(subscriptionBenefits.currentBenefits.pendingChange.effectiveDate)}
-                  changeType={subscriptionBenefits.currentBenefits.pendingChange.changeType}
-                  currentBenefits={{
-                    packageName: subscriptionBenefits.currentBenefits.packageName,
-                    entriesPerMonth: subscriptionBenefits.currentBenefits.entriesPerMonth,
-                    shopDiscountPercent: subscriptionBenefits.currentBenefits.shopDiscountPercent,
-                    partnerDiscountDays: subscriptionBenefits.currentBenefits.partnerDiscountDays,
-                  }}
-                  newBenefits={{
-                    packageName: subscriptionBenefits.currentBenefits.pendingChange.newPackageName,
-                    entriesPerMonth:
-                      subscriptionBenefits.availableDowngrades.find(
-                        (d) => d.packageId === subscriptionBenefits.currentBenefits?.pendingChange?.newPackageId
-                      )?.entriesPerMonth || 0,
-                    shopDiscountPercent:
-                      subscriptionBenefits.availableDowngrades.find(
-                        (d) => d.packageId === subscriptionBenefits.currentBenefits?.pendingChange?.newPackageId
-                      )?.shopDiscountPercent || 0,
-                    partnerDiscountDays:
-                      subscriptionBenefits.availableDowngrades.find(
-                        (d) => d.packageId === subscriptionBenefits.currentBenefits?.pendingChange?.newPackageId
-                      )?.partnerDiscountDays || 0,
-                  }}
-                  onExpired={() => {
-                    // Refresh benefits when countdown expires
-                    fetchSubscriptionBenefits();
-                    if (onSubscriptionUpdate) {
-                      onSubscriptionUpdate();
-                    }
-                  }}
-                />
-              )}
+            {pendingBenefitCountdownProps && (
+              <BenefitCountdown
+                {...pendingBenefitCountdownProps}
+                onExpired={() => {
+                  fetchSubscriptionBenefits();
+                  onSubscriptionUpdate?.();
+                }}
+              />
+            )}
 
             {/* Management Actions - Hidden for past_due subscriptions (only for active subscriptions) */}
             {!hasFailed && (

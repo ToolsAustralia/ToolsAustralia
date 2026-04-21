@@ -1,379 +1,75 @@
-# Upsell Image Selector System
+# Upsell image system
 
 ## Overview
 
-The Upsell Image Selector system dynamically selects promotional images for upsell offers based on:
-- Active promo multiplier (2x, 3x, 5x, 10x for one-time Plus/Upgrade; 2x, 3x, 5x, 10x for membership Package images; 2X Package images upcoming)
-- Package type (membership vs one-time vs mini-draw)
-- Upsell category (subscription-plus, one-time-plus, additional-upgrade)
+Hero images for upsell modals are stored under `public/images/upsells/` in four groups. Each static upsell package in [`src/data/upsellPackages.ts`](../src/data/upsellPackages.ts) declares an `image: { group, slug }` field that maps to files on disk.
 
-This system ensures that the correct promotional images are displayed based on the active promo campaign and the type of purchase that triggered the upsell.
+Resolution is implemented by [`resolveUpsellImage`](../src/utils/upsell/upsell-image-selector.ts) in [`src/utils/upsell/upsell-image-selector.ts`](../src/utils/upsell/upsell-image-selector.ts). The UI uses it from [`UpsellModal`](../src/components/modals/UpsellModal.tsx).
 
----
-
-## Problem Statement
-
-### Original Issues
-
-1. **Incorrect Image Selection**: Subscription-plus upsells (e.g., "tradie-plus-package") were showing base images instead of 10X promo images when 10X promo was active for membership packages.
-
-2. **Wrong Package Type Detection**: When `originalPurchaseContext` was missing, the system defaulted to `"one-time"` for all upsells, causing subscription-plus packages to use one-time multipliers (2X/3X) instead of membership multipliers (10X).
-
-3. **Category Mismatch**: The system relied solely on `extractPackageInfo(offerId)` to determine image category, which didn't account for the actual business category (`subscription-plus`, `one-time-plus`, `additional-upgrade`).
-
-4. **File Naming Inconsistencies**: The system uses consistent uppercase X for all promo images:
-   - Membership packages: `10X {Package} Package.webp`
-   - One-time plus: `2X {Package} Plus.webp`
-   - Additional upgrades: `2X {Package} Upgrade.webp`
-
----
-
-## Architecture & Separation of Concerns
-
-### File Structure
-
-```
-src/
-├── utils/
-│   └── upsell/
-│       └── upsell-image-selector.ts    # Core image selection logic
-└── components/
-    └── modals/
-        └── UpsellModal.tsx              # UI component that uses the selector
-```
-
-### Component Responsibilities
-
-#### 1. `upsell-image-selector.ts` - Core Utility Module
-
-**Responsibility**: Pure utility functions for image path selection logic.
-
-**Exports**:
-- `getUpsellImagePath(params: UpsellImageParams): string` - Main public API
-
-**Internal Functions**:
-- `getImageCategoryFromUpsellCategory()` - Maps business categories to image categories
-- `extractPackageInfo()` - Extracts package name from offerId (legacy support)
-- `getBaseImagePath()` - Returns base image paths (no promo)
-- `getPromoImagePath()` - Constructs promo-specific image paths with correct casing
-
-**Key Principles**:
-- ✅ **Pure Functions**: No side effects, deterministic output
-- ✅ **Single Responsibility**: Each function has one clear purpose
-- ✅ **Type Safety**: Strong TypeScript typing throughout
-- ✅ **Fallback Logic**: Graceful degradation when data is missing
-
-#### 2. `UpsellModal.tsx` - UI Component
-
-**Responsibility**: Determines context and calls the utility function.
-
-**Key Logic**:
-- Determines `packageType` from purchase context or upsell category
-- Resolves promo multiplier based on package type
-- Passes all parameters to `getUpsellImagePath()`
-
-**Key Principles**:
-- ✅ **Context Awareness**: Uses `originalPurchaseContext` when available
-- ✅ **Smart Fallbacks**: Infers package type from upsell category
-- ✅ **Debug Logging**: Comprehensive logging for troubleshooting
-
----
-
-## Feature Changes
-
-### Feature 1: Category-Based Image Category Mapping
-
-**File**: `src/utils/upsell/upsell-image-selector.ts`
-
-**Function**: `getImageCategoryFromUpsellCategory()`
-
-**Purpose**: Maps business categories to image file categories.
-
-**Logic**:
-```typescript
-subscription-plus + membership → "Package" (for 10X images)
-one-time-plus + one-time → "Pack" (becomes "Plus" in filename)
-additional-upgrade + one-time → "Upgrade" (for upgrade images)
-```
-
-**Why**: Ensures the correct image category is used based on business logic, not just offerId patterns.
-
-**Separation of Concerns**: 
-- This function is purely about mapping business categories to technical image categories
-- No file path construction happens here
-- No promo multiplier logic
-
----
-
-### Feature 2: Priority-Based Package Type Detection
-
-**File**: `src/components/modals/UpsellModal.tsx`
-
-**Function**: `getUpsellImagePathValue()`
-
-**Purpose**: Determines the correct package type when `originalPurchaseContext` is missing.
-
-**Priority Order**:
-1. `originalPurchaseContext?.packageType` (most reliable - from actual purchase)
-2. Upsell category inference:
-   - `category === "subscription-plus"` → `packageType = "membership"`
-   - `category === "one-time-plus"` or `"additional-upgrade"` → `packageType = "one-time"`
-3. `offer.category` (fallback)
-4. Default to `"one-time"` (last resort)
-
-**Why**: Subscription-plus upsells are only shown after membership purchases, so we can safely infer `packageType = "membership"` from the category.
-
-**Separation of Concerns**:
-- Package type determination is separate from image path construction
-- Business logic (what triggers what) is separate from technical implementation
-- Context resolution is separate from multiplier resolution
-
----
-
-### Feature 3: Membership 10X Image Detection
-
-**File**: `src/utils/upsell/upsell-image-selector.ts`
-
-**Function**: `getUpsellImagePath()`
-
-**Purpose**: Ensures membership packages with 10X promo always get promo images.
-
-**Key Changes**:
-1. **Early Check**: Membership 10X check happens FIRST, before null checks
-2. **Multiple Detection Methods**:
-   - Explicit `category === "subscription-plus"`
-   - `extractedInfo.imageCategory === "Package"` (from offerId)
-   - `offerId.endsWith("-plus-package")` (pattern match)
-
-**Why**: Prevents fallthrough to base images when 10X promo is active.
-
-**Separation of Concerns**:
-- Membership-specific logic is isolated in its own conditional block
-- Detection methods are clearly separated and documented
-- Early return prevents interference with other logic
-
----
-
-### Feature 4: Correct File Naming Convention
-
-**File**: `src/utils/upsell/upsell-image-selector.ts`
-
-**Function**: `getPromoImagePath()`
-
-**Purpose**: Constructs image filenames with correct casing.
-
-**Conventions**:
-- **Membership/Package**: `${multiplier}X ${packageName} Package.webp` (uppercase X)
-- **One-time Plus**: `${multiplier}X ${packageName} Plus.webp` (uppercase X)
-- **Additional Upgrade**: `${multiplier}X ${packageName} Upgrade.webp` (uppercase X)
-
-**Why**: Matches actual file naming in `public/images/upsells/active-promo/`.
-
-**Separation of Concerns**:
-- File naming logic is isolated in one function
-- Casing rules are clearly documented
-- No business logic mixed with file path construction
-
----
-
-### Feature 5: Debug Logging
-
-**Files**: 
-- `src/utils/upsell/upsell-image-selector.ts`
-- `src/components/modals/UpsellModal.tsx`
-
-**Purpose**: Comprehensive logging for troubleshooting image selection issues.
-
-**What's Logged**:
-1. **UpsellModal**: All input parameters, resolved multipliers, package type determination source
-2. **upsell-image-selector**: Function parameters, extracted info, membership 10X check results, subscription-plus detection
-
-**Why**: Helps diagnose issues when images aren't displaying correctly.
-
-**Separation of Concerns**:
-- Debug logging is clearly marked with `🔍 DEBUG:` prefix
-- Logging doesn't affect business logic
-- Can be easily removed or toggled in production
-
----
-
-## Data Flow
-
-```
-Purchase Event
-    ↓
-UpsellModal.getUpsellImagePathValue()
-    ↓
-1. Get upsellPackage.category
-2. Determine packageType (priority-based)
-3. Resolve promoMultiplier (based on packageType)
-    ↓
-getUpsellImagePath({ offerId, packageType, promoMultiplier, category })
-    ↓
-1. Extract packageName from offerId
-2. Map category to imageCategory
-3. Check membership 10X (early return if match)
-4. Check one-time 2X/3X/5X/10X
-5. Fallback to base images
-    ↓
-getPromoImagePath(multiplier, packageName, imageCategory)
-    ↓
-Construct filename with correct casing
-    ↓
-Return: /images/upsells/active-promo/{filename}
-```
-
----
-
-## Image File Naming Convention
-
-### Directory Structure
+## Folder layout
 
 ```
 public/images/upsells/
-├── {Base Images}                    # No promo active
-│   ├── Tradie Package.webp
-│   ├── Tradie Plus.webp
-│   └── Tradie Upgrade.webp
-└── active-promo/                    # Promo active
-    ├── 2X Boss Package.webp          # Membership 2X (upcoming)
-    ├── 3X Boss Package.webp          # Membership 3X
-    ├── 5X Boss Package.webp          # Membership 5X
-    ├── 10X Boss Package.webp         # Membership 10X
-    ├── 3X Foreman Package.webp
-    ├── 5X Foreman Package.webp
-    ├── 10X Foreman Package.webp
-    ├── 3X Tradie Package.webp
-    ├── 5X Tradie Package.webp
-    ├── 10X Tradie Package.webp
-    ├── 2X Tradie Plus.webp           # One-time 2X
-    ├── 3X Tradie Plus.webp           # One-time 3X
-    ├── 2X Tradie Upgrade.webp        # Additional 2X
-    └── 3X Tradie Upgrade.webp        # Additional 3X
+  membership-pack/           # subscription-plus (Tradie / Foreman / Boss package art)
+  one-time-pack/             # one-time-plus (+ additional-apprentice alias uses apprentice-plus here)
+  additional-one-time-pack/  # additional-upgrade (tradie/boss/foreman/power/vip upgrade art; includes 12x/15x/20x)
+  mini-pack/                 # mini-pack-1 … mini-pack-8 (no promo variants)
 ```
 
-### Naming Rules
+File naming:
 
-| Package Type | Category | Multiplier | Filename Pattern | Example |
-|-------------|----------|------------|------------------|---------|
-| Membership | subscription-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Package.webp` | `3X Boss Package.webp`, `5X Tradie Package.webp`, `10X Foreman Package.webp` (2X upcoming) |
-| One-time | one-time-plus | 2, 3, 5, 10 | `{multiplier}X {Package} Plus.webp` | `2X Tradie Plus.webp`, `10X Boss Plus.webp` |
-| One-time | additional-upgrade | 2, 3, 5, 10 | `{multiplier}X {Package} Upgrade.webp` | `2X Tradie Upgrade.webp`, `10X Boss Upgrade.webp` |
+- Base: `{slug}.webp` (e.g. `tradie-package.webp`, `boss-plus.webp`)
+- Promo variant (when it exists): `{n}x-{slug}.webp` with lowercase `n` (e.g. `10x-tradie-package.webp`, `15x-vip-upgrade.webp`)
 
-**Note**: All promo images use uppercase `X` for consistency (e.g., `2X`, `3X`, `5X`, `10X`).
+## Resolution rule
 
----
+**Strict, base-only fallback**
 
-## Testing & Debugging
+1. If `promoMultiplier` is a known promo value (`src/types/promo-multiplier.ts`) **and** `{group}/{n}x-{slug}.webp` exists in the manifest, use that URL.
+2. Otherwise use `{group}/{slug}.webp`.
 
-### Console Logs
+There is no “nearest lower multiplier” fallback: if a variant file is missing, users see the base image.
 
-When the upsell modal appears, check the browser console for:
+## Manifest (build-time)
 
-1. **`🖼️ Upsell Image Debug`**: Shows all input parameters and resolved values
-2. **`🖼️ getUpsellImagePath called with`**: Shows what's passed to the utility function
-3. **`🖼️ Extracted info`**: Shows package name and category extraction
-4. **`🖼️ ✅ Membership 10X check passed!`** or **`🖼️ ❌ Membership 10X check failed`**: Shows why membership 10X check passed/failed
-5. **`🖼️ Final Image Path`**: Shows the final image path returned
+[`src/generated/upsellImageManifest.ts`](../src/generated/upsellImageManifest.ts) is generated from the filesystem and lists every `.webp` path under `public/images/upsells/` (relative to that folder). Regenerate after adding or renaming assets:
 
-### Common Issues & Solutions
-
-#### Issue: Base image showing instead of 10X promo image
-
-**Check**:
-- `resolvedMembershipMultiplier` should be `10`, not `null`
-- `packageType` should be `"membership"`, not `"one-time"`
-- `category` should be `"subscription-plus"`
-
-**Solution**: Ensure `originalPurchaseContext` is passed correctly, or verify upsell category inference is working.
-
-#### Issue: Wrong multiplier being used
-
-**Check**:
-- `packageType` determination source (should show in logs)
-- If `determinedFrom: "upsellCategory"`, verify category is correct
-- If `determinedFrom: "fallback"`, `originalPurchaseContext` is missing
-
-**Solution**: Ensure `originalPurchaseContext` is set when triggering upsell modal.
-
-#### Issue: Image file not found (404)
-
-**Check**:
-- Generated filename matches actual file name
-- Casing is consistent (uppercase X for all: Package, Plus, and Upgrade)
-- File exists in `public/images/upsells/active-promo/`
-
-**Solution**: Verify file naming matches the convention documented above.
-
----
-
-## API Reference
-
-### `getUpsellImagePath(params: UpsellImageParams): string`
-
-Main public API for getting upsell image paths.
-
-**Parameters**:
-```typescript
-interface UpsellImageParams {
-  offerId: string;                                    // e.g., "tradie-plus-package"
-  packageType?: "membership" | "one-time" | "mini-draw";
-  promoMultiplier?: number;                           // 2, 3, 5, or 10
-  category?: "subscription-plus" | "one-time-plus" | "additional-upgrade";
-}
+```bash
+npm run build:upsell-manifest
 ```
 
-**Returns**: Image path string (e.g., `/images/upsells/active-promo/10X Tradie Package.webp`)
+This runs automatically via `prebuild` and `predev` in `package.json`.
 
-**Behavior**:
-- Returns promo image if multiplier is active and matches package type
-- Returns base image if no promo is active
-- Returns base image as fallback for edge cases
+## Adding a new upsell image
 
----
+1. Add WebP files under the correct group folder (`membership-pack`, `one-time-pack`, `additional-one-time-pack`, or `mini-pack`).
+2. Ensure a **base** `{slug}.webp` exists for that offer (required so the modal never 404s when a promo variant is absent).
+3. Add optional `2x-` … `20x-` prefixed files matching [`PROMO_MULTIPLIERS`](../src/types/promo-multiplier.ts) where you want promo-specific art.
+4. Add `image: { group, slug }` on the corresponding `StaticUpsellPackage` in [`upsellPackages.ts`](../src/data/upsellPackages.ts).
+5. Run `npm run build:upsell-manifest` and commit the updated manifest.
+6. Run `npm run test:upsell-images` to verify every package resolves to a path that exists on disk.
 
-## Related Files
+## PNG conversion
 
-- `src/utils/upsell/upsell-image-selector.ts` - Core utility functions
-- `src/components/modals/UpsellModal.tsx` - UI component using the selector
-- `src/data/upsellPackages.ts` - Upsell package definitions with categories
-- `src/hooks/queries/usePromoQueries.ts` - Promo multiplier resolution hooks
+Large PNG sources can be converted with [`scripts/convert-upsells-to-webp.ts`](../scripts/convert-upsells-to-webp.ts) (uses `sharp`, quality 82). Prefer committing WebP only in `public/images/upsells/`.
 
----
+## Tests
 
-## Future Improvements
+[`src/utils/upsell/__tests__/upsell-image-selector.test.ts`](../src/utils/upsell/__tests__/upsell-image-selector.test.ts) asserts:
 
-1. **Remove Debug Logging**: Consider making debug logging conditional (dev-only) or removable
-2. **Type Safety**: Add stricter types for image categories
-3. **Error Handling**: Add explicit error handling for missing images
-4. **Caching**: Consider caching resolved image paths to reduce computation
-5. **Validation**: Add runtime validation for file existence (optional)
+- Every package’s base `{group}/{slug}.webp` is present in the manifest.
+- For every package and every catalogued promo multiplier, `resolveUpsellImage` returns a path that exists.
 
----
+```bash
+npm run test:upsell-images
+```
 
-## Changelog
+## Related files
 
-### 2024-01-XX - Initial Implementation
-
-- ✅ Added `getImageCategoryFromUpsellCategory()` for category mapping
-- ✅ Refactored `getUpsellImagePath()` to use category parameter as primary source
-- ✅ Fixed membership 10X image detection with early check
-- ✅ Improved package type determination in `UpsellModal`
-- ✅ Added comprehensive debug logging
-- ✅ Fixed file naming convention (uppercase X for all promo images: Package, Plus, Upgrade)
-
----
-
-## Summary
-
-The Upsell Image Selector system now correctly:
-1. ✅ Detects membership packages and uses 10X multiplier when active
-2. ✅ Infers package type from upsell category when context is missing
-3. ✅ Maps business categories to correct image categories
-4. ✅ Constructs filenames with correct casing conventions
-5. ✅ Provides comprehensive debugging information
-
-All changes maintain clear separation of concerns:
-- **Business Logic** (UpsellModal): Context determination, multiplier resolution
-- **Technical Logic** (upsell-image-selector): Image path construction, file naming
-- **Data Mapping** (getImageCategoryFromUpsellCategory): Category translation
+| File | Role |
+|------|------|
+| [`src/data/upsellPackages.ts`](../src/data/upsellPackages.ts) | `image` metadata per offer |
+| [`src/utils/upsell/upsell-image-selector.ts`](../src/utils/upsell/upsell-image-selector.ts) | `resolveUpsellImage` |
+| [`src/generated/upsellImageManifest.ts`](../src/generated/upsellImageManifest.ts) | Generated asset index |
+| [`scripts/build-upsell-image-manifest.ts`](../scripts/build-upsell-image-manifest.ts) | Manifest generator |
+| [`src/components/modals/UpsellModal.tsx`](../src/components/modals/UpsellModal.tsx) | Chooses promo multiplier, calls resolver |

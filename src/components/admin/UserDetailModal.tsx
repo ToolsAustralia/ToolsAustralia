@@ -3560,7 +3560,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {showActionModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{showActionModal.title}</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{showActionModal.title}</h3>
             <p className="text-gray-600 dark:text-neutral-400 mb-6">{showActionModal.description}</p>
 
             {showActionModal.requiresInput && (
@@ -3604,7 +3604,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {showSendEmailModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-lg w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Send Email</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Send Email</h3>
             <p className="text-gray-600 dark:text-neutral-400 mb-6">Compose and send an email directly to the user.</p>
 
             <div className="space-y-4">
@@ -3654,7 +3654,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {showAdminPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Set New Password</h3>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Set New Password</h3>
             <p className="text-gray-600 dark:text-neutral-400 mb-6">
               Set a new password for this user. Minimum length is enforced; no verification email is sent.
             </p>

@@ -5,8 +5,11 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost, apiDelete } from "@/lib/queries";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
 
 // Types
 export interface MajorDraw {
@@ -227,6 +230,10 @@ export const useUserMajorDrawEntries = (userId?: string) => {
 // Mutations
 export const useEnterMajorDraw = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
+  const showEntryReward = useEntryRewardToast();
 
   return useMutation({
     mutationFn: async ({ majorDrawId, entryCount, paymentMethodId }: EntryData) => {
@@ -238,13 +245,14 @@ export const useEnterMajorDraw = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate major draw data
       queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.current });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.entries("current-user") });
       queryClient.invalidateQueries({ queryKey: ["major-draw-stats"] });
+      if (userId) {
+        invalidatePurchaseCaches(userId);
+        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.entries(userId) });
+      }
 
-      // Update current major draw total entries in cache
       queryClient.setQueryData(queryKeys.majorDraw.current, (old: MajorDraw | null) => {
         if (old) {
           return {
@@ -255,6 +263,14 @@ export const useEnterMajorDraw = () => {
         }
         return old;
       });
+
+      if (data.entryCount > 0) {
+        showEntryReward({
+          entries: data.entryCount,
+          drawType: "major",
+          source: "useEnterMajorDraw",
+        });
+      }
     },
     onError: (error) => {
       console.error("Failed to enter major draw:", error);
@@ -264,6 +280,8 @@ export const useEnterMajorDraw = () => {
 
 export const useCancelMajorDrawEntry = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (entryId: string) => {
@@ -273,11 +291,12 @@ export const useCancelMajorDrawEntry = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate major draw data
       queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.current });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats("current-user") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.entries("current-user") });
       queryClient.invalidateQueries({ queryKey: ["major-draw-stats"] });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.entries(userId) });
+      }
 
       // Update current major draw total entries in cache
       queryClient.setQueryData(queryKeys.majorDraw.current, (old: MajorDraw | null) => {

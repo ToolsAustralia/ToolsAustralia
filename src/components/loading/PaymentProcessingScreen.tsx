@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Check, Gift, Star, Zap, AlertCircle, Tag } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
@@ -21,9 +21,29 @@ interface PaymentProcessingScreenProps {
   onTimeout?: () => void;
 }
 
+const STEP_BY_EVENT: Record<string, number> = {
+  "payment_intent.created": 0,
+  "payment_intent.processing": 0,
+  "payment_intent.succeeded": 1,
+  "invoice.payment_succeeded": 1,
+  "customer.subscription.created": 2,
+  "customer.subscription.updated": 2,
+  BenefitsGranted: 3,
+};
+
+function deriveStepIndex(
+  processed: boolean,
+  latestEventType: string | undefined,
+  stepsLength: number
+): number {
+  if (processed) return Math.max(0, stepsLength - 1);
+  const raw = latestEventType ? STEP_BY_EVENT[latestEventType] ?? 0 : 0;
+  const maxPending = Math.max(0, stepsLength - 2);
+  return Math.min(Math.max(0, raw), maxPending);
+}
+
 /**
- * Webhook-Aware Payment Processing Screen
- * Polls payment status and shows real-time progress based on webhook processing
+ * Webhook-aware payment processing screen: polls payment status and maps Stripe hints to steps.
  */
 const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   paymentIntentId,
@@ -35,22 +55,19 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   onError,
   onTimeout: _onTimeout,
 }) => {
-  const [currentStep, setCurrentStep] = useState(0);
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
-  const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const onSuccessCalledRef = useRef(false); // Guard to prevent duplicate onSuccess calls
-  const pixelPurchaseFiredRef = useRef(false); // Fire Pixel Purchase once per payment (same eventID as CAPI for deduplication)
-  const shouldSkipPolling = paymentIntentId === "processing_upgrade";
-  const shouldPoll = isVisible && !!paymentIntentId && !shouldSkipPolling;
+  const [stillWaitingLong, setStillWaitingLong] = useState(false);
+  const onSuccessCalledRef = useRef(false);
+  const pixelPurchaseFiredRef = useRef(false);
 
-  const {
-    data: paymentStatus,
-    isError: paymentStatusError,
-    error: paymentStatusErrorDetails,
-  } = usePaymentStatus(paymentIntentId, { enabled: shouldPoll });
+  const shouldPoll = isVisible && !!paymentIntentId && paymentIntentId.startsWith("pi_");
 
-  // Define processing steps based on package type
+  const { data: paymentStatus, isError: paymentStatusError, error: paymentStatusErrorDetails } = usePaymentStatus(
+    paymentIntentId,
+    { enabled: shouldPoll }
+  );
+
   const getProcessingSteps = () => {
     const baseSteps = [
       "Processing your payment...",
@@ -77,7 +94,12 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   const steps = getProcessingSteps();
 
-  // Reset state when payment intent or visibility changes
+  const currentStep = useMemo(() => {
+    const processed = !!status?.processed;
+    const ev = status?.data?.latestEventType ?? paymentStatus?.data?.latestEventType;
+    return deriveStepIndex(processed, ev, steps.length);
+  }, [status?.processed, status?.data?.latestEventType, paymentStatus?.data?.latestEventType, steps.length]);
+
   useEffect(() => {
     if (!paymentIntentId || !isVisible) {
       return;
@@ -85,143 +107,60 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     onSuccessCalledRef.current = false;
     setStatus(null);
     setError(null);
-    setCurrentStep(0);
-    setIsProcessing(true);
+    setStillWaitingLong(false);
   }, [paymentIntentId, isVisible]);
 
-  // Handle processing upgrade case (showing immediately when Pay button clicked)
-  useEffect(() => {
-    if (!isVisible || !shouldSkipPolling) return;
-
-    let stepIndex = 0;
-    setIsProcessing(true);
-
-    const stepInterval = setInterval(() => {
-      if (stepIndex < steps.length - 1) {
-        setCurrentStep(stepIndex);
-        stepIndex++;
-      } else {
-        clearInterval(stepInterval);
-        setTimeout(() => {
-          const upgradeStatus: PaymentStatusResponse = {
-            success: true,
-            processed: true,
-            status: "completed",
-            data: {
-              paymentIntentId: "upgrade_processing",
-              message: "Upgrade completed successfully",
-            },
-          };
-          setStatus(upgradeStatus);
-          setIsProcessing(false);
-          setCurrentStep(steps.length - 1);
-
-          if (!onSuccessCalledRef.current) {
-            onSuccessCalledRef.current = true;
-            onSuccess?.(upgradeStatus);
-          }
-        }, 1000);
-      }
-    }, 2000);
-
-    return () => {
-      clearInterval(stepInterval);
-    };
-  }, [isVisible, shouldSkipPolling, steps.length, onSuccess]);
-
-  // React to payment status updates from React Query polling
   useEffect(() => {
     if (!shouldPoll || !paymentStatus) return;
 
-    setStatus(paymentStatus);
+    setStatus((prev) => ({
+      ...paymentStatus,
+      data: {
+        ...paymentStatus.data,
+        latestEventType: paymentStatus.data.latestEventType ?? prev?.data?.latestEventType,
+        latestEventAt: paymentStatus.data.latestEventAt ?? prev?.data?.latestEventAt,
+      },
+    }));
 
     if (paymentStatus.processed) {
-      setCurrentStep(steps.length - 1);
-      setIsProcessing(false);
       if (!onSuccessCalledRef.current) {
         onSuccessCalledRef.current = true;
         onSuccess?.(paymentStatus);
       }
-    } else {
-      setIsProcessing(true);
-      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 2));
     }
-  }, [paymentStatus, shouldPoll, steps.length, onSuccess]);
+  }, [paymentStatus, shouldPoll, onSuccess, packageType]);
 
-  // Surface polling errors
   useEffect(() => {
     if (!shouldPoll || !paymentStatusError) return;
     const errorMessage =
       paymentStatusErrorDetails instanceof Error
         ? paymentStatusErrorDetails.message
         : "Payment processing failed. Please try again.";
-
-    setIsProcessing(false);
     setError(errorMessage);
     onError?.(errorMessage);
   }, [shouldPoll, paymentStatusError, paymentStatusErrorDetails, onError]);
 
-  // Auto-advance steps while processing
   useEffect(() => {
-    if (!isProcessing || error) return;
+    if (!isVisible || !shouldPoll || status?.processed || error) return;
 
-    const interval = setInterval(() => {
-      setCurrentStep((prev) => {
-        const nextStep = prev + 1;
-        // Don't go to the last step until payment is processed
-        return Math.min(nextStep, steps.length - 2);
-      });
-    }, 3000); // Advance step every 3 seconds
-
-    return () => clearInterval(interval);
-  }, [isProcessing, error, steps.length]);
-
-  // Fallback: Show success after 30 seconds if payment is successful but not processed
-  useEffect(() => {
-    if (!isProcessing || !paymentIntentId || error || onSuccessCalledRef.current) return;
-
-    const fallbackTimer = setTimeout(() => {
-      console.log("Fallback: Showing success after 30 seconds");
-      setIsProcessing(false);
-      // Guard against duplicate onSuccess calls
-      if (!onSuccessCalledRef.current) {
-        onSuccessCalledRef.current = true;
-        onSuccess?.({
-          success: true,
-          processed: true,
-          status: "completed",
-          data: {
-            paymentIntentId,
-            message: "Payment completed successfully",
-          },
-        });
-      }
-    }, 30000); // 30 seconds fallback
-
-    return () => clearTimeout(fallbackTimer);
-  }, [isProcessing, paymentIntentId, error, onSuccess]);
+    const t = setTimeout(() => {
+      setStillWaitingLong(true);
+    }, 30000);
+    return () => clearTimeout(t);
+  }, [isVisible, shouldPoll, paymentIntentId, status?.processed, error]);
 
   if (!isVisible) return null;
 
-  // Fire Pixel Purchase once when success is shown (same eventID as CAPI for deduplication)
-  if (status?.processed && status.data && paymentIntentId && !shouldSkipPolling && !pixelPurchaseFiredRef.current) {
-    const value = status.data.price;
-    if (typeof value === "number" && value > 0) {
-      pixelPurchaseFiredRef.current = true;
-      const currency = status.data.currency ?? "AUD";
-      console.log("📘 [Meta Pixel] Purchase fired (in-modal success)", {
-        eventId: paymentIntentId,
-        value,
-        currency,
-        source: "PaymentProcessingScreen",
-        packageType,
-      });
-      trackPurchaseWithEventId(value, currency, paymentIntentId, paymentIntentId);
-    }
-  }
-
-  // Show success screen if payment is processed - using SuccessScreen design
   if (status?.processed && status.data) {
+    if (!pixelPurchaseFiredRef.current && paymentIntentId && shouldPoll) {
+      const value = status.data.price;
+      if (typeof value === "number" && value > 0) {
+        pixelPurchaseFiredRef.current = true;
+        const currency = status.data.currency ?? "AUD";
+        trackPurchaseWithEventId(value, currency, paymentIntentId, paymentIntentId);
+      }
+    }
+
     type BenefitIcon = "gift" | "star" | "zap" | "tag";
     const benefits: { text: string; icon: BenefitIcon }[] = [];
 
@@ -300,53 +239,55 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     );
   }
 
-  // Show error screen - using SuccessScreen design pattern but with appropriate theme
   if (error) {
-    const isTimeout = error.includes("taking longer than expected");
-
     return (
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto p-4 sm:p-8 text-center animate-in zoom-in-95 duration-500">
           <div className="mb-4 sm:mb-6">
-            <div
-              className={`w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br ${
-                isTimeout ? "from-yellow-600 to-yellow-700" : "from-red-600 to-red-700"
-              } rounded-full flex items-center justify-center shadow-lg animate-in zoom-in-50 duration-700 delay-200`}
-            >
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-red-600 to-red-700 rounded-full flex items-center justify-center shadow-lg animate-in zoom-in-50 duration-700 delay-200">
               <AlertCircle className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-in fade-in duration-500 delay-500" />
             </div>
-            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
-              {isTimeout ? "Processing in Progress" : "Processing Error"}
-            </h2>
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">Processing Error</h2>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-4">{error}</p>
-            {isTimeout ? (
-              <div className="space-y-2">
-                <p className="text-xs text-gray-500">
-                  Your payment was successful. Benefits will appear in your account shortly.
-                </p>
-                <button
-                  onClick={() => (window.location.href = "/dashboard")}
-                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-                >
-                  Check My Account
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Try Again
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Show processing screen - using LoadingScreen design exactly
+  if (stillWaitingLong && shouldPoll && !status?.processed) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
+        <div className="absolute inset-0 bg-black/60" />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-8 text-center">
+          <AlertCircle className="w-14 h-14 text-amber-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Still processing</h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Your payment is taking longer than usual to confirm. We&apos;ll email you when everything is finalised. You can
+            safely leave this screen.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/my-account";
+            }}
+            className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+          >
+            Go to dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
       <div className="absolute inset-0 bg-black/60" />
@@ -360,7 +301,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
         </div>
         <div className="flex items-center justify-center gap-2 text-sm text-white">
           <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-          <span className="animate-bounce text-center font-medium">{steps[currentStep]}</span>
+          <span className="text-center font-medium">{steps[currentStep] ?? steps[0]}</span>
         </div>
       </div>
     </div>

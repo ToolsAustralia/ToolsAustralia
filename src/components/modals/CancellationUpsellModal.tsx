@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Gift, CheckCircle, Sparkles } from "lucide-react";
 import { useLoading } from "@/contexts/LoadingContext";
+import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
+import { useToast } from "@/components/ui/Toast";
 
 interface CancellationUpsellModalProps {
   isOpen: boolean;
@@ -20,7 +22,9 @@ interface CancellationUpsellModalProps {
 const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpen, onClose, onRedeem, onDecline }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { showLoading, hideLoading, showSuccess } = useLoading();
+  const { showLoading, hideLoading } = useLoading();
+  const showEntryReward = useEntryRewardToast();
+  const { showToast } = useToast();
 
   // Animation effect
   useEffect(() => {
@@ -69,50 +73,29 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
         throw new Error(result.error || "Failed to redeem free entries");
       }
 
-      // Hide loading and show success
       hideLoading();
-      showSuccess(
-        "Free Entries Redeemed!",
-        "100 free entries added to your account",
-        [
-          {
-            text: "100 free entries added to your account",
-            icon: "star" as const,
-          },
-          {
-            text: "Entries added to major draw",
-            icon: "gift" as const,
-          },
-          {
-            text: "Redirecting to dashboard",
-            icon: "star" as const,
-          },
-        ],
-        2000
-      );
+      // Retention flow: use entry toast only (no global success screen) — same pattern as other flows that already show a full-screen success elsewhere.
+      showEntryReward({
+        entries: 100,
+        drawType: "major",
+        source: "cancellation-upsell-redeem",
+      });
 
-      // Call the redeem handler
       onRedeem();
 
-      // Reload the page after a short delay
       setTimeout(() => {
         window.location.reload();
-      }, 2000);
+      }, 2200);
     } catch (error) {
       console.error("Failed to redeem free entries:", error);
       hideLoading();
 
-      // Show error but don't close modal - let user try again
-      showSuccess(
-        "Error",
-        "Failed to redeem free entries. Please try again.",
-        [
-          {
-            text: "Please try again",
-            icon: "star" as const,
-          },
-        ]
-      );
+      showToast({
+        type: "error",
+        title: "Couldn’t redeem entries",
+        message: error instanceof Error ? error.message : "Failed to redeem free entries. Please try again.",
+        duration: 8000,
+      });
     } finally {
       setIsProcessing(false);
     }

@@ -11,6 +11,7 @@ import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import MembershipModal from "@/components/modals/MembershipModal";
 
@@ -64,12 +65,13 @@ function PartnerBenefitsContent() {
 
   const { user } = accountData;
   const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+  const activePackage = getActivePackage(user as ActivePackageUserInput);
 
   // Package theme when user has access
   let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
   if (hasAccess && user) {
-    if (user.subscription?.isActive && user.subscriptionPackageData) {
-      const planId = derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+    if (activePackage.source === "subscription" && activePackage.packageData) {
+      const planId = derivePlanIdFromPackage(activePackage.packageData, "subscription");
       packageTheme = getLandingPageThemeFromPlanId(planId, true);
     } else if (user.enrichedOneTimePackages?.length) {
       const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];

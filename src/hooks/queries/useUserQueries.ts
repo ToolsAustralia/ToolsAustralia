@@ -179,16 +179,35 @@ export const useUpdateUserProfile = () => {
       const response = await apiPut<{ success: boolean; data: UserData }>(`/api/users/${userId}`, data);
       return response.data;
     },
-    onSuccess: (data, variables) => {
-      // Update user data in cache
-      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+    onMutate: async ({ userId, data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.account(userId) });
 
-      // Invalidate related queries to refetch fresh data
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const previousAccount = queryClient.getQueryData<MyAccountData>(queryKeys.users.account(userId));
+
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...data } : old
+      );
+      queryClient.setQueryData(queryKeys.users.account(userId), (old: MyAccountData | undefined) =>
+        old ? { ...old, user: { ...old.user, ...data } } : old
+      );
+
+      return { previousDetail, previousAccount };
+    },
+    onError: (error, variables, context) => {
+      console.error("Failed to update user profile:", error);
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+      if (context?.previousAccount) {
+        queryClient.setQueryData(queryKeys.users.account(variables.userId), context.previousAccount);
+      }
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account(variables.userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(variables.userId) });
-    },
-    onError: (error) => {
-      console.error("Failed to update user profile:", error);
     },
   });
 };
@@ -204,9 +223,25 @@ export const useUpdateUserPreferences = () => {
       );
       return response.data;
     },
+    onMutate: async ({ userId, preferences }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const patch = preferences as Partial<UserData>;
+
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...patch } : old
+      );
+
+      return { previousDetail };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+    },
     onSuccess: (data, variables) => {
-      // Update user data in cache
       queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(variables.userId) });
     },
   });
 };
@@ -219,11 +254,24 @@ export const useCompleteUserSetup = () => {
       const response = await apiPost<{ success: boolean; data: UserData }>(`/api/user/setup`, setupData);
       return response.data;
     },
-    onSuccess: (data, variables) => {
-      // Update user data in cache
-      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+    onMutate: async ({ userId, setupData }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const patch = setupData as Partial<UserData>;
 
-      // Invalidate all user-related queries
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...patch } : old
+      );
+
+      return { previousDetail };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });

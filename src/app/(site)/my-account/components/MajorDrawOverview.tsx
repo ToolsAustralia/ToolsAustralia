@@ -6,6 +6,7 @@ import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import type { PackageDetailModalPackageData, SubscriptionAccumulationData } from "@/components/modals/PackageDetailModal";
 import { formatRenewalDate } from "@/utils/dates/month-helpers";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 interface MajorDrawOverviewProps {
   drawName: string;
@@ -153,6 +154,51 @@ export default function MajorDrawOverview({
 
   const displayMembershipEntries = pendingEntriesData ? pendingEntriesData.expectedEntries : membershipEntries;
 
+  const projectedTotalEntries = pendingEntriesData
+    ? pendingEntriesData.expectedEntries + oneTimeEntries
+    : totalEntries;
+
+  const [showProjected, setShowProjected] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!pendingEntriesData) {
+      setShowProjected(false);
+      return;
+    }
+    setShowProjected(false);
+    const id = window.setInterval(() => {
+      setShowProjected((prev) => !prev);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [pendingEntriesData, projectedTotalEntries]);
+
+  const heroValue = pendingEntriesData && showProjected ? projectedTotalEntries : totalEntries;
+  const heroLabel =
+    pendingEntriesData && showProjected
+      ? "Total entries upon membership renewal"
+      : "Total Entries";
+
+  /** Wider string wins so tabular hero number does not shift horizontally when alternating. */
+  const pendingHeroMinCh = pendingEntriesData
+    ? Math.max(
+        totalEntries.toLocaleString("en-AU").length,
+        projectedTotalEntries.toLocaleString("en-AU").length
+      )
+    : 0;
+
+  /** One badge per package id (user may have multiple active rows for the same upsell). */
+  const oneTimeBadgesList = (() => {
+    if (!oneTimePackages.length || !activeOneTimePackageIds) return [];
+    const byPackageId = new Map<string, (typeof oneTimePackages)[number]>();
+    for (const pkg of oneTimePackages) {
+      if (!pkg.isActive) continue;
+      const id = String(pkg.packageId);
+      if (!activeOneTimePackageIds.has(id)) continue;
+      if (!byPackageId.has(id)) byPackageId.set(id, pkg);
+    }
+    return Array.from(byPackageId.values());
+  })();
+
   return (
     <div className={`px-4 sm:px-6 ${className}`}>
       <div className="max-w-7xl mx-auto">
@@ -178,16 +224,40 @@ export default function MajorDrawOverview({
             {/* Main content panel - elevated glass */}
            
 
-              {/* Total entries hero - stronger presence */}
-              <div className="text-center mb-5 sm:mb-6">
-                <div className="relative inline-block">
+              {/* Total entries hero — fixed slots to avoid layout shift when alternating pending renewal */}
+              <div className="mb-2 flex flex-col items-center text-center">
+                <div
+                  className={`relative mx-auto flex items-center justify-center ${
+                    pendingEntriesData
+                      ? "mb-1 min-h-[2.75rem] xs:min-h-[3.25rem] sm:mb-1.5 sm:min-h-[3.75rem]"
+                      : "mb-1.5"
+                  }`}
+                  style={
+                    pendingEntriesData && pendingHeroMinCh > 0
+                      ? { minWidth: `${pendingHeroMinCh + 1}ch` }
+                      : undefined
+                  }
+                >
                   <div className="absolute inset-0 bg-gradient-radial from-red-500/30 via-red-400/10 to-transparent blur-3xl scale-[2.5]" />
-                  <div className="relative text-4xl xs:text-5xl sm:text-6xl font-extrabold tracking-tighter tabular-nums text-white drop-shadow-[0_0_40px_rgba(238,0,0,0.35),0_0_20px_rgba(238,0,0,0.2),0_2px_4px_rgba(0,0,0,0.4)] mb-1.5">
-                    {totalEntries.toLocaleString()}
+                  <div className="relative text-4xl xs:text-5xl sm:text-6xl font-extrabold tracking-tighter tabular-nums text-white drop-shadow-[0_0_40px_rgba(238,0,0,0.35),0_0_20px_rgba(238,0,0,0.2),0_2px_4px_rgba(0,0,0,0.4)]">
+                    <AnimatedNumber value={heroValue} className="tabular-nums" />
                   </div>
                 </div>
-                <div className="text-red-100/90 text-[10px] xs:text-xs sm:text-sm font-bold uppercase tracking-[0.35em]">
-                  Total Entries
+                <div
+                  className={`flex w-full max-w-full items-center justify-center px-1 ${
+                    pendingEntriesData ? "min-h-11 xs:min-h-12 sm:min-h-14" : ""
+                  }`}
+                >
+                  <span
+                    key={pendingEntriesData ? String(showProjected) : "default"}
+                    className={`max-w-full text-center text-red-100/90 transition-opacity duration-500 whitespace-nowrap ${
+                      pendingEntriesData && showProjected
+                        ? "font-semibold normal-case tracking-normal text-xs xs:text-sm sm:text-base leading-tight"
+                        : "font-bold uppercase text-[10px] xs:text-xs sm:text-sm tracking-[0.35em]"
+                    }`}
+                  >
+                    {heroLabel}
+                  </span>
                 </div>
               </div>
 
@@ -258,7 +328,7 @@ export default function MajorDrawOverview({
                                   : "text-white"
                             }`}
                           >
-                            {displayMembershipEntries.toLocaleString()}
+                            <AnimatedNumber value={displayMembershipEntries} className="tabular-nums" />
                           </div>
                           {pendingEntriesData?.isFailedRenewal && (
                             <Clock
@@ -324,7 +394,7 @@ export default function MajorDrawOverview({
                             <span>One-time</span>
                           </div>
                           <div className="text-2xl xs:text-3xl sm:text-4xl font-bold text-white tabular-nums">
-                            {oneTimeEntries.toLocaleString()}
+                            <AnimatedNumber value={oneTimeEntries} className="tabular-nums" />
                           </div>
                         </div>
                         {oneTimeEntries === 0 && (
@@ -342,7 +412,7 @@ export default function MajorDrawOverview({
                             <span>One-time</span>
                           </div>
                           <div className="text-2xl xs:text-3xl sm:text-4xl font-bold text-white tabular-nums">
-                            {oneTimeEntries.toLocaleString()}
+                            <AnimatedNumber value={oneTimeEntries} className="tabular-nums" />
                           </div>
                         </div>
                         {oneTimeEntries === 0 && (
@@ -381,34 +451,25 @@ export default function MajorDrawOverview({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-center gap-2">
-                      {oneTimePackages && oneTimePackages.length > 0 && (
-                        <>
-                          {oneTimePackages
-                            .filter((pkg) => {
-                              if (!pkg.isActive) return false;
-                              if (!activeOneTimePackageIds) return false;
-                              return activeOneTimePackageIds.has(String(pkg.packageId));
-                            })
-                            .map((pkg, index) => (
-                              <MembershipBadge
-                                key={`${String(pkg.packageId)}-${index}`}
-                                packageData={pkg.packageData}
-                                isActive={true}
-                                membershipType="one-time"
-                                onClick={() => {
-                                  if (onBadgeClick) {
-                                    onBadgeClick({
-                                      packageData: pkg.packageData,
-                                      membershipType: "one-time",
-                                      accumulation: null,
-                                    });
-                                  }
-                                }}
-                              />
-                            ))}
-                        </>
-                      )}
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {oneTimeBadgesList.length > 0 &&
+                        oneTimeBadgesList.map((pkg) => (
+                          <MembershipBadge
+                            key={String(pkg.packageId)}
+                            packageData={pkg.packageData}
+                            isActive={true}
+                            membershipType="one-time"
+                            onClick={() => {
+                              if (onBadgeClick) {
+                                onBadgeClick({
+                                  packageData: pkg.packageData,
+                                  membershipType: "one-time",
+                                  accumulation: null,
+                                });
+                              }
+                            }}
+                          />
+                        ))}
                     </div>
                   </div>
                 </div>

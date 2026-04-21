@@ -6,6 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
+    "build:upsell-manifest": "tsx scripts/build-upsell-image-manifest.ts",
+    "convert:upsell-webp": "tsx scripts/convert-upsells-to-webp.ts",
+    "prebuild": "npm run build:upsell-manifest",
+    "predev": "npm run build:upsell-manifest",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
@@ -34,7 +38,8 @@
     "sync:klaviyo-past-due": "tsx scripts/sync-klaviyo-past-due-profiles.ts",
     "sync:klaviyo-past-due:dry": "tsx scripts/sync-klaviyo-past-due-profiles.ts --dry-run",
     "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts",
-    "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts"
+    "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
+    "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

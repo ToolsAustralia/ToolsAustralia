@@ -3,6 +3,7 @@
 import React, { useMemo } from "react";
 import { Users, Gift, Award } from "lucide-react";
 import { useCompletedMajorDraws } from "@/hooks/queries/useMajorDrawQueries";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 interface MajorDrawStats {
   totalDraws: number;
@@ -108,8 +109,8 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="w-8 h-8 bg-gradient-to-br from-blue-400 via-cyan-400 to-blue-300 rounded-full flex items-center justify-center shadow-lg mx-auto mb-1 ring-2 ring-blue-400/30">
                 <Users className="w-4 h-4 text-gray-900 drop-shadow-md" />
               </div>
-              <div className="text-sm font-bold text-white mb-0.5 font-['Poppins']">
-                {stats.totalEntries.toLocaleString()}
+              <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] tabular-nums">
+                <AnimatedNumber value={stats.totalEntries} className="font-['Poppins'] font-bold" />
               </div>
               <p className="text-[10px] text-gray-300 font-medium leading-tight">Total entries</p>
             </div>
@@ -162,8 +163,8 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <Users className="w-8 h-8 text-gray-900 drop-shadow-md" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-['Poppins']">
-                {stats.totalEntries.toLocaleString()}
+              <div className="text-2xl sm:text-3xl font-bold text-white mb-1 font-['Poppins'] tabular-nums">
+                <AnimatedNumber value={stats.totalEntries} className="font-['Poppins'] font-bold text-2xl sm:text-3xl" />
               </div>
               <p className="text-xs sm:text-sm text-gray-300 font-medium">Total entries</p>
             </div>

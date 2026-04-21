@@ -5,10 +5,16 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost, apiPut } from "@/lib/queries";
 import { useAttribution } from "@/hooks/useAttribution";
-import { getOneTimePackages } from "@/data/membershipPackages";
+import { freezeRefetchIntervals } from "@/lib/purchaseCooldown";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import {
+  armDashboardEntryHoldFromUserStatsCache,
+  clearDashboardEntryHold,
+} from "@/utils/dashboard-entry-hold";
 
 // Types
 export interface MembershipPackage {
@@ -156,6 +162,7 @@ export const useOneTimeMemberships = (userId?: string) => {
 export const usePurchaseMembership = () => {
   const queryClient = useQueryClient();
   const attribution = useAttribution();
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   return useMutation({
     mutationFn: async ({
@@ -181,149 +188,24 @@ export const usePurchaseMembership = () => {
     },
     onMutate: async ({ packageId, userId }) => {
       const actualUserId = userId;
-      // console.log("🔥 ONMUTATE TRIGGERED: Membership purchase starting", { packageId });
 
-      // Cancel outgoing refetches and disable refetch intervals temporarily
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.current });
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.users.account("current-user") });
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.account(actualUserId) });
 
-      // Temporarily disable refetch intervals to prevent overriding optimistic updates
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: false,
-        refetchIntervalInBackground: false,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats(actualUserId), {
-        refetchInterval: false,
-        refetchIntervalInBackground: false,
-      });
+      freezeRefetchIntervals(queryClient, actualUserId, 5000);
 
-      // Snapshot previous values
       const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
       const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
-      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account("current-user"));
+      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account(actualUserId));
 
-      // Get the package data to calculate optimistic updates
-      // Use static data since membership packages are not loaded in React Query cache
-      const packages = getOneTimePackages();
-      const selectedPackage = packages?.find((pkg) => pkg._id === packageId);
-      // console.log("🔍 DEBUG: Membership packages from static data:", packages);
-      // console.log("🔍 DEBUG: Looking for packageId:", packageId);
-      // console.log("🔍 DEBUG: Selected package found:", selectedPackage);
-
-      if (selectedPackage) {
-        // Get effective multiplier from cache (API returns scheduled > toggle > alternating)
-        // Note: We can't use hooks in onMutate, so we read from query cache
-        const currentEffective = queryClient.getQueryData<{
-          data: {
-            "membership-packages": number | null;
-            "one-time-packages": number | null;
-            "mini-packages": number | null;
-          };
-        }>(["alternating-multiplier", "current"]);
-
-        const effectiveForType =
-          selectedPackage.type === "subscription"
-            ? currentEffective?.data?.["membership-packages"]
-            : currentEffective?.data?.["one-time-packages"];
-        const promoMultiplier =
-          effectiveForType != null && effectiveForType > 0 ? effectiveForType : 1;
-
-        // Calculate entry count with promo applied
-        const baseEntries =
-          selectedPackage.type === "subscription"
-            ? selectedPackage.entriesPerMonth || 0
-            : selectedPackage.totalEntries || 0;
-        const entryCount = baseEntries * promoMultiplier;
-
-        // console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries to major draw`, {
-        //   baseEntries,
-        //   promoMultiplier,
-        //   hasPromo: !!oneTimePromo,
-        //   finalEntries: entryCount,
-        // });
-
-        // Optimistically update major draw data (useCurrentMajorDraw expects MajorDraw object)
-        queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
-          if (!old || typeof old !== "object") {
-            // console.log("❌ No existing major draw data for optimistic update");
-            return old;
-          }
-          const oldData = old as Record<string, unknown>;
-
-          // useCurrentMajorDraw expects a MajorDraw object, not the full API response
-          const newData = {
-            ...oldData,
-            totalEntries: ((oldData.totalEntries as number) || 0) + entryCount,
-            isProcessing: true, // Add processing flag
-          };
-
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
-          //   oldTotalEntries: oldData.totalEntries,
-          //   newTotalEntries: newData.totalEntries,
-          //   entryCount,
-          //   isProcessing: true,
-          // });
-
-          return newData;
-        });
-
-        // Optimistically update user stats
-        // console.log(
-        //   "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
-        //   queryKeys.majorDraw.userStats(actualUserId)
-        // );
-        queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), (old: unknown) => {
-          if (!old || typeof old !== "object") return old;
-          const oldData = old as Record<string, unknown>;
-          const newData = {
-            ...oldData,
-            totalEntries: ((oldData.totalEntries as number) || 0) + entryCount,
-            currentDrawEntries: ((oldData.currentDrawEntries as number) || 0) + entryCount,
-            membershipEntries: ((oldData.membershipEntries as number) || 0) + entryCount,
-            isProcessing: true,
-            pendingEntries: entryCount,
-          };
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
-          //   oldTotalEntries: oldData.totalEntries,
-          //   newTotalEntries: newData.totalEntries,
-          //   entryCount,
-          // });
-          return newData;
-        });
-
-        // Optimistically update user account data
-        queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
-          if (!old || typeof old !== "object") return old;
-          const oldData = old as Record<string, unknown>;
-          const oldUser = oldData.user as Record<string, unknown>;
-          const newData = {
-            ...oldData,
-            user: {
-              ...oldUser,
-              accumulatedEntries: ((oldUser.accumulatedEntries as number) || 0) + entryCount,
-              entryWallet: ((oldUser.entryWallet as number) || 0) + entryCount,
-              isProcessing: true,
-            },
-          };
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
-          //   oldAccumulatedEntries: oldUser.accumulatedEntries,
-          //   newAccumulatedEntries: newData.user.accumulatedEntries,
-          //   entryCount,
-          // });
-          return newData;
-        });
-      }
+      armDashboardEntryHoldFromUserStatsCache(previousUserStats);
 
       return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
     },
     onSuccess: (data, variables, context) => {
-      // console.log(`🎉 PAYMENT SUCCESS: Membership purchase completed`);
+      const actualUserId = context?.actualUserId ?? variables.userId;
 
-      // Get the actual user ID from context
-      const actualUserId = context?.actualUserId || "current-user";
-
-      // Clear processing flags immediately
       queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
         if (!old || typeof old !== "object") return old;
         const oldData = old as Record<string, unknown>;
@@ -343,7 +225,7 @@ export const usePurchaseMembership = () => {
         };
       });
 
-      queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
+      queryClient.setQueryData(queryKeys.users.account(actualUserId), (old: unknown) => {
         if (!old || typeof old !== "object") return old;
         const oldData = old as Record<string, unknown>;
         return {
@@ -355,76 +237,43 @@ export const usePurchaseMembership = () => {
         };
       });
 
-      // Re-enable refetch intervals after successful payment
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: 2 * 60 * 1000, // 2 minutes
-        refetchIntervalInBackground: true,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats("current-user"), {
-        refetchInterval: 1 * 60 * 1000, // 1 minute
-        refetchIntervalInBackground: true,
-      });
-
-      // HYBRID APPROACH: Set up webhook validation
       setTimeout(async () => {
-        // console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
         try {
-          // Fetch fresh data from server to validate optimistic updates
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
             fetch("/api/major-draw").then((res) => res.json()),
             fetch(`/api/users/${actualUserId}/my-account`).then((res) => res.json()),
           ]);
 
-          // Update cache with server data if different
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
-            // console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
           }
 
           if (userStatsResponse.success) {
-            queryClient.setQueryData(queryKeys.users.account("current-user"), userStatsResponse.data);
-            // console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
+            queryClient.setQueryData(queryKeys.users.account(actualUserId), userStatsResponse.data);
           }
         } catch (error) {
           console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);
         }
-      }, 3000); // 3 seconds delay to allow webhook to complete
+      }, 3000);
 
-      // Invalidate membership-related queries to sync with server
-      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.packages });
+      invalidatePurchaseCaches(actualUserId);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.current });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current-user") });
-
-      // Update user data cache if available
-      queryClient.setQueryData(queryKeys.memberships.user("current-user"), data.data.membership);
+      queryClient.setQueryData(queryKeys.memberships.user(actualUserId), data.data.membership);
     },
     onError: (error, variables, context) => {
       console.error("Failed to purchase membership:", error);
+      clearDashboardEntryHold();
 
-      // Get the actual user ID from context
-      const actualUserId = context?.actualUserId || "current-user";
+      const actualUserId = context?.actualUserId ?? variables.userId;
 
-      // Re-enable refetch intervals on error
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: 2 * 60 * 1000, // 2 minutes
-        refetchIntervalInBackground: true,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats(actualUserId), {
-        refetchInterval: 1 * 60 * 1000, // 1 minute
-        refetchIntervalInBackground: true,
-      });
-
-      // Rollback optimistic updates
-      if (context?.previousMajorDraw) {
+      if (context?.previousMajorDraw !== undefined) {
         queryClient.setQueryData(queryKeys.majorDraw.current, context.previousMajorDraw);
       }
-      if (context?.previousUserStats) {
+      if (context?.previousUserStats !== undefined) {
         queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), context.previousUserStats);
       }
-      if (context?.previousUserAccount) {
-        queryClient.setQueryData(queryKeys.users.account("current-user"), context.previousUserAccount);
+      if (context?.previousUserAccount !== undefined) {
+        queryClient.setQueryData(queryKeys.users.account(actualUserId), context.previousUserAccount);
       }
     },
   });
@@ -432,6 +281,8 @@ export const usePurchaseMembership = () => {
 
 export const useCancelSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (subscriptionId: string) => {
@@ -442,22 +293,23 @@ export const useCancelSubscription = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update subscription in cache
+      if (!userId) return;
       queryClient.setQueryData(
-        queryKeys.memberships.subscriptions("current-user"),
+        queryKeys.memberships.subscriptions(userId),
         (old: MembershipSubscription[] = []) => {
           return old.map((sub) => (sub._id === data._id ? data : sub));
         }
       );
 
-      // Invalidate user membership
-      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user("current-user") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user(userId) });
     },
   });
 };
 
 export const useReactivateSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (subscriptionId: string) => {
@@ -468,22 +320,23 @@ export const useReactivateSubscription = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update subscription in cache
+      if (!userId) return;
       queryClient.setQueryData(
-        queryKeys.memberships.subscriptions("current-user"),
+        queryKeys.memberships.subscriptions(userId),
         (old: MembershipSubscription[] = []) => {
           return old.map((sub) => (sub._id === data._id ? data : sub));
         }
       );
 
-      // Invalidate user membership
-      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user("current-user") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user(userId) });
     },
   });
 };
 
 export const useUpdateSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({ subscriptionId, packageId }: { subscriptionId: string; packageId: string }) => {
@@ -496,16 +349,15 @@ export const useUpdateSubscription = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Update subscription in cache
+      if (!userId) return;
       queryClient.setQueryData(
-        queryKeys.memberships.subscriptions("current-user"),
+        queryKeys.memberships.subscriptions(userId),
         (old: MembershipSubscription[] = []) => {
           return old.map((sub) => (sub._id === data._id ? data : sub));
         }
       );
 
-      // Invalidate user membership
-      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user("current-user") });
+      queryClient.invalidateQueries({ queryKey: queryKeys.memberships.user(userId) });
     },
   });
 };

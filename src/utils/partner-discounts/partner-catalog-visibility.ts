@@ -63,6 +63,20 @@ export function getPartnerCatalogAccessPercentForPlanId(planId: string): number 
   return 100;
 }
 
+/**
+ * Partner catalog access % for membership package ids used in subscription UI.
+ * Prefer resolving via {@link getPackageById} + {@link derivePlanIdFromPackage} so slug ids
+ * and DB-shaped ids both map to the same tier rules as {@link getPartnerCatalogAccessPercentForPlanId}.
+ */
+export function getPartnerCatalogAccessPercentForMembershipPackageId(packageId: string): number {
+  const pkg = getPackageById(packageId);
+  if (pkg) {
+    const planId = derivePlanIdFromPackage(pkg, pkg.type === "subscription" ? "subscription" : "one-time");
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  return getPartnerCatalogAccessPercentForPlanId(packageId);
+}
+
 function partnerCatalogSummaryFromPercent(pct: number): string {
   return `${pct}% of partner offers`;
 }

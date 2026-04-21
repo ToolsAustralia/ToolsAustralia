@@ -12,6 +12,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { formatMajorDrawStripSchedule } from "@/utils/draws/major-draw-strip-schedule";
 import { isPromoMultiplier } from "@/types/promo-multiplier";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 /** How long each slide stays visible before cross-fading to the other */
 const ROTATE_MS = 10_000;
@@ -128,7 +129,7 @@ export default function MajorDrawHeaderStrip({
           <p className={`${entriesLabelClass} mt-0.5 lg:mt-1`}>
             Your Entries:{" "}
             <span className={entriesValueClass} style={entriesValueStyle}>
-              {entryCount.toLocaleString()}
+              <AnimatedNumber value={entryCount} />
             </span>{" "}
             <span className={entriesWordClass} style={entriesValueStyle}>
               {entryCount === 1 ? "Entry" : "Entries"}

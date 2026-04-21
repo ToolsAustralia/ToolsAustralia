@@ -35,6 +35,7 @@ import {
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -42,6 +43,22 @@ import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membersh
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 
 const stripePromise = getStripePromise();
+
+/** Align with MembershipSection: hide/list uses canonical `_id` or `*-member` plan ids from variant config. */
+function isPackageHiddenByVariant(packageId: string, hidePackages: string[] | undefined): boolean {
+  if (!hidePackages?.length) return false;
+  if (hidePackages.includes(packageId)) return true;
+  if (hidePackages.includes(`${packageId}-member`)) return true;
+  return false;
+}
+
+function variantDisplayOrderRank(packageId: string, displayOrder: string[] | undefined): number {
+  if (!displayOrder?.length) return Number.POSITIVE_INFINITY;
+  const orderMap = new Map(displayOrder.map((id, index) => [id, index]));
+  const direct = orderMap.get(packageId);
+  const memberSuffixed = orderMap.get(`${packageId}-member`);
+  return Math.min(direct ?? Number.POSITIVE_INFINITY, memberSuffixed ?? Number.POSITIVE_INFINITY);
+}
 
 const hexToRgba = (hex: string, alpha: number) => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -129,11 +146,30 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
-  // Get packages with promo applied - use membership multiplier only when user has active subscription
+  // Same membership signal as MembershipSection (subscription on user record)
+  const isSubscriberForPromo = userData?.subscription?.isActive === true;
+
+  const packagesAdjustedForVariant = useMemo(() => {
+    const pkgCfg = variantConfig?.packages;
+    let list = [...packages];
+    if (pkgCfg?.hidePackages?.length) {
+      list = list.filter((p) => !isPackageHiddenByVariant(p._id, pkgCfg.hidePackages));
+    }
+    if (pkgCfg?.displayOrder?.length) {
+      list = [...list].sort(
+        (a, b) =>
+          variantDisplayOrderRank(a._id, pkgCfg.displayOrder) -
+          variantDisplayOrderRank(b._id, pkgCfg.displayOrder)
+      );
+    }
+    return list;
+  }, [packages, variantConfig?.packages]);
+
+  // Get packages with promo applied - member-only one-time packs use membership multiplier when user is subscribed
   const packagesWithPromo = React.useMemo(() => {
-    return packages.map((pkg) => {
+    return packagesAdjustedForVariant.map((pkg) => {
       if (pkg.type === "one-time") {
-        const effectiveType = getEffectivePromoType(pkg._id, "one-time", hasActiveSubscription);
+        const effectiveType = getEffectivePromoType(pkg._id, "one-time", isSubscriberForPromo);
         const resolvedMultiplier =
           effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
         if (resolvedMultiplier !== null && resolvedMultiplier > 1) {
@@ -150,7 +186,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       }
       return pkg;
     });
-  }, [packages, resolvedMembershipMultiplier, resolvedOneTimeMultiplier, hasActiveSubscription]);
+  }, [
+    packagesAdjustedForVariant,
+    resolvedMembershipMultiplier,
+    resolvedOneTimeMultiplier,
+    isSubscriberForPromo,
+  ]);
 
   // Add query client for UI updates
   const queryClient = useQueryClient();
@@ -385,7 +426,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
 
     try {
       const result = await purchaseMembership.mutateAsync({
-        packageId: pkg._id,
+        packageId: normalizeMembershipPlanId(pkg._id),
         userId: userData?._id || "",
         paymentMethodId: paymentMethodIdToCharge,
         idempotencyKey: crypto.randomUUID(),
@@ -500,7 +541,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       const packageWithPromo = packagesWithPromo.find((p) => p._id === selectedPackage._id);
       const appliedMultiplier =
         packageWithPromo?.promoMultiplier ??
-        (getEffectivePromoType(selectedPackage._id, "one-time", hasActiveSubscription) === "membership-packages"
+        (getEffectivePromoType(selectedPackage._id, "one-time", isSubscriberForPromo) === "membership-packages"
           ? resolvedMembershipMultiplier
           : resolvedOneTimeMultiplier) ??
         1;

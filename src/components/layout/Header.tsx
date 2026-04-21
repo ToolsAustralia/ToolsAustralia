@@ -13,6 +13,7 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { formatDisplayName } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
@@ -95,6 +96,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
+
+  const resolvedActivePackage = useMemo(
+    () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
+    [userData]
+  );
   const { requestModal } = useModalPriorityStore();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const router = useRouter();
@@ -745,15 +751,20 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           </span>
                           {(() => {
                             // Prioritize subscription over one-time packages
-                            if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                            if (
+                              resolvedActivePackage?.source === "subscription" &&
+                              resolvedActivePackage.packageData &&
+                              userData?.subscription?.isActive
+                            ) {
+                              const pkg = resolvedActivePackage.packageData;
                               return (
                                 <MembershipBadge
-                                  packageData={userData.subscriptionPackageData}
+                                  packageData={pkg}
                                   isActive={userData.subscription.isActive}
                                   membershipType="subscription"
                                   onClick={() => {
                                     setIsDesktopUserMenuOpen(false);
-                                    openPackageDetailModal(userData.subscriptionPackageData!, "subscription");
+                                    openPackageDetailModal(pkg, "subscription");
                                   }}
                                 />
                               );
@@ -920,14 +931,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
               <div className="lg:hidden flex items-center">
                 {(() => {
-                  // Prioritize subscription over one-time packages
-                  if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                  if (
+                    resolvedActivePackage?.source === "subscription" &&
+                    resolvedActivePackage.packageData &&
+                    userData?.subscription?.isActive
+                  ) {
+                    const pkg = resolvedActivePackage.packageData;
                     return (
                       <MembershipBadge
-                        packageData={userData.subscriptionPackageData}
+                        packageData={pkg}
                         isActive={userData.subscription.isActive}
                         membershipType="subscription"
-                        onClick={() => openPackageDetailModal(userData.subscriptionPackageData!, "subscription")}
+                        onClick={() => openPackageDetailModal(pkg, "subscription")}
                       />
                     );
                   } else if (userData.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
@@ -1217,11 +1232,15 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       {(() => {
-                        // Prioritize subscription over one-time packages using enriched data
-                        if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                        if (
+                          resolvedActivePackage?.source === "subscription" &&
+                          resolvedActivePackage.packageData &&
+                          userData?.subscription?.isActive
+                        ) {
+                          const pkg = resolvedActivePackage.packageData;
                           return (
                             <MembershipBadge
-                              packageData={userData.subscriptionPackageData}
+                              packageData={pkg}
                               isActive={userData.subscription.isActive}
                               membershipType="subscription"
                             />
