@@ -1,3 +1,6 @@
+import crypto from "crypto";
+import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
+
 // Facebook Pixel and Conversions API integration
 export interface FacebookEvent {
   event_name: string;
@@ -26,6 +29,8 @@ export interface FacebookEvent {
     content_type?: string;
     content_name?: string;
     content_category?: string;
+    /** Internal package label; keep content_type as Meta-standard "product" where applicable. */
+    package_type?: string;
     num_items?: number;
     order_id?: string;
     search_string?: string;
@@ -60,18 +65,18 @@ export interface FacebookPixelEvent {
   };
 }
 
-import crypto from "crypto";
-
 /**
- * Get Facebook test event code when testing is enabled.
- * Use test events when NODE_ENV is development OR FACEBOOK_USE_TEST_EVENTS is "true".
- * FACEBOOK_USE_TEST_EVENTS allows test events in Vercel staging (where NODE_ENV is production).
+ * Test event code for Meta "Test events" tab. Non-production environments should always
+ * send CAPI traffic with this code when set; `sendFacebookEvent` refuses non-prod without it.
  */
 export function getFacebookTestEventCode(): string | undefined {
-  const useTestEvents =
-    process.env.NODE_ENV === "development" ||
-    process.env.FACEBOOK_USE_TEST_EVENTS === "true";
-  return useTestEvents ? process.env.FACEBOOK_TEST_EVENT_CODE : undefined;
+  if (isProductionPixelEnv()) {
+    if (process.env.FACEBOOK_USE_TEST_EVENTS === "true") {
+      return process.env.FACEBOOK_TEST_EVENT_CODE;
+    }
+    return undefined;
+  }
+  return process.env.FACEBOOK_TEST_EVENT_CODE || undefined;
 }
 
 /** SHA256 hash for PII - Meta requires lowercase, trimmed input before hashing */
@@ -132,6 +137,8 @@ export interface BuildFacebookPurchaseEventParams {
     order_id?: string;
     content_ids?: string[];
     content_type?: string;
+    content_category?: string;
+    package_type?: string;
     num_items?: number;
   };
 }
@@ -197,6 +204,8 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
       ...(customData?.order_id && { order_id: customData.order_id }),
       ...(customData?.content_ids && customData.content_ids.length > 0 && { content_ids: customData.content_ids }),
       ...(customData?.content_type && { content_type: customData.content_type }),
+      ...(customData?.content_category && { content_category: customData.content_category }),
+      ...(customData?.package_type && { package_type: customData.package_type }),
       ...(customData?.num_items != null && { num_items: customData.num_items }),
     },
   };
@@ -219,8 +228,22 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
     return false;
   }
 
+  const effectiveTestCode = getFacebookTestEventCode();
+  if (!isProductionPixelEnv() && !effectiveTestCode) {
+    console.error("REFUSING CAPI Purchase - non-prod environment without test_event_code", {
+      event_name: event.event_name,
+      env: getPixelEnv(),
+    });
+    return false;
+  }
+
+  const eventIdTrimmed = typeof event.event_id === "string" ? event.event_id.trim() : "";
+  if (!eventIdTrimmed) {
+    console.error("REFUSING CAPI Purchase - missing event_id", { env: getPixelEnv() });
+    return false;
+  }
+
   const isDev = process.env.NODE_ENV === "development";
-  const testEventCode = getFacebookTestEventCode();
 
   // Remove undefined/invalid fields (Meta rejects with error 100)
   const sanitizedEvent = removeUndefinedAndInvalidFields(event as unknown as Record<string, unknown>) as unknown as FacebookEvent;
@@ -228,7 +251,18 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
     data: [sanitizedEvent],
     access_token: accessToken,
   };
-  if (testEventCode) requestBody.test_event_code = testEventCode;
+  if (effectiveTestCode) requestBody.test_event_code = effectiveTestCode;
+
+  const cd = sanitizedEvent.custom_data;
+  console.log("[CAPI] Purchase sent", {
+    env: getPixelEnv(),
+    event_id: sanitizedEvent.event_id,
+    value: cd?.value,
+    currency: cd?.currency,
+    test_event_code: effectiveTestCode ?? null,
+    package_type: cd?.package_type,
+    content_category: cd?.content_category,
+  });
 
   const url = `https://graph.facebook.com/v18.0/${pixelId}/events`;
 
@@ -314,6 +348,23 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       return false;
     }
 
+    const effectiveTestCode = testEventCode ?? getFacebookTestEventCode();
+    if (!isProductionPixelEnv() && !effectiveTestCode) {
+      console.error("REFUSING CAPI event - non-prod environment without test_event_code", {
+        event_name: event.event_name,
+        env: getPixelEnv(),
+      });
+      return false;
+    }
+
+    if (event.event_name === "Purchase") {
+      const id = typeof event.event_id === "string" ? event.event_id.trim() : "";
+      if (!id) {
+        console.error("REFUSING CAPI Purchase - missing event_id", { env: getPixelEnv() });
+        return false;
+      }
+    }
+
     // Ensure website events have required params to avoid Meta _missing_event error
     const sanitizedEvent = ensureWebsiteEventValid(event);
 
@@ -327,9 +378,21 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       access_token: accessToken,
     };
 
-    // Add test_event_code if provided (for testing without affecting production data)
-    if (testEventCode) {
-      requestBody.test_event_code = testEventCode;
+    if (effectiveTestCode) {
+      requestBody.test_event_code = effectiveTestCode;
+    }
+
+    if (sanitizedEvent.event_name === "Purchase") {
+      const cd = sanitizedEvent.custom_data;
+      console.log("[CAPI] Purchase sent", {
+        env: getPixelEnv(),
+        event_id: sanitizedEvent.event_id,
+        value: cd?.value,
+        currency: cd?.currency,
+        test_event_code: effectiveTestCode ?? null,
+        package_type: cd?.package_type,
+        content_category: cd?.content_category,
+      });
     }
 
     const response = await fetch(`https://graph.facebook.com/v18.0/${pixelId}/events`, {

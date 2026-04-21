@@ -39,6 +39,7 @@
     "sync:klaviyo-past-due:dry": "tsx scripts/sync-klaviyo-past-due-profiles.ts --dry-run",
     "test:klaviyo-renewal-preview": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-renewal-entries-preview.test.ts",
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
+    "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts"
   },
   "dependencies": {
