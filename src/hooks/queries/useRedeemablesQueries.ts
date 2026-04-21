@@ -10,7 +10,7 @@ export interface RedeemableWalletItem {
   code?: string;
   campaignCode?: string;
   entriesAmount: number;
-  status: "active" | "redeemed" | "expired" | "cancelled";
+  status: "active" | "redeemed" | "expired" | "cancelled" | "revoked";
   issuedAt: string;
   redeemedAt?: string;
   expiresAt?: string;
@@ -55,7 +55,7 @@ export interface RedeemablesStatusResponse {
   }>;
   latestIssuance: null | {
     id: string;
-    status: "active" | "redeemed" | "expired" | "cancelled";
+    status: "active" | "redeemed" | "expired" | "cancelled" | "revoked";
     expiresAt: string;
     redeemedAt?: string;
   };

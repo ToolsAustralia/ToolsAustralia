@@ -17,6 +17,7 @@ import { useLoading } from "@/contexts/LoadingContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
@@ -131,7 +132,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const [purchasePaymentMethodId, setPurchasePaymentMethodId] = useState<string | null>(null);
 
   // Get user context and payment methods
-  const { isAuthenticated, userData, hasActiveSubscription } = useUserContext();
+  const { isAuthenticated, userData, hasActiveSubscription, isMember } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
   const { paymentMethods, savePaymentMethod, loading: paymentMethodsLoading } = useSavedPaymentMethods();
   const { showToast } = useToast();
@@ -145,9 +146,6 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   // Membership multiplier only for active members; one-time multiplier for non-members with access
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
-
-  // Same membership signal as MembershipSection (subscription on user record)
-  const isSubscriberForPromo = userData?.subscription?.isActive === true;
 
   const packagesAdjustedForVariant = useMemo(() => {
     const pkgCfg = variantConfig?.packages;
@@ -169,7 +167,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const packagesWithPromo = React.useMemo(() => {
     return packagesAdjustedForVariant.map((pkg) => {
       if (pkg.type === "one-time") {
-        const effectiveType = getEffectivePromoType(pkg._id, "one-time", isSubscriberForPromo);
+        const effectiveType = getEffectivePromoType(pkg._id, "one-time", Boolean(isMember));
         const resolvedMultiplier =
           effectiveType === "membership-packages" ? resolvedMembershipMultiplier : resolvedOneTimeMultiplier;
         if (resolvedMultiplier !== null && resolvedMultiplier > 1) {
@@ -190,7 +188,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     packagesAdjustedForVariant,
     resolvedMembershipMultiplier,
     resolvedOneTimeMultiplier,
-    isSubscriberForPromo,
+    isMember,
   ]);
 
   // Add query client for UI updates
@@ -539,12 +537,15 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       // ✅ FIX: Get the multiplier that was actually applied during the original purchase
       // Find the package in packagesWithPromo to get the promoMultiplier that was applied
       const packageWithPromo = packagesWithPromo.find((p) => p._id === selectedPackage._id);
-      const appliedMultiplier =
-        packageWithPromo?.promoMultiplier ??
-        (getEffectivePromoType(selectedPackage._id, "one-time", isSubscriberForPromo) === "membership-packages"
-          ? resolvedMembershipMultiplier
-          : resolvedOneTimeMultiplier) ??
-        1;
+      const appliedMultiplier = resolveUpsellPromoMultiplierForDisplay({
+        packageType: "one-time",
+        packageId: selectedPackage._id,
+        storedPromoMultiplier: packageWithPromo?.promoMultiplier,
+        resolvedMembership: resolvedMembershipMultiplier,
+        resolvedOneTime: resolvedOneTimeMultiplier,
+        resolvedMini: null,
+        isMember: Boolean(isMember),
+      });
 
       // Create context object in local variable to pass directly (avoids closure issue)
       const pm = purchasePaymentMethodId

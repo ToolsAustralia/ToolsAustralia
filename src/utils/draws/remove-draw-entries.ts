@@ -15,12 +15,18 @@ import mongoose from "mongoose";
 /**
  * Source types for major draw entries
  */
-type MajorDrawSourceType = "membership" | "one-time-package" | "upsell" | "mini-draw";
+type MajorDrawSourceType =
+  | "membership"
+  | "one-time-package"
+  | "upsell"
+  | "mini-draw"
+  | "bonus-entry-promo"
+  | "promo-link";
 
 /**
  * Source types for mini draw entries
  */
-type MiniDrawSourceType = "mini-draw-package" | "upsell" | "free-entry";
+type MiniDrawSourceType = "mini-draw-package" | "upsell" | "free-entry" | "bonus-entry-promo" | "promo-link";
 
 /**
  * Remove entries from Major Draw for a specific user

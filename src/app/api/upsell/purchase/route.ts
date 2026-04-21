@@ -12,7 +12,7 @@ import {
   calculateUpsellEntriesFromContext,
   getPackageBaseEntries,
 } from "@/utils/payment/upsell-entries-calculator";
-import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
@@ -314,18 +314,22 @@ export async function POST(request: NextRequest) {
               `✅ Using stored promo multiplier from original purchase: ${promoMultiplier}x`
             );
           } else {
-            // Fall back to querying current active promo (for backward compatibility or when context is missing)
-            // ✅ CRITICAL: For additional-upgrade upsells, member-only packages (e.g. additional-power-pack)
-            // use membership promo (10x), not one-time promo (3x). Use effective promo type based on triggering package.
-            const effectivePromoType =
-              inferredPackageType === "one-time" &&
-              triggeringPackageId &&
-              isMemberOnlyPackageById(triggeringPackageId)
-                ? "membership"
-                : inferredPackageType;
-            promoMultiplier = await getActivePromoMultiplier(effectivePromoType);
+            // Fall back: resolve payment channel like checkout (membership vs one-time vs mini)
+            const isMember = Boolean(user.subscription?.isActive);
+            let paymentMultiplierKey: "membership" | "one-time" | "mini-draw";
+            if (inferredPackageType === "membership") {
+              paymentMultiplierKey = "membership";
+            } else if (inferredPackageType === "mini-draw") {
+              paymentMultiplierKey = "mini-draw";
+            } else if (inferredPackageType === "one-time" && triggeringPackageId) {
+              const channel = getEffectivePromoType(triggeringPackageId, "one-time", isMember);
+              paymentMultiplierKey = channel === "membership-packages" ? "membership" : "one-time";
+            } else {
+              paymentMultiplierKey = "one-time";
+            }
+            promoMultiplier = await getActivePromoMultiplier(paymentMultiplierKey);
             console.log(
-              `ℹ️ No stored multiplier found, using current active promo multiplier for ${effectivePromoType} (triggeringPackage: ${triggeringPackageId}, isMemberOnly: ${triggeringPackageId ? isMemberOnlyPackageById(triggeringPackageId) : "N/A"}): ${promoMultiplier}x`
+              `ℹ️ No stored multiplier found, using current active promo for ${paymentMultiplierKey} (triggeringPackage: ${triggeringPackageId}, isMember: ${isMember}): ${promoMultiplier}x`
             );
           }
 

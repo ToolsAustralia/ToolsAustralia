@@ -274,25 +274,6 @@ export const useUpdateOrderStatus = () => {
   });
 };
 
-export const useRequestRefund = () => {
-  const queryClient = useQueryClient();
-  const { data: session } = useSession();
-  const userId = session?.user?.id ?? "";
-
-  return useMutation({
-    mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
-      const response = await apiPost<{ success: boolean; data: Order }>(`/api/orders/${orderId}/refund`, { reason });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.orders.detail(data._id), data);
-      if (!userId) return;
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all(userId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.recent(userId) });
-    },
-  });
-};
-
 // Utility hooks
 export const useOrderStats = (userId?: string) => {
   const { data: analytics } = useOrderAnalytics(userId);

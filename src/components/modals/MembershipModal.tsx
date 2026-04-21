@@ -221,6 +221,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const subscriptionPackageIdRef = useRef<string | null>(null); // Package the current subscription was created for (so we can invalidate on plan change)
   const previousSubscriptionToCancelRef = useRef<string | null>(null); // When user switches package: pass to API to cancel before creating new subscription
   const userIdRef = useRef<string | null>(null); // Store userId for retry scenarios
+  /** Final static package _id sent to the payment API (after additional-pack remap). Drives upsell multiplier + invoice context. */
+  const lastChargedStaticPackageIdRef = useRef<string | null>(null);
   // First subscription charge must be confirmed client-side; when true we run confirmStripeIntent() after Payment Element has invoice secret
   const [pendingFirstSubscriptionConfirm, setPendingFirstSubscriptionConfirm] = useState(false);
   // ✅ NEW: Track recovery attempts to prevent duplicate recoveries
@@ -2352,7 +2354,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
       const packageId = isMiniDrawPackage
         ? activePlan.id
-        : getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        : lastChargedStaticPackageIdRef.current ??
+          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+          "";
 
       const packageTypeForUpsell = processingPackageType === "mini-draw" ? "one-time" : processingPackageType;
 
@@ -2382,6 +2386,39 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         packageType: packageTypeForUpsell,
       });
 
+      const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+      const multiplierValue =
+        typeof multiplierFromMetadata === "number"
+          ? multiplierFromMetadata
+          : typeof multiplierFromMetadata === "string"
+            ? parseFloat(multiplierFromMetadata)
+            : undefined;
+
+      let appliedPromoForContext: number | undefined;
+      if (isMiniDrawPackage || processingPackageType === "mini-draw") {
+        const applied =
+          multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+            ? multiplierValue
+            : resolvedMiniMultiplier ?? 1;
+        appliedPromoForContext = applied > 1 ? applied : undefined;
+      } else if (packageTypeForUpsell === "membership") {
+        const applied =
+          multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+            ? multiplierValue
+            : resolvedMembershipMultiplier ?? 1;
+        appliedPromoForContext = applied > 1 ? applied : undefined;
+      } else {
+        const effectiveOneTimeMultiplier =
+          getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+            ? resolvedMembershipMultiplier
+            : resolvedOneTimeMultiplier;
+        const applied =
+          multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+            ? multiplierValue
+            : effectiveOneTimeMultiplier ?? 1;
+        appliedPromoForContext = applied > 1 ? applied : undefined;
+      }
+
       // Create context object in local variable to pass directly (avoids closure issue)
       contextToPass = {
         paymentIntentId,
@@ -2391,6 +2428,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         price: activePlan.price,
         entries: status.data?.entries || 0,
         baseEntries,
+        promoMultiplier: appliedPromoForContext,
         miniDrawId,
         miniDrawName,
       };
@@ -2417,7 +2455,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
         const packageId = isMiniDrawPackage
           ? activePlan.id
-          : getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+          : lastChargedStaticPackageIdRef.current ??
+            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+            "";
 
         const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";
         const packageType = activePlan.period === "mo" ? "membership" : "one-time";
@@ -2434,7 +2474,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           triggerType,
           processingPackageName || activePlan.name,
           activePlan.price,
-          packageId || undefined,
+          finalContextToPass?.packageId || packageId || undefined,
           packageType,
           finalContextToPass
         );
@@ -2552,7 +2592,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             let contextToPass: OriginalPurchaseContext | null = null;
 
             if (effectivePaymentIntentId) {
-              const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+              const packageId =
+                lastChargedStaticPackageIdRef.current ??
+                getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+                "";
               const entriesCount = activePlan.metadata?.entriesCount || 0;
               const packageType = activePlan.period === "mo" ? "membership" : "one-time";
 
@@ -2571,13 +2614,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 : undefined;
               const effectiveOneTimeMultiplier =
                 packageType === "one-time"
-                  ? (getEffectivePromoType(activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+                  ? (getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) === "membership-packages"
                       ? resolvedMembershipMultiplier
                       : resolvedOneTimeMultiplier)
                   : null;
-              const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
-                ? multiplierValue
-                : effectiveOneTimeMultiplier ?? 1;
+              const appliedMultiplier =
+                multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                  ? multiplierValue
+                  : packageType === "membership"
+                    ? (resolvedMembershipMultiplier ?? 1)
+                    : (effectiveOneTimeMultiplier ?? 1);
 
               // Create context object in local variable to pass directly (avoids closure issue)
               contextToPass = {
@@ -2614,7 +2660,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 triggerType,
                 activePlan.name,
                 activePlan.price,
-                getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+                finalContextToPass?.packageId ||
+                  lastChargedStaticPackageIdRef.current ||
+                  getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+                  undefined,
                 activePlan.period === "mo" ? "membership" : "one-time",
                 finalContextToPass
               );
@@ -2694,7 +2743,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       let contextToPass: OriginalPurchaseContext | null = null;
 
       if (effectivePaymentIntentId && activePlan.period === "one-time") {
-        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        const packageId =
+          lastChargedStaticPackageIdRef.current ??
+          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+          "";
         
         // Get base entries for upsell calculation
         const baseEntries = getPackageBaseEntries({
@@ -2710,7 +2762,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           ? parseFloat(multiplierFromMetadata) 
           : undefined;
         const effectiveOneTimeMultiplier =
-          getEffectivePromoType(activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+          getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) === "membership-packages"
             ? resolvedMembershipMultiplier
             : resolvedOneTimeMultiplier;
         const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
@@ -2733,7 +2785,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         setOriginalPurchaseContext(contextToPass);
         // console.log("📧 Stored original purchase context for invoice finalization (from handlePaymentSuccess)");
       } else if (effectivePaymentIntentId && activePlan.period === "mo") {
-        const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+        const packageId =
+          lastChargedStaticPackageIdRef.current ??
+          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+          "";
         
         // Get base entries for upsell calculation
         const baseEntries = getPackageBaseEntries({
@@ -2750,7 +2805,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           : undefined;
         const appliedMultiplier = (multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue))
           ? multiplierValue
-          : 1;
+          : (resolvedMembershipMultiplier ?? 1);
 
         // Create context object in local variable to pass directly (avoids closure issue)
         contextToPass = {
@@ -2797,7 +2852,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           triggerType,
           activePlan.name,
           activePlan.price,
-          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+          finalContextToPass?.packageId ||
+            lastChargedStaticPackageIdRef.current ||
+            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+            undefined,
           activePlan.period === "mo" ? "membership" : "one-time",
           finalContextToPass
         );
@@ -2891,6 +2949,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     let confirmedPaymentIntentId: string | undefined = undefined;
 
     try {
+      lastChargedStaticPackageIdRef.current = null;
+
       // Check if this is an upsell purchase using metadata flag
       const isUpsellOffer = activePlan?.metadata?.isUpsellOffer === true;
 
@@ -2979,6 +3039,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           packageId = adjustedPackageId;
         }
       }
+
+      lastChargedStaticPackageIdRef.current = packageId;
 
       // ✅ Option A: Subscription with invoice PaymentIntent – confirm client-side only; no confirm-subscription-payment
       // Only use Payment Element when user is paying with the form; if they selected a saved/default payment method, use the saved-method path below instead (avoids "card number is incomplete" on empty Element)
@@ -3827,7 +3889,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
             let fallbackContext: OriginalPurchaseContext | null = null;
             if (fallbackPaymentIntentId) {
-              const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]);
+              const packageId =
+                lastChargedStaticPackageIdRef.current ??
+                getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+                "";
               const entriesCount = activePlan.metadata?.entriesCount || 0;
 
               // Get base entries for upsell calculation
@@ -3835,6 +3900,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 packageId: packageId || "",
                 packageType: "one-time",
               });
+
+              const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+              const multiplierValue =
+                typeof multiplierFromMetadata === "number"
+                  ? multiplierFromMetadata
+                  : typeof multiplierFromMetadata === "string"
+                    ? parseFloat(multiplierFromMetadata)
+                    : undefined;
+              const effectiveOneTimeMultiplier =
+                getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) === "membership-packages"
+                  ? resolvedMembershipMultiplier
+                  : resolvedOneTimeMultiplier;
+              const appliedMultiplier =
+                multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                  ? multiplierValue
+                  : effectiveOneTimeMultiplier ?? 1;
 
               fallbackContext = {
                 paymentIntentId: fallbackPaymentIntentId,
@@ -3844,6 +3925,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 price: activePlan.price,
                 entries: entriesCount,
                 baseEntries,
+                promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
               };
 
               setOriginalPurchaseContext(fallbackContext);
@@ -3877,7 +3959,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 triggerType,
                 activePlan.name,
                 activePlan.price,
-                getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+                finalFallbackContext?.packageId ||
+                  lastChargedStaticPackageIdRef.current ||
+                  getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+                  undefined,
                 activePlan.period === "mo" ? "membership" : "one-time",
                 finalFallbackContext || originalPurchaseContext
               );
@@ -3901,7 +3986,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             activePlan.period === "mo" ? "membership-purchase" : "one-time-purchase",
             activePlan.name,
             activePlan.price,
-            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+            originalPurchaseContext?.packageId ||
+              lastChargedStaticPackageIdRef.current ||
+              getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+              undefined,
             activePlan.period === "mo" ? "membership" : "one-time",
             originalPurchaseContext
           );
@@ -4237,14 +4325,32 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                     // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
                     const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
-                    const packageId = getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "";
                     const oneTimeOriginalContext: OriginalPurchaseContext | null = oneTimePaymentIntentId
                       ? (() => {
-                          // Get base entries for upsell calculation
+                          const packageId =
+                            lastChargedStaticPackageIdRef.current ??
+                            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+                            "";
                           const baseEntries = getPackageBaseEntries({
                             packageId,
                             packageType: "one-time",
                           });
+                          const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+                          const multiplierValue =
+                            typeof multiplierFromMetadata === "number"
+                              ? multiplierFromMetadata
+                              : typeof multiplierFromMetadata === "string"
+                                ? parseFloat(multiplierFromMetadata)
+                                : undefined;
+                          const effectiveOneTimeMultiplier =
+                            getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) ===
+                            "membership-packages"
+                              ? resolvedMembershipMultiplier
+                              : resolvedOneTimeMultiplier;
+                          const appliedMultiplier =
+                            multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                              ? multiplierValue
+                              : effectiveOneTimeMultiplier ?? 1;
 
                           return {
                             paymentIntentId: oneTimePaymentIntentId,
@@ -4254,6 +4360,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                             price: activePlan.price,
                             entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
                             baseEntries,
+                            promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
                           };
                         })()
                       : null;
@@ -4264,7 +4371,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         triggerType,
                         activePlan.name,
                         activePlan.price,
-                        getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+                        oneTimeOriginalContext?.packageId ||
+                          lastChargedStaticPackageIdRef.current ||
+                          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+                          undefined,
                         "one-time",
                         oneTimeOriginalContext || originalPurchaseContext
                       );
@@ -4330,14 +4440,51 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     const oneTimePaymentIntentId2 =
                       oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
                     const oneTimeOriginalContext2: OriginalPurchaseContext | null = oneTimePaymentIntentId2
-                      ? {
-                          paymentIntentId: oneTimePaymentIntentId2,
-                          packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
-                          packageName: activePlan.name,
-                          packageType: activePlan.period === "mo" ? "membership" : "one-time",
-                          price: activePlan.price,
-                          entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
-                        }
+                      ? (() => {
+                          const packageId =
+                            lastChargedStaticPackageIdRef.current ??
+                            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+                            "";
+                          const packageType = activePlan.period === "mo" ? "membership" : "one-time";
+                          const baseEntries = getPackageBaseEntries({
+                            packageId,
+                            packageType,
+                          });
+                          const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+                          const multiplierValue =
+                            typeof multiplierFromMetadata === "number"
+                              ? multiplierFromMetadata
+                              : typeof multiplierFromMetadata === "string"
+                                ? parseFloat(multiplierFromMetadata)
+                                : undefined;
+                          let appliedMultiplier: number;
+                          if (packageType === "membership") {
+                            appliedMultiplier =
+                              multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                                ? multiplierValue
+                                : resolvedMembershipMultiplier ?? 1;
+                          } else {
+                            const effectiveOneTimeMultiplier =
+                              getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) ===
+                              "membership-packages"
+                                ? resolvedMembershipMultiplier
+                                : resolvedOneTimeMultiplier;
+                            appliedMultiplier =
+                              multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                                ? multiplierValue
+                                : effectiveOneTimeMultiplier ?? 1;
+                          }
+                          return {
+                            paymentIntentId: oneTimePaymentIntentId2,
+                            packageId,
+                            packageName: activePlan.name,
+                            packageType,
+                            price: activePlan.price,
+                            entries: activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
+                            baseEntries,
+                            promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
+                          };
+                        })()
                       : null;
 
                     onClose();
@@ -4349,7 +4496,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         "one-time-purchase",
                         activePlan.name,
                         activePlan.price,
-                        getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+                        oneTimeOriginalContext2?.packageId ||
+                          lastChargedStaticPackageIdRef.current ||
+                          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+                          undefined,
                         activePlan.period === "mo" ? "membership" : "one-time",
                         oneTimeOriginalContext2 || originalPurchaseContext
                       );
@@ -4415,14 +4565,51 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // Extract paymentIntentId and set originalPurchaseContext for invoice finalization
             const finalPaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
             const finalOriginalContext: OriginalPurchaseContext | null = finalPaymentIntentId
-              ? {
-                  paymentIntentId: finalPaymentIntentId,
-                  packageId: getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || "",
-                  packageName: activePlan.name,
-                  packageType: activePlan.period === "mo" ? "membership" : "one-time",
-                  price: activePlan.price,
-                  entries: activePlan.metadata?.entriesCount || oneTimeData?.totalEntries || 0,
-                }
+              ? (() => {
+                  const packageId =
+                    lastChargedStaticPackageIdRef.current ??
+                    getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+                    "";
+                  const packageType = activePlan.period === "mo" ? "membership" : "one-time";
+                  const baseEntries = getPackageBaseEntries({
+                    packageId,
+                    packageType,
+                  });
+                  const multiplierFromMetadata = activePlan.metadata?.promoMultiplier;
+                  const multiplierValue =
+                    typeof multiplierFromMetadata === "number"
+                      ? multiplierFromMetadata
+                      : typeof multiplierFromMetadata === "string"
+                        ? parseFloat(multiplierFromMetadata)
+                        : undefined;
+                  let appliedMultiplier: number;
+                  if (packageType === "membership") {
+                    appliedMultiplier =
+                      multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                        ? multiplierValue
+                        : resolvedMembershipMultiplier ?? 1;
+                  } else {
+                    const effectiveOneTimeMultiplier =
+                      getEffectivePromoType(packageId || activePlan.id, "one-time", isMember ?? false) ===
+                      "membership-packages"
+                        ? resolvedMembershipMultiplier
+                        : resolvedOneTimeMultiplier;
+                    appliedMultiplier =
+                      multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
+                        ? multiplierValue
+                        : effectiveOneTimeMultiplier ?? 1;
+                  }
+                  return {
+                    paymentIntentId: finalPaymentIntentId,
+                    packageId,
+                    packageName: activePlan.name,
+                    packageType,
+                    price: activePlan.price,
+                    entries: activePlan.metadata?.entriesCount || oneTimeData?.totalEntries || 0,
+                    baseEntries,
+                    promoMultiplier: appliedMultiplier > 1 ? appliedMultiplier : undefined,
+                  };
+                })()
               : null;
 
             // Trigger upsell modal (cache invalidation now handled inside triggerUpsellModal)
@@ -4430,7 +4617,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               "one-time-purchase",
               activePlan.name,
               activePlan.price,
-              getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) || undefined,
+              finalOriginalContext?.packageId ||
+                lastChargedStaticPackageIdRef.current ||
+                getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ||
+                undefined,
               activePlan.period === "mo" ? "membership" : "one-time",
               finalOriginalContext || originalPurchaseContext
             );

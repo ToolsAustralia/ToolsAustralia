@@ -3526,6 +3526,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       subscriptionId
     );
 
+    const previousLastMonthAccumulated = user.subscription?.lastMonthAccumulatedEntries ?? 0;
+    const lastMonthDeltaForLedger = newLastMonthAccumulatedEntries - previousLastMonthAccumulated;
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -3557,7 +3560,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       {
         skipMembershipFirstCommission: recordMembershipRecurringAffiliate,
       },
-      isResubscribe
+      isResubscribe,
+      {
+        lastMonthDelta: lastMonthDeltaForLedger,
+        calculationType: entryCalculation.calculationType,
+      }
     );
     webhookLog("info", `Affiliate recurring eligibility`, {
       invoiceId: expandedInvoice.id,
@@ -4427,6 +4434,67 @@ async function handleChargeDisputeUpdated(dispute: Stripe.Dispute) {
 }
 
 /**
+ * Funds withdrawn (chargeback) — reverse benefits early; idempotent via RefundProcessed.
+ */
+async function handleChargeDisputeFundsWithdrawn(dispute: Stripe.Dispute) {
+  try {
+    webhookLog("warn", `Dispute funds withdrawn: ${dispute.id}`);
+    if (!dispute.charge) {
+      webhookLog("error", `No charge on dispute ${dispute.id}`);
+      return;
+    }
+    const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+    const charge = await stripe.charges.retrieve(chargeId, { expand: ["refunds"] });
+
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+
+    if (!paymentIntentId) {
+      webhookLog("error", `No payment intent on charge ${chargeId}`);
+      return;
+    }
+
+    const invoiceId = await resolveInvoiceIdFromRefund(paymentIntentId, charge);
+
+    let user;
+    if (charge.customer) {
+      const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer.id;
+      user = await User.findOne({ stripeCustomerId: customerId });
+    }
+
+    if (!user) {
+      webhookLog("error", `User not found for dispute funds_withdrawn ${dispute.id}`);
+      return;
+    }
+
+    const refundList = charge.refunds?.data ?? [];
+    const succeededCents = sumSucceededRefundAmountCents(refundList);
+    const refundAmount = succeededCents > 0 ? succeededCents : dispute.amount ?? charge.amount ?? 0;
+
+    if (refundAmount <= 0) {
+      webhookLog("warn", `No refund/dispute amount for funds_withdrawn ${dispute.id}`);
+      return;
+    }
+
+    const chargeAmount = charge.amount ?? refundAmount;
+    const isFullRefund = isFullRefundByAmounts(refundAmount, chargeAmount);
+
+    const { processRefundReversal } = await import("@/utils/payment/refund-processing");
+    const result = await processRefundReversal(paymentIntentId, user._id.toString(), refundAmount, isFullRefund, {
+      invoiceId,
+    });
+
+    if (result.success) {
+      webhookLog("info", `✅ Dispute funds_withdrawn reversal processed for ${paymentIntentId}`);
+    } else if (!result.alreadyProcessed) {
+      webhookLog("error", `❌ Dispute funds_withdrawn reversal failed: ${result.error}`);
+    }
+  } catch (error) {
+    webhookLog("error", `Error handling charge.dispute.funds_withdrawn: ${error}`);
+  }
+}
+
+/**
  * Handle charge dispute closed (CRITICAL - handles based on outcome)
  * If won: No refund needed, restore access if previously revoked
  * If lost: Process as refund, reverse all benefits
@@ -4767,6 +4835,9 @@ export async function POST(request: NextRequest) {
         break;
       case "charge.dispute.updated":
         await handleChargeDisputeUpdated(event.data.object);
+        break;
+      case "charge.dispute.funds_withdrawn":
+        await handleChargeDisputeFundsWithdrawn(event.data.object);
         break;
       case "charge.dispute.closed":
         await handleChargeDisputeClosed(event.data.object);

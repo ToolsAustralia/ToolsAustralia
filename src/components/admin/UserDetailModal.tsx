@@ -129,6 +129,12 @@ interface PaymentEventItem {
   paymentIntentId?: string;
   hasRefundProcessed?: boolean;
   refundProcessedAt?: string;
+  /** BenefitsGranted row: Stripe issued a partial refund — ledger not reversed */
+  hasPartialRefundSkipped?: boolean;
+  partialRefundAmountCents?: number;
+  /** Snapshot from matching RefundProcessed (JSON-serializable) */
+  refundReversedSummary?: unknown;
+  refundReversalIssues?: Array<{ step?: string; error?: string }>;
   timestamp?: string;
   price?: number;
   status?: string;
@@ -137,6 +143,7 @@ interface PaymentEventItem {
   packageName?: string;
   data?: {
     price?: number;
+    [key: string]: unknown;
   };
 }
 
@@ -3435,7 +3442,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               ? Number.parseFloat(priceRaw)
                               : NaN;
                           const fallbackIcon =
-                            event.packageType === "membership"
+                            event.eventType === "RefundProcessed" || event.eventType === "RefundPartial"
+                              ? Activity
+                              : event.packageType === "membership"
                               ? CreditCard
                               : event.packageType === "one-time"
                               ? Package
@@ -3508,6 +3517,45 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                         Refunded
                                       </p>
                                     ))}
+                                  {event.eventType === "BenefitsGranted" &&
+                                    event.hasPartialRefundSkipped &&
+                                    typeof event.partialRefundAmountCents === "number" && (
+                                      <p className="text-[9px] sm:text-[10px] mt-0.5">
+                                        <span className="font-semibold text-amber-700 dark:text-amber-300">
+                                          Partial refund — no benefits reversed ($
+                                          {(event.partialRefundAmountCents / 100).toFixed(2)})
+                                        </span>
+                                      </p>
+                                    )}
+                                  {event.eventType === "BenefitsGranted" &&
+                                    Array.isArray(event.refundReversalIssues) &&
+                                    event.refundReversalIssues.length > 0 && (
+                                      <p className="text-[9px] sm:text-[10px] text-amber-900 dark:text-amber-100 mt-0.5">
+                                        {event.refundReversalIssues.length} reversal follow-up(s) — check
+                                        RefundProcessed row
+                                      </p>
+                                    )}
+                                  {event.eventType === "RefundProcessed" &&
+                                    event.data &&
+                                    typeof (event.data as { reversed?: unknown }).reversed === "object" &&
+                                    (event.data as { reversed?: unknown }).reversed != null && (
+                                      <p className="text-[9px] sm:text-[10px] text-gray-600 dark:text-neutral-400 mt-0.5 break-words max-w-full">
+                                        Ledger:{" "}
+                                        {JSON.stringify((event.data as { reversed: unknown }).reversed)}
+                                      </p>
+                                    )}
+                                  {event.eventType === "RefundProcessed" &&
+                                    Array.isArray((event.data as { reversalIssues?: unknown[] })?.reversalIssues) &&
+                                    ((event.data as { reversalIssues: { step?: string; error?: string }[] })
+                                      .reversalIssues?.length ?? 0) > 0 && (
+                                      <p className="text-[9px] sm:text-[10px] text-amber-900 dark:text-amber-100 mt-0.5">
+                                        {
+                                          (event.data as { reversalIssues: unknown[] }).reversalIssues
+                                            ?.length
+                                        }{" "}
+                                        non-fatal issue(s)
+                                      </p>
+                                    )}
                                   <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
                                     {formatDate(event.timestamp || new Date().toISOString())}
                                   </p>

@@ -21,6 +21,8 @@ export interface RedemptionResult {
   reason?: RedemptionFailureReason;
   entriesGranted?: number;
   issuanceId?: string;
+  /** Set when redemption succeeds — used for refund ledger / unredeem. */
+  redemptionKind?: "monthly-coupon" | "milestone";
 }
 
 export class RedemptionService {
@@ -155,6 +157,7 @@ export class RedemptionService {
         success: true,
         entriesGranted: updatedMilestoneIssuance.entriesAmount,
         issuanceId: String(updatedMilestoneIssuance._id),
+        redemptionKind: "milestone",
       };
     }
 
@@ -245,6 +248,95 @@ export class RedemptionService {
       success: true,
       entriesGranted: updatedIssuance.entriesAmount,
       issuanceId: String(updatedIssuance._id),
+      redemptionKind: "monthly-coupon",
     };
+  }
+
+  /**
+   * Undo a monthly-coupon redemption (refund path). Restores issuance to active and reverses entries.
+   */
+  static async unredeemMonthlyCouponRedemption(params: {
+    userId: string;
+    redeemableIssuanceId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { userId, redeemableIssuanceId } = params;
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(redeemableIssuanceId)) {
+      return { success: false, error: "invalid_ids" };
+    }
+    try {
+      const issuance = await RedeemableIssuance.findOne({
+        _id: new mongoose.Types.ObjectId(redeemableIssuanceId),
+        userId: new mongoose.Types.ObjectId(userId),
+        status: "redeemed",
+      });
+      if (!issuance) {
+        return { success: false, error: "issuance_not_found_or_not_redeemed" };
+      }
+      const entriesAmount = issuance.entriesAmount;
+      const redemptionId = `monthly-coupon-${String(issuance._id)}`;
+
+      await RedeemableIssuance.updateOne(
+        { _id: issuance._id },
+        {
+          $set: { status: "active" },
+          $unset: { redeemedAt: 1 },
+        }
+      );
+
+      await User.updateOne(
+        { _id: new mongoose.Types.ObjectId(userId) },
+        {
+          $inc: { accumulatedEntries: -entriesAmount },
+          $pull: { redemptionHistory: { redemptionId } },
+        }
+      );
+
+      const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
+      await removeMajorDrawEntries(userId, entriesAmount, "bonus-entry-promo");
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Undo milestone reward redemption (entries granted when user redeemed an active issuance).
+   */
+  static async unredeemMilestoneRedemption(params: {
+    userId: string;
+    milestoneIssuanceId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { userId, milestoneIssuanceId } = params;
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(milestoneIssuanceId)) {
+      return { success: false, error: "invalid_ids" };
+    }
+    try {
+      const doc = await MilestoneIssuance.findOne({
+        _id: new mongoose.Types.ObjectId(milestoneIssuanceId),
+        userId: new mongoose.Types.ObjectId(userId),
+        status: "redeemed",
+      });
+      if (!doc) {
+        return { success: false, error: "not_redeemed" };
+      }
+      const entriesAmount = doc.entriesAmount;
+      const redemptionId = `milestone-${String(doc._id)}`;
+
+      await User.updateOne(
+        { _id: new mongoose.Types.ObjectId(userId) },
+        {
+          $inc: { accumulatedEntries: -entriesAmount },
+          $pull: { redemptionHistory: { redemptionId } },
+        }
+      );
+
+      const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
+      await removeMajorDrawEntries(userId, entriesAmount, "bonus-entry-promo");
+
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) };
+    }
   }
 }

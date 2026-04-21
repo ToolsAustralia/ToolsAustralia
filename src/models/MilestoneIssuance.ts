@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 import type { MilestoneType } from "@/models/MilestoneReward";
 
-export type MilestoneIssuanceStatus = "active" | "redeemed" | "expired" | "cancelled";
+export type MilestoneIssuanceStatus = "active" | "redeemed" | "expired" | "cancelled" | "revoked";
 
 export interface IMilestoneIssuance extends Document {
   milestoneRewardId: mongoose.Types.ObjectId;
@@ -13,6 +13,8 @@ export interface IMilestoneIssuance extends Document {
   status: MilestoneIssuanceStatus;
   issuedAt: Date;
   redeemedAt?: Date;
+  revokedAt?: Date;
+  revocationReason?: string;
   expiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -56,7 +58,7 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
     },
     status: {
       type: String,
-      enum: ["active", "redeemed", "expired", "cancelled"],
+      enum: ["active", "redeemed", "expired", "cancelled", "revoked"],
       default: "active",
       index: true,
     },
@@ -67,6 +69,12 @@ const MilestoneIssuanceSchema = new Schema<IMilestoneIssuance>(
     },
     redeemedAt: {
       type: Date,
+    },
+    revokedAt: {
+      type: Date,
+    },
+    revocationReason: {
+      type: String,
     },
     expiresAt: {
       type: Date,
