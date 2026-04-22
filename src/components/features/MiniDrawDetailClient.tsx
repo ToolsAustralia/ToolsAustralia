@@ -232,6 +232,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
 
             {showPackages && (
               <MiniDrawPackages
+                key={String(miniDraw._id)}
                 miniDrawId={miniDraw._id}
                 minimumEntries={miniDraw.minimumEntries}
                 totalEntries={miniDraw.totalEntries}

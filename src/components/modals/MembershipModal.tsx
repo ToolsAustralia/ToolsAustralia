@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
-import { Check, Loader2, MapPin } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import PackageSelectionModal from "./PackageSelectionModal";
 import { formatNamePart } from "@/utils/display-name";
 import PaymentMethodSelector from "./PaymentMethodSelector";
@@ -22,6 +22,7 @@ import { convertToAPIPlan, getPackageId } from "@/utils/membership/membership-ad
 import { useUserContext } from "@/contexts/UserContext";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { useRouter, usePathname } from "next/navigation";
+import FullscreenImageViewer, { type FullscreenImageItem } from "@/components/ui/FullscreenImageViewer";
 import { signIn } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -45,11 +46,10 @@ import { usePromoLink } from "@/hooks/usePromoLink";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
 import HexagonalPromoBadge from "../ui/HexagonalPromoBadge";
-import LatestWinnersBadge from "../ui/LatestWinnersBadge";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
-import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
+import { useMajorDrawWinners, type MajorDrawWinner } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPackageById } from "@/data/membershipPackages";
@@ -264,7 +264,85 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Major draw winners from shared cache (homepage/promotions/modal) - only fetches if not already loaded
   const { data: majorDrawWinners = [], isLoading: majorDrawWinnersLoading } = useMajorDrawWinners();
   const winnerCarouselRef = useRef<HTMLDivElement | null>(null);
-  const winnerCount = majorDrawWinners.length;
+  const [winnerViewerOpen, setWinnerViewerOpen] = useState(false);
+  const [winnerViewerInitialIndex, setWinnerViewerInitialIndex] = useState(0);
+  const winnerStripPointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const winnerStripDidDragRef = useRef(false);
+  /** Pairs preserve API order (newest first); first slide = two most recent winners. */
+  const majorDrawWinnerPairs = React.useMemo(() => {
+    const pairs: [MajorDrawWinner, MajorDrawWinner | null][] = [];
+    for (let i = 0; i < majorDrawWinners.length; i += 2) {
+      pairs.push([majorDrawWinners[i], majorDrawWinners[i + 1] ?? null]);
+    }
+    return pairs;
+  }, [majorDrawWinners]);
+
+  const winnerFullscreenImages = React.useMemo((): FullscreenImageItem[] => {
+    return majorDrawWinners.map((winner) => {
+      const displayImage =
+        winner.imageUrl ||
+        (winner.prize?.images?.[0]) ||
+        "/images/promotion/PrizeHeader/PrizeHeader.webp";
+      const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+      const displayDate = (
+        winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)
+      ).toLocaleDateString("en-AU", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const drawLabel = winner.drawName?.trim() || "Major draw";
+      return {
+        src: displayImage,
+        alt: `${displayName} — ${drawLabel}`,
+        captionDetail: {
+          drawName: drawLabel,
+          winnerName: displayName,
+          wonDate: displayDate,
+          drawKind: "major",
+        },
+      };
+    });
+  }, [majorDrawWinners]);
+
+  const renderMajorDrawWinnerTile = (winner: MajorDrawWinner) => {
+    const displayImage =
+      winner.imageUrl ||
+      (winner.prize?.images?.[0]) ||
+      "/images/promotion/PrizeHeader/PrizeHeader.webp";
+    const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+    const displayDate = (
+      winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)
+    ).toLocaleDateString("en-AU", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return (
+      <div className="relative h-full min-h-0 w-full overflow-hidden bg-neutral-950">
+        <Image
+          src={displayImage}
+          alt={displayName}
+          fill
+          className="object-contain object-center"
+          sizes="(max-width: 640px) 45vw, 260px"
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent"
+          aria-hidden
+        />
+        <div className="absolute bottom-0 left-0 right-0 z-10 space-y-0.5 p-1.5 sm:space-y-1 sm:p-2">
+          <p className="line-clamp-2 text-[7px] font-bold uppercase leading-tight tracking-wide text-white drop-shadow-sm sm:text-[8px]">
+            {winner.drawName?.trim() || "Major draw"}
+          </p>
+          <p className="text-[7px] tabular-nums text-white/90 drop-shadow-sm sm:text-[8px]">{displayDate}</p>
+          <p className="truncate font-['Poppins'] text-[8px] font-bold text-white drop-shadow-sm sm:text-[9px]">
+            {displayName}
+          </p>
+        </div>
+      </div>
+    );
+  };
 
   // Track if package selection modal has been auto-opened from promotion page
   // This prevents the modal from auto-opening multiple times during the same session
@@ -616,9 +694,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     validatePromoLink();
   }, [promoLinkCode, isOpen, activePlan]); // eslint-disable-line react-hooks/exhaustive-deps -- isPlaceholderPlan derived from activePlan
 
-  // Compact winner strip: auto-advance horizontal snap scroll (user can swipe/scroll too)
+  // Winner carousel: two winners per slide; auto-advance by one slide (user can swipe too)
   useEffect(() => {
-    if (!isOpen || winnerCount <= 1) return;
+    if (!isOpen || majorDrawWinnerPairs.length <= 1 || majorDrawWinnersLoading) return;
     const el = winnerCarouselRef.current;
     if (!el) return;
 
@@ -634,7 +712,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     const interval = setInterval(tick, 5000);
     return () => clearInterval(interval);
-  }, [isOpen, winnerCount, majorDrawWinnersLoading]);
+  }, [isOpen, majorDrawWinnerPairs.length, majorDrawWinnersLoading]);
 
   // Reset scroll when modal opens or winner list changes
   useEffect(() => {
@@ -2358,7 +2436,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
           "";
 
-      const packageTypeForUpsell = processingPackageType === "mini-draw" ? "one-time" : processingPackageType;
+      // Keep "mini-draw" so upsell entry math uses miniDrawPackages (mapping to "one-time" broke base entry lookup → static 10 entries).
+      const packageTypeForUpsell = processingPackageType;
 
       // For mini-draw packages, try to get miniDrawId from payment intent metadata
       let miniDrawId: string | undefined;
@@ -5031,7 +5110,40 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       ? `/images/badge/X${promoMultiplier}.webp`
       : null;
 
+  const onWinnerStripPointerDown = (e: React.PointerEvent) => {
+    winnerStripPointerStartRef.current = { x: e.clientX, y: e.clientY };
+    winnerStripDidDragRef.current = false;
+  };
+  const onWinnerStripPointerMove = (e: React.PointerEvent) => {
+    const s = winnerStripPointerStartRef.current;
+    if (!s) return;
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 12) {
+      winnerStripDidDragRef.current = true;
+    }
+  };
+  const onWinnerStripPointerEnd = () => {
+    winnerStripPointerStartRef.current = null;
+  };
+  const onWinnerStripClick = () => {
+    if (winnerStripDidDragRef.current) {
+      winnerStripDidDragRef.current = false;
+      return;
+    }
+    const el = winnerCarouselRef.current;
+    let initial = 0;
+    if (el && majorDrawWinners.length > 0) {
+      const w = el.clientWidth;
+      if (w > 0) {
+        const page = Math.round(el.scrollLeft / w);
+        initial = Math.min(page * 2, majorDrawWinners.length - 1);
+      }
+    }
+    setWinnerViewerInitialIndex(initial);
+    setWinnerViewerOpen(true);
+  };
+
   return (
+    <>
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
       <ModalHeader
         title=""
@@ -5049,9 +5161,89 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         showLogo={true}
       />
 
-      <ModalContent>
-        {/* Active promo for entries - bonus from link (below header, centered) */}
-        <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
+      <ModalContent padding="none">
+        {/* Guest step strip: full width, flush under header */}
+        {!isAuthenticated && (
+          <div className="relative w-full shrink-0">
+            {showHeaderPromoBadge && (
+              <div
+                className={`absolute -top-1.5 sm:-top-2 z-20 pointer-events-none ${currentStep === 2 ? "-right-0.5" : "-left-0.5"}`}
+              >
+                {packageBadgeSrc ? (
+                  <Image
+                    src={packageBadgeSrc}
+                    alt={`${promoMultiplier}x bonus entries`}
+                    width={72}
+                    height={72}
+                    className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-md"
+                  />
+                ) : (
+                  <div
+                    className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border border-amber-300/70"
+                    aria-label={`${promoMultiplier}x bonus entries`}
+                  >
+                    {promoMultiplier}x
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-0 w-full rounded-none border-0 border-b border-gray-200 dark:border-neutral-700 divide-x divide-gray-200 dark:divide-neutral-700">
+              <button
+                type="button"
+                onClick={() => handleStepClick(1)}
+                style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
+                className={`flex w-full items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-3 min-h-0 transition-colors cursor-pointer ${
+                  currentStep === 1
+                    ? "text-white font-bold"
+                    : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium hover:bg-gray-200 dark:hover:bg-neutral-700"
+                }`}
+                aria-current={currentStep === 1 ? "step" : undefined}
+              >
+                <span
+                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[10px] sm:text-[11px] font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
+                    currentStep === 1 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
+                  }`}
+                  style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
+                >
+                  1
+                </span>
+                <span className="text-xs sm:text-sm whitespace-nowrap leading-tight">Your Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => hasCompletedRegistration && handleStepClick(2)}
+                disabled={!hasCompletedRegistration}
+                style={hasCompletedRegistration && currentStep === 2 ? { backgroundColor: promoTheme.primary } : undefined}
+                className={`flex w-full items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-3 min-h-0 transition-colors ${
+                  !hasCompletedRegistration
+                    ? "bg-gray-100 dark:bg-neutral-900 text-gray-400 dark:text-neutral-500 cursor-not-allowed opacity-80"
+                    : currentStep === 2
+                      ? "text-white font-bold cursor-pointer"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium cursor-pointer hover:bg-gray-200 dark:hover:bg-neutral-700"
+                }`}
+                aria-current={currentStep === 2 ? "step" : undefined}
+                aria-disabled={!hasCompletedRegistration}
+                title={!hasCompletedRegistration ? "Complete your details first" : undefined}
+              >
+                <span
+                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[10px] sm:text-[11px] font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
+                    currentStep === 2 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
+                  }`}
+                  style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
+                >
+                  2
+                </span>
+                <span className="text-xs sm:text-sm whitespace-nowrap leading-tight">Billing Info</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          className={`px-3 sm:px-6 pb-3 sm:pb-6 ${!isAuthenticated ? "pt-3 sm:pt-4" : "pt-3 sm:pt-6"}`}
+        >
+          {/* Active promo for entries - bonus from link (below header, centered) */}
+          <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period !== "one-time" &&
@@ -5084,85 +5276,33 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             )}
         </div>
 
-        <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl relative">
-          <div className="relative">
-            {/* Package badge - show when step 1 or step 2 is active */}
-            {showHeaderPromoBadge && (
-  <div
-    className={`absolute -top-4 z-20 pointer-events-none
-      ${currentStep === 2 ? "-right-[12px]" : "-left-[12px]"}
-    `}
-  >
-    {packageBadgeSrc ? (
-      <Image
-        src={packageBadgeSrc}
-        alt={`${promoMultiplier}x bonus entries`}
-        width={72}
-        height={72}
-        className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
-      />
-    ) : (
-      <div
-        className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border-2 border-amber-300/70"
-        aria-label={`${promoMultiplier}x bonus entries`}
-      >
-        {promoMultiplier}x
-      </div>
-    )}
-  </div>
-)}
-            {/* Step indicator: only for guests (2-step). Hidden for authenticated users to avoid redundant button-like UI. */}
-            {!isAuthenticated && (
-              <div className="grid grid-cols-2 gap-0 w-full mb-4 sm:mb-5 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 divide-x divide-gray-200 dark:divide-neutral-700">
-                <button
-                  type="button"
-                  onClick={() => handleStepClick(1)}
-                  style={currentStep === 1 ? { backgroundColor: promoTheme.primary } : undefined}
-                  className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors cursor-pointer ${
-                    currentStep === 1
-                      ? "text-white font-bold"
-                      : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium hover:bg-gray-200 dark:hover:bg-neutral-700"
-                  }`}
-                  aria-current={currentStep === 1 ? "step" : undefined}
+          <div className="w-full max-w-sm mx-auto sm:max-w-lg md:max-w-xl lg:max-w-2xl relative">
+            <div className="relative">
+              {/* Package badge for authenticated flow (guest badge is on the flush step strip) */}
+              {isAuthenticated && showHeaderPromoBadge && (
+                <div
+                  className={`absolute -top-4 z-20 pointer-events-none
+                    ${currentStep === 2 ? "-right-[12px]" : "-left-[12px]"}
+                  `}
                 >
-                  <span
-                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/40 ${
-                      currentStep === 1 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
-                    }`}
-                    style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
-                  >
-                    1
-                  </span>
-                  <span className="text-xs sm:text-sm whitespace-nowrap">Your Details</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => hasCompletedRegistration && handleStepClick(2)}
-                  disabled={!hasCompletedRegistration}
-                  style={hasCompletedRegistration && currentStep === 2 ? { backgroundColor: promoTheme.primary } : undefined}
-                  className={`flex w-full items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 transition-colors ${
-                    !hasCompletedRegistration
-                      ? "bg-gray-100 dark:bg-neutral-900 text-gray-400 dark:text-neutral-500 cursor-not-allowed opacity-80"
-                      : currentStep === 2
-                        ? "text-white font-bold cursor-pointer"
-                        : "bg-gray-100 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 font-medium cursor-pointer hover:bg-gray-200 dark:hover:bg-neutral-700"
-                  }`}
-                  aria-current={currentStep === 2 ? "step" : undefined}
-                  aria-disabled={!hasCompletedRegistration}
-                  title={!hasCompletedRegistration ? "Complete your details first" : undefined}
-                >
-                  <span
-                    className={`flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full text-[10px] sm:text-xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/40 ${
-                      currentStep === 2 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
-                    }`}
-                    style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
-                  >
-                    2
-                  </span>
-                  <span className="text-xs sm:text-sm whitespace-nowrap">Billing Info</span>
-                </button>
-              </div>
-            )}
+                  {packageBadgeSrc ? (
+                    <Image
+                      src={packageBadgeSrc}
+                      alt={`${promoMultiplier}x bonus entries`}
+                      width={72}
+                      height={72}
+                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border-2 border-amber-300/70"
+                      aria-label={`${promoMultiplier}x bonus entries`}
+                    >
+                      {promoMultiplier}x
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* Step 1: Personal Details for new users */}
             {currentStep === 1 && (
@@ -5641,70 +5781,60 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               </div>
             )}
 
-            {/* Compact winner strip: swipe/scroll + auto-advance every 5s (no section chrome) */}
+            {/* Major draw winners: two per slide; tap opens FullscreenImageViewer (not a route) */}
             {currentStep !== 2 && (
               <div className="mt-3 sm:mt-4">
-                {majorDrawWinnersLoading ? (
-                  <div className="h-[92px] sm:h-[104px] w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-100 dark:bg-neutral-900 animate-pulse" />
-                ) : majorDrawWinners.length === 0 ? null : (
-                  <div
-                    ref={winnerCarouselRef}
-                    className="flex w-full overflow-x-auto snap-x snap-mandatory rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-black/20 [scrollbar-width:thin] scroll-smooth"
-                  >
-                    {majorDrawWinners.map((winner) => {
-                      const displayImage =
-                        winner.imageUrl ||
-                        (winner.prize?.images?.[0]) ||
-                        "/images/promotion/PrizeHeader/PrizeHeader.webp";
-                      const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-                      const displayDate = (
-                        winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)
-                      ).toLocaleDateString("en-AU", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      });
-                      return (
-                        <div
-                          key={winner.id}
-                          className="relative h-[92px] sm:h-[104px] w-full min-w-full flex-shrink-0 snap-center overflow-hidden bg-neutral-900"
-                        >
-                          <Image
-                            src={displayImage}
-                            alt={displayName}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 640px) 100vw, 480px"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
-                          <div className="absolute top-1.5 left-1/2 z-10 -translate-x-1/2 sm:top-2">
-                            <LatestWinnersBadge drawName={winner.drawName} size="small" className="scale-90 sm:scale-100" />
+                {majorDrawWinnersLoading || majorDrawWinners.length > 0 ? (
+                  majorDrawWinnersLoading ? (
+                    <div className="grid h-[92px] sm:h-[104px] w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-200 dark:bg-neutral-800">
+                      <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
+                      <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
+                    </div>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onWinnerStripClick();
+                        }
+                      }}
+                      className="group block cursor-pointer rounded-xl outline-none transition-opacity hover:opacity-[0.98] focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-500 dark:focus-visible:ring-offset-neutral-950"
+                      aria-label="View winner photos full screen"
+                      title="View full screen"
+                    >
+                      <div
+                        ref={winnerCarouselRef}
+                        onPointerDown={onWinnerStripPointerDown}
+                        onPointerMove={onWinnerStripPointerMove}
+                        onPointerUp={onWinnerStripPointerEnd}
+                        onPointerCancel={onWinnerStripPointerEnd}
+                        onClick={onWinnerStripClick}
+                        className="flex w-full overflow-x-auto snap-x snap-mandatory rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-black/20 [scrollbar-width:thin] scroll-smooth group-hover:border-gray-300 dark:group-hover:border-neutral-600"
+                      >
+                        {majorDrawWinnerPairs.map(([left, right]) => (
+                          <div
+                            key={`${left.id}-${right?.id ?? "single"}`}
+                            className="grid h-[92px] sm:h-[104px] w-full min-w-full flex-shrink-0 snap-center grid-cols-2 gap-px overflow-hidden bg-neutral-800 dark:bg-neutral-900"
+                          >
+                            {renderMajorDrawWinnerTile(left)}
+                            {right ? (
+                              renderMajorDrawWinnerTile(right)
+                            ) : (
+                              <div className="h-full min-h-0 bg-neutral-900/80 dark:bg-neutral-950" aria-hidden />
+                            )}
                           </div>
-                          <div className="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between gap-2 px-2.5 py-2 sm:px-3 sm:py-2.5">
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-bold font-['Poppins'] text-white sm:text-sm drop-shadow-md">
-                                {displayName}
-                              </p>
-                              {winner.winnerState ? (
-                                <div className="mt-0.5 flex items-center gap-1 text-[10px] text-white/85 sm:text-xs">
-                                  <MapPin className="h-3 w-3 shrink-0 text-white/70" />
-                                  <span className="truncate">{winner.winnerState}</span>
-                                </div>
-                              ) : null}
-                            </div>
-                            <p className="shrink-0 text-[10px] font-semibold tabular-nums text-white/90 sm:text-xs">
-                              {displayDate}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        ))}
+                      </div>
+                    </div>
+                  )
+                ) : null}
               </div>
             )}
           </div>
         </div>
+      </div>
       </ModalContent>
 
       {/* Package Selection Modal */}
@@ -5738,11 +5868,22 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           onSuccess={handlePaymentProcessingSuccess}
           onError={handlePaymentProcessingError}
           onTimeout={handlePaymentProcessingTimeout}
+          onStillProcessingDismiss={handlePaymentProcessingTimeout}
         />
       )}
 
       {/* Payment Confirmation Modal removed - subscription confirmation now handled directly in handleSubmit */}
     </ModalContainer>
+
+    <FullscreenImageViewer
+      nested
+      isOpen={winnerViewerOpen}
+      images={winnerFullscreenImages}
+      initialIndex={winnerViewerInitialIndex}
+      onClose={() => setWinnerViewerOpen(false)}
+      title="Major draw winners"
+    />
+    </>
   );
 };
 
