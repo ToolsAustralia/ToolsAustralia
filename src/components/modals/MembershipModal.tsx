@@ -22,7 +22,7 @@ import { convertToAPIPlan, getPackageId } from "@/utils/membership/membership-ad
 import { useUserContext } from "@/contexts/UserContext";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
+import FullscreenImageViewer, { type FullscreenImageItem } from "@/components/ui/FullscreenImageViewer";
 import { signIn } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
@@ -264,6 +264,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   // Major draw winners from shared cache (homepage/promotions/modal) - only fetches if not already loaded
   const { data: majorDrawWinners = [], isLoading: majorDrawWinnersLoading } = useMajorDrawWinners();
   const winnerCarouselRef = useRef<HTMLDivElement | null>(null);
+  const [winnerViewerOpen, setWinnerViewerOpen] = useState(false);
+  const [winnerViewerInitialIndex, setWinnerViewerInitialIndex] = useState(0);
+  const winnerStripPointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const winnerStripDidDragRef = useRef(false);
   /** Pairs preserve API order (newest first); first slide = two most recent winners. */
   const majorDrawWinnerPairs = React.useMemo(() => {
     const pairs: [MajorDrawWinner, MajorDrawWinner | null][] = [];
@@ -271,6 +275,34 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       pairs.push([majorDrawWinners[i], majorDrawWinners[i + 1] ?? null]);
     }
     return pairs;
+  }, [majorDrawWinners]);
+
+  const winnerFullscreenImages = React.useMemo((): FullscreenImageItem[] => {
+    return majorDrawWinners.map((winner) => {
+      const displayImage =
+        winner.imageUrl ||
+        (winner.prize?.images?.[0]) ||
+        "/images/promotion/PrizeHeader/PrizeHeader.webp";
+      const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+      const displayDate = (
+        winner.drawDate ? new Date(winner.drawDate) : new Date(winner.selectedDate)
+      ).toLocaleDateString("en-AU", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const drawLabel = winner.drawName?.trim() || "Major draw";
+      return {
+        src: displayImage,
+        alt: `${displayName} — ${drawLabel}`,
+        captionDetail: {
+          drawName: drawLabel,
+          winnerName: displayName,
+          wonDate: displayDate,
+          drawKind: "major",
+        },
+      };
+    });
   }, [majorDrawWinners]);
 
   const renderMajorDrawWinnerTile = (winner: MajorDrawWinner) => {
@@ -5078,7 +5110,40 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       ? `/images/badge/X${promoMultiplier}.webp`
       : null;
 
+  const onWinnerStripPointerDown = (e: React.PointerEvent) => {
+    winnerStripPointerStartRef.current = { x: e.clientX, y: e.clientY };
+    winnerStripDidDragRef.current = false;
+  };
+  const onWinnerStripPointerMove = (e: React.PointerEvent) => {
+    const s = winnerStripPointerStartRef.current;
+    if (!s) return;
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 12) {
+      winnerStripDidDragRef.current = true;
+    }
+  };
+  const onWinnerStripPointerEnd = () => {
+    winnerStripPointerStartRef.current = null;
+  };
+  const onWinnerStripClick = () => {
+    if (winnerStripDidDragRef.current) {
+      winnerStripDidDragRef.current = false;
+      return;
+    }
+    const el = winnerCarouselRef.current;
+    let initial = 0;
+    if (el && majorDrawWinners.length > 0) {
+      const w = el.clientWidth;
+      if (w > 0) {
+        const page = Math.round(el.scrollLeft / w);
+        initial = Math.min(page * 2, majorDrawWinners.length - 1);
+      }
+    }
+    setWinnerViewerInitialIndex(initial);
+    setWinnerViewerOpen(true);
+  };
+
   return (
+    <>
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
       <ModalHeader
         title=""
@@ -5716,26 +5781,36 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               </div>
             )}
 
-            {/* Major draw winners: two per slide; click opens /winners full gallery (new tab) */}
+            {/* Major draw winners: two per slide; tap opens FullscreenImageViewer (not a route) */}
             {currentStep !== 2 && (
               <div className="mt-3 sm:mt-4">
                 {majorDrawWinnersLoading || majorDrawWinners.length > 0 ? (
-                  <Link
-                    href="/winners"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group block cursor-pointer rounded-xl outline-none transition-opacity hover:opacity-[0.98] focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-500 dark:focus-visible:ring-offset-neutral-950"
-                    aria-label="Open the full winners gallery in a new tab"
-                    title="View all winners"
-                  >
-                    {majorDrawWinnersLoading ? (
-                      <div className="grid h-[92px] sm:h-[104px] w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-200 dark:bg-neutral-800">
-                        <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
-                        <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
-                      </div>
-                    ) : (
+                  majorDrawWinnersLoading ? (
+                    <div className="grid h-[92px] sm:h-[104px] w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-200 dark:bg-neutral-800">
+                      <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
+                      <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
+                    </div>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onWinnerStripClick();
+                        }
+                      }}
+                      className="group block cursor-pointer rounded-xl outline-none transition-opacity hover:opacity-[0.98] focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-500 dark:focus-visible:ring-offset-neutral-950"
+                      aria-label="View winner photos full screen"
+                      title="View full screen"
+                    >
                       <div
                         ref={winnerCarouselRef}
+                        onPointerDown={onWinnerStripPointerDown}
+                        onPointerMove={onWinnerStripPointerMove}
+                        onPointerUp={onWinnerStripPointerEnd}
+                        onPointerCancel={onWinnerStripPointerEnd}
+                        onClick={onWinnerStripClick}
                         className="flex w-full overflow-x-auto snap-x snap-mandatory rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-black/20 [scrollbar-width:thin] scroll-smooth group-hover:border-gray-300 dark:group-hover:border-neutral-600"
                       >
                         {majorDrawWinnerPairs.map(([left, right]) => (
@@ -5752,8 +5827,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           </div>
                         ))}
                       </div>
-                    )}
-                  </Link>
+                    </div>
+                  )
                 ) : null}
               </div>
             )}
@@ -5799,6 +5874,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       {/* Payment Confirmation Modal removed - subscription confirmation now handled directly in handleSubmit */}
     </ModalContainer>
+
+    <FullscreenImageViewer
+      nested
+      isOpen={winnerViewerOpen}
+      images={winnerFullscreenImages}
+      initialIndex={winnerViewerInitialIndex}
+      onClose={() => setWinnerViewerOpen(false)}
+      title="Major draw winners"
+    />
+    </>
   );
 };
 

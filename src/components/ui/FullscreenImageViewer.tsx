@@ -13,9 +13,19 @@ import "swiper/css";
 import "swiper/css/thumbs";
 import "swiper/css/free-mode";
 
+export interface FullscreenImageCaption {
+  drawName: string;
+  winnerName: string;
+  wonDate: string;
+  /** Defaults to major (membership / major-draw winners). */
+  drawKind?: "major" | "mini";
+}
+
 export interface FullscreenImageItem {
   src: string;
   alt?: string;
+  /** Bottom info bar (draw / winner / date). */
+  captionDetail?: FullscreenImageCaption;
 }
 
 interface FullscreenImageViewerProps {
@@ -24,6 +34,8 @@ interface FullscreenImageViewerProps {
   initialIndex: number;
   onClose: () => void;
   title?: string;
+  /** When opened from another modal, stack above it. */
+  nested?: boolean;
 }
 
 const clampIndex = (index: number, length: number): number => {
@@ -39,6 +51,7 @@ export default function FullscreenImageViewer({
   initialIndex,
   onClose,
   title,
+  nested = false,
 }: FullscreenImageViewerProps) {
   const theme = usePromoTheme();
   const [currentIndex, setCurrentIndex] = useState(clampIndex(initialIndex, images.length));
@@ -105,6 +118,7 @@ export default function FullscreenImageViewer({
   const goPrevious = () => swiperRef.current?.slidePrev();
 
   const showCounter = images.length > 0;
+  const activeCaption = images[currentIndex]?.captionDetail;
 
   return (
     <ModalContainer
@@ -112,19 +126,20 @@ export default function FullscreenImageViewer({
       onClose={onClose}
       size="full"
       height="screen"
-      className="!max-w-full !h-screen !rounded-none !bg-black"
+      className="!max-w-full !h-screen !max-h-[100dvh] !rounded-none !bg-black !overflow-hidden"
       closeOnBackdrop
+      nested={nested}
     >
       <div
-        className="relative h-full w-full text-white"
+        className="flex h-full max-h-[100dvh] min-h-0 w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden overscroll-none text-white touch-pan-x"
         style={{
           background: `radial-gradient(circle at top, ${theme.primaryDark}33 0%, rgba(0,0,0,0.96) 52%)`,
         }}
       >
-        <div className="absolute left-0 top-0 z-20 flex w-full items-center justify-between p-3 sm:p-4">
+        <div className="absolute left-0 top-0 z-30 flex w-full items-center justify-between p-3 sm:p-4 pointer-events-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto">
           {showCounter ? (
             <div
-              className="max-w-[80%] text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full backdrop-blur truncate border"
+              className="pointer-events-auto max-w-[80%] text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full backdrop-blur truncate border"
               style={{
                 background: themedPanelBg,
                 border: themedPanelBorder,
@@ -134,12 +149,14 @@ export default function FullscreenImageViewer({
               {title ? `${title} - ` : ""}
               {currentIndex + 1} / {images.length}
             </div>
-          ) : <div />}
+          ) : (
+            <div />
+          )}
           <button
             type="button"
             onClick={onClose}
             autoFocus
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
             style={{
               background: themedPanelBg,
               border: themedPanelBorder,
@@ -152,46 +169,120 @@ export default function FullscreenImageViewer({
         </div>
 
         {images.length > 0 ? (
-          <>
-            <Swiper
-              modules={[Keyboard, Thumbs]}
-              onSwiper={(swiper) => {
-                swiperRef.current = swiper;
-                updateNavigationState(swiper);
-              }}
-              thumbs={{
-                swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null,
-              }}
-              navigation={false}
-              keyboard={{ enabled: true }}
-              watchSlidesProgress={true}
-              slidesPerView={1}
-              initialSlide={clampIndex(initialIndex, images.length)}
-              className="h-full w-full fullscreen-image-viewer-swiper"
-              onSlideChange={(swiper) => {
-                setCurrentIndex(swiper.activeIndex);
-                updateNavigationState(swiper);
-              }}
-              onResize={updateNavigationState}
-            >
-              {images.map((image, index) => (
-                <SwiperSlide key={`${image.src}-${index}`}>
-                  <div className="relative h-full w-full">
-                    <Image
-                      src={image.src}
-                      alt={image.alt || `Fullscreen image ${index + 1}`}
-                      fill
-                      sizes="100vw"
-                      className={`object-contain p-3 sm:p-6 ${hasMultipleImages ? "pb-24 sm:pb-28" : ""}`}
-                      priority={index === currentIndex}
-                    />
-                  </div>
-                </SwiperSlide>
-              ))}
-            </Swiper>
+          <div className="flex min-h-0 flex-1 flex-col pt-14 sm:pt-16">
+            {/* Image stage only — caption + thumbs are separate rows so nothing covers the photo */}
+            <div className="relative min-h-0 w-full flex-1 overflow-hidden">
+              <Swiper
+                modules={[Keyboard, Thumbs]}
+                onSwiper={(swiper) => {
+                  swiperRef.current = swiper;
+                  updateNavigationState(swiper);
+                }}
+                thumbs={{
+                  swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null,
+                }}
+                navigation={false}
+                keyboard={{ enabled: true }}
+                watchSlidesProgress={true}
+                slidesPerView={1}
+                initialSlide={clampIndex(initialIndex, images.length)}
+                className="fullscreen-image-viewer-swiper h-full w-full max-w-full overflow-hidden"
+                wrapperClass="!max-w-full"
+                onSlideChange={(swiper) => {
+                  setCurrentIndex(swiper.activeIndex);
+                  updateNavigationState(swiper);
+                }}
+                onResize={updateNavigationState}
+              >
+                {images.map((image, index) => (
+                  <SwiperSlide key={`${image.src}-${index}`} className="!box-border max-w-full overflow-hidden">
+                    <div className="relative h-full w-full max-w-full overflow-hidden">
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Fullscreen image ${index + 1}`}
+                        fill
+                        sizes="100vw"
+                        className="box-border object-contain p-3 sm:p-4"
+                        priority={index === currentIndex}
+                      />
+                    </div>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
 
-            {hasMultipleImages && (
-              <div className="absolute bottom-3 left-0 z-20 w-full px-2 sm:px-4">
+              {hasMultipleImages ? (
+                <>
+                  {canSlidePrev && (
+                    <button
+                      type="button"
+                      onClick={goPrevious}
+                      className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      style={{
+                        borderColor: chevronColor,
+                        color: chevronColor,
+                        boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
+                      }}
+                      aria-label="View previous image"
+                    >
+                      <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                    </button>
+                  )}
+                  {canSlideNext && (
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      style={{
+                        borderColor: chevronColor,
+                        color: chevronColor,
+                        boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
+                      }}
+                      aria-label="View next image"
+                    >
+                      <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                    </button>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {activeCaption ? (
+              <div
+                className={`z-20 w-full shrink-0 border-t border-white/15 bg-black/90 px-2 py-2.5 backdrop-blur-md sm:px-4 sm:py-3 ${
+                  hasMultipleImages ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                }`}
+              >
+                <div className="mx-auto grid max-w-4xl grid-cols-3 gap-2 sm:gap-4">
+                  <div className="min-w-0 text-center">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                      {activeCaption.drawKind === "mini" ? "Mini draw" : "Major draw"}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-tight text-white sm:text-sm">
+                      {activeCaption.drawName}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-center">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                      Winner
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-tight text-white sm:text-sm">
+                      {activeCaption.winnerName}
+                    </p>
+                  </div>
+                  <div className="min-w-0 text-center">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                      Won date
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold tabular-nums leading-tight text-white sm:text-sm">
+                      {activeCaption.wonDate}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {hasMultipleImages ? (
+              <div className="z-20 w-full max-w-full shrink-0 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-3">
                 <div
                   className="rounded-2xl p-2 backdrop-blur-md"
                   style={{
@@ -217,9 +308,7 @@ export default function FullscreenImageViewer({
                           onClick={() => swiperRef.current?.slideTo(index)}
                           aria-label={`Open image ${index + 1}`}
                           className={`relative h-full w-full overflow-hidden rounded-lg border-2 transition-all duration-200 ${
-                            currentIndex === index
-                              ? ""
-                              : "hover:brightness-110"
+                            currentIndex === index ? "" : "hover:brightness-110"
                           }`}
                           style={
                             currentIndex === index
@@ -245,43 +334,8 @@ export default function FullscreenImageViewer({
                   </Swiper>
                 </div>
               </div>
-            )}
-          </>
-        ) : null}
-
-        {hasMultipleImages ? (
-          <>
-            {canSlidePrev && (
-              <button
-                type="button"
-                onClick={goPrevious}
-                className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                style={{
-                  borderColor: chevronColor,
-                  color: chevronColor,
-                  boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
-                }}
-                aria-label="View previous image"
-              >
-                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-            )}
-            {canSlideNext && (
-              <button
-                type="button"
-                onClick={goNext}
-                className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                style={{
-                  borderColor: chevronColor,
-                  color: chevronColor,
-                  boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
-                }}
-                aria-label="View next image"
-              >
-                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-            )}
-          </>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </ModalContainer>
