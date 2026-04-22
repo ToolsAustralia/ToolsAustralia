@@ -843,6 +843,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}
           onTimeout={handlePaymentTimeout}
+          onStillProcessingDismiss={handlePaymentTimeout}
         />
       )}
 

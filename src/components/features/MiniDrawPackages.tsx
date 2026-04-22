@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Package, Info } from "lucide-react";
 import { miniDrawPackages } from "@/data/miniDrawPackages";
@@ -155,6 +155,19 @@ export default function MiniDrawPackages({
       : undefined;
   const isSoldOut = entriesRemaining !== undefined && entriesRemaining <= 0;
 
+  // When navigating between mini draws, reset purchase/upsell state so nothing leaks across routes.
+  useEffect(() => {
+    setPurchasingPackageId(null);
+    setHoveredPackageId(null);
+    setSelectedPackageId(null);
+    setShowPaymentProcessing(false);
+    setPaymentIntentId(null);
+    setProcessingPackageName("");
+    setUpsellTriggered(false);
+    setOriginalPurchaseContext(null);
+    setSuccessToastShown(false);
+  }, [miniDrawId]);
+
   const handlePurchase = async (packageId: string) => {
     // ✅ AUTHENTICATION-ONLY: Check if user is authenticated (not membership)
     if (!session?.user) {
@@ -216,6 +229,8 @@ export default function MiniDrawPackages({
 
     try {
       setPurchasingPackageId(packageId);
+      // Each new checkout can show the post-purchase upsell (same or different pack on this draw)
+      setUpsellTriggered(false);
 
       // Check if user has default payment method for automatic charging
       const hasDefaultPayment = !!defaultPaymentMethod?.paymentMethodId;
@@ -251,9 +266,44 @@ export default function MiniDrawPackages({
         throw new Error(errorMessage);
       }
 
+      // 3D Secure or bank auth — do not start webhook polling; payment is not complete yet
+      if (!data.success && data.requiresAction) {
+        if (previousMiniDraw) {
+          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
+        }
+        if (previousUserAccount) {
+          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
+        }
+        showToast({
+          type: "info",
+          title: "Complete authentication",
+          message:
+            "Your bank may require 3D Secure to authorise this payment. Please try again and complete any verification. If the issue continues, add or update your card in your account settings.",
+          duration: 8000,
+        });
+        return;
+      }
+
       // ✅ CRITICAL: Only show success if payment actually succeeded
       if (!data.success) {
         throw new Error(data.error || data.details || "Payment failed");
+      }
+
+      // Unconfirmed intent (no saved card): API returns a client_secret for future Elements flow; do not poll for BenefitsGranted
+      if (data.requiresPayment) {
+        if (previousMiniDraw) {
+          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
+        }
+        if (previousUserAccount) {
+          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
+        }
+        showToast({
+          type: "info",
+          title: "Payment method required",
+          message: "Add a default payment method in your account, then return here to complete your purchase.",
+          duration: 8000,
+        });
+        return;
       }
 
       // Extract paymentIntentId from response
@@ -717,6 +767,7 @@ export default function MiniDrawPackages({
           onSuccess={handlePaymentProcessingSuccess}
           onError={handlePaymentProcessingError}
           onTimeout={handlePaymentProcessingTimeout}
+          onStillProcessingDismiss={handlePaymentProcessingTimeout}
         />
       )}
 

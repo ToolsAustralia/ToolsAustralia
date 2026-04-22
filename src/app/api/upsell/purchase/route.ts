@@ -258,8 +258,12 @@ export async function POST(request: NextRequest) {
     
     if (validatedData.originalPurchaseContext?.packageId && validatedData.originalPurchaseContext?.packageType) {
       // Use originalPurchaseContext if available (most reliable)
-      inferredPackageType = validatedData.originalPurchaseContext.packageType;
       triggeringPackageId = validatedData.originalPurchaseContext.packageId;
+      inferredPackageType = validatedData.originalPurchaseContext.packageType;
+      // Older clients sent mini-pack purchases as "one-time", which skips miniDrawPackages lookup and falls back to static entriesCount.
+      if (triggeringPackageId.startsWith("mini-pack-") && inferredPackageType === "one-time") {
+        inferredPackageType = "mini-draw";
+      }
     } else {
       // ✅ FIX: Infer package type from upsell category when context is missing
       // This matches the logic used for image selection
@@ -272,9 +276,15 @@ export async function POST(request: NextRequest) {
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
         );
       } else if (offer.category === "one-time-plus" || offer.category === "additional-upgrade") {
-        // One-time-plus and additional-upgrade upsells are triggered by one-time purchases
-        inferredPackageType = "one-time";
-        triggeringPackageId = offer.triggersOnPackageIds?.[0];
+        // Mini-pack upsells use category one-time-plus but must resolve entries from miniDrawPackages.
+        const triggerCandidate =
+          validatedData.originalPurchaseContext?.packageId ?? offer.triggersOnPackageIds?.[0];
+        if (triggerCandidate?.startsWith("mini-pack-")) {
+          inferredPackageType = "mini-draw";
+        } else {
+          inferredPackageType = "one-time";
+        }
+        triggeringPackageId = triggerCandidate ?? offer.triggersOnPackageIds?.[0];
         console.log(
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
         );
