@@ -66,7 +66,7 @@ export default async function TermsPage() {
                 </a>
               </span>
               <span className="font-semibold text-white">Last Updated:</span>
-              <span>25/11/2025</span>
+              <span>22/04/2026</span>
             </div>
           </section>
 
@@ -102,10 +102,10 @@ export default async function TermsPage() {
                 <h3 className="text-xl font-semibold text-white">a. One-Time Packages:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>
-                    Single purchase providing entries into both Major Giveaway Competitions and Mini Draw Competitions
+                    Single purchase providing entries to Major Giveaway Competitions
                   </li>
                   <li>
-                    Available in five tiers: Apprentice Pack, Tradie Pack, Foreman Pack, Boss Pack, and Power Pack
+                    Available in Six tiers: Apprentice Pack, Tradie Pack, Foreman Pack, Boss Pack, Power Pack, and VIP Pack
                   </li>
                   <li>Access to member discounts for specified period</li>
                   <li>Entries credited immediately upon payment</li>
@@ -130,10 +130,10 @@ export default async function TermsPage() {
               on the website at time of purchase and confirmed via email.
             </p>
             <p className="text-gray-300">
-              <strong>Important:</strong> One-Time Packages provide entries to both Major Giveaway and Mini Draw
-              competitions for the specified period. Membership Packages provide ongoing monthly entries that apply to
-              only Major Giveaway competitions. Purchase confirmations clearly specify the number of entries and
-              applicable competition periods.
+              <strong>Important:</strong> One-Time Packages provide entries to Major Giveaway competitions only, for the
+              specified period. Membership Packages provide ongoing monthly entries that apply only to Major Giveaway
+              competitions. Purchase confirmations clearly specify the number of entries and applicable competition
+              periods.
             </p>
           </section>
 
@@ -168,8 +168,7 @@ export default async function TermsPage() {
                 <h3 className="text-xl font-semibold text-white">5.1 Entry Allocation:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>
-                    One-Time Packages: Entries for both Major Giveaway and Mini Draw competitions for the specified
-                    period
+                    One-Time Packages: Entries for Major Giveaway competitions for the specified period
                   </li>
                   <li>
                     Membership Packages: Monthly accumulated entries apply to Major Giveaway competitions
@@ -184,9 +183,8 @@ export default async function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
                   <li>
-                    Mini Draws have a threshold based on One-Time Package entries sold. Once the specified number of
-                    One-Time Package entries are sold, the Mini Draw closes to new One-Time Package purchases and the
-                    draw is conducted.
+                    Mini Draws may have their own entry thresholds, closure conditions, and eligibility rules as set out
+                    in each competition&apos;s terms and conditions.
                   </li>
                   <li>Maximum entries per member may apply as specified in competition-specific terms.</li>
                 </ul>
@@ -251,7 +249,8 @@ export default async function TermsPage() {
                   <li>Each competition has separate terms and conditions</li>
                   <li>Review competition-specific terms in addition to these general terms</li>
                   <li>
-                    Mini Draws have specific One-Time Package entry thresholds and closure conditions.
+                    Mini Draws may have specific entry thresholds and closure conditions as described in each
+                    competition&apos;s terms.
                   </li>
                 </ul>
               </div>
@@ -521,8 +520,8 @@ export default async function TermsPage() {
               <li>You have read and agree to these terms</li>
               <li>You meet eligibility requirements</li>
               <li>
-                You understand One-Time Packages provide entries Major Giveaway for
-                the specified period
+                You understand One-Time Packages provide entries to Major Giveaway competitions for the specified
+                period
               </li>
               <li>
                 You understand Membership Package entries are accumulated monthly and apply exclusively to Major

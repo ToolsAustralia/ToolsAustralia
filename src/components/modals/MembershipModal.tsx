@@ -2358,7 +2358,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
           "";
 
-      const packageTypeForUpsell = processingPackageType === "mini-draw" ? "one-time" : processingPackageType;
+      // Keep "mini-draw" so upsell entry math uses miniDrawPackages (mapping to "one-time" broke base entry lookup → static 10 entries).
+      const packageTypeForUpsell = processingPackageType;
 
       // For mini-draw packages, try to get miniDrawId from payment intent metadata
       let miniDrawId: string | undefined;
@@ -5738,6 +5739,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           onSuccess={handlePaymentProcessingSuccess}
           onError={handlePaymentProcessingError}
           onTimeout={handlePaymentProcessingTimeout}
+          onStillProcessingDismiss={handlePaymentProcessingTimeout}
         />
       )}
 

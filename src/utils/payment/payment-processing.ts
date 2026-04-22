@@ -1857,9 +1857,29 @@ async function handleUpsellPackage(
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
   // console.log(`🛒 Added upsell purchase atomically: ${packageData.packageName}`);
 
-  // Note: Upsells typically don't include partner discount access in current implementation
-  // If they do in the future, add logic here similar to one-time packages
-  void paymentIntentId; // Reserved for future use when upsells include partner access
+  // Mini-draw upsells: grant partner discount window from miniDrawPackages upsell definition (single source of truth).
+  const miniUpsellMatch = packageData.packageId?.match(/^mini-pack-(\d+)-upgrade$/);
+  if (miniUpsellMatch && paymentIntentId) {
+    const basePackId = `mini-pack-${miniUpsellMatch[1]}`;
+    const miniBase = getMiniDrawPackageById(basePackId);
+    const upsellDef = miniBase?.upsell;
+    if (upsellDef && (upsellDef.partnerDiscountHours > 0 || upsellDef.partnerDiscountDays > 0)) {
+      if (!user.partnerDiscountQueue) {
+        user.partnerDiscountQueue = [];
+        user.markModified("partnerDiscountQueue");
+      }
+      await addToPartnerDiscountQueue(user as unknown as IUser, {
+        packageId: packageData.packageId,
+        packageName: upsellDef.name,
+        packageType: "upsell",
+        discountDays: upsellDef.partnerDiscountDays,
+        discountHours: upsellDef.partnerDiscountHours,
+        stripePaymentIntentId: paymentIntentId,
+      });
+      user.markModified("partnerDiscountQueue");
+      dispatchPackagePurchase(packageData.packageId, "upsell");
+    }
+  }
 }
 
 /**

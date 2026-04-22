@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Check, Gift, Star, Zap, AlertCircle, Tag } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, Gift, Star, Zap, AlertCircle, Tag, X } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -19,6 +20,11 @@ interface PaymentProcessingScreenProps {
   onSuccess?: (status: PaymentStatusResponse) => void;
   onError?: (error: string) => void;
   onTimeout?: () => void;
+  /**
+   * Called when the user dismisses the long-waiting "Still processing" state (close or "Stay on this page")
+   * so they are not forced to the dashboard. Usually mirrors `onTimeout` (hide overlay; polling stops via `isVisible`).
+   */
+  onStillProcessingDismiss?: () => void;
 }
 
 const STEP_BY_EVENT: Record<string, number> = {
@@ -54,7 +60,16 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   onSuccess,
   onError,
   onTimeout: _onTimeout,
+  onStillProcessingDismiss,
 }) => {
+  const mountTo = typeof document !== "undefined" ? document.body : null;
+
+  const renderOverlay = (ui: React.ReactNode) => {
+    if (mountTo) {
+      return createPortal(ui, mountTo);
+    }
+    return ui;
+  };
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stillWaitingLong, setStillWaitingLong] = useState(false);
@@ -195,7 +210,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
       }
     }
 
-    return (
+    return renderOverlay(
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto p-4 sm:p-8 text-center animate-in zoom-in-95 duration-500">
@@ -240,7 +255,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   }
 
   if (error) {
-    return (
+    return renderOverlay(
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-300" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
         <div className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md mx-auto p-4 sm:p-8 text-center animate-in zoom-in-95 duration-500">
@@ -264,31 +279,52 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   }
 
   if (stillWaitingLong && shouldPoll && !status?.processed) {
-    return (
+    return renderOverlay(
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/60" />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-8 text-center">
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-6 sm:p-8 text-center">
+          {onStillProcessingDismiss && (
+            <button
+              type="button"
+              onClick={onStillProcessingDismiss}
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+              aria-label="Close and stay on this page"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
           <AlertCircle className="w-14 h-14 text-amber-500 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-gray-900 mb-2">Still processing</h3>
           <p className="text-sm text-gray-600 mb-6">
             Your payment is taking longer than usual to confirm. We&apos;ll email you when everything is finalised. You can
             safely leave this screen.
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = "/my-account";
-            }}
-            className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
-          >
-            Go to dashboard
-          </button>
+          <div className="flex flex-col gap-2 sm:gap-3">
+            {onStillProcessingDismiss && (
+              <button
+                type="button"
+                onClick={onStillProcessingDismiss}
+                className="w-full px-4 py-3 border border-gray-300 text-gray-900 bg-white rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Stay on this page
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/my-account";
+              }}
+              className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+            >
+              Go to dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
+  return renderOverlay(
     <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
       <div className="absolute inset-0 bg-black/60" />
       <div className="relative bg-transparent rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md mx-auto p-8 sm:p-12 text-center">

@@ -656,6 +656,7 @@ const StripePaymentModal: React.FC<StripePaymentModalProps> = ({
         onSuccess={handleProcessingSuccess}
         onError={handleProcessingError}
         onTimeout={handleProcessingTimeout}
+        onStillProcessingDismiss={handleProcessingTimeout}
       />
     );
   }

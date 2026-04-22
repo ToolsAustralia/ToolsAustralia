@@ -75,6 +75,13 @@ function deriveUpsellPackageType(
     return "membership";
   }
   if (category === "one-time-plus" || category === "additional-upgrade") {
+    const triggerId = pickTriggeringPackageIdForUpsell(
+      upsellPackage?.triggersOnPackageIds,
+      originalPurchaseContext?.packageId
+    );
+    if (triggerId?.startsWith("mini-pack-")) {
+      return "mini-draw";
+    }
     return "one-time";
   }
   if (offer.category === "membership") {
@@ -1121,6 +1128,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}
           onTimeout={handleClose}
+          onStillProcessingDismiss={handleClose}
         />
       )}
     </>
