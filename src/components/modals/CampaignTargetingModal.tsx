@@ -337,8 +337,12 @@ export default function CampaignTargetingModal({
         onClose={onClose}
         showLogo={false}
       />
-      <ModalContent padding="none" className="flex flex-col max-h-[min(85vh,720px)]">
-        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-neutral-800 space-y-4 overflow-y-auto shrink-0">
+      <ModalContent
+        padding="none"
+        scrollbar="none"
+        className="!overflow-hidden flex flex-col min-h-0 flex-1"
+      >
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-neutral-800 space-y-4 shrink-0 max-h-[min(42dvh,340px)] sm:max-h-[min(46dvh,400px)] md:max-h-[min(52dvh,480px)] overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Dropdown
               label="Subscription"
@@ -495,9 +499,15 @@ export default function CampaignTargetingModal({
           )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 pb-4">
+        <div className="flex min-h-[28dvh] flex-1 flex-col overflow-hidden">
+          <div className="px-4 sm:px-5 pt-2 pb-1 shrink-0">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+              Audience preview
+            </span>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-5 pb-2 overscroll-contain touch-pan-y">
           {!previewUsers.length && !previewLoading && (
-            <div className="py-12 text-center text-gray-500 dark:text-neutral-400 text-sm">
+            <div className="py-8 sm:py-12 text-center text-gray-500 dark:text-neutral-400 text-sm">
               Set filters and click <strong>Preview audience</strong> to load users.
             </div>
           )}
@@ -541,10 +551,10 @@ export default function CampaignTargetingModal({
               ))}
             </ul>
           )}
-        </div>
+          </div>
 
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 py-2 border-t border-gray-200 dark:border-neutral-800">
+          <div className="flex shrink-0 items-center justify-center gap-3 py-2 border-t border-gray-200 dark:border-neutral-800 px-2">
             <Button
               type="button"
               variant="outline"
@@ -576,8 +586,9 @@ export default function CampaignTargetingModal({
             </Button>
           </div>
         )}
+        </div>
 
-        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/80">
+        <div className="flex shrink-0 flex-col-reverse sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/80">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>

@@ -66,26 +66,28 @@ export default function AlternatingMultiplierList() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-red-600 dark:text-red-400" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-8">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-red-600">Failed to load alternating multiplier configurations</p>
+      <div className="py-8 text-center">
+        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+        <p className="text-red-600 dark:text-red-400">Failed to load alternating multiplier configurations</p>
       </div>
     );
   }
 
   if (configs.length === 0) {
     return (
-      <div className="text-center py-8">
-        <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-        <p className="text-gray-500">No alternating multiplier configurations</p>
-        <p className="text-sm text-gray-400 mt-1">Create a configuration to enable automatic multiplier alternation</p>
+      <div className="py-8 text-center">
+        <Zap className="mx-auto mb-4 h-12 w-12 text-gray-300 dark:text-neutral-600" />
+        <p className="text-gray-500 dark:text-neutral-400">No alternating multiplier configurations</p>
+        <p className="mt-1 text-sm text-gray-400 dark:text-neutral-500">
+          Create a configuration to enable automatic multiplier alternation
+        </p>
       </div>
     );
   }
@@ -100,21 +102,25 @@ export default function AlternatingMultiplierList() {
           return (
             <div
               key={config.id}
-              className={`bg-white rounded-lg border-2 p-3 sm:p-4 ${
-                config.isEnabled ? "border-green-200 bg-green-50" : "border-gray-200"
+              className={`rounded-lg border-2 p-3 sm:p-4 ${
+                config.isEnabled
+                  ? "border-green-200 bg-green-50 dark:border-green-800/50 dark:bg-green-950/25"
+                  : "border-gray-200 bg-white dark:border-neutral-700 dark:bg-neutral-900"
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
-                    <h4 className="text-base sm:text-lg font-semibold text-gray-900">{getTypeLabel(config.type)}</h4>
+                  <div className="mb-1 flex flex-wrap items-center gap-2 sm:mb-2 sm:gap-3">
+                    <h4 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-white">
+                      {getTypeLabel(config.type)}
+                    </h4>
                     {config.isEnabled ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
-                        <CheckCircle2 className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-950/50 dark:text-green-200">
+                        <CheckCircle2 className="h-3 w-3" />
                         Enabled
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 dark:text-neutral-400 text-xs font-medium rounded">
+                      <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-neutral-800 dark:text-neutral-400">
                         Disabled
                       </span>
                     )}
@@ -126,11 +132,11 @@ export default function AlternatingMultiplierList() {
                       <div className="flex items-center gap-2">
                         {config.multipliers.map((multiplier, index) => (
                           <React.Fragment key={multiplier}>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 text-sm font-semibold rounded">
+                            <span className="rounded bg-red-100 px-2 py-1 text-sm font-semibold text-red-800 dark:bg-red-950/50 dark:text-red-200">
                               {multiplier}x
                             </span>
                             {index < config.multipliers.length - 1 && (
-                              <span className="text-gray-400">↔</span>
+                              <span className="text-gray-400 dark:text-neutral-500">↔</span>
                             )}
                           </React.Fragment>
                         ))}
@@ -147,11 +153,11 @@ export default function AlternatingMultiplierList() {
                     )}
 
                     {config.description && (
-                      <p className="text-sm text-gray-500 mt-2">{config.description}</p>
+                      <p className="mt-2 text-sm text-gray-500 dark:text-neutral-400">{config.description}</p>
                     )}
 
                     {config.createdBy && (
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="mt-2 text-xs text-gray-400 dark:text-neutral-500">
                         Created by: {formatDisplayName(config.createdBy.firstName, config.createdBy.lastName)}
                       </p>
                     )}
@@ -161,7 +167,7 @@ export default function AlternatingMultiplierList() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEdit(config)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
                     title="Edit configuration"
                   >
                     <Edit className="w-4 h-4" />
@@ -169,7 +175,7 @@ export default function AlternatingMultiplierList() {
                   <button
                     onClick={() => handleDelete(config.id)}
                     disabled={deletingId === config.id}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
                     title="Delete configuration"
                   >
                     {deletingId === config.id ? (

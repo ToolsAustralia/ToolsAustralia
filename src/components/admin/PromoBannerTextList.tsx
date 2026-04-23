@@ -90,9 +90,9 @@ export default function PromoBannerTextList() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
         <div className="flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-red-600 dark:text-red-400" />
         </div>
       </div>
     );
@@ -100,9 +100,9 @@ export default function PromoBannerTextList() {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-red-200 p-8">
-        <div className="flex items-center gap-2 text-red-600">
-          <AlertCircle className="w-5 h-5" />
+      <div className="rounded-lg border border-red-200 bg-white p-8 shadow-sm dark:border-red-900/50 dark:bg-neutral-900 dark:shadow-none">
+        <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+          <AlertCircle className="h-5 w-5" />
           <span>Failed to load banner texts. Please try again.</span>
         </div>
       </div>
@@ -111,19 +111,21 @@ export default function PromoBannerTextList() {
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
         {texts.length === 0 ? (
           <div className="p-8 text-center">
-            <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No scheduled banner images</p>
-            <p className="text-sm text-gray-400 mt-1">Create a schedule to show a custom left banner image on matching dates</p>
+            <Calendar className="mx-auto mb-4 h-12 w-12 text-gray-300 dark:text-neutral-600" />
+            <p className="text-gray-500 dark:text-neutral-400">No scheduled banner images</p>
+            <p className="mt-1 text-sm text-gray-400 dark:text-neutral-500">
+              Create a schedule to show a custom left banner image on matching dates
+            </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-neutral-700">
             {texts.map((text) => (
               <div
                 key={text.id}
-                className={`p-3 sm:p-6 hover:bg-gray-50 transition-colors ${
+                className={`p-3 sm:p-6 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/50 ${
                   !text.isActive ? "opacity-60" : ""
                 }`}
               >
@@ -133,10 +135,10 @@ export default function PromoBannerTextList() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                            className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
                               text.isActive
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-600 dark:text-neutral-400"
+                                ? "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200"
+                                : "bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400"
                             }`}
                           >
                             {text.isActive ? (
@@ -151,7 +153,7 @@ export default function PromoBannerTextList() {
                               </>
                             )}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-neutral-400">
                             {text.scheduleType === "one-time" ? "One-time" : "Recurring"}
                           </span>
                         </div>
@@ -160,9 +162,11 @@ export default function PromoBannerTextList() {
                           <img
                             src={text.imageUrl}
                             alt={text.altText || "Scheduled banner"}
-                            className="h-16 w-auto max-w-[200px] object-contain rounded border border-gray-200 bg-gray-50"
+                            className="h-16 w-auto max-w-[200px] rounded border border-gray-200 bg-gray-50 object-contain dark:border-neutral-600 dark:bg-neutral-800"
                           />
-                          <p className="text-xs text-gray-500 break-all sm:max-w-md">{text.imageUrl}</p>
+                          <p className="break-all text-xs text-gray-500 dark:text-neutral-400 sm:max-w-md">
+                            {text.imageUrl}
+                          </p>
                         </div>
                         <div className="text-sm text-gray-600 dark:text-neutral-400 space-y-1">
                           <div className="flex items-center gap-2">
@@ -170,10 +174,10 @@ export default function PromoBannerTextList() {
                             <span>{formatSchedule(text)}</span>
                           </div>
                           {text.description && (
-                            <p className="text-gray-500 italic mt-2">{text.description}</p>
+                            <p className="mt-2 italic text-gray-500 dark:text-neutral-400">{text.description}</p>
                           )}
                           {text.createdBy && (
-                            <p className="text-xs text-gray-400 mt-2">
+                            <p className="mt-2 text-xs text-gray-400 dark:text-neutral-500">
                               Created by {formatDisplayName(text.createdBy.firstName, text.createdBy.lastName)}
                             </p>
                           )}
@@ -185,7 +189,7 @@ export default function PromoBannerTextList() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleEdit(text)}
-                      className="p-2 text-gray-600 dark:text-neutral-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-neutral-400 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
                       title="Edit"
                     >
                       <Edit className="w-4 h-4" />
@@ -193,7 +197,7 @@ export default function PromoBannerTextList() {
                     <button
                       onClick={() => handleDelete(text.id)}
                       disabled={deletingId === text.id}
-                      className="p-2 text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                       title="Delete"
                     >
                       {deletingId === text.id ? (
