@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import { Z_INDEX } from "@/constants/z-index";
-import { useThemeStore } from "@/stores/useThemeStore";
+import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import {
   backdropVariants,
   dialogNestedPanelVariants,
@@ -61,8 +61,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   nestedSecondary = false,
   presentation = "dialog",
 }) => {
-  const theme = useThemeStore((s) => s.theme);
-  const isDarkMode = theme === "dark";
+  const isDarkMode = useHtmlDarkForUi();
   const reduceMotion = useReducedMotion();
 
   const [isLocked, setIsLocked] = useState(isOpen);
