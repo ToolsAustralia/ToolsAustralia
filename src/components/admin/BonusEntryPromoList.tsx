@@ -91,25 +91,26 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-red-600 dark:text-red-400" />
       </div>
     );
   }
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-3 sm:p-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700">
+        <div className="p-3 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Gift className="w-5 h-5 text-red-600" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Gift className="w-5 h-5 text-red-600 dark:text-red-400" />
               Bonus Entry Promos
             </h3>
             <button
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+              className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800"
               title="Refresh"
+              type="button"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>
@@ -119,9 +120,9 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
         <div className="p-3 sm:p-6">
           {promos.length === 0 ? (
             <div className="text-center py-8">
-              <Gift className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No bonus entry promos found</p>
-              <p className="text-sm text-gray-400 mt-1">
+              <Gift className="w-12 h-12 text-gray-300 dark:text-neutral-600 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-neutral-400">No bonus entry promos found</p>
+              <p className="text-sm text-gray-400 dark:text-neutral-500 mt-1">
                 Create a new promo to grant bonus entries during specific date ranges
               </p>
             </div>
@@ -132,12 +133,12 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                 {promos.map((promo) => (
                   <div
                     key={promo.id}
-                    className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50/50"
+                    className="rounded-lg border border-gray-200 p-3 hover:bg-gray-50/50 dark:border-neutral-700 dark:hover:bg-neutral-800/50"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <Gift className="w-4 h-4 text-red-600 shrink-0" />
-                        <span className="text-sm font-semibold text-gray-900">
+                        <Gift className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                        <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
                           {promo.bonusEntries} entries
                         </span>
                       </div>
@@ -145,7 +146,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                         {getStatusBadge(promo)}
                         <button
                           onClick={() => handleEdit(promo)}
-                          className="text-blue-600 hover:text-blue-900 p-1.5 rounded"
+                          className="rounded p-1.5 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -153,7 +154,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                         <button
                           onClick={() => handleDelete(promo.id)}
                           disabled={deletingId === promo.id}
-                          className="text-red-600 hover:text-red-900 p-1.5 rounded disabled:opacity-50"
+                          className="rounded p-1.5 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
                           title="Delete"
                         >
                           {deletingId === promo.id ? (
@@ -181,67 +182,73 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
 
               {/* Desktop: Table layout */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+                  <thead className="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:bg-neutral-800 dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Type
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Bonus Entries
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Date Range
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Description
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-neutral-700 dark:bg-neutral-900/80">
                     {promos.map((promo) => (
-                      <tr key={promo.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{getTypeLabel(promo.type)}</div>
+                      <tr key={promo.id} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <div className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+                            {getTypeLabel(promo.type)}
+                          </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <Gift className="w-4 h-4 text-red-600" />
-                            <span className="text-sm font-semibold text-gray-900">{promo.bonusEntries}</span>
-                            <span className="text-xs text-gray-500">entries</span>
+                            <Gift className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            <span className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+                              {promo.bonusEntries}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-neutral-400">entries</span>
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-sm text-gray-900">
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                          <div className="text-sm text-gray-900 dark:text-neutral-100">
+                            <div className="mb-0.5 flex items-center gap-1">
+                              <Calendar className="h-3 w-3 shrink-0 text-gray-400 dark:text-neutral-500" />
                               <span className="font-medium">Start:</span>
                               <span>{promo.startDateFormatted || formatDateReadable(new Date(promo.startDate))}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                              <Calendar className="h-3 w-3 shrink-0 text-gray-400 dark:text-neutral-500" />
                               <span className="font-medium">End:</span>
                               <span>{promo.endDateFormatted || formatDateReadable(new Date(promo.endDate))}</span>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(promo)}</td>
+                        <td className="whitespace-nowrap px-4 py-3">{getStatusBadge(promo)}</td>
                         <td className="px-4 py-3">
-                          <div className="text-sm text-gray-500 max-w-xs truncate">
-                            {promo.description || <span className="text-gray-400 italic">No description</span>}
+                          <div className="max-w-xs truncate text-sm text-gray-500 dark:text-neutral-400">
+                            {promo.description || (
+                              <span className="italic text-gray-400 dark:text-neutral-500">No description</span>
+                            )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => handleEdit(promo)}
-                              className="text-blue-600 hover:text-blue-900 p-1.5 rounded transition-colors"
+                              className="rounded p-1.5 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                               title="Edit promo"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -249,7 +256,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
                             <button
                               onClick={() => handleDelete(promo.id)}
                               disabled={deletingId === promo.id}
-                              className="text-red-600 hover:text-red-900 p-1.5 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="rounded p-1.5 text-red-600 transition-colors hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
                               title="Delete promo"
                             >
                               {deletingId === promo.id ? (

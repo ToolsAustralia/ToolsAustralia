@@ -135,8 +135,8 @@ export default function SpendByUrlAdBreakdownTable({
       : "py-1 px-0.5 sm:py-1.5 sm:px-1";
   const textSize =
     density === "comfortable" ? "text-xs sm:text-sm" : "text-[10px] sm:text-xs";
-  const theadBg = "bg-slate-50";
-  const sectionBg = "bg-slate-200/80";
+  const theadBg = "bg-slate-50 dark:bg-neutral-800/95";
+  const sectionBg = "bg-slate-200/80 dark:bg-neutral-800/60";
 
   const moreColsHidden = !columnsExpanded;
 
@@ -151,7 +151,7 @@ export default function SpendByUrlAdBreakdownTable({
       {showSearch && (
         <div className="relative max-w-md">
           <Search
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500"
             aria-hidden
           />
           <input
@@ -194,7 +194,9 @@ export default function SpendByUrlAdBreakdownTable({
           aria-label={ariaLabel}
         >
           <thead>
-            <tr className={`border-b border-slate-200 text-gray-600 dark:text-neutral-400 ${theadBg}`}>
+            <tr
+              className={`border-b border-slate-200 text-gray-600 dark:border-neutral-600 dark:text-neutral-300 ${theadBg}`}
+            >
               <SortHeader
                 column="ad"
                 align="left"
@@ -233,7 +235,7 @@ export default function SpendByUrlAdBreakdownTable({
               <SortHeader
                 column="revenue"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold text-emerald-900 whitespace-nowrap`}
+                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold text-emerald-900 dark:text-emerald-300 whitespace-nowrap`}
               >
                 <span className="sm:hidden">Rev</span>
                 <span className="hidden sm:inline">Meta rev.</span>
@@ -258,7 +260,10 @@ export default function SpendByUrlAdBreakdownTable({
           <tbody>
             {groups.length === 0 && (
               <tr>
-                <td colSpan={COL_SPAN} className={`${cellPad} text-gray-500 text-center`}>
+                <td
+                  colSpan={COL_SPAN}
+                  className={`${cellPad} text-center text-gray-500 dark:text-neutral-400`}
+                >
                   No ads match your search.
                 </td>
               </tr>
@@ -267,7 +272,9 @@ export default function SpendByUrlAdBreakdownTable({
               const t = rollupByFormat.get(group.format)!;
               return (
               <React.Fragment key={group.format}>
-                <tr className={sectionBg}>
+                <tr
+                  className={`${sectionBg} border-b border-slate-200/90 dark:border-neutral-600/80`}
+                >
                   <td
                     colSpan={COL_SPAN}
                     className={`${cellPad} font-semibold text-gray-800 dark:text-neutral-100 uppercase tracking-wide`}
@@ -276,10 +283,13 @@ export default function SpendByUrlAdBreakdownTable({
                   </td>
                 </tr>
                 {group.rows.map((d) => (
-                  <tr key={d.adId} className="border-b border-slate-100/80">
-                    <td className={`${cellPad} text-gray-900 max-w-[7rem] sm:max-w-none`}>
+                  <tr
+                    key={d.adId}
+                    className="border-b border-slate-100/80 dark:border-neutral-800/90"
+                  >
+                    <td className={`${cellPad} text-gray-900 dark:text-neutral-100 max-w-[7rem] sm:max-w-none`}>
                       <span
-                        className={`font-mono text-gray-500 block truncate ${
+                        className={`font-mono text-gray-500 dark:text-neutral-500 block truncate ${
                           density === "comfortable" ? "text-[11px] sm:text-xs" : "text-[9px] sm:text-[11px]"
                         }`}
                       >
@@ -313,7 +323,9 @@ export default function SpendByUrlAdBreakdownTable({
                     >
                       {formatAud(d.cpc)}
                     </td>
-                    <td className={`${cellPad} text-right whitespace-nowrap tabular-nums text-emerald-800`}>
+                    <td
+                      className={`${cellPad} text-right whitespace-nowrap tabular-nums text-emerald-800 dark:text-emerald-300`}
+                    >
                       {formatAud(d.revenue)}
                     </td>
                     <td
