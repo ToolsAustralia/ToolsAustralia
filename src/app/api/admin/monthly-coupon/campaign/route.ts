@@ -5,6 +5,7 @@ import { requireAdminUser } from "@/lib/api-auth";
 import { CampaignService, getMonthKey } from "@/services/redeemables";
 import MonthlyEntryCampaign from "@/models/MonthlyEntryCampaign";
 import RedeemableIssuance from "@/models/RedeemableIssuance";
+import { monthlyCouponSegmentConfigSchema } from "@/lib/zod/monthlyCouponSegmentConfig";
 
 const campaignSchema = z.object({
   monthKey: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -25,16 +26,7 @@ const campaignSchema = z.object({
     .max(32),
   requiresPurchase: z.boolean().optional(),
   purchaseRequirement: z.enum(["none", "membership", "one-time", "any"]).optional(),
-  segmentConfig: z
-    .object({
-      minInactiveDays: z.number().int().min(0).optional(),
-      maxInactiveDays: z.number().int().min(0).optional(),
-      requiresEmailVerified: z.boolean().optional(),
-      requiresRecentPurchaseDays: z.number().int().min(1).optional(),
-      includeUserIds: z.array(z.string()).optional(),
-      excludeUserIds: z.array(z.string()).optional(),
-    })
-    .optional(),
+  segmentConfig: monthlyCouponSegmentConfigSchema,
   isActive: z.boolean().optional(),
 });
 
@@ -50,7 +42,9 @@ export async function GET(request: NextRequest) {
     const filters = monthKey ? { monthKey } : {};
     const campaigns = await MonthlyEntryCampaign.find(filters)
       .sort({ monthKey: -1, createdAt: -1 })
-      .select("monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase purchaseRequirement createdAt updatedAt")
+      .select(
+        "monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase purchaseRequirement segmentConfig createdAt updatedAt"
+      )
       .lean();
     const campaignIds = campaigns.map((campaign) => campaign._id);
     const redemptionCounts = await RedeemableIssuance.aggregate<{ _id: string; redeemedCount: number }>([

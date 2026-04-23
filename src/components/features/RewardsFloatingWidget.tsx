@@ -107,9 +107,9 @@ export default function RewardsFloatingWidget({
     });
   };
 
-  const onRedeem = async (issuanceId: string) => {
+  const onRedeem = async (issuanceId: string, entriesAmount?: number) => {
     try {
-      const response = await redemptionMutation.mutateAsync({ issuanceId });
+      const response = await redemptionMutation.mutateAsync({ issuanceId, entriesAmount });
       if (!response.success) {
         throw new Error(response.error || "Redemption failed");
       }
@@ -531,7 +531,7 @@ export default function RewardsFloatingWidget({
                             })()
                           ) : (
                             <button
-                              onClick={() => onRedeem(item.issuanceId)}
+                              onClick={() => onRedeem(item.issuanceId, item.entriesAmount)}
                               disabled={redemptionMutation.isPending}
                               className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white text-[11px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95"
                             >

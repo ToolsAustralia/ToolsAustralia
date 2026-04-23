@@ -23,11 +23,28 @@ import { formatInTimeZone } from "date-fns-tz";
  * Uses existing timezone utilities from src/utils/common/timezone.ts
  */
 export function useAutoTheme() {
-  const { theme, setTheme, autoThemeEnabled, userManualOverride } = useThemeStore();
+  const { theme, setTheme, autoThemeEnabled, userManualOverride, overrideTimestamp, setOverrideTimestamp, setUserManualOverride } =
+    useThemeStore();
 
   useEffect(() => {
-    // Don't run auto-theme if disabled or user manually overrode
-    if (!autoThemeEnabled || userManualOverride) {
+    if (!autoThemeEnabled) {
+      return;
+    }
+
+    // Manual override: expire when the Sydney day/night window has changed since the override (e.g. 6am after staying on dark)
+    if (userManualOverride) {
+      if (overrideTimestamp == null) {
+        // Persisted data from before overrideTimestamp existed — seed so expiry can apply from now on
+        setOverrideTimestamp(Date.now());
+        return;
+      }
+      const scheduledAtOverride = getScheduledThemeForSydney(new Date(overrideTimestamp));
+      const scheduledNow = getScheduledThemeForSydney();
+      if (scheduledAtOverride !== scheduledNow) {
+        setUserManualOverride(false);
+        setOverrideTimestamp(null);
+        setTheme(scheduledNow);
+      }
       return;
     }
 
@@ -56,7 +73,15 @@ export function useAutoTheme() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [theme, setTheme, autoThemeEnabled, userManualOverride]);
+  }, [
+    theme,
+    setTheme,
+    autoThemeEnabled,
+    userManualOverride,
+    overrideTimestamp,
+    setOverrideTimestamp,
+    setUserManualOverride,
+  ]);
 }
 
 /**

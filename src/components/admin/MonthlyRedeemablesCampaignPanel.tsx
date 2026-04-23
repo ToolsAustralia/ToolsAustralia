@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, Gift, Loader2, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import AdminMonthlyRedeemablesModal from "@/components/modals/AdminMonthlyRedeemablesModal";
+import type { MonthlyRedeemableSegmentConfig } from "@/components/modals/AdminMonthlyRedeemablesModal";
 
 interface MonthlyCampaignListItem {
   id: string;
@@ -20,6 +21,7 @@ interface MonthlyCampaignListItem {
   requiresPurchase?: boolean;
   purchaseRequirement?: "none" | "membership" | "one-time" | "any";
   redeemedCount: number;
+  segmentConfig?: MonthlyRedeemableSegmentConfig | null;
 }
 
 interface RedemptionAnalyticsItem {

@@ -46,7 +46,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
       ? "bg-white rounded-2xl border border-gray-200 shadow-sm"
       : "bg-gradient-to-br from-white to-gray-50 rounded-2xl border border-gray-200 shadow-sm";
 
-  const onRedeem = async (payload: { issuanceId?: string; code?: string }) => {
+  const onRedeem = async (payload: { issuanceId?: string; code?: string; entriesAmount?: number }) => {
     try {
       const response = await redemptionMutation.mutateAsync(payload);
       if (!response.success) {
@@ -194,7 +194,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                           </button>
                         ) : (
                           <button
-                            onClick={() => onRedeem({ issuanceId: item.issuanceId })}
+                            onClick={() => onRedeem({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount })}
                             disabled={redemptionMutation.isPending}
                             className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#ee0000] text-white text-xs sm:text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
                           >

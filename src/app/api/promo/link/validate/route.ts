@@ -76,6 +76,9 @@ export async function GET(request: NextRequest) {
       valid: true,
       data: {
         code: promoLink.code,
+        campaignType: promoLink.campaignType,
+        eligibilityAudience: promoLink.eligibilityAudience,
+        description: promoLink.description,
         bonusEntries: promoLink.bonusEntries,
         expiresAt: promoLink.expiresAt,
         appliesToMembership: promoLink.appliesToMembership,

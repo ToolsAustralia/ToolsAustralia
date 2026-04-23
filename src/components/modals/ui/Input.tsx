@@ -79,7 +79,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 <Icon className="w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
               </button>
             ) : (
-              <Icon className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400 dark:text-gray-500" />
+              <Icon
+                className="pointer-events-none absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400 dark:text-gray-500"
+                aria-hidden
+              />
             ))}
 
           {/* Input Field */}

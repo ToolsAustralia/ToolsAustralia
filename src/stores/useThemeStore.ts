@@ -18,6 +18,9 @@ interface ThemeStore {
   /** Track if user manually overrode the theme (disables auto-theme until re-enabled) */
   userManualOverride: boolean;
   setUserManualOverride: (override: boolean) => void;
+  /** When the user last toggled manually; used to detect Sydney schedule boundary crossings */
+  overrideTimestamp: number | null;
+  setOverrideTimestamp: (ts: number | null) => void;
 }
 
 export const useThemeStore = create<ThemeStore>()(
@@ -30,17 +33,25 @@ export const useThemeStore = create<ThemeStore>()(
           theme: state.theme === "light" ? "dark" : "light",
           // When user manually toggles, disable auto-theme
           userManualOverride: true,
+          overrideTimestamp: Date.now(),
         })),
       restoreAutoTheme: () =>
         set({
           userManualOverride: false,
           autoThemeEnabled: true,
           theme: getScheduledThemeForSydney(),
+          overrideTimestamp: null,
         }),
       autoThemeEnabled: true,
       setAutoThemeEnabled: (enabled) => set({ autoThemeEnabled: enabled }),
       userManualOverride: false,
-      setUserManualOverride: (override) => set({ userManualOverride: override }),
+      setUserManualOverride: (override) =>
+        set((s) => ({
+          userManualOverride: override,
+          ...(override ? {} : { overrideTimestamp: null as number | null }),
+        })),
+      overrideTimestamp: null,
+      setOverrideTimestamp: (ts) => set({ overrideTimestamp: ts }),
     }),
     {
       name: "ta-theme",

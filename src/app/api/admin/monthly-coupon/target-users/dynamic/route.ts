@@ -3,18 +3,10 @@ import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import { requireAdminUser } from "@/lib/api-auth";
 import { TargetingService } from "@/services/redeemables";
+import { monthlyCouponSegmentConfigSchema } from "@/lib/zod/monthlyCouponSegmentConfig";
 
 const dynamicSchema = z.object({
-  segmentConfig: z
-    .object({
-      minInactiveDays: z.number().int().min(0).optional(),
-      maxInactiveDays: z.number().int().min(0).optional(),
-      requiresEmailVerified: z.boolean().optional(),
-      requiresRecentPurchaseDays: z.number().int().min(1).optional(),
-      includeUserIds: z.array(z.string()).optional(),
-      excludeUserIds: z.array(z.string()).optional(),
-    })
-    .optional(),
+  segmentConfig: monthlyCouponSegmentConfigSchema,
 });
 
 export async function POST(request: NextRequest) {
