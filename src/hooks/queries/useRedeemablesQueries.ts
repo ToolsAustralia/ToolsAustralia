@@ -103,20 +103,80 @@ export const useRedeemableRedemption = (userId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { issuanceId?: string; code?: string }) => {
+    mutationFn: async (payload: { issuanceId?: string; code?: string; entriesAmount?: number }) => {
+      const { issuanceId, code } = payload;
       return apiPost<{ success: boolean; data?: { entriesGranted?: number }; error?: string }>(
         "/api/redeemables/redeem",
-        payload
+        { issuanceId, code }
       );
     },
-    onSuccess: async () => {
+    onMutate: async (payload) => {
       if (!userId) return;
+      await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+      const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(userId));
+
+      if (payload.entriesAmount) {
+        const added = payload.entriesAmount;
+        queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const o = old as Record<string, unknown>;
+          return {
+            ...o,
+            totalEntries: (Number(o.totalEntries) || 0) + added,
+            currentDrawEntries: (Number(o.currentDrawEntries) || 0) + added,
+            oneTimeEntries: (Number(o.oneTimeEntries) || 0) + added,
+          };
+        });
+      }
+
+      return { previousUserStats };
+    },
+    onSuccess: async (data, _variables, context) => {
+      if (!userId) return;
+      const granted = data?.data?.entriesGranted;
+      const optimisticAmount = _variables.entriesAmount;
+
+      // If the server returned a different count than what we optimistically applied, correct it
+      if (granted !== undefined && optimisticAmount !== undefined && granted !== optimisticAmount) {
+        const diff = granted - optimisticAmount;
+        queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const o = old as Record<string, unknown>;
+          return {
+            ...o,
+            totalEntries: Math.max(0, (Number(o.totalEntries) || 0) + diff),
+            currentDrawEntries: Math.max(0, (Number(o.currentDrawEntries) || 0) + diff),
+            oneTimeEntries: Math.max(0, (Number(o.oneTimeEntries) || 0) + diff),
+          };
+        });
+      } else if (granted !== undefined && optimisticAmount === undefined) {
+        // Code redemption path: no optimistic amount, apply granted count now
+        queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const o = old as Record<string, unknown>;
+          return {
+            ...o,
+            totalEntries: (Number(o.totalEntries) || 0) + granted,
+            currentDrawEntries: (Number(o.currentDrawEntries) || 0) + granted,
+            oneTimeEntries: (Number(o.oneTimeEntries) || 0) + granted,
+          };
+        });
+      }
+
+      void context;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["redeemables", userId, "wallet"] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.redeemables.status(userId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) }),
       ]);
+      // Refetch userStats in the background to sync with server truth
+      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+    },
+    onError: (_error, _variables, context) => {
+      if (!userId || !context) return;
+      if (context.previousUserStats !== undefined) {
+        queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), context.previousUserStats);
+      }
     },
   });
 };

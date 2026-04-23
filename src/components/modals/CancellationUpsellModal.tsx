@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { Gift, CheckCircle, Sparkles } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLoading } from "@/contexts/LoadingContext";
 import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
 import { useToast } from "@/components/ui/Toast";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface CancellationUpsellModalProps {
   isOpen: boolean;
@@ -19,12 +22,17 @@ interface CancellationUpsellModalProps {
  * Offers 100 free entries as a retention incentive
  * Matches the existing UpsellModal design patterns
  */
+const CANCELLATION_UPSELL_ENTRIES = 100;
+
 const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpen, onClose, onRedeem, onDecline }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { showLoading, hideLoading } = useLoading();
   const showEntryReward = useEntryRewardToast();
   const { showToast } = useToast();
+  const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  const userId = session?.user?.id;
 
   // Animation effect
   useEffect(() => {
@@ -74,18 +82,33 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
       }
 
       hideLoading();
-      // Retention flow: use entry toast only (no global success screen) — same pattern as other flows that already show a full-screen success elsewhere.
+
+      // Optimistically update the dashboard entry counts immediately
+      if (userId) {
+        queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const o = old as Record<string, unknown>;
+          return {
+            ...o,
+            totalEntries: (Number(o.totalEntries) || 0) + CANCELLATION_UPSELL_ENTRIES,
+            currentDrawEntries: (Number(o.currentDrawEntries) || 0) + CANCELLATION_UPSELL_ENTRIES,
+            oneTimeEntries: (Number(o.oneTimeEntries) || 0) + CANCELLATION_UPSELL_ENTRIES,
+          };
+        });
+
+        // Invalidate in the background to sync with server
+        void queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+      }
+
+      // Retention flow: use entry toast only (no global success screen)
       showEntryReward({
-        entries: 100,
+        entries: CANCELLATION_UPSELL_ENTRIES,
         drawType: "major",
         source: "cancellation-upsell-redeem",
       });
 
       onRedeem();
-
-      setTimeout(() => {
-        window.location.reload();
-      }, 2200);
     } catch (error) {
       console.error("Failed to redeem free entries:", error);
       hideLoading();

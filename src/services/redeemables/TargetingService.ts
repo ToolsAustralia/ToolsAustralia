@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import User from "@/models/User";
 import type { TargetingMode } from "@/models/MonthlyEntryCampaign";
+import { loadTopMajorDrawPercentileUserIds } from "@/utils/redeemables/topMajorDrawPercentile";
 
 export interface TargetingRequest {
   targetingMode: TargetingMode;
@@ -13,16 +14,29 @@ export interface TargetingRequest {
     requiresRecentPurchaseDays?: number;
     includeUserIds?: string[];
     excludeUserIds?: string[];
+    states?: string[];
+    membershipTiers?: string[];
+    topEntriesPercent?: number;
   };
 }
 
 export class TargetingService {
   static async resolveTargetUserIds(request: TargetingRequest): Promise<string[]> {
     switch (request.targetingMode) {
-      case "manual-users":
-        return this.resolveManualUsers(request.manualUserIds || []);
-      case "csv-users":
-        return this.resolveManualUsers(request.csvUserIds || []);
+      case "manual-users": {
+        const ids =
+          request.manualUserIds && request.manualUserIds.length > 0
+            ? request.manualUserIds
+            : request.segmentConfig?.includeUserIds || [];
+        return this.resolveManualUsers(ids);
+      }
+      case "csv-users": {
+        const ids =
+          request.csvUserIds && request.csvUserIds.length > 0
+            ? request.csvUserIds
+            : request.segmentConfig?.includeUserIds || [];
+        return this.resolveManualUsers(ids);
+      }
       case "dynamic-segment":
         return this.resolveDynamicSegment(request.segmentConfig);
       case "all-active-subscribers":
@@ -62,6 +76,9 @@ export class TargetingService {
     const maxInactiveDays = segmentConfig?.maxInactiveDays;
     const includeUserIds = new Set((segmentConfig?.includeUserIds || []).filter((id) => mongoose.Types.ObjectId.isValid(id)));
     const excludeUserIds = new Set((segmentConfig?.excludeUserIds || []).filter((id) => mongoose.Types.ObjectId.isValid(id)));
+    const states = (segmentConfig?.states || []).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    const membershipTiers = (segmentConfig?.membershipTiers || []).filter(Boolean);
+    const topEntriesPercent = segmentConfig?.topEntriesPercent;
 
     const query: Record<string, unknown> = {
       isActive: true,
@@ -70,6 +87,14 @@ export class TargetingService {
 
     if (requiresEmailVerified) {
       query.isEmailVerified = true;
+    }
+
+    if (states.length > 0) {
+      query.state = { $in: states };
+    }
+
+    if (membershipTiers.length > 0) {
+      query["subscription.packageId"] = { $in: membershipTiers };
     }
 
     if (typeof minInactiveDays === "number" || typeof maxInactiveDays === "number") {
@@ -83,7 +108,13 @@ export class TargetingService {
     }
 
     const users = await User.find(query).select("_id").lean();
-    const ids = new Set(users.map((user) => user._id.toString()));
+    let ids = new Set(users.map((user) => user._id.toString()));
+
+    if (typeof topEntriesPercent === "number") {
+      const topIds = await loadTopMajorDrawPercentileUserIds(topEntriesPercent);
+      const topSet = new Set(topIds);
+      ids = new Set([...ids].filter((id) => topSet.has(id)));
+    }
 
     includeUserIds.forEach((id) => ids.add(id));
     excludeUserIds.forEach((id) => ids.delete(id));
