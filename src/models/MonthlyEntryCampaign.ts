@@ -25,6 +25,12 @@ export interface IMonthlyEntryCampaign extends Document {
     requiresRecentPurchaseDays?: number;
     includeUserIds?: string[];
     excludeUserIds?: string[];
+    /** Australian state codes (e.g. NSW, VIC) */
+    states?: string[];
+    /** Subscription package IDs: tradie-subscription, foreman-subscription, boss-subscription */
+    membershipTiers?: string[];
+    /** Top N% of users by entry count in the active major draw (1–100) */
+    topEntriesPercent?: number;
   };
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -111,6 +117,9 @@ const MonthlyEntryCampaignSchema = new Schema<IMonthlyEntryCampaign>(
       requiresRecentPurchaseDays: { type: Number, min: 1 },
       includeUserIds: [{ type: String, trim: true }],
       excludeUserIds: [{ type: String, trim: true }],
+      states: [{ type: String, trim: true }],
+      membershipTiers: [{ type: String, trim: true }],
+      topEntriesPercent: { type: Number, min: 1, max: 100 },
     },
     createdBy: {
       type: Schema.Types.ObjectId,

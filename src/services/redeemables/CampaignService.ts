@@ -3,6 +3,7 @@ import MonthlyEntryCampaign, { CampaignMode, IMonthlyEntryCampaign, TargetingMod
 import RedeemableIssuance from "@/models/RedeemableIssuance";
 import SegmentSnapshot from "@/models/SegmentSnapshot";
 import User from "@/models/User";
+import { loadTopMajorDrawPercentileUserIds } from "@/utils/redeemables/topMajorDrawPercentile";
 
 const NEVER_EXPIRES_ISSUANCE_DATE = new Date("9999-12-31T23:59:59.999Z");
 
@@ -280,17 +281,18 @@ export class CampaignService {
     return Boolean(campaign.endsAt && campaign.endsAt >= now);
   }
 
-  private static isUserEligibleForCampaign(
+  private static async isUserEligibleForCampaign(
     user: {
       _id: string | mongoose.Types.ObjectId;
       isActive?: boolean;
       isEmailVerified?: boolean;
       lastLogin?: Date;
-      subscription?: { isActive?: boolean };
+      state?: string;
+      subscription?: { isActive?: boolean; packageId?: string | null };
     },
     campaign: IMonthlyEntryCampaign,
     now: Date
-  ): boolean {
+  ): Promise<boolean> {
     const userId = String(user._id);
     const hasActiveSubscription = Boolean(user.subscription?.isActive);
     const isActiveUser = user.isActive !== false;
@@ -299,8 +301,10 @@ export class CampaignService {
     if (!CampaignService.isCampaignLive(campaign, now)) return false;
 
     if (campaign.targetingMode === "manual-users" || campaign.targetingMode === "csv-users") {
-      // Manual/CSV targeting previously depended on explicit admin issuance payloads.
-      // With auto-issuance enabled, default these legacy modes to active subscribers.
+      const include = (campaign.segmentConfig?.includeUserIds || []).map(String);
+      if (include.length > 0) {
+        return include.includes(userId) && hasActiveSubscription;
+      }
       return hasActiveSubscription;
     }
 
@@ -319,6 +323,24 @@ export class CampaignService {
 
     const requiresEmailVerified = config?.requiresEmailVerified ?? true;
     if (requiresEmailVerified && !user.isEmailVerified) return false;
+
+    const states = (config?.states || []).map((s) => s.trim().toUpperCase()).filter(Boolean);
+    if (states.length > 0) {
+      const userState = (user.state || "").trim().toUpperCase();
+      if (!userState || !states.includes(userState)) return false;
+    }
+
+    const membershipTiers = config?.membershipTiers || [];
+    if (membershipTiers.length > 0) {
+      const pkg = user.subscription?.packageId;
+      if (!pkg || !membershipTiers.includes(pkg)) return false;
+    }
+
+    if (typeof config?.topEntriesPercent === "number") {
+      const topIds = await loadTopMajorDrawPercentileUserIds(config.topEntriesPercent);
+      const topSet = new Set(topIds);
+      if (!topSet.has(userId)) return false;
+    }
 
     const minInactiveDays = config?.minInactiveDays;
     const maxInactiveDays = config?.maxInactiveDays;
@@ -398,7 +420,7 @@ export class CampaignService {
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
     const user = await User.findById(userObjectId)
-      .select("_id isActive isEmailVerified lastLogin subscription.isActive")
+      .select("_id isActive isEmailVerified lastLogin state subscription.isActive subscription.packageId")
       .lean();
     if (!user) return { issuedCount: 0 };
 
@@ -411,7 +433,7 @@ export class CampaignService {
 
     let issuedCount = 0;
     for (const campaign of activeCampaigns) {
-      if (!CampaignService.isUserEligibleForCampaign(user, campaign, now)) {
+      if (!(await CampaignService.isUserEligibleForCampaign(user, campaign, now))) {
         continue;
       }
       const created = await CampaignService.createIssuanceForUser(userObjectId, campaign, now);

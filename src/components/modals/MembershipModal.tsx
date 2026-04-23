@@ -5249,14 +5249,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
               <p
-                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap mb-2"
+                className="text-[11px] sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis mb-2"
                 style={{
                   color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
                   borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join again
+                Get <span className="text-[11px] sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join
               </p>
             )}
           {promoLinkInfo?.isValid &&
@@ -5264,14 +5264,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             activePlan.period === "one-time" &&
             promoLinkInfo.appliesToOneTime && (
               <p
-                className="text-[12px] sm:text-sm font-extrabold px-4 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap"
+                className="text-[11px] sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis"
                 style={{
                   color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
                   borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Welcome back - get <span className="text-sm sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
+                Get <span className="text-[11px] sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
               </p>
             )}
         </div>

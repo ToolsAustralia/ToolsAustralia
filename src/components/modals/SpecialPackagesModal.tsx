@@ -341,6 +341,17 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     handleCouponApply(normalizedInitialCode);
   }, [isOpen, initialCouponCode, handleCouponApply]);
 
+  // Auto-apply promo from ?promo= / sessionStorage (MembershipModal pre-fills the same way)
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialCouponCode?.trim()) return;
+    if (!promoLinkCode?.trim()) return;
+    const normalized = promoLinkCode.trim().toUpperCase();
+    if (lastAutoAppliedCodeRef.current === normalized) return;
+    lastAutoAppliedCodeRef.current = normalized;
+    void handleCouponApply(normalized);
+  }, [isOpen, initialCouponCode, promoLinkCode, handleCouponApply]);
+
   useEffect(() => {
     setSetupIntentSecret(null);
   }, [selectedPackage?._id]);

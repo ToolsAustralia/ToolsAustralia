@@ -3,6 +3,7 @@ import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import { requireAdminUser } from "@/lib/api-auth";
 import { CampaignService } from "@/services/redeemables";
+import { monthlyCouponSegmentConfigSchema } from "@/lib/zod/monthlyCouponSegmentConfig";
 
 const updateCampaignSchema = z.object({
   monthKey: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -17,16 +18,7 @@ const updateCampaignSchema = z.object({
   code: z.string().trim().toUpperCase().regex(/^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/).optional(),
   requiresPurchase: z.boolean().optional(),
   purchaseRequirement: z.enum(["none", "membership", "one-time", "any"]).optional(),
-  segmentConfig: z
-    .object({
-      minInactiveDays: z.number().int().min(0).optional(),
-      maxInactiveDays: z.number().int().min(0).optional(),
-      requiresEmailVerified: z.boolean().optional(),
-      requiresRecentPurchaseDays: z.number().int().min(1).optional(),
-      includeUserIds: z.array(z.string()).optional(),
-      excludeUserIds: z.array(z.string()).optional(),
-    })
-    .optional(),
+  segmentConfig: monthlyCouponSegmentConfigSchema,
   isActive: z.boolean().optional(),
 });
 

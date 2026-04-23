@@ -1,17 +1,23 @@
 import mongoose from "mongoose";
-import MajorDraw from "@/models/MajorDraw";
 import { MilestoneService } from "@/services/milestones";
 
 export class DrawGrantService {
   static async grantMonthlyCouponEntries(userId: string, entries: number): Promise<void> {
     if (entries <= 0) return;
 
-    const activeMajorDraw = await MajorDraw.findOne({
-      status: "active",
-      isActive: true,
-    });
+    const { getTargetMajorDraw } = await import("@/utils/draws/major-draw-helpers");
 
-    if (!activeMajorDraw) return;
+    let activeMajorDraw;
+    try {
+      activeMajorDraw = await getTargetMajorDraw();
+    } catch (error) {
+      console.warn("No target major draw available for coupon / milestone entry grant", {
+        userId,
+        entries,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
     const now = new Date();
