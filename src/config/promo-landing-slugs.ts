@@ -5,10 +5,10 @@
  */
 
 import type { PrizeSlug } from "./prizes";
-import type { MajorDrawHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { LandingHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
 import {
-  resolveLandingHeroImages,
-  resolveEvergreenHeroImages,
+  resolveLandingHeroImagesWithUrgency,
+  resolveEvergreenHeroImagesWithUrgency,
   landingToolboxSuffixFromPrizeSlug,
 } from "@/utils/promo/landing-image-resolver";
 import { slugToBrandKey } from "@/config/brand-theme";
@@ -30,32 +30,6 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug]>
   makita: ["makita-sidchrome", "makita-milwaukee"],
 };
 
-/**
- * Prize slug -> landing hero image paths with light/dark support.
- * Uses the new .webp assets with brand-specific folders.
- * null = use standard promo hero.
- */
-const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
-  /** Collage hero under `all-prizes/` (desktop/mobile × light/dark). */
-  "cash-prize": resolveEvergreenHeroImages(),
-
-  // Ryobi prizes — Sidchrome TB vs Milwaukee TB assets (`sidTB` / `milTB`)
-  "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
-  "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
-
-  // Milwaukee prizes
-  "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee", "sidTB"),
-  "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee", "milTB"),
-
-  // DeWalt prizes
-  "dewalt-sidchrome": resolveLandingHeroImages("dewalt", "sidTB"),
-  "dewalt-milwaukee": resolveLandingHeroImages("dewalt", "milTB"),
-
-  // Makita prizes
-  "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
-  "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
-};
-
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
   return TOOLSET_LANDING_SLUGS.includes(slug as ToolsetLandingSlug);
 }
@@ -73,38 +47,31 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
   const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
-  const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
-  const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
+  const hasMilwaukeeHero = slugToBrandKey(milwaukee) != null;
+  const hasSidchromeHero = slugToBrandKey(sidchrome) != null;
   if (hasMilwaukeeHero) return milwaukee;
   if (hasSidchromeHero) return sidchrome;
   return milwaukee;
 }
 
-/**
- * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
- * Returns extended paths with light/dark variants.
- */
-export function getLandingHeroImagePaths(prizeSlug: string): ExtendedPromoImagePaths | null {
-  const mapped = LANDING_HERO_MAP[prizeSlug as PrizeSlug];
-  if (mapped) return mapped;
-  
-  // Fallback: extract brand + toolbox from slug (e.g. future prize slugs)
-  const brand = slugToBrandKey(prizeSlug);
-  if (brand) return resolveLandingHeroImages(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug));
-  
-  return null;
-}
+const CASH_PRIZE_SLUG = "cash-prize";
 
 /**
- * Apply major draw urgency to landing paths
- * Note: Currently returns the same paths since multiplier assets don't exist yet.
- * This is a placeholder for future urgency variants.
+ * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
+ * When `urgency` is set, paths include `-final-hours` / `-drawn-tomorrow` / `-drawn-tonight` suffixes.
  */
-export function applyMajorDrawUrgencyToLandingPaths(
-  paths: ExtendedPromoImagePaths,
-  _urgency: MajorDrawHeroUrgency
-): ExtendedPromoImagePaths {
-  // For now, return the same paths since we're using "no-promo" images as fallback
-  // When urgency variants are available, update this to insert urgency suffix
-  return paths;
+export function getLandingHeroImagePaths(
+  prizeSlug: string,
+  urgency: LandingHeroUrgency | null = null
+): ExtendedPromoImagePaths | null {
+  if (prizeSlug === CASH_PRIZE_SLUG) {
+    return resolveEvergreenHeroImagesWithUrgency(urgency);
+  }
+
+  const brand = slugToBrandKey(prizeSlug);
+  if (!brand) return null;
+
+  return resolveLandingHeroImagesWithUrgency(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug), urgency);
 }
+
+export type { LandingHeroUrgency } from "@/utils/promo/promo-hero-types";

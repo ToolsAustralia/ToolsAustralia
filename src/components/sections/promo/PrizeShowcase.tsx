@@ -47,6 +47,8 @@ import FullscreenImageViewer, {
 } from "@/components/ui/FullscreenImageViewer";
 import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { getMajorDrawHeroUrgencyFromMajorDraw } from "@/utils/promo/promo-hero-images";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 
@@ -430,6 +432,8 @@ export default function PrizeShowcase({
   const prizeRef = useScrollAnimation();
   const theme = usePromoTheme();
   const themeMode = useThemeStore((s) => s.theme);
+  const { data: majorDrawForLanding } = useCurrentMajorDraw();
+  const landingHeroUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDrawForLanding ?? null);
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const mainSwiperRef = useRef<SwiperType | null>(null);
@@ -759,7 +763,7 @@ export default function PrizeShowcase({
   const highlights = activePrize.highlights ?? [];
 
   // Insert landing image as first gallery item if available
-  const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug) : null;
+  const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug, landingHeroUrgency) : null;
   const enhancedGallery = ((): EnhancedGalleryItem[] => {
     if (!landingImagePaths) return activePrize.gallery;
 
