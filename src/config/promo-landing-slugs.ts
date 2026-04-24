@@ -22,12 +22,12 @@ export const TOOLSET_LANDING_SLUGS = [
 
 export type ToolsetLandingSlug = (typeof TOOLSET_LANDING_SLUGS)[number];
 
-/** Map toolset slug to both prize slugs (Sidchrome first, Milwaukee second) */
-const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug]> = {
-  ryobi: ["ryobi-sidchrome", "ryobi-milwaukee"],
-  milwaukee: ["milwaukee-sidchrome", "milwaukee-milwaukee"],
-  dewalt: ["dewalt-sidchrome", "dewalt-milwaukee"],
-  makita: ["makita-sidchrome", "makita-milwaukee"],
+/** Map toolset slug to prize slugs: Sidchrome, Kincrome (centre), Milwaukee */
+const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, PrizeSlug]> = {
+  ryobi: ["ryobi-sidchrome", "ryobi-kincrome", "ryobi-milwaukee"],
+  milwaukee: ["milwaukee-sidchrome", "milwaukee-kincrome", "milwaukee-milwaukee"],
+  dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee"],
+  makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee"],
 };
 
 /**
@@ -41,18 +41,22 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
 
   // Ryobi prizes — Sidchrome TB vs Milwaukee TB assets (`sidTB` / `milTB`)
   "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
+  "ryobi-kincrome": resolveLandingHeroImages("ryobi", "milTB"),
   "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
 
   // Milwaukee prizes
   "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee", "sidTB"),
+  "milwaukee-kincrome": resolveLandingHeroImages("milwaukee", "milTB"),
   "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee", "milTB"),
 
   // DeWalt prizes
   "dewalt-sidchrome": resolveLandingHeroImages("dewalt", "sidTB"),
+  "dewalt-kincrome": resolveLandingHeroImages("dewalt", "milTB"),
   "dewalt-milwaukee": resolveLandingHeroImages("dewalt", "milTB"),
 
   // Makita prizes
   "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
+  "makita-kincrome": resolveLandingHeroImages("makita", "milTB"),
   "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
 };
 
@@ -61,9 +65,9 @@ export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
 }
 
 /**
- * Returns both prize slugs for a toolset landing page (Sidchrome first, Milwaukee second).
+ * Returns prize slugs for a toolset landing page: Sidchrome, Kincrome, Milwaukee.
  */
-export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, PrizeSlug] {
+export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, PrizeSlug, PrizeSlug] {
   return TOOLSET_TO_PRIZE_SLUGS[slug];
 }
 
@@ -72,7 +76,7 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
  * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
-  const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
+  const [sidchrome, _kincrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
   if (hasMilwaukeeHero) return milwaukee;

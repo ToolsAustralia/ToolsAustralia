@@ -46,7 +46,20 @@ export interface PrizeCatalogEntry {
   cardBackgroundImage?: string; // Optional background image for toggle cards
 }
 
-export type PrizeSlug = "milwaukee-sidchrome" | "dewalt-sidchrome" | "makita-sidchrome" | "ryobi-sidchrome" | "milwaukee-milwaukee" | "dewalt-milwaukee" | "makita-milwaukee" | "ryobi-milwaukee" | "cash-prize";
+export type PrizeSlug =
+  | "milwaukee-sidchrome"
+  | "dewalt-sidchrome"
+  | "makita-sidchrome"
+  | "ryobi-sidchrome"
+  | "milwaukee-milwaukee"
+  | "dewalt-milwaukee"
+  | "makita-milwaukee"
+  | "ryobi-milwaukee"
+  | "milwaukee-kincrome"
+  | "dewalt-kincrome"
+  | "makita-kincrome"
+  | "ryobi-kincrome"
+  | "cash-prize";
 
 /** Strict canonical name for the Ryobi prize - use consistently across labels, headings, and display. */
 export const RYOBI_PRIZE_STRICT_NAME = "Custom Ryobi 18V ONE+ Kit with 36V Brushless Ryobi Lawn Mower";
@@ -356,6 +369,22 @@ export const MILWAUKEE_TOOLBOX: PrizeSpecItem = {
 
 // Storage for Milwaukee toolbox prizes
 export const MILWAUKEE_TOOLBOX_STORAGE: PrizeSpecItem[] = [MILWAUKEE_TOOLBOX];
+
+/** Kincrome CONTOUR® workshop kit — matches detail level of Milwaukee toolbox prize copy */
+export const KINCROME_CONTOUR_TOOLBOX: PrizeSpecItem = {
+  name: "KINCROME CONTOUR® Workshop Tool Kit 470pc 17 Drawer (42\") — P1823",
+  model: "P1823",
+  description:
+    "Premium CONTOUR® chest-and-trolley workshop kit: 470 pieces in a 42\" wide layout, with KINCROME’s contoured steel styling, UV powder-coated finish (black or blue), ADRS drawer retention, folding side trays with magnetic boards, stainless worktops, and heavy-duty swivel castors.",
+  specifications: [
+    "Part P1823 — 470 pieces, 17 drawers, 42\" extra-wide workshop configuration",
+    "Designed in Australia; modular CONTOUR® range for carts, chests, hutches and kits",
+    "ADRS automatic drawer retention, screen-printed side panels, heavy-duty steel handles",
+    "Folding side work trays, stainless worktops, premium manoeuvrability on castors",
+  ],
+};
+
+export const KINCROME_TOOLBOX_STORAGE: PrizeSpecItem[] = [KINCROME_CONTOUR_TOOLBOX];
 
 export const DEWALT_SIDCHROME_POWER_TOOLS: PrizeSpecItem[] = [
   {
@@ -2027,6 +2056,324 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
     ],
   },
   {
+    slug: "milwaukee-kincrome",
+    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    heroHeading:
+      "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 6pc Modular System, $5000 cash",
+    heroSubheading:
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 6pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
+    summary:
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 6pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 6-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823) with premium storage and trade-ready features. Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$35,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/toolbox/kincromeTB.webp", alt: "Milwaukee power tool set with Kincrome CONTOUR toolbox" },
+      { src: "/images/majordraws/milwaukee-set/MILWAUKEE.webp", alt: "Milwaukee prize collection" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_039.jpg", alt: "Milwaukee Hackzall reciprocating saw" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_040.jpg", alt: "Milwaukee angle grinder" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_041.jpg", alt: "Milwaukee oscillating multi-tool" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_042.jpg", alt: "Milwaukee hammer drill" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_043.jpg", alt: "Milwaukee circular saw" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_044.jpg", alt: "Milwaukee pruning saw" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_045.jpg", alt: "Milwaukee 18V charging station" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_046.jpg", alt: "Milwaukee jigsaw" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_047.jpg", alt: "Milwaukee blower" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_048.jpg", alt: "Milwaukee jobsite radio" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_049.jpg", alt: "Milwaukee impact wrench" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_050.jpg", alt: "Milwaukee impact driver" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_051.jpg", alt: "Milwaukee orbital sander" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_066.jpg", alt: "Milwaukee REDLITHIUM batteries" },
+      { src: "/images/majordraws/milwaukee-set/Tools_Aust_Feb26_074.jpg", alt: "Milwaukee work light" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
+      {
+        icon: "Package",
+        title: "PACKOUT™ + CONTOUR® Kit",
+        description: "6-piece modular storage plus Kincrome 470pc workshop chest & trolley.",
+      },
+      {
+        icon: "Battery",
+        title: "REDLITHIUM™ Power System",
+        description: "High-output 5.0Ah packs keep every skin running.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools",
+        summary: "Everyday essentials through to specialised cutting, fastening, and lighting tools.",
+        items: MILWAUKEE_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "REDLITHIUM™ 5.0Ah batteries deliver long runtime and intelligent overload protection.",
+        items: MILWAUKEE_POWER_SYSTEM,
+      },
+      {
+        id: "modular-storage",
+        label: "PACKOUT™ Modular Storage",
+        summary:
+          "Milwaukee PACKOUT™ 6pc modular storage system with IP65 rated protection, rolling tool box, organisers, and tool bag for complete jobsite organization.",
+        items: MILWAUKEE_PACKOUT_STORAGE,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "KINCROME CONTOUR® 470pc 17-drawer workshop kit with premium trade features.",
+        items: KINCROME_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "dewalt-kincrome",
+    label: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroHeading:
+      "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    heroSubheading:
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+    summary:
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, KINCROME CONTOUR® workshop storage, and comprehensive power tool collection plus $5000 cash.",
+    detailedDescription:
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$30,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/toolbox/kincromeTB.webp", alt: "DeWalt set with Kincrome CONTOUR toolbox" },
+      { src: "/images/majordraws/dewalt-set/DEWALT.webp", alt: "DeWalt prize collection" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_012.jpg", alt: "DeWalt 18V XR hand vacuum" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_013.jpg", alt: "DeWalt 18V XR impact wrench" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_014.jpg", alt: "DeWalt 18V XR planer" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_015.jpg", alt: "DeWalt 18V XR hammer drill" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_016.jpg", alt: "DeWalt 54V FlexVolt reciprocating saw" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_017.jpg", alt: "DeWalt 18V XR impact driver" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_018.jpg", alt: "DeWalt 18V XR oscillating multi-tool" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_019.jpg", alt: "DeWalt 18V XR random orbital sander" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_020.jpg", alt: "DeWalt 18V XR leaf blower" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_021.jpg", alt: "DeWalt 54V FlexVolt circular saw" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_022.jpg", alt: "DeWalt 54V FlexVolt rotary hammer" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_023.jpg", alt: "DeWalt 18V XR jigsaw" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_024.jpg", alt: "DeWalt 54V FlexVolt angle grinder" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_025.jpg", alt: "DeWalt jobsite radio" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_068.jpg", alt: "DeWalt XR and FlexVolt batteries" },
+      { src: "/images/majordraws/dewalt-set/Tools_Aust_Feb26_075.jpg", alt: "DeWalt fast charger" },
+    ],
+    highlights: [
+      {
+        icon: "Zap",
+        title: "FlexVolt Muscle",
+        description: "54V tools for circular, rotary, and reciprocating power.",
+      },
+      {
+        icon: "Package",
+        title: "TOUGHSYSTEM® 2.0 + CONTOUR®",
+        description: "7-piece mobile storage plus Kincrome 470pc workshop kit.",
+      },
+      {
+        icon: "Battery",
+        title: "High-Capacity Power",
+        description: "FlexVolt + XR batteries with twin-port fast charging.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Jobsite Gear",
+        summary: "FlexVolt and XR tools covering drilling, fastening, demolition, cutting, dust control, and lighting.",
+        items: DEWALT_SIDCHROME_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "FlexVolt batteries and dual-port charging to keep every tool ready.",
+        items: DEWALT_SIDCHROME_POWER_SYSTEM,
+      },
+      {
+        id: "modular-storage",
+        label: "TOUGHSYSTEM® 2.0 Mobile Storage",
+        summary:
+          "DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system with IP65 rated protection, rolling boxes, organisers, soft tote bag, and cross-platform adapter for complete jobsite flexibility.",
+        items: DEWALT_TOUGHSYSTEM_STORAGE,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "KINCROME CONTOUR® 470pc workshop kit with premium trade features.",
+        items: KINCROME_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "makita-kincrome",
+    label: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroHeading:
+      "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    heroSubheading:
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+    summary:
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus, take home $5000 cold hard cash.",
+    prizeValueLabel: "$30,000+ Value",
+    gallery: [
+      { src: "/images/majordraws/toolbox/kincromeTB.webp", alt: "Makita set with Kincrome CONTOUR toolbox" },
+      { src: "/images/majordraws/makita-set/MAKITA.webp", alt: "Makita prize collection" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_026.jpg", alt: "Makita DTW700Z impact wrench" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_027.jpg", alt: "Makita DUB185Z blower" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_028.jpg", alt: "Makita DHS680Z circular saw" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_029.jpg", alt: "Makita DTM52ZX3 multi-tool" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_030.jpg", alt: "Makita DHP486Z hammer drill" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_031.jpg", alt: "Makita DGA508Z angle grinder" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_032.jpg", alt: "Makita DHR242Z rotary hammer" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_033.jpg", alt: "Makita DBO180Z orbital sander" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_034.jpg", alt: "Makita DML812 work light" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_035.jpg", alt: "Makita DTD173Z impact driver" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_036.jpg", alt: "Makita DJV184Z jigsaw" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_037.jpg", alt: "Makita DJR187Z reciprocating saw" },
+      { src: "/images/majordraws/makita-set/Tools_Aust_Feb26_038.jpg", alt: "Makita DKP181Z planer" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
+      {
+        icon: "Package",
+        title: "MAKTRAK™ + CONTOUR®",
+        description: "7-piece mobile storage plus Kincrome 470pc workshop kit.",
+      },
+      {
+        icon: "Battery",
+        title: "LXT Power System",
+        description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Jobsite Gear",
+        summary:
+          "Complete Makita 18V LXT brushless tool range covering drilling, fastening, cutting, sanding, dust control, and lighting.",
+        items: MAKITA_SIDCHROME_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "LXT 5.0Ah batteries and rapid dual-port charger keep every tool ready.",
+        items: MAKITA_SIDCHROME_POWER_SYSTEM,
+      },
+      {
+        id: "modular-storage",
+        label: "MAKTRAK™ Mobile Storage",
+        summary:
+          "Makita MAKTRAK™ 7-piece mobile storage system with 113.4kg capacity rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers for complete jobsite organization.",
+        items: MAKITA_MAKTRAK_STORAGE,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "KINCROME CONTOUR® 470pc workshop kit with premium trade features.",
+        items: KINCROME_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
+    slug: "ryobi-kincrome",
+    label: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
+    heroHeading: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
+    heroSubheading:
+      "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+    summary:
+      "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+    detailedDescription:
+      "Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus $5000 cash.",
+    prizeValueLabel: "$25,000+ Value",
+    cardBackgroundImage: "/images/majordraws/toolbox/kincromeTB.webp",
+    gallery: [
+      { src: "/images/majordraws/toolbox/kincromeTB.webp", alt: "Ryobi set with Kincrome CONTOUR toolbox" },
+      { src: "/images/majordraws/ryobi-set/RYOBI.webp", alt: "Ryobi prize collection" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_052.jpg", alt: "Ryobi power tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_053.jpg", alt: "Ryobi 18V ONE+ tools" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_054.jpg", alt: "Ryobi drill and impact" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_055.jpg", alt: "Ryobi circular saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_056.jpg", alt: "Ryobi angle grinder" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_057.jpg", alt: "Ryobi recip saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_059.jpg", alt: "Ryobi multi-tool" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_060.jpg", alt: "Ryobi workshop blower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_061.jpg", alt: "Ryobi detail sander" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_062.jpg", alt: "Ryobi cordless caulking gun" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_063.jpg", alt: "Ryobi Bluetooth radio" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_064.jpg", alt: "Ryobi compact fan" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_065.jpg", alt: "Ryobi high pressure inflator" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_070.jpg", alt: "Ryobi line trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_071.jpg", alt: "Ryobi hedge trimmer" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_072.jpg", alt: "Ryobi mitre saw" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_073.jpg", alt: "Ryobi lawn mower" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_076.jpg", alt: "Ryobi batteries" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_077.jpg", alt: "Ryobi chargers" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_078.jpg", alt: "Ryobi ONE+ system" },
+      { src: "/images/majordraws/ryobi-set/Tools_Aust_Feb26_079.jpg", alt: "Ryobi toolset" },
+    ],
+    highlights: [
+      { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
+      {
+        icon: "Package",
+        title: "LINK™ + CONTOUR®",
+        description: "Modular LINK™ storage plus Kincrome 470pc workshop kit.",
+      },
+      {
+        icon: "Battery",
+        title: "ONE+ Power System",
+        description: "18V ONE+ batteries power 200+ tools across the range.",
+      },
+      {
+        icon: "DollarSign",
+        title: "$5000 Cash Bonus",
+        description: "Cold hard cash included with your prize.",
+      },
+    ],
+    specSections: [
+      {
+        id: "power-tools",
+        label: "Power Tools & Garden Equipment",
+        summary: "18V ONE+ 12-piece kit, mitre saw, jigsaw, fan, hedge trimmer, lawn mower and more.",
+        items: RYOBI_POWER_TOOLS,
+      },
+      {
+        id: "power-system",
+        label: "Power System",
+        summary: "ONE+ HP 5Ah batteries and 2A charger keep every tool ready.",
+        items: RYOBI_POWER_SYSTEM,
+      },
+      {
+        id: "modular-storage",
+        label: "LINK™ Modular Storage",
+        summary:
+          "Ryobi LINK™ modular storage system with 3-piece rolling storage set (IP65 rated), wall mountable cabinet, and 15-piece wall storage kit for complete workshop and jobsite organization.",
+        items: RYOBI_LINK_STORAGE,
+      },
+      {
+        id: "storage",
+        label: "Tool Storage",
+        summary: "KINCROME CONTOUR® 470pc workshop kit with premium trade features.",
+        items: KINCROME_TOOLBOX_STORAGE,
+      },
+    ],
+  },
+  {
     slug: "cash-prize",
     label: "$10,000 Tax Free Cash",
     heroHeading: "$10,000 Tax Free Cash",
@@ -2134,7 +2481,19 @@ export function getPrizeLabel(slug: PrizeSlug | string | undefined): string | un
   if (slug === "ryobi-milwaukee") {
     return "Milwaukee Toolbox + Ryobi 19pc + LINK + $5,000 Cash";
   }
-  
+  if (slug === "milwaukee-kincrome") {
+    return "Kincrome CONTOUR® + Milwaukee 13pc + PACKOUT + $5,000 Cash";
+  }
+  if (slug === "dewalt-kincrome") {
+    return "Kincrome CONTOUR® + DeWalt 14pc + ToughSystem + $5,000 Cash";
+  }
+  if (slug === "makita-kincrome") {
+    return "Kincrome CONTOUR® + Makita 15pc + MAKTRAK + $5,000 Cash";
+  }
+  if (slug === "ryobi-kincrome") {
+    return "Kincrome CONTOUR® + Ryobi 19pc + LINK + $5,000 Cash";
+  }
+
   // Fallback to full label
   return prize.label;
 }

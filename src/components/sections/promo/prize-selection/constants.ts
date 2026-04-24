@@ -4,6 +4,7 @@
  */
 export const TOOLBOX_IMAGES = {
   milwaukee: "/images/majordraws/toolbox/milwaukeeTB.webp",
+  kincrome: "/images/majordraws/toolbox/kincromeTB.webp",
   sidchrome: "/images/majordraws/toolbox/sidchromeTB.webp",
 } as const;
 
@@ -34,32 +35,33 @@ export const POWERSET_LABELS: Record<string, string> = {
 /** Toolbox display labels - shown as bottom overlay */
 export const TOOLBOX_LABELS: Record<string, string> = {
   milwaukee: "Milwaukee Toolbox",
+  kincrome: "Kincrome Toolbox",
   sidchrome: "Sidchrome Toolbox",
 };
 
 /** Toolbox type keys */
-export type ToolboxType = "sidchrome" | "milwaukee" | "cash";
+export type ToolboxType = "sidchrome" | "milwaukee" | "kincrome" | "cash";
 
 /** Power toolset brand keys */
 export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi";
 
 /**
  * Both toolboxes share one frame size so columns align and labels sit on one row (see ToolboxSelector layout).
- * Milwaukee source art is visually smaller — scale it up inside the same frame as Sidchrome.
+ * Per-artwork scale inside the unified frame (Milwaukee asset reads large at equal numeric scale — keep lower).
  */
 export const TOOLBOX_UNIFIED_FRAME = {
   mobile: { h: 200, maxW: 320 },
   desktop: { h: 280, maxW: 400 },
 } as const;
 
-/** Per-toolbox image scale inside TOOLBOX_UNIFIED_FRAME (same box for both). */
+/**
+ * Per-asset scale applied the same way in ToolboxSelector (CSS transform on `<Image />`).
+ * Values are tuned per artwork so each reads well inside TOOLBOX_UNIFIED_FRAME.
+ */
 export const TOOLBOX_SIZES = {
-  milwaukee: {
-    imageScale: 1.8,
-  },
-  sidchrome: {
-    imageScale: 0.75,
-  },
+  milwaukee: { imageScale: 1.0 },
+  kincrome: { imageScale: 1.05 },
+  sidchrome: { imageScale: 0.75 },
 } as const;
 
 /** Power toolset carousel sizes */

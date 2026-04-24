@@ -109,6 +109,14 @@ function getPrizeGalleryImageLayout(
     };
   }
 
+  if (src.includes("kincromeTB.webp")) {
+    return {
+      scaleClass: thumb ? "scale-75" : "scale-90",
+      translateClass: "",
+      objectPosition: { objectPosition: "center center" as const },
+    };
+  }
+
   const isMakitaSetHero = src.includes("makitaset-") && src.endsWith(".webp");
   const isMilwaukeeSetHero = src.includes("milwaukeeset-") && src.endsWith(".webp");
   const isMilwaukeeSetMilwaukeeTb = src.includes("milwaukeeset-milwaukeetb");
@@ -488,9 +496,11 @@ export default function PrizeShowcase({
   // When NOT on promotions page (e.g. home, my-account): local slug, no navigation
   const [localEffectiveSlug, setLocalEffectiveSlug] = useState<string | null>(null);
   // Toolbox type toggle state - initialize from activeSlug to prevent navigation issues
-  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome" | "cash">("milwaukee");
   // Remember last non-cash toolbox so we can keep showing the power toolset options even when cash is selected
-  const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee">("milwaukee");
+  const [lastNonCashToolboxType, setLastNonCashToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome">(
+    "milwaukee"
+  );
   // When true: PowerToolsetCarousel shows all toolsets (deactivated). Set when user clicks a toolbox; cleared on toolset select (navigation).
   const [carouselDeactivated, setCarouselDeactivated] = useState(false);
 
@@ -499,12 +509,13 @@ export default function PrizeShowcase({
       return (
         toolsetEffectiveSlug ??
         slugProp ??
-        toolsetPrizeSlugs?.[1] ??
+        toolsetPrizeSlugs?.[2] ??
         toolsetPrizeSlugs?.[0]
       );
     if (isPromotionsPage) return slugProp;
     if (localEffectiveSlug) return localEffectiveSlug;
-    const tt: "sidchrome" | "milwaukee" = toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
+    const tt: "sidchrome" | "milwaukee" | "kincrome" =
+      toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
     return filterPrizesByToolboxType(listPrizes(), tt)[0]?.slug ?? slugProp;
   })();
 
@@ -517,7 +528,7 @@ export default function PrizeShowcase({
   // Toolset mode: init to Milwaukee toolbox (second prize slug) to match default toolset landing
   useEffect(() => {
     if (toolsetMode && toolsetPrizeSlugs) {
-      const defaultSlug = toolsetPrizeSlugs[1];
+      const defaultSlug = toolsetPrizeSlugs[2];
       setToolsetEffectiveSlug(defaultSlug);
       setToolboxType("milwaukee");
       setLastNonCashToolboxType("milwaukee");
@@ -547,7 +558,7 @@ export default function PrizeShowcase({
     : filterPrizesByToolboxType(prizes, toolboxType);
 
   // Step 2 ("Power Toolset") should remain visible even when cash is selected
-  const toolsetToolboxType: "sidchrome" | "milwaukee" =
+  const toolsetToolboxType: "sidchrome" | "milwaukee" | "kincrome" =
     toolboxType === "cash" ? lastNonCashToolboxType : toolboxType;
   const toolsetPrizes = toolsetMode
     ? toolsetPrizesCatalog
@@ -712,7 +723,7 @@ export default function PrizeShowcase({
     }
   };
   
-  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
+  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "kincrome" | "cash") => {
     if (toolboxType === type) return;
 
     setToolboxType(type);
@@ -734,7 +745,8 @@ export default function PrizeShowcase({
     setCarouselDeactivated(true);
 
     if (toolsetMode && toolsetPrizeSlugs) {
-      const newSlug = type === "sidchrome" ? toolsetPrizeSlugs[0] : toolsetPrizeSlugs[1];
+      const newSlug =
+        type === "sidchrome" ? toolsetPrizeSlugs[0] : type === "kincrome" ? toolsetPrizeSlugs[1] : toolsetPrizeSlugs[2];
       setToolsetEffectiveSlug(newSlug);
       setStoreSlug(newSlug);
     } else {
@@ -892,7 +904,7 @@ export default function PrizeShowcase({
                   Win your choice of <span style={{ color: theme.primary }}>toolbox</span>
                 </p>
                 <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-400 font-medium break-words whitespace-normal">
-                  Sidchrome or Milwaukee — plus power toolset & $5,000 cash
+                  Milwaukee, Kincrome, or Sidchrome — plus power toolset & $5,000 cash
                 </p>
               </motion.div>
 
@@ -942,7 +954,9 @@ export default function PrizeShowcase({
                     ((toolboxType === "cash"
                       ? (lastNonCashToolboxType === "sidchrome"
                           ? toolsetPrizeSlugs?.[0]
-                          : toolsetPrizeSlugs?.[1])
+                          : lastNonCashToolboxType === "kincrome"
+                            ? toolsetPrizeSlugs?.[1]
+                            : toolsetPrizeSlugs?.[2])
                       : activeSlug) ?? toolsetPrizeSlugs?.[0] ?? "milwaukee-milwaukee") as PrizeSlug
                   }
                   className="mb-8 sm:mb-10 lg:mb-12"
@@ -1185,15 +1199,13 @@ export default function PrizeShowcase({
                         }}
                         aria-label={`View prize image ${index + 1}`}
                       aria-current={activeGalleryIndex === index ? "true" : "false"}
-                      className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer touch-manipulation ${
-                        activeGalleryIndex === index ? "ring-2 ring-offset-1 ring-offset-transparent" : ""
+                      className={`relative w-full h-full rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer touch-manipulation ${
+                        activeGalleryIndex === index
+                          ? "border-gray-500 dark:border-neutral-500 opacity-100"
+                          : "border-gray-200/90 dark:border-neutral-600 opacity-[0.82]"
                       }`}
                         style={{
                           backgroundColor: "#EEEEEC",
-                          borderColor: getBrandGlowColor(activeSlug || "milwaukee-milwaukee"),
-                        ...(activeGalleryIndex === index
-                          ? { boxShadow: `0 0 0 2px ${activeBrandBorderColor}, 0 0 16px ${activeBrandGlowColor}` }
-                          : {}),
                         }}
                       >
                         <PrizeShowcaseResponsiveImage
@@ -1206,16 +1218,6 @@ export default function PrizeShowcase({
                           sizes="64px"
                           alt={image.alt || `Prize thumbnail ${index + 1}`}
                         />
-                        {activeGalleryIndex === index && (
-                          <span
-                            className="absolute right-1.5 top-1.5 z-10 h-2.5 w-2.5 rounded-full border border-black/25"
-                            style={{
-                              backgroundColor: activeBrandBorderColor,
-                              boxShadow: `0 0 10px ${activeBrandGlowColor}`,
-                            }}
-                            aria-hidden="true"
-                          />
-                        )}
                       </button>
                     </SwiperSlide>
                   );})}

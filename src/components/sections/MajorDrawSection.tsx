@@ -74,7 +74,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   const [desktopThumbsSwiper, setDesktopThumbsSwiper] = useState<SwiperType | null>(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
-  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome" | "cash">("milwaukee");
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const { userData: user } = useUserContext();
@@ -96,11 +96,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       setToolboxType(
         slug === "cash-prize"
           ? "cash"
-          : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
-            ? "milwaukee"
-            : slug.includes("sidchrome")
-              ? "sidchrome"
-              : "sidchrome"
+          : slug.endsWith("-sidchrome")
+            ? "sidchrome"
+            : slug.endsWith("-kincrome")
+              ? "kincrome"
+              : slug.endsWith("-milwaukee")
+                ? "milwaukee"
+                : "milwaukee"
       );
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
@@ -164,11 +166,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     }
   };
 
-  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
+  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "kincrome" | "cash") => {
     if (toolboxType === type) return;
     setToolboxType(type);
     const defaultSlugForType =
-      type === "cash" ? "cash-prize" : type === "sidchrome" ? "milwaukee-sidchrome" : "milwaukee-milwaukee";
+      type === "cash"
+        ? "cash-prize"
+        : type === "sidchrome"
+          ? "milwaukee-sidchrome"
+          : type === "kincrome"
+            ? "milwaukee-kincrome"
+            : "milwaukee-milwaukee";
     setSelectedPrizeSlug(defaultSlugForType);
   };
 
@@ -178,11 +186,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     setToolboxType(
       slug === "cash-prize"
         ? "cash"
-        : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
-          ? "milwaukee"
-          : slug.includes("sidchrome")
-            ? "sidchrome"
-            : "sidchrome"
+        : slug.endsWith("-sidchrome")
+          ? "sidchrome"
+          : slug.endsWith("-kincrome")
+            ? "kincrome"
+            : slug.endsWith("-milwaukee")
+              ? "milwaukee"
+              : "milwaukee"
     );
   };
 
@@ -317,15 +327,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
+      case "milwaukee-kincrome":
         return "/images/brands/milwaukee.webp";
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
+      case "dewalt-kincrome":
         return "/images/brands/dewalt-black.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
+      case "makita-kincrome":
         return "/images/brands/Makita-red.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
+      case "ryobi-kincrome":
         return "/images/brands/name/ryobiText.webp";
       case "cash-prize":
         return null;
@@ -339,17 +353,21 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
+      case "dewalt-kincrome":
         return "/images/promotion/FirstPrizeText/1stprice-dewalt.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
+      case "makita-kincrome":
         return "/images/promotion/FirstPrizeText/1stprice-makita.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
+      case "ryobi-kincrome":
         return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp"; // Fallback until 1stprice-ryobi.webp exists
       case "cash-prize":
         return "/images/promotion/FirstPrizeText/1stprice-cash.webp";
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
+      case "milwaukee-kincrome":
       default:
         return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp";
     }
@@ -419,6 +437,34 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
           line3: "$5000 Cash Prize",
         };
       }
+      if (slug === "milwaukee-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "dewalt-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "makita-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Makita Powertools" : "Makita",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "ryobi-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Ryobi Powertools" : "Ryobi",
+          line3: "$5000 Cash Prize",
+        };
+      }
       if (slug === "cash-prize") {
         return { line1: "$10,000 Tax Free Cash", line2: null, line3: null };
       }
@@ -429,32 +475,30 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return { line1: label, line2: null, line3: null };
   };
 
-  const _getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
+  const _getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "kincrome" | "cash" => {
     if (slug === "cash-prize") return "cash";
-    if (
-      (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) &&
-      !slug.includes("sidchrome")
-    ) {
-      return "milwaukee";
-    }
-    if (slug.includes("sidchrome")) return "sidchrome";
+    const lower = slug.toLowerCase();
+    if (lower.endsWith("-sidchrome")) return "sidchrome";
+    if (lower.endsWith("-kincrome")) return "kincrome";
+    if (lower.endsWith("-milwaukee")) return "milwaukee";
     return "sidchrome";
   };
 
   const filterPrizesByToolboxType = (
     prizeList: PrizeCatalogEntry[],
-    toolboxType: "sidchrome" | "milwaukee" | "cash"
+    toolboxType: "sidchrome" | "milwaukee" | "kincrome" | "cash"
   ): PrizeCatalogEntry[] => {
     if (toolboxType === "cash") {
       return prizeList.filter((p) => p.slug === "cash-prize");
     }
     if (toolboxType === "sidchrome") {
-      return prizeList.filter((p) => p.slug.includes("sidchrome"));
+      return prizeList.filter((p) => p.slug.endsWith("-sidchrome"));
+    }
+    if (toolboxType === "kincrome") {
+      return prizeList.filter((p) => p.slug.endsWith("-kincrome"));
     }
     if (toolboxType === "milwaukee") {
-      return prizeList.filter(
-        (p) => p.slug.includes("milwaukee") && !p.slug.includes("sidchrome")
-      );
+      return prizeList.filter((p) => p.slug.endsWith("-milwaukee"));
     }
     return prizeList;
   };
@@ -494,11 +538,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
           Pick Your Toolset
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
-        <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-          {(["sidchrome", "milwaukee", "cash"] as const).map((type) => {
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          {(["milwaukee", "kincrome", "sidchrome", "cash"] as const).map((type) => {
             const isActive = toolboxType === type;
             const label =
-              type === "sidchrome" ? "Sidchrome Toolbox" : type === "milwaukee" ? "Milwaukee Toolbox" : "$10,000 Cash";
+              type === "sidchrome"
+                ? "Sidchrome Toolbox"
+                : type === "milwaukee"
+                  ? "Milwaukee Toolbox"
+                  : type === "kincrome"
+                    ? "Kincrome Toolbox"
+                    : "$10,000 Cash";
             return (
               <button
                 key={type}
