@@ -8,7 +8,7 @@
  */
 
 import type { BrandKey } from "@/config/brand-theme";
-import type { PromoImagePaths, ExtendedPromoImagePaths } from "./promo-hero-types";
+import type { PromoImagePaths, ExtendedPromoImagePaths, LandingHeroUrgency } from "./promo-hero-types";
 
 const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 
@@ -21,6 +21,7 @@ export type LandingHeroToolboxSuffix = "milTB" | "sidTB";
  * - Desktop dark: {brand}-{milTB|sidTB}-no-promo-dark.webp
  * - Mobile light: {brand}-{milTB|sidTB}-no-promo-mobile.webp
  * - Mobile dark: {brand}-{milTB|sidTB}-no-promo-dark-mobile.webp
+ * - Urgency (optional suffix after dark/mobile): -final-hours | -drawn-tomorrow | -drawn-tonight
  */
 
 /**
@@ -34,13 +35,14 @@ export function resolveLandingHeroImage(
   brand: BrandKey,
   mode: "light" | "dark",
   viewport: "desktop" | "mobile",
-  toolboxSuffix: LandingHeroToolboxSuffix = "milTB"
+  toolboxSuffix: LandingHeroToolboxSuffix = "milTB",
+  urgency: LandingHeroUrgency | null = null
 ): string {
   const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
+  const urgencySuffix = urgency ? `-${urgency}` : "";
 
-  // For multiplier variants, we fallback to "no promo" images since multiplier assets don't exist yet
-  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}.webp`;
+  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
 }
 
 /**
@@ -53,11 +55,22 @@ export function resolveLandingHeroImages(
   brand: BrandKey,
   toolboxSuffix: LandingHeroToolboxSuffix = "milTB"
 ): ExtendedPromoImagePaths {
+  return resolveLandingHeroImagesWithUrgency(brand, toolboxSuffix, null);
+}
+
+/**
+ * All four landing variants with optional countdown tier (matches `.webp` under `landing/{brand}/`).
+ */
+export function resolveLandingHeroImagesWithUrgency(
+  brand: BrandKey,
+  toolboxSuffix: LandingHeroToolboxSuffix = "milTB",
+  urgency: LandingHeroUrgency | null = null
+): ExtendedPromoImagePaths {
   return {
-    desktop: resolveLandingHeroImage(brand, "light", "desktop", toolboxSuffix),
-    mobile: resolveLandingHeroImage(brand, "light", "mobile", toolboxSuffix),
-    desktopDark: resolveLandingHeroImage(brand, "dark", "desktop", toolboxSuffix),
-    mobileDark: resolveLandingHeroImage(brand, "dark", "mobile", toolboxSuffix),
+    desktop: resolveLandingHeroImage(brand, "light", "desktop", toolboxSuffix, urgency),
+    mobile: resolveLandingHeroImage(brand, "light", "mobile", toolboxSuffix, urgency),
+    desktopDark: resolveLandingHeroImage(brand, "dark", "desktop", toolboxSuffix, urgency),
+    mobileDark: resolveLandingHeroImage(brand, "dark", "mobile", toolboxSuffix, urgency),
   };
 }
 
@@ -69,12 +82,14 @@ export function resolveLandingHeroImages(
  */
 export function resolveEvergreenHeroImage(
   mode: "light" | "dark",
-  viewport: "desktop" | "mobile"
+  viewport: "desktop" | "mobile",
+  urgency: LandingHeroUrgency | null = null
 ): string {
   const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
-  
-  return `${LANDING_IMAGE_BASE}/all-prizes/all-no-promo${darkSuffix}${mobileSuffix}.webp`;
+  const urgencySuffix = urgency ? `-${urgency}` : "";
+
+  return `${LANDING_IMAGE_BASE}/all-prizes/all-no-promo${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
 }
 
 /**
@@ -82,11 +97,17 @@ export function resolveEvergreenHeroImage(
  * @returns Extended promo image paths for evergreen page
  */
 export function resolveEvergreenHeroImages(): ExtendedPromoImagePaths {
+  return resolveEvergreenHeroImagesWithUrgency(null);
+}
+
+export function resolveEvergreenHeroImagesWithUrgency(
+  urgency: LandingHeroUrgency | null
+): ExtendedPromoImagePaths {
   return {
-    desktop: resolveEvergreenHeroImage("light", "desktop"),
-    mobile: resolveEvergreenHeroImage("light", "mobile"),
-    desktopDark: resolveEvergreenHeroImage("dark", "desktop"),
-    mobileDark: resolveEvergreenHeroImage("dark", "mobile"),
+    desktop: resolveEvergreenHeroImage("light", "desktop", urgency),
+    mobile: resolveEvergreenHeroImage("light", "mobile", urgency),
+    desktopDark: resolveEvergreenHeroImage("dark", "desktop", urgency),
+    mobileDark: resolveEvergreenHeroImage("dark", "mobile", urgency),
   };
 }
 

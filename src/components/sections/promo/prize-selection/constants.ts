@@ -55,7 +55,7 @@ export const TOOLBOX_UNIFIED_FRAME = {
 /** Per-toolbox image scale inside TOOLBOX_UNIFIED_FRAME (same box for both). */
 export const TOOLBOX_SIZES = {
   milwaukee: {
-    imageScale: 1.8,
+    imageScale: 0.9,
   },
   sidchrome: {
     imageScale: 0.75,

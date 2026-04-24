@@ -3,23 +3,24 @@
  * 
  * Centralized logic for resolving promotional hero image paths based on:
  * - Active promo multiplier (2x, 3x, 5x, 10x, or no-badge)
- * - Major draw urgency (final-hours / drawn-tonight from time until draw)
+ * - Major draw urgency (final-hours / drawn-tomorrow / drawn-tonight from time until min(draw, freeze))
  * - A/B testing variant config overrides
  * 
  * Priority order:
  * 1. Variant config override (A/B testing)
- * 2. Major draw urgency (mar-final-hours / mar-drawn-tonight)
+ * 2. Major draw urgency (mar-final-hours / mar-drawn-tonight; drawn-tomorrow uses mar-final-hours)
  * 3. Multiplier-based selection (2x, 3x, 5x, 10x)
  * 4. Default fallback (no-badge)
  * 
  * @module promo-hero-images
  */
 
-import type { 
-  PromoImagePaths, 
-  MajorDrawHeroUrgency, 
+import type {
+  PromoImagePaths,
+  MajorDrawHeroUrgency,
+  LandingHeroUrgency,
   VariantImageOverride,
-  PromoImageResolutionParams 
+  PromoImageResolutionParams,
 } from "./promo-hero-types";
 
 /**
@@ -89,6 +90,8 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
 export function getMajorDrawUrgencyImageVariant(urgency: MajorDrawHeroUrgency | null | undefined): string | null {
   switch (urgency) {
     case "final-hours":
+      return "mar-final-hours";
+    case "drawn-tomorrow":
       return "mar-final-hours";
     case "drawn-tonight":
       return "mar-drawn-tonight";
@@ -161,19 +164,73 @@ export function getPromoImagePaths(
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const THREE_DAY_MS = 72 * HOUR_MS;
+
+export type PromoUrgencyDrawLike = {
+  drawDate?: string | Date | null;
+  freezeEntriesAt?: string | Date | null;
+};
 
 /**
- * Time-until-draw → hero urgency (standard + landing suffixes).
- * - Under 24h remaining: drawn-tonight
- * - 24h or more, up to and including 72h: final-hours
+ * Earliest relevant instant: min(drawDate, freezeEntriesAt) among valid values.
+ * Returns null if that instant is missing or not in the future.
+ */
+export function getPromoUrgencyDeadlineMs(draw: PromoUrgencyDrawLike | null | undefined): number | null {
+  if (!draw) return null;
+  const times: number[] = [];
+  if (draw.drawDate != null) {
+    const t = new Date(draw.drawDate).getTime();
+    if (Number.isFinite(t)) times.push(t);
+  }
+  if (draw.freezeEntriesAt != null) {
+    const t = new Date(draw.freezeEntriesAt).getTime();
+    if (Number.isFinite(t)) times.push(t);
+  }
+  if (times.length === 0) return null;
+  const deadline = Math.min(...times);
+  if (deadline <= Date.now()) return null;
+  return deadline;
+}
+
+/**
+ * Milliseconds until deadline; null if no future deadline.
+ */
+export function getMsUntilPromoUrgencyDeadline(draw: PromoUrgencyDrawLike | null | undefined): number | null {
+  const deadline = getPromoUrgencyDeadlineMs(draw);
+  if (deadline == null) return null;
+  return deadline - Date.now();
+}
+
+/**
+ * Landing asset tier from time until deadline:
+ * - &lt; 24h: drawn-tonight
+ * - &lt; 48h: drawn-tomorrow
+ * - &lt; 72h: final-hours
+ * - else: null
+ */
+export function getLandingHeroUrgencyFromMsUntil(msUntil: number | null): LandingHeroUrgency | null {
+  if (msUntil == null || msUntil <= 0) return null;
+  if (msUntil < 24 * HOUR_MS) return "drawn-tonight";
+  if (msUntil < 48 * HOUR_MS) return "drawn-tomorrow";
+  if (msUntil < THREE_DAY_MS) return "final-hours";
+  return null;
+}
+
+/**
+ * Same tier bands as landing; used for mar-* hero selection.
+ */
+export function getMajorDrawHeroUrgencyFromMajorDraw(
+  draw: PromoUrgencyDrawLike | null | undefined
+): MajorDrawHeroUrgency | null {
+  return getLandingHeroUrgencyFromMsUntil(getMsUntilPromoUrgencyDeadline(draw));
+}
+
+/**
+ * @deprecated Prefer {@link getMajorDrawHeroUrgencyFromMajorDraw} with freeze + drawDate.
+ * Uses drawDate only (no freezeEntriesAt).
  */
 export function getMajorDrawHeroUrgencyFromDrawDate(
   drawDate: string | Date | null | undefined
 ): MajorDrawHeroUrgency | null {
-  if (drawDate == null) return null;
-  const msUntil = new Date(drawDate).getTime() - Date.now();
-  if (msUntil <= 0) return null;
-  if (msUntil < 24 * HOUR_MS) return "drawn-tonight";
-  if (msUntil <= 72 * HOUR_MS) return "final-hours";
-  return null;
+  return getMajorDrawHeroUrgencyFromMajorDraw({ drawDate });
 }

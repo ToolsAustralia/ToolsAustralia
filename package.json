@@ -9,6 +9,8 @@
     "build:upsell-manifest": "tsx scripts/build-upsell-image-manifest.ts",
     "convert:upsell-webp": "tsx scripts/convert-upsells-to-webp.ts",
     "convert:multiplier-banners-webp": "tsx scripts/convert-multiplier-banners-to-webp.ts",
+    "convert:promo-landing-webp": "tsx scripts/convert-promo-landing-to-webp.ts",
+    "check:promo-landing-assets": "node scripts/check-landing-hero-assets.mjs",
     "prebuild": "npm run build:upsell-manifest",
     "predev": "npm run build:upsell-manifest",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
