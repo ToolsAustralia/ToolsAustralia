@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
-import { getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
+import { ACTIVE_SUBSCRIPTION_STATUSES, getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
 
 const SUBSCRIPTION_PACKAGE_IDS = [
   "tradie-subscription",
@@ -17,8 +17,8 @@ const SUBSCRIPTION_PACKAGE_IDS = [
  * Get membership counts per subscription package (active, cancelled, past_due) and revenue
  *
  * Counts are mutually exclusive:
- * - Active: will renew (status active, autoRenew not false)
- * - Cancelled: scheduled to cancel (status active, autoRenew false, has endDate) — excludes past_due
+ * - Active: will renew (status active or trialing, autoRenew not false)
+ * - Cancelled: scheduled to cancel (status active or trialing, autoRenew false, has endDate) — excludes past_due
  * - Past due: payment failed (status past_due), regardless of autoRenew
  *
  * Returns:
@@ -40,17 +40,17 @@ export async function GET(_request: NextRequest) {
     };
 
     const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
-      // Active = will renew (status active, autoRenew not false)
+      // Active = will renew (status active or trialing, autoRenew not false)
       User.aggregate([
         { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
         { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
       ]),
-      // Cancelled = scheduled to cancel (active only; past_due users go in past_due bucket)
+      // Cancelled = scheduled to cancel (active/trialing; past_due users go in past_due bucket)
       User.aggregate([
         {
           $match: {
             ...baseMatch,
-            "subscription.status": "active",
+            "subscription.status": { $in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
             "subscription.autoRenew": false,
             "subscription.endDate": { $exists: true, $ne: null },
           },
