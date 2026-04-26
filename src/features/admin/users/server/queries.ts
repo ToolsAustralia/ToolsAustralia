@@ -15,7 +15,11 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { REFERRAL_CONSTANTS } from "@/lib/referral";
 import type { UserFilters, AdminUserDetail } from "@/types/admin";
-import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
+import {
+  getActiveSubscriptionFilter,
+  getEverPaidUserFilter,
+  SUBSCRIBED_SUBSCRIPTION_STATUSES,
+} from "@/utils/admin/userFilterBuilder";
 
 /**
  * Calculate engagement score based on user activity
@@ -526,7 +530,7 @@ export async function getUsers(filters: UserFilters) {
         // We DON'T filter by isActive because:
         //   - past_due users may have isActive = false (payment issue, not cancellation)
         //   - The key indicator of "will renew" is: autoRenew !== false + (endDate not set / null / in future) + has packageId + has accumulated entries
-        autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+        autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
         autoRenewFilter["subscription.autoRenew"] = { $ne: false };
         autoRenewFilter["subscription.packageId"] = { $exists: true, $ne: null };
         autoRenewFilter["subscription.lastMonthAccumulatedEntries"] = { $gt: 0 };
@@ -537,7 +541,7 @@ export async function getUsers(filters: UserFilters) {
       // - Status is "active" OR "past_due" (not cancelled status)
       // - autoRenew is false (cancelled at period end)
       // - Has endDate set (period end when access ends)
-      autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+      autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
       autoRenewFilter["subscription.autoRenew"] = false;
       autoRenewFilter["subscription.endDate"] = { $exists: true, $ne: null };
     }

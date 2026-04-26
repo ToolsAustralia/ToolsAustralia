@@ -10,7 +10,11 @@ import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
-import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
+import {
+  getActiveSubscriptionFilter,
+  getEverPaidUserFilter,
+  SUBSCRIBED_SUBSCRIPTION_STATUSES,
+} from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 
 /**
@@ -172,7 +176,7 @@ export async function GET(request: NextRequest) {
         ? {
             "subscription.endDate": { $exists: true, $ne: null },
             "subscription.autoRenew": false,
-            "subscription.status": { $in: ["active", "past_due"] },
+            "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
             isActive: true,
           }
         : {
@@ -184,7 +188,7 @@ export async function GET(request: NextRequest) {
     const totalScheduledCancellationQuery = {
       "subscription.endDate": { $exists: true, $ne: null },
       "subscription.autoRenew": false,
-      "subscription.status": { $in: ["active", "past_due"] },
+      "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
       isActive: true,
     };
 
@@ -495,7 +499,7 @@ export async function GET(request: NextRequest) {
       const previousTotalScheduledCancellationQuery = {
         "subscription.endDate": { $gt: comparisonEndDate },
         "subscription.autoRenew": false,
-        "subscription.status": { $in: ["active", "past_due"] },
+        "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
         isActive: true,
       };
 

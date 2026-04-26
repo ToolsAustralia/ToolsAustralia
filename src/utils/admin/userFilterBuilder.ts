@@ -16,14 +16,26 @@ import MajorDraw from "@/models/MajorDraw";
 const AU_STATE_CODES = new Set(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
 
 /**
+ * Stripe subscription statuses that count as a current paying/entitled membership for admin metrics
+ * (includes trial: same access and renewal semantics as the rest of the app).
+ */
+export const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
+
+/**
+ * Subscribed states used for "will renew" / "scheduled cancel" / churn-style admin filters
+ * (active + trialing + payment-problem but not yet ended).
+ */
+export const SUBSCRIBED_SUBSCRIPTION_STATUSES = ["active", "trialing", "past_due"] as const;
+
+/**
  * Get filter for true active subscriptions (subscriptions that will auto-renew)
- * 
+ *
  * This matches the projected income calculation logic:
  * - subscription.isActive: true
- * - subscription.status: "active"
+ * - subscription.status: `active` or `trialing` (Stripe trialing = entitled until trial end)
  * - subscription.autoRenew: { $ne: false } (only count if autoRenew is true or undefined, default is true)
  * - isActive: true (user account is active)
- * 
+ *
  * @param includeUserActive - Whether to include isActive: true check for user account (default: true)
  * @returns MongoDB filter object for active subscriptions that will auto-renew
  */
@@ -31,7 +43,7 @@ export function getActiveSubscriptionFilter(includeUserActive: boolean = true): 
   const filter: Record<string, unknown> = {
     "subscription.isActive": true,
     "subscription.autoRenew": { $ne: false }, // Only count if autoRenew is true or undefined (default is true)
-    "subscription.status": "active",
+    "subscription.status": { $in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
   };
 
   if (includeUserActive) {
@@ -158,7 +170,7 @@ export async function buildUserFilter(
   if (autoRenew !== undefined && autoRenew !== "") {
     if (autoRenew === "true") {
       // Users who WILL renew:
-      // - Status is "active" OR "past_due" (past_due users can still renew if not cancelled)
+      // - Status is "active", "trialing", OR "past_due" (past_due users can still renew if not cancelled)
       //   Note: past_due users may have isActive = false due to payment failures, but they haven't cancelled
       //   EXCLUDE "incomplete" status (users who just registered but haven't purchased)
       // - autoRenew is not false (true or undefined)
@@ -168,7 +180,7 @@ export async function buildUserFilter(
       // We DON'T filter by isActive because:
       //   - past_due users may have isActive = false (payment issue, not cancellation)
       //   - The key indicator of "will renew" is: autoRenew !== false + (endDate not set / null / in future) + has packageId + has accumulated entries
-      autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+      autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
       autoRenewFilter["subscription.autoRenew"] = { $ne: false };
       autoRenewFilter["subscription.packageId"] = { $exists: true, $ne: null };
       autoRenewFilter["subscription.lastMonthAccumulatedEntries"] = { $gt: 0 };
@@ -176,10 +188,10 @@ export async function buildUserFilter(
       // We'll handle this in the $and combination
     } else if (autoRenew === "false") {
       // Users who are CANCELLED (won't renew):
-      // - Status is "active" OR "past_due" (not cancelled status)
+      // - Status is "active", "trialing", OR "past_due" (not ended yet)
       // - autoRenew is false (cancelled at period end)
       // - Has endDate set (period end when access ends)
-      autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+      autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
       autoRenewFilter["subscription.autoRenew"] = false;
       autoRenewFilter["subscription.endDate"] = { $exists: true, $ne: null };
     }
