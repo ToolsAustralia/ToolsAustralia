@@ -5,10 +5,10 @@
  */
 
 import type { PrizeSlug } from "./prizes";
-import type { MajorDrawHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { LandingHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
 import {
-  resolveLandingHeroImages,
-  resolveEvergreenHeroImages,
+  resolveLandingHeroImagesWithUrgency,
+  resolveEvergreenHeroImagesWithUrgency,
   landingToolboxSuffixFromPrizeSlug,
 } from "@/utils/promo/landing-image-resolver";
 import { slugToBrandKey } from "@/config/brand-theme";
@@ -41,22 +41,18 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
 
   // Ryobi prizes — Sidchrome TB vs Milwaukee TB assets (`sidTB` / `milTB`)
   "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
-  "ryobi-kincrome": resolveLandingHeroImages("ryobi", "milTB"),
   "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
 
   // Milwaukee prizes
   "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee", "sidTB"),
-  "milwaukee-kincrome": resolveLandingHeroImages("milwaukee", "milTB"),
   "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee", "milTB"),
 
   // DeWalt prizes
   "dewalt-sidchrome": resolveLandingHeroImages("dewalt", "sidTB"),
-  "dewalt-kincrome": resolveLandingHeroImages("dewalt", "milTB"),
   "dewalt-milwaukee": resolveLandingHeroImages("dewalt", "milTB"),
 
   // Makita prizes
   "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
-  "makita-kincrome": resolveLandingHeroImages("makita", "milTB"),
   "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
 };
 
@@ -76,7 +72,7 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
  * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
-  const [sidchrome, _kincrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
+  const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
   if (hasMilwaukeeHero) return milwaukee;
@@ -84,31 +80,24 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
   return milwaukee;
 }
 
-/**
- * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
- * Returns extended paths with light/dark variants.
- */
-export function getLandingHeroImagePaths(prizeSlug: string): ExtendedPromoImagePaths | null {
-  const mapped = LANDING_HERO_MAP[prizeSlug as PrizeSlug];
-  if (mapped) return mapped;
-  
-  // Fallback: extract brand + toolbox from slug (e.g. future prize slugs)
-  const brand = slugToBrandKey(prizeSlug);
-  if (brand) return resolveLandingHeroImages(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug));
-  
-  return null;
-}
+const CASH_PRIZE_SLUG = "cash-prize";
 
 /**
- * Apply major draw urgency to landing paths
- * Note: Currently returns the same paths since multiplier assets don't exist yet.
- * This is a placeholder for future urgency variants.
+ * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
+ * When `urgency` is set, paths include `-final-hours` / `-drawn-tomorrow` / `-drawn-tonight` suffixes.
  */
-export function applyMajorDrawUrgencyToLandingPaths(
-  paths: ExtendedPromoImagePaths,
-  _urgency: MajorDrawHeroUrgency
-): ExtendedPromoImagePaths {
-  // For now, return the same paths since we're using "no-promo" images as fallback
-  // When urgency variants are available, update this to insert urgency suffix
-  return paths;
+export function getLandingHeroImagePaths(
+  prizeSlug: string,
+  urgency: LandingHeroUrgency | null = null
+): ExtendedPromoImagePaths | null {
+  if (prizeSlug === CASH_PRIZE_SLUG) {
+    return resolveEvergreenHeroImagesWithUrgency(urgency);
+  }
+
+  const brand = slugToBrandKey(prizeSlug);
+  if (!brand) return null;
+
+  return resolveLandingHeroImagesWithUrgency(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug), urgency);
 }
+
+export type { LandingHeroUrgency } from "@/utils/promo/promo-hero-types";

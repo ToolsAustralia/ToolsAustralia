@@ -10,9 +10,9 @@ import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
-import { getMajorDrawHeroUrgencyFromDrawDate, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import { getMajorDrawHeroUrgencyFromMajorDraw, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
-import { applyMajorDrawUrgencyToLandingPaths, getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { getImageForMode, getFallbackImagePath } from "@/utils/promo/landing-image-resolver";
 
@@ -62,14 +62,10 @@ export default function PromoHero({
 
   const storeSlug = usePromoThemeStore((s) => s.slug);
   const effectiveSlug = storeSlug ?? prizeSlug ?? null;
-  const majorDrawUrgency = getMajorDrawHeroUrgencyFromDrawDate(majorDraw?.drawDate);
+  const majorDrawUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
 
   const landingHeroPaths = effectiveSlug
-    ? (() => {
-        const base = getLandingHeroImagePaths(effectiveSlug);
-        if (!base) return null;
-        return majorDrawUrgency ? applyMajorDrawUrgencyToLandingPaths(base, majorDrawUrgency) : base;
-      })()
+    ? getLandingHeroImagePaths(effectiveSlug, majorDrawUrgency)
     : null;
 
   const standardHeroPaths = getPromoImagePaths({

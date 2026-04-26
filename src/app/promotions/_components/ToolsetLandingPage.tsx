@@ -19,7 +19,7 @@ import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-s
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
-import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import { getMajorDrawHeroUrgencyFromMajorDraw, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import mongoose from "mongoose";
 
@@ -73,8 +73,12 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug);
-  const standardHero = getPromoImagePaths({ multiplier: membershipPromo?.multiplier ?? null });
+  const landingUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
+  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug, landingUrgency);
+  const standardHero = getPromoImagePaths({
+    multiplier: membershipPromo?.multiplier ?? null,
+    majorDrawUrgency: landingUrgency,
+  });
   const heroImagePaths: PromoImagePaths = landingHero ?? standardHero;
 
   const experimentId = activeExperiment?._id
