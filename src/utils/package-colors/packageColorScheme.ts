@@ -351,7 +351,7 @@ export function getLandingPageThemeFromSlug(slug: string): {
   preferDarkBackground: boolean;
 } {
   // Milwaukee pages use Tools Australia brand red
-  if (slug === "milwaukee-milwaukee" || slug === "milwaukee-sidchrome") {
+  if (slug === "milwaukee-milwaukee" || slug === "milwaukee-sidchrome" || slug === "milwaukee-kincrome") {
     return {
       ...TOOLS_AUSTRALIA_RED,
       accentHex: TOOLS_AUSTRALIA_RED.primary,

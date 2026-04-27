@@ -29,6 +29,8 @@
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",
     "migrate:affiliate-commission-pi-index:dry": "tsx scripts/migrate-affiliate-commission-pi-index.ts --dry-run",
     "backfill:subscription-end-dates": "tsx scripts/backfill-subscription-end-dates.ts",
+    "stripe:list-active-paused-subscriptions": "tsx scripts/list-active-paused-subscriptions.ts",
+    "stripe:resume-active-paused-subscriptions:dry": "tsx scripts/list-active-paused-subscriptions.ts --limit=200",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
     "sync:meta-spend-by-url": "tsx scripts/sync-meta-spend-by-url.ts",
     "backfill:affiliate-membership-tied": "tsx scripts/backfill-affiliate-membership-tied.ts",
@@ -45,7 +47,8 @@
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
-    "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts"
+    "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
+    "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

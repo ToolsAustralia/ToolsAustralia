@@ -14,6 +14,7 @@ import {
   analyzePaymentIntentForExcessiveRetry,
   analyzeStripePayErrorForExcessiveRetry,
 } from "@/utils/payment/stripe/stripe-excessive-retry";
+import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -236,6 +237,17 @@ export async function POST(request: NextRequest) {
         const paidInvoice = await stripe.invoices.pay(invoiceId, {
           payment_method: paymentMethod.id,
         });
+
+        if (paidInvoice.status === "paid") {
+          try {
+            await resumeAfterSuccessfulRenewalPayment(existingSubscription.id);
+          } catch (resumeErr) {
+            console.error(
+              `[renew-subscription] Invoice paid but could not clear pause_collection for ${existingSubscription.id}:`,
+              resumeErr
+            );
+          }
+        }
 
         // console.log(`✅ Payment successful:`, {
         //   invoiceId: paidInvoice.id,

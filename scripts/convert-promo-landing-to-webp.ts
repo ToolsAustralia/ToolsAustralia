@@ -61,9 +61,7 @@ async function main() {
     totalBefore += before;
 
     if (await statSafe(webpPath)) {
-      console.log(`skip (webp exists): ${relPublic(pngPath)}`);
-      await fs.unlink(pngPath);
-      continue;
+      console.log(`overwrite (webp exists): ${relPublic(pngPath)}`);
     }
 
     await sharp(pngPath).webp({ quality: 82, effort: 5 }).toFile(webpPath);
