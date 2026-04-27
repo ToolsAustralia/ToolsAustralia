@@ -16,6 +16,12 @@
 
 import { stripe } from "@/lib/stripe";
 
+/** Pure policy helpers (no Stripe client); safe to import in tests. */
+export {
+  shouldClearPauseCollectionAfterPaidInvoice,
+  describePauseCollection,
+} from "./pauseCollectionPolicy";
+
 export async function pauseAfterRenewalFailure(subscriptionId: string): Promise<void> {
   await stripe.subscriptions.update(subscriptionId, {
     pause_collection: {

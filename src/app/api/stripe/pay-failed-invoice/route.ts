@@ -350,7 +350,7 @@ export async function POST(_request: NextRequest) {
               if (likelyMissingDefault) {
                 try {
                   const refreshed = await stripe.invoices.retrieve(invoiceData.invoice.id, {
-                    expand: ["payment_intent", "latest_payment_intent"],
+                    expand: ["payment_intent"],
                   });
                   let pi = extractPaymentIntentFromInvoice(refreshed);
                   if (!pi) {

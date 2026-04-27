@@ -5,12 +5,21 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { TOOLBOX_IMAGES, TOOLBOX_LABELS, TOOLBOX_SIZES, TOOLBOX_UNIFIED_FRAME } from "./constants";
 
-/** Toolbox types that have images (excludes cash) */
-const TOOLBOX_OPTIONS = ["milwaukee", "sidchrome"] as const;
+/** Toolbox types that have images (excludes cash) — order: Milwaukee, Kincrome (centre), Sidchrome */
+const TOOLBOX_OPTIONS = ["milwaukee", "kincrome", "sidchrome"] as const;
 type ToolboxOption = (typeof TOOLBOX_OPTIONS)[number];
 
+const TOOLBOX_FOCUS_GLOW =
+  "radial-gradient(circle at 50% 50%, rgba(220, 38, 38, 0.5) 0%, rgba(185, 28, 28, 0.26) 42%, rgba(127, 29, 29, 0.1) 62%, transparent 76%)";
+
+const ARIA_LABEL: Record<ToolboxOption, string> = {
+  milwaukee: "Milwaukee Toolbox",
+  kincrome: "Kincrome CONTOUR toolbox",
+  sidchrome: "Sidchrome Toolbox",
+};
+
 interface ToolboxSelectorProps {
-  /** Currently selected toolbox type (milwaukee or sidchrome). Null when cash-prize so nothing is selected. */
+  /** Currently selected toolbox type. Null when cash-prize so nothing is selected. */
   selectedType: ToolboxOption | null;
   /** Called when user selects a toolbox */
   onSelect: (type: ToolboxOption) => void;
@@ -29,12 +38,12 @@ const containerVariants = {
   },
 };
 
+/** Entrance only — no scale so label row stays aligned across columns */
 const itemVariants = {
-  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
     y: 0,
-    scale: 1,
     transition: {
       type: "spring" as const,
       stiffness: 400,
@@ -43,11 +52,11 @@ const itemVariants = {
   },
 };
 
-const imgSizesAttr = "(max-width: 639px) 320px, 400px";
+const imgSizesAttr = "(max-width: 639px) 280px, 360px";
 
 /**
- * Toolbox selection - Milwaukee and Sidchrome.
- * Unified frame + flex column: image stage, then label row (no absolute labels on mismatched heights).
+ * Toolbox selection — Milwaukee, Kincrome (centre), Sidchrome.
+ * Unified frame + flex column: image stage, then label row.
  */
 export function ToolboxSelector({
   selectedType,
@@ -59,14 +68,14 @@ export function ToolboxSelector({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className={`flex w-full flex-row flex-wrap items-stretch justify-center gap-3 sm:gap-8 md:gap-10 ${className}`}
+      className={`flex w-full flex-row flex-wrap items-stretch justify-center gap-2 sm:gap-5 md:gap-7 ${className}`}
       role="group"
       aria-label="Select toolbox"
     >
-      {TOOLBOX_OPTIONS.map((type) => {
+      {TOOLBOX_OPTIONS.map((type, index) => {
         const isActive = selectedType === type;
         const imgSrc = TOOLBOX_IMAGES[type];
-        const imageScale = TOOLBOX_SIZES[type].imageScale;
+        const imageScale = TOOLBOX_SIZES[type]?.imageScale ?? 1;
 
         return (
           <motion.button
@@ -74,28 +83,12 @@ export function ToolboxSelector({
             type="button"
             onClick={() => onSelect(type)}
             variants={itemVariants}
-            whileHover={{
-              scale: 1.04,
-              transition: { type: "spring", stiffness: 400, damping: 20 },
-            }}
-            whileTap={{
-              scale: 0.98,
-              transition: { duration: 0.15 },
-            }}
-            animate={{
-              opacity: isActive ? 1 : 0.55,
-              filter: isActive
-                ? "drop-shadow(0 8px 24px rgba(0,0,0,0.2))"
-                : "brightness(1.25) saturate(0.7)",
-            }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            className="relative flex min-w-0 max-w-[min(48vw,360px)] flex-1 basis-[calc(50%-0.375rem)] cursor-pointer flex-col items-center gap-2.5 overflow-visible rounded-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-red-500/60 focus-visible:ring-offset-4 sm:max-w-[min(46vw,420px)] sm:basis-0 sm:gap-3"
+            className="relative flex min-h-0 min-w-0 max-w-[min(34vw,300px)] flex-1 basis-[calc(33.333%-0.375rem)] cursor-pointer flex-col items-center overflow-visible rounded-2xl focus:outline-none focus-visible:ring-4 focus-visible:ring-red-500/60 focus-visible:ring-offset-4 sm:max-w-[min(32vw,340px)] sm:basis-0"
             aria-pressed={isActive}
-            aria-label={`${type === "milwaukee" ? "Milwaukee" : "Sidchrome"} Toolbox`}
+            aria-label={ARIA_LABEL[type]}
           >
-            {/* Image stage — TOOLBOX_UNIFIED_FRAME for both; Milwaukee uses higher imageScale */}
-            <div
-              className="relative mx-auto w-full shrink-0 overflow-visible max-w-[var(--tb-max-w)] h-[var(--tb-h)] sm:max-w-[var(--tb-max-w-d)] sm:h-[var(--tb-h-d)]"
+            <motion.div
+              className="relative isolate mx-auto w-full max-w-[var(--tb-max-w)] shrink-0 overflow-visible h-[var(--tb-h)] will-change-transform sm:max-w-[var(--tb-max-w-d)] sm:h-[var(--tb-h-d)]"
               style={
                 {
                   "--tb-max-w": `${TOOLBOX_UNIFIED_FRAME.mobile.maxW}px`,
@@ -104,50 +97,73 @@ export function ToolboxSelector({
                   "--tb-h-d": `${TOOLBOX_UNIFIED_FRAME.desktop.h}px`,
                 } as CSSProperties
               }
+              animate={{
+                scale: isActive ? 1.06 : 0.88,
+                opacity: isActive ? 1 : 0.52,
+                // No CSS `filter` or box-shadow on this layer — avoids blur with scale and removes the “card” rectangle behind art.
+              }}
+              whileHover={
+                isActive
+                  ? {
+                      scale: 1.09,
+                      transition: { type: "spring", stiffness: 400, damping: 20 },
+                    }
+                  : {
+                      scale: 0.92,
+                      transition: { type: "spring", stiffness: 400, damping: 22 },
+                    }
+              }
+              whileTap={{
+                scale: isActive ? 1.02 : 0.85,
+                transition: { duration: 0.15 },
+              }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
             >
               {isActive && (
                 <div
-                  className="pointer-events-none absolute left-1/2 top-1/2 -z-10 aspect-square w-[min(220px,70vw)] -translate-x-1/2 -translate-y-1/2 sm:w-[min(300px,36vw)]"
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 aspect-square w-[min(220px,70vw)] -translate-x-1/2 -translate-y-1/2 sm:w-[min(300px,36vw)]"
                   style={{
-                    background:
-                      type === "milwaukee"
-                        ? "radial-gradient(circle at 50% 50%, rgba(220, 38, 38, 0.5) 0%, rgba(185, 28, 28, 0.26) 42%, rgba(127, 29, 29, 0.1) 62%, transparent 76%)"
-                        : "radial-gradient(circle at 50% 50%, rgba(71, 85, 105, 0.4) 0%, rgba(51, 65, 85, 0.22) 42%, rgba(30, 41, 59, 0.1) 62%, transparent 76%)",
-                    filter: "blur(20px)",
+                    background: TOOLBOX_FOCUS_GLOW,
+                    filter: "blur(24px)",
+                    opacity: 0.95,
                   }}
                   aria-hidden
                 />
               )}
 
-              {/* Centered img + scale on the img (not fill+scaled wrapper) so DevTools/hover bounds track the picture, not the full slot × scale */}
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div
+                className="absolute inset-0 z-[1] flex items-center justify-center"
+                style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+              >
                 <Image
                   src={imgSrc}
-                  alt={`${type === "milwaukee" ? "Milwaukee" : "Sidchrome"} Toolbox`}
+                  alt={ARIA_LABEL[type]}
                   width={640}
                   height={640}
                   sizes={imgSizesAttr}
-                  priority={type === "milwaukee"}
+                  priority={index === 0}
                   className="h-auto max-h-full w-auto max-w-full object-contain object-center transition-transform duration-300"
                   style={{
-                    transform: `scale(${imageScale})`,
+                    transform: `translateZ(0) scale(${imageScale})`,
                     transformOrigin: "center center",
                   }}
                 />
               </div>
-            </div>
+            </motion.div>
 
-            {/* Label row — same vertical position for both columns; text centered in pill */}
-            <div className="flex w-full shrink-0 justify-center px-1">
+            {/* Equal-height columns: grow pushes the label row to the same baseline across all toolboxes */}
+            <div className="min-h-0 w-full flex-1 basis-0" aria-hidden="true" />
+
+            <div className="flex w-full shrink-0 justify-center px-0.5 pt-2 sm:pt-2.5">
               <div
-                className={`flex w-full max-w-[min(100%,280px)] items-center justify-center rounded-full border-2 px-2.5 py-1 text-center shadow-lg backdrop-blur-md transition-all duration-300 sm:max-w-[min(100%,340px)] sm:px-3 sm:py-1 ${
+                className={`flex w-full max-w-[min(100%,260px)] items-center justify-center rounded-full border-2 px-2 py-0.5 text-center shadow-lg backdrop-blur-md transition-all duration-300 sm:max-w-[min(100%,320px)] sm:px-2.5 sm:py-1 ${
                   isActive
                     ? "border-red-500/80 bg-red-900/90 shadow-[0_4px_20px_rgba(127,29,29,0.4)]"
-                    : "border-white/15 bg-black/50 opacity-80"
+                    : "border-white/12 bg-black/45 opacity-75"
                 }`}
               >
                 <span
-                  className={`font-sans text-xs font-extrabold leading-tight sm:text-sm ${isActive ? "text-white" : "text-white/90"}`}
+                  className={`font-sans text-[10px] font-extrabold leading-tight sm:text-xs ${isActive ? "text-white" : "text-white/88"}`}
                 >
                   {TOOLBOX_LABELS[type]}
                 </span>

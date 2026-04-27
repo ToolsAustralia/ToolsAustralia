@@ -38,7 +38,7 @@ function getPowerToolModalPrimaries(slug: PrizeSlug, isDark: boolean): {
   primaryLight: string;
   primaryDark: string;
 } {
-  if (slug === "milwaukee-sidchrome" || slug === "milwaukee-milwaukee") {
+  if (slug === "milwaukee-sidchrome" || slug === "milwaukee-milwaukee" || slug === "milwaukee-kincrome") {
     const t = getLandingPageThemeFromSlug(slug);
     return { primary: t.primary, primaryLight: t.primaryLight, primaryDark: t.primaryDark };
   }
@@ -337,7 +337,8 @@ function getPowerSpecChrome(colorKey: string) {
 export function getPrizeSpecificationsModalHeaderSolidFill(slug: PrizeSlug | undefined): string {
   if (!slug) return "#ee0000";
   if (slug === "cash-prize") return "#16a34a";
-  if (slug === "milwaukee-sidchrome" || slug === "milwaukee-milwaukee") return "#ee0000";
+  if (slug === "milwaukee-sidchrome" || slug === "milwaukee-milwaukee" || slug === "milwaukee-kincrome")
+    return "#ee0000";
   const k = slugToBrandKey(slug);
   if (k === "makita") return "#00c2ed";
   if (k === "dewalt") return "#FDB813";
@@ -508,13 +509,17 @@ export function getPrizeBrandColors(slug: PrizeSlug, isDark = false): PrizeBrand
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
+    case "milwaukee-kincrome":
       return { ...TOOLS_AUSTRALIA_RED };
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
+    case "dewalt-kincrome":
     case "makita-sidchrome":
     case "makita-milwaukee":
+    case "makita-kincrome":
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
+    case "ryobi-kincrome":
       return buildBrandColorsFromTheme(slug, isDark);
     case "cash-prize":
       return {
@@ -572,15 +577,19 @@ export function getBrandGlowClass(slug: PrizeSlug): string {
   switch (slug) {
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
+    case "milwaukee-kincrome":
       return "glow-milwaukee";
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
+    case "dewalt-kincrome":
       return "glow-dewalt";
     case "makita-sidchrome":
     case "makita-milwaukee":
+    case "makita-kincrome":
       return "glow-makita";
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
+    case "ryobi-kincrome":
       return "glow-ryobi";
     case "cash-prize":
       return "glow-green";
