@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PrizeCatalogEntry } from "@/config/prizes";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
@@ -46,6 +47,10 @@ const sideItemVariants = {
   },
 };
 
+/** Hide native scrollbars but keep touch/hover scroll when overflow-x is scroll (desktop rail fallback). */
+const SCROLL_NO_BAR =
+  "overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+
 const centerVariants = {
   enter: {
     opacity: 0,
@@ -84,21 +89,26 @@ export function PowerToolsetCarousel({
     activeSlug != null
       ? (prizes.find((p) => p.slug === activeSlug) ?? prizes[0])
       : null;
-  // Rotate otherPrizes by distance from active so different toolsets get visible side
-  // positions when selection changes (fair visibility on mobile where only ~3 are visible)
-  const otherPrizesRaw = prizes.filter((p) => p.slug !== activePrize?.slug);
   const activeIndex = activePrize ? prizes.findIndex((p) => p.slug === activePrize.slug) : 0;
   const n = prizes.length;
-  const otherPrizes = [...otherPrizesRaw].sort((a, b) => {
-    const idxA = prizes.findIndex((p) => p.slug === a.slug);
-    const idxB = prizes.findIndex((p) => p.slug === b.slug);
-    const distA = activeIndex >= 0 ? (idxA - activeIndex + n) % n : idxA;
-    const distB = activeIndex >= 0 ? (idxB - activeIndex + n) % n : idxB;
-    return distA - distB;
-  });
-  const mid = Math.ceil(otherPrizes.length / 2);
-  const leftPrizes = otherPrizes.slice(0, mid);
-  const rightPrizes = otherPrizes.slice(mid);
+  /**
+   * One item each side, same 3-up as tablet: prev | active | next in prize order
+   * (circular for n >= 3). For n === 2, the “other” sits on the opposite side.
+   */
+  let leftNeighbor: PrizeCatalogEntry | null = null;
+  let rightNeighbor: PrizeCatalogEntry | null = null;
+  if (activePrize && n >= 2) {
+    if (n === 2) {
+      if (activeIndex === 0) {
+        rightNeighbor = prizes[1] ?? null;
+      } else {
+        leftNeighbor = prizes[0] ?? null;
+      }
+    } else {
+      leftNeighbor = prizes[(activeIndex - 1 + n) % n] ?? null;
+      rightNeighbor = prizes[(activeIndex + 1) % n] ?? null;
+    }
+  }
 
   const activeToolset = activePrize ? getToolsetFromSlug(activePrize.slug) : null;
   const activeImgSrc = activeToolset ? POWERSET_IMAGES[activeToolset] : null;
@@ -113,10 +123,114 @@ export function PowerToolsetCarousel({
     return "milwaukee-red";
   };
 
+  const canStepPrize = activePrize && n > 1;
+  const prevPrizeSlug = canStepPrize ? prizes[(activeIndex - 1 + n) % n].slug : null;
+  const nextPrizeSlug = canStepPrize ? prizes[(activeIndex + 1) % n].slug : null;
+  /** 3 toolsets are already visible; step buttons only when a 4+ prize is off-screen. */
+  const showStepButtons = n > 3;
+
+  const renderActiveCenter = (outerClass: string, frameClass: string) => (
+    <div className={outerClass}>
+      <motion.div
+        className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
+        animate={
+          prefersReducedMotion
+            ? { opacity: 0.5, scale: 1 }
+            : {
+                opacity: [0.4, 0.6, 0.4],
+                scale: [1, 1.02, 1],
+              }
+        }
+        transition={
+          prefersReducedMotion
+            ? {}
+            : {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }
+        }
+        style={{
+          background: `radial-gradient(ellipse 80% 70% at 50% 50%, ${glowColor}, transparent 70%)`,
+        }}
+      />
+
+      {activeImgSrc && (
+        <motion.div
+          layout
+          layoutDependency={activeSlug ?? ""}
+          className={frameClass}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeSlug ?? activeImgSrc}
+              variants={centerVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              className="relative w-full h-full"
+            >
+              <motion.div
+                animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
+                transition={
+                  prefersReducedMotion
+                    ? {}
+                    : {
+                        y: {
+                          duration: 4,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        },
+                      }
+                }
+                className="relative w-full h-full"
+              >
+                <div className="absolute inset-0">
+                  <Image
+                    src={activeImgSrc}
+                    alt={activePrize?.label ?? "Selected power toolset"}
+                    fill
+                    className="object-contain drop-shadow-2xl"
+                    sizes="(max-width: 640px) min(68vw, 17rem), (max-width: 1024px) 360px, (max-width: 1280px) 440px, 500px"
+                    priority
+                  />
+                </div>
+                {activeToolset && POWERSET_LABELS[activeToolset] && (() => {
+                  const scheme = getPackageColorScheme(getToolsetColorKey(activeToolset));
+                  const badgeStyle = getToolsetBadgeStyle(activeToolset);
+                  return (
+                    <div className="absolute bottom-0 left-0 right-0 z-10 flex justify-center pointer-events-none px-1.5 sm:px-2">
+                      <div
+                        className="w-fit max-w-full rounded-xl px-2.5 py-1.5 shadow-xl backdrop-blur-md sm:px-4 sm:py-2.5"
+                        style={{
+                          background: badgeStyle.background,
+                          boxShadow: badgeStyle.boxShadow,
+                          border: badgeStyle.border,
+                        }}
+                      >
+                        <p
+                          className={`max-w-[min(100%,18rem)] whitespace-normal font-sans text-center text-[9px] font-extrabold font-bold leading-snug line-clamp-2 sm:max-w-none sm:text-xs sm:leading-tight lg:text-sm ${scheme.buttonText}`}
+                        >
+                          {POWERSET_LABELS[activeToolset]} + $5000 CASH
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      )}
+    </div>
+  );
+
   const renderSideImage = (
     prizeOption: PrizeCatalogEntry,
     index: number,
-    fromLeft: boolean
+    fromLeft: boolean,
+    /** Wider "peek" cards when flanking the active toolset; grid uses compact tiles */
+    layout: "grid" | "selectedRail" = "grid"
   ) => {
     const toolset = getToolsetFromSlug(prizeOption.slug);
     const imgSrc = toolset ? POWERSET_IMAGES[toolset] : null;
@@ -125,6 +239,11 @@ export function PowerToolsetCarousel({
     if (!imgSrc) return null;
     const scheme = toolset ? getPackageColorScheme(getToolsetColorKey(toolset)) : null;
     const badgeStyle = toolset ? getToolsetBadgeStyle(toolset) : null;
+    const shellClass =
+      layout === "selectedRail"
+        ? // Match tablet: one tile each side, ~half to two-thirds the hero read
+          "relative h-32 w-20 min-w-[4.5rem] shrink-0 overflow-visible min-[400px]:w-24 min-[400px]:min-w-[5.5rem] sm:h-32 sm:min-w-[6rem] sm:w-24 md:h-36 md:w-28 lg:h-40 lg:w-32 xl:h-44 xl:w-36"
+        : "relative h-28 w-[5.5rem] shrink-0 overflow-visible sm:h-40 sm:w-32 lg:h-44 lg:w-36 xl:h-48 xl:w-40";
     return (
       <motion.div
         key={prizeOption.slug}
@@ -133,10 +252,14 @@ export function PowerToolsetCarousel({
         initial="hidden"
         animate="visible"
         whileHover="hover"
-        className="relative h-24 w-20 shrink-0 overflow-visible sm:h-36 sm:w-28"
+        className={shellClass}
       >
         {brandLogo && (
-          <div className={`absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 z-20 h-4 w-14 sm:h-5 sm:w-16 pointer-events-none ${toolset === "milwaukee" ? "scale-125" : ""}`}>
+            <div
+              className={`absolute -top-2 sm:-top-3 left-1/2 -translate-x-1/2 z-20 h-5 w-16 sm:h-6 sm:w-20 lg:h-7 lg:w-24 pointer-events-none max-sm:-top-1 ${
+                toolset === "milwaukee" ? "max-sm:scale-90 sm:scale-125" : "max-sm:scale-75"
+              }`}
+            >
             <Image
               src={brandLogo}
               alt={toolset ?? ""}
@@ -157,11 +280,13 @@ export function PowerToolsetCarousel({
               alt={prizeOption.label}
               fill
               className="object-contain"
-              sizes="112px"
+              sizes="(max-width: 640px) 120px, (max-width: 1024px) 180px, 220px"
             />
           </div>
           {label && scheme && badgeStyle && (
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] pointer-events-none">
+          <div
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] pointer-events-none"
+          >
             <div
               className="rounded-xl backdrop-blur-md px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-lg"
               style={{
@@ -170,7 +295,7 @@ export function PowerToolsetCarousel({
                 border: badgeStyle.border,
               }}
             >
-              <p className={`font-sans font-extrabold font-bold text-[7px] sm:text-[8px] lg:text-[10px] leading-tight text-center truncate ${scheme.buttonText}`}>
+              <p className={`font-sans font-extrabold font-bold text-[8px] sm:text-[9px] lg:text-[11px] leading-tight text-center line-clamp-2 break-words hyphens-auto ${scheme.buttonText}`}>
                 {label} + $5000 CASH
               </p>
             </div>
@@ -213,123 +338,102 @@ export function PowerToolsetCarousel({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`flex items-center w-full max-w-6xl mx-auto overflow-visible ${
-          activeSlug != null ? "justify-between gap-1 sm:gap-3 md:gap-6" : "justify-center gap-1 sm:gap-2 md:gap-4 flex-wrap"
-        }`}
+        className={
+          activeSlug != null
+            ? "w-full max-w-[100rem] mx-auto overflow-visible"
+            : "flex items-center w-full max-w-[100rem] mx-auto justify-center overflow-visible px-1 sm:px-2"
+        }
         role="group"
         aria-label="Select power toolset"
       >
       {/* When nothing selected (e.g. cash-prize): single row of all toolsets, no center gap */}
       {activeSlug == null ? (
-        <div className="flex items-center justify-center gap-1 sm:gap-2 md:gap-4 flex-wrap pt-6 sm:pt-7">
+        <div
+          className={
+            prizes.length === 4
+              ? // 2×2 on narrow phones; one row from md when four tiles fit; avoids 3+1 from flex-wrap
+                "grid w-full grid-cols-2 place-items-center gap-x-6 gap-y-10 px-2 pt-7 sm:gap-x-10 sm:gap-y-12 sm:pt-9 sm:px-4 md:grid-cols-4 md:gap-x-10 md:gap-y-8 md:pt-8 lg:gap-x-16 xl:gap-x-20"
+              : "flex flex-wrap items-start justify-center gap-5 sm:gap-8 pt-6 sm:pt-7"
+          }
+        >
           {prizes.map((prize, i) => renderSideImage(prize, i, true))}
         </div>
       ) : (
         <>
-          {/* Left - non-focused toolsets */}
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-x-hidden overflow-y-hidden overscroll-none pt-6 sm:gap-2 sm:pt-7 md:gap-3">
-            {leftPrizes.map((prize, i) => renderSideImage(prize, i, true))}
-          </div>
-
-          {/* Center - focused image with ambient glow and brand text */}
-          <div className="relative flex-shrink-0 flex items-center justify-center px-1 sm:px-2">
-            <motion.div
-              className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
-              animate={
-                prefersReducedMotion
-                  ? { opacity: 0.5, scale: 1 }
-                  : {
-                      opacity: [0.4, 0.6, 0.4],
-                      scale: [1, 1.02, 1],
-                    }
-              }
-              transition={
-                prefersReducedMotion
-                  ? {}
-                  : {
-                      duration: 4,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }
-              }
-              style={{
-                background: `radial-gradient(ellipse 80% 70% at 50% 50%, ${glowColor}, transparent 70%)`,
-              }}
-            />
-
-            {activeImgSrc && (
-            <motion.div
-              layout
-              // Modal scroll-lock toggles body overflow → scrollbar width changes → flex reflow.
-              // Without this, `layout` animates on every reflow (e.g. membership modal open/close).
-              layoutDependency={activeSlug ?? ""}
-              className="relative w-[220px] h-[155px] sm:w-[360px] sm:h-[250px] lg:w-[440px] lg:h-[305px]"
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeSlug ?? activeImgSrc}
-                  variants={centerVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  className="relative w-full h-full"
+          {n === 1 && activePrize ? (
+            <div className="flex w-full justify-center overflow-x-hidden overflow-y-hidden pt-4 sm:pt-6 md:pt-8">
+              {renderActiveCenter(
+                "relative z-[1] flex w-full min-w-0 max-w-[min(100%,420px)] items-center justify-center px-2",
+                "relative mx-auto w-full max-w-[min(100%,420px)] sm:mx-0 sm:h-[260px] sm:w-[340px] sm:min-h-0 sm:max-w-none md:h-[280px] md:w-[380px] lg:h-[290px] lg:w-[400px] xl:h-[310px] xl:w-[440px]"
+              )}
+            </div>
+          ) : (
+            <div className="relative w-full overflow-x-hidden overflow-y-hidden pt-4 sm:pt-6 md:pt-8">
+              {/*
+                Single 3-up row: left neighbor | active | right neighbor (circular for n &gt;= 3).
+                Step chevrons only when a 4+ prize is off the strip (n &gt; 3).
+              */}
+              {showStepButtons && prevPrizeSlug && (
+                <button
+                  type="button"
+                  onClick={() => onSelect(prevPrizeSlug)}
+                  className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 p-1.5 text-white shadow-md backdrop-blur-sm transition hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  aria-label="Previous power toolset"
                 >
-                  <motion.div
-                    animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
-                    transition={
-                      prefersReducedMotion
-                        ? {}
-                        : {
-                            y: {
-                              duration: 4,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                            },
-                          }
-                    }
-                    className="relative w-full h-full"
-                  >
-                    <div className="absolute inset-0">
-                      <Image
-                        src={activeImgSrc}
-                        alt={activePrize?.label ?? "Selected power toolset"}
-                        fill
-                        className="object-contain drop-shadow-2xl"
-                        sizes="(max-width: 640px) 220px, (max-width: 1024px) 360px, 440px"
-                        priority
-                      />
-                    </div>
-                    {activeToolset && POWERSET_LABELS[activeToolset] && (() => {
-                      const scheme = getPackageColorScheme(getToolsetColorKey(activeToolset));
-                      const badgeStyle = getToolsetBadgeStyle(activeToolset);
-                      return (
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-10 w-[95%] sm:w-[90%] pointer-events-none">
-                          <div
-                            className="rounded-xl backdrop-blur-md px-2 py-1.5 sm:px-5 sm:py-2.5 shadow-xl"
-                            style={{
-                              background: badgeStyle.background,
-                              boxShadow: badgeStyle.boxShadow,
-                              border: badgeStyle.border,
-                            }}
-                          >
-                            <p className={`font-sans font-extrabold font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>
-                              {POWERSET_LABELS[activeToolset]} + $5000 CASH
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </motion.div>
-                </motion.div>
-              </AnimatePresence>
-            </motion.div>
-            )}
-          </div>
+                  <ChevronLeft className="h-5 w-5" aria-hidden />
+                </button>
+              )}
+              {showStepButtons && nextPrizeSlug && (
+                <button
+                  type="button"
+                  onClick={() => onSelect(nextPrizeSlug)}
+                  className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 p-1.5 text-white shadow-md backdrop-blur-sm transition hover:bg-black/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  aria-label="Next power toolset"
+                >
+                  <ChevronRight className="h-5 w-5" aria-hidden />
+                </button>
+              )}
 
-          {/* Right - non-focused toolsets */}
-          <div className="flex min-w-0 flex-1 items-center justify-start gap-1 overflow-x-hidden overflow-y-hidden overscroll-none pt-6 sm:gap-2 sm:pt-7 md:gap-3">
-            {rightPrizes.map((prize, i) => renderSideImage(prize, i, false))}
-          </div>
+              <div
+                className={`mx-auto flex w-full min-w-0 max-w-6xl items-center justify-center gap-1 pt-0 sm:gap-2 md:gap-4 lg:gap-6 ${showStepButtons ? "sm:px-10" : "px-1 sm:px-2"}`}
+              >
+                <div
+                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-end self-center ${
+                    leftNeighbor ? "overflow-visible" : "justify-end"
+                  } ${SCROLL_NO_BAR}`}
+                >
+                  {leftNeighbor ? (
+                    renderSideImage(leftNeighbor, 0, true, "selectedRail")
+                  ) : (
+                    <div
+                      className="h-32 w-20 min-w-[4.5rem] min-[400px]:w-24 min-[400px]:min-w-[5.5rem] shrink-0 sm:min-w-[6rem] sm:w-24"
+                      aria-hidden
+                    />
+                  )}
+                </div>
+
+                {renderActiveCenter(
+                  "relative z-[1] flex w-full min-w-0 max-w-[min(68vw,17rem)] shrink-0 grow-0 items-center justify-center self-center sm:max-w-[min(100%,400px)]",
+                  "relative mx-auto h-[min(32vw,9.5rem)] min-h-[8.5rem] w-full max-w-[min(68vw,17rem)] sm:mx-0 sm:h-[260px] sm:min-h-0 sm:max-w-[400px] sm:w-[320px] md:h-[280px] md:w-[360px] lg:h-[290px] lg:w-[400px] xl:h-[310px] xl:w-[420px]"
+                )}
+
+                <div
+                  className={`flex min-h-0 min-w-0 flex-1 items-center justify-start self-center ${
+                    rightNeighbor ? "overflow-visible" : "justify-start"
+                  } ${SCROLL_NO_BAR}`}
+                >
+                  {rightNeighbor ? (
+                    renderSideImage(rightNeighbor, 0, false, "selectedRail")
+                  ) : (
+                    <div
+                      className="h-32 w-20 min-w-[4.5rem] min-[400px]:w-24 min-[400px]:min-w-[5.5rem] shrink-0 sm:min-w-[6rem] sm:w-24"
+                      aria-hidden
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </motion.div>

@@ -37,6 +37,7 @@ import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-pe
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
+  shouldClearPauseCollectionAfterPaidInvoice,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
@@ -2651,7 +2652,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       if (paymentIntentId === "unknown" && invoice.id) {
         try {
           const expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
-            expand: ["payment_intent", "latest_payment_intent", "charges.data.payment_intent"],
+            expand: ["payment_intent", "charges.data.payment_intent"],
           });
           const expandedInvoiceTyped = expandedInvoice as Stripe.Invoice & { 
             payment_intent?: string | Stripe.PaymentIntent;
@@ -2701,7 +2702,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
       if (paymentIntentId === "unknown" && subscriptionId) {
         try {
           const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId, {
-            expand: ["latest_invoice.payment_intent", "latest_invoice.latest_payment_intent"],
+            expand: ["latest_invoice.payment_intent"],
           });
           
           const latestInvoice = stripeSubscription.latest_invoice;
@@ -3164,6 +3165,39 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     const paidSubscriptionId = subscription.id;
 
+    // Affiliate eligibility (moved up): needed for processPaymentBenefits and for resuming collection early.
+    const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
+      stripe,
+      expandedInvoice,
+      subscriptionId
+    );
+
+    // Clear pause_collection BEFORE processPaymentBenefits. Benefits processing can be slow; Stripe CLI / proxies
+    // may time out while waiting for the HTTP response, and processPaymentBenefits can still return success: false
+    // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
+    const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
+    const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
+    if (invoiceIsPaid) {
+      const shouldClearPauseForCollection =
+        shouldClearPauseCollectionAfterPaidInvoice({
+          billingReason: expandedInvoice.billing_reason,
+          previousSubscriptionDbStatus: previousSubscriptionDbStatus,
+        }) ||
+        recordMembershipRecurringAffiliate ||
+        subscription.pause_collection != null;
+      if (shouldClearPauseForCollection) {
+        try {
+          await resumeAfterSuccessfulRenewalPayment(subscription.id);
+          webhookLog(
+            "info",
+            `Cleared pause_collection (before processPaymentBenefits) for subscription ${subscription.id} invoice ${expandedInvoice.id}`
+          );
+        } catch (earlyResumeErr) {
+          webhookLog("warn", `Non-critical: could not resume collection before benefits: ${earlyResumeErr}`);
+        }
+      }
+    }
+
     // Auto-correct stripeSubscriptionId when DB points at a different subscription than the one this invoice paid for,
     // and the stored subscription is dead (incomplete / incomplete_expired / canceled) or missing (404).
     // Compare against subscription.id (paid sub), not a local variable seeded only from DB — that made the old check a no-op.
@@ -3520,12 +3554,6 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       (subscription?.metadata ? extractAttributionFromMetadata(subscription.metadata) : undefined) ??
       (expandedInvoice.metadata ? extractAttributionFromMetadata(expandedInvoice.metadata) : undefined);
 
-    const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
-      stripe,
-      expandedInvoice,
-      subscriptionId
-    );
-
     const previousLastMonthAccumulated = user.subscription?.lastMonthAccumulatedEntries ?? 0;
     const lastMonthDeltaForLedger = newLastMonthAccumulatedEntries - previousLastMonthAccumulated;
 
@@ -3590,18 +3618,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
-      // Resume normal recurring invoices after a successful renewal (clears pause from failed renewal)
-      if (recordMembershipRecurringAffiliate) {
-        try {
-          await resumeAfterSuccessfulRenewalPayment(subscription.id);
-          webhookLog("info", `Cleared pause_collection after successful renewal for subscription ${subscription.id}`);
-        } catch (resumeErr) {
-          webhookLog(
-            "warn",
-            `Non-critical: could not resume subscription collection after renewal payment: ${resumeErr}`
-          );
-        }
-      }
+      // pause_collection is cleared before processPaymentBenefits (see above) so collection is not left paused on timeout/benefit errors.
 
       // ✅ Safety net: Sync isActive for subscription_create (covers renew-subscription "payment requires confirmation" flow)
       // When user completes payment for trialing subscription, ensure isActive = true

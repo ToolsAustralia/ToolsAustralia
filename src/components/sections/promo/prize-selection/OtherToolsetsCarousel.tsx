@@ -7,6 +7,7 @@ import useEmblaCarousel from "embla-carousel-react";
 import { GripVertical } from "lucide-react";
 import type { ToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import { POWERSET_IMAGES, POWERSET_LABELS } from "./constants";
+import { buildPromotionsToolsetLandingHref } from "./utils";
 import {
   getPackageColorScheme,
   getToolsetBadgeStyle,
@@ -120,10 +121,7 @@ export function OtherToolsetsCarousel({
         // Ignore storage errors
       }
       onNavigate?.(targetSlug);
-      const affiliateCode = searchParams.get("aff");
-      const href = affiliateCode
-        ? `/promotions/${targetSlug}?aff=${affiliateCode}`
-        : `/promotions/${targetSlug}`;
+      const href = buildPromotionsToolsetLandingHref(targetSlug, searchParams);
       router.push(href, { scroll: true });
     },
     [referrerSlug, onNavigate, router, searchParams]

@@ -7,7 +7,9 @@
 import type { PrizeSlug } from "./prizes";
 import type { LandingHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
 import {
+  resolveLandingHeroImages,
   resolveLandingHeroImagesWithUrgency,
+  resolveEvergreenHeroImages,
   resolveEvergreenHeroImagesWithUrgency,
   landingToolboxSuffixFromPrizeSlug,
 } from "@/utils/promo/landing-image-resolver";
@@ -36,10 +38,10 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, 
  * null = use standard promo hero.
  */
 const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
-  /** Collage hero under `all-prizes/` (desktop/mobile × light/dark). */
+  /** Collage hero under `all-prizes/` (shared light/dark paths per viewport). */
   "cash-prize": resolveEvergreenHeroImages(),
 
-  // Ryobi prizes — Sidchrome TB vs Milwaukee TB assets (`sidTB` / `milTB`)
+  // Ryobi prizes — `sidTB` / `milTB` / `kinTB` resolved via `landingToolboxSuffixFromPrizeSlug`
   "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
   "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
 
@@ -72,7 +74,7 @@ export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, P
  * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
-  const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
+  const [sidchrome, , milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
   if (hasMilwaukeeHero) return milwaukee;

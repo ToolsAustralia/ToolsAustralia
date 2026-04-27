@@ -75,7 +75,7 @@ export function ToolboxSelector({
       {TOOLBOX_OPTIONS.map((type, index) => {
         const isActive = selectedType === type;
         const imgSrc = TOOLBOX_IMAGES[type];
-        const imageScale = TOOLBOX_SIZES[type].imageScale;
+        const imageScale = TOOLBOX_SIZES[type]?.imageScale ?? 1;
 
         return (
           <motion.button

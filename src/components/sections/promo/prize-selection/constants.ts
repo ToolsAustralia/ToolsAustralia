@@ -60,7 +60,10 @@ export const TOOLBOX_UNIFIED_FRAME = {
  */
 export const TOOLBOX_SIZES = {
   milwaukee: {
-    imageScale: 1.8,
+    imageScale: 1.0,
+  },
+  kincrome: {
+    imageScale: 1.15,
   },
   sidchrome: {
     imageScale: 0.75,

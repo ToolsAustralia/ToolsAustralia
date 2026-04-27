@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
+import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
 
 /** Row shape returned from bulk and single-user past-due charge flows */
 export type PastDueChargeResultRow = {
@@ -13,6 +14,8 @@ export type PastDueChargeResultRow = {
   error?: string;
   amount?: number;
   skipReason?: string;
+  /** Set on success when clearing Stripe `pause_collection` failed (payment still succeeded). */
+  resumeCollectionError?: string;
 };
 
 export function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
@@ -195,10 +198,40 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   const amount = invoice.amount_remaining || 0;
 
   try {
-    const paidInvoice = await stripe.invoices.pay(invoiceId, {
+    const paidInvoiceResponse = await stripe.invoices.pay(invoiceId, {
       payment_method: paymentMethodId,
       off_session: true,
     });
+    const paidInvoice = paidInvoiceResponse as Stripe.Invoice;
+
+    const baseResult: Record<string, unknown> = {
+      ...sanitizeStripeResponse(paidInvoice),
+    };
+    let resumeCollectionError: string | undefined;
+
+    if (paidInvoice.status === "paid") {
+      const withSub = paidInvoice as Stripe.Invoice & {
+        subscription?: string | Stripe.Subscription | null;
+      };
+      const subRaw = withSub.subscription;
+      const subscriptionId =
+        typeof subRaw === "string" ? subRaw : subRaw && typeof subRaw === "object" && "id" in subRaw
+          ? (subRaw as Stripe.Subscription).id
+          : undefined;
+      if (subscriptionId) {
+        try {
+          await resumeAfterSuccessfulRenewalPayment(subscriptionId);
+          baseResult.pauseCollectionResumed = true;
+        } catch (resumeErr) {
+          resumeCollectionError = resumeErr instanceof Error ? resumeErr.message : String(resumeErr);
+          baseResult.pauseCollectionResumeError = resumeCollectionError;
+          console.error(
+            `[chargePastDue] Payment succeeded but could not clear pause_collection for subscription ${subscriptionId}:`,
+            resumeErr
+          );
+        }
+      }
+    }
 
     await InvoiceChargeLog.create({
       invoiceId: invoiceId,
@@ -208,7 +241,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       status: "success",
       amount,
       attemptedAt: new Date(),
-      result: sanitizeStripeResponse(paidInvoice),
+      result: baseResult,
       nextPaymentAttempt: paidInvoice.next_payment_attempt
         ? new Date(paidInvoice.next_payment_attempt * 1000)
         : undefined,
@@ -221,6 +254,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       userEmail,
       status: "success",
       amount,
+      ...(resumeCollectionError ? { resumeCollectionError } : {}),
     };
   } catch (error) {
     const stripeError = error as Stripe.errors.StripeError;

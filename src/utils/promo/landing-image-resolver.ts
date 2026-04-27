@@ -1,9 +1,9 @@
 /**
  * Landing Image Resolver
- * 
+ *
  * Config-driven image resolution for promo landing pages.
  * Supports brand-specific images with light/dark mode and mobile/desktop variants.
- * 
+ *
  * @module landing-image-resolver
  */
 
@@ -12,16 +12,21 @@ import type { PromoImagePaths, ExtendedPromoImagePaths, LandingHeroUrgency } fro
 
 const LANDING_IMAGE_BASE = "/images/background/promo/landing";
 
-/** Filename segment: Milwaukee stack toolbox vs Sidchrome toolbox (matches assets under `landing/{brand}/`). */
-export type LandingHeroToolboxSuffix = "milTB" | "sidTB";
+/** Filename segment: Sidchrome, Kincrome, or Milwaukee stack toolbox under `landing/{brand}/`. */
+export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB";
 
 /**
  * Image naming conventions for landing pages:
- * - Desktop light: {brand}-{milTB|sidTB}-no-promo.webp
- * - Desktop dark: {brand}-{milTB|sidTB}-no-promo-dark.webp
- * - Mobile light: {brand}-{milTB|sidTB}-no-promo-mobile.webp
- * - Mobile dark: {brand}-{milTB|sidTB}-no-promo-dark-mobile.webp
- * - Urgency (optional suffix after dark/mobile): -final-hours | -drawn-tomorrow | -drawn-tonight
+ * - Desktop light: {brand}-{milTB|sidTB|kinTB}.webp
+ * - Desktop dark: {brand}-{milTB|sidTB|kinTB}-dark.webp
+ * - Mobile light: {brand}-{milTB|sidTB|kinTB}-mobile.webp
+ * - Mobile dark: {brand}-{milTB|sidTB|kinTB}-dark-mobile.webp
+ * - Urgency (after dark/mobile): -final-hours | -drawn-tomorrow | -drawn-tonight
+ *
+ * Evergreen (all-prizes): no separate dark filenames — dark mode uses the same file as light.
+ *
+ * Kincrome (`kinTB`): dedicated toolbox art for all viewports. Urgency tiers reuse the same base
+ * kinTB assets (no `-final-hours` / `-drawn-*` kinTB files).
  */
 
 /**
@@ -38,11 +43,16 @@ export function resolveLandingHeroImage(
   toolboxSuffix: LandingHeroToolboxSuffix = "milTB",
   urgency: LandingHeroUrgency | null = null
 ): string {
+  /** Kincrome heroes only ship base assets; urgency tiers reuse the same files. */
+  if (toolboxSuffix === "kinTB" && urgency != null) {
+    return resolveLandingHeroImage(brand, mode, viewport, "kinTB", null);
+  }
+
   const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
   const urgencySuffix = urgency ? `-${urgency}` : "";
 
-  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}-no-promo${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
+  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
 }
 
 /**
@@ -76,20 +86,19 @@ export function resolveLandingHeroImagesWithUrgency(
 
 /**
  * Resolve evergreen (all-prizes) hero image
- * @param mode - Theme mode
+ * @param mode - Theme mode (ignored for path; same asset as light)
  * @param viewport - Viewport size
  * @returns Image path
  */
 export function resolveEvergreenHeroImage(
-  mode: "light" | "dark",
+  _mode: "light" | "dark",
   viewport: "desktop" | "mobile",
   urgency: LandingHeroUrgency | null = null
 ): string {
-  const darkSuffix = mode === "dark" ? "-dark" : "";
   const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
   const urgencySuffix = urgency ? `-${urgency}` : "";
 
-  return `${LANDING_IMAGE_BASE}/all-prizes/all-no-promo${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
+  return `${LANDING_IMAGE_BASE}/all-prizes/all-prizes${mobileSuffix}${urgencySuffix}.webp`;
 }
 
 /**
@@ -103,11 +112,13 @@ export function resolveEvergreenHeroImages(): ExtendedPromoImagePaths {
 export function resolveEvergreenHeroImagesWithUrgency(
   urgency: LandingHeroUrgency | null
 ): ExtendedPromoImagePaths {
+  const desktop = resolveEvergreenHeroImage("light", "desktop", urgency);
+  const mobile = resolveEvergreenHeroImage("light", "mobile", urgency);
   return {
-    desktop: resolveEvergreenHeroImage("light", "desktop", urgency),
-    mobile: resolveEvergreenHeroImage("light", "mobile", urgency),
-    desktopDark: resolveEvergreenHeroImage("dark", "desktop", urgency),
-    mobileDark: resolveEvergreenHeroImage("dark", "mobile", urgency),
+    desktop,
+    mobile,
+    desktopDark: desktop,
+    mobileDark: mobile,
   };
 }
 
@@ -155,8 +166,11 @@ export function getFallbackImagePath(): string {
 }
 
 /**
- * Map prize slug to landing asset toolbox segment (`*-sidchrome` → sidTB, else milTB).
+ * Map prize slug to landing asset toolbox segment (`*-sidchrome` → sidTB, `*-kincrome` → kinTB, else milTB).
  */
 export function landingToolboxSuffixFromPrizeSlug(prizeSlug: string): LandingHeroToolboxSuffix {
-  return prizeSlug.toLowerCase().endsWith("-sidchrome") ? "sidTB" : "milTB";
+  const lower = prizeSlug.toLowerCase();
+  if (lower.endsWith("-sidchrome")) return "sidTB";
+  if (lower.endsWith("-kincrome")) return "kinTB";
+  return "milTB";
 }

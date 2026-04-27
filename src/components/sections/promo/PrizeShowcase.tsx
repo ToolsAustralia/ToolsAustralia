@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -34,6 +34,9 @@ import {
   PowerToolsetCarousel,
   StaticToolsetHighlight,
   OtherToolsetsCarousel,
+  TOOLBOX_QUERY_PARAM,
+  parseToolboxQueryParam,
+  buildToolsetLandingHref,
   getToolboxTypeFromSlug,
   filterPrizesByToolboxType,
 } from "./prize-selection";
@@ -495,7 +498,7 @@ export default function PrizeShowcase({
         .filter((p): p is PrizeCatalogEntry => p != null) ?? [])
     : [];
 
-  // Toolset mode: effective slug from toolbox selection (local state, no URL change)
+  // Toolset mode: effective slug from toolbox selection; kept in sync with `?toolbox=` on the landing URL
   const [toolsetEffectiveSlug, setToolsetEffectiveSlug] = useState<string | null>(null);
   // When NOT on promotions page (e.g. home, my-account): local slug, no navigation
   const [localEffectiveSlug, setLocalEffectiveSlug] = useState<string | null>(null);
@@ -525,19 +528,47 @@ export default function PrizeShowcase({
 
   const { prizes, activePrize, activeSlug } = usePrizeCatalog({ slug: effectiveSlugForCatalog ?? undefined });
 
+  const toolboxQueryValue = searchParams.get(TOOLBOX_QUERY_PARAM);
+
+  const syncToolboxQuery = useCallback(
+    (type: "sidchrome" | "milwaukee" | "kincrome" | "cash") => {
+      if (!toolsetMode || !pathname?.startsWith("/promotions/")) return;
+      const href = buildToolsetLandingHref(pathname, searchParams, type);
+      router.replace(href, { scroll: false });
+    },
+    [toolsetMode, pathname, router, searchParams]
+  );
+
   useEffect(() => {
     setMultiplierBannerLoadFailed(false);
   }, [multiplierForFirstBanner, firstBannerVariant, activeSlug, toolsetMode, toolsetSlug]);
 
-  // Toolset mode: init to Milwaukee toolbox (second prize slug) to match default toolset landing
+  // Toolset mode: hydrate from `?toolbox=` (cash | kincrome | milwaukee | sidchrome); invalid/missing → Milwaukee
   useEffect(() => {
-    if (toolsetMode && toolsetPrizeSlugs) {
-      const defaultSlug = toolsetPrizeSlugs[2];
-      setToolsetEffectiveSlug(defaultSlug);
-      setToolboxType("milwaukee");
-      setLastNonCashToolboxType("milwaukee");
+    if (!toolsetMode || !toolsetPrizeSlugs) return;
+
+    const fromUrl = parseToolboxQueryParam(toolboxQueryValue);
+
+    if (fromUrl === "cash") {
+      setToolsetEffectiveSlug("cash-prize");
+      setToolboxType("cash");
+      setStoreSlug("cash-prize");
+      return;
     }
-  }, [toolsetMode, toolsetSlug, toolsetPrizeSlugs]); // Added toolsetPrizeSlugs per lint - init runs when slug list changes
+
+    const nonCash: "sidchrome" | "milwaukee" | "kincrome" = fromUrl ?? "milwaukee";
+    const slug =
+      nonCash === "sidchrome"
+        ? toolsetPrizeSlugs[0]
+        : nonCash === "kincrome"
+          ? toolsetPrizeSlugs[1]
+          : toolsetPrizeSlugs[2];
+
+    setToolsetEffectiveSlug(slug);
+    setToolboxType(nonCash);
+    setLastNonCashToolboxType(nonCash);
+    setStoreSlug(slug);
+  }, [toolsetMode, toolsetPrizeSlugs, toolboxQueryValue, setStoreSlug]);
 
   // Update toolbox type based on current slug when it changes (evergreen mode only)
   useEffect(() => {
@@ -738,6 +769,7 @@ export default function PrizeShowcase({
       if (toolsetMode) {
         setToolsetEffectiveSlug("cash-prize");
         setStoreSlug("cash-prize");
+        syncToolboxQuery("cash");
       } else {
         handleSelectPrize("cash-prize");
       }
@@ -753,6 +785,7 @@ export default function PrizeShowcase({
         type === "sidchrome" ? toolsetPrizeSlugs[0] : type === "kincrome" ? toolsetPrizeSlugs[1] : toolsetPrizeSlugs[2];
       setToolsetEffectiveSlug(newSlug);
       setStoreSlug(newSlug);
+      syncToolboxQuery(type);
     } else {
       // Evergreen: do not navigate; user must click toolset to select
     }
