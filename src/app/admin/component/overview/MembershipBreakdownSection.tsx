@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import DashboardSection from "./DashboardSection";
 import MembershipByPackageDetailModal from "@/components/modals/MembershipByPackageDetailModal";
-import { useMembershipByPackage } from "@/hooks/queries/useAdminQueries";
+import type { MembershipByPackageData } from "@/hooks/queries/useAdminQueries";
+import { format } from "date-fns";
 import { RefreshCw, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
@@ -14,6 +15,8 @@ interface MembershipBreakdownSectionProps {
   collapsible?: boolean;
   onClose: () => void;
   onUserClick: (userId: string) => void;
+  membershipByPackageData: MembershipByPackageData | undefined;
+  membershipByPackageLoading: boolean;
 }
 
 export default function MembershipBreakdownSection({
@@ -21,8 +24,13 @@ export default function MembershipBreakdownSection({
   collapsible = true,
   onClose,
   onUserClick,
+  membershipByPackageData,
+  membershipByPackageLoading,
 }: MembershipBreakdownSectionProps) {
-  const { data: membershipByPackageData, isLoading: membershipByPackageLoading } = useMembershipByPackage();
+  const snapshotLabel =
+    membershipByPackageData?.meta?.membershipAsOfMode === "snapshot" && membershipByPackageData.meta.asOf
+      ? `Status as of ${format(new Date(membershipByPackageData.meta.asOf), "MMM d, yyyy")}`
+      : "Current membership status";
   const [membershipModalPackage, setMembershipModalPackage] = useState<{
     packageId: string;
     packageName: string;
@@ -38,7 +46,9 @@ export default function MembershipBreakdownSection({
         title="Membership Breakdown"
         subtitle={
           membershipByPackageData && !membershipByPackageLoading
-            ? `${(membershipByPackageData.summary?.totalActiveCount ?? 0).toLocaleString()} active · ${(membershipByPackageData.summary?.totalPastDueCount ?? 0).toLocaleString()} past due`
+            ? `${snapshotLabel} · ${(membershipByPackageData.summary?.totalActiveCount ?? 0).toLocaleString()} active · ${(membershipByPackageData.summary?.totalPastDueCount ?? 0).toLocaleString()} past due${
+                membershipByPackageData.summary?.snapshotPartial ? " (partial history)" : ""
+              }`
             : undefined
         }
         collapsible={collapsible}

@@ -8,7 +8,7 @@ import OverviewToolbar from "./OverviewToolbar";
 import KPIMetricsGrid from "./KPIMetricsGrid";
 import RevenueBreakdownSection from "./RevenueBreakdownSection";
 import MembershipBreakdownSection from "./MembershipBreakdownSection";
-import UpcomingRenewalsSection from "./UpcomingRenewalsSection";
+import RenewalsDashboardSection from "./RenewalsDashboardSection";
 import AdvertisingBreakdownSection from "@/app/admin/component/overview/AdvertisingBreakdownSection";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import QuickActionsPanel from "./QuickActionsPanel";
@@ -113,7 +113,11 @@ export default function DashboardOverview() {
   );
 
   // Fetch membership data for the KPI card
-  const { data: membershipByPackageData, isLoading: membershipLoading } = useMembershipByPackage();
+  const { data: membershipByPackageData, isLoading: membershipLoading } = useMembershipByPackage(
+    dateRange,
+    customStartDate ? customStartDate : undefined,
+    customEndDate ? customEndDate : undefined
+  );
 
   // Update URL params when date filter changes
   const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
@@ -269,12 +273,16 @@ export default function DashboardOverview() {
             collapsible={!isLgUp}
             onClose={() => setIsMembershipByPackageExpanded(false)}
             onUserClick={openUserModal}
+            membershipByPackageData={membershipByPackageData}
+            membershipByPackageLoading={membershipLoading}
           />
         }
         upcomingRenewalsSection={
-          <UpcomingRenewalsSection
+          <RenewalsDashboardSection
             isExpanded={isUpcomingRenewalsExpanded}
             onToggleExpand={() => setIsUpcomingRenewalsExpanded(!isUpcomingRenewalsExpanded)}
+            membershipRenewals={dashboardStats?.users.membershipRenewals}
+            statsLoading={statsLoading}
           />
         }
         advertisingBreakdownSection={

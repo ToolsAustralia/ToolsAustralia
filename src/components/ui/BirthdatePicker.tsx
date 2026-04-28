@@ -7,13 +7,10 @@ import {
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  isSameDay,
   isBefore,
   isAfter,
   startOfDay,
   subYears,
-  setMonth,
-  setYear,
   getYear,
   getMonth,
   getDate,
@@ -25,6 +22,22 @@ const MONTHS = [
 ];
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Days in month (month is 0–11); avoids Feb 29 rolling to March when changing year JS-style. */
+function daysInCalendarMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function clampDayToMonth(year: number, month: number, preferred: number): number {
+  const max = daysInCalendarMonth(year, month);
+  return Math.max(1, Math.min(preferred, max));
+}
+
+/** Neutral default calendar view when no date picked yet — ~25yo, first of month (valid in every month). */
+function defaultViewDateWithoutValue(): Date {
+  const anchor = subYears(new Date(), 25);
+  return new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+}
 
 export interface BirthdatePickerProps {
   value: string; // YYYY-MM-DD
@@ -46,7 +59,7 @@ const DEFAULT_MAX = new Date();
 const DEFAULT_MIN = subYears(new Date(), 120);
 
 /**
- * Birthdate-only picker: month and year dropdowns + calendar grid.
+ * Birthdate-only picker: month & year dropdowns + calendar grid for the day.
  * No time selection. Optimized for date-of-birth with easy year/month selection.
  */
 export default function BirthdatePicker({
@@ -65,12 +78,15 @@ export default function BirthdatePicker({
 }: BirthdatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<"month" | "year" | null>(null);
+  /** Day-of-month for grid highlight / clamping — preserved when changing month/year (does not disappear on year alone). */
+  const [highlightDayOfMonth, setHighlightDayOfMonth] = useState<number | null>(null);
+
   const [viewDate, setViewDate] = useState<Date>(() => {
     if (value) {
-      const d = new Date(value);
-      return isNaN(d.getTime()) ? new Date() : d;
+      const d = new Date(value + "T12:00:00");
+      return isNaN(d.getTime()) ? defaultViewDateWithoutValue() : d;
     }
-    return new Date();
+    return defaultViewDateWithoutValue();
   });
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -79,13 +95,22 @@ export default function BirthdatePicker({
     return isNaN(d.getTime()) ? null : d;
   })() : null;
 
+  const hasCommittedValue = Boolean(value && selectedDate);
+
   const currentYear = getYear(new Date());
   const years = Array.from({ length: currentYear - getYear(minDate) + 1 }, (_, i) => currentYear - i);
 
   useEffect(() => {
-    if (!value) return;
+    if (!value?.trim()) {
+      setHighlightDayOfMonth(null);
+      setViewDate(defaultViewDateWithoutValue());
+      return;
+    }
     const d = new Date(value + "T12:00:00");
-    if (!isNaN(d.getTime())) setViewDate(d);
+    if (!isNaN(d.getTime())) {
+      setViewDate(d);
+      setHighlightDayOfMonth(getDate(d));
+    }
   }, [value]);
 
   useEffect(() => {
@@ -110,12 +135,51 @@ export default function BirthdatePicker({
   const leadingBlanks = Array(firstDayOfWeek).fill(null);
   const gridDays = [...leadingBlanks, ...daysInMonth.map((d) => getDate(d))];
 
+  /** Prefer sticky dom: explicit highlight, then saved value, then current cell in view */
+  function preferredDomForClamp(): number {
+    if (highlightDayOfMonth != null) return highlightDayOfMonth;
+    if (selectedDate) return getDate(selectedDate);
+    return getDate(viewDate);
+  }
+
+  function isDomInRange(y: number, m: number, dom: number): boolean {
+    const dStart = startOfDay(new Date(y, m, dom));
+    if (minDate && isBefore(dStart, startOfDay(minDate))) return false;
+    if (maxDate && isAfter(dStart, startOfDay(maxDate))) return false;
+    return true;
+  }
+
+  const commitIfInRange = (y: number, m: number, dom: number) => {
+    if (!isDomInRange(y, m, dom)) return false;
+    onChange(format(new Date(y, m, dom), "yyyy-MM-dd"));
+    return true;
+  };
+
   const handleMonthChange = (monthIndex: number) => {
-    setViewDate((prev) => setMonth(prev, monthIndex));
+    const y = getYear(viewDate);
+    const dom = clampDayToMonth(y, monthIndex, preferredDomForClamp());
+    const next = new Date(y, monthIndex, dom);
+    setOpenDropdown(null);
+
+    // Editing existing DOB — do not navigate if the clamped date would be out of bounds (stay on current saving).
+    if (hasCommittedValue && !isDomInRange(y, monthIndex, dom)) return;
+
+    setViewDate(next);
+    setHighlightDayOfMonth(dom);
+    if (hasCommittedValue) commitIfInRange(y, monthIndex, dom);
   };
 
   const handleYearChange = (y: number) => {
-    setViewDate((prev) => setYear(prev, y));
+    const m = getMonth(viewDate);
+    const dom = clampDayToMonth(y, m, preferredDomForClamp());
+    const next = new Date(y, m, dom);
+    setOpenDropdown(null);
+
+    if (hasCommittedValue && !isDomInRange(y, m, dom)) return;
+
+    setViewDate(next);
+    setHighlightDayOfMonth(dom);
+    if (hasCommittedValue) commitIfInRange(y, m, dom);
   };
 
   const handleDaySelect = (day: number) => {
@@ -123,6 +187,7 @@ export default function BirthdatePicker({
     const dStart = startOfDay(d);
     if (minDate && isBefore(dStart, startOfDay(minDate))) return;
     if (maxDate && isAfter(dStart, startOfDay(maxDate))) return;
+    setHighlightDayOfMonth(day);
     onChange(format(d, "yyyy-MM-dd"));
     setIsOpen(false);
   };
@@ -174,7 +239,7 @@ export default function BirthdatePicker({
           aria-label="Choose date of birth"
           className="absolute left-0 right-0 z-50 mt-1 w-full min-w-0 rounded-xl border border-gray-200 bg-[#ffffff] py-4 px-3 shadow-xl dark:border-neutral-600 dark:bg-[#171717] lg:px-2.5 lg:py-3"
         >
-          {/* Month & Year – custom dropdowns matching site theme (red accent, no default select look) */}
+          {/* Month & year — pick the day from the calendar below */}
           <div className="grid grid-cols-2 gap-3 mb-4 lg:gap-2 lg:mb-3">
             <div className="space-y-1 lg:space-y-0.5">
               <span className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 lg:text-[10px]">
@@ -211,7 +276,6 @@ export default function BirthdatePicker({
                         aria-selected={getMonth(viewDate) === i}
                         onClick={() => {
                           handleMonthChange(i);
-                          setOpenDropdown(null);
                         }}
                         className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors duration-150 lg:px-2 lg:py-1.5 lg:text-xs ${
                           getMonth(viewDate) === i
@@ -262,7 +326,6 @@ export default function BirthdatePicker({
                         aria-selected={getYear(viewDate) === y}
                         onClick={() => {
                           handleYearChange(y);
-                          setOpenDropdown(null);
                         }}
                         className={`flex w-full items-center justify-between px-3 py-2 text-left transition-colors duration-150 lg:px-2 lg:py-1.5 lg:text-xs ${
                           getYear(viewDate) === y
@@ -280,7 +343,7 @@ export default function BirthdatePicker({
             </div>
           </div>
 
-          {/* Day headers – smaller on lg */}
+          {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-1 mb-2 lg:gap-0.5 lg:mb-1">
             {DAY_NAMES.map((day) => (
               <div
@@ -303,7 +366,10 @@ export default function BirthdatePicker({
               const disabled =
                 (minDate && isBefore(dStart, startOfDay(minDate))) ||
                 (maxDate && isAfter(dStart, startOfDay(maxDate)));
-              const selected = selectedDate && isSameDay(dStart, selectedDate);
+              const selected =
+                !disabled &&
+                highlightDayOfMonth !== null &&
+                day === highlightDayOfMonth;
 
               return (
                 <button

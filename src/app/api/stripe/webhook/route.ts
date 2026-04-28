@@ -50,6 +50,11 @@ import {
   isFullRefundByAmounts,
   sumSucceededRefundAmountCents,
 } from "@/utils/payment/stripe-refund-amount";
+import {
+  appendMembershipStatusHistory,
+  upsertRenewalCycleFromFailedInvoice,
+  upsertRenewalCycleFromPaidInvoice,
+} from "@/services/admin/membershipAnalyticsPersistence";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -2414,7 +2419,8 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     const billingReason = invoice.billing_reason;
     const isInitialPayment = billingReason === "subscription_create";
     const isRenewal = billingReason === "subscription_cycle";
-    
+    const prevSubStatus = user.subscription?.status;
+
     webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
     if (subscriptionId) {
@@ -2577,6 +2583,43 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     }
 
     await user.save();
+
+    if (invoice.id && subscriptionId && isRenewal) {
+      try {
+        await upsertRenewalCycleFromFailedInvoice({
+          invoice,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          stripeSubscriptionId: subscriptionId,
+        });
+      } catch (cycleErr) {
+        webhookLog("warn", `Membership renewal cycle persist failed (non-blocking): ${cycleErr}`);
+      }
+    }
+
+    if (
+      invoice.id &&
+      user.subscription?.status === "past_due" &&
+      prevSubStatus !== "past_due"
+    ) {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendMembershipStatusHistory({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(),
+          membershipStatus: "past_due",
+          actor: "stripe",
+          source: "webhook_invoice_payment_failed",
+          dedupeKey: `pastdue_inv_${invoice.id}`,
+          subscriptionPackageId: pkgId,
+          autoRenew: user.subscription?.autoRenew,
+          endDate: user.subscription?.endDate ?? undefined,
+          pastDueAt: user.subscription?.pastDueAt ?? new Date(),
+          metadata: { invoiceId: invoice.id, billingReason: billingReason ?? null },
+        });
+      } catch (histErr) {
+        webhookLog("warn", `Membership status history persist failed (non-blocking): ${histErr}`);
+      }
+    }
 
     // ✅ Verify save for payment failures
     if (subscriptionId && user.subscription) {
@@ -3119,6 +3162,18 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     if (!subscriptionId) {
       webhookLog("warn", `No subscription ID found for user: ${user.email}`);
       return;
+    }
+
+    if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
+      try {
+        await upsertRenewalCycleFromPaidInvoice({
+          invoice: expandedInvoice,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          stripeSubscriptionId: subscriptionId,
+        });
+      } catch (cycleErr) {
+        webhookLog("warn", `Membership renewal cycle (paid) persist failed (non-blocking): ${cycleErr}`);
+      }
     }
 
     if (invoiceSubscriptionId && invoiceSubscriptionId !== user.stripeSubscriptionId) {

@@ -2,30 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
-import { getPackageById } from "@/data/membershipPackages";
-import { ACTIVE_SUBSCRIPTION_STATUSES, getActiveSubscriptionFilter } from "@/utils/admin/userFilterBuilder";
-
-const SUBSCRIPTION_PACKAGE_IDS = [
-  "tradie-subscription",
-  "foreman-subscription",
-  "boss-subscription",
-] as const;
+import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
+import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
 
 /**
  * GET /api/admin/dashboard/membership-by-package
- * Get membership counts per subscription package (active, cancelled, past_due) and revenue
+ * Live counts for today/all-time; snapshot at end of selected period for yesterday/custom/draws.
  *
- * Counts are mutually exclusive:
- * - Active: will renew (status active or trialing, autoRenew not false)
- * - Cancelled: scheduled to cancel (status active or trialing, autoRenew false, has endDate) — excludes past_due
- * - Past due: payment failed (status past_due), regardless of autoRenew
- *
- * Returns:
- * - packages: [{ packageId, packageName, activeCount, cancelledCount, pastDueCount, activeRevenue, pastDueRevenue }]
- * - summary: { totalActiveCount, totalPastDueCount, totalActiveRevenue, totalPastDueRevenue }
+ * Query params match admin dashboard stats (dateRange, startDate, endDate).
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
@@ -34,89 +20,31 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const baseMatch = {
-      "subscription.packageId": { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
-      isActive: true,
-    };
-
-    const [activeResults, cancelledResults, pastDueResults] = await Promise.all([
-      // Active = will renew (status active or trialing, autoRenew not false)
-      User.aggregate([
-        { $match: { ...baseMatch, ...getActiveSubscriptionFilter(false) } },
-        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
-      ]),
-      // Cancelled = scheduled to cancel (active/trialing; past_due users go in past_due bucket)
-      User.aggregate([
-        {
-          $match: {
-            ...baseMatch,
-            "subscription.status": { $in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
-            "subscription.autoRenew": false,
-            "subscription.endDate": { $exists: true, $ne: null },
-          },
-        },
-        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
-      ]),
-      // Past due = payment failed (all past_due regardless of autoRenew)
-      User.aggregate([
-        {
-          $match: {
-            ...baseMatch,
-            "subscription.status": "past_due",
-            "subscription.packageId": { $exists: true, $nin: [null, ""] },
-          },
-        },
-        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
-      ]),
-    ]);
-
-    const activeByPackage = Object.fromEntries(
-      activeResults.map((r) => [r._id, r.count])
-    );
-    const cancelledByPackage = Object.fromEntries(
-      cancelledResults.map((r) => [r._id, r.count])
-    );
-    const pastDueByPackage = Object.fromEntries(
-      pastDueResults.map((r) => [r._id, r.count])
-    );
-
-    let totalActiveCount = 0;
-    let totalPastDueCount = 0;
-    let totalActiveRevenue = 0;
-    let totalPastDueRevenue = 0;
-
-    const packages = SUBSCRIPTION_PACKAGE_IDS.map((packageId) => {
-      const pkg = getPackageById(packageId);
-      const price = pkg?.price ?? 0;
-      const activeCount = activeByPackage[packageId] ?? 0;
-      const pastDueCount = pastDueByPackage[packageId] ?? 0;
-      const activeRevenue = Math.round(activeCount * price * 100) / 100;
-      const pastDueRevenue = Math.round(pastDueCount * price * 100) / 100;
-      totalActiveCount += activeCount;
-      totalPastDueCount += pastDueCount;
-      totalActiveRevenue += activeRevenue;
-      totalPastDueRevenue += pastDueRevenue;
-      return {
-        packageId,
-        packageName: pkg?.name ?? packageId,
-        activeCount,
-        cancelledCount: cancelledByPackage[packageId] ?? 0,
-        pastDueCount,
-        activeRevenue,
-        pastDueRevenue,
-      };
+    const searchParams = request.nextUrl.searchParams;
+    const parsed = parseAdminDashboardDateRange({
+      dateRange: searchParams.get("dateRange"),
+      startDateParam: searchParams.get("startDate"),
+      endDateParam: searchParams.get("endDate"),
     });
+
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+
+    const { membershipAsOfMode, asOfDate } = parsed.value;
+    const service = new MembershipAnalyticsService();
+
+    const data =
+      membershipAsOfMode === "snapshot" && asOfDate
+        ? await service.getMembershipByPackageSnapshot(asOfDate)
+        : await service.getMembershipByPackageLive();
 
     return NextResponse.json({
       success: true,
-      data: {
-        packages,
-        summary: {
-          totalActiveCount,
-          totalPastDueCount,
-          totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
-          totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
-        },
+      data,
+      meta: {
+        membershipAsOfMode,
+        asOf: asOfDate?.toISOString() ?? null,
       },
     });
   } catch (error) {

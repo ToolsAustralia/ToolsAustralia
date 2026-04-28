@@ -1,54 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
-import DashboardSection from "./DashboardSection";
+import React from "react";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
-import { useUpcomingRenewals } from "@/hooks/queries/useAdminQueries";
-import type { UpcomingRenewalsRange } from "@/hooks/queries/useAdminQueries";
+import type { UpcomingRenewalsData, UpcomingRenewalsRange } from "@/hooks/queries/useAdminQueries";
 import { RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
-interface UpcomingRenewalsSectionProps {
-  isExpanded: boolean;
-  onToggleExpand: () => void;
+export interface UpcomingRenewalsSchedulePanelProps {
+  upcomingRenewalsRange: UpcomingRenewalsRange;
+  onRangeChange: (days: UpcomingRenewalsRange) => void;
+  upcomingRenewalsPage: number;
+  onPageChange: (page: number) => void;
+  upcomingRenewalsData: UpcomingRenewalsData | undefined;
+  upcomingRenewalsLoading: boolean;
+  pageSize: number;
 }
 
-const UPCOMING_RENEWALS_PAGE_SIZE = 15;
-
-export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: UpcomingRenewalsSectionProps) {
-  const [upcomingRenewalsRange, setUpcomingRenewalsRange] = useState<UpcomingRenewalsRange>(0);
-  const [upcomingRenewalsPage, setUpcomingRenewalsPage] = useState(1);
-
-  // Always fetch on mount (collapsed header still shows subtitle); expand only toggles body visibility
-  const { data: upcomingRenewalsData, isLoading: upcomingRenewalsLoading } = useUpcomingRenewals(
-    upcomingRenewalsRange,
-    upcomingRenewalsPage,
-    UPCOMING_RENEWALS_PAGE_SIZE
-  );
-
+export default function UpcomingRenewalsSchedulePanel({
+  upcomingRenewalsRange,
+  onRangeChange,
+  upcomingRenewalsPage,
+  onPageChange,
+  upcomingRenewalsData,
+  upcomingRenewalsLoading,
+  pageSize,
+}: UpcomingRenewalsSchedulePanelProps) {
   return (
-    <DashboardSection
-      title="Upcoming Renewals"
-      subtitle={
-        upcomingRenewalsData && !upcomingRenewalsLoading
-          ? `${upcomingRenewalsData.total} renewals · $${(upcomingRenewalsData.totalRevenue ?? 0).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} expected`
-          : undefined
-      }
-      collapsible={true}
-      isExpanded={isExpanded}
-      onToggleExpand={onToggleExpand}
-      noPadding={false}
-      className="shadow-md"
-    >
-      {/* Range filter — compact */}
+    <>
       <div className="flex flex-wrap gap-1 mb-2 sm:mb-3">
         {([0, 3, 7, 27] as const).map((days) => (
           <button
             key={days}
             type="button"
-            onClick={() => {
-              setUpcomingRenewalsRange(days);
-              setUpcomingRenewalsPage(1);
-            }}
+            onClick={() => onRangeChange(days)}
             className={`px-2 py-1 rounded-md text-[10px] sm:text-xs font-semibold transition-all ${
               upcomingRenewalsRange === days
                 ? "bg-emerald-600 text-white shadow-sm"
@@ -73,11 +56,10 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
             <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 py-2">No renewals in this window.</p>
           ) : (
             <>
-              {upcomingRenewalsData.total > UPCOMING_RENEWALS_PAGE_SIZE && (
+              {upcomingRenewalsData.total > pageSize && (
                 <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mb-1">
-                  {(upcomingRenewalsPage - 1) * UPCOMING_RENEWALS_PAGE_SIZE + 1}–
-                  {Math.min(upcomingRenewalsPage * UPCOMING_RENEWALS_PAGE_SIZE, upcomingRenewalsData.total)} of{" "}
-                  {upcomingRenewalsData.total}
+                  {(upcomingRenewalsPage - 1) * pageSize + 1}–
+                  {Math.min(upcomingRenewalsPage * pageSize, upcomingRenewalsData.total)} of {upcomingRenewalsData.total}
                 </p>
               )}
 
@@ -121,9 +103,9 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
                 </table>
               </div>
 
-              {upcomingRenewalsData.total > UPCOMING_RENEWALS_PAGE_SIZE &&
+              {upcomingRenewalsData.total > pageSize &&
                 (() => {
-                  const totalPages = Math.ceil(upcomingRenewalsData.total / UPCOMING_RENEWALS_PAGE_SIZE);
+                  const totalPages = Math.ceil(upcomingRenewalsData.total / pageSize);
                   const hasPrevPage = upcomingRenewalsPage > 1;
                   const hasNextPage = upcomingRenewalsPage < totalPages;
                   return (
@@ -131,7 +113,7 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
                       <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => setUpcomingRenewalsPage(1)}
+                          onClick={() => onPageChange(1)}
                           disabled={!hasPrevPage}
                           className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                           aria-label="First page"
@@ -140,7 +122,7 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
                         </button>
                         <button
                           type="button"
-                          onClick={() => setUpcomingRenewalsPage((p) => Math.max(1, p - 1))}
+                          onClick={() => onPageChange(Math.max(1, upcomingRenewalsPage - 1))}
                           disabled={!hasPrevPage}
                           className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                           aria-label="Previous page"
@@ -154,7 +136,7 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
                       <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => setUpcomingRenewalsPage((p) => Math.min(totalPages, p + 1))}
+                          onClick={() => onPageChange(Math.min(totalPages, upcomingRenewalsPage + 1))}
                           disabled={!hasNextPage}
                           className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                           aria-label="Next page"
@@ -163,7 +145,7 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
                         </button>
                         <button
                           type="button"
-                          onClick={() => setUpcomingRenewalsPage(totalPages)}
+                          onClick={() => onPageChange(totalPages)}
                           disabled={!hasNextPage}
                           className="p-1.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                           aria-label="Last page"
@@ -178,6 +160,6 @@ export default function UpcomingRenewalsSection({ isExpanded, onToggleExpand }: 
           )}
         </>
       )}
-    </DashboardSection>
+    </>
   );
 }
