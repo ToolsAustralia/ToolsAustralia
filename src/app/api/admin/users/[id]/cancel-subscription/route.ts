@@ -57,6 +57,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const result = await cancelSubscription(user, {
       cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
+      analytics: {
+        actor: "admin",
+        adminUserId: session.user.id,
+      },
     });
 
     const message = result.cancelledImmediately

@@ -26,9 +26,14 @@ interface DashboardStats {
     totalTrend?: TrendData;
     newInRange: number;
     newInRangeTrend?: TrendData;
+    cancelledMemberships?: number;
+    cancelledMembershipsTrend?: TrendData;
     dropOffRate: number;
     dropOffRateTrend?: TrendData;
     periodChurnRate?: number;
+    cancellationImpact?: {
+      estimatedMonthlyRevenue: number;
+    };
   };
   conversionRate: number;
   conversionRateTrend?: TrendData;
@@ -323,7 +328,9 @@ export default function KPIMetricsGrid({
             onClick={onUsersPerformanceExpandToggle}
             className="lg:hidden text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1 shrink-0"
             aria-label={
-              isUsersPerformanceExpanded ? "Hide total users and drop-off rate" : "Show total users and drop-off rate"
+              isUsersPerformanceExpanded
+                ? "Hide total users and cancellations"
+                : "Show total users and cancellations"
             }
           >
             {isUsersPerformanceExpanded ? (
@@ -385,21 +392,31 @@ export default function KPIMetricsGrid({
             loading={loading}
           />
 
-          {/* Drop-off Rate — hidden on small screens when Users & Performance row is collapsed */}
+          {/* Cancellations — hidden on small screens when Users & Performance row is collapsed */}
           <div className={`${!isUsersPerformanceExpanded ? "hidden lg:block" : ""}`}>
             <MetricCard
-              title="Drop-off Rate"
-              value={loading ? "..." : `${(dashboardStats?.users.dropOffRate ?? 0).toFixed(1)}%`}
+              title="Cancellations"
+              value={
+                loading
+                  ? "..."
+                  : (dashboardStats?.users.cancelledMemberships ?? 0).toLocaleString()
+              }
               icon={UserX}
               subtitle={
-                dashboardStats?.users.periodChurnRate != null
-                  ? `${dashboardStats.users.periodChurnRate.toFixed(2)}% churned ${
-                      dateRange === "today" ? "today" : dateRange === "yesterday" ? "yesterday" : "in period"
-                    }`
-                  : "Of members scheduled to cancel"
+                <span className="text-[10px] sm:text-[11px] leading-tight text-gray-500">
+                  Est. membership revenue at risk:{" "}
+                  <span className="font-semibold text-gray-700 dark:text-neutral-300">
+                    $
+                    {(dashboardStats?.users.cancellationImpact?.estimatedMonthlyRevenue ?? 0).toLocaleString("en-AU", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  {dateRange === "all-time" ? " (scheduled cancels)" : ""}
+                </span>
               }
               color="red"
-              trend={getTrendForDisplay(dashboardStats?.users.dropOffRateTrend, true)}
+              trend={getTrendForDisplay(dashboardStats?.users.cancelledMembershipsTrend, true)}
               loading={loading}
             />
           </div>

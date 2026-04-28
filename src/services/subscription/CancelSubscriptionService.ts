@@ -16,9 +16,15 @@ import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-pr
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import type { IUser } from "@/models/User";
+import { recordCancellationAnalytics } from "@/services/admin/membershipAnalyticsPersistence";
 
 export interface CancelSubscriptionOptions {
   cancelAtPeriodEnd?: boolean;
+  /** Optional analytics metadata for membership dashboard history */
+  analytics?: {
+    actor: "user" | "admin";
+    adminUserId?: string;
+  };
 }
 
 export interface CancelSubscriptionResult {
@@ -50,7 +56,7 @@ export async function cancelSubscription(
   user: IUser,
   options: CancelSubscriptionOptions = {}
 ): Promise<CancelSubscriptionResult> {
-  const { cancelAtPeriodEnd = true } = options;
+  const { cancelAtPeriodEnd = true, analytics } = options;
 
   const subscriptionId = user.stripeSubscriptionId;
   if (!subscriptionId) {
@@ -139,6 +145,24 @@ export async function cancelSubscription(
 
   const responseEndDate =
     cancelAtPeriodEnd && stripeEndDate ? stripeEndDate : user.subscription?.endDate ?? null;
+
+  try {
+    await recordCancellationAnalytics(
+      user as IUser,
+      {
+        cancelledImmediately: shouldCancelImmediately,
+        subscriptionId: canceledSubscription.id,
+        status: canceledSubscription.status,
+        cancelAtPeriodEnd: canceledSubscription.cancel_at_period_end,
+        currentPeriodEnd: responseEndDate ? responseEndDate.toISOString() : null,
+        endDate: user.subscription?.endDate ? user.subscription.endDate.toISOString() : null,
+        isPastDue,
+      },
+      analytics
+    );
+  } catch (analyticsErr) {
+    console.error("⚠️ [CANCEL SUBSCRIPTION] Membership analytics history failed (non-blocking):", analyticsErr);
+  }
 
   return {
     cancelledImmediately: shouldCancelImmediately,

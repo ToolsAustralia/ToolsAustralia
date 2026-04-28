@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
 
     const result = await cancelSubscription(user, {
       cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
+      analytics: { actor: "user" },
     });
 
     const message = result.cancelledImmediately
