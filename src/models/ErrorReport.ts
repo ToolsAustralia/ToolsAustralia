@@ -189,6 +189,18 @@ const ErrorReportSchema = new Schema<IErrorReportDocument>(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+    archivedAt: {
+      type: Date,
+    },
+    archivedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    archiveReason: {
+      type: String,
+      trim: true,
+      maxlength: [500, "Archive reason cannot be more than 500 characters"],
+    },
 
     // Deduplication
     deduplicationHash: {
@@ -220,6 +232,7 @@ ErrorReportSchema.index({ category: 1, createdAt: -1 });
 ErrorReportSchema.index({ severity: 1, createdAt: -1 });
 ErrorReportSchema.index({ autoLogged: 1, createdAt: -1 });
 ErrorReportSchema.index({ category: 1, severity: 1, createdAt: -1 });
+ErrorReportSchema.index({ archivedAt: 1, createdAt: -1 });
 
 // Index for API endpoint queries (useful for debugging specific endpoints)
 ErrorReportSchema.index({ apiEndpoint: 1, createdAt: -1 });
