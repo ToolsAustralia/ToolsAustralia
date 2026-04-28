@@ -17,7 +17,7 @@ Creating any new file under `scripts/*.ts` (or `scripts/*.mjs`) intended to muta
    import path from "path";
    config({ path: path.resolve(process.cwd(), ".env.local") });
    ```
-4. Parse a `--dry-run` flag from `process.argv` and default to **dry-run = false off, but always provide a `:dry` npm variant** that passes `--dry-run`.
+4. Parse a `--dry-run` flag from `process.argv`. Default to **dry-run off** (so the live npm script mutates), and **always** provide a sibling `:dry` npm variant that passes `--dry-run`.
 5. Use `connectDB()` from `src/lib/mongodb.ts` — never open ad-hoc connections.
 6. If the script calls Stripe in a loop, add `DELAY_BETWEEN_UPDATES_MS` and 429 retry-with-`Retry-After` (copy `getRetryAfterMs` from `migrate-anchor-billing-24.ts`).
 7. Add **two** entries to `package.json` scripts: `<verb>:<topic>` and `<verb>:<topic>:dry`.

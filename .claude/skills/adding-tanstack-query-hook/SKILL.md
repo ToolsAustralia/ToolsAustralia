@@ -22,7 +22,7 @@ Adding a new client-side data hook in `src/hooks/queries/`, or adding a new quer
 - `apiGet`/`apiPost` etc. handle session caching and 401 sign-out automatically (`src/lib/queries.ts`). Do not reimplement.
 - Prefer `useQuery` for reads, `useMutation` for writes. SWR is also in the repo (`swr` dep) but new code should use TanStack Query unless the surrounding file is already SWR.
 - Hooks live in `src/hooks/queries/` (data) — UI-state hooks live directly in `src/hooks/`. Don't mix.
-- Manifest path `src/hooks/queries/**` is **not** explicitly listed in any domain — its parent `src/hooks/` lives under multiple domains depending on the hook name. Update the docs folder for the domain whose data the hook serves (e.g. add `useFooQueries.ts` for the `subscription` domain → update `docs/subscription/`).
+- The whole `src/hooks/queries/**` tree is owned by the `client-state` domain in the Domain Manifest, so a new file there will pass the doc-sync hook against `docs/client-state/`. **Also** update the domain whose data the hook serves (e.g. for `useSubscriptionQueries.ts` update `docs/subscription/api.md` or `docs/subscription/frontend.md` so the consuming domain's doc references the hook).
 
 ## Verification
 ```bash
