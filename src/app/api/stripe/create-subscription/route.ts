@@ -18,7 +18,12 @@ import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subsc
 // Klaviyo integration handled by webhook for best practices
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
-import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import {
+  checkCanCreateSubscription,
+  EXISTING_SUBSCRIPTION_CODE,
+  EXISTING_SUBSCRIPTION_MESSAGE,
+} from "@/utils/payment/subscription-creation-guard";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
@@ -130,6 +135,13 @@ export async function POST(request: NextRequest) {
             const requestEmail = validatedData.userEmail.toLowerCase();
             if (custEmail === requestEmail) {
               await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+              if (existingUser?.subscription?.pendingStripeSubscriptionId === validatedData.cancelPreviousSubscriptionId) {
+                existingUser.subscription.pendingStripeSubscriptionId = undefined;
+                existingUser.subscription.pendingStripeSubscriptionRequestId = undefined;
+                existingUser.subscription.pendingStripeSubscriptionCreatedAt = undefined;
+                existingUser.markModified("subscription");
+                await existingUser.save();
+              }
               if (correlationId) {
                 console.log("[create-subscription] cancelled previous incomplete subscription (plan switch)", {
                   correlationId,
@@ -485,6 +497,19 @@ export async function POST(request: NextRequest) {
       throw new Error("Anchor billing requires charge_automatically");
     }
 
+    const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(customer.id);
+    if (hasLiveStripeSubscription) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: EXISTING_SUBSCRIPTION_MESSAGE,
+          code: EXISTING_SUBSCRIPTION_CODE,
+          ...(correlationId && { correlationId }),
+        },
+        { status: 409 }
+      );
+    }
+
     let subscription;
     try {
       subscription = await stripe.subscriptions.create(
@@ -563,22 +588,29 @@ export async function POST(request: NextRequest) {
       //   `🔄 Updating existing user with Stripe customer ID: ${customer.id} and subscription ID: ${subscription.id}`
       // );
 
-      // Update existing user with Stripe customer ID and subscription ID (NO payment method saved yet)
+      // Update existing user with Stripe customer ID; canonical subscription ID only when manageable (not incomplete)
+      const registeredUserSet: Record<string, unknown> = {
+        stripeCustomerId: customer.id,
+        subscription: {
+          packageId: String(membershipPackage._id), // Force string conversion
+          startDate: new Date(),
+          endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
+          isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
+          autoRenew: true,
+          status: subscription.status, // Track subscription status
+          pendingStripeSubscriptionId: subscription.id,
+          pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+          pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
+        },
+      };
+      if (shouldWriteCanonicalStripeSubscriptionId(subscription.status)) {
+        registeredUserSet.stripeSubscriptionId = subscription.id;
+      }
+
       user = await User.findByIdAndUpdate(
         registeredUser._id,
         {
-          $set: {
-            stripeCustomerId: customer.id,
-            stripeSubscriptionId: subscription.id,
-            subscription: {
-              packageId: String(membershipPackage._id), // Force string conversion
-              startDate: new Date(),
-              endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
-              isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
-              autoRenew: true,
-              status: subscription.status, // Track subscription status
-            },
-          },
+          $set: registeredUserSet,
           // ✅ REMOVED: $push: { savedPaymentMethods: savedPaymentMethodData }
           // Payment method will be saved by webhook after payment succeeds
         },
@@ -618,7 +650,9 @@ export async function POST(request: NextRequest) {
         mobile: cleanedMobile,
         role: "user",
         stripeCustomerId: customer.id,
-        stripeSubscriptionId: subscription.id,
+        stripeSubscriptionId: shouldWriteCanonicalStripeSubscriptionId(subscription.status)
+          ? subscription.id
+          : undefined,
         subscription: {
           packageId: String(membershipPackage._id), // Force string conversion
           startDate: new Date(),
@@ -626,7 +660,9 @@ export async function POST(request: NextRequest) {
           isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
           autoRenew: true,
           status: subscription.status, // Track subscription status
-          pendingChange: undefined, // Initialize pendingChange field for subscription management
+          pendingStripeSubscriptionId: subscription.id,
+          pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+          pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
           lastDowngradeDate: undefined, // Initialize lastDowngradeDate field for security
         },
         oneTimePackages: [], // Initialize empty array

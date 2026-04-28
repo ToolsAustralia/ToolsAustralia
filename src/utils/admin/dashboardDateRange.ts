@@ -20,9 +20,9 @@ export interface ParsedAdminDashboardDateRange {
   startDate: Date;
   endDate: Date;
   dateRange: AdminDashboardDateRangeKey;
-  /** For membership status card: use current User vs history at end of selected period */
+  /** Membership status KPI currently uses live User.subscription data for active MRR. */
   membershipAsOfMode: MembershipAsOfMode;
-  /** End instant of the selected period; use for snapshot membership queries */
+  /** Reserved for future complete point-in-time membership snapshots. */
   asOfDate: Date | null;
 }
 
@@ -119,9 +119,8 @@ export function parseAdminDashboardDateRange(input: {
       endDate = endOfToday;
   }
 
-  const membershipAsOfMode: MembershipAsOfMode =
-    dateRange === "today" || dateRange === "all-time" ? "live" : "snapshot";
-  const asOfDate = membershipAsOfMode === "snapshot" ? endDate : null;
+  const membershipAsOfMode: MembershipAsOfMode = "live";
+  const asOfDate = null;
 
   return {
     ok: true,

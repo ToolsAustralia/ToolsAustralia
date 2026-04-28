@@ -11,7 +11,12 @@ import { authOptions } from "@/lib/auth";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
-import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import {
+  checkCanCreateSubscription,
+  EXISTING_SUBSCRIPTION_CODE,
+  EXISTING_SUBSCRIPTION_MESSAGE,
+} from "@/utils/payment/subscription-creation-guard";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
@@ -131,6 +136,13 @@ export async function POST(request: NextRequest) {
           const subCustomerId = typeof prevSub.customer === "string" ? prevSub.customer : prevSub.customer?.id;
           if (subCustomerId === stripeCustomerId) {
             await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+            if (existingUser.subscription?.pendingStripeSubscriptionId === validatedData.cancelPreviousSubscriptionId) {
+              existingUser.subscription.pendingStripeSubscriptionId = undefined;
+              existingUser.subscription.pendingStripeSubscriptionRequestId = undefined;
+              existingUser.subscription.pendingStripeSubscriptionCreatedAt = undefined;
+              existingUser.markModified("subscription");
+              await existingUser.save();
+            }
             if (correlationId) {
               console.log("[create-subscription-existing-user] cancelled previous incomplete subscription (plan switch)", {
                 correlationId,
@@ -285,6 +297,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    if (stripeCustomerId) {
+      const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(stripeCustomerId);
+      if (hasLiveStripeSubscription) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: EXISTING_SUBSCRIPTION_MESSAGE,
+            code: EXISTING_SUBSCRIPTION_CODE,
+            ...(correlationId && { correlationId }),
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const subscription = await stripe.subscriptions.create(
       createPayload,
       { idempotencyKey }
@@ -320,6 +347,9 @@ export async function POST(request: NextRequest) {
       endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
       autoRenew: true,
       status: subscription.status, // Track subscription status
+      pendingStripeSubscriptionId: subscription.id,
+      pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+      pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
       lastMonthAccumulatedEntries: preservedLastMonthAccumulatedEntries,
     };
 
@@ -330,7 +360,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    existingUser.stripeSubscriptionId = subscription.id;
+    if (shouldWriteCanonicalStripeSubscriptionId(subscription.status)) {
+      existingUser.stripeSubscriptionId = subscription.id;
+    }
 
     // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
     // Subscription status updates are handled by webhook after payment succeeds
@@ -375,7 +407,21 @@ export async function POST(request: NextRequest) {
         if (endDate !== undefined) {
           updatePayload["subscription.endDate"] = endDate;
         }
-        await User.updateOne({ _id: existingUser._id }, { $set: updatePayload }).catch((err) => {
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          updatePayload["stripeSubscriptionId"] = subscription.id;
+        }
+        const updateOperation: {
+          $set: Record<string, unknown>;
+          $unset?: Record<string, "">;
+        } = { $set: updatePayload };
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          updateOperation.$unset = {
+            "subscription.pendingStripeSubscriptionId": "",
+            "subscription.pendingStripeSubscriptionRequestId": "",
+            "subscription.pendingStripeSubscriptionCreatedAt": "",
+          };
+        }
+        await User.updateOne({ _id: existingUser._id }, updateOperation).catch((err) => {
           console.warn("Non-critical user update after invoice pay failed (webhook will handle):", err);
         });
 
@@ -384,6 +430,12 @@ export async function POST(request: NextRequest) {
         existingUser.subscription!.status = newStatus;
         if (endDate !== undefined) {
           existingUser.subscription!.endDate = endDate;
+        }
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          existingUser.stripeSubscriptionId = subscription.id;
+          existingUser.subscription!.pendingStripeSubscriptionId = undefined;
+          existingUser.subscription!.pendingStripeSubscriptionRequestId = undefined;
+          existingUser.subscription!.pendingStripeSubscriptionCreatedAt = undefined;
         }
 
         return NextResponse.json({

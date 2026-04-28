@@ -9,12 +9,24 @@ function testTodayIsLiveMode() {
   assert.equal(r.value.asOfDate, null);
 }
 
-function testYesterdayIsSnapshot() {
+function testYesterdayIsLiveMode() {
   const r = parseAdminDashboardDateRange({ dateRange: "yesterday" });
   assert.equal(r.ok, true);
   if (!r.ok) return;
-  assert.equal(r.value.membershipAsOfMode, "snapshot");
-  assert.ok(r.value.asOfDate instanceof Date);
+  assert.equal(r.value.membershipAsOfMode, "live");
+  assert.equal(r.value.asOfDate, null);
+}
+
+function testCustomIsLiveModeWithDates() {
+  const r = parseAdminDashboardDateRange({
+    dateRange: "custom",
+    startDateParam: "2026-04-27",
+    endDateParam: "2026-04-27",
+  });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.value.membershipAsOfMode, "live");
+  assert.equal(r.value.asOfDate, null);
 }
 
 function testCustomRequiresDates() {
@@ -25,6 +37,7 @@ function testCustomRequiresDates() {
 }
 
 testTodayIsLiveMode();
-testYesterdayIsSnapshot();
+testYesterdayIsLiveMode();
+testCustomIsLiveModeWithDates();
 testCustomRequiresDates();
 console.log("dashboardDateRange tests passed");

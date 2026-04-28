@@ -17,6 +17,11 @@ import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import type { IUser } from "@/models/User";
 import { recordCancellationAnalytics } from "@/services/admin/membershipAnalyticsPersistence";
+import {
+  isSubscriptionReferenceError,
+  resolveCancellableStripeSubscription,
+  SUBSCRIPTION_REFERENCE_ERROR_CODES,
+} from "@/services/subscription/SubscriptionReferenceService";
 
 export interface CancelSubscriptionOptions {
   cancelAtPeriodEnd?: boolean;
@@ -58,13 +63,31 @@ export async function cancelSubscription(
 ): Promise<CancelSubscriptionResult> {
   const { cancelAtPeriodEnd = true, analytics } = options;
 
-  const subscriptionId = user.stripeSubscriptionId;
-  if (!subscriptionId) {
-    throw new Error("No active subscription found");
+  let resolvedStripeSub: Stripe.Subscription;
+  try {
+    const resolved = await resolveCancellableStripeSubscription(user);
+    resolvedStripeSub = resolved.subscription;
+    if (resolved.repairedCanonicalId) {
+      user.markModified("subscription");
+      await user.save();
+    }
+  } catch (e) {
+    if (isSubscriptionReferenceError(e) && e.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION) {
+      if (user.isModified("stripeSubscriptionId")) {
+        user.markModified("subscription");
+        await user.save().catch((saveErr) => {
+          console.warn("[CANCEL SUBSCRIPTION] Could not persist cleared stripeSubscriptionId:", saveErr);
+        });
+      }
+    }
+    throw e;
   }
 
+  const subscriptionId = resolvedStripeSub.id;
+
   // For past_due subscriptions, cancel immediately (no period to preserve)
-  const isPastDue = user.subscription?.status === "past_due";
+  const isPastDue =
+    resolvedStripeSub.status === "past_due" || user.subscription?.status === "past_due";
   const shouldCancelImmediately = isPastDue || !cancelAtPeriodEnd;
 
   let canceledSubscription: Stripe.Subscription;
