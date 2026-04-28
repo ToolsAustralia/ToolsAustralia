@@ -152,6 +152,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       adminNotes?: string;
       resolvedAt?: Date;
       resolvedBy?: mongoose.Types.ObjectId;
+      $unset?: {
+        resolvedAt?: string;
+        resolvedBy?: string;
+        archivedAt?: string;
+        archivedBy?: string;
+        archiveReason?: string;
+      };
     } = {};
 
     if (validatedData.status !== undefined) {
@@ -161,6 +168,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (validatedData.status === "resolved") {
         updateData.resolvedAt = new Date();
         updateData.resolvedBy = new mongoose.Types.ObjectId(session.user.id);
+      } else {
+        updateData.$unset = {
+          ...(updateData.$unset || {}),
+          resolvedAt: "",
+          resolvedBy: "",
+        };
+      }
+
+      if (validatedData.status !== "dismissed") {
+        updateData.$unset = {
+          ...(updateData.$unset || {}),
+          archivedAt: "",
+          archivedBy: "",
+          archiveReason: "",
+        };
       }
     }
 
@@ -168,9 +190,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.adminNotes = validatedData.adminNotes;
     }
 
-    // Update the report
-    Object.assign(report, updateData);
-    await report.save();
+    const { $unset, ...setData } = updateData;
+    await ErrorReport.updateOne(
+      { _id: report._id },
+      $unset ? { $set: setData, $unset } : { $set: setData }
+    );
 
     // Fetch updated report with populated fields
     const updatedReport = await ErrorReport.findById(id)

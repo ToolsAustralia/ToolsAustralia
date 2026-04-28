@@ -117,6 +117,9 @@ export interface IErrorReport {
   adminNotes?: string;
   resolvedAt?: Date;
   resolvedBy?: string;
+  archivedAt?: Date;
+  archivedBy?: string;
+  archiveReason?: string;
   
   // Deduplication
   deduplicationHash: string;
@@ -163,6 +166,7 @@ export interface ErrorReportsQueryParams {
   apiEndpoint?: string; // ✅ NEW: Filter by API endpoint
   sortBy?: "createdAt" | "status" | "errorMessage" | "category" | "severity"; // ✅ ENHANCED: Added category and severity
   sortOrder?: "asc" | "desc";
+  includeArchived?: boolean;
 }
 
 /**
@@ -180,7 +184,52 @@ export interface ErrorReportsListResponse {
     total: number;
     byStatus: Record<ErrorReportStatus, number>;
     recentCount: number; // Last 24 hours
+    needsAttention?: number;
+    criticalUnresolved?: number;
+    repeatedErrors?: number;
+    affectedUsers?: number;
   };
+  analytics?: ErrorReportsAnalyticsSummary;
+}
+
+export interface ErrorReportsAnalyticsBucket {
+  name: string;
+  value: number;
+}
+
+export interface ErrorReportsTrendBucket {
+  date: string;
+  errors: number;
+}
+
+export interface ErrorReportsTopIssue {
+  key: string;
+  count: number;
+  latestAt?: Date;
+}
+
+export interface ErrorReportsResolutionMetrics {
+  averageHours: number;
+  medianHours: number;
+  minHours: number;
+  maxHours: number;
+  totalResolved: number;
+}
+
+export interface ErrorReportsAnalyticsSummary {
+  scope: "filtered";
+  generatedAt: string;
+  total: number;
+  autoLogged: number;
+  trends: ErrorReportsTrendBucket[];
+  byCategory: ErrorReportsAnalyticsBucket[];
+  bySeverity: ErrorReportsAnalyticsBucket[];
+  byStatus: ErrorReportsAnalyticsBucket[];
+  topErrors: ErrorReportsTopIssue[];
+  topEndpoints: ErrorReportsTopIssue[];
+  topUsers: ErrorReportsTopIssue[];
+  repeatedErrors: ErrorReportsTopIssue[];
+  resolutionMetrics: ErrorReportsResolutionMetrics;
 }
 
 /**
