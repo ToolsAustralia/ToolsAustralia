@@ -5,7 +5,11 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import mongoose from "mongoose";
 import { z } from "zod";
-import { cancelSubscription } from "@/services/subscription";
+import {
+  cancelSubscription,
+  isSubscriptionReferenceError,
+  SUBSCRIPTION_REFERENCE_ERROR_CODES,
+} from "@/services/subscription";
 
 const cancelSubscriptionSchema = z.object({
   cancelAtPeriodEnd: z.boolean().optional().default(true),
@@ -48,9 +52,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!user.stripeSubscriptionId) {
+    if (!user.stripeSubscriptionId && !user.stripeCustomerId) {
       return NextResponse.json(
-        { error: "User has no Stripe subscription to cancel" },
+        { error: "User has no Stripe subscription to cancel", code: SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION },
         { status: 400 }
       );
     }
@@ -81,8 +85,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
     }
 
-    if (error instanceof Error && error.message === "No active subscription found") {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (isSubscriptionReferenceError(error)) {
+      if (error.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 400 });
+      }
+      if (error.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.STRIPE_RETRYABLE) {
+        return NextResponse.json(
+          {
+            error: "Stripe temporarily unavailable. Please try again in a moment.",
+            code: error.code,
+          },
+          { status: 503 }
+        );
+      }
     }
 
     return NextResponse.json(

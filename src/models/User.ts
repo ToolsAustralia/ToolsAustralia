@@ -37,6 +37,11 @@ export interface IUser extends Document {
     autoRenew?: boolean;
     status?: string;
 
+    /** Non-canonical Stripe subscription created during initial checkout. */
+    pendingStripeSubscriptionId?: string;
+    pendingStripeSubscriptionRequestId?: string;
+    pendingStripeSubscriptionCreatedAt?: Date;
+
     // NEW: Previous subscription for benefit preservation during downgrades
     // When user downgrades, Stripe subscription updates immediately, but we preserve old benefits until end date
     previousSubscription?: {
@@ -426,6 +431,18 @@ const UserSchema = new Schema<IUser>(
       status: {
         type: String,
         default: "incomplete",
+      },
+      pendingStripeSubscriptionId: {
+        type: String,
+        required: false,
+      },
+      pendingStripeSubscriptionRequestId: {
+        type: String,
+        required: false,
+      },
+      pendingStripeSubscriptionCreatedAt: {
+        type: Date,
+        required: false,
       },
 
       // NEW: Previous subscription for benefit preservation during downgrades

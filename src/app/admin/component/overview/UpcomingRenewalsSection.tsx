@@ -26,13 +26,13 @@ export default function UpcomingRenewalsSchedulePanel({
 }: UpcomingRenewalsSchedulePanelProps) {
   return (
     <>
-      <div className="flex flex-wrap gap-1 mb-2 sm:mb-3">
+      <div className="flex w-full flex-wrap sm:flex-nowrap gap-1.5 mb-2 sm:mb-3">
         {([0, 3, 7, 27] as const).map((days) => (
           <button
             key={days}
             type="button"
             onClick={() => onRangeChange(days)}
-            className={`px-2 py-1 rounded-md text-[10px] sm:text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[3.25rem] sm:flex-none sm:min-w-0 px-2 py-1.5 rounded-lg text-center text-[10px] sm:text-xs font-semibold transition-all ${
               upcomingRenewalsRange === days
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-300 dark:hover:border-emerald-600"
@@ -63,37 +63,42 @@ export default function UpcomingRenewalsSchedulePanel({
                 </p>
               )}
 
-              <div className="overflow-x-auto -mx-1 px-1 rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-                <table className="w-full text-[10px] sm:text-xs border-collapse min-w-[260px]">
+              <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+                <table className="w-full text-[10px] sm:text-xs border-collapse min-w-[280px]">
                   <thead>
-                    <tr className="border-b border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80">
-                      <th className="text-left py-1.5 px-1.5 sm:px-2 font-semibold text-gray-700 dark:text-neutral-300">
+                    <tr className="bg-gradient-to-b from-gray-50 to-gray-50/80 dark:from-neutral-800 dark:to-neutral-800/90 border-b border-gray-200 dark:border-neutral-700">
+                      <th className="text-left py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Customer
                       </th>
-                      <th className="text-right py-1.5 px-1.5 sm:px-2 font-semibold text-gray-700 dark:text-neutral-300 whitespace-nowrap">
+                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
                         Amount
                       </th>
-                      <th className="text-right py-1.5 px-1.5 sm:px-2 font-semibold text-gray-700 dark:text-neutral-300 whitespace-nowrap">
+                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
                         Renews
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-neutral-800 text-gray-800 dark:text-neutral-200">
-                    {upcomingRenewalsData.renewals.map((r) => {
+                  <tbody className="divide-y divide-gray-100 dark:divide-neutral-800/90">
+                    {upcomingRenewalsData.renewals.map((r, idx) => {
                       const displayName = r.customerName?.trim() || r.customerEmail || r.customerId;
                       return (
-                        <tr key={r.subscriptionId} className="hover:bg-gray-50 dark:hover:bg-neutral-800/60">
-                          <td className="py-1 px-1.5 sm:px-2 align-middle max-w-[9rem] sm:max-w-none">
+                        <tr
+                          key={r.subscriptionId}
+                          className={`transition-colors hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 ${
+                            idx % 2 === 1 ? "bg-gray-50/40 dark:bg-neutral-800/25" : ""
+                          }`}
+                        >
+                          <td className="py-2.5 px-3 sm:px-3.5 align-middle max-w-[10rem] sm:max-w-none">
                             <ClickableUserDisplay
                               displayText={displayName}
                               userId={r.userId ?? null}
-                              className="text-[10px] sm:text-xs text-gray-900 dark:text-white font-medium"
+                              className="text-[10px] sm:text-xs text-gray-900 dark:text-white font-medium leading-snug"
                             />
                           </td>
-                          <td className="py-1 px-1.5 sm:px-2 text-right tabular-nums whitespace-nowrap align-middle">
+                          <td className="py-2.5 px-3 sm:px-3.5 text-right tabular-nums whitespace-nowrap align-middle font-semibold text-gray-900 dark:text-white">
                             {r.amountFormatted}
                           </td>
-                          <td className="py-1 px-1.5 sm:px-2 text-right text-gray-600 dark:text-neutral-400 whitespace-nowrap align-middle">
+                          <td className="py-2.5 px-3 sm:px-3.5 text-right tabular-nums text-gray-600 dark:text-neutral-400 whitespace-nowrap align-middle">
                             {r.renewalDateFormatted}
                           </td>
                         </tr>

@@ -639,7 +639,6 @@ export async function POST(request: NextRequest) {
                   isActive: true,
                   status: "active",
                   autoRenew: true,
-                  pendingChange: undefined, // Initialize pendingChange field for subscription management
                 };
               } else {
                 user.subscription.packageId = subscription.metadata.packageId;

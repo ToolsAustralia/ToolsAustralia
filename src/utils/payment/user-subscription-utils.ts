@@ -78,7 +78,6 @@ export async function createOrUpdateSubscriptionUser(
       isActive: subscriptionData.status === "active" || subscriptionData.status === "trialing",
       autoRenew: true,
       status: subscriptionData.status,
-      pendingChange: undefined, // Initialize pendingChange field for subscription management
       lastDowngradeDate: undefined, // Initialize lastDowngradeDate field for security
     },
     oneTimePackages: [], // Initialize empty array

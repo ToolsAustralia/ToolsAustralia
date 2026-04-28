@@ -7,7 +7,7 @@ import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalytics
 
 /**
  * GET /api/admin/dashboard/membership-by-package
- * Live counts for today/all-time; snapshot at end of selected period for yesterday/custom/draws.
+ * Live membership base by package for the KPI card.
  *
  * Query params match admin dashboard stats (dateRange, startDate, endDate).
  */
@@ -34,10 +34,9 @@ export async function GET(request: NextRequest) {
     const { membershipAsOfMode, asOfDate } = parsed.value;
     const service = new MembershipAnalyticsService();
 
-    const data =
-      membershipAsOfMode === "snapshot" && asOfDate
-        ? await service.getMembershipByPackageSnapshot(asOfDate)
-        : await service.getMembershipByPackageLive();
+    // MembershipStatusHistory is a partial event log today, not a complete state ledger.
+    // Use current User.subscription state for active MRR until historical snapshots are complete.
+    const data = await service.getMembershipByPackageLive();
 
     return NextResponse.json({
       success: true,

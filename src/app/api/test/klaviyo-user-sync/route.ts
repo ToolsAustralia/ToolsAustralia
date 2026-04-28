@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
           isActive: false,
           autoRenew: true,
           status: "incomplete",
-          pendingChange: undefined, // Initialize pendingChange field for subscription management
         }, // Initialize subscription structure for test user
         oneTimePackages: [],
         accumulatedEntries: 10, // Give some test entries
