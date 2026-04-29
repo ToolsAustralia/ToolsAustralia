@@ -198,6 +198,88 @@ export class MembershipAnalyticsService {
   }
 
   /**
+   * Returns the four counts the snapshot model needs (including fully-cancelled).
+   * Used by the cron writer; not exposed to dashboard read paths.
+   */
+  async getMembershipByPackageLiveForSnapshot(): Promise<{
+    packages: Array<{
+      packageId: string;
+      activeCount: number;
+      pastDueCount: number;
+      scheduledCancelCount: number;
+      fullyCancelledCount: number;
+    }>;
+  }> {
+    const baseMatch = {
+      "subscription.packageId": { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+    };
+    const now = new Date();
+
+    const [activeResults, scheduledResults, pastDueResults, fullyCancelledResults] = await Promise.all([
+      User.aggregate([
+        { $match: { ...baseMatch, isActive: true, ...getActiveSubscriptionFilter(false) } },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            isActive: true,
+            "subscription.status": { $in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
+            "subscription.autoRenew": false,
+            "subscription.endDate": { $exists: true, $ne: null },
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            isActive: true,
+            "subscription.status": "past_due",
+            "subscription.packageId": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            $or: [
+              { "subscription.status": { $in: ["canceled", "cancelled"] } },
+              {
+                "subscription.endDate": { $lte: now, $ne: null },
+                "subscription.cancelledAt": { $ne: null },
+              },
+            ],
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toMap = (rows: Array<{ _id: string; count: number }>) =>
+      Object.fromEntries(rows.map((r) => [String(r._id), r.count]));
+
+    const a = toMap(activeResults);
+    const s = toMap(scheduledResults);
+    const p = toMap(pastDueResults);
+    const c = toMap(fullyCancelledResults);
+
+    return {
+      packages: SUBSCRIPTION_PACKAGE_IDS.map((packageId) => ({
+        packageId,
+        activeCount: a[packageId] ?? 0,
+        pastDueCount: p[packageId] ?? 0,
+        scheduledCancelCount: s[packageId] ?? 0,
+        fullyCancelledCount: c[packageId] ?? 0,
+      })),
+    };
+  }
+
+  /**
    * Point-in-time membership counts using MembershipStatusHistory, with fallback to current User.subscription.
    */
   async getMembershipByPackageSnapshot(asOfDate: Date): Promise<MembershipByPackageDataDTO> {

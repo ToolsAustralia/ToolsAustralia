@@ -133,6 +133,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/services/subscription/**",
         "src/services/admin/membershipAnalyticsPersistence.ts",
+        "src/services/admin/MembershipAnalyticsService.ts",
         "src/utils/subscription/**",
         "src/utils/membership/**",
         "src/models/User.ts",

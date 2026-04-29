@@ -127,3 +127,18 @@ Concretely:
 This makes the event log complete from this date forward. Combined with the existing `past_due` and cancellation writes, every state transition into the four primary buckets (`active`, `trialing`, `past_due`, `canceled`/`scheduled_cancel`) is now recorded. The new `MembershipDailySnapshot` cron does not depend on this for daily snapshot writes (it reads live state), but downstream tooling that reconstructs membership state from history events alone will benefit from the completeness.
 
 Errors during the analytics write are caught and routed via `webhookLog("warn", ...)` — they never fail the webhook handler.
+
+## MembershipDailySnapshot cron (added 2026-04-29)
+
+A nightly cron at [`/api/cron/membership-daily-snapshot`](../../src/app/api/cron/membership-daily-snapshot/route.ts) writes one [`MembershipDailySnapshot`](../../src/models/MembershipDailySnapshot.ts) row per package for **yesterday in `Australia/Sydney`**.
+
+Read path:
+- The cron calls [`MembershipAnalyticsService.getMembershipByPackageLiveForSnapshot()`](../../src/services/admin/MembershipAnalyticsService.ts) — a snapshot-shaped sibling of `getMembershipByPackageLive()` that returns four bucket counts (active, past_due, scheduledCancel, fullyCancelled) instead of three. The dashboard's existing `getMembershipByPackageLive()` is unchanged.
+- Each row stores a snapshot of `unitPriceCents` at write time, so historical revenue is **immutable** if a package price changes later.
+- `confidence: "live"` always — there is no historical reconstruction.
+
+Schedule: fires twice daily for redundancy at `0 14 * * *` and `0 15 * * *` UTC. Both correspond to early hours of a fresh Sydney local day (00:00–02:00 local across AEST and AEDT). The handler upserts on `{date, packageId}`, so the second fire is a no-op overwrite if the first succeeded.
+
+DST safety: the handler computes the local date string via `formatInTimeZone(yesterdayDate, "Australia/Sydney", "yyyy-MM-dd")`. The IANA zone is DST-aware automatically. Verified by [`scripts/test-membership-snapshot-dst.ts`](../../scripts/test-membership-snapshot-dst.ts) across both October (AEDT-start) and April (AEDT-end) transition boundaries.
+
+Health: [`GET /api/admin/health/membership-snapshot`](../../src/app/api/admin/health/membership-snapshot/route.ts) lists missing days from the last 7. Admin-only. Read-only — does not attempt repair. See `docs/infrastructure/architecture.md` for the cron schedule context.
