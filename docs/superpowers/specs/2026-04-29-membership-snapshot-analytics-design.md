@@ -2,7 +2,9 @@
 
 **Date:** 2026-04-29
 **Author:** DJ (with Claude Code assistance)
-**Status:** Draft — pending user review
+**Status:** Approved — ready for implementation
+
+> **Revision (2026-04-29, post-approval):** Scope narrowed. Historical reconstruction (90-day backfill) is dropped — the dashboard becomes accurate **from today forward**, not retroactively. A one-shot cleanup script removes pre-existing backfill rows from `MembershipStatusHistory` and `MembershipRenewalCycle`. The deprecated `scripts/backfill-membership-analytics.ts` is deleted. All sections below reflect this revision.
 
 ---
 
@@ -28,7 +30,7 @@ The infrastructure to do point-in-time correctly is **half-built**:
    - `yesterday` → counts as of end-of-yesterday in `Australia/Sydney`.
    - `custom` / `current-draw` / `last-draw` → counts as of the **end of the range's `endDate`**, clamped to today if the range extends into the future.
    - `all-time` → live current counts (matches existing semantics).
-2. Historical accuracy goal: ~90 days of point-in-time counts, with `confidence: "live"` for days written by the going-forward cron and `confidence: "backfill"` for reconstructed days.
+2. **From today forward**, every day produces an accurate point-in-time snapshot via the nightly cron. Historical dates (before the cron's first successful run) display live counts with a "snapshot unavailable" indicator — the dashboard does not lie about historical state, it admits it doesn't have one.
 3. Day-by-day reads must be **fast** (single indexed lookup, no per-user aggregation pipeline).
 4. The cron writes must be **DST-safe** for the `Australia/Sydney` zone — no missed or double-written days across AEST↔AEDT transitions.
 5. The cron must be **redundantly scheduled** so a single Vercel hiccup cannot leave a gap, and gaps must be **observable** so DJ can fix them with a one-line script invocation.
@@ -36,7 +38,7 @@ The infrastructure to do point-in-time correctly is **half-built**:
 
 ## 3. Non-Goals
 
-- Reconstructing point-in-time data for periods older than ~90 days — the source data has too much state churn (untracked `past_due → active` recoveries) for backfilled accuracy to be meaningful that far back.
+- **Historical reconstruction of any kind.** Past-date dashboard reads return live state with a "snapshot unavailable" flag, never reconstructed approximations. DJ explicitly chose accuracy-from-today over best-effort retroactive coverage.
 - Storing per-user state for each historical day. The card and breakdown show aggregates only; the per-user drill-down modal continues to query live `User.subscription`.
 - Webhook-driven incremental snapshot updates. The daily cron + history log is sufficient.
 - Active alerting beyond a health-check endpoint. DJ chose to skip Slack/email alerting for now.
@@ -49,17 +51,19 @@ The infrastructure to do point-in-time correctly is **half-built**:
 │                     MembershipDailySnapshot                         │
 │  one row per (date in Australia/Sydney, packageId)                  │
 │  active/pastDue/scheduledCancel/cancelled counts + locked-in price  │
+│  confidence: "live" only (no "backfill" — collection starts empty)  │
 └─────────────────────────────────────────────────────────────────────┘
               ▲                                  │
               │ writes                           │ reads
-       ┌──────┴──────┬──────────────┐            │
-       │             │              │            │
-   one-shot      nightly cron   (no live    ┌────┴───────────────────┐
-   backfill      (×2 fires +    webhook     │ MembershipAnalyticsSvc │
-   script        health-check)  writers)    │  · getByPackageSnapshot│
-   90 days       confidence:                │  · getByPackageLive    │
-   confidence:   "live"                     └────┬───────────────────┘
-   "backfill"                                    │
+              │                                  │
+       nightly cron                       ┌──────┴───────────────────┐
+       (×2 fires +                        │ MembershipAnalyticsSvc   │
+       health-check)                      │  · getByPackageSnapshot  │
+       confidence:                        │     (live fallback when  │
+       "live"                             │      row missing)        │
+                                          │  · getByPackageLive      │
+                                          └──────┬───────────────────┘
+                                                 │
                                                  │ called by
                                           ┌──────┴────────────────────┐
                                           │ /api/admin/dashboard/...  │
@@ -69,9 +73,9 @@ The infrastructure to do point-in-time correctly is **half-built**:
                                           └───────────────────────────┘
 ```
 
-**Three writers, three readers, one source of truth.**
+**One writer, three readers, one source of truth.**
 
-The dispatch decision lives in `parseAdminDashboardDateRange` — it computes `asOfDate = min(endDate, end-of-today-Sydney)` and sets `membershipAsOfMode = "live"` when `asOfDate` covers today, else `"snapshot"`. Routes call `getMembershipByPackageSnapshot(asOfDate)` or `getMembershipByPackageLive()` accordingly.
+The dispatch decision lives in `parseAdminDashboardDateRange` — it computes `asOfDate = min(endDate, end-of-today-Sydney)` and sets `membershipAsOfMode = "live"` when `asOfDate` covers today, else `"snapshot"`. Routes call `getMembershipByPackageSnapshot(asOfDate)` or `getMembershipByPackageLive()` accordingly. When the snapshot row is missing for a queried date (every date before deployment), the snapshot reader falls back to live counts and sets `summary.snapshotMissing: true`.
 
 ## 5. Data model
 
@@ -92,9 +96,9 @@ interface IMembershipDailySnapshot {
   activeRevenue: number;           // (activeCount × unitPriceCents) / 100
   pastDueRevenue: number;          // (pastDueCount × unitPriceCents) / 100
 
-  confidence: "live" | "backfill"; // "live" = cron from real state; "backfill" = reconstructed
+  confidence: "live";              // only one value today; field retained for forward-compat
   computedAt: Date;                // wall-clock of when row was written
-  sourceVersion: number;           // bump when reconstruction algorithm changes
+  sourceVersion: number;           // bump if cron computation logic changes
 }
 ```
 
@@ -116,40 +120,42 @@ interface IMembershipDailySnapshot {
 
 `unitPriceCents` is stored on the row itself, not looked up at read time from `src/data/membershipPackages.ts`. A future price change writes new snapshots at the new price; old snapshots stay at the old price. Per DJ: "we shouldn't update the history with the new price."
 
-## 6. Reconstruction algorithm (backfill)
+## 6. Cleanup of pre-existing backfill rows
 
-For each user with a subscription, walk forward day-by-day from `subscription.startDate ?? createdAt` to today. The user's state on day **D** is determined by the most recent signal at or before **D**, in this priority order:
+Before the new system goes live, remove rows in `MembershipStatusHistory` and `MembershipRenewalCycle` that were written by the previous (now-deleted) `scripts/backfill-membership-analytics.ts`. These are tagged distinctively and identifiable without ambiguity.
 
-1. **`MembershipStatusHistory` events** with `effectiveAt <= D` — sorted desc, take the latest. Most authoritative.
-2. **`MembershipRenewalCycle` events** as positive activity signal — a `succeeded` cycle at `succeededAt <= D` confirms the user was active on D (until the next signal); a `failed` cycle at `failedAt <= D` confirms `past_due` entry.
-3. **`User.subscription` rewound** as fallback:
-   - `cancelledAt > D` → not yet cancelled on that day
-   - `pastDueAt > D` → not yet past_due on that day
-   - Otherwise → `active`
-4. **Activation start gate** — user is `none` (not in any bucket) for any **D** before `subscription.startDate ?? earliest BenefitsGranted timestamp ?? createdAt`. Handles signups within the 90-day window correctly.
-5. **endDate cap** — if `subscription.endDate <= D` and on a cancellation track → `cancelled`; if `endDate > D` and `autoRenew = false` → `scheduled_cancel`.
+### 6.1 What to delete
 
-### 6.1 Known accuracy limitation
+In `MembershipStatusHistory`:
+- Rows where `source` matches `/^backfill_/` (specifically `backfill_user_pastDueAt`, `backfill_user_cancelledAt`).
+- Rows where `metadata.backfill === true`.
 
-We have no record of `past_due → active` recovery in current data. A user past-due on Mar 10 who recovered Mar 12 will look past-due on Mar 11 in the backfill. Going forward, this is fixed by the new history writes (Section 7); historically it is lossy. All backfilled rows carry `confidence: "backfill"` so the UI can flag them.
+In `MembershipRenewalCycle`:
+- Rows where `confidence === "backfill"`.
 
-### 6.2 Activation seed (one-time, runs before snapshot backfill)
+### 6.2 What stays
 
-For every currently-active user with no `active` history row, write one row to `MembershipStatusHistory` at `subscription.startDate ?? earliest BenefitsGranted timestamp ?? createdAt`, with `dedupeKey: backfill_active_${userId}`. Idempotent. Makes future snapshot reads cleaner.
+- Webhook-written `MembershipStatusHistory` rows (`source: webhook_invoice_payment_failed`, `cancel_api_user`, `cancel_api_admin`) — these are real state transitions captured at the time they happened. Keep.
+- Webhook-written `MembershipRenewalCycle` rows (`confidence: "stripe"`) — these are correct, captured from real Stripe events. Keep.
+- All `User.subscription` data — untouched.
 
 ### 6.3 Process
 
-1. Read all users with `isActive: true` and `subscription.packageId ∈ SUBSCRIPTION_PACKAGE_IDS` once (~8000 docs).
-2. Read all `MembershipStatusHistory` rows from the last 100 days, indexed by `userId`.
-3. Read all `MembershipRenewalCycle` rows from the last 100 days, indexed by `userId`.
-4. For each of the last 90 days (in Sydney local time), walk users and tally counts per package.
-5. Upsert one row per `(date, packageId)` with `confidence: "backfill"`.
+A single one-shot script `scripts/cleanup-membership-backfill-rows.ts`:
+1. Counts matching rows for both collections.
+2. With `--dry-run`, prints counts and exits.
+3. Without `--dry-run`, deletes the matching rows.
+4. Logs a structured summary so the deletion is auditable.
 
-`--dry-run` prints per-day counts and flags any user reconstructions that fell back to "current state assumptions" for spot-check.
+This is run once, before the cron + read-path changes go live, to ensure the analytics collections contain only real, webhook-written data.
+
+### 6.4 Deletion of the old backfill script
+
+`scripts/backfill-membership-analytics.ts` is deleted in the same PR as the cleanup. The four bugs documented in the previous spec revision are no longer relevant since the script is gone. Its `package.json` script entry (if any) is also removed.
 
 ## 7. Going-forward writes
 
-To keep `MembershipStatusHistory` complete from this point onward (the precondition for accurate future snapshot reads), add an `active` history write at every place a subscription transitions to `active` or `trialing`:
+To keep `MembershipStatusHistory` complete from deployment onward, add an `active` history write at every place a subscription transitions to `active` or `trialing`. Combined with the existing `past_due` and cancellation writes, this means every state transition from today forward is captured in the event log — no reconstruction required.
 
 - Subscription creation in [src/services/subscription/](src/services/subscription/) (initial activation).
 - Webhook handlers in [src/app/api/stripe/webhook/route.ts](src/app/api/stripe/webhook/route.ts) for `customer.subscription.created` / `.updated` events that flip status to `active` from a non-active prior state.
@@ -234,14 +240,14 @@ Both fires occur after midnight local on every day of the year. The handler is i
 
 ### 9.3 Handler logic
 
-**Precondition:** Extend `MembershipAnalyticsService` with a new method `getMembershipByPackageLiveForSnapshot()` (or extend `getMembershipByPackageLive` with an extra field) that returns all four counts the snapshot model needs:
+**Precondition:** Extend `MembershipAnalyticsService` with a new method `getMembershipByPackageLiveForSnapshot()` that returns all four counts the snapshot model needs:
 
 - `activeCount` (active + trialing) — already computed by `getActiveSubscriptionFilter(false)`
 - `pastDueCount` — already computed
 - `scheduledCancelCount` — currently exposed as `cancelledCount` in the live DTO (`autoRenew=false` + `endDate` exists)
 - `fullyCancelledCount` (NEW) — aggregates users with `subscription.status ∈ ["canceled", "cancelled"]` OR (`subscription.endDate <= now` AND `subscription.cancelledAt` set)
 
-This avoids the cron writing `0` for fully-cancelled forward-going rows while backfill rows carry real values.
+This populates the schema's `cancelledCount` field with real data on every cron run, instead of hardcoding zero.
 
 ```ts
 const now = new Date();
@@ -292,129 +298,107 @@ Three layers, none of which complicate the daily cron:
 2. **Two daily fires** (14:00 and 15:00 UTC) for redundancy. Idempotent upserts make the second fire free insurance.
 3. **Health-check endpoint** `GET /api/admin/health/membership-snapshot`:
    - Returns `{ ok: true, missingDays: [] }` or `{ ok: false, missingDays: ["yyyy-MM-dd", ...] }`.
-   - Checks the last 7 days for missing rows.
+   - Checks rows from the cron's first deployment date (or last 7 days, whichever is shorter) for gaps.
    - Read-only — does not write or fix.
-   - Fix path: re-run `scripts/backfill-membership-daily-snapshot.ts --from <date> --to <date>` for the gap.
+   - Fix path: manually invoke the cron handler with a stub date, or accept the gap and live with the snapshot-missing fallback for that one day.
 
 DJ explicitly chose not to add active alerting (Slack/email) at this stage.
 
-## 11. Existing backfill script fixes
+## 11. Cleanup script details
 
-[scripts/backfill-membership-analytics.ts](scripts/backfill-membership-analytics.ts) has four bugs that must be fixed before the new snapshot backfill runs against it.
+`scripts/cleanup-membership-backfill-rows.ts` is a one-shot script that prepares the database for the new system by removing pre-existing backfill rows.
 
-### Bug 1 — `dueAt` semantics mismatch ([line 47](scripts/backfill-membership-analytics.ts#L47))
-
-`const dueAt = ev.timestamp ? new Date(ev.timestamp) : new Date()` uses *paid-at* time as the renewal due-at. The webhook ([membershipAnalyticsPersistence.ts line 39](src/services/admin/membershipAnalyticsPersistence.ts#L39)) uses `invoice.period_end`. These differ — the snapshot reconstruction queries `MembershipRenewalCycle.dueAt` to find the billing window.
-
-**Fix:** extract `period_end` from the original `PaymentEvent.data` payload, fall back to `ev.timestamp` only if missing, and tag those rows `confidence: "backfill-fallback"` so they're distinguishable.
-
-### Bug 2 — Cancel branch dead code ([lines 117–122](scripts/backfill-membership-analytics.ts#L117-L122))
-
-Both branches of the inner ternary return `"scheduled_cancel"`, so the `autoRenew === false` check is uselessly checked. Reading the intent: this should distinguish users who *fully cancelled* vs. those who *scheduled cancel for end-of-period*.
-
-**Fix:**
 ```ts
-const status: MembershipNormalizedStatus =
-  u.subscription?.status === "canceled" || u.subscription?.status === "cancelled"
-    ? "canceled"
-    : u.subscription?.endDate && u.subscription.endDate <= new Date()
-      ? "canceled"           // scheduled cancel that has elapsed
-      : "scheduled_cancel";  // scheduled but still active
+const dryRun = process.argv.includes("--dry-run");
+
+const historyFilter = {
+  $or: [
+    { source: { $regex: /^backfill_/ } },
+    { "metadata.backfill": true },
+  ],
+};
+
+const renewalFilter = { confidence: "backfill" };
+
+const historyCount = await MembershipStatusHistory.countDocuments(historyFilter);
+const renewalCount = await MembershipRenewalCycle.countDocuments(renewalFilter);
+
+console.log(dryRun ? "DRY RUN — no deletes" : "LIVE — deleting backfill rows");
+console.log(`Would delete: ${historyCount} history rows, ${renewalCount} renewal rows`);
+
+if (!dryRun) {
+  const histDelete = await MembershipStatusHistory.deleteMany(historyFilter);
+  const renDelete = await MembershipRenewalCycle.deleteMany(renewalFilter);
+  console.log(`Deleted: ${histDelete.deletedCount} history rows, ${renDelete.deletedCount} renewal rows`);
+}
 ```
 
-### Bug 3 — One row per user per status (lossy)
+**Wired into `package.json`** as `cleanup:membership-backfill` and `cleanup:membership-backfill:dry`.
 
-The script writes only the most recent `pastDueAt` / `cancelledAt` per user, losing repeat transitions. Going forward, webhook + service writes will produce multiple rows per user. For backfill, the available data only carries the *last* state, so this is genuinely lossy and not fixable from current data.
+**Run order:** first `:dry`, eyeball the counts, then live. Run **before** PR 2 (cron) and PR 3 (read path) ship — but it can run independently of either.
 
-**Fix:** document the limitation clearly in the script header. No code change.
-
-### Bug 4 — `succeededAt` falls back to `new Date()` ([line 60](scripts/backfill-membership-analytics.ts#L60))
-
-`succeededAt: ev.timestamp ?? new Date()` — defaulting a *historical* event's success time to *now* will produce nonsense if `ev.timestamp` is ever missing.
-
-**Fix:** strict check — skip the row entirely if `ev.timestamp` is missing, log a warning. Better a missing row than a fabricated one.
-
-### Plus: activation seed pass
-
-Adds Section 6.2's logic. Idempotent; safe to re-run.
-
-### Updated script summary report
-
-`{ renewalCyclesWritten, activationSeedRows, pastDueRows, cancelRows, skippedDueToMissingTimestamp }`.
+**The deleted `scripts/backfill-membership-analytics.ts`** had four bugs documented in the previous spec revision. With the script removed, those bugs are no longer tracked — the analytics collections are now only written by the real webhook handlers (`webhook_invoice_payment_failed` for past-due, `cancel_api_user`/`cancel_api_admin` for cancellation) plus the new `webhook_subscription_created`/`webhook_subscription_updated_active` writes added in Section 7.
 
 ## 12. Testing
 
-### 12.1 Reconstruction algorithm test
+### 12.1 DST transition test
 
-`scripts/test-membership-snapshot-reconstruction.ts`. Hand-built fixture users:
-- Active throughout the window
-- Past-due mid-window, never recovered
-- Past-due mid-window, recovered (the lossy case — assert we acknowledge inaccuracy)
-- Scheduled-cancel mid-window with future endDate
-- Fully-cancelled before window
-- Signed up mid-window
-
-Walks 30 simulated days, asserts per-day state per user matches expected.
-
-Wired into `package.json` as `test:membership-snapshot`.
-
-### 12.2 DST transition test
-
-Extends `scripts/test-dst-transitions.ts` (or new file `test-membership-snapshot-dst.ts`):
+`scripts/test-membership-snapshot-dst.ts`:
 - Walks October 2026 AEDT-start boundary.
 - Walks April 2027 AEDT-end boundary.
-- Asserts the cron handler, when invoked at 14:00 UTC and 15:00 UTC on each side, writes a row keyed to the correct local date.
+- Asserts the cron handler's date-key computation, when invoked at 14:00 UTC and 15:00 UTC on each side, produces the correct local date.
 - Asserts no day is double-written or skipped.
 
-### 12.3 End-to-end smoke (manual, documented in PR description)
+Wired into `package.json` as `test:membership-snapshot-dst`.
+
+### 12.2 End-to-end smoke (manual, documented in PR description)
 
 After deploy:
-1. Run backfill script `--dry-run` first; eyeball per-day counts.
-2. Run live backfill.
-3. Hit `GET /api/admin/health/membership-snapshot`, expect `{ ok: true }`.
-4. Open dashboard, switch to "yesterday," confirm count differs from "today" if anything has changed in the live DB.
-5. Switch to a custom range ending Mar 30 (a deeply backfilled date), confirm "as of Mar 30 (reconstructed)" badge shows + counts look plausible.
-6. Switch to a future-dated custom range, confirm it falls back to live without errors.
+1. Run cleanup script `--dry-run`, confirm row counts match expectations, then run live.
+2. Wait for the first cron fire (or trigger manually via the cron endpoint with `Bearer ${CRON_SECRET}`).
+3. Hit `GET /api/admin/health/membership-snapshot`, expect `{ ok: true, missingDays: [yesterday-1, ...] }` — older days will all be flagged as missing, which is expected and correct.
+4. Open dashboard, switch to "today" — see live counts (no badge).
+5. Switch to "yesterday" after the cron has run for a day — see counts as of yesterday with "Status as of {date}" badge.
+6. Switch to a custom range ending two weeks ago — see "Showing live counts (snapshot unavailable for this date)" message. This is the correct behavior; we don't fabricate historical data.
+7. Switch to a future-dated custom range — falls back to live without errors.
 
-### 12.4 Not testing
+### 12.3 Not testing
 
 - Vercel cron scheduling itself — that's Vercel's job. We test the handler in isolation.
 - Per-user drill-down modals — they continue to use live data, unchanged.
 
 ## 13. Migration / deployment order
 
-To avoid the dashboard showing wrong data mid-deploy:
+Three PRs, in order:
 
-1. **PR 1 — model + going-forward writes:**
+1. **PR 1 — Cleanup + Foundation:**
+   - Add `scripts/cleanup-membership-backfill-rows.ts`.
+   - **Run `:dry` against production, eyeball counts, then run live.**
+   - Delete `scripts/backfill-membership-analytics.ts` and its `package.json` entry.
    - Add `MembershipDailySnapshot` model.
-   - Add `appendMembershipStatusHistory` calls at activation paths (Section 7).
-   - Update `CLAUDE.md` manifest.
-   - No reads change yet. Existing dashboard behavior unchanged.
+   - Add `appendActivationStatus` helper + wire into Stripe webhook activation paths (Section 7).
+   - Update `CLAUDE.md` manifest + domain docs.
+   - No dashboard reads change yet — behavior unchanged.
 
-2. **PR 2 — backfill script + activation seed:**
-   - Fix the four bugs in `backfill-membership-analytics.ts`.
-   - Add activation seed pass.
-   - Add `scripts/backfill-membership-daily-snapshot.ts`.
-   - `package.json` entries `backfill:membership-snapshot`, `backfill:membership-snapshot:dry`.
-   - **Deploy, then run `:dry`, eyeball, then run live.**
-
-3. **PR 3 — cron + health check:**
-   - Add cron route + `vercel.json` schedule.
+2. **PR 2 — Cron + Health Check:**
+   - Add `getMembershipByPackageLiveForSnapshot` to the analytics service.
+   - Add cron route + `vercel.json` schedule(s).
    - Add health-check endpoint.
-   - Cron immediately starts writing forward-going `confidence: "live"` rows.
+   - Add DST transition test.
+   - Cron immediately starts writing forward-going `confidence: "live"` rows from the day after deployment.
 
-4. **PR 4 — read path:**
+3. **PR 3 — Read Path:**
    - Update `parseAdminDashboardDateRange` to dispatch.
-   - Wire `getMembershipByPackageSnapshot` to read from the new collection.
+   - Wire `getMembershipByPackageSnapshot` to read from the new collection (with live fallback when row missing).
    - Update lifecycle chart route.
    - Update Cancellations card route.
-   - Light up the "as of {date}" badge in the breakdown UI.
+   - Light up the "as of {date}" badge in the breakdown UI; show "Showing live counts (snapshot unavailable)" for past dates with no row.
 
-This sequencing means the snapshot table is fully populated *before* the read path starts trusting it.
+**Expected runtime behavior:** Until at least one cron fire has succeeded, every snapshot read for any past date returns live data with `snapshotMissing: true`. Once the cron has run for N days, those N days will display correctly; older days continue to show "snapshot unavailable." This is the correct, explicit, no-fabrication behavior DJ chose.
 
 ## 14. Open questions / explicitly deferred
 
 - **Active alerting on cron failure** — deferred. Health-check endpoint exists; DJ to monitor manually for now.
 - **Per-user drill-down modal point-in-time** — out of scope. Continues to query live `User.subscription`.
-- **Older-than-90-day historical reconstruction** — explicitly out of scope; the source data quality drops sharply past 90 days.
-- **Webhook-driven incremental snapshot updates** — explicitly skipped; daily cron + history log is sufficient.
+- **Historical reconstruction (any window)** — explicitly out of scope. DJ chose accuracy-from-today over best-effort retroactive coverage.
+- **Webhook-driven incremental snapshot updates** — explicitly skipped; daily cron is sufficient.
