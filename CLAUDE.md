@@ -479,7 +479,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/package-colors/**",
         "src/utils/prize-brand-colors.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-04-29"
     },
     "client-state": {
       "docs": "docs/client-state/",
