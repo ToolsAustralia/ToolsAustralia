@@ -247,6 +247,8 @@ export default function DashboardOverview() {
         onRevenueClick={handleRevenueBreakdownCardToggle}
         onMembershipClick={() => setIsMembershipByPackageExpanded(!isMembershipByPackageExpanded)}
         membershipLoading={membershipLoading}
+        membershipAsOfMode={membershipByPackageData?.meta?.membershipAsOfMode}
+        membershipAsOf={membershipByPackageData?.meta?.asOf}
         isRevenueExpanded={isRevenueBreakdownExpanded}
         onRevenueExpandToggle={handleRevenueExpandToggle}
         isAdvertisingExpanded={isAdvertisingBreakdownExpanded}

@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code hook state (transient — do not commit)
+.claude/.touched-files
+.claude/.session-state

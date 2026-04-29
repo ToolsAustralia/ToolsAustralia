@@ -1,0 +1,60 @@
+# Draws — Rules
+
+## Status & transitions
+
+### R1. The transition service is the only authority
+
+`major-draw-transition-service.ts` is the single place where major-draw status changes happen. Don't `updateMany({ status: ... })` in any other code. The service:
+- Is idempotent
+- Has timeout protection (`maxTimeMS: 5000`)
+- Is debounced (5s per lambda)
+- Never throws (returns `TransitionResult` object)
+- Adds query comments for Atlas profiling
+
+### R2. Run the transition service before reading status
+
+`getTargetMajorDraw()` calls the transition service at the top. Do the same in any new code that depends on fresh draw status. Otherwise stale `queued` rows can be selected when they should be `active`.
+
+### R3. Cron is authoritative; webhook is best-effort
+
+The cron at 1:30 UTC is the **fallback authority** for transitions. The webhook also calls the service but its failure must not block payment processing. Cron will catch up.
+
+## Eligibility
+
+### R4. Subscriptions anchor renewals to the 24th to leave 3-day failed-renewal recovery window
+
+See [subscription R11-R13](../subscription/rules.md#billing-anchor-24th). Major-draw window is 28th–27th; anchoring the 24th gives ≥3 days to recover from a failed renewal before draw eligibility freezes.
+
+### R5. Eligibility checks go through `giveaway-eligibility.ts`
+
+Don't reimplement the membership-state-to-eligibility logic per route or component. Use the shared helper.
+
+## Tickets & entries
+
+### R6. Entry refunds go through `remove-draw-entries.ts`
+
+When refunding a payment that granted draw entries, call `remove-draw-entries.ts` from the reverser flow ([payment patterns P1](../payment/patterns.md#p1-reverser-modules-per-grant-type)). Don't direct-delete `TicketEntry` rows from refund handlers.
+
+### R7. Purchase cooldown blocks rapid-fire abuse
+
+`src/lib/purchaseCooldown.ts` enforces a min-time between consecutive purchases per user. Don't bypass for test accounts in production.
+
+## Winners & display
+
+### R8. Public-facing winner names go through `winner-name-formatter.ts`
+
+Privacy: first name + last initial. Don't render full names anywhere public. Admin-only views can show full names.
+
+### R9. Winner data has no PII beyond first-name + last-initial in public APIs
+
+`/api/winners/` returns formatted-only data. Internal queries can use raw `Winner` documents.
+
+## Performance
+
+### R10. Use `maxTimeMS` on draw-transition queries
+
+`updateMany` against the `MajorDraw` collection uses `maxTimeMS: 5000` to prevent runaway queries. Carry this over to any new long-running aggregation against draw collections.
+
+### R11. Don't ping Mongo on every transition call
+
+The connection-health check is `mongoose.connection.readyState === 1` (cheap). The expensive `db.admin().ping()` is throttled to once per 30 seconds. Don't add unconditional pings.

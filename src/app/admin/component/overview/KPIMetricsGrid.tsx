@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { format } from "date-fns";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import {
   Users,
@@ -60,6 +61,10 @@ interface KPIMetricsGridProps {
   onRevenueClick: () => void;
   onMembershipClick: () => void;
   membershipLoading?: boolean;
+  /** "live" → current counts; "snapshot" → counts as of `membershipAsOf`. */
+  membershipAsOfMode?: "live" | "snapshot";
+  /** ISO date string of the snapshot date when in snapshot mode; null otherwise. */
+  membershipAsOf?: string | null;
   revenueBreakdownSection?: React.ReactNode;
   membershipBreakdownSection?: React.ReactNode;
   upcomingRenewalsSection?: React.ReactNode;
@@ -82,6 +87,8 @@ export default function KPIMetricsGrid({
   onRevenueClick,
   onMembershipClick,
   membershipLoading = false,
+  membershipAsOfMode,
+  membershipAsOf,
   revenueBreakdownSection,
   membershipBreakdownSection,
   upcomingRenewalsSection,
@@ -175,7 +182,11 @@ export default function KPIMetricsGrid({
           {/* Membership Revenue - Clickable */}
           <div onClick={onMembershipClick} className="cursor-pointer group relative">
             <MetricCard
-              title="Membership Statuses"
+              title={
+                membershipAsOfMode === "snapshot" && membershipAsOf
+                  ? `Membership Statuses (as of ${format(new Date(membershipAsOf), "MMM d")})`
+                  : "Membership Statuses"
+              }
               value={
                 membershipLoading
                   ? "..."

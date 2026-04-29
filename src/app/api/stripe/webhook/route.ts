@@ -51,6 +51,7 @@ import {
   sumSucceededRefundAmountCents,
 } from "@/utils/payment/stripe-refund-amount";
 import {
+  appendActivationStatus,
   appendMembershipStatusHistory,
   upsertRenewalCycleFromFailedInvoice,
   upsertRenewalCycleFromPaidInvoice,
@@ -1605,6 +1606,22 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         webhookLog("info", `✅ Subscription activation verified successfully`);
       }
 
+      if (subscription.status === "active" || subscription.status === "trialing") {
+        try {
+          const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+          await appendActivationStatus({
+            userId: new mongoose.Types.ObjectId(String(user._id)),
+            effectiveAt: new Date(subscription.created * 1000),
+            source: "webhook_subscription_created",
+            subscriptionPackageId: pkgId,
+            isTrialing: subscription.status === "trialing",
+            metadata: { stripeSubscriptionId: subscription.id, status: subscription.status },
+          });
+        } catch (err) {
+          webhookLog("warn", "Failed to append activation history from subscription.created:", err);
+        }
+      }
+
       return;
     } else {
       // Regular subscription creation - only update autoRenew
@@ -1614,6 +1631,22 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     }
 
     await user.save();
+
+    if (subscription.status === "active" || subscription.status === "trialing") {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendActivationStatus({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(subscription.created * 1000),
+          source: "webhook_subscription_created",
+          subscriptionPackageId: pkgId,
+          isTrialing: subscription.status === "trialing",
+          metadata: { stripeSubscriptionId: subscription.id, status: subscription.status },
+        });
+      } catch (err) {
+        webhookLog("warn", "Failed to append activation history from subscription.created:", err);
+      }
+    }
 
     // ✅ NON-CRITICAL: Update Klaviyo profile after subscription activation (fire-and-forget)
     executeBackgroundJob("Klaviyo profile sync after subscription activation", async () => {
@@ -1919,10 +1952,12 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       return;
     }
 
+    // Capture status before any mutations (used below for activation history after save)
+    const prevSubStatus = user.subscription?.status;
+
     // Update user subscription status based on Stripe subscription
     if (user.subscription) {
       const wasActive = user.subscription.isActive;
-      const wasStatus = user.subscription.status;
 
       // Additional protection: If user has an active Boss subscription, don't let old subscription updates override it
       const hasActiveBossSubscription =
@@ -2000,7 +2035,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       }
 
       // Only update status for specific cases to avoid conflicts
-      if (wasActive && wasStatus === "active") {
+      if (wasActive && prevSubStatus === "active") {
         // Subscription already processed as active, only update autoRenew
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         // If cancel_at_period_end is true and cancelledAt is not set, this is a new cancellation
@@ -2033,7 +2068,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         user.subscription.endDate = endDate;
 
-        if (wasStatus !== "past_due") {
+        if (prevSubStatus !== "past_due") {
           user.subscription.pastDueAt = new Date();
         }
 
@@ -2062,7 +2097,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         user.subscription.endDate = endDateUnpaid;
 
-        if (wasStatus !== "unpaid" && wasStatus !== "past_due") {
+        if (prevSubStatus !== "unpaid" && prevSubStatus !== "past_due") {
           user.subscription.pastDueAt = new Date();
         }
 
@@ -2122,6 +2157,26 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     }
 
     await user.save();
+
+    if (
+      (user.subscription?.status === "active" || user.subscription?.status === "trialing") &&
+      prevSubStatus !== "active" &&
+      prevSubStatus !== "trialing"
+    ) {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendActivationStatus({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(),
+          source: "webhook_subscription_updated_active",
+          subscriptionPackageId: pkgId,
+          isTrialing: user.subscription?.status === "trialing",
+          metadata: { stripeSubscriptionId: subscription.id, fromStatus: prevSubStatus, toStatus: user.subscription.status },
+        });
+      } catch (err) {
+        webhookLog("warn", "Failed to append activation history from subscription.updated:", err);
+      }
+    }
 
     // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
     if (subscription.status === "canceled" || subscription.status === "past_due" || subscription.status === "unpaid") {

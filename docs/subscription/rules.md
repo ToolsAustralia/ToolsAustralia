@@ -1,0 +1,115 @@
+# Subscription — Rules
+
+Hard invariants. Violating these causes real-world money/access bugs. Most have dedicated tsx tests under `src/services/subscription/__tests__/` or `src/utils/payment/__tests__/`.
+
+## Cancellation
+
+### R1. Cancellation date = full period end, never sooner
+
+When the user cancels at period end, their `subscription.endDate` is set to **Stripe's authoritative `current_period_end`** (resolved via `getSubscriptionPeriodEnd(sub)` at [src/utils/payment/stripe/subscription-period.ts](../../src/utils/payment/stripe/subscription-period.ts)).
+
+We **never** charge after the user has cancelled. Stripe does not charge at period end when `cancel_at_period_end: true`.
+
+Same helper is used by the cancel API, the subscription webhook, and the anchor-billing migration script — so all three paths agree on what "period end" means.
+
+### R2. Past-due subscriptions always cancel immediately
+
+Regardless of the `cancelAtPeriodEnd` option, when `status === "past_due"` (Stripe or Mongo), `cancelSubscription()` calls `subscriptions.cancel(id)` immediately. There is no period to preserve.
+
+Reference: [CancelSubscriptionService.ts:88-104](../../src/services/subscription/CancelSubscriptionService.ts#L88-L104).
+
+### R3. `lastMonthAccumulatedEntries` is preserved across cancel
+
+Even when cancelling immediately, the user document's `subscription.lastMonthAccumulatedEntries` field is **not** cleared — it must persist so that if the user resubscribes, the entry-accumulation continuity is maintained. See [SUBSCRIPTION_RESUBSCRIBE_ENTRIES](./gotchas.md#resubscribe-entries-continuity) (migrated content).
+
+### R4. Cancellation analytics events come from the webhook only
+
+The "Subscription Cancelled" Klaviyo / Meta event is emitted **exclusively** from the `customer.subscription.deleted` webhook handler. The cancel API path writes the `MembershipStatusHistory` row but **does not** fire any external tracking event — this prevents duplicate events when both API + webhook fire on the same cancel.
+
+## Stripe reference integrity
+
+### R5. Only manageable statuses become canonical
+
+`User.stripeSubscriptionId` must point at a Stripe subscription whose status is in `MANAGEABLE_STRIPE_SUBSCRIPTION_STATUSES` (`active`, `trialing`, `past_due`, `unpaid`, `paused`).
+
+Use `shouldWriteCanonicalStripeSubscriptionId(status)` before any write to that field. Pending/incomplete checkouts go to `subscription.pendingStripeSubscriptionId` instead.
+
+### R6. Auto-repair when canonical points at dead
+
+When the cancel API encounters a stored `stripeSubscriptionId` that is `incomplete` / `incomplete_expired` / `canceled`, it searches the customer for any manageable subscription and adopts the newest one. See `resolveCancellableStripeSubscription()` in [SubscriptionReferenceService.ts](../../src/services/subscription/SubscriptionReferenceService.ts).
+
+### R7. Pre-create dedupe guard
+
+Before creating a new subscription for a customer, **check** `stripeCustomerHasManageableSubscription(customerId)`. If true, do not create — the customer already has a real sub, possibly past-due. Creating another duplicates billing.
+
+## Pause / resume collection
+
+### R8. After failed renewal, set `pause_collection: keep_as_draft`
+
+Failed `subscription_cycle` invoices set `pause_collection` so that newer cycle invoices stay draft until collection resumes — preventing stacked charges and duplicate renewal benefits.
+
+### R9. After successful renewal payment, **clear `pause_collection` before applying benefits**
+
+The `resumeAfterSuccessfulRenewalPayment()` call must run **before** `processPaymentBenefits()` in the webhook. If the benefits path is slow, errors, or the Stripe CLI / proxy times out before the response, an unresumed pause would survive and break the next billing cycle.
+
+The clear-condition lives in `shouldClearPauseCollectionAfterPaidInvoice()` — clear when:
+- Previous Mongo status was `past_due` or `unpaid`, **or**
+- `billing_reason` is `subscription_cycle` | `subscription_threshold` | `subscription_update`.
+
+### R10. Resume is idempotent
+
+`resumeAfterSuccessfulRenewalPayment()` is safe to call when the subscription is not paused — it sets `pause_collection: ""` (Stripe's manual-unpause API), which is a no-op when nothing is paused.
+
+## Billing anchor — 24th of the month
+
+### R11. New 25th/26th/27th joiners anchor to the 24th
+
+Users joining on those three calendar days (AEST / `Australia/Sydney`) are anchored to renew on the **24th** of each subsequent month. This guarantees ≥ 3 days to recover from a failed renewal before the major-draw window (28th–27th).
+
+Implementation:
+- **`trial_end`** = next 24th at midnight AEST
+- **`proration_behavior: "none"`** so renewal anchors to the 24th
+- **`add_invoice_items`** with the full package price so the user pays immediately at signup (not prorated)
+- First invoice = full price charged at signup; subscription status is `trialing` until the 24th, then `active` with renewals on the 24th
+
+The helper that builds these create-params: `getSubscriptionCreateParamsForAnchor(joinDate)` — used by `create-subscription`, `create-subscription-existing-user`, and `renew-subscription` routes (in the [billing-stripe](../billing-stripe/) domain).
+
+### R12. Anchor migration skips `cancel_at_period_end`
+
+The migration script `scripts/migrate-anchor-billing-24.ts` **never** migrates subscriptions where `cancel_at_period_end === true` — those users have already chosen to end on their current period. Touching `trial_end` or `proration_behavior` could re-charge or extend access. The script logs `skip_cancel_at_period_end` and moves on.
+
+### R13. Cancellation date for anchored subs = 24th
+
+If an anchored user cancels (`cancel_at_period_end: true`), their access ends on **the 24th** (full period). Stripe does not charge again at period end. Cancellation date == period end == 24th.
+
+## Date / timezone
+
+### R14. All subscription dates use `date-fns-tz` Australia/Sydney
+
+Anchor day, renewal date, period end, cancellation date — all are computed in `Australia/Sydney`, never in `Date`'s local zone or UTC. Use `date-fns-tz` (already a dependency).
+
+DST regression tests: see [scripts/test-dst-transitions.ts](../../scripts/test-dst-transitions.ts) and the migrated [TESTING-TIMEZONE-DST](./testing.md#dst-tests) (root-level doc, to be merged here).
+
+## Console / logging
+
+### R15. Use `console.error` only for genuine errors
+
+Per CLAUDE.md, production builds strip `console.{log,info,debug,warn}`. Subscription code that needs durable error trails should use `console.error` or route through `ErrorReport` (see [error-reporting](../error-reporting/)).
+
+## Forbidden
+
+### F1. Don't expand `latest_payment_intent` on Invoices
+
+On Stripe API `2025-05-28.basil` (current), retrieving an Invoice with `expand: ['latest_payment_intent']` returns:
+
+> `This property cannot be expanded (latest_payment_intent)`
+
+Use `expand: ['payment_intent']` instead. The invoice JSON may still include `latest_payment_intent` as an id; retrieve the PaymentIntent separately.
+
+### F2. Don't store card data anywhere except Stripe
+
+Saved payment methods on the User document store **only** Stripe `paymentMethodId` strings. The schema enforces this — see [src/models/User.ts:21-26](../../src/models/User.ts#L21-L26). PCI compliance.
+
+### F3. Don't compute `isActive` client-side
+
+Components must read `subscription.isActive` from the user object (server-derived). Don't infer it from `endDate > now()`. The `isActive` flag is set by the cancel/webhook paths and accounts for past-due, scheduled-cancel, and grace-period nuances that a client-side check would miss.

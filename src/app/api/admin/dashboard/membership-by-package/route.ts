@@ -34,9 +34,10 @@ export async function GET(request: NextRequest) {
     const { membershipAsOfMode, asOfDate } = parsed.value;
     const service = new MembershipAnalyticsService();
 
-    // MembershipStatusHistory is a partial event log today, not a complete state ledger.
-    // Use current User.subscription state for active MRR until historical snapshots are complete.
-    const data = await service.getMembershipByPackageLive();
+    const data =
+      membershipAsOfMode === "snapshot" && asOfDate
+        ? await service.getMembershipByPackageSnapshot(asOfDate)
+        : await service.getMembershipByPackageLive();
 
     return NextResponse.json({
       success: true,

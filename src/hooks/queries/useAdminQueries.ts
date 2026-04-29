@@ -165,6 +165,8 @@ export interface MembershipByPackageSummary {
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
   snapshotPartial?: boolean;
+  /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
+  snapshotMissing?: boolean;
 }
 
 export interface MembershipByPackageData {

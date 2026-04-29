@@ -1,4 +1,6 @@
+import { formatInTimeZone } from "date-fns-tz";
 import User from "@/models/User";
+import MembershipDailySnapshot, { type IMembershipDailySnapshot } from "@/models/MembershipDailySnapshot";
 import MembershipRenewalCycle from "@/models/MembershipRenewalCycle";
 import MembershipStatusHistory from "@/models/MembershipStatusHistory";
 import { getPackageById } from "@/data/membershipPackages";
@@ -7,7 +9,7 @@ import {
   getActiveSubscriptionFilter,
   SUBSCRIBED_SUBSCRIPTION_STATUSES,
 } from "@/utils/admin/userFilterBuilder";
-import type { AdminDashboardDateRangeKey } from "@/utils/admin/dashboardDateRange";
+import type { AdminDashboardDateRangeKey, MembershipAsOfMode } from "@/utils/admin/dashboardDateRange";
 import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import type { MembershipAnalyticsBundle } from "@/types/admin/membershipAnalytics";
 
@@ -28,8 +30,10 @@ export interface MembershipByPackageSummaryDTO {
   totalPastDueCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
-  /** True when some users had no status history and fell back to current subscription fields */
+  /** Legacy field — kept for compatibility with the deprecated per-user snapshot reader. */
   snapshotPartial?: boolean;
+  /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
+  snapshotMissing?: boolean;
 }
 
 export interface MembershipByPackageDataDTO {
@@ -44,8 +48,12 @@ export class MembershipAnalyticsService {
   async getAnalyticsBundle(
     startDate: Date,
     endDate: Date,
-    dateRange: AdminDashboardDateRangeKey
+    dateRange: AdminDashboardDateRangeKey,
+    options?: { membershipAsOfMode?: MembershipAsOfMode; asOfDate?: Date | null }
   ): Promise<MembershipAnalyticsBundle> {
+    const membershipAsOfMode = options?.membershipAsOfMode;
+    const asOfDate = options?.asOfDate ?? null;
+
     const [expectedRenewalsInRange, failedRenewalInvoicesInRange, becamePastDueIds] = await Promise.all([
       MembershipRenewalCycle.countDocuments({
         billingReason: "subscription_cycle",
@@ -73,6 +81,7 @@ export class MembershipAnalyticsService {
           }
         : null;
 
+    // Delta query: users who cancelled within the date range (live, never from snapshot)
     const cancellationRows = scheduledCancellationQuery
       ? await User.find(scheduledCancellationQuery).select("subscription.packageId").lean()
       : await User.find({
@@ -99,13 +108,31 @@ export class MembershipAnalyticsService {
     }
 
     let cancelledMembershipRevenueImpact = 0;
-    for (const u of cancellationRows) {
-      const pid = u.subscription?.packageId;
-      const id = typeof pid === "string" ? pid : pid != null && typeof pid === "object" && "toString" in pid ? String(pid) : "";
-      const pkg = id ? getPackageById(id) : undefined;
-      cancelledMembershipRevenueImpact += pkg?.price ?? 0;
+
+    if (membershipAsOfMode === "snapshot" && asOfDate) {
+      // Standing scheduled-cancel revenue sourced from the snapshot for the requested date.
+      // We use count × current catalog price as the best available approximation — the
+      // snapshot DTO doesn't expose per-row unitPriceCents for scheduled-cancel rows yet.
+      // If pricing changes materially in the future, extend the DTO to carry the locked price.
+      const snap = await this.getMembershipByPackageSnapshot(asOfDate);
+      if (!snap.summary?.snapshotMissing) {
+        cancelledMembershipRevenueImpact = snap.packages.reduce((sum, p) => {
+          const pkg = getPackageById(p.packageId);
+          return sum + (p.cancelledCount ?? 0) * (pkg?.price ?? 0);
+        }, 0);
+        cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
+      }
+      // cancellationsInRange is the live delta query result above — not from snapshot.
+    } else {
+      // All-time stock or range-delta path: derive revenue from the cancellation rows above.
+      for (const u of cancellationRows) {
+        const pid = u.subscription?.packageId;
+        const id = typeof pid === "string" ? pid : pid != null && typeof pid === "object" && "toString" in pid ? String(pid) : "";
+        const pkg = id ? getPackageById(id) : undefined;
+        cancelledMembershipRevenueImpact += pkg?.price ?? 0;
+      }
+      cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
     }
-    cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
 
     return {
       expectedRenewalsInRange,
@@ -198,105 +225,104 @@ export class MembershipAnalyticsService {
   }
 
   /**
-   * Point-in-time membership counts using MembershipStatusHistory, with fallback to current User.subscription.
+   * Returns the four counts the snapshot model needs (including fully-cancelled).
+   * Used by the cron writer; not exposed to dashboard read paths.
    */
-  async getMembershipByPackageSnapshot(asOfDate: Date): Promise<MembershipByPackageDataDTO> {
+  async getMembershipByPackageLiveForSnapshot(): Promise<{
+    packages: Array<{
+      packageId: string;
+      activeCount: number;
+      pastDueCount: number;
+      scheduledCancelCount: number;
+      fullyCancelledCount: number;
+    }>;
+  }> {
     const baseMatch = {
       "subscription.packageId": { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
-      isActive: true,
     };
+    const now = new Date();
 
-    const grouped = await User.aggregate<{
-      _id: string;
-      activeCount: number;
-      cancelledCount: number;
-      pastDueCount: number;
-      partialCount: number;
-    }>([
-      { $match: baseMatch },
-      {
-        $lookup: {
-          from: "membershipstatushistories",
-          let: { uid: "$_id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [{ $eq: ["$userId", "$$uid"] }, { $lte: ["$effectiveAt", asOfDate] }],
-                },
+    const [activeResults, scheduledResults, pastDueResults, fullyCancelledResults] = await Promise.all([
+      User.aggregate([
+        { $match: { ...baseMatch, isActive: true, ...getActiveSubscriptionFilter(false) } },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            isActive: true,
+            "subscription.status": { $in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
+            "subscription.autoRenew": false,
+            "subscription.endDate": { $exists: true, $ne: null },
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            isActive: true,
+            "subscription.status": "past_due",
+            "subscription.packageId": { $exists: true, $nin: [null, ""] },
+          },
+        },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
+      User.aggregate([
+        {
+          $match: {
+            ...baseMatch,
+            $or: [
+              { "subscription.status": { $in: ["canceled", "cancelled"] } },
+              {
+                "subscription.endDate": { $lte: now, $ne: null },
+                "subscription.cancelledAt": { $ne: null },
               },
-            },
-            { $sort: { effectiveAt: -1 } },
-            { $limit: 1 },
-          ],
-          as: "hist",
-        },
-      },
-      {
-        $addFields: {
-          snapshotStatus: {
-            $cond: {
-              if: { $gt: [{ $size: "$hist" }, 0] },
-              then: { $arrayElemAt: ["$hist.membershipStatus", 0] },
-              else: {
-                $switch: {
-                  branches: [
-                    { case: { $eq: ["$subscription.status", "past_due"] }, then: "past_due" },
-                    { case: { $eq: ["$subscription.status", "unpaid"] }, then: "unpaid" },
-                    { case: { $eq: ["$subscription.status", "canceled"] }, then: "canceled" },
-                    { case: { $eq: ["$subscription.status", "cancelled"] }, then: "canceled" },
-                    { case: { $eq: ["$subscription.status", "active"] }, then: "active" },
-                    { case: { $eq: ["$subscription.status", "trialing"] }, then: "trialing" },
-                  ],
-                  default: "none",
-                },
-              },
-            },
-          },
-          snapshotPartial: { $eq: [{ $size: "$hist" }, 0] },
-        },
-      },
-      {
-        $group: {
-          _id: "$subscription.packageId",
-          activeCount: {
-            $sum: {
-              $cond: [{ $in: ["$snapshotStatus", ["active", "trialing"]] }, 1, 0],
-            },
-          },
-          cancelledCount: {
-            $sum: {
-              $cond: [{ $in: ["$snapshotStatus", ["scheduled_cancel", "canceled"]] }, 1, 0],
-            },
-          },
-          pastDueCount: {
-            $sum: {
-              $cond: [{ $in: ["$snapshotStatus", ["past_due", "unpaid"]] }, 1, 0],
-            },
-          },
-          partialCount: {
-            $sum: { $cond: ["$snapshotPartial", 1, 0] },
+            ],
           },
         },
-      },
+        { $group: { _id: "$subscription.packageId", count: { $sum: 1 } } },
+      ]),
     ]);
 
-    const byPackage = Object.fromEntries(
-      grouped.map((g) => [
-        String(g._id),
-        {
-          active: g.activeCount,
-          cancelled: g.cancelledCount,
-          pastDue: g.pastDueCount,
-          partial: g.partialCount,
-        },
-      ])
-    );
+    const toMap = (rows: Array<{ _id: string; count: number }>) =>
+      Object.fromEntries(rows.map((r) => [String(r._id), r.count]));
 
-    let totalPartial = 0;
-    for (const g of grouped) {
-      totalPartial += g.partialCount;
+    const a = toMap(activeResults);
+    const s = toMap(scheduledResults);
+    const p = toMap(pastDueResults);
+    const c = toMap(fullyCancelledResults);
+
+    return {
+      packages: SUBSCRIPTION_PACKAGE_IDS.map((packageId) => ({
+        packageId,
+        activeCount: a[packageId] ?? 0,
+        pastDueCount: p[packageId] ?? 0,
+        scheduledCancelCount: s[packageId] ?? 0,
+        fullyCancelledCount: c[packageId] ?? 0,
+      })),
+    };
+  }
+
+  /**
+   * Point-in-time membership counts read from MembershipDailySnapshot, with live fallback when no row exists.
+   */
+  async getMembershipByPackageSnapshot(asOfDate: Date): Promise<MembershipByPackageDataDTO> {
+    const dateKey = formatInTimeZone(asOfDate, "Australia/Sydney", "yyyy-MM-dd");
+    const rows = await MembershipDailySnapshot.find({ date: dateKey }).lean();
+
+    if (rows.length === 0) {
+      const live = await this.getMembershipByPackageLive();
+      return {
+        ...live,
+        summary: { ...live.summary, snapshotMissing: true },
+      };
     }
+
+    const byPackage = new Map<string, IMembershipDailySnapshot>();
+    for (const r of rows) byPackage.set(r.packageId, r as IMembershipDailySnapshot);
 
     let totalActiveCount = 0;
     let totalPastDueCount = 0;
@@ -304,21 +330,21 @@ export class MembershipAnalyticsService {
     let totalPastDueRevenue = 0;
 
     const packages: MembershipByPackageItemDTO[] = SUBSCRIPTION_PACKAGE_IDS.map((packageId) => {
-      const pkg = getPackageById(packageId);
-      const price = pkg?.price ?? 0;
-      const row = byPackage[packageId];
-      const activeCount = row?.active ?? 0;
-      const cancelledCount = row?.cancelled ?? 0;
-      const pastDueCount = row?.pastDue ?? 0;
-      const activeRevenue = Math.round(activeCount * price * 100) / 100;
-      const pastDueRevenue = Math.round(pastDueCount * price * 100) / 100;
+      const row = byPackage.get(packageId);
+      const activeCount = row?.activeCount ?? 0;
+      const pastDueCount = row?.pastDueCount ?? 0;
+      const cancelledCount = row?.scheduledCancelCount ?? 0; // dashboard's "cancelled" = scheduled
+      const activeRevenue = row?.activeRevenue ?? 0;
+      const pastDueRevenue = row?.pastDueRevenue ?? 0;
+
       totalActiveCount += activeCount;
       totalPastDueCount += pastDueCount;
       totalActiveRevenue += activeRevenue;
       totalPastDueRevenue += pastDueRevenue;
+
       return {
         packageId,
-        packageName: pkg?.name ?? packageId,
+        packageName: getPackageById(packageId)?.name ?? packageId,
         activeCount,
         cancelledCount,
         pastDueCount,
@@ -334,7 +360,6 @@ export class MembershipAnalyticsService {
         totalPastDueCount,
         totalActiveRevenue: Math.round(totalActiveRevenue * 100) / 100,
         totalPastDueRevenue: Math.round(totalPastDueRevenue * 100) / 100,
-        snapshotPartial: totalPartial > 0,
       },
     };
   }
