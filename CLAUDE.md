@@ -126,18 +126,20 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-04-28",
+  "lastModified": "2026-04-29",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
       "paths": [
         "src/services/subscription/**",
+        "src/services/admin/membershipAnalyticsPersistence.ts",
         "src/utils/subscription/**",
         "src/utils/membership/**",
         "src/models/User.ts",
         "src/models/MembershipPackage.ts",
         "src/models/MembershipRenewalCycle.ts",
         "src/models/MembershipStatusHistory.ts",
+        "src/models/MembershipDailySnapshot.ts",
         "src/models/ChargeJobLock.ts",
         "src/app/api/subscription/**",
         "src/app/api/memberships/**",
@@ -146,7 +148,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-04-29"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -160,7 +162,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/stripe/**",
         "src/app/api/invoice/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-04-29"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -546,6 +548,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
     "infrastructure": {
       "docs": "docs/infrastructure/",
       "paths": [
+        "package.json",
+        "vercel.json",
         "src/app/api/health/**",
         "src/app/api/cron/**",
         "src/app/api/upload/**",
@@ -563,10 +567,11 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/update-*.ts",
         "scripts/sync-*.ts",
         "scripts/backfill-*.ts",
+        "scripts/cleanup-*.ts",
         "scripts/find-*.ts",
         "scripts/stripe-*.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-04-29"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

@@ -1,6 +1,6 @@
 # Subscription — Mongo models
 
-5 collections own subscription state. Schemas live in [`src/models/`](../../src/models/).
+6 collections own subscription state. Schemas live in [`src/models/`](../../src/models/).
 
 ## `User.subscription` (subdocument on `User`)
 
@@ -191,3 +191,42 @@ Notable: the schema forces `_id: "charge-job-lock"` as the default, so the colle
 The model file deletes any cached Mongoose model before re-registering (`delete mongoose.models[modelName]`) — this is unusual; it's there to ensure schema changes always take effect during dev hot-reload.
 
 > _TODO: locate the cron entry that uses ChargeJobLock — likely `src/lib/jobs/` or `src/app/api/cron/` — and document its schedule and the lease-renewal pattern. Cross-reference [infrastructure](../infrastructure/) when those docs exist._
+
+## `MembershipDailySnapshot`
+
+[src/models/MembershipDailySnapshot.ts](../../src/models/MembershipDailySnapshot.ts) — per-day, per-package roll-up of membership counts and revenue. Used by the admin dashboard to display point-in-time membership data for any selected past date.
+
+```ts
+interface IMembershipDailySnapshot {
+  date: string;                    // "yyyy-MM-dd" in Australia/Sydney
+  packageId: string;               // tradie-/foreman-/boss-subscription
+  tz: "Australia/Sydney";          // recorded for forward-compat
+
+  activeCount: number;             // active + trialing
+  pastDueCount: number;            // past_due + unpaid
+  scheduledCancelCount: number;    // autoRenew=false but still active
+  cancelledCount: number;          // fully terminated
+
+  unitPriceCents: number;          // package.price × 100, locked at write time
+  activeRevenue: number;           // (activeCount × unitPriceCents) / 100
+  pastDueRevenue: number;          // (pastDueCount × unitPriceCents) / 100
+
+  confidence: "live";              // currently only one value; field retained for forward-compat
+  computedAt: Date;
+  sourceVersion: number;
+}
+```
+
+Indexes:
+- `{ date: 1 }`
+- `{ date: 1, packageId: 1 }` (unique) — drives upsert and lookup
+
+Collection name forced: `"membershipdailysnapshots"`.
+
+**Writers:** [src/app/api/cron/membership-daily-snapshot/route.ts](../../src/app/api/cron/membership-daily-snapshot/route.ts) (nightly, fires at 14:00 + 15:00 UTC for redundancy).
+
+**Readers:** `MembershipAnalyticsService.getMembershipByPackageSnapshot(asOfDate)`.
+
+**Locked-in pricing:** `unitPriceCents` is captured at write time. A future package price change writes new snapshots at the new price; existing rows keep the old price. Historical revenue is immutable.
+
+**Behavior on missing rows:** When the snapshot reader is asked for a date with no row (e.g., any date before this collection was first populated, or a one-off cron outage), it falls back to live counts and sets `summary.snapshotMissing: true` so the UI can flag the result. **No reconstruction is performed** — the dashboard surfaces the unknown state explicitly rather than fabricating it.

@@ -20,6 +20,7 @@
 [scripts/](../../scripts/) — many operational scripts. Per CLAUDE.md naming conventions:
 - `migrate-*.ts` → migrate:* npm script
 - `backfill-*.ts` → backfill:*
+- `cleanup-*.ts` → cleanup:*
 - `sync-*.ts` → sync:*
 - `stripe-*.ts` → stripe:*
 - `find-*.ts` → find:*
@@ -28,6 +29,8 @@ Plus:
 - `scripts/migrations/` — date-prefixed migrations
 - `scripts/seed-admin-data.ts` — dev seed
 - `scripts/fix-*.{ts,mjs,js}` — one-off operational fixes
+
+**Destructive script convention:** Scripts that delete or mutate production data should default to dry-run and require an explicit `--live` flag to actually execute. The `:dry` npm variant is the bare invocation; the live variant passes `--live`. See `scripts/cleanup-membership-backfill-rows.ts` for a current example, or `scripts/backfill-subscription-end-dates.ts` for the equivalent pre-existing pattern.
 
 ## Env handling
 

@@ -115,3 +115,15 @@ Side effects (always, in order):
 5. `lastMonthAccumulatedEntries` is **preserved** on the user doc for potential resubscribe.
 
 Cancellation-event analytics emission is centralised in the **`customer.subscription.deleted` webhook**, not the API path, to avoid double-counting.
+
+## Activation history writes (added 2026-04-29)
+
+`handleSubscriptionCreated` and the `customer.subscription.updated` handler both append a row to `MembershipStatusHistory` (status `active` or `trialing`, source `webhook_subscription_created` / `webhook_subscription_updated_active`) whenever a subscription transitions into an active state.
+
+Concretely:
+- **`customer.subscription.created`:** fires once per new subscription (regular checkout) and once per upgrade-promotion path. Records the activation with `effectiveAt = subscription.created`.
+- **`customer.subscription.updated`:** fires when status changes from non-active to `active` or `trialing` (e.g., past_due → active recovery, incomplete → active, trialing → active conversion). Records the activation with `effectiveAt = now`.
+
+This makes the event log complete from this date forward. Combined with the existing `past_due` and cancellation writes, every state transition into the four primary buckets (`active`, `trialing`, `past_due`, `canceled`/`scheduled_cancel`) is now recorded. The new `MembershipDailySnapshot` cron does not depend on this for daily snapshot writes (it reads live state), but downstream tooling that reconstructs membership state from history events alone will benefit from the completeness.
+
+Errors during the analytics write are caught and routed via `webhookLog("warn", ...)` — they never fail the webhook handler.

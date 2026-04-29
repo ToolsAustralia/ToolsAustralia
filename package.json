@@ -49,8 +49,8 @@
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
     "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
     "test:dashboard-date-range": "tsx src/utils/admin/__tests__/dashboardDateRange.test.ts",
-    "backfill:membership-analytics": "tsx scripts/backfill-membership-analytics.ts",
-    "backfill:membership-analytics:dry": "tsx scripts/backfill-membership-analytics.ts --dry-run",
+    "cleanup:membership-backfill": "tsx scripts/cleanup-membership-backfill-rows.ts --live",
+    "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
     "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts"
   },
   "dependencies": {

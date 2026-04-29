@@ -23,8 +23,8 @@ Stripe → POST /api/stripe/webhook
                   │
                   ▼
         switch (event.type)
-        ├── customer.subscription.created       → write User.subscription, write MembershipStatusHistory
-        ├── customer.subscription.updated       → reconcile Mongo state with Stripe
+        ├── customer.subscription.created       → write User.subscription, write MembershipStatusHistory active/trialing
+        ├── customer.subscription.updated       → reconcile Mongo state with Stripe; write MembershipStatusHistory active/trialing on non-active→active recovery
         ├── customer.subscription.deleted       → fire cancellation analytics events (single source!)
         ├── invoice.payment_succeeded           → resumeAfterSuccessfulRenewalPayment, processPaymentBenefits, write PaymentEvent BenefitsGranted
         ├── invoice.payment_failed              → pauseAfterRenewalFailure, write MembershipStatusHistory past_due

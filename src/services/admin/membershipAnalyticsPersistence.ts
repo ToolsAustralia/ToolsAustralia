@@ -172,3 +172,30 @@ export async function recordCancellationAnalytics(
     },
   });
 }
+
+/**
+ * Append an "active" or "trialing" history row when a subscription becomes active.
+ * Idempotent via stable dedupeKey. Safe to call from webhook + service paths.
+ */
+export async function appendActivationStatus(input: {
+  userId: mongoose.Types.ObjectId;
+  effectiveAt: Date;
+  source: string;
+  subscriptionPackageId?: string;
+  isTrialing?: boolean;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const status: MembershipNormalizedStatus = input.isTrialing ? "trialing" : "active";
+  const dedupeKey = `${input.source}_${input.userId.toString()}_${input.effectiveAt.getTime()}_${status}`;
+
+  await appendMembershipStatusHistory({
+    userId: input.userId,
+    effectiveAt: input.effectiveAt,
+    membershipStatus: status,
+    actor: "stripe",
+    source: input.source,
+    dedupeKey,
+    subscriptionPackageId: input.subscriptionPackageId,
+    metadata: input.metadata,
+  });
+}
