@@ -134,6 +134,7 @@ A nightly cron at [`/api/cron/membership-daily-snapshot`](../../src/app/api/cron
 
 Read path:
 - The cron calls [`MembershipAnalyticsService.getMembershipByPackageLiveForSnapshot()`](../../src/services/admin/MembershipAnalyticsService.ts) — a snapshot-shaped sibling of `getMembershipByPackageLive()` that returns four bucket counts (active, past_due, scheduledCancel, fullyCancelled) instead of three. The dashboard's existing `getMembershipByPackageLive()` is unchanged.
+- Dashboard reads (admin route layer) call [`getMembershipByPackageSnapshot(asOfDate)`](../../src/services/admin/MembershipAnalyticsService.ts) when `parseAdminDashboardDateRange` resolves `membershipAsOfMode === "snapshot"`. That method reads three rows (one per package) directly from the `MembershipDailySnapshot` collection — a single indexed lookup. When no row exists for the queried date, it falls back to live counts and sets `summary.snapshotMissing: true` so the UI can flag the result. `getAnalyticsBundle()` accepts the same `{ membershipAsOfMode, asOfDate }` options to keep the cancellation-impact revenue consistent with the snapshot when historical.
 - Each row stores a snapshot of `unitPriceCents` at write time, so historical revenue is **immutable** if a package price changes later.
 - `confidence: "live"` always — there is no historical reconstruction.
 

@@ -35,6 +35,7 @@ export interface UserMetricsQuery {
   startDate?: Date;
   endDate?: Date;
   groupBy?: "source" | "profession" | "status";
+  asOfDate?: Date | null;
 }
 
 export interface UserMetricsResponse {

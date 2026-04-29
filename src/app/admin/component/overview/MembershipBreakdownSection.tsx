@@ -27,10 +27,17 @@ export default function MembershipBreakdownSection({
   membershipByPackageData,
   membershipByPackageLoading,
 }: MembershipBreakdownSectionProps) {
-  const snapshotLabel =
-    membershipByPackageData?.meta?.membershipAsOfMode === "snapshot" && membershipByPackageData.meta.asOf
-      ? `Status as of ${format(new Date(membershipByPackageData.meta.asOf), "MMM d, yyyy")}`
-      : "Current membership status";
+  const snapshotLabel = (() => {
+    const meta = membershipByPackageData?.meta;
+    const summary = membershipByPackageData?.summary;
+    if (meta?.membershipAsOfMode === "snapshot" && summary?.snapshotMissing) {
+      return "Showing live counts (snapshot unavailable for this date)";
+    }
+    if (meta?.membershipAsOfMode === "snapshot" && meta.asOf) {
+      return `Status as of ${format(new Date(meta.asOf), "MMM d, yyyy")}`;
+    }
+    return "Current membership status";
+  })();
   const [membershipModalPackage, setMembershipModalPackage] = useState<{
     packageId: string;
     packageName: string;

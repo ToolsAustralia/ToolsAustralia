@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: parsedRange.error }, { status: parsedRange.status });
     }
 
-    const { startDate, endDate, dateRange } = parsedRange.value;
+    const { startDate, endDate, dateRange, membershipAsOfMode, asOfDate } = parsedRange.value;
     const startOfToday = getStartOfTodayInAEST();
     const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -122,11 +122,28 @@ export async function GET(request: NextRequest) {
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
 
+    // When the dashboard is in snapshot mode (asOfDate is in the past), override the
+    // *standing* cancellation metrics with the corresponding values from the daily
+    // snapshot. The *delta* values (cancelledMemberships, range counters) stay live.
+    let standingScheduledCancellation = totalScheduledCancellation;
+    let snapshotMissingForStanding = false;
+    if (membershipAsOfMode === "snapshot" && asOfDate) {
+      const snapshot = await new MembershipAnalyticsService().getMembershipByPackageSnapshot(asOfDate);
+      if (snapshot.summary?.snapshotMissing) {
+        snapshotMissingForStanding = true;
+      } else {
+        standingScheduledCancellation = snapshot.packages.reduce(
+          (sum, p) => sum + (p.cancelledCount ?? 0),
+          0
+        );
+      }
+    }
+
     // Drop-off rate: % of membership base (active + scheduled) that has scheduled cancellation
-    const membershipBase = activeSubscriptions + totalScheduledCancellation;
+    const membershipBase = activeSubscriptions + standingScheduledCancellation;
     const dropOffRate =
       membershipBase > 0
-        ? Math.round((totalScheduledCancellation / membershipBase) * 1000) / 10
+        ? Math.round((standingScheduledCancellation / membershipBase) * 1000) / 10
         : 0;
 
     // Period churn rate: % of active subscribers who cancelled in the selected period (only when not all-time)
@@ -592,7 +609,7 @@ export async function GET(request: NextRequest) {
     const membershipAnalyticsService = new MembershipAnalyticsService();
     let membershipAnalytics;
     try {
-      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange);
+      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange, { membershipAsOfMode, asOfDate });
     } catch (maErr) {
       console.error("⚠️ Error fetching membership analytics bundle:", maErr);
       membershipAnalytics = {
@@ -619,7 +636,7 @@ export async function GET(request: NextRequest) {
         profileCompletion: profileCompletionRate,
         cancelledMemberships,
         ...(cancelledMembershipsTrend && { cancelledMembershipsTrend }),
-        totalScheduledCancellation,
+        totalScheduledCancellation: standingScheduledCancellation,
         dropOffRate,
         ...(periodChurnRate != null && { periodChurnRate }),
         ...(dropOffRateTrend && { dropOffRateTrend }),
@@ -633,6 +650,7 @@ export async function GET(request: NextRequest) {
         cancellationImpact: {
           estimatedMonthlyRevenue: membershipAnalytics.cancelledMembershipRevenueImpact,
         },
+        ...(snapshotMissingForStanding && { snapshotMissingForStanding: true }),
       },
       revenue: {
         total: totalRevenue,

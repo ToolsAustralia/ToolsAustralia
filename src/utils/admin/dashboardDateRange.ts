@@ -20,9 +20,9 @@ export interface ParsedAdminDashboardDateRange {
   startDate: Date;
   endDate: Date;
   dateRange: AdminDashboardDateRangeKey;
-  /** Membership status KPI currently uses live User.subscription data for active MRR. */
+  /** "live" → read current User.subscription; "snapshot" → read MembershipDailySnapshot for asOfDate. */
   membershipAsOfMode: MembershipAsOfMode;
-  /** Reserved for future complete point-in-time membership snapshots. */
+  /** End-of-day (Sydney) for snapshot reads; null when mode is "live". */
   asOfDate: Date | null;
 }
 
@@ -119,8 +119,14 @@ export function parseAdminDashboardDateRange(input: {
       endDate = endOfToday;
   }
 
-  const membershipAsOfMode: MembershipAsOfMode = "live";
-  const asOfDate = null;
+  const todayEndMs = endOfToday.getTime();
+  const asOfDateMs = Math.min(endDate.getTime(), todayEndMs);
+  const asOfDate = new Date(asOfDateMs);
+  const isFuture = endDate.getTime() > todayEndMs;
+  const isToday = dateRange === "today" || asOfDateMs === todayEndMs;
+
+  const membershipAsOfMode: MembershipAsOfMode =
+    isToday || isFuture || dateRange === "all-time" ? "live" : "snapshot";
 
   return {
     ok: true,
@@ -129,7 +135,7 @@ export function parseAdminDashboardDateRange(input: {
       endDate,
       dateRange,
       membershipAsOfMode,
-      asOfDate,
+      asOfDate: membershipAsOfMode === "snapshot" ? asOfDate : null,
     },
   };
 }

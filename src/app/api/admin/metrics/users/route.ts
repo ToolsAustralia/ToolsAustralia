@@ -5,6 +5,7 @@ import { UserMetricsService } from "@/services/metrics/UserMetricsService";
 import { DailyUserMetricsService } from "@/services/metrics/DailyUserMetricsService";
 import { handleApiError } from "@/lib/errors/handlers";
 import { z } from "zod";
+import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
 
 const userMetricsService = new UserMetricsService();
 const dailyUserMetricsService = new DailyUserMetricsService();
@@ -64,11 +65,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Derive asOfDate for snapshot mode using the shared date-range parser.
+    const parsedRange = parseAdminDashboardDateRange({
+      dateRange: searchParams.get("dateRange"),
+      startDateParam: searchParams.get("startDate"),
+      endDateParam: searchParams.get("endDate"),
+    });
+    const asOfDate = parsedRange.ok ? parsedRange.value.asOfDate : null;
+
     // Aggregate metrics (original behavior)
     const result = await userMetricsService.getUserMetrics({
       startDate: validatedQuery.startDate,
       endDate: validatedQuery.endDate,
       groupBy: validatedQuery.groupBy,
+      asOfDate,
     });
 
     // Count total users for meta

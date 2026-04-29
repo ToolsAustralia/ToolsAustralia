@@ -12,6 +12,8 @@ import {
 import ReferralEvent from "@/models/ReferralEvent";
 import connectDB from "@/lib/mongodb";
 import type { UserMetrics, UserMetricsQuery } from "@/types/metrics/UserMetrics";
+import { formatInTimeZone } from "date-fns-tz";
+import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
 
 export class UserMetricsService {
   /**
@@ -22,6 +24,7 @@ export class UserMetricsService {
 
     const startDate = query.startDate || new Date(0); // Beginning of time if not specified
     const endDate = query.endDate || new Date(); // Now if not specified
+    const asOfDate = query.asOfDate ?? null;
 
     // Get all users created in the date range
     const users = await User.find({
@@ -132,6 +135,26 @@ export class UserMetricsService {
         else if (user.subscription.status === "canceled" || user.subscription.status === "cancelled") {
           membershipStatus.cancelled++;
         }
+      }
+    }
+
+    if (asOfDate) {
+      const dateKey = formatInTimeZone(asOfDate, "Australia/Sydney", "yyyy-MM-dd");
+      const snapshotRows = await MembershipDailySnapshot.find({ date: dateKey }).lean();
+      if (snapshotRows.length > 0) {
+        const totals = snapshotRows.reduce(
+          (acc, r) => {
+            acc.active += r.activeCount;
+            acc.cancelled += r.cancelledCount + r.scheduledCancelCount;
+            acc.pastDue += r.pastDueCount;
+            return acc;
+          },
+          { active: 0, cancelled: 0, pastDue: 0 }
+        );
+        membershipStatus.active = totals.active;
+        membershipStatus.cancelled = totals.cancelled;
+        membershipStatus.pastDue = totals.pastDue;
+        // membershipStatus.renewed stays as-is — it's a range-driven delta from PaymentEvent.
       }
     }
 
