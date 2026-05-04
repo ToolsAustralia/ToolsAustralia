@@ -37,6 +37,49 @@ Raw events (PaymentEvent, MembershipRenewalCycle, MembershipStatusHistory, etc.)
 
 [src/utils/dashboard-entry-hold.ts](../../src/utils/dashboard-entry-hold.ts), [src/utils/dashboard-landing-session.ts](../../src/utils/dashboard-landing-session.ts) — UX-side helpers for the dashboard.
 
+## User-metrics utilities (added 2026-05-04)
+
+Two pure utilities under [src/utils/metrics/](../../src/utils/metrics/) drive the user-metrics aggregation:
+
+### `age-grouping.ts`
+
+Exports `getAgeGroup(birthdate, asOf?)`, `AGE_GROUP_ORDER`, and the `AgeGroupLabel` type. Buckets are `18-24`, `25-34`, `35-44`, `45-54`, `55-64`, `65+`, `Unknown`.
+
+- `Unknown` covers null/undefined birthdates, `NaN`-time Dates, future birthdates, and ages `< 18` (signup floor — anything younger is treated as dirty data).
+- Age uses the **calendar method** (UTC year/month/day comparison). Never use millisecond division — that breaks across leap years and DST.
+- `asOf` defaults to `new Date()`, so values reflect the user's age **today**, not their age at signup. Pass an explicit `asOf` only in tests.
+- `AGE_GROUP_ORDER` is the single source of chronological order for chart/table rendering.
+
+### `profession-normalize.ts`
+
+Exports `normalizeProfession(raw)`, `bucketUnmatched(counts, topN=5)`, and the `PROFESSION_SYNONYMS` map (Readonly Record).
+
+Normalization pipeline:
+
+1. **Sanitize** — collapse whitespace, strip trailing punctuation.
+2. **Synonym map** — Aussie trade nicknames and common typos fold into canonical labels (e.g. `sparky → Electrician`, `chippy/chippie/carpenter → Builder`, `brickie → Bricklayer`, `welda → Welder`, `concretor → Concreter`).
+3. **Canonical match** — case-insensitive lookup against `PROFESSIONS` from [src/data/professions.ts](../../src/data/professions.ts).
+4. **Plural-strip retry** — drop trailing `s` and re-run the synonym + canonical lookup.
+5. **Title-case fallback** — return the cleaned input title-cased (gets bucketed downstream).
+
+`bucketUnmatched` separates canonical labels (kept individually) from non-canonical ones; the top-N non-canonical entries (default 5) are kept by frequency and the long tail is summed into a single `"Other (custom)"` bucket.
+
+> The dropdown choice **`"Other"`** (a real `PROFESSIONS` value) is preserved as a distinct canonical bucket — it is **not** the same as the rolled-up **`"Other (custom)"`** bucket produced by `bucketUnmatched`. Two different bars on the chart.
+
+## `UserMetrics` shape additions (2026-05-04)
+
+[src/types/metrics/UserMetrics.ts](../../src/types/metrics/UserMetrics.ts) gained two fields:
+
+- `ageGroup: Record<AgeGroupLabel, number>` — per-bucket counts keyed by `AgeGroupLabel`.
+- `membershipByPackage: MembershipPackageBreakdown[]` where `MembershipPackageBreakdown = { packageId, packageName, total, active, pastDue, cancelled }` — one row per `MembershipPackage` of `type === "subscription"`.
+
+### Aggregation pipeline (in `UserMetricsService.getUserMetrics`)
+
+- User documents are projected with `birthdate` selected so age can be computed at read time.
+- An `ageGroup` accumulator is initialised from `AGE_GROUP_ORDER` (every label starts at `0`, including `Unknown`).
+- Each user's profession is routed through `normalizeProfession` before counting; the final `profession` map is then passed through `bucketUnmatched(profession, 5)` so the chart caps at canonical + top-5 unmatched + `"Other (custom)"`.
+- A per-subscription-package counter is initialised from the `MembershipPackage` collection (filtered to `type === "subscription"`). Each user's subscription is then classified using the **same ladder** the flat `membershipStatus` aggregation uses (cancelled-with-`endDate` / `past_due` / `active` / legacy-cancelled), and the result is mirrored into the matching package's `{ active, pastDue, cancelled }` counts. This keeps `membershipByPackage` totals consistent with the standing `membershipStatus` rollup.
+
 ## Membership snapshot dispatch (added 2026-04-29)
 
 The admin dashboard's membership-related cards (KPI Membership Statuses, per-package breakdown, Cancellations card, Lifecycle chart) read **point-in-time** counts when the selected date range ends in the past.
