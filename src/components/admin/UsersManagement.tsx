@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Download,
   MapPin,
+  BarChart3,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -391,8 +392,29 @@ export default function UsersManagement() {
         </h2>
         {/* Actions - Export button and View Mode Toggle */}
         <div className="flex items-center gap-2">
-          {/* Klaviyo Sync Button */}
-          <KlaviyoSyncButton />
+          {/* Mobile-only: switch between users / metrics view (replaces sync button on small screens) */}
+          <button
+            onClick={() => handleViewModeChange(viewMode === "metrics" ? "users" : "metrics")}
+            className="sm:hidden px-3 py-1.5 rounded-lg bg-gradient-to-r from-slate-800 to-slate-900 text-white text-xs font-medium hover:from-slate-900 hover:to-black transition-all duration-200 flex items-center gap-1.5 shadow-sm"
+            aria-label={viewMode === "metrics" ? "Switch to users list" : "Switch to metrics"}
+            title={viewMode === "metrics" ? "Switch to users list" : "Switch to metrics"}
+          >
+            {viewMode === "metrics" ? (
+              <>
+                <Users className="w-3.5 h-3.5" />
+                Users
+              </>
+            ) : (
+              <>
+                <BarChart3 className="w-3.5 h-3.5" />
+                Metrics
+              </>
+            )}
+          </button>
+          {/* Klaviyo Sync Button — desktop only */}
+          <div className="hidden sm:block">
+            <KlaviyoSyncButton />
+          </div>
           {/* Charge Past Due Button */}
           <button
             onClick={() => setIsChargeModalOpen(true)}

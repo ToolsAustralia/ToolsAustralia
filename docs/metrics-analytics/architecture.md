@@ -68,17 +68,29 @@ Normalization pipeline:
 
 ## `UserMetrics` shape additions (2026-05-04)
 
-[src/types/metrics/UserMetrics.ts](../../src/types/metrics/UserMetrics.ts) gained two fields:
+[src/types/metrics/UserMetrics.ts](../../src/types/metrics/UserMetrics.ts) gained these fields:
 
 - `ageGroup: Record<AgeGroupLabel, number>` — per-bucket counts keyed by `AgeGroupLabel`.
+- `ageGroupPurchased: Record<AgeGroupLabel, number>` — per-bucket count of users in the range whose `processedPayments` array is non-empty (i.e. have made at least one purchase). Drives the per-age-group "purchased" / conversion column in the admin metrics UI.
 - `membershipByPackage: MembershipPackageBreakdown[]` where `MembershipPackageBreakdown = { packageId, packageName, total, active, pastDue, cancelled }` — one row per `MembershipPackage` of `type === "subscription"`.
 
 ### Aggregation pipeline (in `UserMetricsService.getUserMetrics`)
 
-- User documents are projected with `birthdate` selected so age can be computed at read time.
-- An `ageGroup` accumulator is initialised from `AGE_GROUP_ORDER` (every label starts at `0`, including `Unknown`).
+- User documents are projected with `birthdate` and `processedPayments` selected so age and purchase-status can be computed at read time.
+- An `ageGroup` accumulator is initialised from `AGE_GROUP_ORDER` (every label starts at `0`, including `Unknown`); a parallel `ageGroupPurchased` accumulator is incremented for the same bucket whenever the user has a non-empty `processedPayments` array.
 - Each user's profession is routed through `normalizeProfession` before counting; the final `profession` map is then passed through `bucketUnmatched(profession, 5)` so the chart caps at canonical + top-5 unmatched + `"Other (custom)"`.
-- A per-subscription-package counter is initialised from the `MembershipPackage` collection (filtered to `type === "subscription"`). Each user's subscription is then classified using the **same ladder** the flat `membershipStatus` aggregation uses (cancelled-with-`endDate` / `past_due` / `active` / legacy-cancelled), and the result is mirrored into the matching package's `{ active, pastDue, cancelled }` counts. This keeps `membershipByPackage` totals consistent with the standing `membershipStatus` rollup.
+- A per-subscription-package counter is initialised from the `MembershipPackage` collection (filtered to `type === "subscription"`). Each user's subscription is then classified using the **same ladder** the flat `membershipStatus` aggregation uses, and the result is mirrored into the matching package's `{ active, pastDue, cancelled }` counts. This keeps `membershipByPackage` totals consistent with the standing `membershipStatus` rollup.
+
+### Membership classification ladder
+
+For each user with a `subscription` field, the service walks this ordered chain (first match wins) — both `membershipStatus` flat totals and `membershipByPackage` per-package counts use this same ladder:
+
+1. **Scheduled cancel-at-period-end** → `cancelled`: `status` is `"active"` or `"past_due"` **AND** `autoRenew === false` **AND** `endDate` is set.
+2. **Past Due** → `pastDue`: `status === "past_due"` (and not matched above).
+3. **Active** → `active`: `isActive === true` **AND** `status === "active"`.
+4. **Legacy cancelled** → `cancelled`: `status === "canceled"` or `"cancelled"`.
+
+> **Why `autoRenew === false` is required for branch 1:** the Stripe webhook ([src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts)) writes `endDate` on **every** active/trialing subscription as the next billing-period end. An `endDate`-only check therefore matches every active sub and miscounts them as cancelled — `autoRenew === false` is the canonical "user hit cancel" signal. This mirrors the canonical filter in [src/services/admin/MembershipAnalyticsService.ts](../../src/services/admin/MembershipAnalyticsService.ts) and [src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts).
 
 ## Membership snapshot dispatch (added 2026-04-29)
 
