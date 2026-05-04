@@ -12,7 +12,7 @@
 [src/components/admin/](../../src/components/admin/):
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
 - `ChargePastDueModal.tsx` — bulk past-due retry
-- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Default decline-reason filter is `recoverable_only` (hides fraud signals + permanent-issue codes like `expired_card` / `incorrect_cvc`). Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). Service contract documented in [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
+- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Default decline-reason filter is `recoverable_only` (hides fraud signals + permanent-issue codes like `expired_card` / `incorrect_cvc`). Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). When the backing Stripe scan hits its 2000-PI safety cap (busy accounts on wide date ranges), an amber "Results may be incomplete" banner appears above the filters, citing the `scanned` count from the response. Service contract documented in [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice); scan cap and timeout context in [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#blocked-cards-route-paginates-every-pi).
 - (other admin-specific components)
 
 > _TODO: enumerate full component list._

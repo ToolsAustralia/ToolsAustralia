@@ -89,7 +89,7 @@ Query params:
 - `declineReason` — `any | recoverable_only | transient_only | fraud_signals_only` (`recoverable_only` hides both fraud signals **and** permanent-issue codes; `transient_only` hides only fraud signals)
 - `skippedOnly` — `true | false`
 
-Returns `{ success, rows: BlockedRow[] }`. Auth: admin.
+Returns `{ success, rows: BlockedRow[], truncated: boolean, scanned: number }`. Auth: admin. `maxDuration: 60` because the Stripe scan paginates every PI in the date window. The service caps the scan at 2000 PIs to bound worst-case latency; when the cap is hit, `truncated: true` and the admin UI shows a "narrow your date range" banner. See [gotchas](./gotchas.md#blocked-cards-route-paginates-every-pi).
 
 #### `POST /api/admin/allowlist/apply`
 
