@@ -319,7 +319,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
