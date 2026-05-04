@@ -286,13 +286,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        // Both successful and failed ops must be cleared from pendingOperations,
+        // otherwise the auto-sync useEffect re-fires forever and isLoading flickers
+        // true on every retry, which keeps every "Add to cart" button stuck on "Adding..."
+        const successfulIds = new Set(successfulOperations);
+        const failedIds = new Set(failedOperations.map((op) => op.id));
+
         return {
           ...prev,
           items: updatedItems,
           summary: calculateSummary(updatedItems),
           isDirty: failedOperations.length > 0,
           lastSyncTime: Date.now(),
-          pendingOperations: prev.pendingOperations.filter((op) => !successfulOperations.includes(op.id)),
+          pendingOperations: prev.pendingOperations.filter(
+            (op) => !successfulIds.has(op.id) && !failedIds.has(op.id)
+          ),
           failedOperations: [...prev.failedOperations, ...failedOperations],
         };
       });

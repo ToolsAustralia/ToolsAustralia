@@ -36,7 +36,7 @@ export function ProfessionBreakdown({ data }: ProfessionBreakdownProps) {
   const chartData = Object.entries(data)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 10); // Top 10 professions
+    .slice(0, 20); // bucketUnmatched bounds the input to ~17; cap at 20 defensively
 
   if (chartData.length === 0) {
     return (
