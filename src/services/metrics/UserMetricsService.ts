@@ -36,7 +36,7 @@ export class UserMetricsService {
         $lte: endDate,
       },
     })
-      .select("_id affiliateReferral referral profession subscription createdAt birthdate")
+      .select("_id affiliateReferral referral profession subscription createdAt birthdate processedPayments")
       .lean()
       .exec();
 
@@ -76,6 +76,15 @@ export class UserMetricsService {
 
     // Aggregate age groups — initialize every bucket so empty buckets render as 0
     const ageGroup: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
+      (acc, label) => {
+        acc[label] = 0;
+        return acc;
+      },
+      {} as Record<AgeGroupLabel, number>
+    );
+
+    // Per-age-group count of users who have made at least one purchase (processedPayments non-empty).
+    const ageGroupPurchased: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
       (acc, label) => {
         acc[label] = 0;
         return acc;
@@ -136,7 +145,11 @@ export class UserMetricsService {
       }
 
       // Aggregate age group from birthdate
-      ageGroup[getAgeGroup(user.birthdate as Date | undefined)]++;
+      const ageGroupLabel = getAgeGroup(user.birthdate as Date | undefined);
+      ageGroup[ageGroupLabel]++;
+      if (Array.isArray(user.processedPayments) && user.processedPayments.length > 0) {
+        ageGroupPurchased[ageGroupLabel]++;
+      }
 
       // Check membership status (flat totals + per-package breakdown)
       if (user.subscription) {
@@ -150,11 +163,13 @@ export class UserMetricsService {
           pkgEntry.counts[key]++;
         };
 
-        // Cancelled: "active"/"past_due" with endDate set → scheduled cancel-at-period-end
+        // Scheduled cancel-at-period-end: status is "active"/"past_due" AND auto-renew has been turned off.
+        // Webhook sets endDate on every active/trialing sub (it's the next billing date), so endDate alone
+        // is not a cancellation signal — autoRenew === false is the canonical signal.
         if (
           (user.subscription.status === "active" || user.subscription.status === "past_due") &&
-          user.subscription.endDate &&
-          user.subscription.endDate !== null
+          user.subscription.autoRenew === false &&
+          user.subscription.endDate
         ) {
           membershipStatus.cancelled++;
           bumpPackage("cancelled");
@@ -256,6 +271,7 @@ export class UserMetricsService {
       signupSource,
       profession: bucketedProfession,
       ageGroup,
+      ageGroupPurchased,
       membershipStatus,
       membershipByPackage,
       purchaseHistory,
