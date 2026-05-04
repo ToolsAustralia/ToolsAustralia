@@ -95,3 +95,18 @@ The helper `getSubscriptionCreateParamsForAnchor(joinDate)` lives in [src/utils/
 - `/api/stripe/renew-subscription/route.ts`
 
 Migration script: `scripts/migrate-anchor-billing-24.ts` (`npm run migrate:anchor-billing-24:dry` for dry-run).
+
+## Service inventory — `AllowlistService`
+
+[src/services/allowlist/AllowlistService.ts](../../src/services/allowlist/AllowlistService.ts) gates **auto-allowlisting** of cards that Stripe has issuer-directed-blocked, and exposes the bulk admin operations (apply / reverse / read) backing `/admin/blocked-transactions`.
+
+**Three callers:**
+1. **Webhook** — the `payment_intent.payment_failed` branch in [src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts) calls `service.evaluateAndApply()` best-effort when the failed PI's charge looks blocked (see [gotchas](./gotchas.md#stripe-issuer-directed-auto-block--allowlist-override)).
+2. **Admin bulk page** — `/admin/blocked-transactions` lists candidates and POSTs the selected rows to `/api/admin/allowlist/apply` (`source: "admin_bulk"`). Each row also has a per-row "Allowlist" button that calls the same endpoint with a single-row payload.
+3. **Admin reverse button** — same page; `POST /api/admin/allowlist/reverse` removes a previously-allowlisted fingerprint.
+
+**Constructor DI** — `{ repo: AllowlistRepository, stripeRadar: Stripe["radar"], stripeClient?: Stripe }`. The singleton at [src/services/allowlist/index.ts](../../src/services/allowlist/index.ts) wires the real Stripe client + `MongoAllowlistRepository`; tests inject fakes.
+
+**Filter rule** — never auto-allowlist if the decline_code ∈ `{lost_card, stolen_card, pickup_card, fraudulent}` (real fraud signals), or ∈ `{expired_card, incorrect_cvc, invalid_account, invalid_number, invalid_expiry_year, invalid_expiry_month}` (permanent / customer-action-required issues), or no User can be resolved from the customer, or the user has zero successful `PaymentEvent` rows. Skip reasons recorded as `filter_fraud_signal`, `filter_permanent_issue`, or `filter_not_member` respectively. Admin override is available via the bulk page button.
+
+**Source-of-truth split** — Stripe's `allow_card_fingerprint` Radar value list **is** the live allowlist; our `AllowlistAction` collection is the audit log of decisions (added / skipped / removed) and is never assumed to mirror Stripe's value-list state.

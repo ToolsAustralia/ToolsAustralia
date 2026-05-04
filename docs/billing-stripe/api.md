@@ -69,6 +69,44 @@ These live under `/api/admin/**` (in the [admin](../admin/) domain) but are tigh
 | POST | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | admin | Manual refund-reversal replay |
 | GET | `/api/admin/payment-events` | admin | List ledger rows for support |
 
+### Allowlist admin routes
+
+Backing the `/admin/blocked-transactions` page. All four require `role === "admin"` and delegate to the singleton `AllowlistService` ([architecture.md](./architecture.md#service-inventory--allowlistservice)). Background on the underlying mechanism: see [gotchas](./gotchas.md#stripe-issuer-directed-auto-block--allowlist-override). The API path keeps the legacy `blocked-cards` segment because it predates the rename — only the admin URL slug changed.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/admin/allowlist/blocked-cards` | List blocked-PI candidates for the bulk page |
+| POST | `/api/admin/allowlist/apply` | Bulk-allowlist selected rows |
+| POST | `/api/admin/allowlist/reverse` | Remove a previously-allowlisted fingerprint |
+| GET | `/api/admin/allowlist/actions` | Recent allowlist decisions — feeds the "Recently allowlisted" widget |
+
+#### `GET /api/admin/allowlist/blocked-cards`
+
+Query params:
+- `dateFrom` — ISO timestamp (inclusive)
+- `dateTo` — ISO timestamp (inclusive)
+- `memberStatus` — `any | has_paid | never_paid`
+- `declineReason` — `any | recoverable_only | transient_only | fraud_signals_only` (`recoverable_only` hides both fraud signals **and** permanent-issue codes; `transient_only` hides only fraud signals)
+- `skippedOnly` — `true | false`
+
+Returns `{ success, rows: BlockedRow[] }`. Auth: admin.
+
+#### `POST /api/admin/allowlist/apply`
+
+Body: `{ rows: EvalInput[], allowOverride: boolean }`. Iterates `rows` and calls `AllowlistService.apply(row, source: "admin_bulk")` for each; when `allowOverride` is true the filter rules are bypassed (records `reason: "manual_admin_override"`). Returns `{ success, added, skipped, errors }`. Auth: admin.
+
+#### `POST /api/admin/allowlist/reverse`
+
+Body: `{ actionId: string }` (the `_id` of the original `AllowlistAction` `added` row). Calls `AllowlistService.reverse()`, which removes the fingerprint from Stripe's value list and writes a new `removed` row. Returns `{ success, action }`. Auth: admin.
+
+#### `GET /api/admin/allowlist/actions`
+
+Query params:
+- `limit` — default `50`, max `200`
+- `action` — `added | skipped | removed | all`
+
+Returns `{ success, actions: AllowlistAction[] }`. Auth: admin. Used by the "Recently allowlisted" widget on `/admin/blocked-transactions`.
+
 ## Consistent response shape
 
 Per CLAUDE.md route conventions, all `/api/stripe/**` handlers should return one of:

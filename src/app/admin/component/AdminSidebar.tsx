@@ -107,6 +107,14 @@ const adminTabGroups: Array<{
       { id: "settings", label: "Settings", icon: Settings },
     ],
   },
+  {
+    id: "billing",
+    label: "Billing",
+    groupIcon: AlertCircle,
+    tabs: [
+      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
+    ],
+  },
 ];
 
 export default function AdminSidebar({
