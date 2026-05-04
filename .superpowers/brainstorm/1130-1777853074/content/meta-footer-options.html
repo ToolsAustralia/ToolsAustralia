@@ -1,0 +1,161 @@
+<h2>Meta footer — three treatments</h2>
+<p class="subtitle">Same data (date, location, draw name), three different visual treatments. All use Lucide icons (matches your existing component style). Click one.</p>
+
+<style>
+  .preview { background:#0a0d18; padding:36px 44px; border-radius:14px; margin-bottom:14px; }
+  .preview-light { background:#fafaf7; padding:36px 44px; border-radius:14px; margin-bottom:14px; }
+  .body-prose-sample { font-family:Georgia,serif; font-size:17px; line-height:1.75; color:#cfd5e0; margin-bottom:28px; max-width:620px; }
+  .body-prose-sample-light { font-family:Georgia,serif; font-size:17px; line-height:1.75; color:#1f2937; margin-bottom:28px; max-width:620px; }
+  .label-tag { font-size:10px; letter-spacing:.2em; text-transform:uppercase; font-weight:700; padding:4px 10px; border-radius:6px; display:inline-block; margin-bottom:10px; }
+
+  /* shared svg sizing */
+  .ico { width:16px; height:16px; flex-shrink:0; }
+  .ico-sm { width:14px; height:14px; flex-shrink:0; }
+
+  /* OPTION A — clean inline icons */
+  .meta-a { display:flex; flex-wrap:wrap; gap:24px 32px; font-family:Inter,Arial,sans-serif; font-size:13px; font-weight:600; color:rgba(255,255,255,.75); padding-top:24px; border-top:1px solid rgba(206,43,5,.25); }
+  .meta-a-light { color:#475569; border-top-color:rgba(206,43,5,.20); }
+  .meta-a > span { display:inline-flex; align-items:center; gap:8px; }
+
+  /* OPTION B — chip/pill style */
+  .meta-b { display:flex; flex-wrap:wrap; gap:10px; font-family:Inter,Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em; padding-top:24px; border-top:1px solid rgba(206,43,5,.25); }
+  .meta-b > span { display:inline-flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px; background:rgba(206,43,5,.10); color:#f87171; border:1px solid rgba(206,43,5,.28); }
+  .meta-b-light > span { background:rgba(206,43,5,.06); color:#ce2b05; border:1px solid rgba(206,43,5,.18); }
+
+  /* OPTION C — labelled stack (most editorial) */
+  .meta-c { display:grid; grid-template-columns:repeat(3,1fr); gap:0; font-family:Inter,Arial,sans-serif; padding-top:28px; border-top:1px solid rgba(206,43,5,.25); }
+  .meta-c > div { display:flex; flex-direction:column; gap:8px; padding:0 16px; border-left:1px solid rgba(255,255,255,.08); }
+  .meta-c > div:first-child { border-left:none; padding-left:0; }
+  .meta-c .meta-label { font-size:9px; letter-spacing:.28em; text-transform:uppercase; font-weight:800; color:#f30000; display:flex; align-items:center; gap:6px; }
+  .meta-c .meta-value { font-size:14px; font-weight:600; color:#fff; letter-spacing:-.1px; }
+  .meta-c-light > div { border-left-color:rgba(0,0,0,.08); }
+  .meta-c-light .meta-label { color:#ce2b05; }
+  .meta-c-light .meta-value { color:#0f172a; }
+</style>
+
+<!-- Inline SVG Lucide icons we'll reuse -->
+<svg style="display:none;">
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+  </symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+  </symbol>
+</svg>
+
+<!-- =================================================== -->
+<!-- OPTION A — clean inline (closest to current style) -->
+<!-- =================================================== -->
+<div class="cards" style="grid-template-columns:1fr;">
+
+<div class="card" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer;">
+  <div class="card-image" style="padding:0; background:transparent;">
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:18px 0 0 18px;">DARK</div>
+    <div class="preview" style="margin:8px 18px 0;">
+      <p class="body-prose-sample">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-a">
+        <span><svg class="ico" style="color:#f30000;"><use href="#i-cal"/></svg>11 March 2024</span>
+        <span><svg class="ico" style="color:#f30000;"><use href="#i-pin"/></svg>Toowoomba, QLD</span>
+        <span><svg class="ico" style="color:#f30000;"><use href="#i-gift"/></svg>March Major Draw</span>
+      </div>
+    </div>
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:14px 0 0 18px;">LIGHT</div>
+    <div class="preview-light" style="margin:8px 18px 14px;">
+      <p class="body-prose-sample-light">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-a meta-a-light">
+        <span><svg class="ico" style="color:#ce2b05;"><use href="#i-cal"/></svg>11 March 2024</span>
+        <span><svg class="ico" style="color:#ce2b05;"><use href="#i-pin"/></svg>Toowoomba, QLD</span>
+        <span><svg class="ico" style="color:#ce2b05;"><use href="#i-gift"/></svg>March Major Draw</span>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <h3>A — Clean inline icons</h3>
+    <p>Lucide icons in brand color, plain inline labels. Closest to what you have today, just nicer rendering and properly themed. Quietest option, lets the story do the talking.</p>
+  </div>
+</div>
+
+<!-- =================================================== -->
+<!-- OPTION B — pill/chip style -->
+<!-- =================================================== -->
+<div class="card" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer;">
+  <div class="card-image" style="padding:0; background:transparent;">
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:18px 0 0 18px;">DARK</div>
+    <div class="preview" style="margin:8px 18px 0;">
+      <p class="body-prose-sample">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-b">
+        <span><svg class="ico-sm"><use href="#i-cal"/></svg>11 March 2024</span>
+        <span><svg class="ico-sm"><use href="#i-pin"/></svg>Toowoomba, QLD</span>
+        <span><svg class="ico-sm"><use href="#i-gift"/></svg>March Major Draw</span>
+      </div>
+    </div>
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:14px 0 0 18px;">LIGHT</div>
+    <div class="preview-light" style="margin:8px 18px 14px;">
+      <p class="body-prose-sample-light">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-b meta-b-light">
+        <span><svg class="ico-sm"><use href="#i-cal"/></svg>11 March 2024</span>
+        <span><svg class="ico-sm"><use href="#i-pin"/></svg>Toowoomba, QLD</span>
+        <span><svg class="ico-sm"><use href="#i-gift"/></svg>March Major Draw</span>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <h3>B — Brand-tinted pills</h3>
+    <p>Same icons but wrapped in soft brand-tinted chips. More visually present, more "designed." Reads as deliberate badges of provenance — feels premium because it looks composed.</p>
+  </div>
+</div>
+
+<!-- =================================================== -->
+<!-- OPTION C — labelled stack (editorial / luxury) -->
+<!-- =================================================== -->
+<div class="card" data-choice="c" onclick="toggleSelect(this)" style="cursor:pointer;">
+  <div class="card-image" style="padding:0; background:transparent;">
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:18px 0 0 18px;">DARK</div>
+    <div class="preview" style="margin:8px 18px 0;">
+      <p class="body-prose-sample">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-c">
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-cal"/></svg>Drawn</span>
+          <span class="meta-value">11 March 2024</span>
+        </div>
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-pin"/></svg>From</span>
+          <span class="meta-value">Toowoomba, QLD</span>
+        </div>
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-gift"/></svg>Draw</span>
+          <span class="meta-value">March Major</span>
+        </div>
+      </div>
+    </div>
+    <div class="label-tag" style="background:#1a1a1a; color:#f30000; margin:14px 0 0 18px;">LIGHT</div>
+    <div class="preview-light" style="margin:8px 18px 14px;">
+      <p class="body-prose-sample-light">…the cash is going straight into a new ute mount for the toolboxes. Cheers to the team.</p>
+      <div class="meta-c meta-c-light">
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-cal"/></svg>Drawn</span>
+          <span class="meta-value">11 March 2024</span>
+        </div>
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-pin"/></svg>From</span>
+          <span class="meta-value">Toowoomba, QLD</span>
+        </div>
+        <div>
+          <span class="meta-label"><svg class="ico-sm"><use href="#i-gift"/></svg>Draw</span>
+          <span class="meta-value">March Major</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <h3>C — Labelled stack (most editorial)</h3>
+    <p>Three columns with tiny brand-color labels above bold values. Vertical dividers between. Feels like the spec strip on a luxury watch listing — most "expensive," most editorial.</p>
+  </div>
+</div>
+
+</div>
+
+<p class="subtitle" style="text-align:center; margin-top:24px;">My pick: <b>C</b> for the modal (it earns the editorial article feel). <b>A</b> would also be fine if you want the meta to stay quiet. <b>B</b> works if you want it to feel snappier.</p>

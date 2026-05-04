@@ -1,0 +1,221 @@
+<h2>Full section — themed to light/dark + brand</h2>
+<p class="subtitle">Section background, title, divider, card, and CTA all respond to (a) site light/dark mode and (b) the active promo brand theme. Real Tools Australia content. Below: 4 combinations to validate.</p>
+
+<style>
+  /* SECTION SKELETON */
+  .ws-section { padding:48px 28px; border-radius:14px; position:relative; overflow:hidden; }
+  .ws-section .ws-grain { position:absolute; inset:0; opacity:.5; pointer-events:none; }
+  .ws-title-block { text-align:center; max-width:780px; margin:0 auto 32px; position:relative; z-index:2; }
+  .ws-eyebrow { font-size:10px; letter-spacing:.32em; text-transform:uppercase; font-weight:800; margin-bottom:12px; }
+  .ws-title { font-family:Inter,Arial,sans-serif; font-size:34px; font-weight:800; letter-spacing:-.5px; line-height:1.1; margin:0 0 14px 0; }
+  .ws-divider { display:inline-block; width:48px; height:2px; border-radius:2px; }
+  .ws-subtitle { font-family:Georgia,serif; font-style:italic; font-size:16px; margin:14px 0 0 0; line-height:1.45; opacity:.75; }
+
+  /* CARD */
+  .testimony-card { position:relative; width:100%; min-height:380px; border-radius:20px; overflow:hidden; font-family:Inter,Arial,sans-serif; max-width:880px; margin:0 auto; }
+  .pseudo-photo { position:absolute; inset:0; }
+  .vignette { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.20) 0%, rgba(0,0,0,.55) 50%, rgba(0,0,0,.95) 100%); }
+  .top-row { position:absolute; top:20px; left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; z-index:2; gap:12px; flex-wrap:wrap; }
+  .label-pill { font-size:10px; letter-spacing:.28em; color:#fff; text-transform:uppercase; font-weight:700; padding:6px 12px; border-radius:999px; backdrop-filter:blur(8px); background:rgba(0,0,0,.4); }
+  .draw-meta { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.7); font-weight:600; }
+  .quote-area { position:absolute; left:0; right:0; bottom:0; padding:30px 32px 28px; color:#fff; z-index:2; }
+  .opener { font-family:Georgia,serif; font-size:48px; line-height:.4; opacity:.85; margin-bottom:6px; }
+  .quote { font-family:Georgia,serif; font-size:19px; line-height:1.45; font-style:italic; letter-spacing:-.2px; margin:0 0 22px 0; max-width:620px; }
+  .meta-row { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .winner-name { font-size:19px; font-weight:700; letter-spacing:-.3px; }
+  .winner-sub { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.6); margin-top:3px; font-weight:600; max-width:380px; }
+  .cta-pill { font-size:11px; letter-spacing:.22em; text-transform:uppercase; font-weight:800; padding:10px 18px; border-radius:999px; display:inline-flex; gap:8px; white-space:nowrap; }
+
+  /* SECONDARY CTA (for surrounding section) */
+  .ws-section-cta { display:inline-flex; align-items:center; gap:8px; padding:14px 26px; border-radius:999px; font-size:12px; letter-spacing:.18em; text-transform:uppercase; font-weight:800; margin-top:36px; }
+
+  .ws-bottom-row { text-align:center; margin-top:32px; position:relative; z-index:2; }
+  .label-tag { font-size:10px; letter-spacing:.2em; text-transform:uppercase; font-weight:700; padding:4px 10px; border-radius:6px; display:inline-block; margin-bottom:6px; }
+</style>
+
+<!-- ============================================================ -->
+<!-- 1. DARK SITE + MILWAUKEE (default) -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#f30000;">DARK MODE · MILWAUKEE</div>
+<div class="ws-section" style="background:
+  radial-gradient(ellipse at top, rgba(206,43,5,.16) 0%, transparent 35%),
+  radial-gradient(ellipse at bottom right, rgba(206,43,5,.10) 0%, transparent 45%),
+  linear-gradient(135deg, #050811 0%, #0b1326 50%, #050811 100%);
+  margin-bottom:36px;">
+
+  <div class="ws-title-block">
+    <div class="ws-eyebrow" style="color:#f30000;">— Real Stories —</div>
+    <h2 class="ws-title" style="color:#fff;">Hear From Our Winners</h2>
+    <span class="ws-divider" style="background:linear-gradient(90deg,#ce2b05,#f30000,#dd5358);"></span>
+    <p class="ws-subtitle" style="color:rgba(255,255,255,.7);">Tradies, weekend warriors, first-home builders — the people behind the prizes.</p>
+  </div>
+
+  <div class="testimony-card">
+    <div class="pseudo-photo" style="background:linear-gradient(135deg, #1a1a1f 0%, #0a0a0d 100%);"></div>
+    <div style="position:absolute; left:8%; top:18%; width:60%; height:55%; background:linear-gradient(180deg, #8a1808 0%, #5a0f04 65%, #2a0702 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+    <div style="position:absolute; left:14%; top:24%; width:48%; height:6%; background:#1a0d08; border-radius:4px;"></div>
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      <span class="draw-meta">March 2024 · Toowoomba, QLD</span>
+    </div>
+    <div class="quote-area">
+      <div class="opener" style="color:#f30000;">"</div>
+      <p class="quote">Been chasing a proper Packout setup for years and just couldn't justify it. Got the call Tuesday morning — thought it was a wind-up. Workshop's never looked better.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Brett Sullivan</div>
+          <div class="winner-sub">Milwaukee 13pc Kit + Packout 6pc Storage + $5,000 cash</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05,#f30000,#dd5358); color:#fff; box-shadow:0 8px 24px rgba(206,43,5,.45);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ws-bottom-row">
+    <a class="ws-section-cta" style="background:linear-gradient(135deg,#ce2b05,#f30000,#dd5358); color:#fff; box-shadow:0 14px 30px rgba(206,43,5,.4);">Join the Winners Circle →</a>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 2. LIGHT SITE + MILWAUKEE -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#f30000;">LIGHT MODE · MILWAUKEE</div>
+<div class="ws-section" style="background:
+  radial-gradient(ellipse at top, rgba(206,43,5,.10) 0%, transparent 40%),
+  radial-gradient(ellipse at bottom right, rgba(206,43,5,.08) 0%, transparent 45%),
+  linear-gradient(135deg, #f5f3ee 0%, #ebe7dd 50%, #f5f3ee 100%);
+  margin-bottom:36px;">
+
+  <div class="ws-title-block">
+    <div class="ws-eyebrow" style="color:#ce2b05;">— Real Stories —</div>
+    <h2 class="ws-title" style="color:#0f172a;">Hear From Our Winners</h2>
+    <span class="ws-divider" style="background:linear-gradient(90deg,#ce2b05,#f30000,#dd5358);"></span>
+    <p class="ws-subtitle" style="color:#475569;">Tradies, weekend warriors, first-home builders — the people behind the prizes.</p>
+  </div>
+
+  <!-- Card stays dark-cinematic on purpose, framed by light section -->
+  <div class="testimony-card" style="box-shadow:0 30px 80px rgba(15,23,42,.22);">
+    <div class="pseudo-photo" style="background:linear-gradient(135deg, #1a1a1f 0%, #0a0a0d 100%);"></div>
+    <div style="position:absolute; left:8%; top:18%; width:60%; height:55%; background:linear-gradient(180deg, #8a1808 0%, #5a0f04 65%, #2a0702 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+    <div style="position:absolute; left:14%; top:24%; width:48%; height:6%; background:#1a0d08; border-radius:4px;"></div>
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      <span class="draw-meta">March 2024 · Toowoomba, QLD</span>
+    </div>
+    <div class="quote-area">
+      <div class="opener" style="color:#f30000;">"</div>
+      <p class="quote">Been chasing a proper Packout setup for years and just couldn't justify it. Workshop's never looked better.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Brett Sullivan</div>
+          <div class="winner-sub">Milwaukee 13pc Kit + Packout 6pc Storage + $5,000 cash</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05,#f30000,#dd5358); color:#fff; box-shadow:0 8px 24px rgba(206,43,5,.45);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ws-bottom-row">
+    <a class="ws-section-cta" style="background:linear-gradient(135deg,#ce2b05,#f30000,#dd5358); color:#fff; box-shadow:0 14px 30px rgba(206,43,5,.45);">Join the Winners Circle →</a>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 3. DARK SITE + RYOBI -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#e0ff00;">DARK MODE · RYOBI</div>
+<div class="ws-section" style="background:
+  radial-gradient(ellipse at top, rgba(224,255,0,.13) 0%, transparent 35%),
+  radial-gradient(ellipse at bottom right, rgba(224,255,0,.08) 0%, transparent 45%),
+  linear-gradient(135deg, #050811 0%, #0a1320 50%, #050811 100%);
+  margin-bottom:36px;">
+
+  <div class="ws-title-block">
+    <div class="ws-eyebrow" style="color:#e0ff00;">— Real Stories —</div>
+    <h2 class="ws-title" style="color:#fff;">Hear From Our Winners</h2>
+    <span class="ws-divider" style="background:linear-gradient(90deg,#e0ff00,#f2ff4d,#c8eb00);"></span>
+    <p class="ws-subtitle" style="color:rgba(255,255,255,.7);">Tradies, weekend warriors, first-home builders — the people behind the prizes.</p>
+  </div>
+
+  <div class="testimony-card">
+    <div class="pseudo-photo" style="background:linear-gradient(135deg, #0a1500 0%, #050a00 100%);"></div>
+    <div style="position:absolute; left:8%; top:18%; width:60%; height:55%; background:linear-gradient(180deg, #2a3a00 0%, #1a2400 65%, #0a1200 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(224,255,0,.24) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(224,255,0,.18) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(224,255,0,.6);">Major Draw Winner</span>
+      <span class="draw-meta">February 2024 · Geelong, VIC</span>
+    </div>
+    <div class="quote-area">
+      <div class="opener" style="color:#e0ff00;">"</div>
+      <p class="quote">Whole shed sorted — 18V ONE+ kit and the brushless mower. Backyard's never looked sharper.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Sam Halloran</div>
+          <div class="winner-sub">Custom Ryobi 18V ONE+ Kit + 36V Brushless Mower</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#e0ff00,#f2ff4d,#c8eb00); color:#000; box-shadow:0 8px 24px rgba(224,255,0,.35);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ws-bottom-row">
+    <a class="ws-section-cta" style="background:linear-gradient(135deg,#e0ff00,#f2ff4d,#c8eb00); color:#000; box-shadow:0 14px 30px rgba(224,255,0,.35);">Join the Winners Circle →</a>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 4. LIGHT SITE + DEWALT -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#ffd200;">LIGHT MODE · DEWALT</div>
+<div class="ws-section" style="background:
+  radial-gradient(ellipse at top, rgba(255,210,0,.18) 0%, transparent 40%),
+  radial-gradient(ellipse at bottom right, rgba(255,210,0,.10) 0%, transparent 45%),
+  linear-gradient(135deg, #f5f3ee 0%, #ebe7dd 50%, #f5f3ee 100%);
+  margin-bottom:36px;">
+
+  <div class="ws-title-block">
+    <div class="ws-eyebrow" style="color:#b8860b;">— Real Stories —</div>
+    <h2 class="ws-title" style="color:#0f172a;">Hear From Our Winners</h2>
+    <span class="ws-divider" style="background:linear-gradient(90deg,#ffd200,#ffc517,#c1c55b);"></span>
+    <p class="ws-subtitle" style="color:#475569;">Tradies, weekend warriors, first-home builders — the people behind the prizes.</p>
+  </div>
+
+  <div class="testimony-card" style="box-shadow:0 30px 80px rgba(15,23,42,.22);">
+    <div class="pseudo-photo" style="background:linear-gradient(135deg, #1a1500 0%, #0a0805 100%);"></div>
+    <div style="position:absolute; left:8%; top:18%; width:60%; height:55%; background:linear-gradient(180deg, #4a3a00 0%, #2a2400 65%, #1a1500 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(255,210,0,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(255,210,0,.18) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(255,210,0,.6);">Major Draw Winner</span>
+      <span class="draw-meta">January 2024 · Newcastle, NSW</span>
+    </div>
+    <div class="quote-area">
+      <div class="opener" style="color:#ffd200;">"</div>
+      <p class="quote">Tough System has been on my wishlist forever. Finally got it without spending a cent.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Daniel Hicks</div>
+          <div class="winner-sub">DeWalt 14pc Power Tool Kit + Tough System 2.0</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ffd200,#ffc517,#c1c55b); color:#000; box-shadow:0 8px 24px rgba(255,210,0,.4);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ws-bottom-row">
+    <a class="ws-section-cta" style="background:linear-gradient(135deg,#ffd200,#ffc517,#c1c55b); color:#000; box-shadow:0 14px 30px rgba(255,210,0,.4);">Join the Winners Circle →</a>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px; padding:20px; background:rgba(0,0,0,.05); border-radius:10px; font-size:13px; color:#374151; line-height:1.6;">
+  <p style="margin:0 0 8px 0;"><b>What's themed:</b></p>
+  <p style="margin:0 0 6px 0;">• <b>Section background</b>: deep navy (dark mode) / warm cream (light mode), with brand-tinted radial glows top + bottom-right</p>
+  <p style="margin:0 0 6px 0;">• <b>Title eyebrow + divider line</b>: brand color</p>
+  <p style="margin:0 0 6px 0;">• <b>Card edge-glow + label border + opening quote-mark + CTA pill</b>: brand color</p>
+  <p style="margin:0;">• <b>Card itself stays dark cinematic</b> in both light/dark modes — keeps the prize photo dramatic. The light section just frames it differently.</p>
+</div>

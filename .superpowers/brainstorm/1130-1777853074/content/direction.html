@@ -1,0 +1,81 @@
+<h2>Pick a visual direction</h2>
+<p class="subtitle">Three ways to make the testimony feel premium and editorial — each handles the winner's photo differently. Click one to select.</p>
+
+<div class="cards">
+
+  <!-- ============= OPTION A : EDITORIAL MAGAZINE ============= -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0b1220;padding:32px;display:flex;align-items:center;justify-content:center;">
+      <div style="background:#fafaf7;color:#111;border-radius:6px;width:100%;max-width:520px;padding:36px 38px;font-family:Georgia,serif;box-shadow:0 30px 60px rgba(0,0,0,.5);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+          <div style="width:44px;height:44px;border-radius:999px;background:linear-gradient(135deg,#c2a36a,#8a6d36);flex-shrink:0;"></div>
+          <div>
+            <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#9a7b3a;font-weight:700;">Major Draw Winner</div>
+            <div style="font-size:18px;font-weight:700;letter-spacing:-.2px;">Jessica Tran</div>
+          </div>
+        </div>
+        <div style="font-size:60px;line-height:1;color:#c2a36a;font-family:Georgia,serif;margin-bottom:-8px;">“</div>
+        <p style="font-size:19px;line-height:1.55;color:#1f2937;margin:0 0 18px 0;font-style:italic;">I really couldn't believe it. The team rang me on a Tuesday morning and I had to pull over the car. My husband still doesn't trust I'm not pranking him.</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:14px;">
+          <span>Brisbane, QLD</span>
+          <span style="color:#9a7b3a;font-weight:700;">Read full story →</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Editorial Magazine</h3>
+      <p>Big elegant pull-quote. Small portrait avatar (32–44px). Cream/paper card on dark stage. Feels like a magazine spread. Photo is present but editorial, never the hero.</p>
+    </div>
+  </div>
+
+  <!-- ============= OPTION B : CINEMATIC POSTER ============= -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:0;display:flex;align-items:stretch;justify-content:center;overflow:hidden;">
+      <div style="position:relative;width:100%;min-height:340px;background:linear-gradient(135deg,#3a2410 0%,#1a0a08 60%,#000 100%);overflow:hidden;">
+        <!-- Simulated portrait silhouette -->
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 70% 35%, rgba(194,163,106,.35), transparent 45%), radial-gradient(circle at 75% 55%, rgba(60,40,20,.9) 0 22%, transparent 23%);"></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg, transparent 30%, rgba(0,0,0,.85) 100%);"></div>
+        <!-- Top label -->
+        <div style="position:absolute;top:18px;left:22px;font-family:Inter,Arial,sans-serif;font-size:10px;letter-spacing:.28em;color:rgba(255,255,255,.85);text-transform:uppercase;font-weight:700;border:1px solid rgba(255,255,255,.25);padding:5px 10px;border-radius:999px;backdrop-filter:blur(4px);">Major Draw Winner</div>
+        <!-- Bottom content -->
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:24px 28px;color:#fff;font-family:Inter,Arial,sans-serif;">
+          <div style="font-family:Georgia,serif;font-size:22px;line-height:1.35;font-style:italic;margin-bottom:14px;letter-spacing:-.2px;">"I really couldn't believe it. I had to pull over the car."</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+            <div>
+              <div style="font-size:18px;font-weight:700;letter-spacing:-.2px;">Jessica Tran</div>
+              <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:2px;">Brisbane · 2024 Toyota HiLux</div>
+            </div>
+            <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#c2a36a;font-weight:700;">Story →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Cinematic Poster</h3>
+      <p>Photo becomes a full-bleed dramatic background with deep gradient overlay. Quote sits over the image like a movie poster. Photo is no longer "displayed product-style" — it becomes mood and texture.</p>
+    </div>
+  </div>
+
+  <!-- ============= OPTION C : PURE QUOTE STAGE ============= -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:radial-gradient(ellipse at top, #1a1f3a 0%, #050811 70%);padding:40px 30px;display:flex;align-items:center;justify-content:center;">
+      <div style="text-align:center;color:#fff;font-family:Inter,Arial,sans-serif;max-width:520px;">
+        <div style="font-family:Georgia,serif;font-size:80px;line-height:.6;color:#c2a36a;margin-bottom:6px;">“</div>
+        <p style="font-family:Georgia,serif;font-size:22px;line-height:1.4;font-style:italic;color:#f3f4f6;margin:0 0 28px 0;letter-spacing:-.3px;">I really couldn't believe it. The team rang me on a Tuesday morning and I had to pull over the car.</p>
+        <div style="height:1px;width:60px;background:linear-gradient(90deg,transparent,#c2a36a,transparent);margin:0 auto 18px;"></div>
+        <div style="font-size:18px;font-weight:700;letter-spacing:-.2px;">Jessica Tran</div>
+        <div style="font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:6px;">Major Draw · Brisbane, QLD</div>
+        <div style="margin-top:24px;display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#c2a36a;font-weight:700;border:1px solid rgba(194,163,106,.5);padding:9px 18px;border-radius:999px;">See photo & full story →</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Pure Quote Stage</h3>
+      <p>No photo on the section card at all. Just the words, beautifully typeset, in a dark "stage" with a subtle gold accent. Photo only appears inside the modal. Most minimalist, most editorial, most "expensive watch ad."</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:28px;">
+  <p class="subtitle" style="text-align:center;">Or describe a different direction in the terminal — these are starting points, not the only options.</p>
+</div>
