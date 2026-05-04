@@ -86,7 +86,7 @@ export default function GiveawayDetails() {
       title: "Eligibility",
       description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
     },
-    { icon: IdCard, title: "License Numbers", description: "NTP/16264" },
+    { icon: IdCard, title: "License Numbers", description: "ABN: 54 690 397 061 | TP/04720 | NTP/16579" },
   ];
 
   const cardHoverStyle = {
