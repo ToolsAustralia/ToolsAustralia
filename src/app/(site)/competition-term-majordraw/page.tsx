@@ -141,7 +141,7 @@ export default async function MajorGiveawayTermsPage() {
               {giveawayTitle}
             </h1>
             <p className="text-gray-300">
-              Authorised under NSW License TP/04720. Notification Number: NTP/16264. These terms outline participation rules, prize details, compliance,
+              Authorised under NSW License TP/04720. Notification Number: NTP/16579. These terms outline participation rules, prize details, compliance,
               and consumer protections for the Major Giveaway.
             </p>
           </header>
