@@ -4,7 +4,11 @@ import User from "@/models/User";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { cancelSubscription } from "@/services/subscription";
+import {
+  cancelSubscription,
+  isSubscriptionReferenceError,
+  SUBSCRIPTION_REFERENCE_ERROR_CODES,
+} from "@/services/subscription";
 
 const cancelSubscriptionSchema = z.object({
   cancelAtPeriodEnd: z.boolean().optional().default(true), // Cancel at end of billing period by default
@@ -31,12 +35,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!user.stripeSubscriptionId) {
-      return NextResponse.json({ error: "No active subscription found" }, { status: 400 });
+    if (!user.stripeSubscriptionId && !user.stripeCustomerId) {
+      return NextResponse.json(
+        { error: "No active subscription found", code: SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION },
+        { status: 400 }
+      );
     }
 
     const result = await cancelSubscription(user, {
       cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
+      analytics: { actor: "user" },
     });
 
     const message = result.cancelledImmediately
@@ -63,6 +71,21 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
+    }
+
+    if (isSubscriptionReferenceError(error)) {
+      if (error.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 400 });
+      }
+      if (error.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.STRIPE_RETRYABLE) {
+        return NextResponse.json(
+          {
+            error: "Payment provider temporarily unavailable. Please try again.",
+            code: error.code,
+          },
+          { status: 503 }
+        );
+      }
     }
 
     return NextResponse.json(

@@ -604,7 +604,6 @@ export async function POST(request: NextRequest) {
         isActive: false,
         autoRenew: true,
         status: "incomplete",
-        pendingChange: undefined, // Initialize pendingChange field for subscription management
         lastDowngradeDate: undefined, // Initialize lastDowngradeDate field for security
       }, // Initialize subscription structure (no active subscription initially)
       oneTimePackages: [], // No packages initially

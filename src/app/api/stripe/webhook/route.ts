@@ -50,6 +50,18 @@ import {
   isFullRefundByAmounts,
   sumSucceededRefundAmountCents,
 } from "@/utils/payment/stripe-refund-amount";
+import {
+  appendActivationStatus,
+  appendMembershipStatusHistory,
+  upsertRenewalCycleFromFailedInvoice,
+  upsertRenewalCycleFromPaidInvoice,
+} from "@/services/admin/membershipAnalyticsPersistence";
+import {
+  isDeadStripeSubscriptionStatus,
+  isManageableStripeSubscriptionStatus,
+  retrieveStripeSubscription,
+  shouldAdoptPaidSubscriptionOverStored,
+} from "@/services/subscription/SubscriptionReferenceService";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -67,6 +79,58 @@ function webhookLog(level: "info" | "warn" | "error", message: string, data?: un
 
   const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : "ℹ️";
   console[level](`${prefix} WEBHOOK: ${message}`, data || "");
+}
+
+type PendingUpgradeChange = NonNullable<IUser["subscription"]>["pendingChange"];
+
+function isValidPendingUpgrade(change: PendingUpgradeChange | undefined): change is PendingUpgradeChange {
+  return (
+    change?.changeType === "upgrade" &&
+    typeof change.newPackageId === "string" &&
+    change.newPackageId.length > 0
+  );
+}
+
+function stripeSubscriptionIdFromUnknown(value: unknown): string | undefined {
+  if (typeof value === "string" && value.startsWith("sub_")) return value;
+  if (value && typeof value === "object") {
+    const id = (value as { id?: unknown }).id;
+    if (typeof id === "string" && id.startsWith("sub_")) return id;
+  }
+  return undefined;
+}
+
+function objectValue(value: unknown, key: string): unknown {
+  return value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+}
+
+function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | undefined {
+  const invoiceWithHints = invoice as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+    parent?: unknown;
+  };
+
+  const parent = invoiceWithHints.parent;
+  const parentSubscriptionDetails = objectValue(parent, "subscription_details");
+  const parentSubscriptionId = stripeSubscriptionIdFromUnknown(
+    objectValue(parentSubscriptionDetails, "subscription")
+  );
+  if (parentSubscriptionId) return parentSubscriptionId;
+
+  const legacySubscriptionId = stripeSubscriptionIdFromUnknown(invoiceWithHints.subscription);
+  if (legacySubscriptionId) return legacySubscriptionId;
+
+  for (const line of invoice.lines?.data ?? []) {
+    const lineParent = objectValue(line, "parent");
+    const subscriptionDetails = objectValue(lineParent, "subscription_details");
+    const subscriptionItemDetails = objectValue(lineParent, "subscription_item_details");
+    const lineSubscriptionId =
+      stripeSubscriptionIdFromUnknown(objectValue(subscriptionDetails, "subscription")) ??
+      stripeSubscriptionIdFromUnknown(objectValue(subscriptionItemDetails, "subscription"));
+    if (lineSubscriptionId) return lineSubscriptionId;
+  }
+
+  return undefined;
 }
 
 // ✅ WEBHOOK-FIRST: Use PaymentEvent-only idempotency (no additional infrastructure needed)
@@ -1502,16 +1566,17 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       return;
     }
 
-    // Check if this is an upgrade (has pendingChange)
-    if (
-      user.subscription?.pendingChange &&
-      user.subscription.pendingChange.stripeSubscriptionId === subscription.id &&
-      user.subscription.pendingChange.changeType === "upgrade"
-    ) {
+    const pendingUpgrade = isValidPendingUpgrade(user.subscription?.pendingChange)
+      ? user.subscription?.pendingChange
+      : undefined;
+
+    // Check if this is an upgrade (has a valid pendingChange)
+    if (pendingUpgrade?.stripeSubscriptionId === subscription.id) {
+      if (!user.subscription) return;
       webhookLog("info", `Activating upgrade subscription: ${subscription.id}`);
 
       // Activate the upgrade
-      user.subscription.packageId = user.subscription.pendingChange.newPackageId;
+      user.subscription.packageId = pendingUpgrade.newPackageId;
       user.subscription.startDate = new Date();
       user.subscription.isActive = true;
       user.subscription.status = "active";
@@ -1541,6 +1606,22 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         webhookLog("info", `✅ Subscription activation verified successfully`);
       }
 
+      if (subscription.status === "active" || subscription.status === "trialing") {
+        try {
+          const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+          await appendActivationStatus({
+            userId: new mongoose.Types.ObjectId(String(user._id)),
+            effectiveAt: new Date(subscription.created * 1000),
+            source: "webhook_subscription_created",
+            subscriptionPackageId: pkgId,
+            isTrialing: subscription.status === "trialing",
+            metadata: { stripeSubscriptionId: subscription.id, status: subscription.status },
+          });
+        } catch (err) {
+          webhookLog("warn", "Failed to append activation history from subscription.created:", err);
+        }
+      }
+
       return;
     } else {
       // Regular subscription creation - only update autoRenew
@@ -1550,6 +1631,22 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     }
 
     await user.save();
+
+    if (subscription.status === "active" || subscription.status === "trialing") {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendActivationStatus({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(subscription.created * 1000),
+          source: "webhook_subscription_created",
+          subscriptionPackageId: pkgId,
+          isTrialing: subscription.status === "trialing",
+          metadata: { stripeSubscriptionId: subscription.id, status: subscription.status },
+        });
+      } catch (err) {
+        webhookLog("warn", "Failed to append activation history from subscription.created:", err);
+      }
+    }
 
     // ✅ NON-CRITICAL: Update Klaviyo profile after subscription activation (fire-and-forget)
     executeBackgroundJob("Klaviyo profile sync after subscription activation", async () => {
@@ -1578,24 +1675,27 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       return;
     }
 
+    const pendingUpgrade = isValidPendingUpgrade(user.subscription?.pendingChange)
+      ? user.subscription?.pendingChange
+      : undefined;
+
     // ✅ PRORATION UPGRADE: Check if this is from subscription.update() (new best practice pattern)
     // When using subscription.update() for upgrades, the subscription ID doesn't change
     const isProrationUpgrade =
       user.stripeSubscriptionId === subscription.id &&
-      user.subscription?.pendingChange?.changeType === "upgrade" &&
+      pendingUpgrade != null &&
       subscription.metadata?.upgradeType === "proration";
 
     webhookLog(
       "info",
-      `Checking subscription update - isProrationUpgrade: ${isProrationUpgrade}, hasPendingChange: ${!!user.subscription
-        ?.pendingChange}, subscriptionStatus: ${subscription.status}`
+      `Checking subscription update - isProrationUpgrade: ${isProrationUpgrade}, hasPendingChange: ${!!pendingUpgrade}, subscriptionStatus: ${subscription.status}`
     );
 
     // Check if this is a pending change activation (upgrade or downgrade)
     webhookLog(
       "info",
-      `Checking pending change - hasPendingChange: ${!!user.subscription?.pendingChange}, pendingSubscriptionId: ${
-        user.subscription?.pendingChange?.stripeSubscriptionId
+      `Checking pending change - hasPendingChange: ${!!pendingUpgrade}, pendingSubscriptionId: ${
+        pendingUpgrade?.stripeSubscriptionId
       }, currentSubscriptionId: ${subscription.id}, subscriptionStatus: ${subscription.status}`
     );
 
@@ -1604,21 +1704,22 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     // Webhook just processes subscription updates normally
 
     if (
-      user.subscription?.pendingChange &&
-      (user.subscription.pendingChange.stripeSubscriptionId === subscription.id || isProrationUpgrade) &&
+      pendingUpgrade &&
+      (pendingUpgrade.stripeSubscriptionId === subscription.id || isProrationUpgrade) &&
       subscription.status === "active"
     ) {
-      const changeType = user.subscription.pendingChange.changeType;
+      const changeType = pendingUpgrade.changeType;
 
       // 🔧 CRITICAL FIX: Only process upgrades immediately, not downgrades
       if (changeType === "upgrade") {
+        if (!user.subscription) return;
         webhookLog(
           "info",
-          `Activating pending upgrade: ${user.subscription.pendingChange.newPackageId} (proration: ${isProrationUpgrade})`
+          `Activating pending upgrade: ${pendingUpgrade.newPackageId} (proration: ${isProrationUpgrade})`
         );
 
         // Get package details for entries
-        const packageId = user.subscription.pendingChange.newPackageId;
+        const packageId = pendingUpgrade.newPackageId;
         const membershipPackage = getPackageById(packageId);
 
         if (!membershipPackage) {
@@ -1632,6 +1733,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.isActive = true;
         user.subscription.status = "active";
         user.subscription.autoRenew = true;
+        const pendingUpgradePaymentIntentId = pendingUpgrade.paymentIntentId || "";
         user.subscription.pendingChange = undefined; // Clear pending change
         user.subscription.cancelledAt = undefined; // Clear cancellation timestamp when subscription is reactivated
         user.stripeSubscriptionId = subscription.id;
@@ -1672,8 +1774,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
             toPrice: membershipPackage.price, // Already in dollars
             upgradeAmount: membershipPackage.price, // Already in dollars, don't multiply
             entriesAdded: membershipPackage.entriesPerMonth || 0,
-            paymentIntentId:
-              (user.subscription?.pendingChange as unknown as { paymentIntentId?: string })?.paymentIntentId || "",
+            paymentIntentId: pendingUpgradePaymentIntentId,
           });
 
           klaviyo.trackEventBackground(upgradeEvent);
@@ -1815,7 +1916,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     }
 
     // RESEARCH-BACKED PROTECTION: Check if user has pending changes or recent upgrades
-    const hasPendingChange = user.subscription?.pendingChange;
+    const hasPendingChange = isValidPendingUpgrade(user.subscription?.pendingChange);
     const hasRecentUpgrade =
       user.subscription?.lastUpgradeDate && Date.now() - user.subscription.lastUpgradeDate.getTime() < 60000; // 1 minute window
 
@@ -1851,10 +1952,12 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       return;
     }
 
+    // Capture status before any mutations (used below for activation history after save)
+    const prevSubStatus = user.subscription?.status;
+
     // Update user subscription status based on Stripe subscription
     if (user.subscription) {
       const wasActive = user.subscription.isActive;
-      const wasStatus = user.subscription.status;
 
       // Additional protection: If user has an active Boss subscription, don't let old subscription updates override it
       const hasActiveBossSubscription =
@@ -1885,47 +1988,54 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
       // Only process updates if this is the user's current subscription.
       // Exception: if the stored stripeSubscriptionId points to a dead subscription
-      // (incomplete/incomplete_expired/canceled), adopt the incoming active one instead.
+      // (incomplete/incomplete_expired/canceled) or 404, adopt the incoming manageable one instead.
       if (user.stripeSubscriptionId && user.stripeSubscriptionId !== subscription.id) {
-        if (subscription.status === "active" || subscription.status === "trialing") {
-          try {
-            const storedSub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-            const isStoredDead =
-              storedSub.status === "incomplete" ||
-              storedSub.status === "incomplete_expired" ||
-              storedSub.status === "canceled";
-            if (isStoredDead) {
+        if (isManageableStripeSubscriptionStatus(subscription.status)) {
+          const storedRetrieve = await retrieveStripeSubscription(user.stripeSubscriptionId);
+          if (!storedRetrieve.ok) {
+            if (storedRetrieve.is404) {
               webhookLog(
                 "info",
-                `Adopting subscription ${subscription.id} (${subscription.status}) — stored ${user.stripeSubscriptionId} is ${storedSub.status}`
+                `Adopting subscription ${subscription.id} — stored ${user.stripeSubscriptionId} is 404/deleted`
               );
               user.stripeSubscriptionId = subscription.id;
-              // Fall through to process the update normally
+            } else if (storedRetrieve.isRetryable) {
+              webhookLog(
+                "info",
+                `Skipping subscription.updated for ${subscription.id} - Stripe verification retryable: ${storedRetrieve.message}`
+              );
+              return;
             } else {
-              webhookLog("info", `Ignoring update of subscription ${subscription.id} - user has active subscription ${user.stripeSubscriptionId}`);
+              webhookLog(
+                "info",
+                `Ignoring update of subscription ${subscription.id} - could not verify stored sub: ${storedRetrieve.message}`
+              );
               return;
             }
-          } catch (retrieveErr) {
-            const statusCode =
-              retrieveErr && typeof retrieveErr === "object" && "statusCode" in retrieveErr
-                ? (retrieveErr as { statusCode?: number }).statusCode
-                : undefined;
-            if (statusCode === 404) {
-              webhookLog("info", `Adopting subscription ${subscription.id} — stored ${user.stripeSubscriptionId} is 404/deleted`);
-              user.stripeSubscriptionId = subscription.id;
-            } else {
-              webhookLog("info", `Ignoring update of subscription ${subscription.id} - could not verify stored sub: ${retrieveErr}`);
-              return;
-            }
+          } else if (isDeadStripeSubscriptionStatus(storedRetrieve.subscription.status)) {
+            webhookLog(
+              "info",
+              `Adopting subscription ${subscription.id} (${subscription.status}) — stored ${user.stripeSubscriptionId} is ${storedRetrieve.subscription.status}`
+            );
+            user.stripeSubscriptionId = subscription.id;
+          } else {
+            webhookLog(
+              "info",
+              `Ignoring update of subscription ${subscription.id} - user has active subscription ${user.stripeSubscriptionId}`
+            );
+            return;
           }
         } else {
-          webhookLog("info", `Ignoring update of old subscription ${subscription.id} - user has newer subscription ${user.stripeSubscriptionId}`);
+          webhookLog(
+            "info",
+            `Ignoring update of old subscription ${subscription.id} - user has newer subscription ${user.stripeSubscriptionId}`
+          );
           return;
         }
       }
 
       // Only update status for specific cases to avoid conflicts
-      if (wasActive && wasStatus === "active") {
+      if (wasActive && prevSubStatus === "active") {
         // Subscription already processed as active, only update autoRenew
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         // If cancel_at_period_end is true and cancelledAt is not set, this is a new cancellation
@@ -1958,7 +2068,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         user.subscription.endDate = endDate;
 
-        if (wasStatus !== "past_due") {
+        if (prevSubStatus !== "past_due") {
           user.subscription.pastDueAt = new Date();
         }
 
@@ -1987,7 +2097,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
         user.subscription.autoRenew = !subscription.cancel_at_period_end;
         user.subscription.endDate = endDateUnpaid;
 
-        if (wasStatus !== "unpaid" && wasStatus !== "past_due") {
+        if (prevSubStatus !== "unpaid" && prevSubStatus !== "past_due") {
           user.subscription.pastDueAt = new Date();
         }
 
@@ -2047,6 +2157,26 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     }
 
     await user.save();
+
+    if (
+      (user.subscription?.status === "active" || user.subscription?.status === "trialing") &&
+      prevSubStatus !== "active" &&
+      prevSubStatus !== "trialing"
+    ) {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendActivationStatus({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(),
+          source: "webhook_subscription_updated_active",
+          subscriptionPackageId: pkgId,
+          isTrialing: user.subscription?.status === "trialing",
+          metadata: { stripeSubscriptionId: subscription.id, fromStatus: prevSubStatus, toStatus: user.subscription.status },
+        });
+      } catch (err) {
+        webhookLog("warn", "Failed to append activation history from subscription.updated:", err);
+      }
+    }
 
     // ✅ Verify save for canceled/past_due/unpaid status + Klaviyo profile (past_due renewal entries on profile)
     if (subscription.status === "canceled" || subscription.status === "past_due" || subscription.status === "unpaid") {
@@ -2221,9 +2351,11 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       hasEndDate && user.subscription?.endDate ? new Date(user.subscription.endDate) <= new Date() : false;
 
     // ✅ BEST PRACTICE: Check for relevant pending activity (only block if actually relevant)
-    const pendingChange = user.subscription?.pendingChange;
+    const pendingChange = isValidPendingUpgrade(user.subscription?.pendingChange)
+      ? user.subscription?.pendingChange
+      : undefined;
     const hasRelevantPendingChange =
-      pendingChange !== undefined && pendingChange.stripeSubscriptionId === subscription.id; // Only relevant if for THIS subscription
+      pendingChange?.stripeSubscriptionId === subscription.id; // Only relevant if for THIS subscription
 
     // ✅ BEST PRACTICE: Check for recent upgrade activity (only block if very recent AND subscription still active)
     const lastUpgradeDate = user.subscription?.lastUpgradeDate;
@@ -2414,7 +2546,8 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     const billingReason = invoice.billing_reason;
     const isInitialPayment = billingReason === "subscription_create";
     const isRenewal = billingReason === "subscription_cycle";
-    
+    const prevSubStatus = user.subscription?.status;
+
     webhookLog("info", `Invoice billing_reason: ${billingReason}, isRenewal: ${isRenewal}, isInitialPayment: ${isInitialPayment}, subscriptionId: ${subscriptionId || 'none'}`);
 
     if (subscriptionId) {
@@ -2577,6 +2710,43 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     }
 
     await user.save();
+
+    if (invoice.id && subscriptionId && isRenewal) {
+      try {
+        await upsertRenewalCycleFromFailedInvoice({
+          invoice,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          stripeSubscriptionId: subscriptionId,
+        });
+      } catch (cycleErr) {
+        webhookLog("warn", `Membership renewal cycle persist failed (non-blocking): ${cycleErr}`);
+      }
+    }
+
+    if (
+      invoice.id &&
+      user.subscription?.status === "past_due" &&
+      prevSubStatus !== "past_due"
+    ) {
+      try {
+        const pkgId = user.subscription?.packageId != null ? String(user.subscription.packageId) : undefined;
+        await appendMembershipStatusHistory({
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          effectiveAt: new Date(),
+          membershipStatus: "past_due",
+          actor: "stripe",
+          source: "webhook_invoice_payment_failed",
+          dedupeKey: `pastdue_inv_${invoice.id}`,
+          subscriptionPackageId: pkgId,
+          autoRenew: user.subscription?.autoRenew,
+          endDate: user.subscription?.endDate ?? undefined,
+          pastDueAt: user.subscription?.pastDueAt ?? new Date(),
+          metadata: { invoiceId: invoice.id, billingReason: billingReason ?? null },
+        });
+      } catch (histErr) {
+        webhookLog("warn", `Membership status history persist failed (non-blocking): ${histErr}`);
+      }
+    }
 
     // ✅ Verify save for payment failures
     if (subscriptionId && user.subscription) {
@@ -3032,7 +3202,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Webhook events don't always include all fields expanded, so we need to retrieve it fresh
     // This ensures we have access to subscription, payment_intent, and charge fields
     const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
-      expand: ["subscription", "payment_intent", "charge"],
+      expand: ["parent.subscription_details.subscription", "payment_intent", "charge"],
     });
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
@@ -3042,10 +3212,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const eventId = `BenefitsGranted-${invoicePaymentId}`;
 
     // ✅ DEBUG: Log invoice details (correlationId from subscription metadata when available)
-    const invoiceSubId = (() => {
-      const sub = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription }).subscription;
-      return typeof sub === "string" ? sub : (sub as Stripe.Subscription)?.id;
-    })();
+    const invoiceSubId = resolveInvoiceSubscriptionId(expandedInvoice);
     webhookLog("info", `Invoice details:`, {
       invoiceId: expandedInvoice.id,
       customerId: expandedInvoice.customer,
@@ -3098,11 +3265,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // after duplicate incomplete subs / checkout races).
     const invoiceSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
       .subscription;
-    const invoiceSubscriptionId =
-      typeof invoiceSubscription === "string" ? invoiceSubscription : (invoiceSubscription as Stripe.Subscription)?.id;
+    const invoiceSubscriptionId = resolveInvoiceSubscriptionId(expandedInvoice);
+    const pendingSubscriptionId = user.subscription?.pendingStripeSubscriptionId;
 
-    /** Canonical ID for this payment: invoice first, then DB fallback (e.g. rare missing expand). */
-    const subscriptionId: string | undefined = invoiceSubscriptionId ?? user.stripeSubscriptionId ?? undefined;
+    /**
+     * Canonical ID for this payment: Stripe invoice first, then customer-correlated pending attempt,
+     * then canonical DB fallback for legacy/renewal paths.
+     */
+    const subscriptionId: string | undefined =
+      invoiceSubscriptionId ?? pendingSubscriptionId ?? user.stripeSubscriptionId ?? undefined;
 
     // Observability for upgrade flows (subscriptionId already matches invoice when invoice has a subscription)
     if (user.subscription?.pendingChange?.stripeSubscriptionId && invoiceSubscriptionId) {
@@ -3119,6 +3290,18 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     if (!subscriptionId) {
       webhookLog("warn", `No subscription ID found for user: ${user.email}`);
       return;
+    }
+
+    if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
+      try {
+        await upsertRenewalCycleFromPaidInvoice({
+          invoice: expandedInvoice,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          stripeSubscriptionId: subscriptionId,
+        });
+      } catch (cycleErr) {
+        webhookLog("warn", `Membership renewal cycle (paid) persist failed (non-blocking): ${cycleErr}`);
+      }
     }
 
     if (invoiceSubscriptionId && invoiceSubscriptionId !== user.stripeSubscriptionId) {
@@ -3164,6 +3347,37 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     const paidSubscriptionId = subscription.id;
+    const invoiceCustomerId =
+      typeof expandedInvoice.customer === "string" ? expandedInvoice.customer : expandedInvoice.customer?.id;
+    const subscriptionCustomerId =
+      typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
+
+    if (invoiceCustomerId && subscriptionCustomerId && invoiceCustomerId !== subscriptionCustomerId) {
+      webhookLog(
+        "error",
+        `Invoice customer ${invoiceCustomerId} does not match subscription customer ${subscriptionCustomerId}; skipping benefit grant`
+      );
+      return;
+    }
+
+    if (!isManageableStripeSubscriptionStatus(subscription.status)) {
+      webhookLog(
+        "warn",
+        `Paid invoice resolved subscription ${subscription.id}, but status ${subscription.status} is not manageable; skipping benefit grant`
+      );
+      return;
+    }
+
+    if (user.stripeSubscriptionId !== paidSubscriptionId) {
+      await User.findByIdAndUpdate(user._id, {
+        $set: { stripeSubscriptionId: paidSubscriptionId },
+      });
+      user.stripeSubscriptionId = paidSubscriptionId;
+      webhookLog(
+        "info",
+        `Promoted paid subscription ${paidSubscriptionId} (${subscription.status}) to canonical stripeSubscriptionId before benefits`
+      );
+    }
 
     // Affiliate eligibility (moved up): needed for processPaymentBenefits and for resuming collection early.
     const recordMembershipRecurringAffiliate = await shouldRecordMembershipRecurringAffiliateCharge(
@@ -3205,43 +3419,32 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       paidSubscriptionId &&
       user.stripeSubscriptionId &&
       user.stripeSubscriptionId !== paidSubscriptionId &&
-      (subscription.status === "active" || subscription.status === "trialing")
+      isManageableStripeSubscriptionStatus(subscription.status)
     ) {
-      try {
-        const storedSub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-        const storedStatus = storedSub.status;
-        const isStoredDead =
-          storedStatus === "incomplete" ||
-          storedStatus === "incomplete_expired" ||
-          storedStatus === "canceled";
-        if (isStoredDead) {
-          await User.findByIdAndUpdate(user._id, {
-            $set: { stripeSubscriptionId: paidSubscriptionId },
-          });
-          user.stripeSubscriptionId = paidSubscriptionId;
-          webhookLog(
-            "info",
-            `Auto-corrected stripeSubscriptionId: ${storedSub.id} (${storedStatus}) → ${paidSubscriptionId} (${subscription.status}) for ${user.email}`
-          );
-        }
-      } catch (correctErr) {
-        // If the stored sub is 404/deleted, it's definitely dead — align DB with the subscription that just paid
-        const statusCode =
-          correctErr && typeof correctErr === "object" && "statusCode" in correctErr
-            ? (correctErr as { statusCode?: number }).statusCode
-            : undefined;
-        if (statusCode === 404) {
-          await User.findByIdAndUpdate(user._id, {
-            $set: { stripeSubscriptionId: paidSubscriptionId },
-          });
-          user.stripeSubscriptionId = paidSubscriptionId;
-          webhookLog(
-            "info",
-            `Auto-corrected stripeSubscriptionId (stored was 404/deleted) → ${paidSubscriptionId} for ${user.email}`
-          );
-        } else {
-          webhookLog("warn", `Non-critical: could not verify stored stripeSubscriptionId: ${correctErr}`);
-        }
+      const storedRetrieve = await retrieveStripeSubscription(user.stripeSubscriptionId);
+      const shouldCorrect =
+        (!storedRetrieve.ok && storedRetrieve.is404) ||
+        (storedRetrieve.ok &&
+          shouldAdoptPaidSubscriptionOverStored(
+            paidSubscriptionId,
+            user.stripeSubscriptionId,
+            subscription.status,
+            storedRetrieve.subscription.status
+          ));
+      if (shouldCorrect) {
+        await User.findByIdAndUpdate(user._id, {
+          $set: { stripeSubscriptionId: paidSubscriptionId },
+        });
+        user.stripeSubscriptionId = paidSubscriptionId;
+        webhookLog(
+          "info",
+          `Auto-corrected stripeSubscriptionId → ${paidSubscriptionId} (${subscription.status}) for ${user.email}`
+        );
+      } else if (!storedRetrieve.ok && !storedRetrieve.is404) {
+        webhookLog(
+          "warn",
+          `Non-critical: could not verify stored stripeSubscriptionId: ${storedRetrieve.message}`
+        );
       }
     }
 
@@ -3620,18 +3823,39 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     if (result.success) {
       // pause_collection is cleared before processPaymentBenefits (see above) so collection is not left paused on timeout/benefit errors.
 
-      // ✅ Safety net: Sync isActive for subscription_create (covers renew-subscription "payment requires confirmation" flow)
-      // When user completes payment for trialing subscription, ensure isActive = true
+      // ✅ Safety net: Sync canonical subscription state and clear pending initial checkout bridge.
       if (expandedInvoice.billing_reason === "subscription_create") {
         try {
           const subStatus = subscription?.status;
           const shouldBeActive = subStatus === "active" || subStatus === "trialing";
-          if (shouldBeActive && !user.subscription?.isActive) {
-            await User.findByIdAndUpdate(user._id, { $set: { "subscription.isActive": true, "subscription.status": subStatus } });
-            webhookLog("info", `Synced subscription.isActive=true (status=${subStatus}) for ${user.email}`);
+          if (shouldBeActive) {
+            await User.findByIdAndUpdate(
+              user._id,
+              {
+                $set: {
+                  stripeSubscriptionId: paidSubscriptionId,
+                  "subscription.isActive": true,
+                  "subscription.status": subStatus,
+                },
+                $unset: {
+                  "subscription.pendingStripeSubscriptionId": "",
+                  "subscription.pendingStripeSubscriptionRequestId": "",
+                  "subscription.pendingStripeSubscriptionCreatedAt": "",
+                },
+              }
+            );
+            user.stripeSubscriptionId = paidSubscriptionId;
+            if (user.subscription) {
+              user.subscription.isActive = true;
+              user.subscription.status = subStatus;
+              user.subscription.pendingStripeSubscriptionId = undefined;
+              user.subscription.pendingStripeSubscriptionRequestId = undefined;
+              user.subscription.pendingStripeSubscriptionCreatedAt = undefined;
+            }
+            webhookLog("info", `Synced canonical subscription state (status=${subStatus}) for ${user.email}`);
           }
         } catch (syncErr) {
-          webhookLog("warn", `Non-critical: could not sync isActive for subscription_create: ${syncErr}`);
+          webhookLog("warn", `Non-critical: could not sync subscription_create state: ${syncErr}`);
         }
       }
 

@@ -51,7 +51,6 @@ export async function POST() {
           isActive: false,
           autoRenew: true,
           status: "incomplete",
-          pendingChange: undefined,
         };
         changesMade = true;
         userResult.changes.push("Created subscription object with pendingChange");

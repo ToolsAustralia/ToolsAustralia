@@ -23,15 +23,17 @@
  * - Dry-run by default: no DB writes unless --live is passed.
  * - Optional --limit=N caps how many users are fetched (default: all matching candidates).
  * - Per-user try/catch; one failure does not abort the script.
- * - Rate-limit handling with retries on 429.
+ * - Rate-limit handling with retries on 429 (shared cooldown across concurrent workers).
  *
  * Usage:
- *   npx tsx scripts/repair-wrong-stripe-subscription-ids.ts [--dry-run] [--live] [--limit=N]
+ *   npx tsx scripts/repair-wrong-stripe-subscription-ids.ts [--dry-run] [--live] [--limit=N] [--concurrency=N] [--max-retries=N]
  *
  * Options:
- *   --dry-run   Log what would be updated; no DB writes (default).
- *   --live      Perform DB updates.
- *   --limit=N   Max users to process (omit for no cap).
+ *   --dry-run       Log what would be updated; no DB writes (default).
+ *   --live          Perform DB updates.
+ *   --limit=N       Max users to process (omit for no cap).
+ *   --concurrency=N Parallel Stripe scans (default: 3 dry-run, 2 live).
+ *   --max-retries=N Stripe 429 retries per call (default: 5).
  *
  * Env: .env.local must have MONGODB_URI and STRIPE_SECRET_KEY.
  */
@@ -46,29 +48,114 @@ const LIMIT_ARG = process.argv.find((a) => a.startsWith("--limit="));
 /** When set, caps MongoDB candidate fetch; omit --limit= on CLI to process all matches. */
 const LIMIT = LIMIT_ARG ? Math.max(1, parseInt(LIMIT_ARG.split("=")[1] || "1", 10)) : undefined;
 
-const DELAY_BETWEEN_STRIPE_MS = 200;
-const MAX_RETRIES_429 = 3;
-const RETRY_AFTER_DEFAULT_MS = 5000;
+const CONCURRENCY_ARG = process.argv.find((a) => a.startsWith("--concurrency="));
+const DEFAULT_CONCURRENCY = DRY_RUN ? 3 : 2;
+const CONCURRENCY = CONCURRENCY_ARG
+  ? Math.max(1, parseInt(CONCURRENCY_ARG.split("=")[1] || String(DEFAULT_CONCURRENCY), 10))
+  : DEFAULT_CONCURRENCY;
+
+const MAX_RETRIES_ARG = process.argv.find((a) => a.startsWith("--max-retries="));
+const MAX_RETRIES = MAX_RETRIES_ARG ? Math.max(0, parseInt(MAX_RETRIES_ARG.split("=")[1] || "5", 10)) : 5;
+
+/** Log progress every N completed Stripe scans (stderr). */
+const PROGRESS_EVERY = 25;
+
+let rateLimitCooldownUntil = 0;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getRetryAfterMs(err: unknown, attempt: number): number {
-  const raw =
-    err && typeof err === "object" && "raw" in err
-      ? (err as { raw?: { headers?: Record<string, string> } }).raw
-      : undefined;
-  const retryAfter = raw?.headers?.["retry-after"];
-  if (retryAfter != null) {
-    const sec = parseInt(retryAfter, 10);
-    if (!Number.isNaN(sec)) return Math.min(sec * 1000, 60_000);
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r > 0 ? `${m}m ${r}s` : `${m}m`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getStripeErrorCode(error: unknown): string {
+  return isRecord(error) && typeof error.code === "string" ? error.code : "";
+}
+
+function getStripeErrorStatus(error: unknown): number | undefined {
+  return isRecord(error) && typeof error.statusCode === "number" ? error.statusCode : undefined;
+}
+
+function getStripeErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRateLimitError(error: unknown): boolean {
+  const message = getStripeErrorMessage(error).toLowerCase();
+  return getStripeErrorStatus(error) === 429 || getStripeErrorCode(error) === "rate_limit" || message.includes("rate limit");
+}
+
+function getRetryAfterMsFromError(error: unknown): number | null {
+  if (!isRecord(error) || !isRecord(error.raw) || !isRecord(error.raw.headers)) return null;
+  const retryAfter = error.raw.headers["retry-after"];
+  if (typeof retryAfter !== "string") return null;
+  const seconds = Number.parseInt(retryAfter, 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
+}
+
+async function waitForRateLimitCooldown(): Promise<void> {
+  const waitMs = rateLimitCooldownUntil - Date.now();
+  if (waitMs > 0) {
+    await sleep(waitMs);
   }
-  return RETRY_AFTER_DEFAULT_MS * Math.pow(2, attempt);
+}
+
+async function withStripeRateLimitRetry<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    await waitForRateLimitCooldown();
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt >= MAX_RETRIES) {
+        throw error;
+      }
+
+      const retryAfterMs = getRetryAfterMsFromError(error);
+      const backoffMs = retryAfterMs ?? Math.min(30_000, 1_500 * 2 ** attempt);
+      const jitterMs = Math.floor(Math.random() * 500);
+      const waitMs = backoffMs + jitterMs;
+      rateLimitCooldownUntil = Math.max(rateLimitCooldownUntil, Date.now() + waitMs);
+      console.error(
+        `   RATE LIMIT ${label}; retry ${attempt + 1}/${MAX_RETRIES} after ${formatDurationMs(waitMs)}`
+      );
+      await sleep(waitMs);
+    }
+  }
 }
 
 // Use base Stripe.Subscription so we can assign from both retrieve() and list().data
 type StripeSubscription = import("stripe").Stripe.Subscription;
+
+const RECOVERABLE_STATUSES = ["active", "trialing", "past_due", "unpaid"] as const;
+type RecoverableStatus = (typeof RECOVERABLE_STATUSES)[number];
+
+const STATUS_PRIORITY: Record<RecoverableStatus, number> = {
+  active: 0,
+  trialing: 1,
+  past_due: 2,
+  unpaid: 3,
+};
+
+function pickBestRecoverableSubscription(subs: StripeSubscription[]): StripeSubscription | null {
+  const recoverable = subs.filter((s): s is StripeSubscription & { status: RecoverableStatus } =>
+    (RECOVERABLE_STATUSES as readonly string[]).includes(s.status)
+  );
+  if (recoverable.length === 0) return null;
+  recoverable.sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]);
+  return recoverable[0];
+}
 
 function buildCandidateFilter() {
   return {
@@ -92,34 +179,46 @@ type FixPlanRow = {
   activeSub: StripeSubscription;
 };
 
-async function retrieveWithRetry(
+type ScanCounters = {
+  totalChecked: number;
+  skippedStoredActive: number;
+  skippedNoActiveSub: number;
+  errors: number;
+};
+
+async function retrieveStoredSub(
   stripe: typeof import("../src/lib/stripe").stripe,
   subId: string
 ): Promise<{ sub: StripeSubscription | null; error?: string; is404?: boolean }> {
-  for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
-    try {
-      const sub = await stripe.subscriptions.retrieve(subId);
-      return { sub };
-    } catch (e) {
-      const code = e && typeof e === "object" && "code" in e ? (e as { code: string }).code : "";
-      const statusCode =
-        e && typeof e === "object" && "statusCode" in e ? (e as { statusCode?: number }).statusCode : undefined;
-      if (code === "resource_missing_deleted" || statusCode === 404) {
-        return { sub: null, is404: true };
-      }
-      if (code === "rate_limit" || statusCode === 429) {
-        if (attempt < MAX_RETRIES_429) {
-          const wait = getRetryAfterMs(e, attempt);
-          console.log(`   [RETRY] 429, waiting ${Math.round(wait / 1000)}s`);
-          await sleep(wait);
-          continue;
-        }
-        return { sub: null, error: "429 after retries" };
-      }
-      return { sub: null, error: e instanceof Error ? e.message : String(e) };
+  try {
+    const sub = await withStripeRateLimitRetry(`retrieve sub=${subId}`, () => stripe.subscriptions.retrieve(subId));
+    return { sub };
+  } catch (e) {
+    const code = getStripeErrorCode(e);
+    const statusCode = getStripeErrorStatus(e);
+    if (code === "resource_missing_deleted" || code === "resource_missing" || statusCode === 404) {
+      return { sub: null, is404: true };
     }
+    return { sub: null, error: getStripeErrorMessage(e) };
   }
-  return { sub: null, error: "Max retries exceeded" };
+}
+
+async function listRecoverableForCustomer(
+  stripe: typeof import("../src/lib/stripe").stripe,
+  customerId: string
+): Promise<{ sub: StripeSubscription | null; error?: string }> {
+  try {
+    const list = await withStripeRateLimitRetry(`list subs customer=${customerId}`, () =>
+      stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 100,
+      })
+    );
+    return { sub: pickBestRecoverableSubscription(list.data) };
+  } catch (e) {
+    return { sub: null, error: getStripeErrorMessage(e) };
+  }
 }
 
 async function main() {
@@ -143,14 +242,18 @@ async function main() {
   console.log("\n🔧 Repair stripeSubscriptionId for users pointing to dead subscriptions");
   console.log(`   Mode: ${DRY_RUN ? "DRY RUN (no DB writes)" : "LIVE"}`);
   console.log(`   Limit: ${LIMIT === undefined ? "none (all candidates)" : LIMIT}`);
+  console.log(`   Concurrency: ${CONCURRENCY}`);
+  console.log(`   Max rate-limit retries: ${MAX_RETRIES}`);
   console.log(`   Now (UTC): ${now.toISOString()}`);
   console.log("   Filters: processedPayments length ≥ 1, subscription.status ≠ incomplete");
   console.log("");
 
-  let totalChecked = 0;
-  let skippedStoredActive = 0;
-  let skippedNoActiveSub = 0;
-  let errors = 0;
+  const counters: ScanCounters = {
+    totalChecked: 0,
+    skippedStoredActive: 0,
+    skippedNoActiveSub: 0,
+    errors: 0,
+  };
 
   const correctedUsers: {
     email: string;
@@ -182,7 +285,9 @@ async function main() {
     console.log(`   Total users matching DB filters (full database): ${totalInDatabase}`);
     console.log(
       `   Users loaded & to be Stripe-scanned this run: ${candidates.length}` +
-        (LIMIT !== undefined ? ` (--limit=${LIMIT}; remaining in DB not loaded: ${Math.max(0, totalInDatabase - candidates.length)})` : "")
+        (LIMIT !== undefined
+          ? ` (--limit=${LIMIT}; remaining in DB not loaded: ${Math.max(0, totalInDatabase - candidates.length)})`
+          : "")
     );
     console.log("");
 
@@ -192,29 +297,48 @@ async function main() {
       process.exit(0);
     }
 
-    const fixPlan: FixPlanRow[] = [];
+    const total = candidates.length;
+    const fixPlanByIndex: (FixPlanRow | null)[] = new Array(total).fill(null);
+    let scanCompleted = 0;
+    let eligibleSoFar = 0;
+    const loopStart = Date.now();
 
-    console.log("🔍 Scanning Stripe for each candidate...\n");
+    const logProgress = () => {
+      if (scanCompleted % PROGRESS_EVERY !== 0 && scanCompleted !== total) return;
 
-    for (let i = 0; i < candidates.length; i++) {
-      const u = candidates[i];
+      const pct = total > 0 ? Math.round((scanCompleted / total) * 100) : 0;
+      const elapsedMs = Date.now() - loopStart;
+      const remaining = total - scanCompleted;
+      const avgMs = scanCompleted > 0 ? elapsedMs / scanCompleted : 0;
+      const etaMs = remaining * avgMs;
+      const etaStr =
+        remaining === 0 ? "done" : `~${formatDurationMs(etaMs)} left (avg ${formatDurationMs(avgMs)}/user)`;
+
+      console.error(
+        `Progress: ${scanCompleted} of ${total} (${pct}%) | elapsed ${formatDurationMs(elapsedMs)} | ${etaStr} | ` +
+          `dead+fixable: ${eligibleSoFar} | skipped alive: ${counters.skippedStoredActive} | skipped no sub: ${counters.skippedNoActiveSub} | errors: ${counters.errors}`
+      );
+    };
+
+    const processCandidate = async (index: number) => {
+      const u = candidates[index];
       const userId = (u._id as { toString: () => string }).toString();
       const email = (u.email as string) || "(no email)";
       const storedSubId = (u.stripeSubscriptionId as string) || "";
       const customerId = (u.stripeCustomerId as string) || "";
 
-      if (!storedSubId || !customerId) continue;
+      if (!storedSubId || !customerId) {
+        return;
+      }
 
-      totalChecked++;
-      await sleep(DELAY_BETWEEN_STRIPE_MS);
+      counters.totalChecked++;
 
-      // Step 1: Check if stored subscription is dead
-      const { sub: storedSub, is404, error: retrieveError } = await retrieveWithRetry(stripe, storedSubId);
+      const { sub: storedSub, is404, error: retrieveError } = await retrieveStoredSub(stripe, storedSubId);
 
       if (retrieveError && !is404) {
-        console.log(`   [ERROR] ${email} – could not retrieve stored sub: ${retrieveError}`);
-        errors++;
-        continue;
+        console.error(`   [ERROR] ${email} – could not retrieve stored sub: ${retrieveError}`);
+        counters.errors++;
+        return;
       }
 
       const storedStatus = is404 ? "deleted/404" : (storedSub?.status ?? "unknown");
@@ -225,47 +349,31 @@ async function main() {
         storedStatus === "canceled";
 
       if (!isStoredDead) {
-        skippedStoredActive++;
-        continue;
+        counters.skippedStoredActive++;
+        return;
       }
 
-      // Step 2: Find a recoverable subscription: active → trialing → past_due / unpaid (overdue)
-      await sleep(DELAY_BETWEEN_STRIPE_MS);
+      const { sub: activeSub, error: listError } = await listRecoverableForCustomer(stripe, customerId);
 
-      let activeSub: StripeSubscription | null = null;
-      try {
-        const statuses = ["active", "trialing", "past_due", "unpaid"] as const;
-        for (let i = 0; i < statuses.length; i++) {
-          if (i > 0) await sleep(DELAY_BETWEEN_STRIPE_MS);
-          const subs = await stripe.subscriptions.list({
-            customer: customerId,
-            status: statuses[i],
-            limit: 5,
-          });
-          if (subs.data.length > 0) {
-            activeSub = subs.data[0];
-            break;
-          }
-        }
-      } catch (listErr) {
-        console.log(`   [ERROR] ${email} – could not list customer subscriptions: ${listErr}`);
-        errors++;
-        continue;
+      if (listError) {
+        console.error(`   [ERROR] ${email} – could not list customer subscriptions: ${listError}`);
+        counters.errors++;
+        return;
       }
 
       if (!activeSub) {
-        skippedNoActiveSub++;
-        console.log(
+        counters.skippedNoActiveSub++;
+        console.error(
           `   [SKIP] ${email} (${userId}) – stored sub ${storedSubId} is ${storedStatus}, but no active/trialing/past_due/unpaid sub found for customer`
         );
-        continue;
+        return;
       }
 
       const periodEnd = getSubscriptionPeriodEnd(activeSub);
       const newEndDate = periodEnd != null ? new Date(periodEnd * 1000) : undefined;
       const newEndDateStr = newEndDate?.toISOString() ?? "(unknown)";
 
-      fixPlan.push({
+      fixPlanByIndex[index] = {
         email,
         userId,
         oldSubId: storedSubId,
@@ -275,25 +383,56 @@ async function main() {
         newEndDateStr,
         newEndDate,
         activeSub,
-      });
+      };
+      eligibleSoFar++;
+    };
+
+    console.error("🔍 Scanning Stripe (concurrent)...\n");
+
+    let nextIndex = 0;
+    const workerCount = Math.min(CONCURRENCY, total);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (true) {
+          const index = nextIndex++;
+          if (index >= total) return;
+          try {
+            await processCandidate(index);
+          } finally {
+            scanCompleted++;
+            logProgress();
+          }
+        }
+      })
+    );
+
+    if (total === 0) {
+      logProgress();
     }
+
+    const fixPlan = fixPlanByIndex.filter((row): row is FixPlanRow => row != null);
+    const scanMs = Date.now() - loopStart;
+    console.error(`\nStripe scan finished in ${formatDurationMs(scanMs)}.\n`);
 
     const eligibleCount = fixPlan.length;
     console.log("\n📊 --- After Stripe scan ---");
-    console.log(`   Stripe-checked users: ${totalChecked} (of ${candidates.length} loaded)`);
+    console.log(`   Stripe-checked users: ${counters.totalChecked} (of ${candidates.length} loaded)`);
     console.log(
       `   Eligible for DB update (dead stored sub + recoverable sub found): ${eligibleCount}` +
-        (eligibleCount > 0 ? ` — ${DRY_RUN ? "dry-run will list them below; " : ""}--live will write ${eligibleCount} user(s) if saves succeed` : "")
+        (eligibleCount > 0
+          ? ` — ${DRY_RUN ? "dry-run will list them below; " : ""}--live will write ${eligibleCount} user(s) if saves succeed`
+          : "")
     );
     console.log("");
 
     if (eligibleCount === 0) {
       console.log("📊 Summary:");
-      console.log(`   Total checked: ${totalChecked}`);
+      console.log(`   Total checked: ${counters.totalChecked}`);
       console.log(`   Corrected: 0`);
-      console.log(`   Skipped (stored sub still alive): ${skippedStoredActive}`);
-      console.log(`   Skipped (no recoverable sub on customer): ${skippedNoActiveSub}`);
-      console.log(`   Errors: ${errors}`);
+      console.log(`   Skipped (stored sub still alive): ${counters.skippedStoredActive}`);
+      console.log(`   Skipped (no recoverable sub on customer): ${counters.skippedNoActiveSub}`);
+      console.log(`   Errors: ${counters.errors}`);
       return;
     }
 
@@ -371,16 +510,16 @@ async function main() {
           `   [ERROR] ${row.email} (${row.userId}) – save failed:`,
           saveErr instanceof Error ? saveErr.message : saveErr
         );
-        errors++;
+        counters.errors++;
       }
     }
 
     console.log("\n📊 Summary:");
-    console.log(`   Total checked: ${totalChecked}`);
+    console.log(`   Total checked: ${counters.totalChecked}`);
     console.log(`   Corrected: ${corrected}`);
-    console.log(`   Skipped (stored sub still alive): ${skippedStoredActive}`);
-    console.log(`   Skipped (no recoverable sub on customer): ${skippedNoActiveSub}`);
-    console.log(`   Errors: ${errors}`);
+    console.log(`   Skipped (stored sub still alive): ${counters.skippedStoredActive}`);
+    console.log(`   Skipped (no recoverable sub on customer): ${counters.skippedNoActiveSub}`);
+    console.log(`   Errors: ${counters.errors}`);
 
     if (correctedUsers.length > 0) {
       const emailsHeader = DRY_RUN

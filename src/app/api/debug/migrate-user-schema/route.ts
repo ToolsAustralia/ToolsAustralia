@@ -36,7 +36,6 @@ export async function POST() {
         isActive: false,
         autoRenew: true,
         status: "incomplete",
-        pendingChange: undefined, // Initialize pendingChange field
       };
       changesMade = true;
       console.log(`✅ Created subscription object with pendingChange field`);

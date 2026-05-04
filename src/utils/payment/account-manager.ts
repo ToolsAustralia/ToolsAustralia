@@ -172,7 +172,6 @@ export async function createUserFromPaymentMetadata(
         isActive: false,
         autoRenew: true,
         status: "incomplete",
-        pendingChange: undefined,
       },
       oneTimePackages: [],
       accumulatedEntries: 0,

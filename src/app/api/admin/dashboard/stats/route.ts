@@ -5,11 +5,13 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { getStartOfTodayInAEST, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import { subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { fetchFacebookInsights } from "@/lib/facebook-marketing";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
+import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
+import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
 import {
   getActiveSubscriptionFilter,
   getEverPaidUserFilter,
@@ -44,111 +46,23 @@ export async function GET(request: NextRequest) {
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const dateRange = (searchParams.get("dateRange") as "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw") || "today";
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
 
-    console.log("📊 Fetching admin dashboard stats...", { dateRange });
+    const parsedRange = parseAdminDashboardDateRange({
+      dateRange: searchParams.get("dateRange"),
+      startDateParam,
+      endDateParam,
+    });
+    if (!parsedRange.ok) {
+      return NextResponse.json({ error: parsedRange.error }, { status: parsedRange.status });
+    }
 
-    // Calculate date range based on selection
-    let startDate: Date;
-    let endDate: Date;
-
+    const { startDate, endDate, dateRange, membershipAsOfMode, asOfDate } = parsedRange.value;
     const startOfToday = getStartOfTodayInAEST();
     const AEST_TIMEZONE = "Australia/Sydney";
-    
-    // Get end of today in AEST (23:59:59.999) for proper date range
-    const now = new Date();
-    const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-    const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-    const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-    const endOfToday = createAESTDateAsUTC(todayYear, todayMonth, todayDay, 23, 59);
-    endOfToday.setUTCSeconds(59, 999);
-    
-    // Default endDate to end of today
-    endDate = endOfToday;
 
-    switch (dateRange) {
-      case "today":
-        startDate = startOfToday;
-        endDate = endOfToday;
-        break;
-      case "yesterday":
-        // Get yesterday's start (24 hours before today's start)
-        const yesterdayStart = subDays(startOfToday, 1);
-        startDate = yesterdayStart;
-        // End at end of yesterday (one millisecond before today starts)
-        endDate = new Date(startOfToday.getTime() - 1);
-        break;
-      case "current-draw":
-      case "last-draw": {
-        // For draw-based ranges, use the provided startDate and endDate params
-        // These are set by the frontend from the draw dates
-        if (!startDateParam || !endDateParam) {
-          return NextResponse.json(
-            { error: "startDate and endDate are required for draw-based ranges" },
-            { status: 400 }
-          );
-        }
-        // Parse dates and normalize to AEST start/end of day
-        const drawStartDateParsed = new Date(startDateParam);
-        const drawEndDateParsed = new Date(endDateParam);
-        
-        // Get date components in AEST
-        const drawStartYear = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const drawStartMonth = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "M"), 10);
-        const drawStartDay = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        const drawEndYear = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const drawEndMonth = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "M"), 10);
-        const drawEndDay = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        // Set startDate to start of day (00:00:00) in AEST
-        startDate = createAESTDateAsUTC(drawStartYear, drawStartMonth, drawStartDay, 0, 0);
-        
-        // Set endDate to end of day (23:59:59.999) in AEST
-        const drawNextDayStart = createAESTDateAsUTC(drawEndYear, drawEndMonth, drawEndDay, 0, 0);
-        const drawNextDay = new Date(drawNextDayStart);
-        drawNextDay.setUTCDate(drawNextDay.getUTCDate() + 1);
-        endDate = new Date(drawNextDay.getTime() - 1);
-        break;
-      }
-      case "all-time":
-        // Website launch date: November 27, 2025 at midnight AEST
-        // End date: End of today (January 6, 2026)
-        startDate = getWebsiteLaunchDateUTC();
-        endDate = endOfToday;
-        break;
-      case "custom":
-        if (!startDateParam || !endDateParam) {
-          return NextResponse.json({ error: "startDate and endDate are required for custom range" }, { status: 400 });
-        }
-        // Parse dates and normalize to AEST start/end of day
-        const startDateParsed = new Date(startDateParam);
-        const endDateParsed = new Date(endDateParam);
-        
-        // Get date components in AEST
-        const startYear = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const startMonth = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "M"), 10);
-        const startDay = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        const endYear = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const endMonth = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "M"), 10);
-        const endDay = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        // Set startDate to start of day (00:00:00) in AEST
-        startDate = createAESTDateAsUTC(startYear, startMonth, startDay, 0, 0);
-        
-        // Set endDate to end of day (23:59:59.999) in AEST
-        // Calculate by getting start of next day and subtracting 1ms
-        const nextDayStart = createAESTDateAsUTC(endYear, endMonth, endDay, 0, 0);
-        const nextDay = new Date(nextDayStart);
-        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-        endDate = new Date(nextDay.getTime() - 1);
-        break;
-      default:
-        startDate = startOfToday;
-    }
+    console.log("📊 Fetching admin dashboard stats...", { dateRange });
 
     // ========================================
     // COMPARISON PERIOD (for trend calculation)
@@ -208,11 +122,28 @@ export async function GET(request: NextRequest) {
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
 
+    // When the dashboard is in snapshot mode (asOfDate is in the past), override the
+    // *standing* cancellation metrics with the corresponding values from the daily
+    // snapshot. The *delta* values (cancelledMemberships, range counters) stay live.
+    let standingScheduledCancellation = totalScheduledCancellation;
+    let snapshotMissingForStanding = false;
+    if (membershipAsOfMode === "snapshot" && asOfDate) {
+      const snapshot = await new MembershipAnalyticsService().getMembershipByPackageSnapshot(asOfDate);
+      if (snapshot.summary?.snapshotMissing) {
+        snapshotMissingForStanding = true;
+      } else {
+        standingScheduledCancellation = snapshot.packages.reduce(
+          (sum, p) => sum + (p.cancelledCount ?? 0),
+          0
+        );
+      }
+    }
+
     // Drop-off rate: % of membership base (active + scheduled) that has scheduled cancellation
-    const membershipBase = activeSubscriptions + totalScheduledCancellation;
+    const membershipBase = activeSubscriptions + standingScheduledCancellation;
     const dropOffRate =
       membershipBase > 0
-        ? Math.round((totalScheduledCancellation / membershipBase) * 1000) / 10
+        ? Math.round((standingScheduledCancellation / membershipBase) * 1000) / 10
         : 0;
 
     // Period churn rate: % of active subscribers who cancelled in the selected period (only when not all-time)
@@ -675,6 +606,23 @@ export async function GET(request: NextRequest) {
       // Gracefully degrade - enhanced metrics are optional
     }
 
+    const membershipAnalyticsService = new MembershipAnalyticsService();
+    let membershipAnalytics;
+    try {
+      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange, { membershipAsOfMode, asOfDate });
+    } catch (maErr) {
+      console.error("⚠️ Error fetching membership analytics bundle:", maErr);
+      membershipAnalytics = {
+        expectedRenewalsInRange: 0,
+        successfulRenewalsInRange: 0,
+        successfulRenewalUserCount: 0,
+        failedRenewalInvoicesInRange: 0,
+        becamePastDueInRange: 0,
+        cancellationsInRange: 0,
+        cancelledMembershipRevenueImpact: 0,
+      };
+    }
+
     // ========================================
     // RESPONSE
     // ========================================
@@ -688,10 +636,21 @@ export async function GET(request: NextRequest) {
         profileCompletion: profileCompletionRate,
         cancelledMemberships,
         ...(cancelledMembershipsTrend && { cancelledMembershipsTrend }),
-        totalScheduledCancellation,
+        totalScheduledCancellation: standingScheduledCancellation,
         dropOffRate,
         ...(periodChurnRate != null && { periodChurnRate }),
         ...(dropOffRateTrend && { dropOffRateTrend }),
+        membershipRenewals: {
+          expectedInRange: membershipAnalytics.expectedRenewalsInRange,
+          succeededInRange: membershipAnalytics.successfulRenewalsInRange,
+          succeededDistinctMembers: membershipAnalytics.successfulRenewalUserCount,
+          failedInvoicesInRange: membershipAnalytics.failedRenewalInvoicesInRange,
+          becamePastDueInRange: membershipAnalytics.becamePastDueInRange,
+        },
+        cancellationImpact: {
+          estimatedMonthlyRevenue: membershipAnalytics.cancelledMembershipRevenueImpact,
+        },
+        ...(snapshotMissingForStanding && { snapshotMissingForStanding: true }),
       },
       revenue: {
         total: totalRevenue,

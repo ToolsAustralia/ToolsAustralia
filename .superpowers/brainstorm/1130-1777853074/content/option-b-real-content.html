@@ -1,0 +1,177 @@
+<h2>Option B — with real Tools Australia content</h2>
+<p class="subtitle">Apologies for the car content earlier. Now using actual prize names from <code>src/config/prizes.ts</code> and a tradie-voice testimony. Same cinematic-dark card, themed accents.</p>
+
+<style>
+  .stage-dark { background: linear-gradient(135deg, #050811 0%, #0b1326 50%, #050811 100%); padding: 40px 28px; border-radius: 14px; }
+  .testimony-card { position:relative; width:100%; min-height:400px; border-radius:20px; overflow:hidden; font-family:Inter,Arial,sans-serif; }
+  .pseudo-photo { position:absolute; inset:0; }
+  .vignette { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.20) 0%, rgba(0,0,0,.55) 50%, rgba(0,0,0,.95) 100%); }
+  .top-row { position:absolute; top:20px; left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; z-index:2; gap:12px; flex-wrap:wrap; }
+  .label-pill { font-size:10px; letter-spacing:.28em; color:#fff; text-transform:uppercase; font-weight:700; padding:6px 12px; border-radius:999px; backdrop-filter:blur(8px); background:rgba(0,0,0,.4); }
+  .draw-meta { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.7); font-weight:600; }
+  .quote-area { position:absolute; left:0; right:0; bottom:0; padding:30px 32px 28px; color:#fff; z-index:2; }
+  .opener { font-family:Georgia,serif; font-size:48px; line-height:.4; opacity:.85; margin-bottom:6px; }
+  .quote { font-family:Georgia,serif; font-size:21px; line-height:1.45; font-style:italic; letter-spacing:-.2px; margin:0 0 22px 0; max-width:620px; }
+  .meta-row { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .winner-name { font-family:Inter,Arial,sans-serif; font-size:20px; font-weight:700; letter-spacing:-.3px; }
+  .winner-sub { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.6); margin-top:3px; font-weight:600; max-width:380px; }
+  .cta-pill { font-size:11px; letter-spacing:.22em; text-transform:uppercase; font-weight:800; padding:10px 18px; border-radius:999px; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
+</style>
+
+<!-- ============================================================ -->
+<!-- HERO: Milwaukee toolkit winner -->
+<!-- ============================================================ -->
+<h3>Hero card · Milwaukee theme (default)</h3>
+<div class="stage-dark" style="margin-bottom:32px;">
+  <div class="testimony-card">
+    <!-- Simulated tool/Packout photo: dark workshop tones -->
+    <div class="pseudo-photo" style="background:
+      linear-gradient(135deg, #1a1a1f 0%, #0a0a0d 100%),
+      radial-gradient(ellipse at 60% 40%, #2a1410 0%, transparent 55%);"></div>
+    <!-- Faux red Packout silhouette -->
+    <div style="position:absolute; left:8%; top:18%; width:60%; height:55%;
+      background: linear-gradient(180deg, #8a1808 0%, #5a0f04 65%, #2a0702 100%);
+      border-radius:12px; box-shadow: 0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+    <div style="position:absolute; left:14%; top:24%; width:48%; height:6%;
+      background:#1a0d08; border-radius:4px;"></div>
+
+    <!-- Brand-tinted edge glow (Milwaukee red) -->
+    <div style="position:absolute; inset:0; background:
+      radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%),
+      radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      <span class="draw-meta">March 2024 · Toowoomba, QLD</span>
+    </div>
+
+    <div class="quote-area">
+      <div class="opener" style="color:#f30000;">"</div>
+      <p class="quote">Been chasing a proper Packout setup for years and just couldn't justify it. Got the call Tuesday morning — thought it was a wind-up. Workshop's never looked better. Cheers Tools Australia.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Brett Sullivan</div>
+          <div class="winner-sub">Milwaukee 13pc Power Tool Kit + Packout 6pc Modular Storage + $5,000 cash</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05 0%,#f30000 50%,#dd5358 100%); color:#fff; box-shadow:0 8px 24px rgba(206,43,5,.45);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- BRAND VARIATIONS -->
+<!-- ============================================================ -->
+<h3>Same card across the four brand themes</h3>
+<p class="subtitle" style="margin-bottom:18px;">Real prize examples pulled from your prize catalog. Theme color drives the edge glow, label border, opening quote-mark, and CTA gradient.</p>
+
+<div style="display:grid; grid-template-columns:repeat(2,1fr); gap:18px;">
+
+  <!-- DEWALT -->
+  <div>
+    <div class="label" style="color:#ffd200; font-weight:700; margin-bottom:6px;">DEWALT theme</div>
+    <div class="testimony-card" style="min-height:280px;">
+      <div class="pseudo-photo" style="background:linear-gradient(135deg, #1a1500 0%, #0a0805 100%);"></div>
+      <div style="position:absolute; left:10%; top:25%; width:55%; height:50%; background:linear-gradient(180deg,#3a2f00 0%,#1a1400 100%); border-radius:10px; opacity:.8;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(255,210,0,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(255,210,0,.18) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(255,210,0,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <div class="opener" style="color:#ffd200; font-size:30px;">"</div>
+        <p class="quote" style="font-size:14px; margin-bottom:12px; line-height:1.45;">Tough System has been on my wishlist forever. Finally got it without spending a cent.</p>
+        <div class="meta-row">
+          <div>
+            <div class="winner-name" style="font-size:14px;">Daniel Hicks</div>
+            <div class="winner-sub" style="font-size:9px;">DeWalt 14pc Power Tool Kit + Tough System 2.0</div>
+          </div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #ffd200 0%, #ffc517 50%, #c1c55b 100%); color:#000; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAKITA -->
+  <div>
+    <div class="label" style="color:#00c2ed; font-weight:700; margin-bottom:6px;">MAKITA theme</div>
+    <div class="testimony-card" style="min-height:280px;">
+      <div class="pseudo-photo" style="background:linear-gradient(135deg, #001a20 0%, #050a0f 100%);"></div>
+      <div style="position:absolute; left:10%; top:25%; width:55%; height:50%; background:linear-gradient(180deg,#003a45 0%,#001a20 100%); border-radius:10px; opacity:.8;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(0,194,237,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(92,169,236,.18) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(0,194,237,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <div class="opener" style="color:#00c2ed; font-size:30px;">"</div>
+        <p class="quote" style="font-size:14px; margin-bottom:12px; line-height:1.45;">MAKTRAK is a game changer for the ute — full kit organised, ready to roll.</p>
+        <div class="meta-row">
+          <div>
+            <div class="winner-name" style="font-size:14px;">Jacqui Pham</div>
+            <div class="winner-sub" style="font-size:9px;">Makita 15pc Power Tool Kit + MAKTRAK 7pc Storage</div>
+          </div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #5ca9ec 0%, #00c2ed 50%, #5ca9ec 100%); color:#fff; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MILWAUKEE -->
+  <div>
+    <div class="label" style="color:#f30000; font-weight:700; margin-bottom:6px;">MILWAUKEE theme</div>
+    <div class="testimony-card" style="min-height:280px;">
+      <div class="pseudo-photo" style="background:linear-gradient(135deg, #1a0a05 0%, #0a0503 100%);"></div>
+      <div style="position:absolute; left:10%; top:25%; width:55%; height:50%; background:linear-gradient(180deg,#5a0f04 0%,#2a0702 100%); border-radius:10px; opacity:.85;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Mini Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <div class="opener" style="color:#f30000; font-size:30px;">"</div>
+        <p class="quote" style="font-size:14px; margin-bottom:12px; line-height:1.45;">Sidchrome 356pc kit landed last week — the missus reckons I've been smiling at it like a Christmas tree.</p>
+        <div class="meta-row">
+          <div>
+            <div class="winner-name" style="font-size:14px;">Marcus Webb</div>
+            <div class="winner-sub" style="font-size:9px;">Sidchrome SCMT11402 356pc Tool Kit</div>
+          </div>
+          <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05 0%,#f30000 50%,#dd5358 100%); color:#fff; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RYOBI -->
+  <div>
+    <div class="label" style="color:#e0ff00; font-weight:700; margin-bottom:6px;">RYOBI theme</div>
+    <div class="testimony-card" style="min-height:280px;">
+      <div class="pseudo-photo" style="background:linear-gradient(135deg, #0a1500 0%, #050a00 100%);"></div>
+      <div style="position:absolute; left:10%; top:25%; width:55%; height:50%; background:linear-gradient(180deg,#1f2a00 0%,#0d1500 100%); border-radius:10px; opacity:.8;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(224,255,0,.24) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(224,255,0,.18) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(224,255,0,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <div class="opener" style="color:#e0ff00; font-size:30px;">"</div>
+        <p class="quote" style="font-size:14px; margin-bottom:12px; line-height:1.45;">Whole shed sorted — 18V ONE+ kit and the brushless mower. Backyard's never looked sharper.</p>
+        <div class="meta-row">
+          <div>
+            <div class="winner-name" style="font-size:14px;">Sam Halloran</div>
+            <div class="winner-sub" style="font-size:9px;">Custom Ryobi 18V ONE+ Kit + 36V Brushless Mower</div>
+          </div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #e0ff00 0%, #f2ff4d 45%, #c8eb00 100%); color:#000; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:32px; padding:18px; background:rgba(0,0,0,.04); border-radius:10px;">
+  <p style="font-size:14px; line-height:1.6; color:#374151; margin:0;">
+    <b>Real content:</b> prize labels straight from <code>src/config/prizes.ts</code> · testimony in tradie voice · "Major Draw Winner" / "Mini Draw Winner" badge from <code>winner.drawType</code> · location from <code>winner.winnerState</code>.
+  </p>
+</div>

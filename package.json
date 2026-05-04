@@ -48,7 +48,11 @@
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
     "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
-    "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts"
+    "test:dashboard-date-range": "tsx src/utils/admin/__tests__/dashboardDateRange.test.ts",
+    "cleanup:membership-backfill": "tsx scripts/cleanup-membership-backfill-rows.ts --live",
+    "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
+    "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts",
+    "test:membership-snapshot-dst": "tsx scripts/test-membership-snapshot-dst.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

@@ -82,6 +82,16 @@ export interface AdminDashboardStats {
     dropOffRate: number;
     dropOffRateTrend?: TrendData;
     periodChurnRate?: number;
+    membershipRenewals?: {
+      expectedInRange: number;
+      succeededInRange: number;
+      succeededDistinctMembers: number;
+      failedInvoicesInRange: number;
+      becamePastDueInRange: number;
+    };
+    cancellationImpact?: {
+      estimatedMonthlyRevenue: number;
+    };
   };
   revenue: {
     total: number;
@@ -154,11 +164,18 @@ export interface MembershipByPackageSummary {
   totalPastDueCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  snapshotPartial?: boolean;
+  /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
+  snapshotMissing?: boolean;
 }
 
 export interface MembershipByPackageData {
   packages: MembershipByPackageItem[];
   summary: MembershipByPackageSummary;
+  meta?: {
+    membershipAsOfMode: "live" | "snapshot";
+    asOf: string | null;
+  };
 }
 
 // Types for projected income
@@ -584,11 +601,26 @@ export function useProjectedIncome() {
   });
 }
 
-export function useMembershipByPackage() {
+export function useMembershipByPackage(
+  dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
+  startDate?: string,
+  endDate?: string
+) {
   return useQuery<MembershipByPackageData>({
-    queryKey: ["admin", "membership-by-package"],
+    queryKey: ["admin", "membership-by-package", dateRange, startDate, endDate],
     queryFn: async (): Promise<MembershipByPackageData> => {
-      const response = await fetch("/api/admin/dashboard/membership-by-package");
+      const params = new URLSearchParams();
+      params.set("dateRange", dateRange);
+      if (
+        (dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw") &&
+        startDate &&
+        endDate
+      ) {
+        params.set("startDate", startDate);
+        params.set("endDate", endDate);
+      }
+
+      const response = await fetch(`/api/admin/dashboard/membership-by-package?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch membership by package");
@@ -600,7 +632,10 @@ export function useMembershipByPackage() {
         throw new Error("Failed to fetch membership by package");
       }
 
-      return result.data;
+      return {
+        ...result.data,
+        ...(result.meta ? { meta: result.meta } : {}),
+      };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes

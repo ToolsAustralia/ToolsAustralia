@@ -1,0 +1,177 @@
+<h2>Option B — themed to your brand system</h2>
+<p class="subtitle">No avatar. Prize photo becomes the cinematic background. Promo theme drives the accent color, label border, and CTA. Below: the same card in dark + light, then a sample across all 4 brand themes.</p>
+
+<style>
+  .stage-dark { background: linear-gradient(135deg, #050811 0%, #0b1326 50%, #050811 100%); padding: 40px 28px; border-radius: 14px; }
+  .stage-light { background: linear-gradient(135deg, #f5f5f0 0%, #ebe9e2 50%, #f5f5f0 100%); padding: 40px 28px; border-radius: 14px; }
+  .testimony-card { position:relative; width:100%; min-height:380px; border-radius:20px; overflow:hidden; font-family:Inter,Arial,sans-serif; }
+  .pseudo-photo { position:absolute; inset:0; }
+  .vignette { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.45) 45%, rgba(0,0,0,.92) 100%); }
+  .top-row { position:absolute; top:20px; left:24px; right:24px; display:flex; justify-content:space-between; align-items:center; z-index:2; }
+  .label-pill { font-size:10px; letter-spacing:.28em; color:#fff; text-transform:uppercase; font-weight:700; padding:6px 12px; border-radius:999px; backdrop-filter:blur(8px); background:rgba(0,0,0,.35); }
+  .draw-meta { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.7); font-weight:600; }
+  .quote-area { position:absolute; left:0; right:0; bottom:0; padding:30px 32px 28px; color:#fff; z-index:2; }
+  .opener { font-family:Georgia,serif; font-size:48px; line-height:.4; opacity:.8; margin-bottom:6px; }
+  .quote { font-family:Georgia,serif; font-size:21px; line-height:1.4; font-style:italic; letter-spacing:-.2px; margin:0 0 22px 0; max-width:560px; }
+  .meta-row { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .winner-name { font-family:Inter,Arial,sans-serif; font-size:20px; font-weight:700; letter-spacing:-.3px; }
+  .winner-sub { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-top:3px; font-weight:600; }
+  .cta-pill { font-size:11px; letter-spacing:.22em; text-transform:uppercase; font-weight:800; padding:10px 18px; border-radius:999px; display:inline-flex; align-items:center; gap:8px; }
+</style>
+
+<!-- ============================================================ -->
+<!-- HERO: Dark mode, Milwaukee (default) -->
+<!-- ============================================================ -->
+<h3 style="margin-top:8px;">1 · Dark mode (default Milwaukee theme)</h3>
+<div class="stage-dark" style="margin-bottom:32px;">
+  <div class="testimony-card">
+    <!-- Simulated prize photo background -->
+    <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #4a2010 0%, #1a0805 55%, #000 100%);"></div>
+    <!-- Brand-tinted edge glow (Milwaukee red) -->
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.25) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.18) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      <span class="draw-meta">Mar 2024 · Brisbane</span>
+    </div>
+
+    <div class="quote-area">
+      <div class="opener" style="color:#f30000;">"</div>
+      <p class="quote">I really couldn't believe it. The team rang me on a Tuesday morning and I had to pull over the car. My husband still doesn't trust I'm not pranking him.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Jessica Tran</div>
+          <div class="winner-sub">2024 Toyota HiLux SR5 · $98,500 prize</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05 0%,#f30000 50%,#dd5358 100%); color:#fff; box-shadow:0 8px 24px rgba(206,43,5,.45);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- LIGHT MODE -->
+<!-- ============================================================ -->
+<h3>2 · Light mode (same card, light site theme)</h3>
+<div class="stage-light" style="margin-bottom:32px;">
+  <div class="testimony-card" style="box-shadow:0 30px 80px rgba(15,23,42,.18);">
+    <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #4a2010 0%, #1a0805 55%, #000 100%);"></div>
+    <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.25) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.18) 0%, transparent 40%);"></div>
+    <div class="vignette"></div>
+    <div class="top-row">
+      <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      <span class="draw-meta">Mar 2024 · Brisbane</span>
+    </div>
+    <div class="quote-area">
+      <div class="opener" style="color:#f30000;">"</div>
+      <p class="quote">I really couldn't believe it. The team rang me on a Tuesday morning and I had to pull over the car.</p>
+      <div class="meta-row">
+        <div>
+          <div class="winner-name">Jessica Tran</div>
+          <div class="winner-sub">2024 Toyota HiLux SR5 · $98,500 prize</div>
+        </div>
+        <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05 0%,#f30000 50%,#dd5358 100%); color:#fff; box-shadow:0 8px 24px rgba(206,43,5,.45);">Read full story →</span>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center; margin-top:14px; font-size:12px; color:#6b7280;">Card itself stays cinematic-dark on purpose (same vibe everywhere). Surrounding "stage" adapts to light/dark.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- BRAND VARIATIONS -->
+<!-- ============================================================ -->
+<h3>3 · Same card, theme color follows the brand</h3>
+<p class="subtitle" style="margin-bottom:18px;">When the user's on a Dewalt / Makita / Ryobi promo page, the accent edge-glow + label border + CTA gradient swap to that brand. Card structure is identical.</p>
+
+<div style="display:grid; grid-template-columns:repeat(2,1fr); gap:18px;">
+
+  <!-- DEWALT -->
+  <div>
+    <div class="label" style="color:#ffd200; font-weight:700;">DEWALT</div>
+    <div class="testimony-card" style="min-height:240px;">
+      <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #2a1f00 0%, #0a0a05 55%, #000 100%);"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(255,210,0,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(255,210,0,.15) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(255,210,0,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <p class="quote" style="font-size:15px; margin-bottom:12px;">"I had to pull over the car."</p>
+        <div class="meta-row">
+          <div><div class="winner-name" style="font-size:15px;">Jessica Tran</div></div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #ffd200 0%, #ffc517 50%, #c1c55b 100%); color:#000; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAKITA -->
+  <div>
+    <div class="label" style="color:#00c2ed; font-weight:700;">MAKITA</div>
+    <div class="testimony-card" style="min-height:240px;">
+      <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #003a45 0%, #050f15 55%, #000 100%);"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(0,194,237,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(92,169,236,.18) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(0,194,237,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <p class="quote" style="font-size:15px; margin-bottom:12px;">"I had to pull over the car."</p>
+        <div class="meta-row">
+          <div><div class="winner-name" style="font-size:15px;">Jessica Tran</div></div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #5ca9ec 0%, #00c2ed 50%, #5ca9ec 100%); color:#fff; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MILWAUKEE -->
+  <div>
+    <div class="label" style="color:#f30000; font-weight:700;">MILWAUKEE</div>
+    <div class="testimony-card" style="min-height:240px;">
+      <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #4a2010 0%, #1a0805 55%, #000 100%);"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.25) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.18) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <p class="quote" style="font-size:15px; margin-bottom:12px;">"I had to pull over the car."</p>
+        <div class="meta-row">
+          <div><div class="winner-name" style="font-size:15px;">Jessica Tran</div></div>
+          <span class="cta-pill" style="background:linear-gradient(135deg,#ce2b05 0%,#f30000 50%,#dd5358 100%); color:#fff; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RYOBI -->
+  <div>
+    <div class="label" style="color:#e0ff00; font-weight:700;">RYOBI</div>
+    <div class="testimony-card" style="min-height:240px;">
+      <div class="pseudo-photo" style="background: radial-gradient(ellipse at 70% 35%, #1f2a00 0%, #060a00 55%, #000 100%);"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(224,255,0,.22) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(224,255,0,.15) 0%, transparent 40%);"></div>
+      <div class="vignette"></div>
+      <div class="top-row">
+        <span class="label-pill" style="border:1px solid rgba(224,255,0,.6);">Major Draw Winner</span>
+      </div>
+      <div class="quote-area" style="padding:20px 22px 18px;">
+        <p class="quote" style="font-size:15px; margin-bottom:12px;">"I had to pull over the car."</p>
+        <div class="meta-row">
+          <div><div class="winner-name" style="font-size:15px;">Jessica Tran</div></div>
+          <span class="cta-pill" style="background:linear-gradient(135deg, #e0ff00 0%, #f2ff4d 45%, #c8eb00 100%); color:#000; padding:7px 13px; font-size:9px;">Story →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:32px; padding:18px; background:rgba(0,0,0,.04); border-radius:10px;">
+  <p style="font-size:14px; line-height:1.6; color:#374151; margin:0;">
+    <b>What's themed:</b> the corner edge-glow (top-left & bottom-right), the label border, the opening quote-mark color, and the CTA pill gradient.<br>
+    <b>What stays constant:</b> the dark cinematic vignette, the typography (serif for the quote, sans for the meta), the layout grid.<br>
+    <b>What's gone:</b> the avatar / portrait icon — confirmed not needed.
+  </p>
+</div>

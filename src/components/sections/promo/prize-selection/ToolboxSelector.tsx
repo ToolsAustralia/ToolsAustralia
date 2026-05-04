@@ -159,12 +159,10 @@ export function ToolboxSelector({
                 className={`flex w-full max-w-[min(100%,260px)] items-center justify-center rounded-full border-2 px-2 py-0.5 text-center shadow-lg backdrop-blur-md transition-all duration-300 sm:max-w-[min(100%,320px)] sm:px-2.5 sm:py-1 ${
                   isActive
                     ? "border-red-500/80 bg-red-900/90 shadow-[0_4px_20px_rgba(127,29,29,0.4)]"
-                    : "border-white/12 bg-black/45 opacity-75"
+                    : "border-white/15 bg-black/55"
                 }`}
               >
-                <span
-                  className={`font-sans text-[10px] font-extrabold leading-tight sm:text-xs ${isActive ? "text-white" : "text-white/88"}`}
-                >
+                <span className="font-sans text-[10px] font-extrabold leading-tight text-white sm:text-xs">
                   {TOOLBOX_LABELS[type]}
                 </span>
               </div>

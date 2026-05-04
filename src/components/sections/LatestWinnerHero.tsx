@@ -24,7 +24,7 @@ export default function LatestWinnerHero({
 
   const emblaOptions = useMemo(
     () => ({
-      align: "start" as const,
+      align: "center" as const,
       loop: winners.length > 1,
       dragFree: false,
     }),
@@ -76,7 +76,7 @@ export default function LatestWinnerHero({
   useEffect(() => {
     if (loading || winners.length === 0 || !emblaApi) return;
     emblaApi.reInit({
-      align: "start",
+      align: "center",
       loop: winners.length > 1,
       dragFree: false,
     });
@@ -138,7 +138,7 @@ export default function LatestWinnerHero({
                 onClick={() => emblaApi?.scrollPrev()}
                 disabled={!canScrollPrev}
                 aria-label="Previous latest winner"
-                className="absolute left-2 top-[42%] z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border bg-white/95 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.18)] winner-motion-button disabled:opacity-40 dark:bg-neutral-900 dark:text-white"
+                className="absolute left-2 top-[42%] z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border bg-white/95 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-[transform,background-color,box-shadow] duration-150 ease-out active:scale-90 active:bg-white active:shadow-[0_6px_16px_rgba(15,23,42,0.24)] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:opacity-40 disabled:active:scale-100 dark:bg-neutral-900 dark:text-white dark:active:bg-neutral-800"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronLeft className="h-4 w-4" style={{ color: theme.primaryLight }} />
@@ -148,7 +148,7 @@ export default function LatestWinnerHero({
                 onClick={() => emblaApi?.scrollNext()}
                 disabled={!canScrollNext}
                 aria-label="Next latest winner"
-                className="absolute right-2 top-[42%] z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border bg-white/95 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.18)] winner-motion-button disabled:opacity-40 dark:bg-neutral-900 dark:text-white"
+                className="absolute right-2 top-[42%] z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border bg-white/95 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-[transform,background-color,box-shadow] duration-150 ease-out active:scale-90 active:bg-white active:shadow-[0_6px_16px_rgba(15,23,42,0.24)] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:opacity-40 disabled:active:scale-100 dark:bg-neutral-900 dark:text-white dark:active:bg-neutral-800"
                 style={{ borderColor: theme.borderRgba }}
               >
                 <ChevronRight className="h-4 w-4" style={{ color: theme.primaryLight }} />
@@ -159,7 +159,7 @@ export default function LatestWinnerHero({
           <div className="overflow-hidden" ref={emblaRef}>
             <div className="flex">
               {winners.map((winner) => (
-                <div key={winner.id} className="min-w-0 flex-[0_0_86%] pr-4 sm:flex-[0_0_62%]">
+                <div key={winner.id} className="min-w-0 flex-[0_0_86%] px-2 sm:flex-[0_0_62%]">
                   <WinnerCard winner={winner} showDrawLink={false} />
                 </div>
               ))}
@@ -203,7 +203,7 @@ export default function LatestWinnerHero({
             style={{ borderColor: theme.borderRgba }}
           >
             Join our next giveaway
-            <ArrowRight className="h-4 w-4" style={{ color: theme.primaryLight }} />
+            <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
       </div>
