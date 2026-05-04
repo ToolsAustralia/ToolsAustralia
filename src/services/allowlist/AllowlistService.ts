@@ -5,10 +5,21 @@ import type {
   AllowlistRepository,
   ApplySource,
   BlockedFilter,
+  BlockedListResult,
   BlockedRow,
   EvalInput,
   EvalResult,
 } from "./types";
+
+/**
+ * Hard cap on the number of PaymentIntents the Stripe scan will iterate
+ * before bailing out. Stripe's `paymentIntents.list` cannot filter by
+ * outcome/status, so we paginate every PI in the date window — on a busy
+ * account that's tens of thousands of records and easily blows the Vercel
+ * function timeout. The cap keeps the worst case bounded; the admin UI
+ * surfaces a "narrow your date range" notice when it's hit.
+ */
+const MAX_PAYMENT_INTENTS_SCANNED = 2000;
 import {
   FRAUD_SIGNAL_DECLINE_CODES,
   PERMANENT_ISSUE_DECLINE_CODES,
@@ -190,7 +201,7 @@ export class AllowlistService {
     } as never);
   }
 
-  async listBlockedFromStripe(filter: BlockedFilter): Promise<BlockedRow[]> {
+  async listBlockedFromStripe(filter: BlockedFilter): Promise<BlockedListResult> {
     if (!this.stripeClient) {
       throw new Error(
         "listBlockedFromStripe requires a full Stripe client; was not provided in deps"
@@ -200,7 +211,11 @@ export class AllowlistService {
     // Stripe's paymentIntents.list does not accept an outcome filter directly,
     // so we paginate failed PIs in the date range and filter client-side by
     // outcome.type === "blocked" or outcome.network_status === "declined_by_network".
+    // Bounded by MAX_PAYMENT_INTENTS_SCANNED so a busy account can't time out
+    // the request — see the constant's docblock for context.
     const collected: Stripe.PaymentIntent[] = [];
+    let scanned = 0;
+    let truncated = false;
     for await (const pi of this.stripeClient.paymentIntents.list({
       created: {
         gte: Math.floor(filter.dateFrom.getTime() / 1000),
@@ -209,6 +224,11 @@ export class AllowlistService {
       limit: 100,
       expand: ["data.latest_charge"],
     })) {
+      scanned += 1;
+      if (scanned > MAX_PAYMENT_INTENTS_SCANNED) {
+        truncated = true;
+        break;
+      }
       if (pi.status !== "requires_payment_method" && pi.status !== "canceled") continue;
       const charge =
         pi.latest_charge && typeof pi.latest_charge !== "string" ? pi.latest_charge : null;
@@ -297,6 +317,6 @@ export class AllowlistService {
         alreadyAllowlisted: Boolean(existingAdded),
       });
     }
-    return rows;
+    return { rows, truncated, scanned };
   }
 }

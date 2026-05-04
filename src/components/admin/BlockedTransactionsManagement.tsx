@@ -38,6 +38,10 @@ const DEFAULT_FILTER: BlockedFilter = {
   skippedOnly: false,
 };
 
+// Stable reference so memos downstream don't invalidate every render while
+// the query is still loading.
+const EMPTY_BLOCKED_ROWS: BlockedRow[] = [];
+
 const memberStatusOptions = [
   { value: "any", label: "Any member status" },
   { value: "has_paid", label: "Has paid before" },
@@ -136,7 +140,10 @@ export default function BlockedTransactionsManagement() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
 
-  const { data: rows = [], isLoading, refetch, isFetching } = useBlockedCards(filter);
+  const { data, isLoading, refetch, isFetching } = useBlockedCards(filter);
+  const rows = data?.rows ?? EMPTY_BLOCKED_ROWS;
+  const isTruncated = data?.truncated ?? false;
+  const scanned = data?.scanned ?? 0;
   const { data: recentActions = [] } = useAllowlistActions("added", 50);
   const applyMutation = useApplyAllowlist();
   const reverseMutation = useReverseAllowlist();
@@ -307,6 +314,20 @@ export default function BlockedTransactionsManagement() {
           subtitle="No action needed"
         />
       </div>
+
+      {/* Truncation notice — shown when the Stripe scan hit its safety cap */}
+      {isTruncated && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Results may be incomplete</p>
+            <p className="mt-0.5 text-xs">
+              Scanned {scanned.toLocaleString()} transactions and stopped early to keep the
+              request fast. Narrow the date range to see the full set.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters card */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-4">

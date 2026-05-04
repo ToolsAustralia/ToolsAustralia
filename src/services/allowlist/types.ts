@@ -54,6 +54,17 @@ export type BlockedRow = {
   alreadyAllowlisted: boolean;
 };
 
+/**
+ * Result envelope for `listBlockedFromStripe`. `truncated=true` means the
+ * Stripe scan hit the safety cap before the date window was exhausted, so
+ * `rows` may be incomplete — admins should narrow the date range.
+ */
+export type BlockedListResult = {
+  rows: BlockedRow[];
+  truncated: boolean;
+  scanned: number;
+};
+
 /** Repository abstraction so the service can be tested with hand-rolled fakes. */
 export interface AllowlistRepository {
   /** Returns the userId if either stripeCustomerId or customerEmail matches a User row. */
