@@ -11,7 +11,7 @@
  * NSW Trade Promotion Notification Number
  * Required for major giveaways in NSW
  */
-export const NTP_NUMBER = "NTP/16264";
+export const NTP_NUMBER = "NTP/16579";
 
 /**
  * NSW Trade Promotion License Number
