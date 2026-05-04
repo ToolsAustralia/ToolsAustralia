@@ -44,3 +44,6 @@ next-env.d.ts
 # Claude Code hook state (transient — do not commit)
 .claude/.touched-files
 .claude/.session-state
+
+# git worktrees (each is a sibling checkout — see docs/dev-tooling/worktrees.md)
+.worktrees/

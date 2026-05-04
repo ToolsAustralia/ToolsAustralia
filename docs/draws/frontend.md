@@ -39,3 +39,11 @@
 
 - Winner names are rendered via [src/utils/winner-name-formatter.ts](../../src/utils/winner-name-formatter.ts) — privacy convention (first name + last initial).
 - Eligibility messaging via [src/utils/giveaway-eligibility.ts](../../src/utils/giveaway-eligibility.ts).
+
+## Cross-domain notes
+
+### Winner testimony display
+
+The cinematic Hear From Our Winners section + Read Full Story modal live under [src/components/sections/winner-testimony/](../../src/components/sections/winner-testimony/) — owned by the **shared-ui** domain (see [docs/shared-ui/frontend.md](../shared-ui/frontend.md#sectionswinner-testimony--hear-from-our-winners)). Draws-domain code (the `Winner` model, `WinnerSummary` type, [src/utils/winners.ts](../../src/utils/winners.ts) helpers) feeds it; the visual layout is owned by shared-ui.
+
+Refactored 2026-05-04: the photo is now used as a full-bleed cinematic background (not a centered display image) and the modal uses a magazine-article layout. No data-shape, API, or business-logic changes.

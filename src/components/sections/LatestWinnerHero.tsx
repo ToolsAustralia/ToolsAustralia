@@ -203,7 +203,7 @@ export default function LatestWinnerHero({
             style={{ borderColor: theme.borderRgba }}
           >
             Join our next giveaway
-            <ArrowRight className="h-4 w-4" style={{ color: theme.primaryLight }} />
+            <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
       </div>

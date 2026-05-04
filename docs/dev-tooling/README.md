@@ -13,3 +13,4 @@ Dev-only routes, test pages, debug endpoints, examples, test scripts.
 - [gotchas.md](./gotchas.md) — dev routes leaking to prod
 - [models.md](./models.md) — _N/A_
 - [testing.md](./testing.md) — test scripts under `scripts/test-*.ts`
+- [worktrees.md](./worktrees.md) — `scripts/wt-*.sh` workflow for parallel checkouts

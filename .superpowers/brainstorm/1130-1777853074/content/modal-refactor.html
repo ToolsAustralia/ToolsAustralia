@@ -1,0 +1,206 @@
+<h2>Read Full Story modal — refactored</h2>
+<p class="subtitle">Magazine-article treatment that extends the section's cinematic style. Hero photo with overlay, then a proper editorial body. Below: desktop dark, desktop light, and mobile.</p>
+
+<style>
+  .modal-frame { background:rgba(0,0,0,.6); padding:30px; border-radius:14px; margin-bottom:36px; }
+  .modal-shell { width:100%; max-width:880px; margin:0 auto; border-radius:24px; overflow:hidden; box-shadow:0 40px 100px rgba(0,0,0,.5); position:relative; font-family:Inter,Arial,sans-serif; }
+  .modal-shell-dark { background:#0a0d18; color:#e5e7eb; }
+  .modal-shell-light { background:#fafaf7; color:#0f172a; }
+
+  .close-x { position:absolute; top:16px; right:16px; z-index:10; width:36px; height:36px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); color:#fff; backdrop-filter:blur(8px); font-size:18px; cursor:pointer; border:1px solid rgba(255,255,255,.2); }
+
+  /* HERO (mirrors the section card) */
+  .hero { position:relative; width:100%; height:380px; overflow:hidden; }
+  .hero-photo { position:absolute; inset:0; }
+  .hero-vignette { position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.55) 55%, rgba(0,0,0,.95) 100%); }
+  .hero-top { position:absolute; top:22px; left:24px; right:80px; display:flex; gap:10px; flex-wrap:wrap; z-index:2; }
+  .hero-pill { font-size:10px; letter-spacing:.28em; color:#fff; text-transform:uppercase; font-weight:700; padding:6px 12px; border-radius:999px; backdrop-filter:blur(8px); background:rgba(0,0,0,.45); }
+  .hero-bottom { position:absolute; left:0; right:0; bottom:0; padding:28px 32px; color:#fff; z-index:2; }
+  .hero-name { font-size:32px; font-weight:800; letter-spacing:-.6px; line-height:1.05; margin:0 0 6px 0; }
+  .hero-prize { font-size:13px; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.75); font-weight:600; }
+
+  /* BODY */
+  .body { padding:36px 44px 38px; }
+  .body-eyebrow { display:flex; align-items:center; gap:14px; font-size:10px; letter-spacing:.32em; text-transform:uppercase; font-weight:800; margin-bottom:24px; }
+  .body-eyebrow .line { flex:1; height:1px; }
+
+  .body-prose p { font-family:Georgia,serif; font-size:18px; line-height:1.75; margin:0 0 18px 0; letter-spacing:-.1px; }
+  .body-prose p:last-child { margin-bottom:0; }
+
+  .drop-cap::first-letter { float:left; font-family:Georgia,serif; font-size:60px; line-height:.85; padding:6px 12px 0 0; font-weight:700; }
+
+  /* FOOTER META */
+  .meta-divider { height:1px; margin:32px 0 24px; }
+  .meta-row { display:flex; flex-wrap:wrap; gap:18px 26px; font-size:13px; font-weight:600; }
+  .meta-item { display:inline-flex; align-items:center; gap:8px; }
+  .meta-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; }
+
+  /* MOBILE */
+  .mobile-wrap { width:380px; max-width:100%; margin:0 auto; }
+  .mobile-wrap .hero { height:280px; }
+  .mobile-wrap .hero-name { font-size:22px; }
+  .mobile-wrap .hero-prize { font-size:11px; }
+  .mobile-wrap .body { padding:24px 22px 28px; }
+  .mobile-wrap .body-prose p { font-size:16px; line-height:1.7; }
+  .mobile-wrap .drop-cap::first-letter { font-size:46px; padding:4px 8px 0 0; }
+  .mobile-wrap .meta-row { gap:10px 18px; font-size:12px; }
+
+  .label-tag { font-size:10px; letter-spacing:.2em; text-transform:uppercase; font-weight:700; padding:4px 10px; border-radius:6px; display:inline-block; margin-bottom:12px; }
+</style>
+
+<!-- ============================================================ -->
+<!-- 1. DESKTOP · DARK · MILWAUKEE -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#f30000;">DESKTOP · DARK · MILWAUKEE</div>
+<div class="modal-frame" style="background:rgba(0,0,0,.7);">
+  <div class="modal-shell modal-shell-dark">
+    <div class="close-x">×</div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-photo" style="background:linear-gradient(135deg, #1a1a1f 0%, #0a0a0d 100%);"></div>
+      <div style="position:absolute; left:8%; top:14%; width:55%; height:60%; background:linear-gradient(180deg, #8a1808 0%, #5a0f04 65%, #2a0702 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+      <div style="position:absolute; left:14%; top:20%; width:43%; height:6%; background:#1a0d08; border-radius:4px;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+      <div class="hero-vignette"></div>
+      <div class="hero-top">
+        <span class="hero-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+        <span class="hero-pill" style="border:1px solid rgba(255,255,255,.18);">March 2024 · Toowoomba, QLD</span>
+      </div>
+      <div class="hero-bottom">
+        <h2 class="hero-name">Brett Sullivan</h2>
+        <p class="hero-prize">Milwaukee 13pc Kit + Packout 6pc Storage + $5,000 cash</p>
+      </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+      <div class="body-eyebrow" style="color:#f30000;">
+        <span class="line" style="background:linear-gradient(90deg, transparent, rgba(206,43,5,.5));"></span>
+        The Story
+        <span class="line" style="background:linear-gradient(90deg, rgba(206,43,5,.5), transparent);"></span>
+      </div>
+
+      <div class="body-prose" style="color:#cfd5e0;">
+        <p class="drop-cap" style="--cap-color:#f30000;"><span style="color:#f30000;">B</span>een chasing a proper Packout setup for years and just couldn't justify it. Got the call Tuesday morning while I was halfway through a kitchen reno — thought it was a wind-up at first. Had to put the phone on the bench and just stand there for a minute.</p>
+        <p>The whole kit landed Friday. Mates have been dropping by all week pretending they need to "borrow something." I see what you're up to, lads. Workshop's never looked better.</p>
+        <p>The cash is going straight into a new ute mount for the toolboxes. Honestly, I'd been entering for about eight months and never thought I'd actually win. Cheers to the team — keep doing what you're doing.</p>
+      </div>
+
+      <div class="meta-divider" style="background:linear-gradient(90deg, transparent, rgba(206,43,5,.4), transparent);"></div>
+
+      <div class="meta-row" style="color:rgba(255,255,255,.7);">
+        <span class="meta-item"><span class="meta-icon" style="color:#f30000;">📅</span>11 March 2024</span>
+        <span class="meta-item"><span class="meta-icon" style="color:#f30000;">📍</span>Toowoomba, QLD</span>
+        <span class="meta-item"><span class="meta-icon" style="color:#f30000;">🎁</span>March Major Draw</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 2. DESKTOP · LIGHT · MILWAUKEE -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#f30000;">DESKTOP · LIGHT · MILWAUKEE</div>
+<div class="modal-frame" style="background:rgba(15,23,42,.4);">
+  <div class="modal-shell modal-shell-light">
+    <div class="close-x">×</div>
+
+    <!-- HERO (stays dark cinematic, same as section card) -->
+    <div class="hero">
+      <div class="hero-photo" style="background:linear-gradient(135deg, #1a1a1f 0%, #0a0a0d 100%);"></div>
+      <div style="position:absolute; left:8%; top:14%; width:55%; height:60%; background:linear-gradient(180deg, #8a1808 0%, #5a0f04 65%, #2a0702 100%); border-radius:12px; box-shadow:0 30px 60px rgba(0,0,0,.6); opacity:.85;"></div>
+      <div style="position:absolute; left:14%; top:20%; width:43%; height:6%; background:#1a0d08; border-radius:4px;"></div>
+      <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(206,43,5,.28) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(206,43,5,.22) 0%, transparent 40%);"></div>
+      <div class="hero-vignette"></div>
+      <div class="hero-top">
+        <span class="hero-pill" style="border:1px solid rgba(206,43,5,.55);">Major Draw Winner</span>
+        <span class="hero-pill" style="border:1px solid rgba(255,255,255,.18);">March 2024 · Toowoomba, QLD</span>
+      </div>
+      <div class="hero-bottom">
+        <h2 class="hero-name">Brett Sullivan</h2>
+        <p class="hero-prize">Milwaukee 13pc Kit + Packout 6pc Storage + $5,000 cash</p>
+      </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+      <div class="body-eyebrow" style="color:#ce2b05;">
+        <span class="line" style="background:linear-gradient(90deg, transparent, rgba(206,43,5,.4));"></span>
+        The Story
+        <span class="line" style="background:linear-gradient(90deg, rgba(206,43,5,.4), transparent);"></span>
+      </div>
+
+      <div class="body-prose" style="color:#1f2937;">
+        <p class="drop-cap"><span style="color:#ce2b05;">B</span>een chasing a proper Packout setup for years and just couldn't justify it. Got the call Tuesday morning while I was halfway through a kitchen reno — thought it was a wind-up at first.</p>
+        <p>The whole kit landed Friday. Mates have been dropping by all week pretending they need to "borrow something." Workshop's never looked better.</p>
+        <p>The cash is going straight into a new ute mount for the toolboxes. Cheers to the team — keep doing what you're doing.</p>
+      </div>
+
+      <div class="meta-divider" style="background:linear-gradient(90deg, transparent, rgba(206,43,5,.35), transparent);"></div>
+
+      <div class="meta-row" style="color:#475569;">
+        <span class="meta-item"><span class="meta-icon" style="color:#ce2b05;">📅</span>11 March 2024</span>
+        <span class="meta-item"><span class="meta-icon" style="color:#ce2b05;">📍</span>Toowoomba, QLD</span>
+        <span class="meta-item"><span class="meta-icon" style="color:#ce2b05;">🎁</span>March Major Draw</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- 3. MOBILE · DARK · RYOBI (different brand for variety) -->
+<!-- ============================================================ -->
+<div class="label-tag" style="background:#1a1a1a; color:#e0ff00;">MOBILE · DARK · RYOBI</div>
+<div class="modal-frame" style="background:rgba(0,0,0,.7);">
+  <div class="mobile-wrap">
+    <div class="modal-shell modal-shell-dark">
+      <div class="close-x">×</div>
+
+      <div class="hero">
+        <div class="hero-photo" style="background:linear-gradient(135deg, #0a1500 0%, #050a00 100%);"></div>
+        <div style="position:absolute; left:8%; top:14%; width:55%; height:60%; background:linear-gradient(180deg, #2a3a00 0%, #1a2400 65%, #0a1200 100%); border-radius:10px; opacity:.85;"></div>
+        <div style="position:absolute; inset:0; background: radial-gradient(ellipse at 0% 0%, rgba(224,255,0,.24) 0%, transparent 35%), radial-gradient(ellipse at 100% 100%, rgba(224,255,0,.18) 0%, transparent 40%);"></div>
+        <div class="hero-vignette"></div>
+        <div class="hero-top">
+          <span class="hero-pill" style="border:1px solid rgba(224,255,0,.6);">Major Draw Winner</span>
+        </div>
+        <div class="hero-bottom">
+          <h2 class="hero-name">Sam Halloran</h2>
+          <p class="hero-prize">Ryobi 18V ONE+ Kit + 36V Mower</p>
+        </div>
+      </div>
+
+      <div class="body">
+        <div class="body-eyebrow" style="color:#e0ff00;">
+          <span class="line" style="background:linear-gradient(90deg, transparent, rgba(224,255,0,.5));"></span>
+          The Story
+          <span class="line" style="background:linear-gradient(90deg, rgba(224,255,0,.5), transparent);"></span>
+        </div>
+
+        <div class="body-prose" style="color:#cfd5e0;">
+          <p class="drop-cap"><span style="color:#e0ff00;">W</span>hole shed sorted in one go — 18V ONE+ kit and the brushless mower. Backyard's never looked sharper, and the missus is chuffed because I've actually been using the gear instead of leaving it in the box.</p>
+          <p>Two weeks in and I've already done the side fence, the deck, and three of the neighbours' lawns. Reckon I'll start charging soon.</p>
+        </div>
+
+        <div class="meta-divider" style="background:linear-gradient(90deg, transparent, rgba(224,255,0,.4), transparent);"></div>
+
+        <div class="meta-row" style="color:rgba(255,255,255,.7);">
+          <span class="meta-item"><span class="meta-icon" style="color:#e0ff00;">📅</span>22 Feb 2024</span>
+          <span class="meta-item"><span class="meta-icon" style="color:#e0ff00;">📍</span>Geelong, VIC</span>
+          <span class="meta-item"><span class="meta-icon" style="color:#e0ff00;">🎁</span>Feb Major Draw</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px; padding:20px; background:rgba(0,0,0,.05); border-radius:10px; font-size:13px; color:#374151; line-height:1.6;">
+  <p style="margin:0 0 8px 0;"><b>What changed vs current modal:</b></p>
+  <p style="margin:0 0 6px 0;">• <b>Photo treatment</b>: cinematic hero with vignette + brand glow (matches section card), not the current "image plopped on slate" look</p>
+  <p style="margin:0 0 6px 0;">• <b>Name + prize</b>: pulled out of separate ModalHeader and overlaid on hero image — feels like a magazine spread, not a stacked form</p>
+  <p style="margin:0 0 6px 0;">• <b>Story body</b>: serif typography, larger size, 1.75 leading, brand-colored drop cap on first paragraph</p>
+  <p style="margin:0 0 6px 0;">• <b>Decorative dividers</b>: gradient brand line above eyebrow + below body — gives the editorial "article" feel</p>
+  <p style="margin:0 0 6px 0;">• <b>Meta footer</b>: same icons as before but brand-colored, larger text</p>
+  <p style="margin:0;">• <b>Theming</b>: same rule as section — modal shell adapts to site light/dark, hero stays dark, accents follow brand</p>
+</div>
