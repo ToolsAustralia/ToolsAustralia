@@ -6,10 +6,15 @@ import { AGE_GROUP_ORDER } from "@/utils/metrics/age-grouping";
 
 export interface AgeBreakdownTableProps {
   data: UserMetrics["ageGroup"];
+  purchasedData?: UserMetrics["ageGroupPurchased"];
 }
 
-export function AgeBreakdownTable({ data }: AgeBreakdownTableProps) {
+export function AgeBreakdownTable({ data, purchasedData }: AgeBreakdownTableProps) {
   const total = AGE_GROUP_ORDER.reduce((sum, label) => sum + (data[label] ?? 0), 0);
+  const totalPurchased = AGE_GROUP_ORDER.reduce(
+    (sum, label) => sum + (purchasedData?.[label] ?? 0),
+    0
+  );
 
   if (total === 0) {
     return (
@@ -29,17 +34,23 @@ export function AgeBreakdownTable({ data }: AgeBreakdownTableProps) {
             <tr className="border-b-2 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
               <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Age Group</th>
               <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Users</th>
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-400">Purchased</th>
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">Conversion</th>
               <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">% of Total</th>
             </tr>
           </thead>
           <tbody>
             {AGE_GROUP_ORDER.map((label) => {
               const value = data[label] ?? 0;
+              const purchased = purchasedData?.[label] ?? 0;
               const pct = total > 0 ? (value / total) * 100 : 0;
+              const conversion = value > 0 ? (purchased / value) * 100 : 0;
               return (
                 <tr key={label} className="border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors">
                   <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-gray-900 dark:text-white font-medium">{label}</td>
                   <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right text-gray-900 dark:text-white tabular-nums">{value.toLocaleString()}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right text-emerald-700 dark:text-emerald-400 tabular-nums">{purchased.toLocaleString()}</td>
+                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right text-gray-600 dark:text-neutral-400 tabular-nums">{value > 0 ? `${conversion.toFixed(1)}%` : "—"}</td>
                   <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right text-gray-600 dark:text-neutral-400 tabular-nums">{pct.toFixed(1)}%</td>
                 </tr>
               );
@@ -49,6 +60,8 @@ export function AgeBreakdownTable({ data }: AgeBreakdownTableProps) {
             <tr className="border-t-2 border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800">
               <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm font-bold text-gray-900 dark:text-white">Total</td>
               <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right font-bold text-gray-900 dark:text-white tabular-nums">{total.toLocaleString()}</td>
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{totalPurchased.toLocaleString()}</td>
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right font-bold text-gray-600 dark:text-neutral-400 tabular-nums">{total > 0 ? `${((totalPurchased / total) * 100).toFixed(1)}%` : "—"}</td>
               <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm text-right font-bold text-gray-600 dark:text-neutral-400 tabular-nums">100.0%</td>
             </tr>
           </tfoot>

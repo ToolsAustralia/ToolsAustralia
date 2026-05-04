@@ -1,5 +1,11 @@
 # Metrics-Analytics — Gotchas
 
+## `subscription.endDate` is not a cancellation signal
+
+The Stripe webhook ([src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts)) writes `subscription.endDate` on **every** active/trialing sub — it's the next billing-period end, not a "user cancelled" marker. Classifying by `endDate` alone counts every healthy sub as cancelled.
+
+The canonical "scheduled cancel-at-period-end" check is `status ∈ {active, past_due} && autoRenew === false && endDate set` — see the ladder in [architecture.md](./architecture.md#membership-classification-ladder). Same filter is used in [src/services/admin/MembershipAnalyticsService.ts](../../src/services/admin/MembershipAnalyticsService.ts) and [src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts); keep these three in sync if the rule ever changes.
+
 ## Backfill rows aren't 1:1 with stripe rows
 
 `MembershipRenewalCycle` rows with `confidence: "backfill"` were reconstructed from invoices that pre-date cycle tracking. They may have approximated `dueAt` or `amountPaidCents`. Filter them out for accuracy-sensitive reads.

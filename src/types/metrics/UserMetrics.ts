@@ -25,6 +25,7 @@ export interface UserMetrics {
   };
   profession: Record<string, number>;
   ageGroup: Record<AgeGroupLabel, number>;
+  ageGroupPurchased: Record<AgeGroupLabel, number>;
   membershipStatus: {
     active: number;
     cancelled: number;

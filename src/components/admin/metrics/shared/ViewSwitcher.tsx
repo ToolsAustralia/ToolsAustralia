@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { Table, BarChart3, Columns } from "lucide-react";
+import { Table, BarChart3 } from "lucide-react";
 
-export type ViewMode = "table" | "chart" | "side-by-side";
+export type ViewMode = "table" | "chart";
 
 export interface ViewSwitcherProps {
   currentView: ViewMode;
@@ -19,7 +19,6 @@ export function ViewSwitcher({ currentView, onViewChange, className = "" }: View
   const views: Array<{ mode: ViewMode; label: string; shortLabel: string; icon: React.ComponentType<{ className?: string }> }> = [
     { mode: "table", label: "Table", shortLabel: "Table", icon: Table },
     { mode: "chart", label: "Chart", shortLabel: "Chart", icon: BarChart3 },
-    { mode: "side-by-side", label: "Compare", shortLabel: "Compare", icon: Columns },
   ];
 
   return (

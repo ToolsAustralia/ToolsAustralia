@@ -7,6 +7,7 @@ import { AgeBreakdown } from "./users/AgeBreakdown";
 import { ProfessionBreakdown } from "./users/ProfessionBreakdown";
 import { AgeBreakdownTable } from "./users/AgeBreakdownTable";
 import { ProfessionBreakdownTable } from "./users/ProfessionBreakdownTable";
+import { MembershipPackageBreakdown } from "./users/MembershipPackageBreakdown";
 import { MembershipPackageBreakdownTable } from "./users/MembershipPackageBreakdownTable";
 import { ViewSwitcher } from "./shared/ViewSwitcher";
 import { MetricCard } from "./shared/MetricCard";
@@ -70,12 +71,7 @@ export function UserMetricsView() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">User Metrics</h2>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-0.5">All-time snapshot</p>
-        </div>
+      <div className="flex justify-end">
         <ViewSwitcher
           currentView={viewMode}
           onViewChange={(mode) => handleViewModeChange(mode as "table" | "chart")}
@@ -139,13 +135,20 @@ export function UserMetricsView() {
           {/* Chart vs Table content */}
           {viewMode === "chart" ? (
             <div className="space-y-6">
-              <AgeBreakdown data={aggregateData.ageGroup} />
+              <MembershipPackageBreakdown data={aggregateData.membershipByPackage} />
+              <AgeBreakdown
+                data={aggregateData.ageGroup}
+                purchasedData={aggregateData.ageGroupPurchased}
+              />
               <ProfessionBreakdown data={aggregateData.profession} />
             </div>
           ) : (
             <div className="space-y-6">
               <MembershipPackageBreakdownTable data={aggregateData.membershipByPackage} />
-              <AgeBreakdownTable data={aggregateData.ageGroup} />
+              <AgeBreakdownTable
+                data={aggregateData.ageGroup}
+                purchasedData={aggregateData.ageGroupPurchased}
+              />
               <ProfessionBreakdownTable data={aggregateData.profession} />
             </div>
           )}
