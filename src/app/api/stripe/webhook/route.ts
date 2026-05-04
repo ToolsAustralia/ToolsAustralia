@@ -4984,9 +4984,62 @@ export async function POST(request: NextRequest) {
           } for ${event.data.object.id}`
         );
         break;
-      case "payment_intent.payment_failed":
-        await handlePaymentFailure(event.data.object);
+      case "payment_intent.payment_failed": {
+        const failedPi = event.data.object as Stripe.PaymentIntent;
+        await handlePaymentFailure(failedPi);
+
+        // Auto-allowlist eligibility check. Best-effort — see allowlist gotchas.md.
+        try {
+          const charge =
+            failedPi.latest_charge && typeof failedPi.latest_charge !== "string"
+              ? failedPi.latest_charge
+              : failedPi.latest_charge
+              ? await stripe.charges.retrieve(failedPi.latest_charge)
+              : null;
+
+          const isBlocked =
+            charge?.outcome?.type === "blocked" ||
+            charge?.outcome?.network_status === "declined_by_network";
+
+          const card = charge?.payment_method_details?.card;
+          const fingerprint = card?.fingerprint;
+          if (isBlocked && card && fingerprint) {
+            const { getAllowlistService } = await import("@/services/allowlist");
+            const allowlist = getAllowlistService();
+            await allowlist.apply(
+              {
+                cardFingerprint: fingerprint,
+                cardLast4: card.last4 ?? "",
+                cardBrand: card.brand ?? "unknown",
+                stripeCustomerId:
+                  typeof failedPi.customer === "string"
+                    ? failedPi.customer
+                    : failedPi.customer?.id ?? null,
+                customerEmail:
+                  failedPi.receipt_email ?? charge.billing_details?.email ?? null,
+                declineCode: failedPi.last_payment_error?.decline_code ?? null,
+                failureCode: failedPi.last_payment_error?.code ?? null,
+                triggeringPaymentIntentId: failedPi.id,
+                triggeringChargeId: charge.id,
+              },
+              "webhook",
+              null
+            );
+          }
+        } catch (allowlistErr) {
+          // Best-effort: do NOT bubble. See docs/billing-stripe/gotchas.md —
+          // bubbling would cause Stripe to retry the entire
+          // payment_intent.payment_failed webhook, re-running the
+          // (already-completed) handlePaymentFailure handler.
+          webhookLog(
+            "error",
+            `AllowlistService.apply failed for PI ${failedPi.id}: ${
+              allowlistErr instanceof Error ? allowlistErr.message : String(allowlistErr)
+            }`
+          );
+        }
         break;
+      }
       case "charge.succeeded":
         // Skip charge.succeeded to prevent duplicate processing
         break;

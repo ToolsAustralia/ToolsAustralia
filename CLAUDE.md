@@ -157,11 +157,16 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/billing/**",
         "src/lib/stripe.ts",
         "src/lib/stripe-client.ts",
+        "src/services/allowlist/**",
         "src/models/PaymentEvent.ts",
         "src/models/ProcessedStripeEvent.ts",
         "src/models/InvoiceChargeLog.ts",
+        "src/models/AllowlistAction.ts",
         "src/app/api/stripe/**",
-        "src/app/api/invoice/**"
+        "src/app/api/invoice/**",
+        "src/app/api/admin/allowlist/**",
+        "src/hooks/queries/admin/useBlockedCards.ts",
+        "src/hooks/queries/admin/useAllowlistActions.ts"
       ],
       "lastVerified": "2026-04-29"
     },
@@ -319,7 +324,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",

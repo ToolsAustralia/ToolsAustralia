@@ -20,6 +20,7 @@ import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
+import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
@@ -177,6 +178,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
+                  {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "activity-log" && "Complete activity history with filters and search"}
                 </p>
               </div>
@@ -226,6 +228,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* ERROR REPORTS TAB */}
           {selectedTab === "error-reports" && <ErrorReportsManagement />}
+
+          {/* BLOCKED TRANSACTIONS TAB */}
+          {selectedTab === "blocked-transactions" && <BlockedTransactionsManagement />}
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}

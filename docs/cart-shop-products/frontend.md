@@ -18,6 +18,12 @@ interface CartContextValue {
   updateQuantity(id, q): void;
   clear(): void;
   // ...
+  // Global sync flag — do NOT gate per-product buttons on this; see gotchas.md
+  isLoading: boolean;
+  // Per-product loading helpers — use these inside cards / detail pages
+  isAddingToCart(productId: string): boolean;
+  isUpdatingCart(productId: string): boolean;
+  isRemovingFromCart(productId: string): boolean;
 }
 ```
 
@@ -33,3 +39,20 @@ interface CartContextValue {
 - Products via TanStack Query (server-state)
 - Orders via TanStack Query (server-state, refresh on purchase via `usePurchaseInvalidation`)
 - No Zustand for cart
+
+## Theming
+
+The shop product detail page (`src/app/(site)/shop/[slug]/page.tsx`) and its components (`ProductInteractions.tsx`, `ProductTabs.tsx`) have full light/dark support. The convention used across the slug page is:
+
+- Page wrappers / "white" surfaces → `bg-white dark:bg-neutral-950`
+- Secondary surfaces (image frames, tab strip background) → `bg-gray-100 dark:bg-neutral-900`
+- Card surfaces (review cards, info panels) → `bg-white dark:bg-neutral-950 dark:border-neutral-800`
+- Primary text (`text-gray-900`) → also `dark:text-neutral-100`
+- Secondary text (`text-gray-500`/`text-gray-600`, e.g. review meta, descriptions) → also `dark:text-neutral-400`
+- Borders (quantity selector, trust-badge top border, dividers) → also `dark:border-neutral-700` / `dark:border-neutral-800`
+- Hover states on neutral buttons (`hover:bg-gray-100`) → also `dark:hover:bg-neutral-800`
+- Empty rating stars (`text-gray-300`) → also `dark:text-neutral-700`
+- Strike-through prices (`text-gray-500`) → also `dark:text-neutral-500`
+- Disabled button state (`bg-gray-300 text-gray-500`) → also `dark:bg-neutral-800 dark:text-neutral-400`
+
+Match these classes when extending the slug page or adding new card-style sections under `src/app/(site)/shop/`.

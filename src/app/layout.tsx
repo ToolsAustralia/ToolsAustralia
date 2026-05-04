@@ -81,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const nonce = await getNonce();
 
   return (
-    <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`}>
+    <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         {/* Single theme-color updated client-side by ThemeMetaSync; avoids duplicate meta tags */}
