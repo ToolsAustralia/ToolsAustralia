@@ -1,15 +1,28 @@
 import type Stripe from "stripe";
 import type { Types } from "mongoose";
 import type { IAllowlistAction } from "@/models/AllowlistAction";
+import AllowlistAction from "@/models/AllowlistAction";
+import BlockedTransaction from "@/models/BlockedTransaction";
+import PaymentEvent from "@/models/PaymentEvent";
+import User from "@/models/User";
 import type {
   AllowlistRepository,
   ApplySource,
   BlockedFilter,
   BlockedListResult,
+  BlockedPageResult,
   BlockedRow,
+  EligibilityPreview,
   EvalInput,
   EvalResult,
 } from "./types";
+import {
+  FRAUD_SIGNAL_DECLINE_CODES,
+  PERMANENT_ISSUE_DECLINE_CODES,
+  isFraudSignalDeclineCode,
+  isPermanentIssueDeclineCode,
+} from "./declineCodes";
+import { getAllowCardFingerprintListId } from "./stripeListResolver";
 
 /**
  * Hard cap on the number of PaymentIntents the Stripe scan will iterate
@@ -20,13 +33,95 @@ import type {
  * surfaces a "narrow your date range" notice when it's hit.
  */
 const MAX_PAYMENT_INTENTS_SCANNED = 2000;
-import {
-  FRAUD_SIGNAL_DECLINE_CODES,
-  PERMANENT_ISSUE_DECLINE_CODES,
-  isFraudSignalDeclineCode,
-  isPermanentIssueDeclineCode,
-} from "./declineCodes";
-import { getAllowCardFingerprintListId } from "./stripeListResolver";
+
+/** Default page size for `listBlocked`. */
+const DEFAULT_LIST_BLOCKED_LIMIT = 50;
+/** Hard upper bound for `listBlocked` page size — clamps any caller request. */
+const MAX_LIST_BLOCKED_LIMIT = 100;
+
+/**
+ * PaymentEvent eventTypes that mean "user has successfully paid at least once."
+ * Re-derived here (with identical values) from MongoAllowlistRepository's
+ * SUCCEEDED_EVENT_TYPES so `listBlocked`'s batched paid-user lookup matches
+ * the repo's single-user `userHasSucceededPayment` semantics. If you change
+ * the success markers, update both lists in lockstep.
+ */
+// TODO(C-followup): extract to shared constants — duplicated in MongoAllowlistRepository.
+const SUCCEEDED_EVENT_TYPES = [
+  "PaymentProcessed",
+  "BenefitsGranted",
+  "SubscriptionActivated",
+];
+
+// ---------- listBlocked helpers ----------
+
+export type CursorPayload = { createdAt: Date; _id: string };
+
+export function encodeCursor(row: { createdAt: Date; _id: string }): string {
+  return Buffer.from(
+    JSON.stringify({ c: row.createdAt.toISOString(), i: row._id })
+  ).toString("base64");
+}
+
+export function decodeCursor(s: string): CursorPayload | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(s, "base64").toString()) as {
+      c: string;
+      i: string;
+    };
+    if (typeof parsed.c !== "string" || typeof parsed.i !== "string") return null;
+    const createdAt = new Date(parsed.c);
+    if (Number.isNaN(createdAt.getTime())) return null;
+    return { createdAt, _id: parsed.i };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lookup maps consumed by `computeEligibility`. The maps are the
+ * already-fetched joins for a single page of `listBlocked` — we don't want
+ * the verdict logic to issue further DB queries.
+ */
+export type EligibilityMaps = {
+  userByCustomerId: Map<string, { _id: Types.ObjectId | string }>;
+  userByEmail: Map<string, { _id: Types.ObjectId | string }>;
+  paidUserIds: Set<string>;
+};
+
+/**
+ * Pure verdict function — mirror of `AllowlistService.evaluate` but driven
+ * by pre-fetched maps instead of new DB queries. Same order, same reasons:
+ *   1. fraud signal decline-code check
+ *   2. permanent issue decline-code check
+ *   3. user lookup (stripeCustomerId, then email)
+ *   4. has-paid check
+ * Exported so Task C2 can unit-test the verdict logic against constructed
+ * input. Keep these branches in lockstep with `evaluate`.
+ */
+export function computeEligibility(
+  doc: {
+    declineCode: string | null;
+    stripeCustomerId: string | null;
+    customerEmail: string | null;
+  },
+  maps: EligibilityMaps
+): EligibilityPreview {
+  if (isFraudSignalDeclineCode(doc.declineCode)) {
+    return { eligible: false, reason: "filter_fraud_signal" };
+  }
+  if (isPermanentIssueDeclineCode(doc.declineCode)) {
+    return { eligible: false, reason: "filter_permanent_issue" };
+  }
+  let user: { _id: Types.ObjectId | string } | undefined;
+  if (doc.stripeCustomerId) user = maps.userByCustomerId.get(doc.stripeCustomerId);
+  if (!user && doc.customerEmail) user = maps.userByEmail.get(doc.customerEmail);
+  if (!user) return { eligible: false, reason: "filter_not_member" };
+  if (!maps.paidUserIds.has(String(user._id))) {
+    return { eligible: false, reason: "filter_not_member" };
+  }
+  return { eligible: true };
+}
 
 /**
  * The Stripe SDK v18 does not export `Stripe.RadarResource`. We pull the
@@ -318,5 +413,233 @@ export class AllowlistService {
       });
     }
     return { rows, truncated, scanned };
+  }
+
+  /**
+   * Mongo-backed read path for the admin Blocked Transactions page. Replaces
+   * `listBlockedFromStripe` (which paginates Stripe at request-time and
+   * doesn't scale on busy accounts) with a cursor-paged read over the
+   * `blockedtransactions` collection — populated by the
+   * `payment_intent.payment_failed` webhook (Phase A) and the historical
+   * backfill script (Phase B).
+   *
+   * Performance shape: 2 indexed Mongo queries for the page (count + find),
+   * then a single User.find followed by 2 parallel batched lookups
+   * (AllowlistAction by fingerprint, PaymentEvent.distinct by userId). Total
+   * per page is bounded — does not depend on the size of the date window
+   * like the Stripe path did.
+   *
+   * Filter semantics intentionally mirror `listBlockedFromStripe` so the UI
+   * sees identical row counts during the migration period. Phase C3+ swap
+   * the route to call this method instead.
+   */
+  async listBlocked(
+    filter: BlockedFilter,
+    opts?: { cursor?: string | null; limit?: number }
+  ): Promise<BlockedPageResult> {
+    const requestedLimit = opts?.limit ?? DEFAULT_LIST_BLOCKED_LIMIT;
+    const limit = Math.max(
+      1,
+      Math.min(MAX_LIST_BLOCKED_LIMIT, Math.floor(requestedLimit) || DEFAULT_LIST_BLOCKED_LIMIT)
+    );
+
+    // Date-range + decline-code filter pushed into the Mongo query.
+    // The `{ createdAt: -1 }` index covers the date range; combined with
+    // `_id` for tie-breaking we get a stable sort for cursor pagination.
+    const baseFilter: Record<string, unknown> = {
+      createdAt: { $gte: filter.dateFrom, $lte: filter.dateTo },
+    };
+
+    // Decline-code filter — replicates the in-memory filter from
+    // listBlockedFromStripe, but as a Mongo predicate so we don't fetch
+    // rows we'll immediately discard.
+    const fraudCodes = Array.from(FRAUD_SIGNAL_DECLINE_CODES);
+    const permanentCodes = Array.from(PERMANENT_ISSUE_DECLINE_CODES);
+    if (filter.declineReason === "recoverable_only") {
+      baseFilter.declineCode = { $nin: [...fraudCodes, ...permanentCodes] };
+    } else if (filter.declineReason === "transient_only") {
+      baseFilter.declineCode = { $nin: fraudCodes };
+    } else if (filter.declineReason === "fraud_signals_only") {
+      baseFilter.declineCode = { $in: fraudCodes };
+    }
+
+    // Cursor predicate — a row is "before" the cursor if its createdAt is
+    // strictly less, OR createdAt equal AND _id strictly less. Combined
+    // with `sort({ createdAt: -1, _id: -1 })` this yields stable pagination.
+    const cursorRaw = opts?.cursor ?? null;
+    const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+    // `dbFilter`'s top-level `createdAt` and `$or` are AND-ed by Mongo:
+    // (dateFrom <= createdAt <= dateTo) AND (cursor predicate).
+    // Do NOT collapse — the date range bound IS preserved by the implicit AND.
+    const dbFilter: Record<string, unknown> = cursor
+      ? {
+          ...baseFilter,
+          $or: [
+            { createdAt: { $lt: cursor.createdAt } },
+            { createdAt: cursor.createdAt, _id: { $lt: cursor._id } },
+          ],
+        }
+      : baseFilter;
+
+    // Total count uses the filter MINUS the cursor predicate — we want the
+    // full filtered total for "Showing X of Y" UI, not the remaining count.
+    const [rawTotal, rawDocs] = await Promise.all([
+      BlockedTransaction.countDocuments(baseFilter),
+      BlockedTransaction.find(dbFilter)
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit)
+        .lean<
+          Array<{
+            _id: string;
+            paymentIntentId: string;
+            chargeId: string;
+            cardFingerprint: string;
+            cardLast4: string;
+            cardBrand: string;
+            stripeCustomerId: string | null;
+            customerEmail: string | null;
+            declineCode: string | null;
+            failureCode: string | null;
+            amount: number;
+            currency: string;
+            createdAt: Date;
+          }>
+        >(),
+    ]);
+
+    if (rawDocs.length === 0) {
+      return { rows: [], nextCursor: null, total: rawTotal };
+    }
+
+    // Build dedup'd lookup keys for the three batched queries.
+    const cardFingerprints = Array.from(
+      new Set(rawDocs.map((d) => d.cardFingerprint).filter(Boolean))
+    );
+    const customerIds = Array.from(
+      new Set(rawDocs.map((d) => d.stripeCustomerId).filter((v): v is string => Boolean(v)))
+    );
+    const emails = Array.from(
+      new Set(rawDocs.map((d) => d.customerEmail).filter((v): v is string => Boolean(v)))
+    );
+
+    // Phase 1 (serial): fetch users — this is the gate to the paid-user
+    // check, which needs user IDs. Running this once (instead of in two
+    // parallel Promise.all branches) avoids a duplicate indexed query and
+    // removes the theoretical consistency risk of two reads diverging.
+    const users =
+      customerIds.length || emails.length
+        ? await User.find({
+            $or: [
+              ...(customerIds.length
+                ? [{ stripeCustomerId: { $in: customerIds } }]
+                : []),
+              ...(emails.length ? [{ email: { $in: emails } }] : []),
+            ],
+          })
+            .select("_id email stripeCustomerId")
+            .lean<
+              Array<{
+                _id: Types.ObjectId | string;
+                email: string | null;
+                stripeCustomerId: string | null;
+              }>
+            >()
+        : ([] as Array<{
+            _id: Types.ObjectId | string;
+            email: string | null;
+            stripeCustomerId: string | null;
+          }>);
+
+    const userIds = users.map((u) => u._id);
+
+    // Phase 2 (parallel): the two queries that depend on user-ids OR
+    // fingerprints — independent of each other, so run together.
+    const [allowlistedActions, paidUserIds] = await Promise.all([
+      cardFingerprints.length
+        ? AllowlistAction.find({
+            cardFingerprint: { $in: cardFingerprints },
+            action: "added",
+          })
+            .select("cardFingerprint")
+            .lean<Array<{ cardFingerprint: string }>>()
+        : Promise.resolve([] as Array<{ cardFingerprint: string }>),
+
+      userIds.length === 0
+        ? Promise.resolve(new Set<string>())
+        : (async (): Promise<Set<string>> => {
+            const distinctIds = await PaymentEvent.distinct("userId", {
+              userId: { $in: userIds },
+              eventType: { $in: SUCCEEDED_EVENT_TYPES },
+            });
+            return new Set((distinctIds as Array<Types.ObjectId | string>).map(String));
+          })(),
+    ]);
+
+    // Build O(1) lookup maps from the result arrays.
+    const userByCustomerId = new Map<string, { _id: Types.ObjectId | string }>();
+    const userByEmail = new Map<string, { _id: Types.ObjectId | string }>();
+    for (const u of users) {
+      if (u.stripeCustomerId) userByCustomerId.set(u.stripeCustomerId, u);
+      if (u.email) userByEmail.set(u.email, u);
+    }
+    const allowlistedSet = new Set<string>(
+      allowlistedActions.map((a) => a.cardFingerprint)
+    );
+
+    const eligibilityMaps: EligibilityMaps = {
+      userByCustomerId,
+      userByEmail,
+      paidUserIds,
+    };
+
+    const builtRows: BlockedRow[] = rawDocs.map((doc) => {
+      const preview = computeEligibility(doc, eligibilityMaps);
+      return {
+        paymentIntentId: doc.paymentIntentId,
+        chargeId: doc.chargeId,
+        createdAt: doc.createdAt,
+        amount: doc.amount,
+        currency: doc.currency,
+        cardFingerprint: doc.cardFingerprint,
+        cardLast4: doc.cardLast4,
+        cardBrand: doc.cardBrand,
+        stripeCustomerId: doc.stripeCustomerId,
+        customerEmail: doc.customerEmail,
+        declineCode: doc.declineCode,
+        failureCode: doc.failureCode,
+        preview,
+        alreadyAllowlisted: allowlistedSet.has(doc.cardFingerprint),
+      };
+    });
+
+    // Member-status filter is in-memory because the verdict depends on
+    // joins we already computed. Mirrors the negation logic in
+    // listBlockedFromStripe so the two paths return matching counts.
+    const filteredRows = builtRows.filter((r) => {
+      if (filter.memberStatus === "has_paid") {
+        return r.preview.eligible || r.preview.reason !== "filter_not_member";
+      }
+      if (filter.memberStatus === "never_paid") {
+        return !r.preview.eligible && r.preview.reason === "filter_not_member";
+      }
+      return true;
+    });
+
+    // skippedOnly mirrors the listBlockedFromStripe behavior.
+    const finalRows = filter.skippedOnly
+      ? filteredRows.filter((r) => !r.preview.eligible)
+      : filteredRows;
+
+    // nextCursor encodes the LAST raw doc on the page (not the last filtered
+    // row) because the cursor advances the underlying Mongo scan, not the
+    // post-filter view. If a page is full but every row got dropped by the
+    // member-status filter, the next call will pick up where the scan left off.
+    const lastRaw = rawDocs[rawDocs.length - 1];
+    const nextCursor =
+      rawDocs.length === limit && lastRaw
+        ? encodeCursor({ createdAt: lastRaw.createdAt, _id: lastRaw._id })
+        : null;
+
+    return { rows: finalRows, nextCursor, total: rawTotal };
   }
 }

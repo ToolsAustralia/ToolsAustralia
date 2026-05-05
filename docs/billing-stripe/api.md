@@ -83,13 +83,21 @@ Backing the `/admin/blocked-transactions` page. All four require `role === "admi
 #### `GET /api/admin/allowlist/blocked-cards`
 
 Query params:
+- `source` — `stripe | mongo` (default `stripe`). Selects the read backend. Invalid values → `400`. The `useBlockedCards` hook (the only UI consumer) hardcodes `mongo`; `stripe` remains the default for safe rollout and ad-hoc debugging.
 - `dateFrom` — ISO timestamp (inclusive)
 - `dateTo` — ISO timestamp (inclusive)
 - `memberStatus` — `any | has_paid | never_paid`
 - `declineReason` — `any | recoverable_only | transient_only | fraud_signals_only` (`recoverable_only` hides both fraud signals **and** permanent-issue codes; `transient_only` hides only fraud signals)
 - `skippedOnly` — `true | false`
+- `cursor` — opaque cursor for the next page (mongo source only). Omitted on first page; pass back the previous response's `nextCursor`.
+- `limit` — page size (mongo source only). 1–100, default 50.
 
-Returns `{ success, rows: BlockedRow[], truncated: boolean, scanned: number }`. Auth: admin. `maxDuration: 60` because the Stripe scan paginates every PI in the date window. The service caps the scan at 2000 PIs to bound worst-case latency; when the cap is hit, `truncated: true` and the admin UI shows a "narrow your date range" banner. See [gotchas](./gotchas.md#blocked-cards-route-paginates-every-pi).
+Two response envelopes — pick by `source`:
+
+- `source=stripe` (default, legacy): `{ success, rows: BlockedRow[], truncated: boolean, scanned: number }`. The Stripe scan paginates every PI in the date window; `maxDuration: 60` exists for this path. The service caps the scan at 2000 PIs to bound worst-case latency; when the cap is hit, `truncated: true` and the admin UI shows a "narrow your date range" banner.
+- `source=mongo` (Phase C): `{ success, rows: BlockedRow[], nextCursor: string | null, total: number }`. Reads from the `blockedtransactions` collection — see [`listBlocked`](./architecture.md#listblocked-mongo-backed-read-path). Per-page cost is bounded and independent of the date window; `maxDuration` is preserved on the route only because the stripe path still needs it.
+
+Auth: admin. See [gotchas](./gotchas.md#blocked-cards-route-paginates-every-pi).
 
 #### `POST /api/admin/allowlist/apply`
 

@@ -3,6 +3,17 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
+import {
+  RECENT_ATTEMPT_WINDOW_HOURS,
+  buildAdminChargeIdempotencyKey,
+  cutoffForRecentAttempt,
+} from "./past-due-charge-idempotency";
+
+export {
+  RECENT_ATTEMPT_WINDOW_HOURS,
+  buildAdminChargeIdempotencyKey,
+  cutoffForRecentAttempt,
+};
 
 /** Row shape returned from bulk and single-user past-due charge flows */
 export type PastDueChargeResultRow = {
@@ -197,11 +208,49 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   const userIdStr = typeof user._id === "string" ? user._id : String(user._id);
   const amount = invoice.amount_remaining || 0;
 
-  try {
-    const paidInvoiceResponse = await stripe.invoices.pay(invoiceId, {
-      payment_method: paymentMethodId,
-      off_session: true,
+  // 24h skip — protects against repeat decline fees when an admin (or two admins,
+  // or the per-user retry endpoint and the bulk endpoint) hits the same invoice
+  // within Stripe's idempotency window. The Stripe key below is the second line of
+  // defence; this DB check is the first because it avoids the Stripe call entirely.
+  const recentAttempt = await InvoiceChargeLog.findOne({
+    invoiceId,
+    attemptedAt: { $gte: cutoffForRecentAttempt() },
+  })
+    .select({ _id: 1, status: 1, attemptedAt: 1 })
+    .lean();
+
+  if (recentAttempt) {
+    await InvoiceChargeLog.create({
+      invoiceId,
+      customerId,
+      userId: new mongoose.Types.ObjectId(userIdStr),
+      adminId: new mongoose.Types.ObjectId(adminId),
+      status: "skipped",
+      amount,
+      attemptedAt: new Date(),
+      errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
     });
+
+    return {
+      invoiceId,
+      customerId,
+      userId: userIdStr,
+      userEmail,
+      status: "skipped",
+      skipReason: "recently_attempted",
+      amount,
+    };
+  }
+
+  try {
+    const paidInvoiceResponse = await stripe.invoices.pay(
+      invoiceId,
+      {
+        payment_method: paymentMethodId,
+        off_session: true,
+      },
+      { idempotencyKey: buildAdminChargeIdempotencyKey(invoiceId) }
+    );
     const paidInvoice = paidInvoiceResponse as Stripe.Invoice;
 
     const baseResult: Record<string, unknown> = {

@@ -164,6 +164,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/AllowlistAction.ts",
         "src/models/BlockedTransaction.ts",
         "scripts/backfill-blocked-transactions.ts",
+        "scripts/sync-allowlist-from-blocked-transactions.ts",
         "src/app/api/stripe/**",
         "src/app/api/invoice/**",
         "src/app/api/admin/allowlist/**",

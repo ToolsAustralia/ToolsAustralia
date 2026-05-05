@@ -3,7 +3,8 @@
 ## Server-only code
 
 [src/server/admin/](../../src/server/admin/):
-- `chargePastDueShared.ts` — shared logic for past-due charge retry (used by single + bulk endpoints)
+- `chargePastDueShared.ts` — shared logic for past-due charge retry (used by single + bulk endpoints). `payOpenInvoiceAsPastDueAdmin` enforces the 24h DB skip window via `InvoiceChargeLog` and passes a stable `idempotencyKey` to `stripe.invoices.pay` so a rapid double-submit returns Stripe's cached first response. See [billing-stripe/gotchas#multi-layer-protection-on-the-bulk-endpoint](../billing-stripe/gotchas.md#multi-layer-protection-on-the-bulk-endpoint).
+- `past-due-charge-idempotency.ts` — pure helpers (`RECENT_ATTEMPT_WINDOW_HOURS`, `cutoffForRecentAttempt`, `buildAdminChargeIdempotencyKey`) extracted to a Stripe-free module so they're unit-testable without `STRIPE_SECRET_KEY`. Tested by `src/server/admin/__tests__/chargePastDueShared.test.ts` (`npm run test:past-due-admin-charge`).
 - (other shared admin code)
 
 ## Features

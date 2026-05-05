@@ -85,10 +85,12 @@ Normalization pipeline:
 
 For each user with a `subscription` field, the service walks this ordered chain (first match wins) — both `membershipStatus` flat totals and `membershipByPackage` per-package counts use this same ladder:
 
-1. **Scheduled cancel-at-period-end** → `cancelled`: `status` is `"active"` or `"past_due"` **AND** `autoRenew === false` **AND** `endDate` is set.
+1. **Scheduled cancel-at-period-end** → `cancelled`: `status` is `"active"`, `"trialing"`, or `"past_due"` **AND** `autoRenew === false` **AND** `endDate` is set.
 2. **Past Due** → `pastDue`: `status === "past_due"` (and not matched above).
-3. **Active** → `active`: `isActive === true` **AND** `status === "active"`.
+3. **Active** → `active`: `isActive === true` **AND** `status` is `"active"` or `"trialing"`.
 4. **Legacy cancelled** → `cancelled`: `status === "canceled"` or `"cancelled"`.
+
+> **Why trialing counts as active:** trialing users are paying-customers-in-grace and are counted as active by both the per-user "Active" badge ([src/components/admin/ui/AdminBadge.tsx](../../src/components/admin/ui/AdminBadge.tsx), which only checks `subscription.isActive`) and the dashboard "Membership by Package" KPI ([src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts), `ACTIVE_SUBSCRIPTION_STATUSES = ["active","trialing"]`). The metrics ladder must include `"trialing"` in branch 3 for the User Metrics view's "Active Memberships" card to reconcile with these other numbers; branch 1 must accept `"trialing"` as well so a trialing user with `autoRenew === false` is bucketed as scheduled-cancel rather than active.
 
 > **Why `autoRenew === false` is required for branch 1:** the Stripe webhook ([src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts)) writes `endDate` on **every** active/trialing subscription as the next billing-period end. An `endDate`-only check therefore matches every active sub and miscounts them as cancelled — `autoRenew === false` is the canonical "user hit cancel" signal. This mirrors the canonical filter in [src/services/admin/MembershipAnalyticsService.ts](../../src/services/admin/MembershipAnalyticsService.ts) and [src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts).
 

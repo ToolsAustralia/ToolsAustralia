@@ -96,7 +96,7 @@ Indexes:
 - `{ stripeCustomerId: 1, createdAt: -1 }` — for surfacing recent decisions on a user-detail admin page
 - `{ action: 1, createdAt: -1 }` — supports admin "show only skipped" / "show only added" filter
 
-**Source-of-truth principle:** `AllowlistAction` is a **decision log**, not a mirror of Stripe's `allow_card_fingerprint` Radar value list. Stripe is authoritative for what's currently in the allowlist; this collection records *why and when* we made each call. A row with `action: "added"` does not guarantee the fingerprint is still in Stripe's list — admins or other operators may have removed it via the Stripe dashboard.
+**Source-of-truth principle:** `AllowlistAction` is a **decision log**, not a mirror of Stripe's `card_fingerprint_allowlist` Radar value list. Stripe is authoritative for what's currently in the allowlist; this collection records *why and when* we made each call. A row with `action: "added"` does not guarantee the fingerprint is still in Stripe's list — admins or other operators may have removed it via the Stripe dashboard.
 
 ## `BlockedTransaction`
 

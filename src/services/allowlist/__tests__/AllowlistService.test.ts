@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { Types } from "mongoose";
 import type { IAllowlistAction } from "@/models/AllowlistAction";
 import type { AllowlistRepository, EvalInput } from "../types";
-import { AllowlistService } from "../AllowlistService";
+import {
+  AllowlistService,
+  computeEligibility,
+  decodeCursor,
+  encodeCursor,
+  type EligibilityMaps,
+} from "../AllowlistService";
 
 // ---------- Fakes ----------
 
@@ -438,6 +444,284 @@ async function testReverseThrowsWhenActionNotFound() {
   );
 }
 
+// ---------- computeEligibility() tests ----------
+
+function makeBlockedDoc(
+  overrides: Partial<{
+    declineCode: string | null;
+    stripeCustomerId: string | null;
+    customerEmail: string | null;
+  }> = {}
+): { declineCode: string | null; stripeCustomerId: string | null; customerEmail: string | null } {
+  return {
+    declineCode: null,
+    stripeCustomerId: null,
+    customerEmail: null,
+    ...overrides,
+  };
+}
+
+function makeMaps(
+  opts: {
+    userByCustomerId?: Array<[string, { _id: string }]>;
+    userByEmail?: Array<[string, { _id: string }]>;
+    paidUserIds?: string[];
+  } = {}
+): EligibilityMaps {
+  return {
+    userByCustomerId: new Map(opts.userByCustomerId ?? []),
+    userByEmail: new Map(opts.userByEmail ?? []),
+    paidUserIds: new Set(opts.paidUserIds ?? []),
+  };
+}
+
+function testComputeEligibilityFraudSignals() {
+  for (const code of ["lost_card", "stolen_card", "pickup_card", "fraudulent"] as const) {
+    // Even with a known paying member, fraud-signal codes win first.
+    const result = computeEligibility(
+      makeBlockedDoc({
+        declineCode: code,
+        stripeCustomerId: "cus_1",
+        customerEmail: "u@example.com",
+      }),
+      makeMaps({
+        userByCustomerId: [["cus_1", { _id: "user_1" }]],
+        paidUserIds: ["user_1"],
+      })
+    );
+    assert.equal(result.eligible, false, `${code} must be ineligible`);
+    if (!result.eligible) {
+      assert.equal(
+        result.reason,
+        "filter_fraud_signal",
+        `${code} must produce filter_fraud_signal`
+      );
+    }
+  }
+}
+
+function testComputeEligibilityPermanentIssues() {
+  for (const code of ["expired_card", "incorrect_cvc"] as const) {
+    // Even with a known paying member, permanent-issue codes still skip.
+    const result = computeEligibility(
+      makeBlockedDoc({
+        declineCode: code,
+        stripeCustomerId: "cus_1",
+        customerEmail: "u@example.com",
+      }),
+      makeMaps({
+        userByCustomerId: [["cus_1", { _id: "user_1" }]],
+        paidUserIds: ["user_1"],
+      })
+    );
+    assert.equal(result.eligible, false, `${code} must be ineligible`);
+    if (!result.eligible) {
+      assert.equal(
+        result.reason,
+        "filter_permanent_issue",
+        `${code} must produce filter_permanent_issue`
+      );
+    }
+  }
+}
+
+function testComputeEligibilityNoUserFound() {
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: "do_not_honor",
+      stripeCustomerId: "cus_unknown",
+      customerEmail: "nobody@example.com",
+    }),
+    makeMaps()
+  );
+  assert.equal(result.eligible, false, "no user → ineligible");
+  if (!result.eligible) {
+    assert.equal(
+      result.reason,
+      "filter_not_member",
+      "no user → filter_not_member"
+    );
+  }
+}
+
+function testComputeEligibilityUserFoundButNotPaid() {
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: "do_not_honor",
+      stripeCustomerId: "cus_1",
+      customerEmail: "u@example.com",
+    }),
+    makeMaps({
+      userByCustomerId: [["cus_1", { _id: "user_1" }]],
+      // paidUserIds intentionally empty
+    })
+  );
+  assert.equal(result.eligible, false, "user found but never paid → ineligible");
+  if (!result.eligible) {
+    assert.equal(
+      result.reason,
+      "filter_not_member",
+      "non-paid user must produce filter_not_member"
+    );
+  }
+}
+
+function testComputeEligibilityUserFoundByEmailAndPaid() {
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: "do_not_honor",
+      stripeCustomerId: null, // not in customerId map
+      customerEmail: "u@example.com",
+    }),
+    makeMaps({
+      userByEmail: [["u@example.com", { _id: "user_1" }]],
+      paidUserIds: ["user_1"],
+    })
+  );
+  assert.equal(
+    result.eligible,
+    true,
+    "email-matched paying user must be eligible"
+  );
+}
+
+function testComputeEligibilityUserFoundByCustomerIdAndPaid() {
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: "do_not_honor",
+      stripeCustomerId: "cus_1",
+      customerEmail: "u@example.com",
+    }),
+    makeMaps({
+      userByCustomerId: [["cus_1", { _id: "user_1" }]],
+      paidUserIds: ["user_1"],
+    })
+  );
+  assert.equal(
+    result.eligible,
+    true,
+    "customerId-matched paying user must be eligible"
+  );
+  // Verify the eligible:true branch carries no reason field.
+  assert.equal(
+    "reason" in result,
+    false,
+    "eligible:true result must not carry a reason field"
+  );
+}
+
+function testComputeEligibilityNullDeclineCodeWithPaidMember() {
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: null,
+      stripeCustomerId: "cus_1",
+      customerEmail: "u@example.com",
+    }),
+    makeMaps({
+      userByCustomerId: [["cus_1", { _id: "user_1" }]],
+      paidUserIds: ["user_1"],
+    })
+  );
+  assert.equal(
+    result.eligible,
+    true,
+    "null declineCode with paying member must be eligible — fraud/permanent checks only fire on listed codes"
+  );
+}
+
+function testComputeEligibilityCustomerIdWinsOverEmail() {
+  // Both lookups would resolve, but to DIFFERENT users. customerId-first
+  // matches AllowlistService.evaluate's sequence: stripeCustomerId, then email.
+  const customerIdUser = "user_by_cid";
+  const emailUser = "user_by_email";
+  const result = computeEligibility(
+    makeBlockedDoc({
+      declineCode: "do_not_honor",
+      stripeCustomerId: "cus_1",
+      customerEmail: "u@example.com",
+    }),
+    makeMaps({
+      userByCustomerId: [["cus_1", { _id: customerIdUser }]],
+      userByEmail: [["u@example.com", { _id: emailUser }]],
+      // Only the email-resolved user has paid. If the email branch wins,
+      // we'd return eligible:true. We expect customerId to win → ineligible.
+      paidUserIds: [emailUser],
+    })
+  );
+  assert.equal(
+    result.eligible,
+    false,
+    "customerId match must take precedence over email match"
+  );
+  if (!result.eligible) {
+    assert.equal(
+      result.reason,
+      "filter_not_member",
+      "customerId-resolved user (unpaid) must produce filter_not_member, not eligible"
+    );
+  }
+}
+
+// ---------- cursor encode/decode tests ----------
+
+function testCursorRoundTrip() {
+  const createdAt = new Date("2026-01-15T10:00:00Z");
+  const cursor = encodeCursor({ createdAt, _id: "abc123" });
+  const decoded = decodeCursor(cursor);
+  assert.notEqual(decoded, null, "round-trip must succeed");
+  if (!decoded) return;
+  assert.equal(decoded._id, "abc123", "round-trip _id must match");
+  assert.equal(
+    decoded.createdAt instanceof Date,
+    true,
+    "round-trip createdAt must be a Date instance"
+  );
+  assert.equal(
+    decoded.createdAt.getTime(),
+    createdAt.getTime(),
+    "round-trip createdAt must match by time"
+  );
+}
+
+function testCursorRejectsGarbageBase64() {
+  // "garbage-not-base64" technically passes through Buffer.from(s, "base64")
+  // which is permissive — but the resulting bytes won't parse as JSON.
+  const result = decodeCursor("garbage-not-base64");
+  assert.equal(result, null, "non-JSON garbage must decode to null");
+}
+
+function testCursorRejectsValidBase64NotJson() {
+  const result = decodeCursor(Buffer.from("not json").toString("base64"));
+  assert.equal(result, null, "valid base64 of non-JSON must decode to null");
+}
+
+function testCursorRejectsValidJsonWrongShape() {
+  const result = decodeCursor(
+    Buffer.from(JSON.stringify({ wrong: "shape" })).toString("base64")
+  );
+  assert.equal(
+    result,
+    null,
+    "valid JSON missing required c/i fields must decode to null"
+  );
+}
+
+function testCursorRejectsInvalidDate() {
+  const result = decodeCursor(
+    Buffer.from(JSON.stringify({ c: "not-a-date", i: "abc" })).toString("base64")
+  );
+  assert.equal(
+    result,
+    null,
+    "createdAt failing Date parse must decode to null"
+  );
+}
+
+function testCursorRejectsEmptyString() {
+  const result = decodeCursor("");
+  assert.equal(result, null, "empty cursor string must decode to null");
+}
+
 async function run() {
   await testEvaluateRejectsFraudSignals();
   await testEvaluateRejectsPermanentIssues();
@@ -456,6 +740,20 @@ async function run() {
   await testReverseRemovesFromStripeAndWritesRemovedRow();
   await testReverseTreats404AsSuccess();
   await testReverseThrowsWhenActionNotFound();
+  testComputeEligibilityFraudSignals();
+  testComputeEligibilityPermanentIssues();
+  testComputeEligibilityNoUserFound();
+  testComputeEligibilityUserFoundButNotPaid();
+  testComputeEligibilityUserFoundByEmailAndPaid();
+  testComputeEligibilityUserFoundByCustomerIdAndPaid();
+  testComputeEligibilityNullDeclineCodeWithPaidMember();
+  testComputeEligibilityCustomerIdWinsOverEmail();
+  testCursorRoundTrip();
+  testCursorRejectsGarbageBase64();
+  testCursorRejectsValidBase64NotJson();
+  testCursorRejectsValidJsonWrongShape();
+  testCursorRejectsInvalidDate();
+  testCursorRejectsEmptyString();
   console.log("AllowlistService tests passed");
 }
 
