@@ -4,10 +4,8 @@
 // "Blocked Transactions" admin tab. The hook keeps its `Cards` naming because
 // it mirrors the API endpoint path; the user-facing label is "Transactions".
 //
-// Phase C: this hook now reads the Mongo-backed cursor-paginated path
-// (`?source=mongo`) via `useInfiniteQuery`. The route still defaults to
-// `stripe` for any other caller / debugging, but this hook — the only
-// consumer that matters for the admin UI — explicitly opts into Mongo.
+// The route reads the Mongo-backed `BlockedTransaction` collection via a
+// cursor-paginated path; this hook drives `useInfiniteQuery` over it.
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -22,7 +20,7 @@ const DEFAULT_PAGE_SIZE = 50;
 // every render while the query is still loading.
 const EMPTY_ROWS: BlockedRow[] = [];
 
-type MongoPageResponse = {
+type PageResponse = {
   success: true;
   rows: BlockedRow[];
   nextCursor: string | null;
@@ -44,7 +42,6 @@ function buildFilterKey(filter: BlockedFilter): string {
 /** Full request URL for a given page (filter + pagination). */
 function buildPageQueryString(filter: BlockedFilter, cursor: string | null): string {
   const params = new URLSearchParams({
-    source: "mongo",
     dateFrom: filter.dateFrom.toISOString(),
     dateTo: filter.dateTo.toISOString(),
     memberStatus: filter.memberStatus,
@@ -84,7 +81,7 @@ export function useBlockedCards(filter: BlockedFilter): UseBlockedCardsResult {
     queryKey: queryKeys.admin.allowlist.blockedCards(filterKey),
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
       const qs = buildPageQueryString(filter, pageParam);
-      return await apiGet<MongoPageResponse>(`/api/admin/allowlist/blocked-cards?${qs}`);
+      return await apiGet<PageResponse>(`/api/admin/allowlist/blocked-cards?${qs}`);
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,

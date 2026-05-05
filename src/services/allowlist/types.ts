@@ -55,20 +55,8 @@ export type BlockedRow = {
 };
 
 /**
- * Result envelope for `listBlockedFromStripe`. `truncated=true` means the
- * Stripe scan hit the safety cap before the date window was exhausted, so
- * `rows` may be incomplete — admins should narrow the date range.
- */
-export type BlockedListResult = {
-  rows: BlockedRow[];
-  truncated: boolean;
-  scanned: number;
-};
-
-/**
- * Result envelope for `listBlocked` (Mongo-backed read path). Replaces the
- * Stripe-paginate-at-request-time approach with a cursor-paged Mongo query
- * over the `blockedtransactions` collection.
+ * Result envelope for `listBlocked` (Mongo-backed read path). Cursor-paged
+ * Mongo query over the `blockedtransactions` collection.
  *
  * - `rows` — page of rows (size up to opts.limit).
  * - `nextCursor` — opaque cursor for the next page; null when no more results.

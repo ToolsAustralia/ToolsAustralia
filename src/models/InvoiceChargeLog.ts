@@ -13,6 +13,7 @@ export interface IInvoiceChargeLog extends Document {
   canRetryAt?: Date;
   nextPaymentAttempt?: Date;
   result?: Record<string, unknown>; // Sanitized Stripe response/error
+  chargeRunId?: mongoose.Types.ObjectId | null; // null/absent for per-user manual retries
 }
 
 const InvoiceChargeLogSchema = new Schema<IInvoiceChargeLog>(
@@ -76,6 +77,12 @@ const InvoiceChargeLogSchema = new Schema<IInvoiceChargeLog>(
       type: Schema.Types.Mixed,
       required: false,
     },
+    chargeRunId: {
+      type: Schema.Types.ObjectId,
+      ref: "ChargeJobRun",
+      required: false,
+      default: null,
+    },
   },
   {
     timestamps: false, // We use custom attemptedAt field
@@ -101,6 +108,12 @@ InvoiceChargeLogSchema.index({ status: 1, attemptedAt: -1 });
 
 // Index for retry eligibility checks
 InvoiceChargeLogSchema.index({ canRetryAt: 1 });
+
+// Sparse index for run drill-in (chargeRunId set) and manual-retries filter (chargeRunId null)
+InvoiceChargeLogSchema.index(
+  { chargeRunId: 1, attemptedAt: -1 },
+  { sparse: true }
+);
 
 // Clear cached model to ensure schema updates are applied
 const modelName = "InvoiceChargeLog";
