@@ -96,6 +96,17 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
     invoiceId: string;
     userEmail: string;
   } | null>(null);
+  const [forceChargeMode, setForceChargeMode] = useState(false);
+  const [forceConfirmation, setForceConfirmation] = useState("");
+  const [forceProcessing, setForceProcessing] = useState(false);
+  const [forceResult, setForceResult] = useState<{
+    success: boolean;
+    chargedInvoiceId?: string;
+    reason?: string;
+    message?: string;
+    amount?: number;
+    paymentStatus?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isOpen || !targetUserId) return;
@@ -148,6 +159,10 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
     setError(null);
     setStatusFilter("all");
     setCurrentPage(1);
+    setForceChargeMode(false);
+    setForceConfirmation("");
+    setForceProcessing(false);
+    setForceResult(null);
     onClose();
   };
 
@@ -164,6 +179,34 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
     } catch (err) {
       setState("error");
       setError(err instanceof Error ? err.message : "An error occurred");
+    }
+  };
+
+  const handleForceCharge = async () => {
+    if (forceConfirmation !== "FORCE CHARGE") return;
+    setForceProcessing(true);
+    try {
+      const res = await fetch(`/api/admin/users/${targetUserId}/force-charge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "FORCE CHARGE" }),
+      });
+      const data = await res.json();
+      setForceResult({
+        success: !!data.success,
+        chargedInvoiceId: data.chargedInvoiceId,
+        reason: data.reason,
+        message: data.message,
+        amount: data.row?.amount,
+        paymentStatus: data.row?.status,
+      });
+    } catch (err) {
+      setForceResult({
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setForceProcessing(false);
     }
   };
 
@@ -311,6 +354,87 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
                   autoFocus
                 />
               </div>
+
+              {state === "preview" && preview && preview.preview.eligibleCount === 0 && !forceChargeMode && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-200 dark:border-amber-800/50 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                        No chargeable invoice on this user&apos;s current subscription
+                      </h4>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                        The user may have a held draft from <code>pause_collection</code> that needs finalizing.
+                        Force Charge will finalize and pay an existing draft (or pay an existing open invoice)
+                        on the current subscription. It never creates new manual invoices.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setForceChargeMode(true)}
+                        className="inline-flex items-center gap-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs font-semibold dark:bg-amber-600 dark:hover:bg-amber-700"
+                      >
+                        Switch to Force Charge
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {forceChargeMode && !forceResult && (
+                <div className="bg-red-50 dark:bg-red-950/25 rounded-lg p-4 border border-red-200 dark:border-red-900/45">
+                  <label className="block text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                    Type <strong>FORCE CHARGE</strong> to confirm:
+                  </label>
+                  <input
+                    type="text"
+                    value={forceConfirmation}
+                    onChange={(e) => setForceConfirmation(e.target.value)}
+                    placeholder="FORCE CHARGE"
+                    className="w-full px-3 py-2 rounded-md text-sm uppercase text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 bg-white dark:bg-neutral-900 border border-red-300 dark:border-red-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {forceProcessing && (
+                <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-600 dark:text-amber-500" />
+                  <p className="text-gray-700 dark:text-neutral-300 text-sm">Force charging…</p>
+                </div>
+              )}
+
+              {forceResult && forceResult.success && (
+                <div className="bg-green-50 dark:bg-green-950/25 border border-green-200 dark:border-green-900/45 rounded-lg p-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <h4 className="font-semibold text-green-800 dark:text-green-200">Force charge complete</h4>
+                  </div>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-2">
+                    Invoice {forceResult.chargedInvoiceId} → {forceResult.paymentStatus} ({forceResult.amount ? formatCurrency(forceResult.amount) : "—"})
+                  </p>
+                </div>
+              )}
+
+              {forceResult && !forceResult.success && (
+                <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-red-800 dark:text-red-200 mb-1">
+                        Force charge failed
+                      </h4>
+                      <p className="text-sm text-red-700 dark:text-red-300">
+                        {forceResult.message || "Unknown error"}
+                      </p>
+                      {forceResult.reason && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-mono">
+                          reason: {forceResult.reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -512,7 +636,7 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
           <Button onClick={handleClose} variant="secondary" className="flex-1" disabled={state === "processing"}>
             {state === "completed" ? "Close" : "Cancel"}
           </Button>
-          {state === "preview" && (
+          {state === "preview" && !forceChargeMode && (
             <Button
               onClick={() => void handleConfirm()}
               variant="secondary"
@@ -520,6 +644,16 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
               disabled={confirmation !== "CHARGE" || preview?.preview.eligibleCount === 0}
             >
               Confirm charge ({preview?.preview.eligibleCount ?? 0})
+            </Button>
+          )}
+          {forceChargeMode && !forceResult && (
+            <Button
+              onClick={() => void handleForceCharge()}
+              variant="secondary"
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-700"
+              disabled={forceConfirmation !== "FORCE CHARGE" || forceProcessing}
+            >
+              Force Charge
             </Button>
           )}
         </div>

@@ -13,6 +13,7 @@
 
 - `past-due-charge-idempotency.ts` — pure helpers (`RECENT_ATTEMPT_WINDOW_HOURS`, `cutoffForRecentAttempt`, `buildAdminChargeIdempotencyKey`, `shouldSkipForNotPastDue`) extracted to a Stripe-free module so they're unit-testable without `STRIPE_SECRET_KEY`. Tested by `src/server/admin/__tests__/chargePastDueShared.test.ts` (`npm run test:past-due-admin-charge`).
 - `recoverStrandedPastDuePolicy.ts` — pure helpers for the "recover stranded past-due invoice" flow (no Stripe SDK / Mongo imports). Covers: stable idempotency keys for each recovery step (`buildRecoveryVoidIdempotencyKey`, `buildRecoveryCreateIdempotencyKey`, `buildRecoveryFinalizeIdempotencyKey`), eligibility check for the original invoice (`isOriginalInvoiceEligibleForRecovery` — eligible when `uncollectible` or `void`), held-draft picker (`pickHeldDraftForRecovery` — finds the newest matching-amount draft on the subscription), and a 24h lock predicate (`hasRecentRecoveryAttempt` — reuses `RECENT_ATTEMPT_WINDOW_HOURS` from `past-due-charge-idempotency.ts`). Tested by `src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts` (`npm run test:recover-stranded-past-due-policy`).
+- `forceChargePastDuePolicy.ts` — pure helpers for the Force Charge past-due flow (no Stripe SDK / Mongo imports). Exports: `buildForceChargeFinalizeIdempotencyKey(invoiceId)` — stable key for the finalize step; `pickForceChargeTarget(openInvoices, draftInvoices, expectedAmountCents)` — prefers an existing `open` invoice (charge_automatically, amount_remaining>0) then falls back to the newest matching-amount `draft`; returns `null` when neither fits so the caller blocks with `"no_chargeable_invoice"`. Never returns a candidate that would require creating a new invoice — manual invoices have `billing_reason: "manual"` which the webhook dispatch ladder does not handle. `isCurrentPeriodAlreadyPaid(paidInvoices, periodStart, periodEnd)` — double-billing guard based on Unix-second period overlap. `hasRecentSuccessfulChargeOnSubscription(rows, subscriptionId, now?)` — 24h success-lock predicate; reads `result.subscriptionId` from `InvoiceChargeLog` rows written by the orchestrator. Tested by `src/server/admin/__tests__/forceChargePastDuePolicy.test.ts` (`npm run test:force-charge-policy`).
 - (other shared admin code)
 
 ## Stranded past-due invoice recovery
@@ -24,7 +25,7 @@ The recovery flow lives in [`src/server/admin/recoverStrandedPastDue.ts`](../../
 1. Verify state — admin auth, user `subscription.status === "past_due"`, original invoice in `uncollectible`/`void`, customer/subscription ids match.
 2. 24h lock — query `InvoiceChargeLog` for any prior recovery on the same original invoice via `hasRecentRecoveryAttempt` from [`recoverStrandedPastDuePolicy.ts`](../../src/server/admin/recoverStrandedPastDuePolicy.ts).
 3. Void original (skipped if already `void`).
-4. Find or create a held draft. The codebase prefers an existing held draft (Stripe creates one per missed cycle while paused) matching the expected cycle amount; falls back to `stripe.invoices.create()` + `invoiceItems.create()` if none.
+4. Find a held draft. Looks for an existing held draft (Stripe creates one per missed cycle while paused) matching the expected cycle amount. If none is found, the flow aborts with `reason: "no_held_draft"` and logs a `skipped` row — it does **not** create a new manual invoice because manual invoices have `billing_reason: "manual"` which the webhook dispatch ladder does not handle, breaking the renewal pipeline (no status flip, no entries, no Klaviyo event).
 5. `stripe.invoices.finalizeInvoice()` — this is the same battle-tested path used in [`pay-failed-invoice/route.ts:150`](../../src/app/api/stripe/pay-failed-invoice/route.ts#L150) and [`invoice-payment-intent.ts:163`](../../src/utils/payment/stripe/invoice-payment-intent.ts#L163). Manual finalize bypasses `pause_collection: keep_as_draft`.
 6. Delegate to `payOpenInvoiceAsPastDueAdmin` ([`chargePastDueShared.ts`](../../src/server/admin/chargePastDueShared.ts)) for the actual charge — inherits its log row + idempotency key + `resumeAfterSuccessfulRenewalPayment` on success.
 
@@ -35,7 +36,7 @@ Pure helpers live in [`recoverStrandedPastDuePolicy.ts`](../../src/server/admin/
 | Step | Stripe key | DB lock |
 |---|---|---|
 | Void | `recover-void-${originalInvoiceId}` | — |
-| Create | `recover-create-${originalInvoiceId}` | 24h via `result.recovery.originalInvoiceId` |
+| Find draft (no create) | — | 24h via `result.recovery.originalInvoiceId` |
 | Finalize | `recover-finalize-${newInvoiceId}` | — |
 | Pay | `admin-charge-${newInvoiceId}` (existing) | 24h via `invoiceId` (existing) |
 
@@ -46,9 +47,37 @@ The 24h DB lock checks for any `InvoiceChargeLog` row tagged `result.recovery.or
 Each step is naturally idempotent. If a step fails mid-sequence, the customer is no worse than before:
 
 - Void fails → no state change
-- Create fails → original voided, no new invoice (admin retries; void is a no-op)
-- Finalize fails → original voided, draft exists (admin retries; create finds existing draft)
+- No held draft → original voided, no invoice; `reason: "no_held_draft"` returned (admin must wait for Stripe to generate a cycle draft)
+- Finalize fails → original voided, draft exists (admin retries; draft is still there)
 - Pay fails → original voided, fresh `open` invoice (admin uses existing per-user retry)
+
+## Force Charge for stuck-paused subscriptions
+
+When `pause_collection: keep_as_draft` was applied (or the user has cancelled-and-resubscribed leaving orphan invoices), the user's current subscription may have no chargeable open invoice — only held drafts. Force Charge finalizes such a draft (or pays an existing open invoice) on the current subscription.
+
+The orchestrator [`forceChargeCurrentCycle`](../../src/server/admin/forceChargePastDue.ts):
+
+1. Verify state — admin (or self) auth, `subscription.status === "past_due"`, customer/sub ids present, package found, expected amount derived.
+2. DB 24h lock — `hasRecentSuccessfulChargeOnSubscription` from [`forceChargePastDuePolicy.ts`](../../src/server/admin/forceChargePastDuePolicy.ts).
+3. Stripe paid-period check — `isCurrentPeriodAlreadyPaid` against `stripe.invoices.list({ status: "paid" })` for the current `current_period`.
+4. Pick target — `pickForceChargeTarget` returns either an open invoice or a held draft matching expected amount (never null + create — see "Critical safety property").
+5. Finalize the draft if needed (idempotency key `force-finalize-${invoiceId}`).
+6. Pay via existing `payOpenInvoiceAsPastDueAdmin` — preserves `billing_reason: "subscription_cycle"`, triggers full webhook renewal pipeline.
+
+### Critical safety property
+
+Force Charge never creates new manual invoices. The webhook's [`invoice.payment_succeeded`](../../src/app/api/stripe/webhook/route.ts#L3598-L3618) dispatch ladder rejects unknown `billing_reason` values, so a manually-created invoice (`billing_reason: "manual"`) would charge the customer but skip the renewal pipeline (no status flip, no entries, no Klaviyo event). By only paying invoices Stripe created (which retain `subscription_cycle`), the pipeline runs as normal.
+
+If no chargeable invoice exists on the current sub, the orchestrator returns `reason: "no_chargeable_invoice"` and the admin/user is prompted to contact support.
+
+### Idempotency model
+
+| Step | Stripe key | DB lock |
+|---|---|---|
+| Finalize | `force-finalize-${invoiceId}` | (covered by InvoiceChargeLog 24h success-status lock keyed on subscription) |
+| Pay | `admin-charge-${invoiceId}` (existing) | (existing per-invoice 24h lock) |
+
+Concurrent admin + user fires deduplicate via stable Stripe idempotency keys.
 
 ## Features
 

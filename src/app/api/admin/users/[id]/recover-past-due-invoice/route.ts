@@ -81,6 +81,7 @@ export async function POST(
         invoice_still_chargeable: 409,
         invoice_already_paid: 409,
         invoice_unknown_status: 409,
+        no_held_draft: 409,
         no_payment_method: 409,
         recent_recovery_attempt: 409,
         void_failed: 502,

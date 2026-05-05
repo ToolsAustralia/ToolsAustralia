@@ -21,3 +21,13 @@ Multiple admin modals (UserDetail + ChargePastDue + ErrorReport) can stack. Coor
 ## Sanitised log echoes
 
 If admin UI shows raw Stripe responses, card data leaks into screenshots / shared screens. Always sanitise before display.
+
+## Stripe API 2025-04-01+ period field migration
+
+`current_period_start` and `current_period_end` were removed from the Subscription root in Stripe API version `2025-04-01` (Basil). They now live on each `subscription.items.data[*]` instead.
+
+**Affected function:** `checkForceChargeEligibility` in `src/server/admin/forceChargePastDue.ts`
+
+The fix reads from `subscription.items.data[0]` first (new API) and falls back to the subscription root (old API). Any code that casts a subscription object and reads `.current_period_start` / `.current_period_end` directly will silently get `undefined` on the new API — guard against both locations.
+
+For a shared helper that abstracts this, see `src/utils/payment/stripe/subscription-period.ts` (`getSubscriptionPeriodEnd`).
