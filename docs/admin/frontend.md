@@ -98,6 +98,22 @@ Three TanStack Query hooks under `src/hooks/queries/admin/`:
 
 All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", ...]`. The two `useInfiniteQuery` hooks key on the full `filter` object so changing date range (or any other filter field) resets paging from offset 0. `getNextPageParam` returns `loaded < total ? loaded : undefined`. The Bulk Runs and Manual Retries cards each render a "Load more" button at the bottom (matching `BlockedTransactionsManagement`'s pattern); the table header shows `Showing X of Y`. Summary `MetricCard`s aggregate across **loaded** pages only — clicking "Load more" updates them.
 
+## Stranded invoice recovery UI
+
+The recovery action is exposed in two places (both call the same modal):
+
+- **Trigger A** — `Manual Retries (per-user)` table in [`PastDueChargeHistory.tsx`](../../src/app/admin/component/PastDueChargeHistory.tsx). Rows whose error matches `/no longer be paid|no longer payable/i` get a `Recover` button in a new Action column.
+- **Trigger D** — auto-fallback in [`ChargePastDueUserModal.tsx`](../../src/components/admin/ChargePastDueUserModal.tsx). When a single-user retry returns a stranded-error row, that row gets an inline `Recover` button alongside the error text.
+
+Both triggers open [`RecoverInvoiceModal.tsx`](../../src/components/admin/RecoverInvoiceModal.tsx), which:
+
+- Shows the recovery sequence in plain English
+- Requires the admin to type `RECOVER` exactly
+- POSTs to `/api/admin/users/[userId]/recover-past-due-invoice`
+- Displays the per-step result (new invoice id, charge status, amount)
+
+The modal is intentionally narrower than `ChargePastDueUserModal` — by the time the admin opens it they have already seen the failed row, so there's no preview step.
+
 ## Hooks
 
 | Hook | Purpose |
