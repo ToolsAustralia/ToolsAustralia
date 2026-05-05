@@ -27,3 +27,18 @@ export function cutoffForRecentAttempt(now: Date = new Date()): Date {
 export function buildAdminChargeIdempotencyKey(invoiceId: string): string {
   return `admin-charge-${invoiceId}`;
 }
+
+/** Skip-reason value written to InvoiceChargeLog when the late re-check fires. */
+export const SKIP_REASON_NO_LONGER_PAST_DUE = "no_longer_past_due" as const;
+
+/**
+ * Pure predicate gating the late `subscription.status` re-check inside
+ * payOpenInvoiceAsPastDueAdmin. Returns true when the user is no longer
+ * eligible for an admin-driven charge attempt.
+ */
+export function shouldSkipForNotPastDue(
+  status: string | null | undefined
+): boolean {
+  if (!status) return true;
+  return status.toLowerCase() !== "past_due";
+}

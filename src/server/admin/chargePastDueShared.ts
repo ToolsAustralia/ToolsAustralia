@@ -2,17 +2,22 @@ import mongoose from "mongoose";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
+import User from "@/models/User";
 import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
 import {
   RECENT_ATTEMPT_WINDOW_HOURS,
+  SKIP_REASON_NO_LONGER_PAST_DUE,
   buildAdminChargeIdempotencyKey,
   cutoffForRecentAttempt,
+  shouldSkipForNotPastDue,
 } from "./past-due-charge-idempotency";
 
 export {
   RECENT_ATTEMPT_WINDOW_HOURS,
+  SKIP_REASON_NO_LONGER_PAST_DUE,
   buildAdminChargeIdempotencyKey,
   cutoffForRecentAttempt,
+  shouldSkipForNotPastDue,
 };
 
 /** Row shape returned from bulk and single-user past-due charge flows */
@@ -191,8 +196,9 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   customerId: string;
   user: LeanPastDueUser;
   adminId: string;
+  chargeRunId?: mongoose.Types.ObjectId | null;
 }): Promise<PastDueChargeResultRow> {
-  const { invoice, paymentMethodId, customerId, user, adminId } = params;
+  const { invoice, paymentMethodId, customerId, user, adminId, chargeRunId = null } = params;
   const invoiceId = invoice.id;
   if (!invoiceId) {
     return {
@@ -229,6 +235,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       amount,
       attemptedAt: new Date(),
       errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
+      chargeRunId,
     });
 
     return {
@@ -238,6 +245,37 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       userEmail,
       status: "skipped",
       skipReason: "recently_attempted",
+      amount,
+    };
+  }
+
+  // Late re-check — user's subscription.status may have flipped from past_due
+  // to active mid-run (Stripe's own retry won, or pay-failed-invoice succeeded
+  // in another tab). Skip rather than charge a now-current customer.
+  const freshUser = await User.findById(userIdStr)
+    .select({ "subscription.status": 1 })
+    .lean();
+
+  if (shouldSkipForNotPastDue(freshUser?.subscription?.status as string | undefined)) {
+    await InvoiceChargeLog.create({
+      invoiceId,
+      customerId,
+      userId: new mongoose.Types.ObjectId(userIdStr),
+      adminId: new mongoose.Types.ObjectId(adminId),
+      status: "skipped",
+      amount,
+      attemptedAt: new Date(),
+      errorMessage: `Skipped: subscription.status is "${freshUser?.subscription?.status ?? "(missing)"}", no longer past_due`,
+      chargeRunId,
+    });
+
+    return {
+      invoiceId,
+      customerId,
+      userId: userIdStr,
+      userEmail,
+      status: "skipped",
+      skipReason: SKIP_REASON_NO_LONGER_PAST_DUE,
       amount,
     };
   }
@@ -294,6 +332,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       nextPaymentAttempt: paidInvoice.next_payment_attempt
         ? new Date(paidInvoice.next_payment_attempt * 1000)
         : undefined,
+      chargeRunId,
     });
 
     return {
@@ -324,6 +363,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         errorCode: stripeError.code,
         errorMessage: "Invoice already paid",
         result: sanitizeStripeResponse(stripeError),
+        chargeRunId,
       });
 
       return {
@@ -348,6 +388,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       amount,
       attemptedAt: new Date(),
       result: sanitizeStripeResponse(stripeError),
+      chargeRunId,
     });
 
     return {

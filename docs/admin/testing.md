@@ -1,6 +1,13 @@
 # Admin — Testing
 
-> _TODO: enumerate any tests under `services/admin/__tests__/` or `server/admin/__tests__/`._
+## Unit tests
+
+| npm script | file | covers |
+|---|---|---|
+| `npm run test:past-due-admin-charge` | `src/server/admin/__tests__/chargePastDueShared.test.ts` | shared charge-past-due utilities |
+| `npm run test:past-due-history` | `src/server/admin/__tests__/charge-past-due-totals.test.ts` | `aggregateRunTotals`, `isOrphanRun`, `ORPHAN_RUN_THRESHOLD_MS` |
+
+`charge-past-due-totals.ts` is Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
 
 ## Manual smoke
 

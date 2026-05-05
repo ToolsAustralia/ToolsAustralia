@@ -48,6 +48,14 @@ Mark as `status: "skipped"`, `skipReason: "already_paid"`. **Don't** treat as fa
 - `Promise.allSettled()` so individual failures don't kill the batch
 - Max 100 invoices per request (Stripe list limit)
 
+### Run audit — drill-in UI
+
+`/admin/past-due-history` shows every bulk run with its triggering admin, lifecycle status, and attempt totals. Clicking a run opens a drawer with per-invoice `InvoiceChargeLog` rows for that run. The **Manual Retries** tab alongside it lists all `InvoiceChargeLog` rows where `chargeRunId === null` (per-user retries). Data is backed by the `ChargeJobRun` collection (see [admin/models.md](../admin/models.md#chargejobrun)) and served by `src/services/admin/chargePastDueHistory.ts`.
+
+### Late re-check — `no_longer_past_due`
+
+`payOpenInvoiceAsPastDueAdmin` re-fetches `subscription.status` from the DB immediately before calling `stripe.invoices.pay`. If the status has flipped from `past_due` to `active` between list-time and charge-time (e.g. a concurrent Stripe webhook already settled the invoice), the attempt is skipped with `skipReason: "no_longer_past_due"` — avoiding a spurious Stripe call and a double-charge attempt. This skip is counted in `ChargeJobRun.totals.skippedBreakdown.noLongerPastDue`.
+
 ### Logs
 
 `InvoiceChargeLog` has the full audit trail. Fields:
@@ -56,7 +64,9 @@ Mark as `status: "skipped"`, `skipReason: "already_paid"`. **Don't** treat as fa
 - timing: `attemptedAt`, `canRetryAt`, `nextPaymentAttempt`
 - payload: `result` (sanitised — no PAN, no full PM objects)
 
-Indexes: compound unique on `(invoiceId, attemptedAt-day)`; lookups by customer / admin / status / canRetryAt.
+- linkage: `chargeRunId` (ObjectId, nullable) — set to the `ChargeJobRun._id` when the row was produced by a bulk run; `null` for per-user manual retries. Used by the audit UI's "Manual Retries" filter (`chargeRunId: null`).
+
+Indexes: compound unique on `(invoiceId, attemptedAt-day)`; lookups by customer / admin / status / canRetryAt; sparse compound `(chargeRunId, attemptedAt-desc)` for run drill-in.
 
 ## Payment Element migration / confirmation method
 
@@ -104,12 +114,6 @@ Stripe retries failed deliveries with exponential backoff. The dedupe via `Proce
 
 **Filter rules.** We **never** auto-allowlist cards whose decline_code is `lost_card`, `stolen_card`, `pickup_card`, or `fraudulent` (real fraud signals — allowlisting would expose us to chargebacks). We also skip permanent-issue codes — `expired_card`, `incorrect_cvc`, `invalid_account`, `invalid_number`, `invalid_expiry_year`, `invalid_expiry_month` — because allowlisting them is pointless without customer action (the issuer will keep declining; Account Updater doesn't help most of these). We **only** allowlist if the user has at least one prior succeeded `PaymentEvent` (i.e. is a paying member, not a fraudster). Skipped decisions still write an `AllowlistAction` row with `reason: "filter_fraud_signal"`, `"filter_permanent_issue"`, or `"filter_not_member"` for audit. Admin can override any filter via the **"Allowlist with override"** button on `/admin/blocked-transactions`, which calls `/api/admin/allowlist/apply` with `allowOverride: true` and records `reason: "manual_admin_override"`.
 
-## Blocked-cards route paginates every PI
-
-`GET /api/admin/allowlist/blocked-cards` powers the `/admin/blocked-transactions` page. Stripe's `paymentIntents.list` does **not** accept an `outcome.type` filter, so the route paginates **every** PaymentIntent in the date window — successes included — and filters client-side by `outcome.type === "blocked"` or `outcome.network_status === "declined_by_network"`. On a busy account that's tens of thousands of records and easily blows Vercel's default 10–15 s function timeout (looks like "loading forever" in the UI).
-
-> **Filter mismatch with Phase A/B.** The existing route's broad OR predicate captures every issuer-declined charge (most failed payments). Phase A/B persists a *narrower* set — only `outcome.type === "blocked"` — to match Stripe Dashboard's "Blocked" pill semantics. After Phase C ships and the admin page reads from Mongo, the displayed row count will drop accordingly (e.g. ~3225 → ~196 in a typical 5-week window) — that's the point. The webhook still calls `allowlist.apply()` on the broader set so existing auto-allowlist behavior is preserved; only the persisted dataset is tightened.
-
 ## Past-due bulk charge hitting blocked-card failures (Phase B.5 sweep)
 
 The webhook auto-allowlist handler runs only on **new** `payment_intent.payment_failed` events. Cards that were Stripe-auto-blocked **before** the webhook was wired live have a `BlockedTransaction` row (after the Phase B backfill) but **no** corresponding `AllowlistAction` — and therefore are not in Stripe's `card_fingerprint_allowlist` list. Your "Charge Past Due Customers" runs against those cards and hits a wall of blocked-failure decline fees.
@@ -124,15 +128,9 @@ npm run sync:allowlist-from-blocked                        # live: writes to Str
 npm run sync:allowlist-from-blocked -- --no-limit          # if your account exceeds 1000 unique blocked fingerprints
 ```
 
-This is a **one-time catch-up**, not a recurring job. Once it runs, the live webhook handles all subsequent blocks. Phase D's reconciliation cron can absorb the "any stragglers?" sweep going forward.
+This is a **one-time catch-up**, not a recurring job. Once it runs, the live webhook handles all subsequent blocks. Phase D's reconciliation cron is the recurring safety net (see below).
 
-Three guardrails wrap this:
-
-1. **Route `maxDuration = 60`** — gives the scan room to finish.
-2. **Iterator cap: `MAX_PAYMENT_INTENTS_SCANNED = 2000`** in `AllowlistService.listBlockedFromStripe` — bounded worst case. When hit, the response carries `truncated: true` and the admin UI shows a banner asking the user to narrow the date range.
-3. **`maxNetworkRetries: 2`** on the global Stripe client (`src/lib/stripe.ts`) — handles transient blips and 429s during the long pagination automatically.
-
-If you ever notice the page truncating in normal use, the right next move is **not** to raise the cap — it's to switch the data source.
+`maxNetworkRetries: 2` on the global Stripe client (`src/lib/stripe.ts`) handles transient blips and 429s during the script's pagination automatically.
 
 **Phase A (write side) is in place.** The Stripe webhook now persists every blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection (best-effort, in its own try/catch so a Mongo write failure does not block the allowlist call that follows). All new blocked PIs are captured automatically.
 
@@ -143,8 +141,10 @@ npm run backfill:blocked-transactions:dry -- --from=2026-02-01 --to=2026-05-01 -
 npm run backfill:blocked-transactions     -- --from=2026-02-01 --to=2026-05-01
 ```
 
-**Phase C (read flip) is in place — both backends coexist.** [`AllowlistService.listBlocked(filter, opts)`](./architecture.md#listblocked-mongo-backed-read-path) is the new Mongo-backed read path: cursor-paged over `BlockedTransaction`, with eligibility joins batched into a serial `User.find` followed by parallel `AllowlistAction.find` + `PaymentEvent.distinct`. The verdict logic was extracted to a pure `computeEligibility(doc, maps)` helper for testability (14 unit tests in `src/services/allowlist/__tests__/AllowlistService.test.ts` — 8 for verdict branches, 6 for the cursor codec).
+**Phase C (read flip) is in place.** [`AllowlistService.listBlocked(filter, opts)`](./architecture.md#listblocked-mongo-backed-read-path) is the Mongo-backed read path: cursor-paged over `BlockedTransaction`, with eligibility joins batched into a serial `User.find` followed by parallel `AllowlistAction.find` + `PaymentEvent.distinct`. The verdict logic was extracted to a pure `computeEligibility(doc, maps)` helper for testability.
 
-The route at `GET /api/admin/allowlist/blocked-cards` now accepts `?source=stripe|mongo` (default **stripe** for safe rollout). Response envelopes differ — `{rows, truncated, scanned}` for stripe vs. `{rows, nextCursor, total}` for mongo — see [api.md](./api.md#get-apiadminallowlistblocked-cards). The admin UI (`useBlockedCards` hook → `BlockedTransactionsManagement`) hardcodes `?source=mongo` and renders "Showing X of Y" + a Load-more button instead of the truncation banner.
+The route at `GET /api/admin/allowlist/blocked-cards` returns `{rows, nextCursor, total}` — see [api.md](./api.md#get-apiadminallowlistblocked-cards). The admin UI (`useBlockedCards` hook → `BlockedTransactionsManagement`) renders "Showing X of Y" + a Load-more button.
 
-`listBlockedFromStripe` is intentionally **left intact** so a manual flip back to `?source=stripe` is one query-string away if the Mongo path misbehaves in production. Once the Mongo path bakes for ~2 weeks, drop `MAX_PAYMENT_INTENTS_SCANNED`, `listBlockedFromStripe`, the truncation banner code-path, and `maxDuration: 60` — they all become dead weight then.
+**Phase D (reconciliation cron) is in place.** [src/app/api/cron/reconcile-blocked-transactions/route.ts](../../src/app/api/cron/reconcile-blocked-transactions/route.ts) runs daily at 03:15 UTC and compares yesterday's `BlockedTransaction` row count against `stripe.charges.search` for `status:"failed"` charges with `outcome.type === "blocked"` in the same UTC window. Drift > 5% (via the exported `computeDriftRatio` helper) emits a `console.error` with the structured summary; OK runs emit a `console.log`. This is the ongoing safety net: if a future webhook regression silently drops blocked rows, the next day's reconcile alert flags it. Architecture detail: [architecture.md → Reconciliation cron — Phase D](./architecture.md#reconciliation-cron--phase-d).
+
+**Phase E (legacy code removal) is complete.** The legacy `listBlockedFromStripe` code path, its `MAX_PAYMENT_INTENTS_SCANNED` cap, the route's `?source=` query param, and the route's `maxDuration: 60` setting have all been removed — `listBlocked` is now the only read path. Rollback if needed is via `git revert` of the Phase E commit (re-introducing the Stripe-pagination escape hatch is no longer a query-string flip).
