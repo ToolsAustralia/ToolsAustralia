@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useChargePastDueRuns } from "@/hooks/queries/admin/useChargePastDueRuns";
 import { useChargePastDueManualRetries } from "@/hooks/queries/admin/useChargePastDueManualRetries";
-import { formatDurationMs } from "@/services/admin/chargePastDueHistory";
+import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
 import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
 
 function formatCents(cents: number): string {

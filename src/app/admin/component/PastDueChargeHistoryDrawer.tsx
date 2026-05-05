@@ -1,7 +1,7 @@
 "use client";
 
 import { useChargePastDueRunDetail } from "@/hooks/queries/admin/useChargePastDueRunDetail";
-import { formatDurationMs } from "@/services/admin/chargePastDueHistory";
+import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
