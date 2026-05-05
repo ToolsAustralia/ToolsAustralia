@@ -109,6 +109,27 @@ Migration script: `scripts/migrate-anchor-billing-24.ts` (`npm run migrate:ancho
 
 **Filter rule** — never auto-allowlist if the decline_code ∈ `{lost_card, stolen_card, pickup_card, fraudulent}` (real fraud signals), or ∈ `{expired_card, incorrect_cvc, invalid_account, invalid_number, invalid_expiry_year, invalid_expiry_month}` (permanent / customer-action-required issues), or no User can be resolved from the customer, or the user has zero successful `PaymentEvent` rows. Skip reasons recorded as `filter_fraud_signal`, `filter_permanent_issue`, or `filter_not_member` respectively. Admin override is available via the bulk page button.
 
-**Source-of-truth split** — Stripe's `allow_card_fingerprint` Radar value list **is** the live allowlist; our `AllowlistAction` collection is the audit log of decisions (added / skipped / removed) and is never assumed to mirror Stripe's value-list state.
+**Source-of-truth split** — Stripe's `card_fingerprint_allowlist` Radar value list **is** the live allowlist; our `AllowlistAction` collection is the audit log of decisions (added / skipped / removed) and is never assumed to mirror Stripe's value-list state.
 
-**Webhook dual-write for blocked PIs** — alongside the allowlist eligibility check, the `payment_intent.payment_failed` branch also persists the blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection via `upsertBlockedTransaction()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts). Both writes are best-effort and wrapped in *independent* try/catch blocks so a failure in one cannot block the other. The persisted rows back the planned read-path migration for the admin `/admin/blocked-transactions` page (Phase C — see [gotchas](./gotchas.md#blocked-cards-route-paginates-every-pi)). The shared `buildBlockedTransactionRecord()` projector is reused by [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) so historical and live rows have identical shape.
+**Webhook dual-write for blocked PIs** — alongside the allowlist eligibility check, the `payment_intent.payment_failed` branch also persists the blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection via `upsertBlockedTransaction()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts). Both writes are best-effort and wrapped in *independent* try/catch blocks so a failure in one cannot block the other. The persisted rows back the read-path migration for the admin `/admin/blocked-transactions` page (Phase C — see [`listBlocked`](#listblocked-mongo-backed-read-path) below and [gotchas](./gotchas.md#blocked-cards-route-paginates-every-pi)). The shared `buildBlockedTransactionRecord()` projector is reused by [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) so historical and live rows have identical shape.
+
+### `listBlocked` — Mongo-backed read path
+
+The admin page's read path. Replaces the request-time Stripe pagination of [`listBlockedFromStripe`](../../src/services/allowlist/AllowlistService.ts) with a cursor-paged query over the `blockedtransactions` collection populated by Phase A (webhook) and Phase B (backfill). Both methods coexist on the service for safe rollout — `listBlockedFromStripe` is still the route default until the source flip is flagged in.
+
+**Signature:** `listBlocked(filter: BlockedFilter, opts?: { cursor?: string | null; limit?: number }): Promise<BlockedPageResult>` — returns `{ rows, nextCursor, total }`. `limit` is clamped 1–100 (default 50).
+
+**Query shape (per page):**
+1. **Parallel:** `BlockedTransaction.countDocuments(filter)` + `BlockedTransaction.find(filter + cursor predicate).sort({createdAt:-1, _id:-1}).limit(N)`.
+2. **Serial:** `User.find({ $or: [stripeCustomerId $in, email $in] })` — gates the paid-user check that needs user IDs.
+3. **Parallel:** `AllowlistAction.find({ cardFingerprint: $in, action: "added" })` + `PaymentEvent.distinct("userId", { userId: $in, eventType: $in SUCCEEDED_EVENT_TYPES })`.
+
+Per-page cost is bounded — independent of the date-window size, unlike the Stripe path.
+
+**Pagination.** Stable on `(createdAt DESC, _id DESC)`. Cursor is base64 JSON `{c: ISO, i: _id}` via the exported `encodeCursor` / `decodeCursor` helpers; malformed cursors decode to `null` (silently treated as page 1).
+
+**Verdict logic.** Extracted as the pure top-level helper `computeEligibility(doc, maps: EligibilityMaps)` — same branch order as `evaluate` (fraud signal → permanent issue → user lookup → has-paid) but driven by pre-fetched maps, not new DB queries. Exported alongside the `EligibilityMaps` type so unit tests can exercise verdicts without Mongo.
+
+**Filter parity with `listBlockedFromStripe`.** Decline-code filter is pushed into the Mongo query (`$nin` / `$in` against `FRAUD_SIGNAL_DECLINE_CODES` / `PERMANENT_ISSUE_DECLINE_CODES`); member-status and `skippedOnly` are applied in-memory after the joins (because the verdict depends on them). `nextCursor` encodes the last *raw* doc on the page, not the last filtered row, so pagination advances even when the in-memory filter drops every row.
+
+**Caveat — duplicated `SUCCEEDED_EVENT_TYPES`.** The list (`PaymentProcessed`, `BenefitsGranted`, `SubscriptionActivated`) is re-declared at the top of `AllowlistService.ts` so the batched `PaymentEvent.distinct` matches `MongoAllowlistRepository.userHasSucceededPayment` semantics. Keep both in lockstep until extracted (TODO marker in code).

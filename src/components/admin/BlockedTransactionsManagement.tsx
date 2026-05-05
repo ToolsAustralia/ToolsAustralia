@@ -38,10 +38,6 @@ const DEFAULT_FILTER: BlockedFilter = {
   skippedOnly: false,
 };
 
-// Stable reference so memos downstream don't invalidate every render while
-// the query is still loading.
-const EMPTY_BLOCKED_ROWS: BlockedRow[] = [];
-
 const memberStatusOptions = [
   { value: "any", label: "Any member status" },
   { value: "has_paid", label: "Has paid before" },
@@ -140,10 +136,17 @@ export default function BlockedTransactionsManagement() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
 
-  const { data, isLoading, refetch, isFetching } = useBlockedCards(filter);
-  const rows = data?.rows ?? EMPTY_BLOCKED_ROWS;
-  const isTruncated = data?.truncated ?? false;
-  const scanned = data?.scanned ?? 0;
+  const {
+    rows,
+    total,
+    hasMore,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
+    error,
+  } = useBlockedCards(filter);
   const { data: recentActions = [] } = useAllowlistActions("added", 50);
   const applyMutation = useApplyAllowlist();
   const reverseMutation = useReverseAllowlist();
@@ -315,15 +318,14 @@ export default function BlockedTransactionsManagement() {
         />
       </div>
 
-      {/* Truncation notice — shown when the Stripe scan hit its safety cap */}
-      {isTruncated && (
+      {/* Error banner — shown when the blocked-cards query fails */}
+      {error && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="font-semibold">Results may be incomplete</p>
+            <p className="font-semibold">Failed to load blocked transactions</p>
             <p className="mt-0.5 text-xs">
-              Scanned {scanned.toLocaleString()} transactions and stopped early to keep the
-              request fast. Narrow the date range to see the full set.
+              {error.message || "Failed to load blocked transactions"}
             </p>
           </div>
         </div>
@@ -469,6 +471,11 @@ export default function BlockedTransactionsManagement() {
 
       {/* Table */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
+        {total > 0 && (
+          <div className="border-b border-gray-200 px-4 py-2 text-xs text-gray-500 dark:border-neutral-700 dark:text-neutral-400">
+            Showing {rows.length} of {total}
+          </div>
+        )}
         {isLoading ? (
           <div className="p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
             Loading blocked transactions…
@@ -631,6 +638,23 @@ export default function BlockedTransactionsManagement() {
                 );
               })}
             </div>
+
+            {/* Load more — only when more pages remain on the server */}
+            {hasMore && (
+              <div className="flex justify-center border-t border-gray-200 px-4 py-3 dark:border-neutral-700">
+                <button
+                  type="button"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${isFetchingNextPage ? "animate-spin" : ""}`}
+                  />
+                  {isFetchingNextPage ? "Loading more..." : "Load more"}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
