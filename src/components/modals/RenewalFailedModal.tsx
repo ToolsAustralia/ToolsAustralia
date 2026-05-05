@@ -356,6 +356,15 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   const [showInlineCardSetup, setShowInlineCardSetup] = useState(false);
   const [setupIntentSecret, setSetupIntentSecret] = useState<string | null>(null);
   const [loadingSetupIntent, setLoadingSetupIntent] = useState(false);
+  const [forceChargeProcessing, setForceChargeProcessing] = useState(false);
+  const [forceChargeResult, setForceChargeResult] = useState<{
+    success: boolean;
+    chargedInvoiceId?: string;
+    paymentStatus?: string;
+    amount?: number;
+    reason?: string;
+    message?: string;
+  } | null>(null);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -372,6 +381,8 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       setShowInlineCardSetup(false);
       setSetupIntentSecret(null);
       setLoadingSetupIntent(false);
+      setForceChargeProcessing(false);
+      setForceChargeResult(null);
       // Don't auto-trigger - let user click "Resolve Payment Issue" button
     }
   }, [isOpen]);
@@ -413,6 +424,51 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       cancelled = true;
     };
   }, [isOpen, showInlineCardSetup, setupIntentSecret, showToast]);
+
+  function isNoPayableInvoiceError(errMsg: string | null | undefined): boolean {
+    const m = (errMsg || "").toLowerCase();
+    return (
+      m.includes("no longer be paid") ||
+      m.includes("no longer payable") ||
+      m.includes("can't be paid") ||
+      m.includes("cannot be paid") ||
+      m.includes("no payable invoice")
+    );
+  }
+
+  const handlePayOverdue = async () => {
+    setForceChargeProcessing(true);
+    try {
+      const res = await fetch("/api/stripe/force-charge-overdue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json() as {
+        success?: boolean;
+        chargedInvoiceId?: string;
+        paymentStatus?: string;
+        amount?: number;
+        reason?: string;
+        message?: string;
+      };
+      setForceChargeResult({
+        success: !!data.success,
+        chargedInvoiceId: data.chargedInvoiceId,
+        paymentStatus: data.paymentStatus,
+        amount: data.amount,
+        reason: data.reason,
+        message: data.message,
+      });
+    } catch (err) {
+      setForceChargeResult({
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setForceChargeProcessing(false);
+    }
+  };
 
   // Handle "Resolve Payment Issue" button click
   const handleResolvePayment = async () => {
@@ -945,19 +1001,53 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
         {/* Error Display - Show both error and details */}
         {(error || errorDetails) && !showInlineCardSetup && (
-          <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg">
             <div className="flex items-start gap-2">
-              <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                {error && <p className="text-red-900 font-semibold text-xs sm:text-sm mb-1">{error}</p>}
+                {error && <p className="text-red-900 dark:text-red-200 font-semibold text-xs sm:text-sm mb-1">{error}</p>}
                 {errorDetails && (
-                  <p className="text-red-700 text-xs sm:text-sm">{errorDetails}</p>
+                  <p className="text-red-700 dark:text-red-300 text-xs sm:text-sm">{errorDetails}</p>
                 )}
                 {!errorDetails && error && (
-                  <p className="text-red-700 text-xs sm:text-sm">{error}</p>
+                  <p className="text-red-700 dark:text-red-300 text-xs sm:text-sm">{error}</p>
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Pay Overdue CTA — shown when the pay-failed-invoice path reports "no payable invoice" */}
+        {isNoPayableInvoiceError(error) && !forceChargeResult && (
+          <div className="mt-4 flex flex-col gap-3">
+            <p className="text-sm text-gray-700 dark:text-neutral-300">
+              We can settle your overdue cycle by finalizing your held cycle invoice.
+              One-click recovery — no card update needed.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handlePayOverdue()}
+              disabled={forceChargeProcessing}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {forceChargeProcessing ? "Paying overdue amount…" : "Pay overdue amount"}
+            </button>
+          </div>
+        )}
+
+        {forceChargeResult && forceChargeResult.success && (
+          <div className="mt-4 bg-green-50 dark:bg-green-950/25 border border-green-200 dark:border-green-900/45 rounded-lg p-4">
+            <p className="text-sm text-green-800 dark:text-green-200">
+              Payment received. Your subscription is now up to date.
+            </p>
+          </div>
+        )}
+
+        {forceChargeResult && !forceChargeResult.success && (
+          <div className="mt-4 bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4">
+            <p className="text-sm text-red-800 dark:text-red-200">
+              {forceChargeResult.message || "Could not pay overdue amount. Please contact support."}
+            </p>
           </div>
         )}
 
