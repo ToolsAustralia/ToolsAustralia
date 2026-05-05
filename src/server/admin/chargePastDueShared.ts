@@ -11,6 +11,7 @@ import {
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
 } from "./past-due-charge-idempotency";
+import { pickOpenInvoiceForFailedRenewal } from "@/utils/payment/failed-invoice-selection";
 
 export {
   RECENT_ATTEMPT_WINDOW_HOURS,
@@ -179,6 +180,34 @@ export function resolveInvoicePaymentMethodId(
     : null;
 
   return invoicePaymentMethod || customerDefaultPaymentMethodId || null;
+}
+
+/**
+ * Reduce a customer's open invoices to the single invoice we should charge —
+ * the one attached to the user's current subscription. Older or duplicate
+ * cycle invoices (created when pause_collection didn't fire in time) are
+ * returned separately so the caller can log them as skipped.
+ *
+ * Returns `target: null` when no invoice on the current subscription is chargeable.
+ */
+export function selectCurrentSubscriptionChargeable(
+  invoices: Stripe.Invoice[],
+  userStripeSubscriptionId: string | null | undefined
+): { target: Stripe.Invoice | null; skipped: Stripe.Invoice[] } {
+  if (!userStripeSubscriptionId) {
+    return { target: null, skipped: invoices };
+  }
+  const onCurrentSub = invoices.filter((inv) => {
+    const withSub = inv as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
+    const invSubId =
+      typeof withSub.subscription === "string"
+        ? withSub.subscription
+        : (withSub.subscription as Stripe.Subscription | null | undefined)?.id;
+    return invSubId === userStripeSubscriptionId;
+  });
+  const target = pickOpenInvoiceForFailedRenewal(onCurrentSub);
+  const skipped = invoices.filter((inv) => inv.id !== target?.id);
+  return { target, skipped };
 }
 
 type LeanPastDueUser = {

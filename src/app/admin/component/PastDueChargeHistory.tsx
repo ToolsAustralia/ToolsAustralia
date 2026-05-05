@@ -26,6 +26,7 @@ import {
 } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
+import RecoverInvoiceModal from "@/components/admin/RecoverInvoiceModal";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -46,6 +47,13 @@ function formatDateTime(d: string | Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function isStrandedError(errorMessage?: string | null, errorCode?: string | null): boolean {
+  const msg = (errorMessage || "").toLowerCase();
+  if (msg.includes("no longer be paid") || msg.includes("no longer payable")) return true;
+  // Stripe surfaces this under various codes; the message check above is the reliable signal.
+  return errorCode === "invoice_not_payable";
 }
 
 function defaultLast30Days() {
@@ -100,6 +108,11 @@ export default function PastDueChargeHistory() {
   const [endDate, setEndDate] = useState<string>(initialRange.end);
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [openRunId, setOpenRunId] = useState<string | null>(null);
+  const [recoverTarget, setRecoverTarget] = useState<{
+    userId: string;
+    userEmail: string;
+    originalInvoiceId: string;
+  } | null>(null);
 
   const { data: drawDates } = useCurrentAndLastDrawDates();
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -447,6 +460,9 @@ export default function PastDueChargeHistory() {
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       Error
                     </th>
+                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
+                      Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -476,6 +492,23 @@ export default function PastDueChargeHistory() {
                       <td className="px-4 py-3 text-xs text-red-700 dark:text-red-400">
                         {r.errorCode ?? r.errorMessage ?? ""}
                       </td>
+                      <td className="px-4 py-3 text-right text-sm">
+                        {r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRecoverTarget({
+                                userId: r.userId!,
+                                userEmail: r.userEmail || r.userId!,
+                                originalInvoiceId: r.invoiceId,
+                              });
+                            }}
+                            className="rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 text-xs font-semibold dark:bg-amber-950/50 dark:hover:bg-amber-900/60 dark:text-amber-200"
+                          >
+                            Recover
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -501,6 +534,19 @@ export default function PastDueChargeHistory() {
       </div>
 
       <PastDueChargeHistoryDrawer runId={openRunId} onClose={() => setOpenRunId(null)} />
+
+      {recoverTarget && (
+        <RecoverInvoiceModal
+          isOpen={true}
+          onClose={() => setRecoverTarget(null)}
+          userId={recoverTarget.userId}
+          userEmail={recoverTarget.userEmail}
+          originalInvoiceId={recoverTarget.originalInvoiceId}
+          onRecovered={() => {
+            setRecoverTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

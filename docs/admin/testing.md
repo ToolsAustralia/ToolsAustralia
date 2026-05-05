@@ -6,8 +6,9 @@
 |---|---|---|
 | `npm run test:past-due-admin-charge` | `src/server/admin/__tests__/chargePastDueShared.test.ts` | shared charge-past-due utilities |
 | `npm run test:past-due-history` | `src/server/admin/__tests__/charge-past-due-totals.test.ts` | `aggregateRunTotals`, `isOrphanRun`, `ORPHAN_RUN_THRESHOLD_MS` |
+| `npm run test:recover-stranded-past-due-policy` | `src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts` | pure helpers for stranded invoice recovery: idempotency keys, eligibility, draft-picking, 24h lock |
 
-`charge-past-due-totals.ts` is Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
+`charge-past-due-totals.ts` and `recoverStrandedPastDuePolicy.ts` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
 
 ## Manual smoke
 

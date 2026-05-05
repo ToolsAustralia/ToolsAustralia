@@ -5,6 +5,7 @@ import { AlertTriangle, XCircle, CheckCircle, X, Loader2 } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { Button } from "../modals/ui";
 import { ChargeJobResultStatusBadge } from "@/components/admin/ui/AdminBadge";
+import RecoverInvoiceModal from "./RecoverInvoiceModal";
 
 export interface ChargePastDueUserModalProps {
   isOpen: boolean;
@@ -91,6 +92,10 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed" | "skipped">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [recoverTarget, setRecoverTarget] = useState<{
+    invoiceId: string;
+    userEmail: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isOpen || !targetUserId) return;
@@ -171,7 +176,13 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
     }).format(amount / 100);
   };
 
+  function rowIsStrandedError(row: ChargeResult): boolean {
+    const msg = (row.error || "").toLowerCase();
+    return msg.includes("no longer be paid") || msg.includes("no longer payable");
+  }
+
   return (
+    <>
     <div
       className="fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}
@@ -420,7 +431,23 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
                                   {result.amount ? formatCurrency(result.amount) : "-"}
                                 </td>
                                 <td className="px-3 py-2 text-gray-600 dark:text-neutral-400 text-xs">
-                                  {result.error || result.skipReason || "-"}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span>{result.error || result.skipReason || "-"}</span>
+                                    {result.status === "failed" && rowIsStrandedError(result) && targetUserId && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setRecoverTarget({
+                                            invoiceId: result.invoiceId,
+                                            userEmail: result.userEmail || memberLabel || targetUserId,
+                                          });
+                                        }}
+                                        className="rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-0.5 text-xs font-semibold dark:bg-amber-950/50 dark:hover:bg-amber-900/60 dark:text-amber-200 whitespace-nowrap"
+                                      >
+                                        Recover
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))
@@ -498,6 +525,16 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
         </div>
       </div>
     </div>
+    {recoverTarget && (
+      <RecoverInvoiceModal
+        isOpen={true}
+        onClose={() => setRecoverTarget(null)}
+        userId={targetUserId}
+        userEmail={recoverTarget.userEmail}
+        originalInvoiceId={recoverTarget.invoiceId}
+      />
+    )}
+    </>
   );
 };
 
