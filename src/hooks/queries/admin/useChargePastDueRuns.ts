@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import type { ChargeJobRunStatus, IChargeJobRun } from "@/models/ChargeJobRun";
 
 export interface RunsFilter {
@@ -6,8 +7,6 @@ export interface RunsFilter {
   endDate?: string;
   adminId?: string;
   status?: ChargeJobRunStatus;
-  limit?: number;
-  offset?: number;
 }
 
 export interface ListedRunDTO {
@@ -26,22 +25,63 @@ export interface RunsResponse {
   total: number;
 }
 
-function toQs(filter: RunsFilter): string {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(filter)) {
-    if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
-  }
-  return p.toString();
+export interface UseChargePastDueRunsResult {
+  runs: ListedRunDTO[];
+  total: number;
+  hasMore: boolean;
+  isLoading: boolean;
+  isFetching: boolean;
+  isFetchingNextPage: boolean;
+  isError: boolean;
+  fetchNextPage: () => void;
 }
 
-export function useChargePastDueRuns(filter: RunsFilter) {
-  return useQuery<RunsResponse>({
+const PAGE_SIZE = 50;
+const EMPTY_RUNS: ListedRunDTO[] = [];
+
+function buildQueryString(filter: RunsFilter, offset: number): string {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) {
+    if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+  }
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(offset));
+  return params.toString();
+}
+
+export function useChargePastDueRuns(filter: RunsFilter): UseChargePastDueRunsResult {
+  const query = useInfiniteQuery<RunsResponse>({
     queryKey: ["admin", "charge-past-due", "runs", filter],
-    queryFn: async () => {
-      const qs = toQs(filter);
-      const res = await fetch(`/api/admin/charge-past-due/runs${qs ? `?${qs}` : ""}`);
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const offset = (pageParam as number) ?? 0;
+      const qs = buildQueryString(filter, offset);
+      const res = await fetch(`/api/admin/charge-past-due/runs?${qs}`);
       if (!res.ok) throw new Error(`Failed to load runs (${res.status})`);
       return res.json();
     },
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, p) => sum + p.runs.length, 0);
+      return loaded < lastPage.total ? loaded : undefined;
+    },
   });
+
+  const runs = useMemo(
+    () => query.data?.pages.flatMap((p) => p.runs) ?? EMPTY_RUNS,
+    [query.data]
+  );
+  const total = query.data?.pages[0]?.total ?? 0;
+
+  return {
+    runs,
+    total,
+    hasMore: !!query.hasNextPage,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isError: query.isError,
+    fetchNextPage: () => {
+      void query.fetchNextPage();
+    },
+  };
 }

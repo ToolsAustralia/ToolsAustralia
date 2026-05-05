@@ -20,6 +20,7 @@ import {
 import Dropdown from "@/components/modals/ui/Dropdown";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { useToast } from "@/components/ui/Toast";
 import { useBlockedCards } from "@/hooks/queries/admin/useBlockedCards";
 import {
@@ -53,6 +54,18 @@ const declineReasonOptions = [
 
 function formatDateInput(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function formatDateRangeLabel(from: Date, to: Date): string {
+  const sameDay =
+    from.getFullYear() === to.getFullYear() &&
+    from.getMonth() === to.getMonth() &&
+    from.getDate() === to.getDate();
+  if (sameDay) return format(from, "MMM d, yyyy");
+  if (from.getFullYear() === to.getFullYear()) {
+    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`;
+  }
+  return `${format(from, "MMM d, yyyy")} – ${format(to, "MMM d, yyyy")}`;
 }
 
 function formatDateTime(value: Date | string): string {
@@ -134,6 +147,7 @@ export default function BlockedTransactionsManagement() {
   const [filter, setFilter] = useState<BlockedFilter>(DEFAULT_FILTER);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
 
   const {
@@ -367,33 +381,23 @@ export default function BlockedTransactionsManagement() {
         </div>
 
         <div className={`${isFiltersOpen ? "block" : "hidden sm:block"}`}>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <label className="block text-xs">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div className="block text-xs">
               <span className="mb-1 flex items-center gap-1.5 font-semibold text-gray-700 dark:text-neutral-300">
                 <Calendar className="h-3.5 w-3.5 text-red-600" />
-                From
+                Date range
               </span>
-              <input
-                type="date"
-                value={formatDateInput(filter.dateFrom)}
-                onChange={(e) =>
-                  setFilter({ ...filter, dateFrom: new Date(e.target.value) })
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-              />
-            </label>
-            <label className="block text-xs">
-              <span className="mb-1 flex items-center gap-1.5 font-semibold text-gray-700 dark:text-neutral-300">
-                <Calendar className="h-3.5 w-3.5 text-red-600" />
-                To
-              </span>
-              <input
-                type="date"
-                value={formatDateInput(filter.dateTo)}
-                onChange={(e) => setFilter({ ...filter, dateTo: new Date(e.target.value) })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-              />
-            </label>
+              <button
+                type="button"
+                onClick={() => setIsDateRangeModalOpen(true)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 hover:bg-gray-50 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white dark:hover:bg-neutral-700"
+              >
+                <span className="truncate">
+                  {formatDateRangeLabel(filter.dateFrom, filter.dateTo)}
+                </span>
+                <Calendar className="h-4 w-4 shrink-0 text-gray-400 dark:text-neutral-500" />
+              </button>
+            </div>
             <div>
               <span className="mb-1 block text-xs font-semibold text-gray-700 dark:text-neutral-300">
                 Member status
@@ -424,6 +428,21 @@ export default function BlockedTransactionsManagement() {
           </div>
         </div>
       </div>
+
+      <CustomDateRangeModal
+        isOpen={isDateRangeModalOpen}
+        onClose={() => setIsDateRangeModalOpen(false)}
+        onApply={(start, end) => {
+          setFilter({
+            ...filter,
+            dateFrom: new Date(start),
+            dateTo: new Date(end),
+          });
+          setIsDateRangeModalOpen(false);
+        }}
+        currentStartDate={formatDateInput(filter.dateFrom)}
+        currentEndDate={formatDateInput(filter.dateTo)}
+      />
 
       {/* Bulk action bar */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
