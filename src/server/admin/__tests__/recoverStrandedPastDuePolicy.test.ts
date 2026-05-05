@@ -79,9 +79,10 @@ function testPickHeldDraftReturnsNullOnEmptyList() {
 
 function testRecentLockBlocksWithinWindow() {
   const now = new Date("2026-05-05T12:00:00.000Z");
+  // 5h ago — inside the 6h window
   const rows = [
     {
-      attemptedAt: new Date("2026-05-05T05:00:00.000Z"),
+      attemptedAt: new Date("2026-05-05T07:00:00.000Z"),
       result: { recovery: { originalInvoiceId: "in_orig" } },
     },
   ];
@@ -90,9 +91,10 @@ function testRecentLockBlocksWithinWindow() {
 
 function testRecentLockAllowsAfterWindow() {
   const now = new Date("2026-05-05T12:00:00.000Z");
+  // Just over 6h ago — outside the 6h window
   const rows = [
     {
-      attemptedAt: new Date("2026-05-04T11:59:59.000Z"),
+      attemptedAt: new Date("2026-05-05T05:59:59.000Z"),
       result: { recovery: { originalInvoiceId: "in_orig" } },
     },
   ];
@@ -101,9 +103,10 @@ function testRecentLockAllowsAfterWindow() {
 
 function testRecentLockIgnoresDifferentInvoice() {
   const now = new Date("2026-05-05T12:00:00.000Z");
+  // 5h ago — inside window, but wrong invoice id
   const rows = [
     {
-      attemptedAt: new Date("2026-05-05T05:00:00.000Z"),
+      attemptedAt: new Date("2026-05-05T07:00:00.000Z"),
       result: { recovery: { originalInvoiceId: "in_other" } },
     },
   ];
@@ -112,9 +115,10 @@ function testRecentLockIgnoresDifferentInvoice() {
 
 function testRecentLockIgnoresRowsWithoutRecoveryTag() {
   const now = new Date("2026-05-05T12:00:00.000Z");
+  // 5h ago — inside window, but no recovery tag
   const rows = [
-    { attemptedAt: new Date("2026-05-05T05:00:00.000Z"), result: {} },
-    { attemptedAt: new Date("2026-05-05T05:00:00.000Z") },
+    { attemptedAt: new Date("2026-05-05T07:00:00.000Z"), result: {} },
+    { attemptedAt: new Date("2026-05-05T07:00:00.000Z") },
   ];
   assert.equal(hasRecentRecoveryAttempt(rows, "in_orig", now), false);
 }
