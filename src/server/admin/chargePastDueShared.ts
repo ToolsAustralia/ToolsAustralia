@@ -5,18 +5,22 @@ import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import User from "@/models/User";
 import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
 import {
+  MIN_SECONDS_BETWEEN_ATTEMPTS,
   RECENT_ATTEMPT_WINDOW_HOURS,
   SKIP_REASON_NO_LONGER_PAST_DUE,
   buildAdminChargeIdempotencyKey,
+  cutoffForDebounce,
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
 } from "./past-due-charge-idempotency";
 import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
 
 export {
+  MIN_SECONDS_BETWEEN_ATTEMPTS,
   RECENT_ATTEMPT_WINDOW_HOURS,
   SKIP_REASON_NO_LONGER_PAST_DUE,
   buildAdminChargeIdempotencyKey,
+  cutoffForDebounce,
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
 };
@@ -216,8 +220,35 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   user: LeanPastDueUser;
   adminId: string;
   chargeRunId?: mongoose.Types.ObjectId | null;
+  /**
+   * Override the default `admin-charge-${invoiceId}` Stripe idempotency key.
+   * Force Charge paths supply per-attempt keys to allow real retries within
+   * the 6h budget window (otherwise Stripe returns the cached first response).
+   */
+  idempotencyKey?: string;
+  /**
+   * Override the default 1-per-window lock check. When provided, the function
+   * calls this instead of running its own `findOne` on InvoiceChargeLog.
+   * Force Charge paths supply a callback that counts per-path Force Charge
+   * attempts and allows up to 3 per 6h window.
+   *
+   * Returns `allowed: true` to proceed or `allowed: false` with a reason/message
+   * to skip. Independent of the 30s debounce check, which always runs first.
+   */
+  attemptBudgetCheck?: () => Promise<
+    { allowed: true } | { allowed: false; reason: string; message: string }
+  >;
 }): Promise<PastDueChargeResultRow> {
-  const { invoice, paymentMethodId, customerId, user, adminId, chargeRunId = null } = params;
+  const {
+    invoice,
+    paymentMethodId,
+    customerId,
+    user,
+    adminId,
+    chargeRunId = null,
+    idempotencyKey,
+    attemptBudgetCheck,
+  } = params;
   const invoiceId = invoice.id;
   if (!invoiceId) {
     return {
@@ -233,18 +264,15 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   const userIdStr = typeof user._id === "string" ? user._id : String(user._id);
   const amount = invoice.amount_remaining || 0;
 
-  // 24h skip — protects against repeat decline fees when an admin (or two admins,
-  // or the per-user retry endpoint and the bulk endpoint) hits the same invoice
-  // within Stripe's idempotency window. The Stripe key below is the second line of
-  // defence; this DB check is the first because it avoids the Stripe call entirely.
-  const recentAttempt = await InvoiceChargeLog.findOne({
+  // 30s spam-click debounce — fires before any other lock check.
+  const recentRowsForDebounce = await InvoiceChargeLog.find({
     invoiceId,
-    attemptedAt: { $gte: cutoffForRecentAttempt() },
+    attemptedAt: { $gte: cutoffForDebounce() },
   })
-    .select({ _id: 1, status: 1, attemptedAt: 1 })
+    .select({ attemptedAt: 1 })
     .lean();
 
-  if (recentAttempt) {
+  if (recentRowsForDebounce.length > 0) {
     await InvoiceChargeLog.create({
       invoiceId,
       customerId,
@@ -253,7 +281,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       status: "skipped",
       amount,
       attemptedAt: new Date(),
-      errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
+      errorMessage: `Skipped: another attempt within last ${MIN_SECONDS_BETWEEN_ATTEMPTS} seconds (debounce)`,
       chargeRunId,
     });
 
@@ -263,9 +291,69 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       userId: userIdStr,
       userEmail,
       status: "skipped",
-      skipReason: "recently_attempted",
+      skipReason: "too_soon",
       amount,
     };
+  }
+
+  // Window-based budget check. Default: 1-per-window (any prior attempt blocks).
+  // Force Charge paths inject `attemptBudgetCheck` for per-path 3-per-window budgets.
+  if (attemptBudgetCheck) {
+    const budget = await attemptBudgetCheck();
+    if (!budget.allowed) {
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "skipped",
+        amount,
+        attemptedAt: new Date(),
+        errorMessage: `Skipped: ${budget.message}`,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: budget.reason,
+        amount,
+      };
+    }
+  } else {
+    const recentAttempt = await InvoiceChargeLog.findOne({
+      invoiceId,
+      attemptedAt: { $gte: cutoffForRecentAttempt() },
+    })
+      .select({ _id: 1, status: 1, attemptedAt: 1 })
+      .lean();
+
+    if (recentAttempt) {
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "skipped",
+        amount,
+        attemptedAt: new Date(),
+        errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: "recently_attempted",
+        amount,
+      };
+    }
   }
 
   // Late re-check — user's subscription.status may have flipped from past_due
@@ -306,7 +394,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         payment_method: paymentMethodId,
         off_session: true,
       },
-      { idempotencyKey: buildAdminChargeIdempotencyKey(invoiceId) }
+      { idempotencyKey: idempotencyKey ?? buildAdminChargeIdempotencyKey(invoiceId) }
     );
     const paidInvoice = paidInvoiceResponse as Stripe.Invoice;
 
