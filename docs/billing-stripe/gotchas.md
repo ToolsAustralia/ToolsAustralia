@@ -96,7 +96,7 @@ Stripe retries failed deliveries with exponential backoff. The dedupe via `Proce
 
 **The mechanism.** When the issuing bank declines a card with certain hard codes (`lost_card`, `stolen_card`, `pickup_card`, etc.), Stripe **auto-blocks future attempts** on that card — globally, across the entire Stripe account — to prevent decline-fee waste. The Stripe dashboard's activity log surfaces this as *"directed Stripe to block future attempts."* No further attempts on that card will reach the issuer; they fail at Stripe.
 
-**The override.** Adding the card fingerprint to Stripe's built-in `allow_card_fingerprint` Radar value list bypasses **both** Radar fraud rules **and** the issuer-directed auto-block. The dashboard's "Add to allow list" button uses this same API (`radar.valueListItems.create`). This is the only programmatic escape hatch.
+**The override.** Adding the card fingerprint to Stripe's built-in `card_fingerprint_allowlist` Radar value list bypasses **both** Radar fraud rules **and** the issuer-directed auto-block. The dashboard's "Add to allow list" button uses this same API (`radar.valueListItems.create`). This is the only programmatic escape hatch. Aliases on built-in Radar lists follow Stripe's `<entity>_<field>_<allowlist|blocklist>` convention; verify per-account with `npm run find:radar-lists`.
 
 **Webhook signal.** A blocked PI surfaces as `payment_intent.payment_failed` whose `charge.outcome.type === "blocked"` **or** `charge.outcome.network_status === "declined_by_network"`. This signal is what distinguishes "Stripe is blocking future attempts on this card" from a normal one-off decline. The `payment_intent.payment_failed` branch in the webhook examines `outcome` to decide whether to call `AllowlistService.evaluateAndApply()`.
 
@@ -109,6 +109,22 @@ Stripe retries failed deliveries with exponential backoff. The dedupe via `Proce
 `GET /api/admin/allowlist/blocked-cards` powers the `/admin/blocked-transactions` page. Stripe's `paymentIntents.list` does **not** accept an `outcome.type` filter, so the route paginates **every** PaymentIntent in the date window — successes included — and filters client-side by `outcome.type === "blocked"` or `outcome.network_status === "declined_by_network"`. On a busy account that's tens of thousands of records and easily blows Vercel's default 10–15 s function timeout (looks like "loading forever" in the UI).
 
 > **Filter mismatch with Phase A/B.** The existing route's broad OR predicate captures every issuer-declined charge (most failed payments). Phase A/B persists a *narrower* set — only `outcome.type === "blocked"` — to match Stripe Dashboard's "Blocked" pill semantics. After Phase C ships and the admin page reads from Mongo, the displayed row count will drop accordingly (e.g. ~3225 → ~196 in a typical 5-week window) — that's the point. The webhook still calls `allowlist.apply()` on the broader set so existing auto-allowlist behavior is preserved; only the persisted dataset is tightened.
+
+## Past-due bulk charge hitting blocked-card failures (Phase B.5 sweep)
+
+The webhook auto-allowlist handler runs only on **new** `payment_intent.payment_failed` events. Cards that were Stripe-auto-blocked **before** the webhook was wired live have a `BlockedTransaction` row (after the Phase B backfill) but **no** corresponding `AllowlistAction` — and therefore are not in Stripe's `card_fingerprint_allowlist` list. Your "Charge Past Due Customers" runs against those cards and hits a wall of blocked-failure decline fees.
+
+Fix: [scripts/sync-allowlist-from-blocked-transactions.ts](../../scripts/sync-allowlist-from-blocked-transactions.ts). For every unique card fingerprint in `BlockedTransaction`, calls `AllowlistService.apply(input, "admin_bulk", null)`. Eligible cards (paying members, no fraud-signal / no permanent-issue decline codes) get added to Stripe; ineligible ones get a recorded `skipped` `AllowlistAction` row — same outcome as if the webhook had fired originally.
+
+Idempotent on the *added* path: the script pre-checks `AllowlistAction` for an active `added` row per fingerprint and short-circuits if found. Re-runs against already-allowlisted cards make zero Stripe calls and zero Mongo inserts. **Re-runs against previously-*skipped* fingerprints will re-evaluate** (which is intentional — a customer who wasn't a paying member at first-skip time may have since paid, flipping them eligible) and insert a fresh `skipped` row each time. Acceptable for occasional re-runs; don't loop the script.
+
+```
+npm run sync:allowlist-from-blocked:dry                    # eyeball the eligibility breakdown
+npm run sync:allowlist-from-blocked                        # live: writes to Stripe Radar + Mongo
+npm run sync:allowlist-from-blocked -- --no-limit          # if your account exceeds 1000 unique blocked fingerprints
+```
+
+This is a **one-time catch-up**, not a recurring job. Once it runs, the live webhook handles all subsequent blocks. Phase D's reconciliation cron can absorb the "any stragglers?" sweep going forward.
 
 Three guardrails wrap this:
 
