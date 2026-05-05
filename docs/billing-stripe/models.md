@@ -1,6 +1,6 @@
 # Billing-Stripe — Models
 
-4 collections own this domain's state.
+5 collections own this domain's state.
 
 ## `PaymentEvent`
 
@@ -97,3 +97,50 @@ Indexes:
 - `{ action: 1, createdAt: -1 }` — supports admin "show only skipped" / "show only added" filter
 
 **Source-of-truth principle:** `AllowlistAction` is a **decision log**, not a mirror of Stripe's `allow_card_fingerprint` Radar value list. Stripe is authoritative for what's currently in the allowlist; this collection records *why and when* we made each call. A row with `action: "added"` does not guarantee the fingerprint is still in Stripe's list — admins or other operators may have removed it via the Stripe dashboard.
+
+## `BlockedTransaction`
+
+[src/models/BlockedTransaction.ts](../../src/models/BlockedTransaction.ts) — captured copy of every Stripe `payment_intent.payment_failed` event whose charge has `outcome.type === "blocked"` (collection: `blockedtransactions`). Predicate intentionally matches the Stripe Dashboard's "Blocked" status pill — normal issuer declines (`network_status === "declined_by_network"` with `outcome.type === "issuer_declined"`) are **not** captured because they aren't candidates for the auto-allowlist mechanism.
+
+Exists so the admin `/admin/blocked-transactions` page can read from Mongo instead of paginating Stripe at request time. Webhook captures new rows; [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) handles historical data.
+
+Schema:
+
+| Field | Type | Notes |
+|---|---|---|
+| `_id` | `string` (required) | Equals `paymentIntentId` — natural idempotency key for Stripe webhook retries |
+| `paymentIntentId` | `string` (required) | Same value as `_id`; kept as field for query clarity |
+| `chargeId` | `string` (required) | Stripe charge id |
+| `cardFingerprint` | `string` (required) | Stripe card fingerprint — admin lookup key |
+| `cardLast4` | `string` | For admin display |
+| `cardBrand` | `string` | For admin display |
+| `stripeCustomerId` | `string \| null` | Captured raw — user resolution happens at read time, not denormalized |
+| `customerEmail` | `string \| null` | `pi.receipt_email` then `charge.billing_details.email` |
+| `declineCode` | `string \| null` | Raw — fraud/permanent/recoverable classification deliberately at read time |
+| `failureCode` | `string \| null` | Raw `last_payment_error.code` |
+| `outcomeType` | `string \| null` | `charge.outcome.type` |
+| `outcomeNetworkStatus` | `string \| null` | `charge.outcome.network_status` |
+| `outcomeReason` | `string \| null` | `charge.outcome.reason` |
+| `amount` | `number` (required) | Subunits |
+| `currency` | `string` (required) | ISO code |
+| `rawOutcome` | `Mixed` | Full `charge.outcome` object snapshotted for forensics |
+| `createdAt` | `Date` (required) | PI created time, NOT row insertion time |
+| `capturedAt` | `Date` | When we wrote the row; bumped on each upsert |
+
+Indexes:
+- `{ createdAt: -1 }` — primary admin query (date range + sort)
+- `{ cardFingerprint: 1 }` — by-card lookup
+- `{ stripeCustomerId: 1, createdAt: -1 }` — by-customer history
+- `{ declineCode: 1, createdAt: -1 }` — decline-reason filter
+
+**Deliberate non-decisions** (documented so a future change doesn't unwittingly add coupling):
+- `userId` is not denormalized — captured `stripeCustomerId`/`customerEmail` are the keys; user resolution happens at read time so newly-signed-up users' historical blocks reflect the up-to-date verdict.
+- `alreadyAllowlisted` is not denormalized — admins act on `AllowlistAction` rows, which would force cross-collection updates. Computed in the read path with a single `$in` lookup.
+- Decline-code classification (fraud / permanent / recoverable) is not stored — kept as logic in `src/services/allowlist/declineCodes.ts` so changing the rules doesn't require a backfill.
+- `rawOutcome` IS stored as `Mixed` — cheap insurance against Stripe surfacing fields we'll later want to filter on.
+
+Writers:
+- Webhook: [src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts) `payment_intent.payment_failed` branch — best-effort, wrapped in its own try/catch so a Mongo write failure does not block the allowlist evaluation that follows it.
+- Backfill: [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) — uses Stripe Search API (`status:"failed"` query) for efficiency. Idempotent on `_id`.
+
+Both write paths share `buildBlockedTransactionRecord()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts) so live and historical rows are byte-identical.

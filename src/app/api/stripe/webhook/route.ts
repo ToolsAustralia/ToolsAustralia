@@ -5003,7 +5003,25 @@ export async function POST(request: NextRequest) {
 
           const card = charge?.payment_method_details?.card;
           const fingerprint = card?.fingerprint;
-          if (isBlocked && card && fingerprint) {
+          if (isBlocked && card && fingerprint && charge) {
+            // Persist the blocked PI for the admin /admin/blocked-transactions
+            // page so it can read from Mongo instead of paginating Stripe at
+            // request time. Inner try/catch keeps this independent from the
+            // allowlist call below — either failing must not block the other.
+            try {
+              const { buildBlockedTransactionRecord, upsertBlockedTransaction } =
+                await import("@/services/allowlist/blockedTransactionRepo");
+              const record = buildBlockedTransactionRecord(failedPi, charge);
+              if (record) await upsertBlockedTransaction(record);
+            } catch (btErr) {
+              webhookLog(
+                "error",
+                `BlockedTransaction upsert failed for PI ${failedPi.id}: ${
+                  btErr instanceof Error ? btErr.message : String(btErr)
+                }`
+              );
+            }
+
             const { getAllowlistService } = await import("@/services/allowlist");
             const allowlist = getAllowlistService();
             await allowlist.apply(
