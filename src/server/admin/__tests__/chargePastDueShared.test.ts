@@ -8,13 +8,13 @@ import {
 } from "../past-due-charge-idempotency";
 
 function testWindowConstant() {
-  assert.equal(RECENT_ATTEMPT_WINDOW_HOURS, 24);
+  assert.equal(RECENT_ATTEMPT_WINDOW_HOURS, 6);
 }
 
-function testCutoffIs24hBeforeNow() {
+function testCutoffIs6hBeforeNow() {
   const now = new Date("2026-05-05T12:00:00.000Z");
   const cutoff = cutoffForRecentAttempt(now);
-  assert.equal(cutoff.toISOString(), "2026-05-04T12:00:00.000Z");
+  assert.equal(cutoff.toISOString(), "2026-05-05T06:00:00.000Z");
 }
 
 function testCutoffMovesWithNow() {
@@ -61,7 +61,7 @@ function testShouldNotSkipWhenStatusPastDueWithUppercase() {
 
 function run() {
   testWindowConstant();
-  testCutoffIs24hBeforeNow();
+  testCutoffIs6hBeforeNow();
   testCutoffMovesWithNow();
   testIdempotencyKeyIsStableForSameInvoice();
   testIdempotencyKeyDiffersByInvoice();

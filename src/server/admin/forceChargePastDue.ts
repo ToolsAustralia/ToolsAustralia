@@ -32,6 +32,14 @@ import {
   type ForceChargeTarget,
 } from "./forceChargePastDuePolicy";
 import {
+  MAX_FORCE_CHARGE_ATTEMPTS_PER_WINDOW,
+  RECENT_ATTEMPT_WINDOW_HOURS,
+  buildForceChargeIdempotencyKey,
+  countForceChargeAttempts,
+  cutoffForRecentAttempt,
+  hasForceChargeBudgetExhausted,
+} from "./past-due-charge-idempotency";
+import {
   payOpenInvoiceAsPastDueAdmin,
   type PastDueChargeResultRow,
 } from "./chargePastDueShared";
@@ -119,10 +127,10 @@ export async function checkForceChargeEligibility(params: {
   }
   const expectedAmountCents = Math.round(pkg.price * 100);
 
-  // 1. DB 24h lock check
+  // 1. DB lock check — use the shared window constant
   const recentRows = await InvoiceChargeLog.find({
     userId: new mongoose.Types.ObjectId(userId),
-    attemptedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    attemptedAt: { $gte: cutoffForRecentAttempt() },
   })
     .select({ attemptedAt: 1, status: 1, result: 1 })
     .lean();
@@ -139,7 +147,7 @@ export async function checkForceChargeEligibility(params: {
     return {
       eligible: false,
       reason: "recent_charge_attempt",
-      message: "A successful charge for this subscription happened within the last 24h",
+      message: `A successful charge for this subscription happened within the last ${RECENT_ATTEMPT_WINDOW_HOURS}h`,
     };
   }
 
@@ -234,6 +242,36 @@ export async function forceChargeCurrentCycle(params: {
 
   const { target, expectedAmountCents, subscriptionId } = eligibility;
 
+  // Per-path Force Charge budget: count prior force-charge attempts on this
+  // invoice + this triggeredBy path within the 6h window.
+  const targetInvoiceId = target.invoice.id;
+  if (!targetInvoiceId) {
+    return {
+      ok: false,
+      reason: "pay_failed",
+      message: "Target invoice missing id",
+    };
+  }
+  const priorAttemptRows = await InvoiceChargeLog.find({
+    invoiceId: targetInvoiceId,
+    attemptedAt: { $gte: cutoffForRecentAttempt() },
+  })
+    .select({ attemptedAt: 1, result: 1 })
+    .lean();
+  const priorPathRows = priorAttemptRows.map((r) => ({
+    attemptedAt: r.attemptedAt,
+    result: r.result,
+  }));
+  if (hasForceChargeBudgetExhausted(priorPathRows, params.triggeredBy)) {
+    return {
+      ok: false,
+      reason: "recent_charge_attempt",
+      message: `Force Charge budget for ${params.triggeredBy} exhausted (max ${MAX_FORCE_CHARGE_ATTEMPTS_PER_WINDOW} per ${RECENT_ATTEMPT_WINDOW_HOURS}h). Try again later.`,
+    };
+  }
+  const attemptNumber =
+    countForceChargeAttempts(priorPathRows, params.triggeredBy) + 1;
+
   // Re-fetch user for the write path (user could have changed between eligibility and execution).
   const user = await User.findById(userId)
     .select("_id email stripeCustomerId")
@@ -322,12 +360,44 @@ export async function forceChargeCurrentCycle(params: {
     };
   }
 
+  const idempotencyKey = buildForceChargeIdempotencyKey(
+    targetInvoiceId,
+    params.triggeredBy,
+    attemptNumber
+  );
+
+  // TOCTOU recheck: re-validate the budget right before the Stripe call.
+  // Cheap (one indexed query) and protects against concurrent Force Charges
+  // racing past the initial check.
+  const attemptBudgetCheck = async () => {
+    const freshRows = await InvoiceChargeLog.find({
+      invoiceId: targetInvoiceId,
+      attemptedAt: { $gte: cutoffForRecentAttempt() },
+    })
+      .select({ attemptedAt: 1, result: 1 })
+      .lean();
+    const freshPathRows = freshRows.map((r) => ({
+      attemptedAt: r.attemptedAt,
+      result: r.result,
+    }));
+    if (hasForceChargeBudgetExhausted(freshPathRows, params.triggeredBy)) {
+      return {
+        allowed: false as const,
+        reason: "recent_charge_attempt",
+        message: `Force Charge budget for ${params.triggeredBy} exhausted (max ${MAX_FORCE_CHARGE_ATTEMPTS_PER_WINDOW} per ${RECENT_ATTEMPT_WINDOW_HOURS}h)`,
+      };
+    }
+    return { allowed: true as const };
+  };
+
   const row = await payOpenInvoiceAsPastDueAdmin({
     invoice: payableInvoice,
     paymentMethodId: resolvedPmId,
     customerId: user.stripeCustomerId,
     user: { _id: user._id, email: user.email },
     adminId,
+    idempotencyKey,
+    attemptBudgetCheck,
   });
 
   // Stamp subscriptionId into the most-recently-created log row so the 24h lock

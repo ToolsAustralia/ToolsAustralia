@@ -62,7 +62,7 @@ When `pause_collection: keep_as_draft` was applied (or the user has cancelled-an
 The orchestrator [`forceChargeCurrentCycle`](../../src/server/admin/forceChargePastDue.ts):
 
 1. Verify state — admin (or self) auth, `subscription.status === "past_due"`, customer/sub ids present, package found, expected amount derived.
-2. DB 24h lock — `hasRecentSuccessfulChargeOnSubscription` from [`forceChargePastDuePolicy.ts`](../../src/server/admin/forceChargePastDuePolicy.ts).
+2. DB eligibility check — `hasRecentSuccessfulChargeOnSubscription` from [`forceChargePastDuePolicy.ts`](../../src/server/admin/forceChargePastDuePolicy.ts) (subscription-level 24h success lock; separate from per-invoice 6h budget window below).
 3. Stripe paid-period check — `isCurrentPeriodAlreadyPaid` against `stripe.invoices.list({ status: "paid" })` for the current `current_period`.
 4. Pick target — `pickForceChargeTarget` returns either an open invoice or a held draft matching expected amount (never null + create — see "Critical safety property").
 5. Finalize the draft if needed (idempotency key `force-finalize-${invoiceId}`).
@@ -74,14 +74,42 @@ Force Charge never creates new manual invoices. The webhook's [`invoice.payment_
 
 If no chargeable invoice exists on the current sub, the orchestrator returns `reason: "no_chargeable_invoice"` and the admin/user is prompted to contact support.
 
-### Idempotency model
+### Idempotency model (pre-2026-05-06)
 
 | Step | Stripe key | DB lock |
 |---|---|---|
-| Finalize | `force-finalize-${invoiceId}` | (covered by InvoiceChargeLog 24h success-status lock keyed on subscription) |
-| Pay | `admin-charge-${invoiceId}` (existing) | (existing per-invoice 24h lock) |
+| Finalize | `force-finalize-${invoiceId}` | (covered by InvoiceChargeLog subscription-level 24h success-status lock) |
+| Pay | `admin-charge-${invoiceId}` (existing) | (existing per-invoice 24h lock, superseded by 6h + budget model below) |
 
-Concurrent admin + user fires deduplicate via stable Stripe idempotency keys.
+Concurrent admin + user fires deduplicated via stable Stripe idempotency keys.
+
+### Window + budget model (effective 2026-05-06)
+
+The 24h-per-invoice lock was tightened to 6h with per-path attempt budgets:
+
+| Path | Window | Max attempts per window | Idempotency key |
+|---|---|---|---|
+| Bulk past-due charger | 6h | 1 | Static `admin-charge-${invoiceId}` |
+| Per-user admin retry | 6h | 1 | Static `admin-charge-${invoiceId}` |
+| Admin Force Charge | 6h | 3 | Per-attempt `admin-charge-${invoiceId}-fc-admin-${N}` |
+| User self-serve | 6h | 3 | Per-attempt `admin-charge-${invoiceId}-fc-user-${N}` |
+
+Admin and user budgets are tracked **separately** via `result.forceCharge.triggeredBy` on the InvoiceChargeLog rows the orchestrator writes after pay.
+
+**30-second debounce:** independent of budget. Any second attempt on the same invoice within 30s of the prior attempt is blocked with `skipReason: "too_soon"`. Applies uniformly across all paths to absorb spam-clicks.
+
+**Per-attempt idempotency keys** mean Force Charge retries are real Stripe calls (not cached). Stripe still caches each unique key for 24h, so an exhausted budget doesn't accidentally re-charge from a prior window.
+
+**Worst-case decline-fee bound per invoice per 6h:** 1 (bulk) + 3 (admin FC) + 3 (user) = 7 fresh attempts.
+
+### `recent_charge_attempt` reason — expanded semantics
+
+The reason name is unchanged but its meaning differs by caller:
+- Bulk / regular admin retry: any prior attempt within 6h.
+- Admin Force Charge: 3+ admin Force Charge attempts within 6h.
+- User self-serve: 3+ user-triggered attempts within 6h.
+
+The error message string distinguishes them.
 
 ## Features
 

@@ -213,7 +213,7 @@ Force-charge a past-due user's current cycle when no eligible invoice was found 
 | `subscription_inactive` | 409 | User has no active Stripe subscription/customer or `current_period` window |
 | `not_past_due` | 409 | `user.subscription.status !== "past_due"` |
 | `package_not_found` | 409 | `subscription.packageId` not found in static membershipPackages |
-| `recent_charge_attempt` | 409 | A successful charge for this subscription happened within the last 24h |
+| `recent_charge_attempt` | 409 | Either: (a) per-path Force Charge admin budget exhausted (3 per 6h), or (b) a successful charge for this subscription happened within the last 6h. Message text distinguishes. |
 | `period_already_paid` | 409 | Current billing period is already settled by a paid invoice |
 | `no_chargeable_invoice` | 409 | No open invoice and no held draft matching expected amount on current sub |
 | `finalize_failed` | 502 | Stripe rejected the finalize call |
@@ -242,7 +242,7 @@ User self-serve version of the force-charge above. Same orchestrator, no admin a
 }
 ```
 
-**Error reasons:** Same 9 reasons as the admin endpoint, with one HTTP-status difference: `recent_charge_attempt: 429` (rate limit semantics for self-serve) instead of `409`.
+**Error reasons:** Same as the admin endpoint (`recent_charge_attempt` is "Either: (a) per-path Force Charge user budget exhausted (3 per 6h), or (b) a successful charge for this subscription happened within the last 6h. Message text distinguishes."), with one HTTP-status difference: `recent_charge_attempt: 429` (rate limit semantics for self-serve) instead of `409`.
 
 **Audit:** the `InvoiceChargeLog` row is tagged `result.forceCharge.triggeredBy: "user"` (with `adminId === userId` since the user is their own admin for self-serve).
 
