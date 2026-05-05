@@ -108,10 +108,28 @@ Stripe retries failed deliveries with exponential backoff. The dedupe via `Proce
 
 `GET /api/admin/allowlist/blocked-cards` powers the `/admin/blocked-transactions` page. Stripe's `paymentIntents.list` does **not** accept an `outcome.type` filter, so the route paginates **every** PaymentIntent in the date window — successes included — and filters client-side by `outcome.type === "blocked"` or `outcome.network_status === "declined_by_network"`. On a busy account that's tens of thousands of records and easily blows Vercel's default 10–15 s function timeout (looks like "loading forever" in the UI).
 
+> **Filter mismatch with Phase A/B.** The existing route's broad OR predicate captures every issuer-declined charge (most failed payments). Phase A/B persists a *narrower* set — only `outcome.type === "blocked"` — to match Stripe Dashboard's "Blocked" pill semantics. After Phase C ships and the admin page reads from Mongo, the displayed row count will drop accordingly (e.g. ~3225 → ~196 in a typical 5-week window) — that's the point. The webhook still calls `allowlist.apply()` on the broader set so existing auto-allowlist behavior is preserved; only the persisted dataset is tightened.
+
 Three guardrails wrap this:
 
 1. **Route `maxDuration = 60`** — gives the scan room to finish.
 2. **Iterator cap: `MAX_PAYMENT_INTENTS_SCANNED = 2000`** in `AllowlistService.listBlockedFromStripe` — bounded worst case. When hit, the response carries `truncated: true` and the admin UI shows a banner asking the user to narrow the date range.
 3. **`maxNetworkRetries: 2`** on the global Stripe client (`src/lib/stripe.ts`) — handles transient blips and 429s during the long pagination automatically.
 
-If you ever notice the page truncating in normal use, the right next move is **not** to raise the cap — it's to switch the data source. Two fixes in order of effort: (a) replace `paymentIntents.list` with `charges.search({ query: 'status:"failed" AND created>...' })` for server-side filtering — note Search is eventually consistent by ~1 min and has a separate 20 req/s rate limit; (b) the permanent fix is to persist `BlockedTransaction` rows from the webhook (mirroring `PaymentEvent` for successes), so the admin route reads from Mongo instead of Stripe. The current per-row work also runs **sequentially** inside the scan loop (one `User.findOne` + one `PaymentEvent.exists` + one `AllowlistAction.findOne` per blocked row), which can be batched into 3 `$in` queries when the data source is changed.
+If you ever notice the page truncating in normal use, the right next move is **not** to raise the cap — it's to switch the data source.
+
+**Phase A (write side) is in place.** The Stripe webhook now persists every blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection (best-effort, in its own try/catch so a Mongo write failure does not block the allowlist call that follows). All new blocked PIs are captured automatically.
+
+**Phase B (backfill) is in place.** [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) imports historical data from Stripe using the Search API (`status:"failed"` query). Idempotent on PI id. Run once with a wide window (e.g. 90 days) and verify Mongo count vs. Stripe count for the same window. Always dry-run first:
+
+```
+npm run backfill:blocked-transactions:dry -- --from=2026-02-01 --to=2026-05-01 --limit=2000
+npm run backfill:blocked-transactions     -- --from=2026-02-01 --to=2026-05-01
+```
+
+**Phase C (read flip) is the next step.** The admin route still calls `AllowlistService.listBlockedFromStripe(filter)` and pays the full pagination cost on every load. Replace it with a `listBlocked(filter)` that:
+1. Queries `BlockedTransaction.find({ createdAt: range, ...declineFilter })` (single indexed query)
+2. Batches the per-row eligibility lookups into 3 `Promise.all` queries: `User.find({ $or: [stripeCustomerId/email $in] })`, `AllowlistAction.find({ cardFingerprint: $in, action: "added" })`, then `PaymentEvent.distinct("userId", { userId: $in, eventType: $in })`
+3. Joins in memory and returns
+
+After Phase C ships and bakes for ~2 weeks, drop `MAX_PAYMENT_INTENTS_SCANNED`, the truncation banner, and the `maxDuration: 60` from the route — they all become dead weight once the read source is Mongo.
