@@ -4,12 +4,14 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
+import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 import {
   batchFetchCustomers,
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
+  selectCurrentSubscriptionChargeable,
 } from "@/server/admin/chargePastDueShared";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -20,6 +22,7 @@ type LeanChargeUser = {
   firstName?: string | null;
   lastName?: string | null;
   stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
   subscription?: { status?: string | null } | null;
 };
 
@@ -32,7 +35,7 @@ async function loadPastDueUserForCharge(userId: string): Promise<
   }
 
   const user = await User.findById(userId)
-    .select("_id email firstName lastName stripeCustomerId subscription.status")
+    .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
     .lean<LeanChargeUser | null>();
 
   if (!user) {
@@ -115,6 +118,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       noCustomerId: 0,
       notPastDue: 0,
       eligible: 0,
+      duplicateOrStaleCycle: 0,
     };
 
     const preview: Array<{
@@ -175,10 +179,30 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    // Convert eligible preview entries back into invoices for filtering.
+    // We need to know which preview entry corresponds to which invoice.
+    const previewToInvoice = new Map<string, Stripe.Invoice>();
+    for (const inv of allInvoices) {
+      if (inv.id) previewToInvoice.set(inv.id, inv);
+    }
+    const previewInvoices = preview
+      .map((p) => previewToInvoice.get(p.invoiceId))
+      .filter((i): i is Stripe.Invoice => !!i);
+
+    const { target: previewTarget, skipped: previewSkipped } =
+      selectCurrentSubscriptionChargeable(previewInvoices, user.stripeSubscriptionId);
+
+    const filteredPreview = previewTarget
+      ? preview.filter((p) => p.invoiceId === previewTarget.id)
+      : [];
+    const duplicateCount = previewSkipped.length;
+    filterStats.eligible = filteredPreview.length;
+    filterStats.duplicateOrStaleCycle = duplicateCount;
+
     return NextResponse.json({
       success: true,
       preview: {
-        eligibleCount: preview.length,
+        eligibleCount: filteredPreview.length,
         totalInvoices: filterStats.totalInvoices,
         filterStats: {
           wrongCollectionMethod: filterStats.wrongCollectionMethod,
@@ -187,13 +211,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
           noCustomerId: filterStats.noCustomerId,
           userNotFound: 0,
           notPastDue: filterStats.notPastDue,
+          duplicateOrStaleCycle: filterStats.duplicateOrStaleCycle,
         },
         debug: {
           totalCustomerIds: 1,
           totalUsersFound: 1,
           pastDueUsersFound: 1,
         },
-        users: preview,
+        users: filteredPreview,
       },
     });
   } catch (error) {
@@ -266,13 +291,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return true;
     });
 
+    // Scope to current subscription only — prevents charging duplicate cycle
+    // invoices that accumulate when pause_collection didn't fire in time.
+    const { target, skipped: nonCurrentInvoices } = selectCurrentSubscriptionChargeable(
+      eligibleInvoices,
+      user.stripeSubscriptionId
+    );
+    const invoicesToCharge = target ? [target] : [];
+
     const results: Awaited<ReturnType<typeof payOpenInvoiceAsPastDueAdmin>>[] = [];
     let processed = 0;
     let succeeded = 0;
     let failed = 0;
     let skipped = 0;
 
-    for (const invoice of eligibleInvoices) {
+    for (const invoice of invoicesToCharge) {
       const invCustomerId =
         typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
       if (!invCustomerId) continue;
@@ -308,6 +341,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       else skipped++;
 
       results.push(row);
+    }
+
+    // Log skipped duplicates so audit stays honest about what we saw vs charged
+    for (const dup of nonCurrentInvoices) {
+      if (!dup.id) continue;
+      skipped++;
+      try {
+        await InvoiceChargeLog.create({
+          invoiceId: dup.id,
+          customerId,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: "skipped",
+          amount: dup.amount_remaining || 0,
+          attemptedAt: new Date(),
+          errorMessage: "Skipped: duplicate or stale cycle invoice not on current subscription",
+        });
+      } catch (logErr) {
+        console.error("[charge-past-due] Failed to write InvoiceChargeLog for skipped duplicate:", logErr);
+      }
+      results.push({
+        invoiceId: dup.id,
+        customerId,
+        userId: String(user._id),
+        userEmail: user.email || "N/A",
+        status: "skipped",
+        skipReason: "duplicate_or_stale_cycle_invoice",
+        amount: dup.amount_remaining || 0,
+      });
     }
 
     return NextResponse.json({

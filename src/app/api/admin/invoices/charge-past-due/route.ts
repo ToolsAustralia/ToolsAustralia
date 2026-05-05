@@ -5,12 +5,14 @@ import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
 import ChargeJobLock from "@/models/ChargeJobLock";
+import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 import {
   batchFetchCustomers,
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
+  selectCurrentSubscriptionChargeable,
 } from "@/server/admin/chargePastDueShared";
 import ChargeJobRun from "@/models/ChargeJobRun";
 import {
@@ -18,6 +20,16 @@ import {
   aggregateRunTotals,
   type ChargeLogRowForAggregation,
 } from "@/server/admin/charge-past-due-totals";
+
+type PastDueUserLean = {
+  _id: mongoose.Types.ObjectId;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscription?: { status?: string | null };
+};
 
 /**
  * GET /api/admin/invoices/charge-past-due
@@ -64,7 +76,7 @@ export async function GET(_request: NextRequest) {
     const allUsers = await User.find({
       stripeCustomerId: { $in: customerIds },
     })
-      .select("_id email firstName lastName stripeCustomerId subscription.status")
+      .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
       .lean();
 
     // Get users with past_due status
@@ -72,8 +84,8 @@ export async function GET(_request: NextRequest) {
       stripeCustomerId: { $in: customerIds },
       "subscription.status": "past_due",
     })
-      .select("_id email firstName lastName stripeCustomerId subscription.status")
-      .lean();
+      .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
+      .lean<PastDueUserLean[]>();
 
     const userMap = new Map(pastDueUsers.map((u) => [u.stripeCustomerId, u]));
 
@@ -91,6 +103,7 @@ export async function GET(_request: NextRequest) {
       userNotFound: 0,
       notPastDue: 0,
       eligible: 0,
+      duplicateOrStaleCycle: 0,
     };
 
     const preview: Array<{
@@ -166,10 +179,44 @@ export async function GET(_request: NextRequest) {
       });
     }
 
+    // Per-customer scoping: reduce preview to the single invoice per customer
+    // that is attached to their current subscription.
+    const previewToInvoiceGet = new Map<string, Stripe.Invoice>();
+    for (const inv of allInvoices) {
+      if (inv.id) previewToInvoiceGet.set(inv.id, inv);
+    }
+
+    // Group preview entries by customerId so we can scope per customer.
+    const previewByCustomer = new Map<string, typeof preview>();
+    for (const p of preview) {
+      if (!previewByCustomer.has(p.customerId)) previewByCustomer.set(p.customerId, []);
+      previewByCustomer.get(p.customerId)!.push(p);
+    }
+
+    const filteredPreviewGet: typeof preview = [];
+    let totalSkippedDuplicatesGet = 0;
+
+    for (const [cid, custPreview] of previewByCustomer) {
+      const custInvoices = custPreview
+        .map((p) => previewToInvoiceGet.get(p.invoiceId))
+        .filter((i): i is Stripe.Invoice => !!i);
+      const u = userMap.get(cid);
+      const userSubId = u?.stripeSubscriptionId;
+      const { target: custTarget, skipped: custSkipped } = selectCurrentSubscriptionChargeable(custInvoices, userSubId);
+      if (custTarget) {
+        const targetEntry = custPreview.find((p) => p.invoiceId === custTarget.id);
+        if (targetEntry) filteredPreviewGet.push(targetEntry);
+      }
+      totalSkippedDuplicatesGet += custSkipped.length;
+    }
+
+    filterStats.eligible = filteredPreviewGet.length;
+    filterStats.duplicateOrStaleCycle = totalSkippedDuplicatesGet;
+
     return NextResponse.json({
       success: true,
       preview: {
-        eligibleCount: preview.length,
+        eligibleCount: filteredPreviewGet.length,
         totalInvoices: filterStats.totalInvoices,
         filterStats: {
           wrongCollectionMethod: filterStats.wrongCollectionMethod,
@@ -178,13 +225,14 @@ export async function GET(_request: NextRequest) {
           noCustomerId: filterStats.noCustomerId,
           userNotFound: filterStats.userNotFound,
           notPastDue: filterStats.notPastDue,
+          duplicateOrStaleCycle: filterStats.duplicateOrStaleCycle,
         },
         debug: {
           totalCustomerIds: customerIds.length,
           totalUsersFound: allUsers.length,
           pastDueUsersFound: pastDueUsers.length,
         },
-        users: preview,
+        users: filteredPreviewGet,
       },
     });
   } catch (error) {
@@ -333,8 +381,8 @@ export async function POST(request: NextRequest) {
         stripeCustomerId: { $in: customerIds },
         "subscription.status": "past_due",
       })
-        .select("_id email firstName lastName stripeCustomerId subscription.status")
-        .lean();
+        .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
+        .lean<PastDueUserLean[]>();
 
       const userMap = new Map(users.map((u) => [u.stripeCustomerId, u]));
 
@@ -374,6 +422,27 @@ export async function POST(request: NextRequest) {
         return true;
       });
 
+      // Scope each customer to the invoice attached to their current subscription only.
+      const invoicesByCustomer = new Map<string, Stripe.Invoice[]>();
+      for (const inv of eligibleInvoices) {
+        const cid = typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
+        if (!cid) continue;
+        if (!invoicesByCustomer.has(cid)) invoicesByCustomer.set(cid, []);
+        invoicesByCustomer.get(cid)!.push(inv);
+      }
+
+      const eligibleByUserSub: Stripe.Invoice[] = [];
+      const skippedDuplicates: Array<{ invoice: Stripe.Invoice; customerId: string; user: PastDueUserLean }> = [];
+
+      for (const [cid, custInvoices] of invoicesByCustomer) {
+        const u = userMap.get(cid);
+        if (!u) continue;
+        const userSubId = u.stripeSubscriptionId;
+        const { target, skipped: dups } = selectCurrentSubscriptionChargeable(custInvoices, userSubId);
+        if (target) eligibleByUserSub.push(target);
+        for (const d of dups) skippedDuplicates.push({ invoice: d, customerId: cid, user: u });
+      }
+
       // Insert the run record — status="running" until finalize block runs.
       // Captures eligible count even if no invoices end up attempted.
       const chargeRun = await ChargeJobRun.create({
@@ -405,8 +474,8 @@ export async function POST(request: NextRequest) {
       const BATCH_DELAY = 500;
 
       try {
-        for (let i = 0; i < eligibleInvoices.length; i += BATCH_SIZE) {
-          const batch = eligibleInvoices.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < eligibleByUserSub.length; i += BATCH_SIZE) {
+          const batch = eligibleByUserSub.slice(i, i + BATCH_SIZE);
 
           const _batchResults = await Promise.allSettled(
             batch.map(async (invoice) => {
@@ -469,9 +538,39 @@ export async function POST(request: NextRequest) {
           );
 
           // Delay between batches
-          if (i + BATCH_SIZE < eligibleInvoices.length) {
+          if (i + BATCH_SIZE < eligibleByUserSub.length) {
             await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
           }
+        }
+
+        // Log skipped duplicates so audit stays honest about what we saw vs charged.
+        for (const { invoice, customerId: cid, user: u } of skippedDuplicates) {
+          if (!invoice.id) continue;
+          skipped++;
+          try {
+            await InvoiceChargeLog.create({
+              invoiceId: invoice.id,
+              customerId: cid,
+              userId: new mongoose.Types.ObjectId(String(u._id)),
+              adminId: new mongoose.Types.ObjectId(adminId),
+              status: "skipped",
+              amount: invoice.amount_remaining || 0,
+              attemptedAt: new Date(),
+              errorMessage: "Skipped: duplicate or stale cycle invoice not on current subscription",
+              chargeRunId,
+            });
+          } catch (logErr) {
+            console.error("[charge-past-due] Failed to write InvoiceChargeLog for skipped duplicate:", logErr);
+          }
+          results.push({
+            invoiceId: invoice.id,
+            customerId: cid,
+            userId: String(u._id),
+            userEmail: u.email || "N/A",
+            status: "skipped",
+            skipReason: "duplicate_or_stale_cycle_invoice",
+            amount: invoice.amount_remaining || 0,
+          });
         }
 
         // Aggregate authoritative totals from the in-memory `results` array.
