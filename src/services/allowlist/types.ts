@@ -65,6 +65,22 @@ export type BlockedListResult = {
   scanned: number;
 };
 
+/**
+ * Result envelope for `listBlocked` (Mongo-backed read path). Replaces the
+ * Stripe-paginate-at-request-time approach with a cursor-paged Mongo query
+ * over the `blockedtransactions` collection.
+ *
+ * - `rows` — page of rows (size up to opts.limit).
+ * - `nextCursor` — opaque cursor for the next page; null when no more results.
+ * - `total` — total count of rows matching the filter (across all pages),
+ *   used by the admin UI's "Showing X of Y" counter.
+ */
+export type BlockedPageResult = {
+  rows: BlockedRow[];
+  nextCursor: string | null;
+  total: number;
+};
+
 /** Repository abstraction so the service can be tested with hand-rolled fakes. */
 export interface AllowlistRepository {
   /** Returns the userId if either stripeCustomerId or customerEmail matches a User row. */

@@ -13,8 +13,8 @@
 3. Global rate limit: 1 / 24 hours (prevents Stripe Radar spikes; disabled in dev)
 4. Confirmation: must POST `{ "confirmation": "CHARGE" }` exactly
 5. Optional global mutex: `ChargeJobLock` (auto-expiry 30 minutes)
-6. Time-based DB idempotency: 24h since last attempt on the invoice
-7. Stripe idempotency keys: `admin-charge-${invoiceId}`
+6. Time-based DB idempotency: 24h since last `InvoiceChargeLog.attemptedAt` on the invoice — enforced inside [`payOpenInvoiceAsPastDueAdmin`](../../src/server/admin/chargePastDueShared.ts) so both the bulk and per-user (`POST /api/admin/users/[id]/charge-past-due`) routes inherit it. Skipped attempts write a `skipped` log row with `skipReason: "recently_attempted"`.
+7. Stripe idempotency keys: `admin-charge-${invoiceId}` — passed as the third arg to `stripe.invoices.pay`. Stripe caches the response for 24h, which matches the DB window: by the time a legitimate next-day retry runs, both have cleared.
 8. DB status verification: only invoices whose user has `subscription.status === "past_due"`
 
 ### Invoice filter — only charge if ALL true
@@ -143,9 +143,8 @@ npm run backfill:blocked-transactions:dry -- --from=2026-02-01 --to=2026-05-01 -
 npm run backfill:blocked-transactions     -- --from=2026-02-01 --to=2026-05-01
 ```
 
-**Phase C (read flip) is the next step.** The admin route still calls `AllowlistService.listBlockedFromStripe(filter)` and pays the full pagination cost on every load. Replace it with a `listBlocked(filter)` that:
-1. Queries `BlockedTransaction.find({ createdAt: range, ...declineFilter })` (single indexed query)
-2. Batches the per-row eligibility lookups into 3 `Promise.all` queries: `User.find({ $or: [stripeCustomerId/email $in] })`, `AllowlistAction.find({ cardFingerprint: $in, action: "added" })`, then `PaymentEvent.distinct("userId", { userId: $in, eventType: $in })`
-3. Joins in memory and returns
+**Phase C (read flip) is in place — both backends coexist.** [`AllowlistService.listBlocked(filter, opts)`](./architecture.md#listblocked-mongo-backed-read-path) is the new Mongo-backed read path: cursor-paged over `BlockedTransaction`, with eligibility joins batched into a serial `User.find` followed by parallel `AllowlistAction.find` + `PaymentEvent.distinct`. The verdict logic was extracted to a pure `computeEligibility(doc, maps)` helper for testability (14 unit tests in `src/services/allowlist/__tests__/AllowlistService.test.ts` — 8 for verdict branches, 6 for the cursor codec).
 
-After Phase C ships and bakes for ~2 weeks, drop `MAX_PAYMENT_INTENTS_SCANNED`, the truncation banner, and the `maxDuration: 60` from the route — they all become dead weight once the read source is Mongo.
+The route at `GET /api/admin/allowlist/blocked-cards` now accepts `?source=stripe|mongo` (default **stripe** for safe rollout). Response envelopes differ — `{rows, truncated, scanned}` for stripe vs. `{rows, nextCursor, total}` for mongo — see [api.md](./api.md#get-apiadminallowlistblocked-cards). The admin UI (`useBlockedCards` hook → `BlockedTransactionsManagement`) hardcodes `?source=mongo` and renders "Showing X of Y" + a Load-more button instead of the truncation banner.
+
+`listBlockedFromStripe` is intentionally **left intact** so a manual flip back to `?source=stripe` is one query-string away if the Mongo path misbehaves in production. Once the Mongo path bakes for ~2 weeks, drop `MAX_PAYMENT_INTENTS_SCANNED`, `listBlockedFromStripe`, the truncation banner code-path, and `maxDuration: 60` — they all become dead weight then.

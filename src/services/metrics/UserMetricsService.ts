@@ -163,11 +163,13 @@ export class UserMetricsService {
           pkgEntry.counts[key]++;
         };
 
-        // Scheduled cancel-at-period-end: status is "active"/"past_due" AND auto-renew has been turned off.
+        // Scheduled cancel-at-period-end: status is "active"/"trialing"/"past_due" AND auto-renew has been turned off.
         // Webhook sets endDate on every active/trialing sub (it's the next billing date), so endDate alone
         // is not a cancellation signal — autoRenew === false is the canonical signal.
         if (
-          (user.subscription.status === "active" || user.subscription.status === "past_due") &&
+          (user.subscription.status === "active" ||
+            user.subscription.status === "trialing" ||
+            user.subscription.status === "past_due") &&
           user.subscription.autoRenew === false &&
           user.subscription.endDate
         ) {
@@ -186,8 +188,12 @@ export class UserMetricsService {
           membershipStatus.pastDue++;
           bumpPackage("pastDue");
         }
-        // Active: isActive && status === "active"
-        else if (user.subscription.isActive && user.subscription.status === "active") {
+        // Active: isActive && status ∈ {"active","trialing"} — trialing is a paying-customer-in-grace
+        // and is counted as active by both the per-user badge and the dashboard "Membership by Package" KPI.
+        else if (
+          user.subscription.isActive &&
+          (user.subscription.status === "active" || user.subscription.status === "trialing")
+        ) {
           membershipStatus.active++;
           bumpPackage("active");
         }

@@ -4,7 +4,11 @@
 
 The Stripe webhook ([src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts)) writes `subscription.endDate` on **every** active/trialing sub — it's the next billing-period end, not a "user cancelled" marker. Classifying by `endDate` alone counts every healthy sub as cancelled.
 
-The canonical "scheduled cancel-at-period-end" check is `status ∈ {active, past_due} && autoRenew === false && endDate set` — see the ladder in [architecture.md](./architecture.md#membership-classification-ladder). Same filter is used in [src/services/admin/MembershipAnalyticsService.ts](../../src/services/admin/MembershipAnalyticsService.ts) and [src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts); keep these three in sync if the rule ever changes.
+The canonical "scheduled cancel-at-period-end" check is `status ∈ {active, trialing, past_due} && autoRenew === false && endDate set` — see the ladder in [architecture.md](./architecture.md#membership-classification-ladder). Same filter is used in [src/services/admin/MembershipAnalyticsService.ts](../../src/services/admin/MembershipAnalyticsService.ts) and [src/utils/admin/userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts); keep these three in sync if the rule ever changes.
+
+## Trialing must be counted as active
+
+The User Metrics view's "Active Memberships" card ([src/components/admin/metrics/UserMetricsView.tsx](../../src/components/admin/metrics/UserMetricsView.tsx)) reads `membershipStatus.active` from the metrics ladder. The ladder's "Active" branch must include both `status === "active"` **and** `status === "trialing"` — otherwise trialing users fall through to no bucket and the card under-counts vs. the per-user "Active" badge ([src/components/admin/ui/AdminBadge.tsx](../../src/components/admin/ui/AdminBadge.tsx)) and the dashboard "Membership by Package" KPI, both of which include trialing.
 
 ## Backfill rows aren't 1:1 with stripe rows
 

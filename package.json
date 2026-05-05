@@ -58,6 +58,7 @@
     "test:dashboard-date-range": "tsx src/utils/admin/__tests__/dashboardDateRange.test.ts",
     "test:age-grouping": "tsx src/utils/metrics/__tests__/age-grouping.test.ts",
     "test:profession-normalize": "tsx src/utils/metrics/__tests__/profession-normalize.test.ts",
+    "test:past-due-admin-charge": "tsx src/server/admin/__tests__/chargePastDueShared.test.ts",
     "cleanup:membership-backfill": "tsx scripts/cleanup-membership-backfill-rows.ts --live",
     "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
     "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts",

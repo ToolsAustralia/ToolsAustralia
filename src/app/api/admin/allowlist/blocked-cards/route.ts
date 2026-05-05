@@ -36,7 +36,28 @@ export async function GET(request: NextRequest) {
     skippedOnly: searchParams.get("skippedOnly") === "true",
   };
 
+  // Phase C: optional Mongo-backed read path. Default stays "stripe" so the
+  // existing behavior is preserved for any caller that doesn't opt in.
+  const sourceRaw = searchParams.get("source") ?? "stripe";
+  if (sourceRaw !== "stripe" && sourceRaw !== "mongo") {
+    return NextResponse.json(
+      { success: false, error: "Invalid source — must be 'stripe' or 'mongo'" },
+      { status: 400 }
+    );
+  }
+  const source: "stripe" | "mongo" = sourceRaw;
+
   try {
+    if (source === "mongo") {
+      const cursor = searchParams.get("cursor");
+      const limitRaw = searchParams.get("limit");
+      const limit = limitRaw
+        ? Math.max(1, Math.min(100, parseInt(limitRaw, 10) || 50))
+        : 50;
+      const result = await getAllowlistService().listBlocked(filter, { cursor, limit });
+      return NextResponse.json({ success: true, ...result });
+    }
+
     const result = await getAllowlistService().listBlockedFromStripe(filter);
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
