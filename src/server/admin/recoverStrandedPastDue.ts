@@ -45,30 +45,54 @@ export type RecoverStrandedResult =
       message: string;
     };
 
-export async function recoverStrandedPastDueInvoice(params: {
+export type RecoveryEligibilityResult =
+  | { eligible: true; expectedAmountCents: number }
+  | {
+      eligible: false;
+      reason:
+        | "user_not_found"
+        | "subscription_inactive"
+        | "not_past_due"
+        | "package_not_found"
+        | "invoice_not_found"
+        | "invoice_owner_mismatch"
+        | "invoice_subscription_mismatch"
+        | "invoice_still_chargeable"
+        | "invoice_already_paid"
+        | "invoice_unknown_status"
+        | "recent_recovery_attempt";
+      message: string;
+    };
+
+/**
+ * Read-only eligibility check — performs the same verifications as the front of
+ * `recoverStrandedPastDueInvoice` but makes no Stripe writes and no DB writes.
+ * Returns { eligible: true, expectedAmountCents } when recovery can proceed,
+ * or { eligible: false, reason, message } with the first blocking reason found.
+ */
+export async function checkRecoveryEligibility(params: {
   userId: string;
   originalInvoiceId: string;
-  adminId: string;
-}): Promise<RecoverStrandedResult> {
-  const { userId, originalInvoiceId, adminId } = params;
+}): Promise<RecoveryEligibilityResult> {
+  const { userId, originalInvoiceId } = params;
 
   // ─── 1. Load user + verify state ───
   const user = await User.findById(userId)
     .select("_id email stripeCustomerId stripeSubscriptionId subscription")
     .lean();
-  if (!user) return { ok: false, reason: "user_not_found", message: "User not found" };
+  if (!user) return { eligible: false, reason: "user_not_found", message: "User not found" };
 
   const subStatus = (user.subscription as { status?: string } | undefined)?.status;
   if (subStatus !== "past_due") {
     return {
-      ok: false,
+      eligible: false,
       reason: "not_past_due",
       message: `Subscription status is "${subStatus ?? "(missing)"}", not past_due`,
     };
   }
   if (!user.stripeCustomerId || !user.stripeSubscriptionId) {
     return {
-      ok: false,
+      eligible: false,
       reason: "subscription_inactive",
       message: "User has no active Stripe subscription/customer",
     };
@@ -78,7 +102,7 @@ export async function recoverStrandedPastDueInvoice(params: {
   const pkg = packageId ? getPackageById(packageId) : undefined;
   if (!pkg || !pkg.isActive || typeof pkg.price !== "number") {
     return {
-      ok: false,
+      eligible: false,
       reason: "package_not_found",
       message: `MembershipPackage "${packageId ?? ""}" not found or inactive`,
     };
@@ -91,7 +115,7 @@ export async function recoverStrandedPastDueInvoice(params: {
     originalInvoice = await stripe.invoices.retrieve(originalInvoiceId);
   } catch (err) {
     return {
-      ok: false,
+      eligible: false,
       reason: "invoice_not_found",
       message: err instanceof Error ? err.message : String(err),
     };
@@ -103,15 +127,12 @@ export async function recoverStrandedPastDueInvoice(params: {
       : originalInvoice.customer?.id;
   if (invoiceCustomerId !== user.stripeCustomerId) {
     return {
-      ok: false,
+      eligible: false,
       reason: "invoice_owner_mismatch",
       message: "Original invoice customer does not match user's stripeCustomerId",
     };
   }
 
-  // Tighter check: the invoice must belong to the user's current subscription,
-  // not an old (canceled-and-resubscribed) one. Prevents accidental recovery
-  // of legacy invoices that the admin shouldn't be touching.
   const invoiceWithSub = originalInvoice as Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
   };
@@ -121,20 +142,20 @@ export async function recoverStrandedPastDueInvoice(params: {
       : invoiceWithSub.subscription?.id;
   if (invoiceSubscriptionId !== user.stripeSubscriptionId) {
     return {
-      ok: false,
+      eligible: false,
       reason: "invoice_subscription_mismatch",
       message: "Original invoice does not belong to user's current subscription",
     };
   }
 
-  const eligibility = isOriginalInvoiceEligibleForRecovery(originalInvoice);
-  if (!eligibility.eligible) {
+  const eligibilityCheck = isOriginalInvoiceEligibleForRecovery(originalInvoice);
+  if (!eligibilityCheck.eligible) {
     return {
-      ok: false,
+      eligible: false,
       reason:
-        eligibility.reason === "still_chargeable"
+        eligibilityCheck.reason === "still_chargeable"
           ? "invoice_still_chargeable"
-          : eligibility.reason === "already_paid"
+          : eligibilityCheck.reason === "already_paid"
             ? "invoice_already_paid"
             : "invoice_unknown_status",
       message: `Original invoice status is "${originalInvoice.status}"; not stranded`,
@@ -151,9 +172,53 @@ export async function recoverStrandedPastDueInvoice(params: {
 
   if (hasRecentRecoveryAttempt(recentRows, originalInvoiceId)) {
     return {
-      ok: false,
+      eligible: false,
       reason: "recent_recovery_attempt",
       message: `A recovery attempt for this invoice happened within the last ${RECENT_ATTEMPT_WINDOW_HOURS}h`,
+    };
+  }
+
+  return { eligible: true, expectedAmountCents };
+}
+
+export async function recoverStrandedPastDueInvoice(params: {
+  userId: string;
+  originalInvoiceId: string;
+  adminId: string;
+}): Promise<RecoverStrandedResult> {
+  const { userId, originalInvoiceId, adminId } = params;
+
+  // ─── 1–3. Eligibility check (delegates to shared read-only function) ───
+  const eligibilityResult = await checkRecoveryEligibility({ userId, originalInvoiceId });
+  if (!eligibilityResult.eligible) {
+    // Map RecoveryEligibilityResult reason to RecoverStrandedResult reason (identical union subset)
+    return { ok: false, reason: eligibilityResult.reason, message: eligibilityResult.message };
+  }
+
+  const { expectedAmountCents } = eligibilityResult;
+
+  // Re-load user and invoice (needed for the write path; eligibility check already validated them)
+  const user = await User.findById(userId)
+    .select("_id email stripeCustomerId stripeSubscriptionId subscription")
+    .lean();
+  // These cannot be null/undefined — eligibility check passed — but narrow for TypeScript
+  if (!user || !user.stripeCustomerId || !user.stripeSubscriptionId) {
+    return { ok: false, reason: "user_not_found", message: "User not found after eligibility check" };
+  }
+
+  const packageId = (user.subscription as { packageId?: string } | undefined)?.packageId;
+  const pkg = packageId ? getPackageById(packageId) : undefined;
+  // pkg was already validated in checkRecoveryEligibility; if somehow missing now, use a safe fallback
+  const pkgName = pkg?.name ?? packageId ?? "membership";
+
+  let originalInvoice: Stripe.Invoice;
+  try {
+    originalInvoice = await stripe.invoices.retrieve(originalInvoiceId);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "invoice_not_found",
+      message: err instanceof Error ? err.message : String(err),
     };
   }
 
@@ -231,7 +296,7 @@ export async function recoverStrandedPastDueInvoice(params: {
           invoice: draftInvoice.id,
           amount: expectedAmountCents,
           currency: "aud",
-          description: `Recovery for ${pkg.name} (replaces ${originalInvoiceId})`,
+          description: `Recovery for ${pkgName} (replaces ${originalInvoiceId})`,
         },
         { idempotencyKey: buildRecoveryItemIdempotencyKey(originalInvoiceId) }
       );

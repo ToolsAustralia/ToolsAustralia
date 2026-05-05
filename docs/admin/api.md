@@ -10,6 +10,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/users/[id]/charge-past-due` | [billing-stripe](../billing-stripe/) | Single past-due retry |
 | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | [billing-stripe](../billing-stripe/) | Refund replay |
 | `/api/admin/invoices/charge-past-due` | [billing-stripe](../billing-stripe/) | Bulk past-due retry |
+| `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery |
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | _TODO_ | — | Promo, affiliate, draw, analytics admin routes |
@@ -50,6 +51,34 @@ Lists `InvoiceChargeLog` rows where `chargeRunId === null` — i.e. per-user man
 **Query params:** same as `/runs` (`startDate`, `endDate`, `adminId`, `status`, `limit`, `offset`).
 
 **Response:** `{ rows: InvoiceChargeLog[], total: number }`
+
+### `GET /api/admin/users/[userId]/recover-past-due-invoice`
+
+Pre-flight eligibility check — read-only (no Stripe writes, no DB writes). Used by [`RecoverInvoiceModal`](../../src/components/admin/RecoverInvoiceModal.tsx) on open to gate the confirmation UI before the admin has a chance to submit.
+
+**Auth:** admin only.
+
+**Query params:**
+
+| Param | Required | Notes |
+|---|---|---|
+| `invoiceId` | yes | The original invoice ID to check (`in_…`) |
+
+**Response (always HTTP 200 when the check itself succeeds):**
+
+```json
+{ "eligible": true, "expectedAmountCents": 4000 }
+```
+or
+```json
+{ "eligible": false, "reason": "invoice_subscription_mismatch", "message": "Original invoice does not belong to user's current subscription" }
+```
+
+The `reason` values are the same subset as the POST error reasons (excluding the write-only reasons `void_failed`, `draft_create_failed`, `finalize_failed`, `no_payment_method`). Returns `400` if `invoiceId` is missing.
+
+**Implementation:** delegates to `checkRecoveryEligibility()` exported from [`src/server/admin/recoverStrandedPastDue.ts`](../../src/server/admin/recoverStrandedPastDue.ts). The POST handler internally calls the same function so verification logic is shared and not duplicated.
+
+---
 
 ### `POST /api/admin/users/[userId]/recover-past-due-invoice`
 
@@ -94,6 +123,63 @@ Recover a stranded past-due invoice (status `uncollectible` or `void` — the "T
 | `finalize_failed` | 502 | Stripe rejected the finalize call |
 
 **Audit:** Each step writes one `InvoiceChargeLog` row. The void/create/finalize rows are tagged with `result.recovery.{step,originalInvoiceId,newInvoiceId?}`. The pay step writes its own row via the standard past-due primitive (no `recovery` tag). To trace a recovery, query by `result.recovery.originalInvoiceId`, then by `newInvoiceId` for the pay row.
+
+---
+
+### `POST /api/admin/invoices/recover-past-due`
+
+Bulk-recover up to 10 stranded past-due invoices in one request. Processes them sequentially via the same `recoverStrandedPastDueInvoice` orchestrator used by the per-user modal.
+
+**Auth:** admin only.
+
+**Body:**
+
+```json
+{
+  "confirmation": "RECOVER ALL",
+  "items": [
+    { "userId": "...", "originalInvoiceId": "in_..." },
+    "..."
+  ]
+}
+```
+
+- `items` array: 1–10 entries (Zod-enforced; hard cap prevents exceeding the serverless request timeout).
+- `confirmation` must be the literal string `"RECOVER ALL"`.
+- Larger batches risk exceeding the serverless request timeout; admins should run multiple smaller batches.
+
+**Success response (`HTTP 200`):**
+
+```json
+{
+  "success": true,
+  "summary": { "total": 3, "succeeded": 2, "failed": 1 },
+  "results": [
+    {
+      "userId": "...",
+      "originalInvoiceId": "in_...",
+      "ok": true,
+      "newInvoiceId": "in_new...",
+      "paymentStatus": "success",
+      "amount": 4000
+    },
+    {
+      "userId": "...",
+      "originalInvoiceId": "in_...",
+      "ok": false,
+      "reason": "recent_recovery_attempt",
+      "message": "A recovery attempt for this invoice happened within the last 24h"
+    }
+  ]
+}
+```
+
+**Error responses:**
+- `401` — not authenticated or not admin
+- `400` — body fails Zod validation (wrong confirmation, empty/over-10 items)
+- `500` — unexpected server error
+
+Each item is processed with `recoverStrandedPastDueInvoice`, which has its own 24h per-user idempotency lock and writes `InvoiceChargeLog` rows for every step (void / create / finalize / pay). A 300ms delay is inserted between rows to reduce Stripe rate-limit pressure. Per-item failures do **not** abort the batch — all items run and results include both successes and failures.
 
 ## Auth
 
