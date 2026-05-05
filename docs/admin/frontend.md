@@ -12,7 +12,7 @@
 [src/components/admin/](../../src/components/admin/):
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
 - `ChargePastDueModal.tsx` — bulk past-due retry
-- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Now Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection) instead of scanning Stripe live, so initial load is sub-100ms. Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom (single instance for desktop + mobile, spinner when `isFetchingNextPage`). Query errors surface in an amber banner above the filters card (replaces the old truncation banner — there is no scan-cap concept on the Mongo path). Default decline-reason filter is `recoverable_only` (hides fraud signals + permanent-issue codes like `expired_card` / `incorrect_cvc`). Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). Note: the Mongo dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill), so row counts are typically much lower than the legacy Stripe-scan view (~3225 → ~196 in a 5-week window) — this is intentional. Service contract documented in [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice); the broader filter-mismatch context lives in [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#blocked-cards-route-paginates-every-pi).
+- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection), so initial load is sub-100ms. Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom (single instance for desktop + mobile, spinner when `isFetchingNextPage`). Query errors surface in an amber banner above the filters card. Default decline-reason filter is `recoverable_only` (hides fraud signals + permanent-issue codes like `expired_card` / `incorrect_cvc`). Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract documented in [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
 - (other admin-specific components)
 
 > _TODO: enumerate full component list._
@@ -76,6 +76,25 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 - Data: calls `useUserMetrics({ enabled: isExpanded })` so the all-time aggregation only fetches when the section is opened.
 - Body when loaded: `<AgeBreakdownTable data={data.ageGroup} purchasedData={data.ageGroupPurchased} />` followed by `<ProfessionBreakdownTable data={data.profession} />` — the same components used in the metrics tab's table mode.
 - Loading shows a spinner row; when `data` is null after load, a "No breakdown data available." placeholder renders.
+
+## Past-due charge history tab (`/admin/past-due-history`)
+
+### Components
+
+- [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. Renders a filter bar (date range, admin, status) plus two tables side-by-side: **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
+- [src/app/admin/component/PastDueChargeHistoryDrawer.tsx](../../src/app/admin/component/PastDueChargeHistoryDrawer.tsx) — slide-in drawer for a single run. Fetches `GET /api/admin/charge-past-due/runs/[runId]` via `useChargePastDueRunDetail` and displays the `ChargeJobRun` header (status badge, totals, admin, timestamps) plus a paginated table of individual `InvoiceChargeLog` rows for that run.
+
+### Hooks
+
+Three TanStack Query hooks under `src/hooks/queries/admin/`:
+
+| Hook | Endpoint |
+|---|---|
+| `useChargePastDueRuns(filter)` | `GET /api/admin/charge-past-due/runs` |
+| `useChargePastDueRunDetail(runId)` | `GET /api/admin/charge-past-due/runs/[runId]` |
+| `useChargePastDueManualRetries(filter)` | `GET /api/admin/charge-past-due/manual-retries` |
+
+All three are admin-only; they return `undefined` when the session is not admin. Query keys are prefixed `["admin", "charge-past-due", ...]`.
 
 ## Hooks
 

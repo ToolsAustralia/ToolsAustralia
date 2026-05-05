@@ -12,6 +12,12 @@ import {
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
 } from "@/server/admin/chargePastDueShared";
+import ChargeJobRun from "@/models/ChargeJobRun";
+import {
+  ORPHAN_RUN_THRESHOLD_MS,
+  aggregateRunTotals,
+  type ChargeLogRowForAggregation,
+} from "@/server/admin/charge-past-due-totals";
 
 /**
  * GET /api/admin/invoices/charge-past-due
@@ -257,6 +263,23 @@ export async function POST(request: NextRequest) {
       await lock.save();
     }
 
+    // Orphan sweep: any prior ChargeJobRun stuck in "running" past the lock window
+    // was almost certainly killed by a process crash. Mark them aborted so the
+    // history view doesn't show indefinite "running" rows.
+    await ChargeJobRun.updateMany(
+      {
+        status: "running",
+        startedAt: { $lt: new Date(Date.now() - ORPHAN_RUN_THRESHOLD_MS) },
+      },
+      {
+        $set: {
+          status: "aborted",
+          finishedAt: new Date(),
+          error: "Aborted by orphan sweep — exceeded lock window without finalize",
+        },
+      }
+    );
+
     try {
       // 4. Fetch eligible invoices from Stripe with pagination
       // Note: Stripe invoices don't have "past_due" status - that's a subscription status
@@ -351,6 +374,16 @@ export async function POST(request: NextRequest) {
         return true;
       });
 
+      // Insert the run record — status="running" until finalize block runs.
+      // Captures eligible count even if no invoices end up attempted.
+      const chargeRun = await ChargeJobRun.create({
+        adminId: new mongoose.Types.ObjectId(adminId),
+        startedAt: new Date(),
+        status: "running",
+        totals: { eligibleCount: eligibleInvoices.length },
+      });
+      const chargeRunId = chargeRun._id as mongoose.Types.ObjectId;
+
       const results: Array<{
         invoiceId: string;
         customerId: string;
@@ -371,72 +404,110 @@ export async function POST(request: NextRequest) {
       const BATCH_SIZE = 15;
       const BATCH_DELAY = 500;
 
-      for (let i = 0; i < eligibleInvoices.length; i += BATCH_SIZE) {
-        const batch = eligibleInvoices.slice(i, i + BATCH_SIZE);
+      try {
+        for (let i = 0; i < eligibleInvoices.length; i += BATCH_SIZE) {
+          const batch = eligibleInvoices.slice(i, i + BATCH_SIZE);
 
-        const _batchResults = await Promise.allSettled(
-          batch.map(async (invoice) => {
-            const invoiceId = invoice.id;
-            if (!invoiceId) return;
-            
-            const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
-            if (!customerId) return;
+          const _batchResults = await Promise.allSettled(
+            batch.map(async (invoice) => {
+              const invoiceId = invoice.id;
+              if (!invoiceId) return;
 
-            // Get user first (needed for email in results)
-            const user = userMap.get(customerId);
-            const userEmail = user?.email || "N/A";
+              const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+              if (!customerId) return;
 
-            if (!user) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "User not found or not past_due",
-                amount: invoice.amount_remaining || 0,
+              // Get user first (needed for email in results)
+              const user = userMap.get(customerId);
+              const userEmail = user?.email || "N/A";
+
+              if (!user) {
+                skipped++;
+                results.push({
+                  invoiceId: invoiceId,
+                  customerId: customerId,
+                  userEmail: userEmail,
+                  status: "skipped",
+                  skipReason: "User not found or not past_due",
+                  amount: invoice.amount_remaining || 0,
+                });
+                return;
+              }
+
+              const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
+              const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
+
+              if (!paymentMethodId) {
+                skipped++;
+                results.push({
+                  invoiceId: invoiceId,
+                  customerId: customerId,
+                  userId: user._id.toString(),
+                  userEmail: userEmail,
+                  status: "skipped",
+                  skipReason: "No payment method found on invoice or customer",
+                  amount: invoice.amount_remaining || 0,
+                });
+                return;
+              }
+
+              const row = await payOpenInvoiceAsPastDueAdmin({
+                invoice,
+                paymentMethodId,
+                customerId,
+                user: { _id: user._id, email: user.email },
+                adminId,
+                chargeRunId,
               });
-              return;
-            }
 
-            const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-            const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
+              processed++;
+              if (row.status === "success") succeeded++;
+              else if (row.status === "failed") failed++;
+              else skipped++;
 
-            if (!paymentMethodId) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "No payment method found on invoice or customer",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
+              results.push(row);
+            })
+          );
 
-            const row = await payOpenInvoiceAsPastDueAdmin({
-              invoice,
-              paymentMethodId,
-              customerId,
-              user: { _id: user._id, email: user.email },
-              adminId,
-            });
+          // Delay between batches
+          if (i + BATCH_SIZE < eligibleInvoices.length) {
+            await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
+          }
+        }
 
-            processed++;
-            if (row.status === "success") succeeded++;
-            else if (row.status === "failed") failed++;
-            else skipped++;
-
-            results.push(row);
-          })
+        // Aggregate authoritative totals from the in-memory `results` array.
+        const aggregationRows: ChargeLogRowForAggregation[] = results.map((r) => ({
+          status: r.status,
+          amount: r.amount ?? 0,
+          skipReason: r.skipReason,
+        }));
+        const finalTotals = aggregateRunTotals(
+          aggregationRows,
+          eligibleInvoices.length
         );
 
-        // Delay between batches
-        if (i + BATCH_SIZE < eligibleInvoices.length) {
-          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
-        }
+        await ChargeJobRun.updateOne(
+          { _id: chargeRunId },
+          {
+            $set: {
+              finishedAt: new Date(),
+              status: "completed",
+              totals: finalTotals,
+            },
+          }
+        );
+      } catch (runError) {
+        const message = runError instanceof Error ? runError.message : String(runError);
+        await ChargeJobRun.updateOne(
+          { _id: chargeRunId },
+          {
+            $set: {
+              finishedAt: new Date(),
+              status: "failed",
+              error: message,
+            },
+          }
+        );
+        throw runError;
       }
 
       // Release lock

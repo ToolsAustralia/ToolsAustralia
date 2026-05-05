@@ -9,7 +9,6 @@ import type {
   AllowlistRepository,
   ApplySource,
   BlockedFilter,
-  BlockedListResult,
   BlockedPageResult,
   BlockedRow,
   EligibilityPreview,
@@ -24,16 +23,6 @@ import {
 } from "./declineCodes";
 import { getAllowCardFingerprintListId } from "./stripeListResolver";
 
-/**
- * Hard cap on the number of PaymentIntents the Stripe scan will iterate
- * before bailing out. Stripe's `paymentIntents.list` cannot filter by
- * outcome/status, so we paginate every PI in the date window — on a busy
- * account that's tens of thousands of records and easily blows the Vercel
- * function timeout. The cap keeps the worst case bounded; the admin UI
- * surfaces a "narrow your date range" notice when it's hit.
- */
-const MAX_PAYMENT_INTENTS_SCANNED = 2000;
-
 /** Default page size for `listBlocked`. */
 const DEFAULT_LIST_BLOCKED_LIMIT = 50;
 /** Hard upper bound for `listBlocked` page size — clamps any caller request. */
@@ -46,7 +35,7 @@ const MAX_LIST_BLOCKED_LIMIT = 100;
  * the repo's single-user `userHasSucceededPayment` semantics. If you change
  * the success markers, update both lists in lockstep.
  */
-// TODO(C-followup): extract to shared constants — duplicated in MongoAllowlistRepository.
+// TODO(allowlist): extract to shared constants — duplicated in MongoAllowlistRepository.
 const SUCCEEDED_EVENT_TYPES = [
   "PaymentProcessed",
   "BenefitsGranted",
@@ -96,7 +85,7 @@ export type EligibilityMaps = {
  *   2. permanent issue decline-code check
  *   3. user lookup (stripeCustomerId, then email)
  *   4. has-paid check
- * Exported so Task C2 can unit-test the verdict logic against constructed
+ * Exported so unit tests can exercise the verdict logic against constructed
  * input. Keep these branches in lockstep with `evaluate`.
  */
 export function computeEligibility(
@@ -132,21 +121,16 @@ type StripeRadar = Stripe["radar"];
 export type AllowlistServiceDeps = {
   repo: AllowlistRepository;
   stripeRadar: StripeRadar;
-  /** Full Stripe client — needed for paymentIntents.list. Optional in tests
-   *  that only exercise evaluate/apply/reverse. */
-  stripeClient?: Stripe;
 };
 
 export class AllowlistService {
   private readonly repo: AllowlistRepository;
-  // Used by apply() / reverse() in subsequent tasks (6 and 7).
+  // Used by apply() / reverse().
   private readonly stripeRadar: StripeRadar;
-  private readonly stripeClient: Stripe | null;
 
   constructor(deps: AllowlistServiceDeps) {
     this.repo = deps.repo;
     this.stripeRadar = deps.stripeRadar;
-    this.stripeClient = deps.stripeClient ?? null;
   }
 
   async evaluate(input: EvalInput): Promise<EvalResult> {
@@ -296,142 +280,16 @@ export class AllowlistService {
     } as never);
   }
 
-  async listBlockedFromStripe(filter: BlockedFilter): Promise<BlockedListResult> {
-    if (!this.stripeClient) {
-      throw new Error(
-        "listBlockedFromStripe requires a full Stripe client; was not provided in deps"
-      );
-    }
-
-    // Stripe's paymentIntents.list does not accept an outcome filter directly,
-    // so we paginate failed PIs in the date range and filter client-side by
-    // outcome.type === "blocked" or outcome.network_status === "declined_by_network".
-    // Bounded by MAX_PAYMENT_INTENTS_SCANNED so a busy account can't time out
-    // the request — see the constant's docblock for context.
-    const collected: Stripe.PaymentIntent[] = [];
-    let scanned = 0;
-    let truncated = false;
-    for await (const pi of this.stripeClient.paymentIntents.list({
-      created: {
-        gte: Math.floor(filter.dateFrom.getTime() / 1000),
-        lte: Math.floor(filter.dateTo.getTime() / 1000),
-      },
-      limit: 100,
-      expand: ["data.latest_charge"],
-    })) {
-      scanned += 1;
-      if (scanned > MAX_PAYMENT_INTENTS_SCANNED) {
-        truncated = true;
-        break;
-      }
-      if (pi.status !== "requires_payment_method" && pi.status !== "canceled") continue;
-      const charge =
-        pi.latest_charge && typeof pi.latest_charge !== "string" ? pi.latest_charge : null;
-      if (!charge) continue;
-      const isBlocked =
-        charge.outcome?.type === "blocked" ||
-        charge.outcome?.network_status === "declined_by_network";
-      if (!isBlocked) continue;
-      collected.push(pi);
-    }
-
-    const rows: BlockedRow[] = [];
-    for (const pi of collected) {
-      const charge = pi.latest_charge as Stripe.Charge;
-      const card = charge.payment_method_details?.card;
-      if (!card?.fingerprint) continue;
-
-      const stripeCustomerId =
-        typeof pi.customer === "string" ? pi.customer : pi.customer?.id ?? null;
-      const customerEmail = pi.receipt_email ?? charge.billing_details?.email ?? null;
-      const declineCode = pi.last_payment_error?.decline_code ?? null;
-      const failureCode = pi.last_payment_error?.code ?? null;
-
-      const evalResult = await this.evaluate({
-        cardFingerprint: card.fingerprint,
-        cardLast4: card.last4 ?? "",
-        cardBrand: card.brand ?? "unknown",
-        stripeCustomerId,
-        customerEmail,
-        declineCode,
-        failureCode,
-        triggeringPaymentIntentId: pi.id,
-        triggeringChargeId: charge.id,
-      });
-
-      const existingAdded = await this.repo.findActiveAddedActionByFingerprint(card.fingerprint);
-
-      // Apply admin-page filters
-      if (
-        filter.memberStatus === "has_paid" &&
-        !evalResult.eligible &&
-        evalResult.reason === "filter_not_member"
-      )
-        continue;
-      if (
-        filter.memberStatus === "never_paid" &&
-        (evalResult.eligible || evalResult.reason !== "filter_not_member")
-      )
-        continue;
-      if (
-        filter.declineReason === "transient_only" &&
-        declineCode &&
-        FRAUD_SIGNAL_DECLINE_CODES.has(declineCode)
-      )
-        continue;
-      if (
-        filter.declineReason === "recoverable_only" &&
-        declineCode &&
-        (FRAUD_SIGNAL_DECLINE_CODES.has(declineCode) ||
-          PERMANENT_ISSUE_DECLINE_CODES.has(declineCode))
-      )
-        continue;
-      if (
-        filter.declineReason === "fraud_signals_only" &&
-        (!declineCode || !FRAUD_SIGNAL_DECLINE_CODES.has(declineCode))
-      )
-        continue;
-      if (filter.skippedOnly && evalResult.eligible) continue;
-
-      rows.push({
-        paymentIntentId: pi.id,
-        chargeId: charge.id,
-        createdAt: new Date(pi.created * 1000),
-        amount: pi.amount,
-        currency: pi.currency,
-        cardFingerprint: card.fingerprint,
-        cardLast4: card.last4 ?? "",
-        cardBrand: card.brand ?? "unknown",
-        stripeCustomerId,
-        customerEmail,
-        declineCode,
-        failureCode,
-        preview: evalResult.eligible
-          ? { eligible: true }
-          : { eligible: false, reason: evalResult.reason },
-        alreadyAllowlisted: Boolean(existingAdded),
-      });
-    }
-    return { rows, truncated, scanned };
-  }
-
   /**
-   * Mongo-backed read path for the admin Blocked Transactions page. Replaces
-   * `listBlockedFromStripe` (which paginates Stripe at request-time and
-   * doesn't scale on busy accounts) with a cursor-paged read over the
-   * `blockedtransactions` collection — populated by the
-   * `payment_intent.payment_failed` webhook (Phase A) and the historical
-   * backfill script (Phase B).
+   * Mongo-backed read path for the admin Blocked Transactions page. Reads
+   * cursor-paginated rows from the `blockedtransactions` collection —
+   * populated by the `payment_intent.payment_failed` webhook (Phase A) and
+   * the historical backfill script (Phase B).
    *
    * Performance shape: 2 indexed Mongo queries for the page (count + find),
    * then a single User.find followed by 2 parallel batched lookups
    * (AllowlistAction by fingerprint, PaymentEvent.distinct by userId). Total
-   * per page is bounded — does not depend on the size of the date window
-   * like the Stripe path did.
-   *
-   * Filter semantics intentionally mirror `listBlockedFromStripe` so the UI
-   * sees identical row counts during the migration period. Phase C3+ swap
-   * the route to call this method instead.
+   * per page is bounded — does not depend on the size of the date window.
    */
   async listBlocked(
     filter: BlockedFilter,
@@ -450,9 +308,8 @@ export class AllowlistService {
       createdAt: { $gte: filter.dateFrom, $lte: filter.dateTo },
     };
 
-    // Decline-code filter — replicates the in-memory filter from
-    // listBlockedFromStripe, but as a Mongo predicate so we don't fetch
-    // rows we'll immediately discard.
+    // Decline-code filter pushed into the Mongo query as a `$nin`/`$in`
+    // predicate so we don't fetch rows we'll immediately discard.
     const fraudCodes = Array.from(FRAUD_SIGNAL_DECLINE_CODES);
     const permanentCodes = Array.from(PERMANENT_ISSUE_DECLINE_CODES);
     if (filter.declineReason === "recoverable_only") {
@@ -613,8 +470,7 @@ export class AllowlistService {
     });
 
     // Member-status filter is in-memory because the verdict depends on
-    // joins we already computed. Mirrors the negation logic in
-    // listBlockedFromStripe so the two paths return matching counts.
+    // joins we already computed.
     const filteredRows = builtRows.filter((r) => {
       if (filter.memberStatus === "has_paid") {
         return r.preview.eligible || r.preview.reason !== "filter_not_member";
@@ -625,7 +481,7 @@ export class AllowlistService {
       return true;
     });
 
-    // skippedOnly mirrors the listBlockedFromStripe behavior.
+    // skippedOnly: only return rows that were not eligible.
     const finalRows = filter.skippedOnly
       ? filteredRows.filter((r) => !r.preview.eligible)
       : filteredRows;

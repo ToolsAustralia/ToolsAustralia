@@ -10,7 +10,6 @@ export function getAllowlistService(): AllowlistService {
   instance = new AllowlistService({
     repo: new MongoAllowlistRepository(),
     stripeRadar: stripe.radar,
-    stripeClient: stripe,
   });
   return instance;
 }

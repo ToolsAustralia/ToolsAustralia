@@ -113,6 +113,7 @@ const adminTabGroups: Array<{
     groupIcon: AlertCircle,
     tabs: [
       { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
+      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText },
     ],
   },
 ];

@@ -20,6 +20,14 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-
 npm run migrate:<name>:dry
 ```
 
+## npm test scripts
+
+New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
+
+```bash
+npm run test:past-due-history   # pure aggregation helpers (no env vars needed)
+```
+
 ## What's NOT well tested
 
 - Cron endpoint auth thoroughness

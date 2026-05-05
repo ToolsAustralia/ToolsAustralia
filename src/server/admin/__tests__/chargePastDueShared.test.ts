@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   RECENT_ATTEMPT_WINDOW_HOURS,
+  SKIP_REASON_NO_LONGER_PAST_DUE,
   buildAdminChargeIdempotencyKey,
   cutoffForRecentAttempt,
+  shouldSkipForNotPastDue,
 } from "../past-due-charge-idempotency";
 
 function testWindowConstant() {
@@ -35,12 +37,39 @@ function testIdempotencyKeyDiffersByInvoice() {
   assert.notEqual(a, b);
 }
 
+function testSkipReasonConstantStable() {
+  assert.equal(SKIP_REASON_NO_LONGER_PAST_DUE, "no_longer_past_due");
+}
+
+function testShouldSkipWhenStatusActive() {
+  assert.equal(shouldSkipForNotPastDue("active"), true);
+}
+
+function testShouldSkipWhenStatusUndefined() {
+  assert.equal(shouldSkipForNotPastDue(undefined), true);
+  assert.equal(shouldSkipForNotPastDue(null), true);
+  assert.equal(shouldSkipForNotPastDue(""), true);
+}
+
+function testShouldNotSkipWhenStatusPastDue() {
+  assert.equal(shouldSkipForNotPastDue("past_due"), false);
+}
+
+function testShouldNotSkipWhenStatusPastDueWithUppercase() {
+  assert.equal(shouldSkipForNotPastDue("Past_Due"), false);
+}
+
 function run() {
   testWindowConstant();
   testCutoffIs24hBeforeNow();
   testCutoffMovesWithNow();
   testIdempotencyKeyIsStableForSameInvoice();
   testIdempotencyKeyDiffersByInvoice();
+  testSkipReasonConstantStable();
+  testShouldSkipWhenStatusActive();
+  testShouldSkipWhenStatusUndefined();
+  testShouldNotSkipWhenStatusPastDue();
+  testShouldNotSkipWhenStatusPastDueWithUppercase();
   console.log("chargePastDueShared helpers tests passed");
 }
 
