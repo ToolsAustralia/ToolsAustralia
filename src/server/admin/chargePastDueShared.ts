@@ -11,7 +11,7 @@ import {
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
 } from "./past-due-charge-idempotency";
-import { pickOpenInvoiceForFailedRenewal } from "@/utils/payment/failed-invoice-selection";
+import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
 
 export {
   RECENT_ATTEMPT_WINDOW_HOURS,
@@ -189,25 +189,15 @@ export function resolveInvoicePaymentMethodId(
  * returned separately so the caller can log them as skipped.
  *
  * Returns `target: null` when no invoice on the current subscription is chargeable.
+ *
+ * Compatible with both Stripe API <2025-04-01 (invoice.subscription) and
+ * >=2025-04-01 (invoice.parent.subscription_details.subscription).
  */
 export function selectCurrentSubscriptionChargeable(
   invoices: Stripe.Invoice[],
   userStripeSubscriptionId: string | null | undefined
 ): { target: Stripe.Invoice | null; skipped: Stripe.Invoice[] } {
-  if (!userStripeSubscriptionId) {
-    return { target: null, skipped: invoices };
-  }
-  const onCurrentSub = invoices.filter((inv) => {
-    const withSub = inv as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
-    const invSubId =
-      typeof withSub.subscription === "string"
-        ? withSub.subscription
-        : (withSub.subscription as Stripe.Subscription | null | undefined)?.id;
-    return invSubId === userStripeSubscriptionId;
-  });
-  const target = pickOpenInvoiceForFailedRenewal(onCurrentSub);
-  const skipped = invoices.filter((inv) => inv.id !== target?.id);
-  return { target, skipped };
+  return _selectCurrentSubscriptionChargeable(invoices, userStripeSubscriptionId);
 }
 
 type LeanPastDueUser = {
@@ -326,14 +316,17 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
     let resumeCollectionError: string | undefined;
 
     if (paidInvoice.status === "paid") {
+      // Stripe API 2025-04-01+ moved invoice.subscription onto parent.subscription_details.
+      // Read from parent first, fall back to root for older API versions / cached objects.
       const withSub = paidInvoice as Stripe.Invoice & {
         subscription?: string | Stripe.Subscription | null;
+        parent?: { subscription_details?: { subscription?: string | null } | null } | null;
       };
-      const subRaw = withSub.subscription;
       const subscriptionId =
-        typeof subRaw === "string" ? subRaw : subRaw && typeof subRaw === "object" && "id" in subRaw
-          ? (subRaw as Stripe.Subscription).id
-          : undefined;
+        withSub.parent?.subscription_details?.subscription ??
+        (typeof withSub.subscription === "string"
+          ? withSub.subscription
+          : withSub.subscription?.id);
       if (subscriptionId) {
         try {
           await resumeAfterSuccessfulRenewalPayment(subscriptionId);

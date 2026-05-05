@@ -132,13 +132,17 @@ export async function checkRecoveryEligibility(params: {
     };
   }
 
+  // Stripe API 2025-04-01+ moved invoice.subscription onto parent.subscription_details.
+  // Read from parent first, fall back to root for older API versions / cached objects.
   const invoiceWithSub = originalInvoice as Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
+    parent?: { subscription_details?: { subscription?: string | null } | null } | null;
   };
   const invoiceSubscriptionId =
-    typeof invoiceWithSub.subscription === "string"
+    invoiceWithSub.parent?.subscription_details?.subscription ??
+    (typeof invoiceWithSub.subscription === "string"
       ? invoiceWithSub.subscription
-      : invoiceWithSub.subscription?.id;
+      : invoiceWithSub.subscription?.id);
   if (invoiceSubscriptionId !== user.stripeSubscriptionId) {
     return {
       eligible: false,
