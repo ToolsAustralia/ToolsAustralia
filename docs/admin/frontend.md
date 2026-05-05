@@ -100,19 +100,51 @@ All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", 
 
 ## Stranded invoice recovery UI
 
-The recovery action is exposed in two places (both call the same modal):
+The recovery action is exposed in three places:
 
-- **Trigger A** — `Manual Retries (per-user)` table in [`PastDueChargeHistory.tsx`](../../src/app/admin/component/PastDueChargeHistory.tsx). Rows whose error matches `/no longer be paid|no longer payable/i` get a `Recover` button in a new Action column.
+- **Trigger A** — `Manual Retries (per-user)` table in [`PastDueChargeHistory.tsx`](../../src/app/admin/component/PastDueChargeHistory.tsx). Rows whose error matches `/no longer be paid|no longer payable/i` get a `Recover` button in the Action column (per-row) **and** a checkbox in a new Select column. When one or more stranded rows are checked, a **Recover Selected (N)** button appears in the Manual Retries section header — clicking it opens `BulkRecoverInvoicesModal`.
 - **Trigger D** — auto-fallback in [`ChargePastDueUserModal.tsx`](../../src/components/admin/ChargePastDueUserModal.tsx). When a single-user retry returns a stranded-error row, that row gets an inline `Recover` button alongside the error text.
 
-Both triggers open [`RecoverInvoiceModal.tsx`](../../src/components/admin/RecoverInvoiceModal.tsx), which:
+Per-row recovery opens [`RecoverInvoiceModal.tsx`](../../src/components/admin/RecoverInvoiceModal.tsx), which:
 
-- Shows the recovery sequence in plain English
-- Requires the admin to type `RECOVER` exactly
-- POSTs to `/api/admin/users/[userId]/recover-past-due-invoice`
-- Displays the per-step result (new invoice id, charge status, amount)
+- On open, immediately fires `GET /api/admin/users/[userId]/recover-past-due-invoice?invoiceId=…` (the pre-flight eligibility check) and shows "Checking eligibility…" while it runs.
+  - If ineligible: shows a red-bordered panel with the blocking reason and message; the Recover button is hidden (only Cancel is shown). The admin cannot proceed without dismissing.
+  - If eligible: shows the recovery sequence in plain English, the RECOVER confirmation input, and the Recover button.
+- Requires the admin to type `RECOVER` exactly before submitting.
+- POSTs to `/api/admin/users/[userId]/recover-past-due-invoice` with `{ confirmation: "RECOVER", originalInvoiceId }`.
+- Displays the per-step result (new invoice id, charge status, amount).
 
 The modal is intentionally narrower than `ChargePastDueUserModal` — by the time the admin opens it they have already seen the failed row, so there's no preview step.
+
+### Bulk stranded-invoice recovery
+
+[`BulkRecoverInvoicesModal.tsx`](../../src/components/admin/BulkRecoverInvoicesModal.tsx) handles N-row recovery in one operation:
+
+- Accepts `items: BulkRecoverItem[]` (userId, userEmail, originalInvoiceId, amount).
+- Shows a warning panel listing all selected invoices (scrollable preview table).
+- Requires the admin to type `RECOVER ALL` (uppercase, exact) before enabling the Recover button.
+- POSTs to `POST /api/admin/invoices/recover-past-due` with `{ confirmation: "RECOVER ALL", items }`.
+- Shows a spinner while the server processes rows sequentially (300ms delay between rows; request holds open until all rows complete).
+- On completion shows a 3-column summary card (Total / Succeeded / Failed). Each summary card is a filter toggle — clicking one filters the results table below to that subset.
+- Results table: original invoice ID (truncated), outcome label, detail (error string or reason).
+- On successful completion, calls `onCompleted()` which clears the checkbox selection in `PastDueChargeHistory`.
+- Hard cap: 50 items per call (enforced by Zod on the server and implicitly by the checkbox UX which only shows on stranded rows in the current view).
+
+**Selection state in `PastDueChargeHistory`:**
+
+- `selectedRows: Set<string>` — keys are `${userId}-${invoiceId}`.
+- `strandedRows` memo — filters `retriesQuery.rows` to those that pass `isStrandedError()` and have a `userId`.
+- `selectedItems` memo — maps `strandedRows` entries whose key is in `selectedRows` to `BulkRecoverItem[]`.
+- Checkboxes only render for stranded rows; all other rows have an empty cell.
+
+### Light/dark mode parity
+
+The footer uses explicit paired classes throughout:
+- **Cancel button**: `bg-gray-200 hover:bg-gray-300 text-gray-800` (light) / `dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-gray-100` (dark)
+- **Recover button**: `bg-amber-600 hover:bg-amber-700 text-white` — amber works in both modes, dark overrides repeat the same values for explicitness.
+- Footer background: `bg-gray-50 dark:bg-neutral-950/80`
+
+Success (green) and error (red) panels use `{color}-50` light backgrounds with `{color}-800`/`{color}-900` text in light mode for sufficient contrast, and `{color}-950/25` dark backgrounds with `{color}-200`/`{color}-300` text in dark mode.
 
 ## Hooks
 

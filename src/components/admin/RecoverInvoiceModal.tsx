@@ -34,6 +34,13 @@ interface RecoverResponse {
   error?: string;
 }
 
+interface EligibilityState {
+  checked: boolean;
+  eligible: boolean;
+  reason?: string;
+  message?: string;
+}
+
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -53,14 +60,41 @@ const RecoverInvoiceModal: React.FC<RecoverInvoiceModalProps> = ({
   const [confirmation, setConfirmation] = useState("");
   const [state, setState] = useState<State>("idle");
   const [response, setResponse] = useState<RecoverResponse | null>(null);
+  const [eligibility, setEligibility] = useState<EligibilityState>({
+    checked: false,
+    eligible: false,
+  });
 
   useEffect(() => {
     if (isOpen) {
       setConfirmation("");
       setState("idle");
       setResponse(null);
+      setEligibility({ checked: false, eligible: false });
+
+      // Fire GET eligibility check on open
+      void fetch(
+        `/api/admin/users/${userId}/recover-past-due-invoice?invoiceId=${encodeURIComponent(originalInvoiceId)}`
+      )
+        .then((res) => res.json())
+        .then((data: { eligible: boolean; reason?: string; message?: string }) => {
+          setEligibility({
+            checked: true,
+            eligible: data.eligible,
+            reason: data.reason,
+            message: data.message,
+          });
+        })
+        .catch(() => {
+          setEligibility({
+            checked: true,
+            eligible: false,
+            reason: "check_failed",
+            message: "Could not verify eligibility. Proceed with caution or close and retry.",
+          });
+        });
     }
-  }, [isOpen]);
+  }, [isOpen, userId, originalInvoiceId]);
 
   if (!isOpen) return null;
 
@@ -98,6 +132,7 @@ const RecoverInvoiceModal: React.FC<RecoverInvoiceModalProps> = ({
     >
       <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative bg-white dark:bg-neutral-900 dark:border dark:border-neutral-800 rounded-lg sm:rounded-xl shadow-2xl w-full max-w-lg mx-auto max-h-[90dvh] overflow-y-auto flex flex-col">
+        {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500" />
@@ -111,52 +146,88 @@ const RecoverInvoiceModal: React.FC<RecoverInvoiceModalProps> = ({
           <button
             onClick={handleClose}
             disabled={state === "processing"}
-            className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 p-1 disabled:opacity-50"
+            className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-200 p-1 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-4 sm:p-6 space-y-4">
           {state === "idle" && (
             <>
-              <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-200 dark:border-amber-800/50 rounded-lg p-4">
-                <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
-                  This will:
-                </h4>
-                <ol className="text-sm text-amber-700 dark:text-amber-300 list-decimal pl-5 space-y-1">
-                  <li>
-                    Void the dead invoice <span className="font-mono">{originalInvoiceId}</span>
-                  </li>
-                  <li>Use a held draft if one exists, else create a fresh invoice</li>
-                  <li>Finalize and attempt one charge against the customer&apos;s saved card</li>
-                  <li>On success, clear pause_collection so next anchor bills normally</li>
-                </ol>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mt-3 italic">
-                  Voiding cannot be undone. If the charge fails, the customer ends up with a
-                  fresh open invoice that can be retried via the existing flow.
-                </p>
-              </div>
-
-              {expectedAmountCents !== undefined && (
-                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-200">
-                  Expected charge: <strong>{formatCurrency(expectedAmountCents)}</strong>
+              {/* Eligibility: loading */}
+              {!eligibility.checked && (
+                <div className="flex items-center gap-2 py-2 text-sm text-gray-500 dark:text-neutral-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking eligibility…
                 </div>
               )}
 
-              <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4">
-                <label className="block text-sm font-medium text-red-800 dark:text-red-200 mb-2">
-                  Type <strong>RECOVER</strong> to confirm:
-                </label>
-                <input
-                  type="text"
-                  value={confirmation}
-                  onChange={(e) => setConfirmation(e.target.value)}
-                  placeholder="RECOVER"
-                  className="w-full px-3 py-2 rounded-md text-sm uppercase text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 bg-white dark:bg-neutral-900 border border-red-300 dark:border-red-800 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  autoFocus
-                />
-              </div>
+              {/* Eligibility: ineligible */}
+              {eligibility.checked && !eligibility.eligible && (
+                <div className="bg-red-50 dark:bg-red-950/25 border-2 border-red-300 dark:border-red-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-red-800 dark:text-red-200 mb-1">
+                        Cannot recover this invoice
+                      </h4>
+                      <p className="text-sm text-red-700 dark:text-red-300">
+                        {eligibility.message ?? "This invoice does not meet the recovery criteria."}
+                      </p>
+                      {eligibility.reason && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-2 font-mono">
+                          reason: {eligibility.reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Eligibility: eligible — show normal recovery flow */}
+              {eligibility.checked && eligibility.eligible && (
+                <>
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-200 dark:border-amber-800/50 rounded-lg p-4">
+                    <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                      This will:
+                    </h4>
+                    <ol className="text-sm text-amber-700 dark:text-amber-300 list-decimal pl-5 space-y-1">
+                      <li>
+                        Void the dead invoice <span className="font-mono">{originalInvoiceId}</span>
+                      </li>
+                      <li>Use a held draft if one exists, else create a fresh invoice</li>
+                      <li>Finalize and attempt one charge against the customer&apos;s saved card</li>
+                      <li>On success, clear pause_collection so next anchor bills normally</li>
+                    </ol>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-3 italic">
+                      Voiding cannot be undone. If the charge fails, the customer ends up with a
+                      fresh open invoice that can be retried via the existing flow.
+                    </p>
+                  </div>
+
+                  {expectedAmountCents !== undefined && (
+                    <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-200">
+                      Expected charge: <strong>{formatCurrency(expectedAmountCents)}</strong>
+                    </div>
+                  )}
+
+                  <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4">
+                    <label className="block text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                      Type <strong>RECOVER</strong> to confirm:
+                    </label>
+                    <input
+                      type="text"
+                      value={confirmation}
+                      onChange={(e) => setConfirmation(e.target.value)}
+                      placeholder="RECOVER"
+                      className="w-full px-3 py-2 rounded-md text-sm uppercase text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 bg-white dark:bg-neutral-900 border border-red-300 dark:border-red-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      autoFocus
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -232,20 +303,21 @@ const RecoverInvoiceModal: React.FC<RecoverInvoiceModalProps> = ({
           )}
         </div>
 
-        <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 pt-0 border-t border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/80">
+        {/* Footer */}
+        <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 pt-0 border-t border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950/80">
           <Button
             onClick={handleClose}
             variant="secondary"
-            className="flex-1"
+            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-gray-100"
             disabled={state === "processing"}
           >
             {state === "success" || state === "error" ? "Close" : "Cancel"}
           </Button>
-          {state === "idle" && (
+          {state === "idle" && eligibility.checked && eligibility.eligible && (
             <Button
               onClick={() => void handleSubmit()}
               variant="secondary"
-              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-700 dark:text-white"
               disabled={confirmation !== "RECOVER"}
             >
               Recover

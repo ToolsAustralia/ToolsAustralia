@@ -3,12 +3,38 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
-import { recoverStrandedPastDueInvoice } from "@/server/admin/recoverStrandedPastDue";
+import {
+  recoverStrandedPastDueInvoice,
+  checkRecoveryEligibility,
+} from "@/server/admin/recoverStrandedPastDue";
 
 const bodySchema = z.object({
   confirmation: z.literal("RECOVER"),
   originalInvoiceId: z.string().min(1),
 });
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  await connectDB();
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { id: userId } = await params;
+  const url = new URL(request.url);
+  const originalInvoiceId = url.searchParams.get("invoiceId");
+  if (!originalInvoiceId) {
+    return NextResponse.json(
+      { error: "missing invoiceId query param" },
+      { status: 400 }
+    );
+  }
+
+  const result = await checkRecoveryEligibility({ userId, originalInvoiceId });
+  return NextResponse.json(result, { status: 200 });
+}
 
 export async function POST(
   request: NextRequest,
