@@ -27,6 +27,7 @@ import {
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
 import RecoverInvoiceModal from "@/components/admin/RecoverInvoiceModal";
+import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -113,6 +114,8 @@ export default function PastDueChargeHistory() {
     userEmail: string;
     originalInvoiceId: string;
   } | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   const { data: drawDates } = useCurrentAndLastDrawDates();
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -155,6 +158,39 @@ export default function PastDueChargeHistory() {
 
   const runsQuery = useChargePastDueRuns(filter);
   const retriesQuery = useChargePastDueManualRetries(filter);
+
+  const toggleRow = (key: string) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const strandedRows = useMemo(
+    () =>
+      retriesQuery.rows.filter(
+        (r) => r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId
+      ),
+    [retriesQuery.rows]
+  );
+
+  const selectedItems: BulkRecoverItem[] = useMemo(() => {
+    const itemsArr: BulkRecoverItem[] = [];
+    for (const r of strandedRows) {
+      const key = `${r.userId}-${r.invoiceId}`;
+      if (selectedRows.has(key) && r.userId) {
+        itemsArr.push({
+          userId: r.userId,
+          userEmail: r.userEmail || r.userId,
+          originalInvoiceId: r.invoiceId,
+          amount: r.amount,
+        });
+      }
+    }
+    return itemsArr;
+  }, [selectedRows, strandedRows]);
 
   const summary = useMemo(() => {
     let attempted = 0;
@@ -413,11 +449,22 @@ export default function PastDueChargeHistory() {
               Manual Retries (per-user)
             </h3>
           </div>
-          {retriesQuery.total > 0 && (
-            <span className="text-xs text-gray-500 dark:text-neutral-400">
-              Showing {retriesQuery.rows.length} of {retriesQuery.total}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-md bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs font-semibold dark:bg-amber-600 dark:hover:bg-amber-700"
+              >
+                Recover Selected ({selectedItems.length})
+              </button>
+            )}
+            {retriesQuery.total > 0 && (
+              <span className="text-xs text-gray-500 dark:text-neutral-400">
+                Showing {retriesQuery.rows.length} of {retriesQuery.total}
+              </span>
+            )}
+          </div>
         </div>
         {retriesQuery.isLoading ? (
           <div className="p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
@@ -439,6 +486,9 @@ export default function PastDueChargeHistory() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-neutral-700">
+                    <th className="bg-gray-50 px-3 py-3 text-left dark:bg-neutral-800 w-10">
+                      <span className="sr-only">Select</span>
+                    </th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       When
                     </th>
@@ -471,6 +521,16 @@ export default function PastDueChargeHistory() {
                       key={`${r.invoiceId}-${r.attemptedAt}`}
                       className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
                     >
+                      <td className="px-3 py-3">
+                        {r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.has(`${r.userId}-${r.invoiceId}`)}
+                            onChange={() => toggleRow(`${r.userId}-${r.invoiceId}`)}
+                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-800"
+                          />
+                        ) : null}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
                         {formatDateTime(r.attemptedAt)}
                       </td>
@@ -544,6 +604,17 @@ export default function PastDueChargeHistory() {
           originalInvoiceId={recoverTarget.originalInvoiceId}
           onRecovered={() => {
             setRecoverTarget(null);
+          }}
+        />
+      )}
+
+      {bulkModalOpen && selectedItems.length > 0 && (
+        <BulkRecoverInvoicesModal
+          isOpen={true}
+          onClose={() => setBulkModalOpen(false)}
+          items={selectedItems}
+          onCompleted={() => {
+            setSelectedRows(new Set());
           }}
         />
       )}
