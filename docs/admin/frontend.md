@@ -84,6 +84,8 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 - [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. Renders a filter bar (date range, admin, status) plus two tables side-by-side: **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
 - [src/app/admin/component/PastDueChargeHistoryDrawer.tsx](../../src/app/admin/component/PastDueChargeHistoryDrawer.tsx) — slide-in drawer for a single run. Fetches `GET /api/admin/charge-past-due/runs/[runId]` via `useChargePastDueRunDetail` and displays the `ChargeJobRun` header (status badge, totals, admin, timestamps) plus a paginated table of individual `InvoiceChargeLog` rows for that run.
 
+Both components import `formatDurationMs` from [src/utils/admin/chargePastDueFormat.ts](../../src/utils/admin/chargePastDueFormat.ts) — a Mongoose-free pure formatter. Importing it from `services/admin/chargePastDueHistory.ts` would transitively pull `mongoose` into the client bundle and crash hydration on `mongoose.models[...]`.
+
 ### Hooks
 
 Three TanStack Query hooks under `src/hooks/queries/admin/`:

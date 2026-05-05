@@ -23,6 +23,8 @@
   - `listChargeRuns(filter)` — paginated list of `ChargeJobRun` documents; accepts `startDate`, `endDate`, `adminId`, `status`, `limit`, `offset`.
   - `getChargeRunDetail(runId)` — returns `{ run, rows }` for a single bulk run (run doc + all matching `InvoiceChargeLog` rows).
   - `listManualRetries(filter)` — same filter shape as `listChargeRuns`; returns `InvoiceChargeLog` rows where `chargeRunId === null`.
+
+  The pure `formatDurationMs` formatter lives in [src/utils/admin/chargePastDueFormat.ts](../../src/utils/admin/chargePastDueFormat.ts) and is re-exported here for server callers — client components must import directly from `utils/admin/chargePastDueFormat` so Mongoose is not pulled into the client bundle.
 - `MembershipAnalyticsService` — renewal, past-due, and cancellation metrics.
   - `getAnalyticsBundle(startDate, endDate, dateRange, options?)` — returns `MembershipAnalyticsBundle`. Accepts optional `{ membershipAsOfMode, asOfDate }`. When `membershipAsOfMode === "snapshot"` and `asOfDate` is set, `cancelledMembershipRevenueImpact` is computed from the snapshot row's `scheduledCancelCount × current catalog price` (snapshot date-lock approximation). The `cancellationsInRange` count is always live (delta query).
   - `getMembershipByPackageLive()` — live per-package counts.
