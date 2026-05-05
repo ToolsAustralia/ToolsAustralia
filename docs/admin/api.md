@@ -74,7 +74,7 @@ or
 { "eligible": false, "reason": "invoice_subscription_mismatch", "message": "Original invoice does not belong to user's current subscription" }
 ```
 
-The `reason` values are the same subset as the POST error reasons (excluding the write-only reasons `void_failed`, `draft_create_failed`, `finalize_failed`, `no_payment_method`). Returns `400` if `invoiceId` is missing.
+The `reason` values are the same subset as the POST error reasons (excluding the write-only reasons `void_failed`, `finalize_failed`, `no_payment_method`). Returns `400` if `invoiceId` is missing.
 
 **Implementation:** delegates to `checkRecoveryEligibility()` exported from [`src/server/admin/recoverStrandedPastDue.ts`](../../src/server/admin/recoverStrandedPastDue.ts). The POST handler internally calls the same function so verification logic is shared and not duplicated.
 
@@ -117,9 +117,9 @@ Recover a stranded past-due invoice (status `uncollectible` or `void` — the "T
 | `invoice_already_paid` | 409 | Original is `paid`; nothing to recover |
 | `invoice_unknown_status` | 409 | Original has an unexpected Stripe status |
 | `recent_recovery_attempt` | 409 | Another recovery for this invoice happened within 24h |
+| `no_held_draft` | 409 | No held draft invoice found on the subscription; recovery cannot proceed without one (manual invoices break the webhook renewal pipeline) |
 | `no_payment_method` | 409 | Finalized invoice has no payment method (on invoice or customer default) |
 | `void_failed` | 502 | Stripe rejected the void call |
-| `draft_create_failed` | 502 | Stripe rejected the create call |
 | `finalize_failed` | 502 | Stripe rejected the finalize call |
 
 **Audit:** Each step writes one `InvoiceChargeLog` row. The void/create/finalize rows are tagged with `result.recovery.{step,originalInvoiceId,newInvoiceId?}`. The pay step writes its own row via the standard past-due primitive (no `recovery` tag). To trace a recovery, query by `result.recovery.originalInvoiceId`, then by `newInvoiceId` for the pay row.
@@ -180,6 +180,73 @@ Bulk-recover up to 10 stranded past-due invoices in one request. Processes them 
 - `500` — unexpected server error
 
 Each item is processed with `recoverStrandedPastDueInvoice`, which has its own 24h per-user idempotency lock and writes `InvoiceChargeLog` rows for every step (void / create / finalize / pay). A 300ms delay is inserted between rows to reduce Stripe rate-limit pressure. Per-item failures do **not** abort the batch — all items run and results include both successes and failures.
+
+## Force Charge endpoints
+
+### `POST /api/admin/users/[id]/force-charge`
+
+Force-charge a past-due user's current cycle when no eligible invoice was found by the standard charger. Finalizes a held draft (or pays an existing open invoice) on the current subscription. Never creates new manual invoices — the webhook does not recognize `billing_reason: "manual"`, which would silently skip the renewal pipeline.
+
+**Auth:** admin only.
+
+**Body:**
+
+```json
+{ "confirmation": "FORCE CHARGE" }
+```
+
+**Success:**
+
+```json
+{
+  "success": true,
+  "chargedInvoiceId": "in_xxx",
+  "row": { "...": "PastDueChargeResultRow shape (status, amount, error?, etc.)" }
+}
+```
+
+**Error reasons (response shape `{ success: false, reason, message }`):**
+
+| reason | HTTP | meaning |
+|---|---|---|
+| `user_not_found` | 404 | userId did not match a Mongo user |
+| `subscription_inactive` | 409 | User has no active Stripe subscription/customer or `current_period` window |
+| `not_past_due` | 409 | `user.subscription.status !== "past_due"` |
+| `package_not_found` | 409 | `subscription.packageId` not found in static membershipPackages |
+| `recent_charge_attempt` | 409 | A successful charge for this subscription happened within the last 24h |
+| `period_already_paid` | 409 | Current billing period is already settled by a paid invoice |
+| `no_chargeable_invoice` | 409 | No open invoice and no held draft matching expected amount on current sub |
+| `finalize_failed` | 502 | Stripe rejected the finalize call |
+| `pay_failed` | 502 | Stripe rejected the pay call or no payment method on file |
+
+**Audit:** delegates to `payOpenInvoiceAsPastDueAdmin` for the pay step (which writes the `InvoiceChargeLog` row), then enriches that row with `result.subscriptionId`, `result.forceCharge.step`, and `result.forceCharge.triggeredBy: "admin"`.
+
+---
+
+### `POST /api/stripe/force-charge-overdue`
+
+User self-serve version of the force-charge above. Same orchestrator, no admin auth required (uses NextAuth session), no confirmation field. The user must own the subscription being charged.
+
+**Auth:** authenticated user (NextAuth session).
+
+**Body:** `{}` (empty)
+
+**Success:**
+
+```json
+{
+  "success": true,
+  "chargedInvoiceId": "in_xxx",
+  "paymentStatus": "success" | "failed" | "skipped",
+  "amount": 4000
+}
+```
+
+**Error reasons:** Same 9 reasons as the admin endpoint, with one HTTP-status difference: `recent_charge_attempt: 429` (rate limit semantics for self-serve) instead of `409`.
+
+**Audit:** the `InvoiceChargeLog` row is tagged `result.forceCharge.triggeredBy: "user"` (with `adminId === userId` since the user is their own admin for self-serve).
+
+---
 
 ## Auth
 

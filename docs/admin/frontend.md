@@ -98,6 +98,37 @@ Three TanStack Query hooks under `src/hooks/queries/admin/`:
 
 All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", ...]`. The two `useInfiniteQuery` hooks key on the full `filter` object so changing date range (or any other filter field) resets paging from offset 0. `getNextPageParam` returns `loaded < total ? loaded : undefined`. The Bulk Runs and Manual Retries cards each render a "Load more" button at the bottom (matching `BlockedTransactionsManagement`'s pattern); the table header shows `Showing X of Y`. Summary `MetricCard`s aggregate across **loaded** pages only — clicking "Load more" updates them.
 
+## Force Charge fallback in ChargePastDueUserModal
+
+[`ChargePastDueUserModal.tsx`](../../src/components/admin/ChargePastDueUserModal.tsx) includes a Force Charge fallback path for the case where the standard preview returns `eligibleCount: 0` (no chargeable open invoices found by the normal past-due filter). This happens when the user is still `past_due` in the DB but their current subscription cycle invoice is a held draft under `pause_collection` — which the normal filter excludes.
+
+**UI flow:**
+
+1. Preview loads and shows `eligibleCount: 0`.
+2. An amber warning panel appears: "No chargeable invoice on this user's current subscription" with a **Switch to Force Charge** button.
+3. Clicking the button enters `forceChargeMode`. The normal "Confirm charge (0)" button in the footer is replaced with an amber **Force Charge** button.
+4. A confirmation input requires the admin to type `FORCE CHARGE` exactly (uppercase) before the button enables.
+5. On submit, POSTs to `POST /api/admin/users/[id]/force-charge` with `{ confirmation: "FORCE CHARGE" }`.
+6. Success shows a green panel with the charged invoice ID, payment status, and amount. Failure shows a red panel with the error message and optional `reason` code.
+
+**State variables added:** `forceChargeMode`, `forceConfirmation`, `forceProcessing`, `forceResult`. All are reset in `handleClose`.
+
+**Color scheme:** amber (`bg-amber-600`) distinguishes Force Charge from the standard red (`bg-red-600`) charge path. Light/dark parity is maintained throughout.
+
+## Force Charge UI (user self-serve)
+
+[`RenewalFailedModal.tsx`](../../src/components/modals/RenewalFailedModal.tsx) — when the existing `pay-failed-invoice` flow returns an error matching "no payable invoice" or similar phrases (matched by `isNoPayableInvoiceError(error)`), the modal renders a "Pay overdue amount" CTA that calls `POST /api/stripe/force-charge-overdue`.
+
+**UI flow:**
+1. User sees the renewal-failed modal and clicks "Resolve Payment Issue".
+2. The `pay-failed-invoice` mutation returns an error whose message contains "no payable invoice" (or related phrases).
+3. The amber "Pay overdue amount" button appears below the error box.
+4. On click, the button shows "Paying overdue amount…" while the request runs.
+5. On success, a green panel confirms "Payment received. Your subscription is now up to date."
+6. On failure, a red panel shows the error message from the API (or a generic contact-support message).
+
+**State variables added:** `forceChargeProcessing`, `forceChargeResult`. Both are reset when the modal opens.
+
 ## Stranded invoice recovery UI
 
 The recovery action is exposed in three places:

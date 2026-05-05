@@ -35,6 +35,16 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 **Updated 2026-05-04**: removed photo background — section + card + modal hero are now typographic on a dark brand-glow stage (no `<Image>`). The card CTA was moved out of absolute positioning into normal document flow below the hero (full-width on mobile, auto-width on `sm`+) so it can never overlap the winner name. The italic subtitle paragraph (`Tradies, weekend warriors…`) was removed from the populated header.
 
+## Modals
+
+### RenewalFailedModal
+
+[`src/components/modals/RenewalFailedModal.tsx`](../../src/components/modals/RenewalFailedModal.tsx) handles failed subscription renewal payments. It calls `POST /api/stripe/pay-failed-invoice` via `usePayFailedInvoice` (TanStack Query mutation). When that flow returns an error matching "no payable invoice" or similar phrases, the modal renders a fallback "Pay overdue amount" CTA that calls `POST /api/stripe/force-charge-overdue`.
+
+**Force Charge fallback state variables:** `forceChargeProcessing` (boolean), `forceChargeResult` (nullable object with `success`, `chargedInvoiceId`, `paymentStatus`, `amount`, `reason`, `message`). Both are reset when the modal opens.
+
+**`isNoPayableInvoiceError(errMsg)`** — inline helper that matches the error state variable `error` against known "no payable invoice" phrases. When it returns `true` and `forceChargeResult` is null, the amber "Pay overdue amount" button appears. On result, success renders a green panel and failure renders a red panel. Full flow documented in [docs/admin/frontend.md](../admin/frontend.md#force-charge-ui).
+
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.

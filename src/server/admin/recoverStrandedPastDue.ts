@@ -6,9 +6,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   buildRecoveryVoidIdempotencyKey,
-  buildRecoveryCreateIdempotencyKey,
   buildRecoveryFinalizeIdempotencyKey,
-  buildRecoveryItemIdempotencyKey,
   hasRecentRecoveryAttempt,
   isOriginalInvoiceEligibleForRecovery,
   pickHeldDraftForRecovery,
@@ -40,8 +38,9 @@ export type RecoverStrandedResult =
         | "recent_recovery_attempt"
         | "void_failed"
         | "draft_create_failed"
-        | "finalize_failed"
-        | "no_payment_method";
+        | "no_held_draft"
+        | "no_payment_method"
+        | "finalize_failed";
       message: string;
     };
 
@@ -206,11 +205,6 @@ export async function recoverStrandedPastDueInvoice(params: {
     return { ok: false, reason: "user_not_found", message: "User not found after eligibility check" };
   }
 
-  const packageId = (user.subscription as { packageId?: string } | undefined)?.packageId;
-  const pkg = packageId ? getPackageById(packageId) : undefined;
-  // pkg was already validated in checkRecoveryEligibility; if somehow missing now, use a safe fallback
-  const pkgName = pkg?.name ?? packageId ?? "membership";
-
   let originalInvoice: Stripe.Invoice;
   try {
     originalInvoice = await stripe.invoices.retrieve(originalInvoiceId);
@@ -260,9 +254,12 @@ export async function recoverStrandedPastDueInvoice(params: {
     result: { recovery: { step: "void", originalInvoiceId } },
   });
 
-  // ─── 5. Find or create a draft for the missed cycle ───
+  // ─── 5. Find a held draft for the missed cycle ───
+  // CRITICAL: never create new manual invoices. Stripe-cycle drafts preserve
+  // `billing_reason: "subscription_cycle"`, which the webhook needs to fire
+  // the full renewal pipeline. A manually-created invoice would have
+  // `billing_reason: "manual"` and silently skip the pipeline.
   let draftInvoice: Stripe.Invoice | null = null;
-  let usedExistingDraft = false;
   try {
     const drafts = await stripe.invoices.list({
       subscription: user.stripeSubscriptionId,
@@ -270,48 +267,26 @@ export async function recoverStrandedPastDueInvoice(params: {
       limit: 10,
     });
     draftInvoice = pickHeldDraftForRecovery(drafts.data, expectedAmountCents);
-    if (draftInvoice) usedExistingDraft = true;
   } catch (err) {
-    // Listing failed; fall through to create
     console.error("[recoverStrandedPastDue] listing drafts failed:", err);
   }
 
   if (!draftInvoice) {
-    try {
-      draftInvoice = await stripe.invoices.create(
-        {
-          customer: user.stripeCustomerId,
-          subscription: user.stripeSubscriptionId,
-          collection_method: "charge_automatically",
-          auto_advance: false,
-          pending_invoice_items_behavior: "exclude",
-        },
-        { idempotencyKey: buildRecoveryCreateIdempotencyKey(originalInvoiceId) }
-      );
-
-      // Add the cycle line item
-      await stripe.invoiceItems.create(
-        {
-          customer: user.stripeCustomerId,
-          invoice: draftInvoice.id,
-          amount: expectedAmountCents,
-          currency: "aud",
-          description: `Recovery for ${pkgName} (replaces ${originalInvoiceId})`,
-        },
-        { idempotencyKey: buildRecoveryItemIdempotencyKey(originalInvoiceId) }
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      await InvoiceChargeLog.create({
-        ...baseLogFields,
-        invoiceId: originalInvoiceId,
-        status: "failed",
-        attemptedAt: new Date(),
-        errorMessage: `create failed: ${message}`,
-        result: { recovery: { step: "create", originalInvoiceId } },
-      });
-      return { ok: false, reason: "draft_create_failed", message };
-    }
+    await InvoiceChargeLog.create({
+      ...baseLogFields,
+      invoiceId: originalInvoiceId,
+      status: "skipped",
+      attemptedAt: new Date(),
+      errorMessage:
+        "No held draft found on the subscription; recovery cannot proceed without one (manual invoices break the webhook renewal pipeline)",
+      result: { recovery: { step: "create", originalInvoiceId } },
+    });
+    return {
+      ok: false,
+      reason: "no_held_draft",
+      message:
+        "No held draft invoice exists on the subscription. Stripe must have a cycle-billed invoice to finalize and pay; manual invoices break the renewal pipeline.",
+    };
   }
 
   const newInvoiceId = draftInvoice.id;
@@ -329,9 +304,7 @@ export async function recoverStrandedPastDueInvoice(params: {
     invoiceId: newInvoiceId,
     status: "skipped",
     attemptedAt: new Date(),
-    errorMessage: usedExistingDraft
-      ? `Used existing held draft ${newInvoiceId}`
-      : `Created fresh draft ${newInvoiceId}`,
+    errorMessage: `Used existing held draft ${newInvoiceId}`,
     result: { recovery: { step: "create", originalInvoiceId, newInvoiceId } },
   });
 
@@ -381,6 +354,14 @@ export async function recoverStrandedPastDueInvoice(params: {
   const paymentMethodId = resolveInvoicePaymentMethodId(finalizedInvoice, customerDefaultPmId);
 
   if (!paymentMethodId) {
+    await InvoiceChargeLog.create({
+      ...baseLogFields,
+      invoiceId: newInvoiceId,
+      status: "failed",
+      attemptedAt: new Date(),
+      errorMessage: "Finalized invoice has no payment method on invoice or customer default",
+      result: { recovery: { step: "pay", originalInvoiceId, newInvoiceId } },
+    });
     return {
       ok: false,
       reason: "no_payment_method",
