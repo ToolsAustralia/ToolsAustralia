@@ -6,7 +6,9 @@
 |---|---|---|
 | _TODO_ | `/api/major-draw/**` | Major-draw read & entry-related routes |
 | _TODO_ | `/api/mini-draw/**` | Mini-draw routes (parallel with major) |
-| _TODO_ | `/api/winners/**` | Public winners feed |
+| GET | `/api/winners/all` | Public winners feed (major + mini, optional `?drawType=` filter, `?limit=` default 20). Edge-cached 5min via `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` and `revalidate = 300` segment config. DB queries are pre-`.limit()`ed so cache misses still bound payload size. |
+| GET | `/api/winners/major-draws` | Major-draw winners only (already DB-limited; no edge cache). |
+| GET | `/api/winners/latest` | Latest winner (cached `revalidate=60`). |
 
 > _TODO: read [src/app/api/major-draw/](../../src/app/api/major-draw/), [src/app/api/mini-draw/](../../src/app/api/mini-draw/), [src/app/api/winners/](../../src/app/api/winners/) and document each handler. Currently only inventoried._
 

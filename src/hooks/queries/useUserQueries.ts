@@ -150,7 +150,7 @@ export const useMyAccountData = (userId?: string) => {
     staleTime: 2 * 60 * 1000, // 2 minutes - reuse cache across my-account pages
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes for real-time updates
-    refetchIntervalInBackground: true, // Allow refetch in background
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; user-visible refetch resumes when tab is focused (refetchOnWindowFocus is false here, but refetchInterval ticks resume)
     refetchOnWindowFocus: false, // Avoid refetch on every tab switch when data is fresh
     refetchOnMount: true, // Refetch on mount only when data is stale
   });

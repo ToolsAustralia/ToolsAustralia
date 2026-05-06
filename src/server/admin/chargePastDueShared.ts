@@ -14,6 +14,10 @@ import {
   shouldSkipForNotPastDue,
 } from "./past-due-charge-idempotency";
 import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
+import {
+  decidePostPayAction,
+  extractPaymentIntentId,
+} from "./chargePastDuePostPayPolicy";
 
 export {
   MIN_SECONDS_BETWEEN_ATTEMPTS,
@@ -38,6 +42,24 @@ export type PastDueChargeResultRow = {
   /** Set on success when clearing Stripe `pause_collection` failed (payment still succeeded). */
   resumeCollectionError?: string;
 };
+
+/**
+ * Pull the trio of fields we persist into InvoiceChargeLog from a Stripe error.
+ * `decline_code` is the specific reason (e.g. `do_not_honor`); `code` is the bucket
+ * (e.g. `card_declined`). Saving both lets the UI prefer the specific one.
+ */
+function extractStripeErrorFields(err: Stripe.errors.StripeError): {
+  errorCode?: string;
+  declineCode?: string;
+  errorMessage?: string;
+} {
+  const cardErr = err as Stripe.errors.StripeError & { decline_code?: string };
+  return {
+    errorCode: err.code,
+    declineCode: cardErr.decline_code,
+    errorMessage: err.message,
+  };
+}
 
 export function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
   if (!response || typeof response !== "object") {
@@ -396,14 +418,71 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       },
       { idempotencyKey: idempotencyKey ?? buildAdminChargeIdempotencyKey(invoiceId) }
     );
-    const paidInvoice = paidInvoiceResponse as Stripe.Invoice;
+    let paidInvoice = paidInvoiceResponse as Stripe.Invoice;
 
-    const baseResult: Record<string, unknown> = {
-      ...sanitizeStripeResponse(paidInvoice),
-    };
-    let resumeCollectionError: string | undefined;
+    // Stripe sometimes leaves the PI in `requires_confirmation` after invoices.pay()
+    // (particularly when the invoice already had a PI from finalization). Fetch the
+    // PI directly and decide what to do based on its actual state — never trust that
+    // a successful pay() response means the invoice is paid.
+    let pi: Stripe.PaymentIntent | null = null;
+    const piId = extractPaymentIntentId(paidInvoice);
+    if (piId) {
+      try {
+        pi = await stripe.paymentIntents.retrieve(piId);
+      } catch (err) {
+        console.error(`[payOpenInvoiceAsPastDueAdmin] PI retrieve failed for ${piId}:`, err);
+      }
+    }
 
-    if (paidInvoice.status === "paid") {
+    let decision = decidePostPayAction(paidInvoice, pi);
+
+    // If Stripe left the PI in requires_confirmation, explicitly confirm it.
+    // This is the bridge for Stripe's quirk after re-paying invoices with prior PIs.
+    if (decision.kind === "needs_confirm") {
+      try {
+        pi = await stripe.paymentIntents.confirm(decision.piId, {
+          off_session: true,
+        });
+        // Re-fetch invoice to get updated status after confirm
+        paidInvoice = (await stripe.invoices.retrieve(invoiceId)) as Stripe.Invoice;
+        decision = decidePostPayAction(paidInvoice, pi);
+      } catch (confirmErr) {
+        const stripeErr = confirmErr as Stripe.errors.StripeError;
+        const errFields = extractStripeErrorFields(stripeErr);
+        // Confirm threw — log as failed with the actual error
+        await InvoiceChargeLog.create({
+          invoiceId,
+          customerId,
+          userId: new mongoose.Types.ObjectId(userIdStr),
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: "failed",
+          errorCode: errFields.errorCode,
+          declineCode: errFields.declineCode,
+          errorMessage: errFields.errorMessage,
+          amount,
+          attemptedAt: new Date(),
+          result: sanitizeStripeResponse(stripeErr),
+          chargeRunId,
+        });
+        return {
+          invoiceId,
+          customerId,
+          userId: userIdStr,
+          userEmail,
+          status: "failed",
+          error: stripeErr.message ?? "PaymentIntent confirm failed",
+          amount,
+        };
+      }
+    }
+
+    // Now decide based on FINAL state
+    if (decision.kind === "success") {
+      const baseResult: Record<string, unknown> = {
+        ...sanitizeStripeResponse(paidInvoice),
+      };
+      let resumeCollectionError: string | undefined;
+
       // Stripe API 2025-04-01+ moved invoice.subscription onto parent.subscription_details.
       // Read from parent first, fall back to root for older API versions / cached objects.
       const withSub = paidInvoice as Stripe.Invoice & {
@@ -428,20 +507,66 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
           );
         }
       }
+
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "success",
+        amount,
+        attemptedAt: new Date(),
+        result: baseResult,
+        nextPaymentAttempt: paidInvoice.next_payment_attempt
+          ? new Date(paidInvoice.next_payment_attempt * 1000)
+          : undefined,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "success",
+        amount,
+        ...(resumeCollectionError ? { resumeCollectionError } : {}),
+      };
     }
 
+    // Non-success outcomes — log as failed with the decision's diagnostic info
+    const failedErrorCode =
+      decision.kind === "requires_authentication"
+        ? "authentication_required"
+        : decision.kind === "failed"
+          ? decision.errorCode
+          : `pi_${decision.kind}`;
+    const failedErrorMessage =
+      decision.kind === "requires_authentication"
+        ? "Customer authentication required to complete the charge (3DS or similar)"
+        : decision.kind === "failed"
+          ? decision.errorMessage
+          : `Unexpected post-pay decision: ${decision.kind}`;
+    const failedDeclineCode =
+      decision.kind === "failed" ? decision.declineCode : undefined;
+
     await InvoiceChargeLog.create({
-      invoiceId: invoiceId,
-      customerId: customerId,
+      invoiceId,
+      customerId,
       userId: new mongoose.Types.ObjectId(userIdStr),
       adminId: new mongoose.Types.ObjectId(adminId),
-      status: "success",
+      status: "failed",
+      errorCode: failedErrorCode,
+      declineCode: failedDeclineCode,
+      errorMessage: failedErrorMessage,
       amount,
       attemptedAt: new Date(),
-      result: baseResult,
-      nextPaymentAttempt: paidInvoice.next_payment_attempt
-        ? new Date(paidInvoice.next_payment_attempt * 1000)
-        : undefined,
+      result: {
+        invoiceStatus: paidInvoice.status,
+        piStatus: pi?.status ?? null,
+        piId: pi?.id ?? null,
+        decision: decision.kind,
+      },
       chargeRunId,
     });
 
@@ -450,9 +575,9 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       customerId,
       userId: userIdStr,
       userEmail,
-      status: "success",
+      status: "failed",
+      error: failedErrorMessage,
       amount,
-      ...(resumeCollectionError ? { resumeCollectionError } : {}),
     };
   } catch (error) {
     const stripeError = error as Stripe.errors.StripeError;
@@ -471,6 +596,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         amount,
         attemptedAt: new Date(),
         errorCode: stripeError.code,
+        declineCode: (stripeError as Stripe.errors.StripeError & { decline_code?: string }).decline_code,
         errorMessage: "Invoice already paid",
         result: sanitizeStripeResponse(stripeError),
         chargeRunId,
@@ -493,8 +619,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       userId: new mongoose.Types.ObjectId(userIdStr),
       adminId: new mongoose.Types.ObjectId(adminId),
       status: "failed",
-      errorCode: stripeError.code,
-      errorMessage: stripeError.message,
+      ...extractStripeErrorFields(stripeError),
       amount,
       attemptedAt: new Date(),
       result: sanitizeStripeResponse(stripeError),

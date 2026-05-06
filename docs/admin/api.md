@@ -29,18 +29,18 @@ Lists `ChargeJobRun` documents for the audit UI.
 
 | Param | Type | Notes |
 |---|---|---|
-| `startDate` | ISO date string | Filter by `startedAt ≥ startDate` |
-| `endDate` | ISO date string | Filter by `startedAt ≤ endDate` |
+| `startDate` | `YYYY-MM-DD` | Inclusive lower bound. Interpreted as the **AEST/AEDT calendar day** (start of day at Australia/Sydney midnight); converted to a UTC instant by `parseAestDayStartUtc`. Filter is `startedAt ≥ startDate`. |
+| `endDate` | `YYYY-MM-DD` | **Exclusive upper bound** (`startedAt < endDate`). Interpreted as the AEST calendar day; the service uses the start of the *next* AEST day so the entire local day is included regardless of DST transitions (`parseAestDayEndExclusiveUtc`). |
 | `adminId` | string | Filter by the admin who triggered the run |
 | `status` | `running\|completed\|failed\|aborted` | Filter by run lifecycle state |
-| `limit` | number | Page size (default 20) |
+| `limit` | number | Page size (default 50, capped at 200) |
 | `offset` | number | Skip count for pagination |
 
 **Response:** `{ runs: ChargeJobRun[], total: number }`
 
 ### `GET /api/admin/charge-past-due/runs/[runId]`
 
-Returns the detail view for a single bulk run: the `ChargeJobRun` document plus all `InvoiceChargeLog` rows with a matching `chargeRunId`.
+Returns the detail view for a single bulk run: the `ChargeJobRun` document plus all `InvoiceChargeLog` rows with a matching `chargeRunId`. Rows include `declineCode` (Stripe's specific decline reason, e.g. `do_not_honor`, `insufficient_funds`) alongside `errorCode`/`errorMessage` so the UI can prefer the most specific signal.
 
 **Response:** `{ run: ChargeJobRun, rows: InvoiceChargeLog[] }` or `404` if the run is not found.
 
@@ -48,7 +48,17 @@ Returns the detail view for a single bulk run: the `ChargeJobRun` document plus 
 
 Lists `InvoiceChargeLog` rows where `chargeRunId === null` — i.e. per-user manual retries that were not part of any bulk run.
 
-**Query params:** same as `/runs` (`startDate`, `endDate`, `adminId`, `status`, `limit`, `offset`).
+**Query params:** same date / paging filters as `/runs` (AEST-aware `startDate` inclusive, `endDate` exclusive), plus:
+
+| Param | Type | Notes |
+|---|---|---|
+| `adminId` | string | Filter by the admin who triggered the retry |
+| `status` | `success\|failed\|skipped` | Filter on the `InvoiceChargeLog.status` field |
+| `userSearch` | string (max 120 chars) | Case-insensitive substring match against `User.email`. Server pre-resolves matching user IDs (regex, capped at 500) and constrains the query to `userId: { $in: [...] }`. Empty string is ignored; whitespace is trimmed. |
+| `limit` | number | Page size (default 50, capped at 200) |
+| `offset` | number | Skip count for pagination |
+
+Each row includes `declineCode` alongside `errorCode`/`errorMessage` (same convention as the runs detail endpoint).
 
 **Response:** `{ rows: InvoiceChargeLog[], total: number }`
 

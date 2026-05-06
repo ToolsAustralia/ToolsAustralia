@@ -57,10 +57,12 @@
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
     "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
     "test:dashboard-date-range": "tsx src/utils/admin/__tests__/dashboardDateRange.test.ts",
+    "test:group-charge-attempts": "tsx src/utils/admin/__tests__/groupChargeAttemptsByUser.test.ts",
     "test:age-grouping": "tsx src/utils/metrics/__tests__/age-grouping.test.ts",
     "test:profession-normalize": "tsx src/utils/metrics/__tests__/profession-normalize.test.ts",
     "test:past-due-admin-charge": "tsx src/server/admin/__tests__/chargePastDueShared.test.ts && tsx src/server/admin/__tests__/chargePastDueSelectionPolicy.test.ts",
     "test:charge-lock-rate-limit": "tsx src/server/admin/__tests__/chargeLockRateLimitPolicy.test.ts",
+    "test:charge-past-due-post-pay": "tsx src/server/admin/__tests__/chargePastDuePostPayPolicy.test.ts",
     "test:force-charge-policy": "tsx src/server/admin/__tests__/forceChargePastDuePolicy.test.ts",
     "test:recover-stranded-past-due-policy": "tsx src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts",
     "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts",
@@ -70,7 +72,9 @@
     "test:membership-snapshot-dst": "tsx scripts/test-membership-snapshot-dst.ts",
     "find:stuck-paused-users": "tsx scripts/find-stuck-paused-users.ts",
     "test:force-charge:dry": "tsx scripts/test-force-charge.ts",
-    "test:force-charge:live": "tsx scripts/test-force-charge.ts --live"
+    "test:force-charge:live": "tsx scripts/test-force-charge.ts --live",
+    "confirm-stuck-pi": "tsx scripts/confirm-stuck-pi.ts",
+    "confirm-stuck-pi:dry": "tsx scripts/confirm-stuck-pi.ts --dry-run"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
