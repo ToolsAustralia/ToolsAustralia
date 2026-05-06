@@ -47,6 +47,16 @@ Plus:
 
 `Australia/Sydney`-anchored crons fire at 14:00 UTC = 00:00 AEST / 01:00 AEDT, and 15:00 UTC = 01:00 AEST / 02:00 AEDT — both are after Sydney midnight in either DST regime, so they reliably write "yesterday" in local time. See [`docs/subscription/architecture.md`](../subscription/architecture.md) for the full membership-snapshot flow and `scripts/test-membership-snapshot-dst.ts` for the DST verification test.
 
+## Function memory configuration
+
+[`vercel.json`](../../vercel.json) `functions` block right-sizes memory per route:
+
+- **Default** (`src/app/api/**/route.ts`): `memory: 512MB, maxDuration: 10s` — covers light read-heavy GETs (the majority of the 289 routes).
+- **Heavy I/O** (Stripe webhook, Cloudinary upload, admin exports/participants/sync, dashboard recent-activities, activity log): `memory: 1024MB, maxDuration: 30–60s`.
+- **Crons** (every `/api/cron/*` plus `/api/admin/klaviyo/**`): `memory: 1024MB, maxDuration: 300s`.
+
+Vercel scales CPU with memory, so 512MB is roughly half the CPU of 1024MB — fine for read-heavy GETs but watch Vercel logs for `FUNCTION_INVOCATION_FAILED` / `Allocation failed` after deploy. Bump individual routes to 1024MB if needed.
+
 ## Env handling
 
 `lib/environment.ts` validates and exposes env vars. Don't access `process.env.X` directly — go through this module so missing/invalid vars fail fast at boot.

@@ -45,3 +45,9 @@
 | `useLoadingStates()` | Coordinate multiple loading states |
 | `usePrefetching()` | Hover-prefetch for navigation |
 | `useConfetti()` | Confetti effect (with QUICKSTART/README/example .md files alongside) |
+
+## Polling intervals
+
+Hooks under [`src/hooks/queries/`](../../src/hooks/queries/) that opt into `refetchInterval` use `refetchIntervalInBackground: false` so polling pauses for hidden tabs and resumes when the tab is focused (the next interval tick fires after focus, and `refetchOnWindowFocus: true` provides immediate catch-up where set). This applies to: `usePromoQueries` (`useActivePromos`, `useAdminActivePromos`, `useEffectiveForBanner`), `usePromoBannerTextQueries`, `useAlternatingMultiplierQueries`, `useMajorDrawQueries` (`useCurrentMajorDraw`, `useUserMajorDrawStats`), `useUserQueries` (`useMyAccountData`). Background polling on hidden tabs would inflate Edge Requests + Function Invocations without user-visible benefit.
+
+NextAuth `<SessionProvider>` in [`src/app/providers.tsx`](../../src/app/providers.tsx) uses `refetchInterval={15 * 60}` (15 min, raised from 5 min). Refresh-on-focus is intentionally disabled (`refetchOnWindowFocus={false}`); the 15-min server poll bounds the worst-case stale-session UI window without flooding `/api/auth/session` invocations on every tab.
