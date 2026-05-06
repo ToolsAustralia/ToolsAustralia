@@ -35,8 +35,53 @@ function testEligibleWhenAlreadyVoid() {
   assert.equal(isOriginalInvoiceEligibleForRecovery(inv).eligible, true);
 }
 
-function testNotEligibleWhenStillOpen() {
-  const inv = { status: "open", amount_remaining: 4000 } as Stripe.Invoice;
+function testNotEligibleWhenStillOpenWithPendingRetry() {
+  const inv = {
+    status: "open",
+    amount_remaining: 4000,
+    attempt_count: 0,
+    next_payment_attempt: 9999999999, // far future
+  } as Stripe.Invoice;
+  const result = isOriginalInvoiceEligibleForRecovery(inv);
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, "still_chargeable");
+}
+
+function testEligibleWhenOpenButExhausted() {
+  // Stripe quirk: open + retries exhausted = functionally stranded
+  const inv = {
+    status: "open",
+    amount_remaining: 4000,
+    attempt_count: 3,
+    next_payment_attempt: null,
+  } as Stripe.Invoice;
+  const result = isOriginalInvoiceEligibleForRecovery(inv);
+  assert.equal(result.eligible, true);
+}
+
+function testNotEligibleWhenOpenZeroAttempts() {
+  // Edge case: open with 0 attempts and no next_payment_attempt scheduled.
+  // Probably a freshly created invoice waiting for finalization. NOT stranded.
+  const inv = {
+    status: "open",
+    amount_remaining: 4000,
+    attempt_count: 0,
+    next_payment_attempt: null,
+  } as Stripe.Invoice;
+  const result = isOriginalInvoiceEligibleForRecovery(inv);
+  assert.equal(result.eligible, false);
+  assert.equal(result.reason, "still_chargeable");
+}
+
+function testNotEligibleWhenOpenWithRetryStillScheduled() {
+  // Stripe is still planning a retry — let Stripe's smart retry handle it,
+  // not us.
+  const inv = {
+    status: "open",
+    amount_remaining: 4000,
+    attempt_count: 2,
+    next_payment_attempt: 9999999999,
+  } as Stripe.Invoice;
   const result = isOriginalInvoiceEligibleForRecovery(inv);
   assert.equal(result.eligible, false);
   assert.equal(result.reason, "still_chargeable");
@@ -127,7 +172,10 @@ function run() {
   testIdempotencyKeysAreStableAndDistinct();
   testEligibleWhenUncollectible();
   testEligibleWhenAlreadyVoid();
-  testNotEligibleWhenStillOpen();
+  testNotEligibleWhenStillOpenWithPendingRetry();
+  testEligibleWhenOpenButExhausted();
+  testNotEligibleWhenOpenZeroAttempts();
+  testNotEligibleWhenOpenWithRetryStillScheduled();
   testNotEligibleWhenAlreadyPaid();
   testNotEligibleWhenDraft();
   testPickHeldDraftMatchesAmount();
