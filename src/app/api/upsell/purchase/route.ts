@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import {
   calculateUpsellEntriesFromContext,
   getPackageBaseEntries,
@@ -163,9 +164,10 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // Get the authenticated user session
     const session = await getServerSession(authOptions);
@@ -746,12 +748,13 @@ async function handlePaymentIntentCreation(
 ) {
   try {
     // Derive event source URL for CAPI if not passed (e.g. from request)
-    const eventSourceUrl =
+    const eventSourceUrl = safeEventSourceUrl(
       capiEventSourceUrl ??
       (request
         ? request.headers.get("referer") ??
           (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
-        : undefined);
+        : undefined)
+    );
 
     // Prepare metadata with original package type
     const paymentMetadata = {

@@ -86,6 +86,14 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+## Stripe metadata 500-char cap
+
+Each Stripe metadata value is capped at 500 chars. Exceeding that on **any** key rejects the entire `subscriptions.create` / `paymentIntents.create` / `customers.update` call with `Metadata values can have up to 500 characters`, which surfaces to the user as a generic payment error and blocks checkout.
+
+The most frequent offender is `capi_event_source_url` — Facebook ad referer URLs (long UTMs + `fbclid` + `_aem_` + `brid`) routinely run 500+ chars. All routes building Stripe metadata must run a referer through [`safeEventSourceUrl`](../../src/utils/tracking/event-source-url.ts) before storing it. See [tracking/gotchas.md](../tracking/gotchas.md#stripe-metadata-500-char-cap-on-capi_event_source_url).
+
+If you add a new metadata key that holds user-supplied or URL-derived content, length-check or truncate at the boundary — don't trust upstream values.
+
 ## Don't `expand: ['latest_payment_intent']`
 
 On Stripe API `2025-05-28.basil`, this returns:

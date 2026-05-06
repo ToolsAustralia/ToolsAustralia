@@ -9,6 +9,7 @@ import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 // ✅ REMOVED: processPaymentBenefits and isPaymentProcessed imports
 // Fallback processing removed to prevent duplicate Facebook tracking
 // Webhook is now the single source of truth for payment processing
@@ -98,9 +99,10 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     const body = await request.json();
     requestBody = body; // Store for error logging

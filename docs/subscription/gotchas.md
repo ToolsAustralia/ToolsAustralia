@@ -50,6 +50,19 @@ When a subscription is `past_due` AND has `cancel_at_period_end: true`, the situ
 
 Resolution in `cancelSubscription()`: **immediate cancel wins**. The past-due check fires first (`shouldCancelImmediately = isPastDue || !cancelAtPeriodEnd`), regardless of the requested option. The user loses access now; no charge happens.
 
+## Admin dashboard analytics
+
+### Dashboard cancellation revenue must come from the same cohort as the count
+
+The "Cancellations" KPI card on the admin dashboard shows two values that **must** describe the same cohort:
+
+- **Count** (`users.cancelledMemberships`): number of users whose `subscription.cancelledAt` falls in the selected range (delta), or — for `all-time` — number of users with a standing scheduled cancellation (stock).
+- **"Est. membership revenue at risk"** (`users.cancellationImpact.estimatedMonthlyRevenue`): sum of package prices for those same users.
+
+[`MembershipAnalyticsService.getAnalyticsBundle()`](../../src/services/admin/MembershipAnalyticsService.ts) always derives the revenue by iterating `cancellationRows` (the exact users that produced the count) and summing `getPackageById(packageId).price`. **Never** source this revenue from `MembershipDailySnapshot` / `getMembershipByPackageSnapshot()`: the snapshot's `cancelledCount` per package is the **standing** scheduled-cancel total as of that day (i.e., a stock value), so combining it with a delta count produces a wildly inflated revenue figure for a different (much larger) cohort.
+
+The original snapshot-revenue path violated this invariant and shipped — for "Yesterday" with 38 cancellations it reported ~$16,580 (the entire ~470-user scheduled-cancel stock × price), not the ~$1.3k actually attributable to those 38 users. Smell test: divide revenue by count; it must land within the package price range ($35–$200ish). If it's much higher, something is mixing stock with delta.
+
 ## Cancel flow
 
 ### Admin cancel edge cases
