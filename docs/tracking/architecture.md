@@ -52,3 +52,9 @@ UTM params captured on landing → persisted via `useUTMPersistence` → flow th
 (Migrated from `docs/FACEBOOK_TRACKING_IMPLEMENTATION.md`.)
 
 > _TODO: read root file and merge full content. Brief: server-side CAPI is canonical; pixel is supplementary._
+
+## Observability sampling
+
+Speed Insights mounted globally in [`src/app/layout.tsx`](../../src/app/layout.tsx) with `sampleRate={0.1}` — beacons 10% of page views. Sufficient for stable Core Web Vitals trends; reduces Vercel Speed Insights data-point billing roughly 10×. Vercel Web Analytics (`<Analytics />`) is currently unsampled — see [`docs/superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md`](../superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md) for follow-up.
+
+Contentsquare UX analytics is loaded via `next/script` with `strategy="afterInteractive"` from [`src/app/layout.tsx`](../../src/app/layout.tsx) — defers execution until after Next is hydrated so it never blocks LCP or competes with the critical render path. Klaviyo and GTM also use `next/script` ([`KlaviyoScriptLoader.tsx`](../../src/components/KlaviyoScriptLoader.tsx), [`GoogleTagManager.tsx`](../../src/components/GoogleTagManager.tsx)).

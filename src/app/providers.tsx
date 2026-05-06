@@ -85,7 +85,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <ThemeProvider>
         <ThemeMetaSync />
-        <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
+        <SessionProvider refetchOnWindowFocus={false} refetchInterval={15 * 60}>
           <QueryClientProvider client={queryClient}>
             <ApiErrorBoundary>
               <UserProvider>
