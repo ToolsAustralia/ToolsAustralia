@@ -41,7 +41,10 @@ export type EligibilityResult =
 /**
  * Recovery is only valid when the original invoice has aged out of payable state.
  * - `uncollectible` / `void` → eligible (the "stranded" case)
- * - `open` / `draft` → still chargeable; admin should use the existing flow
+ * - `open` (exhausted) → eligible: Stripe quirk where smart retries have run out but
+ *   status stays `open` (Dashboard labels these "Failed"). Detected via attempt_count >= 1
+ *   and next_payment_attempt == null — `stripe.invoices.pay()` rejects these anyway.
+ * - `open` (still active) / `draft` → still chargeable; admin should use the existing flow
  * - `paid` → already paid; nothing to recover
  */
 export function isOriginalInvoiceEligibleForRecovery(invoice: Stripe.Invoice): EligibilityResult {
@@ -49,7 +52,23 @@ export function isOriginalInvoiceEligibleForRecovery(invoice: Stripe.Invoice): E
     case "uncollectible":
     case "void":
       return { eligible: true };
-    case "open":
+    case "open": {
+      // Stripe quirk: an `open` invoice can be functionally dead. After smart
+      // retries exhaust, Stripe stops scheduling (`next_payment_attempt: null`)
+      // and `stripe.invoices.pay()` rejects with "no longer be paid" — but the
+      // API status remains `open`. The Stripe Dashboard labels these as "Failed".
+      //
+      // Detection: status is `open` AND there's been at least one attempt AND
+      // Stripe has stopped scheduling future attempts. That combination is the
+      // unambiguous "Stripe gave up" signal — recovery via void+re-bill is the
+      // right path even though API status is `open`.
+      const attemptCount = invoice.attempt_count ?? 0;
+      const hasNextAttempt = invoice.next_payment_attempt != null;
+      if (attemptCount >= 1 && !hasNextAttempt) {
+        return { eligible: true };
+      }
+      return { eligible: false, reason: "still_chargeable" };
+    }
     case "draft":
       return { eligible: false, reason: "still_chargeable" };
     case "paid":
