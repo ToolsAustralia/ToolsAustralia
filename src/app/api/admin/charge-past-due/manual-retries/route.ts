@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
-import { listManualRetries } from "@/services/admin/chargePastDueHistory";
+import {
+  listManualRetries,
+  parseAestDayStartUtc,
+  parseAestDayEndExclusiveUtc,
+} from "@/services/admin/chargePastDueHistory";
 
 const VALID_STATUS = ["success", "failed", "skipped"] as const;
 type Status = (typeof VALID_STATUS)[number];
-
-function parseDate(s: string | null): Date | undefined {
-  if (!s) return undefined;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -26,11 +24,14 @@ export async function GET(request: NextRequest) {
     ? (statusParam as Status)
     : undefined;
 
+  const userSearch = (searchParams.get("userSearch") ?? "").trim() || undefined;
+
   const result = await listManualRetries({
-    startDate: parseDate(searchParams.get("startDate")),
-    endDate: parseDate(searchParams.get("endDate")),
+    startDate: parseAestDayStartUtc(searchParams.get("startDate")),
+    endDate: parseAestDayEndExclusiveUtc(searchParams.get("endDate")),
     adminId: searchParams.get("adminId") || undefined,
     status,
+    userSearch,
     limit: Number(searchParams.get("limit")) || 50,
     offset: Number(searchParams.get("offset")) || 0,
   });
