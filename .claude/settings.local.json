@@ -12,7 +12,8 @@
       "Read(//tmp/**)",
       "Bash(npm run *)",
       "Bash(Get-Content -Path \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\05bcbfbb-a312-443a-9c3f-55bc8aafcfeb\\\\tasks\\\\bfwcelxzl.output\" -Wait)",
-      "Bash(timeout 45 bash -c \"npm run lint 2>&1\")"
+      "Bash(timeout 45 bash -c \"npm run lint 2>&1\")",
+      "Bash(grep -E \"\\(event-source-url|create-subscription|create-one-time-purchase|mini-draw\\\\\\\\\\\\\\\\purchase|upsell\\\\\\\\\\\\\\\\purchase|tracking\\\\\\\\\\\\\\\\gotchas|billing-stripe\\\\\\\\\\\\\\\\gotchas\\)\" \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\6481f0ec-7981-42df-bea1-a247b70bfeac\\\\tasks\\\\b7pwqvw7q.output\")"
     ]
   }
 }

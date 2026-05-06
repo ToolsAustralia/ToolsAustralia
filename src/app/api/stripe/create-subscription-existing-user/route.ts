@@ -19,6 +19,7 @@ import {
 import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
@@ -85,9 +86,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
