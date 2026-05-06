@@ -48,7 +48,9 @@ Key fields:
 - `userId` (indexed, ref `User`)
 - `adminId` (indexed, ref `User`) — who triggered
 - `status: "success" | "failed" | "skipped"`
-- `errorCode`, `errorMessage`
+- `errorCode` — generic Stripe error code (e.g. `card_declined`, `expired_card`)
+- `declineCode` (optional, no index) — Stripe's specific decline reason from `error.decline_code` (e.g. `do_not_honor`, `insufficient_funds`, `lost_card`); complements the generic `errorCode`. `error.code` answers _what kind of failure_; `error.decline_code` answers _why the issuer specifically declined_ — both are persisted so admins can distinguish recoverable issues (insufficient funds → retry later) from permanent ones (lost/stolen card → stop retrying).
+- `errorMessage`
 - `amount` (cents)
 - `attemptedAt` (indexed)
 - `canRetryAt` (indexed)

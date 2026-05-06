@@ -112,16 +112,13 @@ export default withAuth(
 );
 
 export const config = {
-  // Match all routes to ensure CSP headers and nonce are set on every request
-  // The auth checks inside middleware will still only apply to protected routes
+  // Match all page routes; exclude static assets and APIs so middleware doesn't run
+  // (and incur JWT decode + CSP nonce generation) on bytes/handlers that don't need them.
+  //
+  // IMPORTANT: Multiple matcher entries are OR'd (Next.js include semantics), so all
+  // exclusions must live in ONE regex's negative lookahead. The lookahead uses `|`
+  // alternation to combine path-prefix excludes and extension excludes.
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.json|sw\\.js|icon\\.ico|apple-icon\\.png|\\.well-known/|images/|fonts/|.*\\.(?:png|jpg|jpeg|gif|webp|avif|svg|ico|ttf|woff|woff2|otf|map|txt|xml|json)$).*)",
   ],
 };

@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   CheckCircle,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   DollarSign,
   ListChecks,
   RefreshCw,
+  Search,
   UserCog,
 } from "lucide-react";
 import { useChargePastDueRuns } from "@/hooks/queries/admin/useChargePastDueRuns";
@@ -28,6 +31,12 @@ import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
 import RecoverInvoiceModal from "@/components/admin/RecoverInvoiceModal";
 import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import {
+  groupChargeAttemptsByUser,
+  type UserAttemptGroup,
+} from "@/utils/admin/groupChargeAttemptsByUser";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -116,6 +125,9 @@ export default function PastDueChargeHistory() {
   } | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [userSearchInput, setUserSearchInput] = useState("");
+  const debouncedUserSearch = useDebounce(userSearchInput, 300);
+  const [expandedUserKeys, setExpandedUserKeys] = useState<Set<string>>(new Set());
 
   const { data: drawDates } = useCurrentAndLastDrawDates();
   const { data: majorDraws = [] } = useMajorDrawsForDateRange();
@@ -152,8 +164,9 @@ export default function PastDueChargeHistory() {
     () => ({
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      userSearch: debouncedUserSearch.trim() || undefined,
     }),
-    [startDate, endDate]
+    [startDate, endDate, debouncedUserSearch]
   );
 
   const runsQuery = useChargePastDueRuns(filter);
@@ -191,6 +204,36 @@ export default function PastDueChargeHistory() {
     }
     return itemsArr;
   }, [selectedRows, strandedRows]);
+
+  const groupedRetries = useMemo<UserAttemptGroup<typeof retriesQuery.rows[number]>[]>(
+    () => groupChargeAttemptsByUser(retriesQuery.rows),
+    [retriesQuery.rows]
+  );
+
+  const groupKey = (g: UserAttemptGroup): string => g.userId ?? `email:${g.userEmail}`;
+
+  const toggleGroup = (key: string) => {
+    setExpandedUserKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAllStrandedForUser = (g: UserAttemptGroup<typeof retriesQuery.rows[number]>) => {
+    const keys = g.attempts
+      .filter((a) => a.status === "failed" && isStrandedError(a.errorMessage, a.errorCode) && a.userId)
+      .map((a) => `${a.userId}-${a.invoiceId}`);
+    if (keys.length === 0) return;
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      const allSelected = keys.every((k) => next.has(k));
+      if (allSelected) keys.forEach((k) => next.delete(k));
+      else keys.forEach((k) => next.add(k));
+      return next;
+    });
+  };
 
   const summary = useMemo(() => {
     let attempted = 0;
@@ -450,6 +493,16 @@ export default function PastDueChargeHistory() {
             </h3>
           </div>
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
+              <input
+                type="search"
+                value={userSearchInput}
+                onChange={(e) => setUserSearchInput(e.target.value)}
+                placeholder="Search by email…"
+                className="w-44 rounded-md border border-gray-300 bg-white py-1 pl-7 pr-2 text-xs text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder-neutral-500"
+              />
+            </div>
             {selectedItems.length > 0 && (
               <button
                 type="button"
@@ -486,94 +539,173 @@ export default function PastDueChargeHistory() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-neutral-700">
+                    <th className="bg-gray-50 px-3 py-3 dark:bg-neutral-800 w-8" />
                     <th className="bg-gray-50 px-3 py-3 text-left dark:bg-neutral-800 w-10">
                       <span className="sr-only">Select</span>
                     </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      When
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Admin
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      User
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Invoice
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Status
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Amount
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Error
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Action
-                    </th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Last attempt</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Admin</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
+                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Attempts</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Latest</th>
+                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
-                  {retriesQuery.rows.map((r) => (
-                    <tr
-                      key={`${r.invoiceId}-${r.attemptedAt}`}
-                      className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
-                    >
-                      <td className="px-3 py-3">
-                        {r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.has(`${r.userId}-${r.invoiceId}`)}
-                            onChange={() => toggleRow(`${r.userId}-${r.invoiceId}`)}
-                            className="h-4 w-4 cursor-pointer rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-800"
-                          />
-                        ) : null}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                        {formatDateTime(r.attemptedAt)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                        {r.adminName}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                        {r.userEmail || r.userId}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-neutral-300">
-                        {r.invoiceId}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <RetryStatusBadge status={r.status} />
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                        {formatCents(r.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-red-700 dark:text-red-400">
-                        {r.errorCode ?? r.errorMessage ?? ""}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm">
-                        {r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRecoverTarget({
-                                userId: r.userId!,
-                                userEmail: r.userEmail || r.userId!,
-                                originalInvoiceId: r.invoiceId,
-                              });
-                            }}
-                            className="rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 text-xs font-semibold dark:bg-amber-950/50 dark:hover:bg-amber-900/60 dark:text-amber-200"
-                          >
-                            Recover
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
+                  {groupedRetries.map((g) => {
+                    const key = groupKey(g);
+                    const isExpanded = expandedUserKeys.has(key);
+                    const strandedKeys = g.attempts
+                      .filter((a) => a.status === "failed" && isStrandedError(a.errorMessage, a.errorCode) && a.userId)
+                      .map((a) => `${a.userId}-${a.invoiceId}`);
+                    const strandedCount = strandedKeys.length;
+                    const selectedHere = strandedKeys.filter((k) => selectedRows.has(k)).length;
+                    const checkboxState =
+                      strandedCount === 0
+                        ? "none"
+                        : selectedHere === 0
+                          ? "unchecked"
+                          : selectedHere === strandedCount
+                            ? "checked"
+                            : "indeterminate";
+
+                    return (
+                      <Fragment key={key}>
+                        <tr
+                          onClick={() => toggleGroup(key)}
+                          className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
+                        >
+                          <td className="px-3 py-3">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-500" />
+                            )}
+                          </td>
+                          <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                            {checkboxState !== "none" && (
+                              <input
+                                type="checkbox"
+                                checked={checkboxState === "checked"}
+                                ref={(el) => {
+                                  if (el) el.indeterminate = checkboxState === "indeterminate";
+                                }}
+                                onChange={() => toggleAllStrandedForUser(g)}
+                                className="h-4 w-4 cursor-pointer rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-800"
+                              />
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                            {formatDateTime(g.lastAttemptedAt)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                            {g.adminLabel}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                            <ClickableUserDisplay
+                              displayText={g.userEmail || g.userId || "(unknown)"}
+                              userId={g.userId ?? undefined}
+                              className="text-sm"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
+                            {g.attempts.length}
+                            <span className="ml-2 text-xs text-gray-500 dark:text-neutral-400">
+                              {g.successCount > 0 && <span className="text-emerald-600">{g.successCount}✓ </span>}
+                              {g.failedCount > 0 && <span className="text-red-600">{g.failedCount}✗ </span>}
+                              {g.skippedCount > 0 && <span>{g.skippedCount}⏭</span>}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <RetryStatusBadge status={g.latestStatus} />
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                            {formatCents(g.totalAmount)}
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="bg-gray-50/60 dark:bg-neutral-800/40">
+                            <td colSpan={8} className="px-4 py-3">
+                              <table className="w-full">
+                                <thead>
+                                  <tr>
+                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500 w-8" />
+                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">When</th>
+                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Invoice</th>
+                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Status</th>
+                                    <th className="px-2 py-2 text-right text-[10px] uppercase text-gray-500">Amount</th>
+                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Error</th>
+                                    <th className="px-2 py-2 text-right text-[10px] uppercase text-gray-500">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {g.attempts.map((r) => {
+                                    const stranded =
+                                      r.status === "failed" && isStrandedError(r.errorMessage, r.errorCode) && r.userId;
+                                    return (
+                                      <tr key={`${r.invoiceId}-${r.attemptedAt}`}>
+                                        <td className="px-2 py-2">
+                                          {stranded ? (
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedRows.has(`${r.userId}-${r.invoiceId}`)}
+                                              onChange={() => toggleRow(`${r.userId}-${r.invoiceId}`)}
+                                              className="h-4 w-4 cursor-pointer rounded border-gray-300 text-amber-600 focus:ring-amber-500 dark:border-neutral-600 dark:bg-neutral-800"
+                                            />
+                                          ) : null}
+                                        </td>
+                                        <td className="whitespace-nowrap px-2 py-2 text-xs text-gray-700 dark:text-neutral-300">
+                                          {formatDateTime(r.attemptedAt)}
+                                        </td>
+                                        <td className="px-2 py-2 font-mono text-xs text-gray-700 dark:text-neutral-300">
+                                          {r.invoiceId}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs">
+                                          <RetryStatusBadge status={r.status} />
+                                        </td>
+                                        <td className="px-2 py-2 text-right text-xs font-semibold text-gray-900 dark:text-white">
+                                          {formatCents(r.amount)}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs text-red-700 dark:text-red-400">
+                                          {r.declineCode ?? r.errorCode ?? r.errorMessage ?? ""}
+                                        </td>
+                                        <td className="px-2 py-2 text-right text-xs">
+                                          {stranded ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setRecoverTarget({
+                                                  userId: r.userId!,
+                                                  userEmail: r.userEmail || r.userId!,
+                                                  originalInvoiceId: r.invoiceId,
+                                                });
+                                              }}
+                                              className="rounded-md bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 text-xs font-semibold dark:bg-amber-950/50 dark:hover:bg-amber-900/60 dark:text-amber-200"
+                                            >
+                                              Recover
+                                            </button>
+                                          ) : null}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            {retriesQuery.hasMore && (
+              <p className="px-4 pb-2 text-xs text-gray-500 dark:text-neutral-400">
+                Per-user counts reflect loaded attempts only. Click &quot;Load more&quot; to widen the view.
+              </p>
+            )}
             {retriesQuery.hasMore && (
               <div className="flex justify-center border-t border-gray-200 px-4 py-3 dark:border-neutral-700">
                 <button

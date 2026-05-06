@@ -1,8 +1,14 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { useChargePastDueRunDetail } from "@/hooks/queries/admin/useChargePastDueRunDetail";
 import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import {
+  groupChargeAttemptsByUser,
+  type UserAttemptGroup,
+} from "@/utils/admin/groupChargeAttemptsByUser";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -66,6 +72,32 @@ export default function PastDueChargeHistoryDrawer({
   onClose: () => void;
 }) {
   const detailQuery = useChargePastDueRunDetail(runId);
+
+  const [search, setSearch] = useState("");
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  // The drawer's per-row DTO has no `adminName` (one admin per run). Augment with the run's
+  // admin so each row satisfies ChargeAttemptInput before grouping.
+  const groupedAttempts = useMemo(() => {
+    const rows = detailQuery.data?.rows ?? [];
+    const adminName = detailQuery.data?.run.adminName ?? "";
+    const augmented = rows.map((r) => ({ ...r, adminName }));
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? augmented.filter((r) => (r.userEmail ?? "").toLowerCase().includes(q))
+      : augmented;
+    return groupChargeAttemptsByUser(filtered);
+  }, [detailQuery.data, search]);
+
+  const groupKey = (g: UserAttemptGroup): string => g.userId ?? `email:${g.userEmail}`;
+  const toggleGroup = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   if (!runId) return null;
 
@@ -182,64 +214,113 @@ export default function PastDueChargeHistoryDrawer({
             </section>
 
             <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900 overflow-hidden">
-              <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-neutral-800">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-neutral-800">
                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
                   Per-invoice attempts
                 </h4>
-                <span className="text-xs text-gray-500 dark:text-neutral-400">
-                  {detailQuery.data.rows.length}
-                </span>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search by email…"
+                      className="w-44 rounded-md border border-gray-300 bg-white py-1 pl-7 pr-2 text-xs text-gray-900 placeholder-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white dark:placeholder-neutral-500"
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-neutral-400">
+                    {groupedAttempts.length} users
+                  </span>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-neutral-700">
-                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        When
-                      </th>
-                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        User
-                      </th>
-                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        Invoice
-                      </th>
-                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        Status
-                      </th>
-                      <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        Amount
-                      </th>
-                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                        Error
-                      </th>
+                      <th className="bg-gray-50 px-3 py-3 dark:bg-neutral-800 w-8" />
+                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
+                      <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Attempts</th>
+                      <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Latest</th>
+                      <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
-                    {detailQuery.data.rows.map((r) => (
-                      <tr
-                        key={`${r.invoiceId}-${r.attemptedAt}`}
-                        className="transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
-                      >
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                          {formatDateTime(r.attemptedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                          {r.userEmail || r.userId}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-neutral-300">
-                          {r.invoiceId}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <RetryStatusBadge status={r.status} />
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                          {formatCents(r.amount)}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-red-700 dark:text-red-400">
-                          {r.errorCode ?? r.errorMessage ?? ""}
-                        </td>
-                      </tr>
-                    ))}
+                    {groupedAttempts.map((g) => {
+                      const key = groupKey(g);
+                      const isExpanded = expandedKeys.has(key);
+                      return (
+                        <Fragment key={key}>
+                          <tr
+                            onClick={() => toggleGroup(key)}
+                            className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70"
+                          >
+                            <td className="px-3 py-3">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-500" />
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
+                              <ClickableUserDisplay
+                                displayText={g.userEmail || g.userId || "(unknown)"}
+                                userId={g.userId ?? undefined}
+                                className="text-sm"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
+                              {g.attempts.length}
+                              <span className="ml-2 text-xs text-gray-500 dark:text-neutral-400">
+                                {g.successCount > 0 && <span className="text-emerald-600">{g.successCount}✓ </span>}
+                                {g.failedCount > 0 && <span className="text-red-600">{g.failedCount}✗ </span>}
+                                {g.skippedCount > 0 && <span>{g.skippedCount}⏭</span>}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <RetryStatusBadge status={g.latestStatus} />
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                              {formatCents(g.totalAmount)}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-50/60 dark:bg-neutral-800/40">
+                              <td colSpan={5} className="px-4 py-3">
+                                <table className="w-full">
+                                  <thead>
+                                    <tr>
+                                      <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Invoice</th>
+                                      <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Status</th>
+                                      <th className="px-2 py-2 text-right text-[10px] uppercase text-gray-500">Amount</th>
+                                      <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Error</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {g.attempts.map((r) => (
+                                      <tr key={`${r.invoiceId}-${r.attemptedAt}`}>
+                                        <td className="px-2 py-2 font-mono text-xs text-gray-700 dark:text-neutral-300">
+                                          {r.invoiceId}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs">
+                                          <RetryStatusBadge status={r.status} />
+                                        </td>
+                                        <td className="px-2 py-2 text-right text-xs font-semibold text-gray-900 dark:text-white">
+                                          {formatCents(r.amount)}
+                                        </td>
+                                        <td className="px-2 py-2 text-xs text-red-700 dark:text-red-400">
+                                          {r.declineCode ?? r.errorCode ?? r.errorMessage ?? ""}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

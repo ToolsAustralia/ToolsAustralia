@@ -7,6 +7,7 @@ export interface IInvoiceChargeLog extends Document {
   adminId: mongoose.Types.ObjectId;
   status: "success" | "failed" | "skipped";
   errorCode?: string;
+  declineCode?: string;
   errorMessage?: string;
   amount: number;
   attemptedAt: Date;
@@ -47,6 +48,10 @@ const InvoiceChargeLogSchema = new Schema<IInvoiceChargeLog>(
       index: true,
     },
     errorCode: {
+      type: String,
+      required: false,
+    },
+    declineCode: {
       type: String,
       required: false,
     },

@@ -168,7 +168,7 @@ export const useCurrentMajorDraw = () => {
       // Otherwise, refetch every 2 minutes for active draws
       return 2 * 60 * 1000;
     },
-    refetchIntervalInBackground: true, // Allow refetch in background for real-time updates
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
     refetchOnWindowFocus: true, // Refetch when user returns to tab
   });
 };
@@ -207,7 +207,7 @@ export const useUserMajorDrawStats = (userId?: string) => {
     staleTime: 0, // Always consider data stale to ensure fresh data after login
     gcTime: 5 * 60 * 1000, // 5 minutes - reduced for fresher data
     refetchInterval: 1 * 60 * 1000, // Refetch every 1 minute for real-time stats
-    refetchIntervalInBackground: true, // Allow refetch in background
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
     refetchOnWindowFocus: true, // Refetch when user returns to tab
     refetchOnMount: true, // Always refetch on mount for fresh data
   });

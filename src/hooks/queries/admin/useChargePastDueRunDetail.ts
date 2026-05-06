@@ -11,6 +11,7 @@ export interface RunDetailRowDTO {
   amount: number;
   attemptedAt: string;
   errorCode?: string;
+  declineCode?: string;
   errorMessage?: string;
 }
 

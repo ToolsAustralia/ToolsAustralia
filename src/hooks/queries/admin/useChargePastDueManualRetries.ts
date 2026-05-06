@@ -8,6 +8,7 @@ export interface ManualRetriesFilter {
   endDate?: string;
   adminId?: string;
   status?: IInvoiceChargeLog["status"];
+  userSearch?: string;
 }
 
 export interface ManualRetryRowDTO extends RunDetailRowDTO {

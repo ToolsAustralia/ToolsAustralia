@@ -98,7 +98,7 @@ export const useActivePromos = () => {
     queryFn: fetchActivePromos,
     staleTime: 30000, // 30 seconds
     refetchInterval: 30000, // Refetch every 30 seconds for countdown accuracy
-    refetchIntervalInBackground: true, // Continue refetching even when tab is not active
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
   });
 };
 
@@ -108,7 +108,7 @@ export const useAdminActivePromos = () => {
     queryFn: fetchAdminActivePromos,
     staleTime: 30000, // 30 seconds
     refetchInterval: 30000, // Refetch every 30 seconds for countdown accuracy
-    refetchIntervalInBackground: true, // Continue refetching even when tab is not active
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
   });
 };
 
@@ -178,7 +178,7 @@ export const useEffectiveForBanner = () => {
     queryFn: fetchEffectiveForBanner,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
     refetchOnWindowFocus: true,
     refetchOnMount: true,
   });

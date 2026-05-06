@@ -172,7 +172,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useBlockedCards.ts",
         "src/hooks/queries/admin/useAllowlistActions.ts"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-06"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -399,6 +399,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/meta/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
+        "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
         "src/hooks/useKlaviyoTracking.ts",
@@ -501,6 +502,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/queries.ts",
         "src/lib/queryKeys.ts",
         "src/lib/requestDeduplication.ts",
+        "src/app/providers.tsx",
         "src/hooks/queries/**",
         "src/hooks/useDebounce.ts",
         "src/hooks/useMediaQuery.ts",
@@ -510,7 +512,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-06"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -526,7 +528,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/admin/**",
         "src/hooks/useAdminMobileDateToolbarSlot.ts"
       ],
-      "lastVerified": "2026-05-05"
+      "lastVerified": "2026-05-06"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
