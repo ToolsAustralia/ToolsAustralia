@@ -8,6 +8,7 @@ import MiniDraw from "@/models/MiniDraw";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 // Benefits are now granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
@@ -53,9 +54,10 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // Parse and validate request body
     const body = await request.json();
@@ -582,12 +584,13 @@ async function handlePaymentIntentCreation(
   try {
     const shouldConfirm = !!paymentMethodId;
 
-    const eventSourceUrl =
+    const eventSourceUrl = safeEventSourceUrl(
       capiEventSourceUrl ??
       (request
         ? request.headers.get("referer") ??
           (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
-        : undefined);
+        : undefined)
+    );
 
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
