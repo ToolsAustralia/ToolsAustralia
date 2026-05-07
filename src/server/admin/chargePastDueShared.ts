@@ -2,7 +2,32 @@ import mongoose from "mongoose";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
+import User from "@/models/User";
 import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
+import {
+  MIN_SECONDS_BETWEEN_ATTEMPTS,
+  RECENT_ATTEMPT_WINDOW_HOURS,
+  SKIP_REASON_NO_LONGER_PAST_DUE,
+  buildAdminChargeIdempotencyKey,
+  cutoffForDebounce,
+  cutoffForRecentAttempt,
+  shouldSkipForNotPastDue,
+} from "./past-due-charge-idempotency";
+import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
+import {
+  decidePostPayAction,
+  extractPaymentIntentId,
+} from "./chargePastDuePostPayPolicy";
+
+export {
+  MIN_SECONDS_BETWEEN_ATTEMPTS,
+  RECENT_ATTEMPT_WINDOW_HOURS,
+  SKIP_REASON_NO_LONGER_PAST_DUE,
+  buildAdminChargeIdempotencyKey,
+  cutoffForDebounce,
+  cutoffForRecentAttempt,
+  shouldSkipForNotPastDue,
+};
 
 /** Row shape returned from bulk and single-user past-due charge flows */
 export type PastDueChargeResultRow = {
@@ -17,6 +42,24 @@ export type PastDueChargeResultRow = {
   /** Set on success when clearing Stripe `pause_collection` failed (payment still succeeded). */
   resumeCollectionError?: string;
 };
+
+/**
+ * Pull the trio of fields we persist into InvoiceChargeLog from a Stripe error.
+ * `decline_code` is the specific reason (e.g. `do_not_honor`); `code` is the bucket
+ * (e.g. `card_declined`). Saving both lets the UI prefer the specific one.
+ */
+function extractStripeErrorFields(err: Stripe.errors.StripeError): {
+  errorCode?: string;
+  declineCode?: string;
+  errorMessage?: string;
+} {
+  const cardErr = err as Stripe.errors.StripeError & { decline_code?: string };
+  return {
+    errorCode: err.code,
+    declineCode: cardErr.decline_code,
+    errorMessage: err.message,
+  };
+}
 
 export function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
   if (!response || typeof response !== "object") {
@@ -165,6 +208,51 @@ export function resolveInvoicePaymentMethodId(
   return invoicePaymentMethod || customerDefaultPaymentMethodId || null;
 }
 
+/**
+ * Pull the customer's `invoice_settings.default_payment_method` ID from an
+ * Invoice whose `customer` field has been expanded inline via
+ * `expand: ['data.customer']` on the list call. Lets the bulk past-due flows
+ * skip the N+1 `customers.retrieve` round-trip — eligibility now needs zero
+ * extra Stripe calls per customer.
+ *
+ * Returns null when the customer is unset, only an ID (not expanded), deleted,
+ * or has no default payment method configured.
+ */
+export function getCustomerDefaultPaymentMethodFromInvoice(
+  invoice: Stripe.Invoice
+): string | null {
+  const customer = invoice.customer;
+  if (!customer || typeof customer === "string") return null;
+  if ((customer as Stripe.DeletedCustomer).deleted) return null;
+
+  const fullCustomer = customer as Stripe.Customer & {
+    invoice_settings?: {
+      default_payment_method?: string | Stripe.PaymentMethod | null;
+    };
+  };
+  const dpm = fullCustomer.invoice_settings?.default_payment_method;
+  if (!dpm) return null;
+  return typeof dpm === "string" ? dpm : dpm.id;
+}
+
+/**
+ * Reduce a customer's open invoices to the single invoice we should charge —
+ * the one attached to the user's current subscription. Older or duplicate
+ * cycle invoices (created when pause_collection didn't fire in time) are
+ * returned separately so the caller can log them as skipped.
+ *
+ * Returns `target: null` when no invoice on the current subscription is chargeable.
+ *
+ * Compatible with both Stripe API <2025-04-01 (invoice.subscription) and
+ * >=2025-04-01 (invoice.parent.subscription_details.subscription).
+ */
+export function selectCurrentSubscriptionChargeable(
+  invoices: Stripe.Invoice[],
+  userStripeSubscriptionId: string | null | undefined
+): { target: Stripe.Invoice | null; skipped: Stripe.Invoice[] } {
+  return _selectCurrentSubscriptionChargeable(invoices, userStripeSubscriptionId);
+}
+
 type LeanPastDueUser = {
   _id: mongoose.Types.ObjectId | string;
   email?: string | null;
@@ -180,8 +268,36 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   customerId: string;
   user: LeanPastDueUser;
   adminId: string;
+  chargeRunId?: mongoose.Types.ObjectId | null;
+  /**
+   * Override the default `admin-charge-${invoiceId}` Stripe idempotency key.
+   * Force Charge paths supply per-attempt keys to allow real retries within
+   * the 6h budget window (otherwise Stripe returns the cached first response).
+   */
+  idempotencyKey?: string;
+  /**
+   * Override the default 1-per-window lock check. When provided, the function
+   * calls this instead of running its own `findOne` on InvoiceChargeLog.
+   * Force Charge paths supply a callback that counts per-path Force Charge
+   * attempts and allows up to 3 per 6h window.
+   *
+   * Returns `allowed: true` to proceed or `allowed: false` with a reason/message
+   * to skip. Independent of the 30s debounce check, which always runs first.
+   */
+  attemptBudgetCheck?: () => Promise<
+    { allowed: true } | { allowed: false; reason: string; message: string }
+  >;
 }): Promise<PastDueChargeResultRow> {
-  const { invoice, paymentMethodId, customerId, user, adminId } = params;
+  const {
+    invoice,
+    paymentMethodId,
+    customerId,
+    user,
+    adminId,
+    chargeRunId = null,
+    idempotencyKey,
+    attemptBudgetCheck,
+  } = params;
   const invoiceId = invoice.id;
   if (!invoiceId) {
     return {
@@ -197,27 +313,214 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   const userIdStr = typeof user._id === "string" ? user._id : String(user._id);
   const amount = invoice.amount_remaining || 0;
 
-  try {
-    const paidInvoiceResponse = await stripe.invoices.pay(invoiceId, {
-      payment_method: paymentMethodId,
-      off_session: true,
+  // 30s spam-click debounce — fires before any other lock check.
+  const recentRowsForDebounce = await InvoiceChargeLog.find({
+    invoiceId,
+    attemptedAt: { $gte: cutoffForDebounce() },
+  })
+    .select({ attemptedAt: 1 })
+    .lean();
+
+  if (recentRowsForDebounce.length > 0) {
+    await InvoiceChargeLog.create({
+      invoiceId,
+      customerId,
+      userId: new mongoose.Types.ObjectId(userIdStr),
+      adminId: new mongoose.Types.ObjectId(adminId),
+      status: "skipped",
+      amount,
+      attemptedAt: new Date(),
+      errorMessage: `Skipped: another attempt within last ${MIN_SECONDS_BETWEEN_ATTEMPTS} seconds (debounce)`,
+      chargeRunId,
     });
-    const paidInvoice = paidInvoiceResponse as Stripe.Invoice;
 
-    const baseResult: Record<string, unknown> = {
-      ...sanitizeStripeResponse(paidInvoice),
+    return {
+      invoiceId,
+      customerId,
+      userId: userIdStr,
+      userEmail,
+      status: "skipped",
+      skipReason: "too_soon",
+      amount,
     };
-    let resumeCollectionError: string | undefined;
+  }
 
-    if (paidInvoice.status === "paid") {
+  // Window-based budget check. Default: 1-per-window (any prior attempt blocks).
+  // Force Charge paths inject `attemptBudgetCheck` for per-path 3-per-window budgets.
+  if (attemptBudgetCheck) {
+    const budget = await attemptBudgetCheck();
+    if (!budget.allowed) {
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "skipped",
+        amount,
+        attemptedAt: new Date(),
+        errorMessage: `Skipped: ${budget.message}`,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: budget.reason,
+        amount,
+      };
+    }
+  } else {
+    const recentAttempt = await InvoiceChargeLog.findOne({
+      invoiceId,
+      attemptedAt: { $gte: cutoffForRecentAttempt() },
+    })
+      .select({ _id: 1, status: 1, attemptedAt: 1 })
+      .lean();
+
+    if (recentAttempt) {
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "skipped",
+        amount,
+        attemptedAt: new Date(),
+        errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: "recently_attempted",
+        amount,
+      };
+    }
+  }
+
+  // Late re-check — user's subscription.status may have flipped from past_due
+  // to active mid-run (Stripe's own retry won, or pay-failed-invoice succeeded
+  // in another tab). Skip rather than charge a now-current customer.
+  const freshUser = await User.findById(userIdStr)
+    .select({ "subscription.status": 1 })
+    .lean();
+
+  if (shouldSkipForNotPastDue(freshUser?.subscription?.status as string | undefined)) {
+    await InvoiceChargeLog.create({
+      invoiceId,
+      customerId,
+      userId: new mongoose.Types.ObjectId(userIdStr),
+      adminId: new mongoose.Types.ObjectId(adminId),
+      status: "skipped",
+      amount,
+      attemptedAt: new Date(),
+      errorMessage: `Skipped: subscription.status is "${freshUser?.subscription?.status ?? "(missing)"}", no longer past_due`,
+      chargeRunId,
+    });
+
+    return {
+      invoiceId,
+      customerId,
+      userId: userIdStr,
+      userEmail,
+      status: "skipped",
+      skipReason: SKIP_REASON_NO_LONGER_PAST_DUE,
+      amount,
+    };
+  }
+
+  try {
+    const paidInvoiceResponse = await stripe.invoices.pay(
+      invoiceId,
+      {
+        payment_method: paymentMethodId,
+        off_session: true,
+      },
+      { idempotencyKey: idempotencyKey ?? buildAdminChargeIdempotencyKey(invoiceId) }
+    );
+    let paidInvoice = paidInvoiceResponse as Stripe.Invoice;
+
+    // Stripe sometimes leaves the PI in `requires_confirmation` after invoices.pay()
+    // (particularly when the invoice already had a PI from finalization). Fetch the
+    // PI directly and decide what to do based on its actual state — never trust that
+    // a successful pay() response means the invoice is paid.
+    let pi: Stripe.PaymentIntent | null = null;
+    const piId = extractPaymentIntentId(paidInvoice);
+    if (piId) {
+      try {
+        pi = await stripe.paymentIntents.retrieve(piId);
+      } catch (err) {
+        console.error(`[payOpenInvoiceAsPastDueAdmin] PI retrieve failed for ${piId}:`, err);
+      }
+    }
+
+    let decision = decidePostPayAction(paidInvoice, pi);
+
+    // If Stripe left the PI in requires_confirmation, explicitly confirm it.
+    // This is the bridge for Stripe's quirk after re-paying invoices with prior PIs.
+    if (decision.kind === "needs_confirm") {
+      try {
+        pi = await stripe.paymentIntents.confirm(decision.piId, {
+          off_session: true,
+        });
+        // Re-fetch invoice to get updated status after confirm
+        paidInvoice = (await stripe.invoices.retrieve(invoiceId)) as Stripe.Invoice;
+        decision = decidePostPayAction(paidInvoice, pi);
+      } catch (confirmErr) {
+        const stripeErr = confirmErr as Stripe.errors.StripeError;
+        const errFields = extractStripeErrorFields(stripeErr);
+        // Confirm threw — log as failed with the actual error
+        await InvoiceChargeLog.create({
+          invoiceId,
+          customerId,
+          userId: new mongoose.Types.ObjectId(userIdStr),
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: "failed",
+          errorCode: errFields.errorCode,
+          declineCode: errFields.declineCode,
+          errorMessage: errFields.errorMessage,
+          amount,
+          attemptedAt: new Date(),
+          result: sanitizeStripeResponse(stripeErr),
+          chargeRunId,
+        });
+        return {
+          invoiceId,
+          customerId,
+          userId: userIdStr,
+          userEmail,
+          status: "failed",
+          error: stripeErr.message ?? "PaymentIntent confirm failed",
+          amount,
+        };
+      }
+    }
+
+    // Now decide based on FINAL state
+    if (decision.kind === "success") {
+      const baseResult: Record<string, unknown> = {
+        ...sanitizeStripeResponse(paidInvoice),
+      };
+      let resumeCollectionError: string | undefined;
+
+      // Stripe API 2025-04-01+ moved invoice.subscription onto parent.subscription_details.
+      // Read from parent first, fall back to root for older API versions / cached objects.
       const withSub = paidInvoice as Stripe.Invoice & {
         subscription?: string | Stripe.Subscription | null;
+        parent?: { subscription_details?: { subscription?: string | null } | null } | null;
       };
-      const subRaw = withSub.subscription;
       const subscriptionId =
-        typeof subRaw === "string" ? subRaw : subRaw && typeof subRaw === "object" && "id" in subRaw
-          ? (subRaw as Stripe.Subscription).id
-          : undefined;
+        withSub.parent?.subscription_details?.subscription ??
+        (typeof withSub.subscription === "string"
+          ? withSub.subscription
+          : withSub.subscription?.id);
       if (subscriptionId) {
         try {
           await resumeAfterSuccessfulRenewalPayment(subscriptionId);
@@ -231,20 +534,67 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
           );
         }
       }
+
+      await InvoiceChargeLog.create({
+        invoiceId,
+        customerId,
+        userId: new mongoose.Types.ObjectId(userIdStr),
+        adminId: new mongoose.Types.ObjectId(adminId),
+        status: "success",
+        amount,
+        attemptedAt: new Date(),
+        result: baseResult,
+        nextPaymentAttempt: paidInvoice.next_payment_attempt
+          ? new Date(paidInvoice.next_payment_attempt * 1000)
+          : undefined,
+        chargeRunId,
+      });
+
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "success",
+        amount,
+        ...(resumeCollectionError ? { resumeCollectionError } : {}),
+      };
     }
 
+    // Non-success outcomes — log as failed with the decision's diagnostic info
+    const failedErrorCode =
+      decision.kind === "requires_authentication"
+        ? "authentication_required"
+        : decision.kind === "failed"
+          ? decision.errorCode
+          : `pi_${decision.kind}`;
+    const failedErrorMessage =
+      decision.kind === "requires_authentication"
+        ? "Customer authentication required to complete the charge (3DS or similar)"
+        : decision.kind === "failed"
+          ? decision.errorMessage
+          : `Unexpected post-pay decision: ${decision.kind}`;
+    const failedDeclineCode =
+      decision.kind === "failed" ? decision.declineCode : undefined;
+
     await InvoiceChargeLog.create({
-      invoiceId: invoiceId,
-      customerId: customerId,
+      invoiceId,
+      customerId,
       userId: new mongoose.Types.ObjectId(userIdStr),
       adminId: new mongoose.Types.ObjectId(adminId),
-      status: "success",
+      status: "failed",
+      errorCode: failedErrorCode,
+      declineCode: failedDeclineCode,
+      errorMessage: failedErrorMessage,
       amount,
       attemptedAt: new Date(),
-      result: baseResult,
-      nextPaymentAttempt: paidInvoice.next_payment_attempt
-        ? new Date(paidInvoice.next_payment_attempt * 1000)
-        : undefined,
+      result: {
+        invoiceStatus: paidInvoice.status,
+        piStatus: pi?.status ?? null,
+        piId: pi?.id ?? null,
+        decision: decision.kind,
+      },
+      chargeRunId,
     });
 
     return {
@@ -252,9 +602,9 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       customerId,
       userId: userIdStr,
       userEmail,
-      status: "success",
+      status: "failed",
+      error: failedErrorMessage,
       amount,
-      ...(resumeCollectionError ? { resumeCollectionError } : {}),
     };
   } catch (error) {
     const stripeError = error as Stripe.errors.StripeError;
@@ -273,8 +623,10 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         amount,
         attemptedAt: new Date(),
         errorCode: stripeError.code,
+        declineCode: (stripeError as Stripe.errors.StripeError & { decline_code?: string }).decline_code,
         errorMessage: "Invoice already paid",
         result: sanitizeStripeResponse(stripeError),
+        chargeRunId,
       });
 
       return {
@@ -294,11 +646,11 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       userId: new mongoose.Types.ObjectId(userIdStr),
       adminId: new mongoose.Types.ObjectId(adminId),
       status: "failed",
-      errorCode: stripeError.code,
-      errorMessage: stripeError.message,
+      ...extractStripeErrorFields(stripeError),
       amount,
       attemptedAt: new Date(),
       result: sanitizeStripeResponse(stripeError),
+      chargeRunId,
     });
 
     return {

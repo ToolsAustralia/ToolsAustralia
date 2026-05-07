@@ -70,6 +70,53 @@ These live under `/api/admin/**` (in the [admin](../admin/) domain) but are tigh
 | POST | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | admin | Manual refund-reversal replay |
 | GET | `/api/admin/payment-events` | admin | List ledger rows for support |
 
+### Allowlist admin routes
+
+Backing the `/admin/blocked-transactions` page. All four require `role === "admin"` and delegate to the singleton `AllowlistService` ([architecture.md](./architecture.md#service-inventory--allowlistservice)). Background on the underlying mechanism: see [gotchas](./gotchas.md#stripe-issuer-directed-auto-block--allowlist-override). The API path keeps the legacy `blocked-cards` segment because it predates the rename — only the admin URL slug changed.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/admin/allowlist/blocked-cards` | List blocked-PI candidates for the bulk page |
+| POST | `/api/admin/allowlist/apply` | Bulk-allowlist selected rows |
+| POST | `/api/admin/allowlist/reverse` | Remove a previously-allowlisted fingerprint |
+| GET | `/api/admin/allowlist/actions` | Recent allowlist decisions — feeds the "Recently allowlisted" widget |
+| GET | `/api/admin/allowlist/stats` | All-time count of cards currently on the Stripe allowlist |
+
+#### `GET /api/admin/allowlist/blocked-cards`
+
+Query params:
+- `dateFrom` — ISO timestamp (inclusive)
+- `dateTo` — ISO timestamp (inclusive)
+- `email` — case-insensitive substring match on `customerEmail`. Omitted = no filter.
+- `declineCodes` — comma-separated list of decline codes (e.g. `lost_card,generic_decline`). Omitted = no filter.
+- `eligibility` — comma-separated list of eligibility kinds: `auto_eligible`, `already_allowlisted`, `fraud_signal`, `permanent_issue`, `not_member`. Omitted = no filter.
+- `cursor` — opaque cursor for the next page. Omitted on first page; pass back the previous response's `nextCursor`.
+- `limit` — page size, 1–100, default 50.
+
+Response: `{ success, rows: BlockedRow[], nextCursor: string | null, total: number }`. Reads from the `blockedtransactions` collection — see [`listBlocked`](./architecture.md#listblocked-mongo-backed-read-path). Per-page cost is bounded and independent of the date window. Each `BlockedRow` includes a resolved `userId` (or `null` for guests).
+
+Auth: admin.
+
+#### `POST /api/admin/allowlist/apply`
+
+Body: `{ rows: EvalInput[], allowOverride: boolean }`. Iterates `rows` and calls `AllowlistService.apply(row, source: "admin_bulk")` for each; when `allowOverride` is true the filter rules are bypassed (records `reason: "manual_admin_override"`). Returns `{ success, added, skipped, errors }`. Auth: admin.
+
+#### `POST /api/admin/allowlist/reverse`
+
+Body: `{ actionId: string }` (the `_id` of the original `AllowlistAction` `added` row). Calls `AllowlistService.reverse()`, which removes the fingerprint from Stripe's value list and writes a new `removed` row. Returns `{ success, action }`. Auth: admin.
+
+#### `GET /api/admin/allowlist/actions`
+
+Query params:
+- `limit` — default `50`, max `200`
+- `action` — `added | skipped | removed | all`
+
+Returns `{ success, actions: AllowlistAction[] }`. Auth: admin. Used by the "Recently allowlisted" widget on `/admin/blocked-transactions`.
+
+#### `GET /api/admin/allowlist/stats`
+
+No params. Returns `{ success, totalActiveAllowlisted: number }` — the count of card fingerprints whose most-recent `AllowlistAction` is `"added"`. Drives the "Total on allowlist" metric on `/admin/blocked-transactions`. Stripe's `card_fingerprint_allowlist` Radar value list is the live allowlist; this count is an audit-log approximation. Auth: admin.
+
 ## Consistent response shape
 
 Per CLAUDE.md route conventions, all `/api/stripe/**` handlers should return one of:

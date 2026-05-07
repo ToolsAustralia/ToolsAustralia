@@ -10,11 +10,11 @@
       "Bash(npm run *)",
       "Bash(npm ls *)",
       "Bash(npx playwright *)",
+      "Bash(npx tsc *)",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('package.json','utf8'\\)\\); console.log\\('JSON OK'\\)\")",
       "Bash(node -e \"console.log\\('scripts:', Object.keys\\(require\\('./package.json'\\).scripts\\).length\\)\")",
       "Bash(node -e \"const s = require\\('./package.json'\\).scripts; const need = ['test:e2e','test:e2e:ui','test:e2e:auth','seed:e2e','cleanup:e2e']; const miss = need.filter\\(k=>!s[k]\\); if \\(miss.length\\) { console.error\\('MISSING:', miss\\); process.exit\\(1\\); } else console.log\\('all scripts present'\\)\")",
       "Bash(node -e \"const s = require\\('./package.json'\\).scripts; ['test:e2e','test:e2e:ui','test:e2e:auth','test:e2e:shop','seed:e2e','seed:e2e:clear','cleanup:e2e'].forEach\\(k => console.log\\(k, '=>', s[k] || 'MISSING'\\)\\)\")",
-      "Bash(npx tsc *)",
       "Bash(grep -E \"scripts/seed-e2e-fixtures|scripts\\\\\\\\\\\\\\\\seed-e2e-fixtures\")",
       "Bash(grep -E \"scripts/cleanup-e2e-fixtures|scripts\\\\\\\\\\\\\\\\cleanup-e2e-fixtures\")",
       "Bash(node -e ' *)",
@@ -32,7 +32,15 @@
       "PowerShell($env:E2E_KEEP_FIXTURES=\"true\"; npx playwright test e2e/auth/login.spec.ts --project=chromium-guest --workers=1 2>&1 | Select-Object -Last 50)",
       "Bash(iconv -f UTF-16LE -t UTF-8 \"c:/tmp/login-spec.log\")",
       "PowerShell($env:E2E_KEEP_FIXTURES=\"true\"; npx playwright test e2e/auth/login.spec.ts --project=chromium-guest --workers=1 --reporter=line | Out-File -FilePath \"c:\\\\tmp\\\\login-spec2.log\" -Encoding utf8; Write-Output \"EXIT=$LASTEXITCODE\")",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Read(//c/Users/Genesis/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/skills/subagent-driven-development/**)",
+      "Read(//tmp/**)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\05bcbfbb-a312-443a-9c3f-55bc8aafcfeb\\\\tasks\\\\b2pj3jaq7.output\")",
+      "Bash(Get-Content -Path \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\05bcbfbb-a312-443a-9c3f-55bc8aafcfeb\\\\tasks\\\\bfwcelxzl.output\" -Wait)",
+      "Bash(timeout 45 bash -c \"npm run lint 2>&1\")",
+      "Bash(grep -E \"\\(event-source-url|create-subscription|create-one-time-purchase|mini-draw\\\\\\\\\\\\\\\\purchase|upsell\\\\\\\\\\\\\\\\purchase|tracking\\\\\\\\\\\\\\\\gotchas|billing-stripe\\\\\\\\\\\\\\\\gotchas\\)\" \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\6481f0ec-7981-42df-bea1-a247b70bfeac\\\\tasks\\\\b7pwqvw7q.output\")",
+      "Bash(git worktree *)",
+      "Bash(git branch *)"
     ]
   }
 }

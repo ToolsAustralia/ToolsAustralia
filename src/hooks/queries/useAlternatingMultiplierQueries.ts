@@ -26,7 +26,7 @@ export function useCurrentAlternatingMultipliers() {
     },
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Refetch every 1 minute
-    refetchIntervalInBackground: true, // Allow refetch in background
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; refetchOnWindowFocus catches up on tab focus
     refetchOnWindowFocus: true,
     refetchOnMount: true, // Ensure fresh data on mount
   });

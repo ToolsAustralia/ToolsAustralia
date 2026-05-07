@@ -13,7 +13,7 @@
 | File | Role |
 |---|---|
 | [src/lib/queries.ts](../../src/lib/queries.ts) | Query client config |
-| [src/lib/queryKeys.ts](../../src/lib/queryKeys.ts) | Centralized query-key factory |
+| [src/lib/queryKeys.ts](../../src/lib/queryKeys.ts) | Centralized query-key factory. Admin allowlist namespace exposes `blockedCards(filterKey)`, `actions(action, limit)`, and `stats()` — the latter (added 2026-05-07) drives the all-time "Total on allowlist" metric on `/admin/blocked-transactions`. Apply/reverse mutations invalidate the broad `["admin", "allowlist"]` prefix, which covers all three keys. |
 | [src/lib/requestDeduplication.ts](../../src/lib/requestDeduplication.ts) | Request dedup helpers |
 | [src/hooks/queries/](../../src/hooks/queries/) | Domain-specific query hooks |
 
@@ -45,3 +45,9 @@
 | `useLoadingStates()` | Coordinate multiple loading states |
 | `usePrefetching()` | Hover-prefetch for navigation |
 | `useConfetti()` | Confetti effect (with QUICKSTART/README/example .md files alongside) |
+
+## Polling intervals
+
+Hooks under [`src/hooks/queries/`](../../src/hooks/queries/) that opt into `refetchInterval` use `refetchIntervalInBackground: false` so polling pauses for hidden tabs and resumes when the tab is focused (the next interval tick fires after focus, and `refetchOnWindowFocus: true` provides immediate catch-up where set). This applies to: `usePromoQueries` (`useActivePromos`, `useAdminActivePromos`, `useEffectiveForBanner`), `usePromoBannerTextQueries`, `useAlternatingMultiplierQueries`, `useMajorDrawQueries` (`useCurrentMajorDraw`, `useUserMajorDrawStats`), `useUserQueries` (`useMyAccountData`). Background polling on hidden tabs would inflate Edge Requests + Function Invocations without user-visible benefit.
+
+NextAuth `<SessionProvider>` in [`src/app/providers.tsx`](../../src/app/providers.tsx) uses `refetchInterval={15 * 60}` (15 min, raised from 5 min). Refresh-on-focus is intentionally disabled (`refetchOnWindowFocus={false}`); the 15-min server poll bounds the worst-case stale-session UI window without flooding `/api/auth/session` invocations on every tab.

@@ -5017,9 +5017,120 @@ export async function POST(request: NextRequest) {
         );
         break;
       }
-      case "payment_intent.payment_failed":
-        await handlePaymentFailure(event.data.object);
+      case "payment_intent.payment_failed": {
+        const failedPi = event.data.object as Stripe.PaymentIntent;
+        await handlePaymentFailure(failedPi);
+
+        // Auto-allowlist eligibility check. Best-effort — see allowlist gotchas.md.
+        try {
+          const charge =
+            failedPi.latest_charge && typeof failedPi.latest_charge !== "string"
+              ? failedPi.latest_charge
+              : failedPi.latest_charge
+              ? await stripe.charges.retrieve(failedPi.latest_charge)
+              : null;
+
+          const isBlocked =
+            charge?.outcome?.type === "blocked" ||
+            charge?.outcome?.network_status === "declined_by_network";
+
+          const card = charge?.payment_method_details?.card;
+          const fingerprint = card?.fingerprint;
+          if (isBlocked && card && fingerprint && charge) {
+            // Persist the blocked PI for the admin /admin/blocked-transactions
+            // page so it can read from Mongo instead of paginating Stripe at
+            // request time. Inner try/catch keeps this independent from the
+            // allowlist call below — either failing must not block the other.
+            try {
+              const { buildBlockedTransactionRecord, upsertBlockedTransaction } =
+                await import("@/services/allowlist/blockedTransactionRepo");
+              const record = buildBlockedTransactionRecord(failedPi, charge);
+              if (record) await upsertBlockedTransaction(record);
+            } catch (btErr) {
+              webhookLog(
+                "error",
+                `BlockedTransaction upsert failed for PI ${failedPi.id}: ${
+                  btErr instanceof Error ? btErr.message : String(btErr)
+                }`
+              );
+            }
+
+            const { getAllowlistService } = await import("@/services/allowlist");
+            const allowlist = getAllowlistService();
+            await allowlist.apply(
+              {
+                cardFingerprint: fingerprint,
+                cardLast4: card.last4 ?? "",
+                cardBrand: card.brand ?? "unknown",
+                stripeCustomerId:
+                  typeof failedPi.customer === "string"
+                    ? failedPi.customer
+                    : failedPi.customer?.id ?? null,
+                customerEmail:
+                  failedPi.receipt_email ?? charge.billing_details?.email ?? null,
+                declineCode: failedPi.last_payment_error?.decline_code ?? null,
+                failureCode: failedPi.last_payment_error?.code ?? null,
+                triggeringPaymentIntentId: failedPi.id,
+                triggeringChargeId: charge.id,
+              },
+              "webhook",
+              null
+            );
+          }
+        } catch (allowlistErr) {
+          // Best-effort: do NOT bubble. See docs/billing-stripe/gotchas.md —
+          // bubbling would cause Stripe to retry the entire
+          // payment_intent.payment_failed webhook, re-running the
+          // (already-completed) handlePaymentFailure handler.
+          webhookLog(
+            "error",
+            `AllowlistService.apply failed for PI ${failedPi.id}: ${
+              allowlistErr instanceof Error ? allowlistErr.message : String(allowlistErr)
+            }`
+          );
+        }
         break;
+      }
+      case "charge.failed": {
+        const failedCharge = event.data.object as Stripe.Charge;
+
+        // Narrow gate: only Stripe-side blocks (issuer-directed auto-block).
+        // Matches buildBlockedTransactionRecord's predicate exactly.
+        if (failedCharge.outcome?.type !== "blocked") break;
+        if (!failedCharge.payment_method_details?.card?.fingerprint) break;
+
+        // Idempotent dual-write — second call from the existing PI branch (or
+        // a Stripe webhook retry) just refreshes capturedAt. AllowlistService
+        // is intentionally NOT called here: that lives on
+        // payment_intent.payment_failed and we don't want double records.
+        try {
+          const piRef = failedCharge.payment_intent;
+          const pi: Stripe.PaymentIntent | null =
+            typeof piRef === "string"
+              ? await stripe.paymentIntents.retrieve(piRef)
+              : piRef ?? null;
+          if (!pi) {
+            webhookLog(
+              "warn",
+              `charge.failed for ${failedCharge.id} has no payment_intent; skipping BlockedTransaction upsert`
+            );
+            break;
+          }
+
+          const { buildBlockedTransactionRecord, upsertBlockedTransaction } =
+            await import("@/services/allowlist/blockedTransactionRepo");
+          const record = buildBlockedTransactionRecord(pi, failedCharge);
+          if (record) await upsertBlockedTransaction(record);
+        } catch (err) {
+          webhookLog(
+            "error",
+            `BlockedTransaction upsert (charge.failed) failed for ${failedCharge.id}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
+        break;
+      }
       case "charge.succeeded":
         // Skip charge.succeeded to prevent duplicate processing
         break;

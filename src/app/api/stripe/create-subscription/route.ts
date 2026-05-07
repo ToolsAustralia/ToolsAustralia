@@ -5,6 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
 // Referral processing moved to webhook - no longer needed here
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -104,9 +105,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
     // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
     // console.log("✅ Validating request data...");

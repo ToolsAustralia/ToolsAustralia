@@ -14,6 +14,9 @@ import connectDB from "@/lib/mongodb";
 import type { UserMetrics, UserMetricsQuery } from "@/types/metrics/UserMetrics";
 import { formatInTimeZone } from "date-fns-tz";
 import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
+import { getAgeGroup, AGE_GROUP_ORDER, type AgeGroupLabel } from "@/utils/metrics/age-grouping";
+import { normalizeProfession, bucketUnmatched } from "@/utils/metrics/profession-normalize";
+import { membershipPackages } from "@/data/membershipPackages";
 
 export class UserMetricsService {
   /**
@@ -33,7 +36,7 @@ export class UserMetricsService {
         $lte: endDate,
       },
     })
-      .select("_id affiliateReferral referral profession subscription createdAt")
+      .select("_id affiliateReferral referral profession subscription createdAt birthdate processedPayments")
       .lean()
       .exec();
 
@@ -71,6 +74,24 @@ export class UserMetricsService {
     // Aggregate professions
     const profession: Record<string, number> = {};
 
+    // Aggregate age groups — initialize every bucket so empty buckets render as 0
+    const ageGroup: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
+      (acc, label) => {
+        acc[label] = 0;
+        return acc;
+      },
+      {} as Record<AgeGroupLabel, number>
+    );
+
+    // Per-age-group count of users who have made at least one purchase (processedPayments non-empty).
+    const ageGroupPurchased: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
+      (acc, label) => {
+        acc[label] = 0;
+        return acc;
+      },
+      {} as Record<AgeGroupLabel, number>
+    );
+
     // Aggregate membership status
     const membershipStatus = {
       active: 0,
@@ -81,6 +102,27 @@ export class UserMetricsService {
 
     // Track renewals (users who cancelled and then resubscribed)
     const userRenewalMap = new Map<string, boolean>();
+
+    // Per-package membership breakdown — initialize only for subscription packages
+    // so the table shape is stable even if a package has 0 members.
+    type PackageCounts = { active: number; pastDue: number; cancelled: number };
+    const perPackage = new Map<string, { name: string; counts: PackageCounts }>();
+    for (const pkg of membershipPackages) {
+      if (pkg.type === "subscription") {
+        perPackage.set(pkg._id, { name: pkg.name, counts: { active: 0, pastDue: 0, cancelled: 0 } });
+      }
+    }
+
+    // Fallback bucket: catches classified subscriptions whose packageId doesn't match any
+    // known subscription package (legacy ObjectId values, one-time packageIds in the
+    // subscription.packageId slot, deleted packages). Ensures grand-total of the per-package
+    // breakdown reconciles with `membershipStatus.{active+pastDue+cancelled}`.
+    const OTHER_PACKAGE_ID = "__other__";
+    const OTHER_PACKAGE_NAME = "Other / Unknown";
+    perPackage.set(OTHER_PACKAGE_ID, {
+      name: OTHER_PACKAGE_NAME,
+      counts: { active: 0, pastDue: 0, cancelled: 0 },
+    });
 
     for (const user of users) {
       const userId = user._id.toString();
@@ -96,44 +138,69 @@ export class UserMetricsService {
         signupSource.direct++;
       }
 
-      // Aggregate profession
-      if (user.profession) {
-        profession[user.profession] = (profession[user.profession] || 0) + 1;
+      // Aggregate profession (normalized — folds typos/casing/plurals/synonyms)
+      const normalizedProfession = normalizeProfession(user.profession);
+      if (normalizedProfession !== "Unknown") {
+        profession[normalizedProfession] = (profession[normalizedProfession] || 0) + 1;
       }
 
-      // Check membership status
+      // Aggregate age group from birthdate
+      const ageGroupLabel = getAgeGroup(user.birthdate as Date | undefined);
+      ageGroup[ageGroupLabel]++;
+      if (Array.isArray(user.processedPayments) && user.processedPayments.length > 0) {
+        ageGroupPurchased[ageGroupLabel]++;
+      }
+
+      // Check membership status (flat totals + per-package breakdown)
       if (user.subscription) {
-        // Cancelled: Users with "active" or "past_due" status who have an endDate set
-        // (meaning they cancelled at period end but are still in their billing period)
-        // This check must come first to prioritize cancelled over past_due
+        // Coerce to string: legacy users may have ObjectId stored in this Mixed field.
+        const rawPkgId = user.subscription.packageId;
+        const pkgKey = rawPkgId != null ? String(rawPkgId) : null;
+        const matchedEntry = pkgKey ? perPackage.get(pkgKey) : undefined;
+        // Fallback ensures the per-package breakdown reconciles with the flat totals.
+        const pkgEntry = matchedEntry ?? perPackage.get(OTHER_PACKAGE_ID)!;
+        const bumpPackage = (key: keyof PackageCounts) => {
+          pkgEntry.counts[key]++;
+        };
+
+        // Scheduled cancel-at-period-end: status is "active"/"trialing"/"past_due" AND auto-renew has been turned off.
+        // Webhook sets endDate on every active/trialing sub (it's the next billing date), so endDate alone
+        // is not a cancellation signal — autoRenew === false is the canonical signal.
         if (
-          (user.subscription.status === "active" || user.subscription.status === "past_due") &&
-          user.subscription.endDate &&
-          user.subscription.endDate !== null
+          (user.subscription.status === "active" ||
+            user.subscription.status === "trialing" ||
+            user.subscription.status === "past_due") &&
+          user.subscription.autoRenew === false &&
+          user.subscription.endDate
         ) {
           membershipStatus.cancelled++;
-          
-          // Check if user has renewed (has subscription history indicating renewal)
-          // This is a simplified check - in production, you might want to track renewal events explicitly
+          bumpPackage("cancelled");
+
           if (user.subscription.startDate) {
-            const userId = user._id.toString();
-            if (!userRenewalMap.has(userId)) {
-              userRenewalMap.set(userId, false);
+            const userIdStr = user._id.toString();
+            if (!userRenewalMap.has(userIdStr)) {
+              userRenewalMap.set(userIdStr, false);
             }
           }
         }
-        // Past Due: status = "past_due" without an endDate (payment issue, not cancelled)
-        // (regardless of isActive, as payment failures set isActive = false)
+        // Past Due: status === "past_due" with no endDate
         else if (user.subscription.status === "past_due") {
           membershipStatus.pastDue++;
+          bumpPackage("pastDue");
         }
-        // Active: isActive = true and status = "active"
-        else if (user.subscription.isActive && user.subscription.status === "active") {
+        // Active: isActive && status ∈ {"active","trialing"} — trialing is a paying-customer-in-grace
+        // and is counted as active by both the per-user badge and the dashboard "Membership by Package" KPI.
+        else if (
+          user.subscription.isActive &&
+          (user.subscription.status === "active" || user.subscription.status === "trialing")
+        ) {
           membershipStatus.active++;
+          bumpPackage("active");
         }
-        // Legacy cancelled status (for backwards compatibility)
+        // Legacy cancelled
         else if (user.subscription.status === "canceled" || user.subscription.status === "cancelled") {
           membershipStatus.cancelled++;
+          bumpPackage("cancelled");
         }
       }
     }
@@ -191,10 +258,28 @@ export class UserMetricsService {
       },
     });
 
+    const membershipByPackage = Array.from(perPackage.entries())
+      .map(([packageId, { name, counts }]) => ({
+        packageId,
+        packageName: name,
+        total: counts.active + counts.pastDue + counts.cancelled,
+        active: counts.active,
+        pastDue: counts.pastDue,
+        cancelled: counts.cancelled,
+      }))
+      // Hide the synthetic "Other / Unknown" bucket when it has zero members so the table
+      // stays clean for healthy data; surface it only when reconciliation actually needs it.
+      .filter((row) => row.packageId !== OTHER_PACKAGE_ID || row.total > 0);
+
+    const bucketedProfession = bucketUnmatched(profession, 5);
+
     return {
       signupSource,
-      profession,
+      profession: bucketedProfession,
+      ageGroup,
+      ageGroupPurchased,
       membershipStatus,
+      membershipByPackage,
       purchaseHistory,
       dateRange: {
         startDate,

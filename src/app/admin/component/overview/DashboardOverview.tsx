@@ -9,6 +9,7 @@ import KPIMetricsGrid from "./KPIMetricsGrid";
 import RevenueBreakdownSection from "./RevenueBreakdownSection";
 import MembershipBreakdownSection from "./MembershipBreakdownSection";
 import RenewalsDashboardSection from "./RenewalsDashboardSection";
+import UsersBreakdownSection from "./UsersBreakdownSection";
 import AdvertisingBreakdownSection from "@/app/admin/component/overview/AdvertisingBreakdownSection";
 import RevenueOverview from "@/components/admin/RevenueOverview";
 import QuickActionsPanel from "./QuickActionsPanel";
@@ -42,6 +43,7 @@ export default function DashboardOverview() {
   const [isUpcomingRenewalsExpanded, setIsUpcomingRenewalsExpanded] = useState(false);
   const [isAdvertisingBreakdownExpanded, setIsAdvertisingBreakdownExpanded] = useState(true);
   const [isUsersPerformanceExpanded, setIsUsersPerformanceExpanded] = useState(true);
+  const [isUsersBreakdownExpanded, setIsUsersBreakdownExpanded] = useState(false);
 
   const { isLgUp, slotEl: mobileToolbarRoot } = useAdminMobileDateToolbarSlot();
 
@@ -295,6 +297,12 @@ export default function DashboardOverview() {
             isExpanded={isAdvertisingBreakdownExpanded}
           />
         }
+      />
+
+      {/* Users Breakdown — sits underneath Users & Performance with age + profession tables */}
+      <UsersBreakdownSection
+        isExpanded={isUsersBreakdownExpanded}
+        onToggleExpand={() => setIsUsersBreakdownExpanded(!isUsersBreakdownExpanded)}
       />
 
       {/* Revenue Overview Chart */}

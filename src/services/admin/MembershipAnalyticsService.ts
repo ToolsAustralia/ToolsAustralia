@@ -49,11 +49,11 @@ export class MembershipAnalyticsService {
     startDate: Date,
     endDate: Date,
     dateRange: AdminDashboardDateRangeKey,
-    options?: { membershipAsOfMode?: MembershipAsOfMode; asOfDate?: Date | null }
+    // Options are accepted for call-site compatibility but are no longer used:
+    // revenue/count for cancellations always come from cancellationRows so the
+    // two values always describe the same cohort.
+    _options?: { membershipAsOfMode?: MembershipAsOfMode; asOfDate?: Date | null }
   ): Promise<MembershipAnalyticsBundle> {
-    const membershipAsOfMode = options?.membershipAsOfMode;
-    const asOfDate = options?.asOfDate ?? null;
-
     const [expectedRenewalsInRange, failedRenewalInvoicesInRange, becamePastDueIds] = await Promise.all([
       MembershipRenewalCycle.countDocuments({
         billingReason: "subscription_cycle",
@@ -107,32 +107,21 @@ export class MembershipAnalyticsService {
       }
     }
 
+    // Revenue impact is derived from cancellationRows so it always matches the
+    // cohort behind cancellationsInRange:
+    //  - all-time → standing scheduled-cancel users (autoRenew=false + endDate set)
+    //  - any other range → users whose subscription.cancelledAt falls in the range
+    // Do NOT source this from the daily snapshot: snapshot.cancelledCount is the
+    // standing scheduled-cancel STOCK as of that day, which would mismatch the
+    // delta count shown alongside it on the dashboard.
     let cancelledMembershipRevenueImpact = 0;
-
-    if (membershipAsOfMode === "snapshot" && asOfDate) {
-      // Standing scheduled-cancel revenue sourced from the snapshot for the requested date.
-      // We use count × current catalog price as the best available approximation — the
-      // snapshot DTO doesn't expose per-row unitPriceCents for scheduled-cancel rows yet.
-      // If pricing changes materially in the future, extend the DTO to carry the locked price.
-      const snap = await this.getMembershipByPackageSnapshot(asOfDate);
-      if (!snap.summary?.snapshotMissing) {
-        cancelledMembershipRevenueImpact = snap.packages.reduce((sum, p) => {
-          const pkg = getPackageById(p.packageId);
-          return sum + (p.cancelledCount ?? 0) * (pkg?.price ?? 0);
-        }, 0);
-        cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
-      }
-      // cancellationsInRange is the live delta query result above — not from snapshot.
-    } else {
-      // All-time stock or range-delta path: derive revenue from the cancellation rows above.
-      for (const u of cancellationRows) {
-        const pid = u.subscription?.packageId;
-        const id = typeof pid === "string" ? pid : pid != null && typeof pid === "object" && "toString" in pid ? String(pid) : "";
-        const pkg = id ? getPackageById(id) : undefined;
-        cancelledMembershipRevenueImpact += pkg?.price ?? 0;
-      }
-      cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
+    for (const u of cancellationRows) {
+      const pid = u.subscription?.packageId;
+      const id = typeof pid === "string" ? pid : pid != null && typeof pid === "object" && "toString" in pid ? String(pid) : "";
+      const pkg = id ? getPackageById(id) : undefined;
+      cancelledMembershipRevenueImpact += pkg?.price ?? 0;
     }
+    cancelledMembershipRevenueImpact = Math.round(cancelledMembershipRevenueImpact * 100) / 100;
 
     return {
       expectedRenewalsInRange,

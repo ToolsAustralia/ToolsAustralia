@@ -20,6 +20,24 @@ curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-
 npm run migrate:<name>:dry
 ```
 
+## npm test scripts
+
+New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
+
+```bash
+npm run test:past-due-history   # pure aggregation helpers (no env vars needed)
+```
+
+## Diagnostic find scripts
+
+| npm script | file | covers |
+|---|---|---|
+| `npm run find:stuck-paused-users` | `scripts/find-stuck-paused-users.ts` | queries MongoDB for `past_due` users whose Stripe sub has no chargeable invoice; outputs CSV to stdout, progress to stderr; supports `--limit=N` and `--include-orphans` |
+| `npm run find:duplicate-subscriptions` | `scripts/find-duplicate-stripe-subscriptions.ts` | finds users with multiple active Stripe subscriptions |
+| `npm run find:radar-lists` | `scripts/find-radar-value-lists.ts` | lists Stripe Radar value lists |
+
+Run against production only from a secure machine with `.env.local` set up. The `find:stuck-paused-users` script is a pre-requisite for the Force Charge rollout checklist.
+
 ## What's NOT well tested
 
 - Cron endpoint auth thoroughness

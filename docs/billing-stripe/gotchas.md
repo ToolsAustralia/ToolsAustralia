@@ -13,8 +13,8 @@
 3. Global rate limit: 1 / 24 hours (prevents Stripe Radar spikes; disabled in dev)
 4. Confirmation: must POST `{ "confirmation": "CHARGE" }` exactly
 5. Optional global mutex: `ChargeJobLock` (auto-expiry 30 minutes)
-6. Time-based DB idempotency: 24h since last attempt on the invoice
-7. Stripe idempotency keys: `admin-charge-${invoiceId}`
+6. Time-based DB idempotency: 24h since last `InvoiceChargeLog.attemptedAt` on the invoice — enforced inside [`payOpenInvoiceAsPastDueAdmin`](../../src/server/admin/chargePastDueShared.ts) so both the bulk and per-user (`POST /api/admin/users/[id]/charge-past-due`) routes inherit it. Skipped attempts write a `skipped` log row with `skipReason: "recently_attempted"`.
+7. Stripe idempotency keys: `admin-charge-${invoiceId}` — passed as the third arg to `stripe.invoices.pay`. Stripe caches the response for 24h, which matches the DB window: by the time a legitimate next-day retry runs, both have cleared.
 8. DB status verification: only invoices whose user has `subscription.status === "past_due"`
 
 ### Invoice filter — only charge if ALL true
@@ -48,6 +48,14 @@ Mark as `status: "skipped"`, `skipReason: "already_paid"`. **Don't** treat as fa
 - `Promise.allSettled()` so individual failures don't kill the batch
 - Max 100 invoices per request (Stripe list limit)
 
+### Run audit — drill-in UI
+
+`/admin/past-due-history` shows every bulk run with its triggering admin, lifecycle status, and attempt totals. Clicking a run opens a drawer with per-invoice `InvoiceChargeLog` rows for that run. The **Manual Retries** tab alongside it lists all `InvoiceChargeLog` rows where `chargeRunId === null` (per-user retries). Data is backed by the `ChargeJobRun` collection (see [admin/models.md](../admin/models.md#chargejobrun)) and served by `src/services/admin/chargePastDueHistory.ts`.
+
+### Late re-check — `no_longer_past_due`
+
+`payOpenInvoiceAsPastDueAdmin` re-fetches `subscription.status` from the DB immediately before calling `stripe.invoices.pay`. If the status has flipped from `past_due` to `active` between list-time and charge-time (e.g. a concurrent Stripe webhook already settled the invoice), the attempt is skipped with `skipReason: "no_longer_past_due"` — avoiding a spurious Stripe call and a double-charge attempt. This skip is counted in `ChargeJobRun.totals.skippedBreakdown.noLongerPastDue`.
+
 ### Logs
 
 `InvoiceChargeLog` has the full audit trail. Fields:
@@ -56,7 +64,9 @@ Mark as `status: "skipped"`, `skipReason: "already_paid"`. **Don't** treat as fa
 - timing: `attemptedAt`, `canRetryAt`, `nextPaymentAttempt`
 - payload: `result` (sanitised — no PAN, no full PM objects)
 
-Indexes: compound unique on `(invoiceId, attemptedAt-day)`; lookups by customer / admin / status / canRetryAt.
+- linkage: `chargeRunId` (ObjectId, nullable) — set to the `ChargeJobRun._id` when the row was produced by a bulk run; `null` for per-user manual retries. Used by the audit UI's "Manual Retries" filter (`chargeRunId: null`).
+
+Indexes: compound unique on `(invoiceId, attemptedAt-day)`; lookups by customer / admin / status / canRetryAt; sparse compound `(chargeRunId, attemptedAt-desc)` for run drill-in.
 
 ## Payment Element migration / confirmation method
 
@@ -76,6 +86,14 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+## Stripe metadata 500-char cap
+
+Each Stripe metadata value is capped at 500 chars. Exceeding that on **any** key rejects the entire `subscriptions.create` / `paymentIntents.create` / `customers.update` call with `Metadata values can have up to 500 characters`, which surfaces to the user as a generic payment error and blocks checkout.
+
+The most frequent offender is `capi_event_source_url` — Facebook ad referer URLs (long UTMs + `fbclid` + `_aem_` + `brid`) routinely run 500+ chars. All routes building Stripe metadata must run a referer through [`safeEventSourceUrl`](../../src/utils/tracking/event-source-url.ts) before storing it. See [tracking/gotchas.md](../tracking/gotchas.md#stripe-metadata-500-char-cap-on-capi_event_source_url).
+
+If you add a new metadata key that holds user-supplied or URL-derived content, length-check or truncate at the boundary — don't trust upstream values.
+
 ## Don't `expand: ['latest_payment_intent']`
 
 On Stripe API `2025-05-28.basil`, this returns:
@@ -91,3 +109,52 @@ Use `expand: ['payment_intent']` instead.
 ## Webhook retries
 
 Stripe retries failed deliveries with exponential backoff. The dedupe via `ProcessedStripeEvent` is what makes retries safe. If the dedupe row gets stuck (e.g. crash *between* writing the row and finishing work), the next retry will see the row and skip — manual intervention needed to actually replay. _TODO: document the recovery procedure for that case._
+
+## Stripe issuer-directed auto-block + allowlist override
+
+**The mechanism.** When the issuing bank declines a card with certain hard codes (`lost_card`, `stolen_card`, `pickup_card`, etc.), Stripe **auto-blocks future attempts** on that card — globally, across the entire Stripe account — to prevent decline-fee waste. The Stripe dashboard's activity log surfaces this as *"directed Stripe to block future attempts."* No further attempts on that card will reach the issuer; they fail at Stripe.
+
+**The override.** Adding the card fingerprint to Stripe's built-in `card_fingerprint_allowlist` Radar value list bypasses **both** Radar fraud rules **and** the issuer-directed auto-block. The dashboard's "Add to allow list" button uses this same API (`radar.valueListItems.create`). This is the only programmatic escape hatch. Aliases on built-in Radar lists follow Stripe's `<entity>_<field>_<allowlist|blocklist>` convention; verify per-account with `npm run find:radar-lists`.
+
+**Webhook signal.** A blocked PI surfaces as `payment_intent.payment_failed` whose `charge.outcome.type === "blocked"` **or** `charge.outcome.network_status === "declined_by_network"`. This signal is what distinguishes "Stripe is blocking future attempts on this card" from a normal one-off decline. The `payment_intent.payment_failed` branch in the webhook examines `outcome` to decide whether to call `AllowlistService.evaluateAndApply()`.
+
+**Best-effort branch.** The auto-allowlist call in our webhook is wrapped in `try/catch` and swallows errors via `webhookLog("error", ...)`. This is intentional: if we re-threw, Stripe would retry the entire `payment_intent.payment_failed` event and re-run the (already-completed) `handlePaymentFailure` handler — re-pausing the sub, re-firing analytics, re-sending Klaviyo events. The trade-off is that allowlist-call failures need to be recovered through the admin bulk page (`/admin/blocked-transactions`), which lists all blocked candidates regardless of whether the webhook attempt succeeded.
+
+**Filter rules.** We **never** auto-allowlist cards whose decline_code is `lost_card`, `stolen_card`, `pickup_card`, or `fraudulent` (real fraud signals — allowlisting would expose us to chargebacks). We also skip permanent-issue codes — `expired_card`, `incorrect_cvc`, `invalid_account`, `invalid_number`, `invalid_expiry_year`, `invalid_expiry_month` — because allowlisting them is pointless without customer action (the issuer will keep declining; Account Updater doesn't help most of these). We **only** allowlist if the user has at least one prior succeeded `PaymentEvent` (i.e. is a paying member, not a fraudster). Skipped decisions still write an `AllowlistAction` row with `reason: "filter_fraud_signal"`, `"filter_permanent_issue"`, or `"filter_not_member"` for audit. Admin can override any filter via the **"Allowlist with override"** button on `/admin/blocked-transactions`, which calls `/api/admin/allowlist/apply` with `allowOverride: true` and records `reason: "manual_admin_override"`.
+
+**Capture coverage (2026-05-07).** The webhook now listens to **both** `payment_intent.payment_failed` and `charge.failed`. The latter is the universal "any failed charge" event and catches issuer-blocked subscription renewals where the PI event sometimes does not fire. Only `payment_intent.payment_failed` triggers `AllowlistService.apply()` — the `charge.failed` branch is write-side-only — so we never double-record `AllowlistAction` rows. The reconcile cron is now self-healing (upserts missing rows on every run, 48h window) and `npm run investigate:blocked` is a read-only diagnostic that compares Stripe and Mongo for a date window. **Deployment requirement**: `charge.failed` must be enabled on the Stripe dashboard webhook subscription.
+
+## Past-due bulk charge hitting blocked-card failures (Phase B.5 sweep)
+
+The webhook auto-allowlist handler runs only on **new** `payment_intent.payment_failed` events. Cards that were Stripe-auto-blocked **before** the webhook was wired live have a `BlockedTransaction` row (after the Phase B backfill) but **no** corresponding `AllowlistAction` — and therefore are not in Stripe's `card_fingerprint_allowlist` list. Your "Charge Past Due Customers" runs against those cards and hits a wall of blocked-failure decline fees.
+
+Fix: [scripts/sync-allowlist-from-blocked-transactions.ts](../../scripts/sync-allowlist-from-blocked-transactions.ts). For every unique card fingerprint in `BlockedTransaction`, calls `AllowlistService.apply(input, "admin_bulk", null)`. Eligible cards (paying members, no fraud-signal / no permanent-issue decline codes) get added to Stripe; ineligible ones get a recorded `skipped` `AllowlistAction` row — same outcome as if the webhook had fired originally.
+
+Idempotent on the *added* path: the script pre-checks `AllowlistAction` for an active `added` row per fingerprint and short-circuits if found. Re-runs against already-allowlisted cards make zero Stripe calls and zero Mongo inserts. **Re-runs against previously-*skipped* fingerprints will re-evaluate** (which is intentional — a customer who wasn't a paying member at first-skip time may have since paid, flipping them eligible) and insert a fresh `skipped` row each time. Acceptable for occasional re-runs; don't loop the script.
+
+```
+npm run sync:allowlist-from-blocked:dry                    # eyeball the eligibility breakdown
+npm run sync:allowlist-from-blocked                        # live: writes to Stripe Radar + Mongo
+npm run sync:allowlist-from-blocked -- --no-limit          # if your account exceeds 1000 unique blocked fingerprints
+```
+
+This is a **one-time catch-up**, not a recurring job. Once it runs, the live webhook handles all subsequent blocks. Phase D's reconciliation cron is the recurring safety net (see below).
+
+`maxNetworkRetries: 2` on the global Stripe client (`src/lib/stripe.ts`) handles transient blips and 429s during the script's pagination automatically.
+
+**Phase A (write side) is in place.** The Stripe webhook now persists every blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection (best-effort, in its own try/catch so a Mongo write failure does not block the allowlist call that follows). All new blocked PIs are captured automatically.
+
+**Phase B (backfill) is in place.** [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) imports historical data from Stripe using the Search API (`status:"failed"` query). Idempotent on PI id. Run once with a wide window (e.g. 90 days) and verify Mongo count vs. Stripe count for the same window. Always dry-run first:
+
+```
+npm run backfill:blocked-transactions:dry -- --from=2026-02-01 --to=2026-05-01 --limit=2000
+npm run backfill:blocked-transactions     -- --from=2026-02-01 --to=2026-05-01
+```
+
+**Phase C (read flip) is in place.** [`AllowlistService.listBlocked(filter, opts)`](./architecture.md#listblocked-mongo-backed-read-path) is the Mongo-backed read path: cursor-paged over `BlockedTransaction`, with eligibility joins batched into a serial `User.find` followed by parallel `AllowlistAction.find` + `PaymentEvent.distinct`. The verdict logic was extracted to a pure `computeEligibility(doc, maps)` helper for testability.
+
+The route at `GET /api/admin/allowlist/blocked-cards` returns `{rows, nextCursor, total}` — see [api.md](./api.md#get-apiadminallowlistblocked-cards). The admin UI (`useBlockedCards` hook → `BlockedTransactionsManagement`) renders "Showing X of Y" + a Load-more button.
+
+**Phase D (reconciliation cron) is in place.** [src/app/api/cron/reconcile-blocked-transactions/route.ts](../../src/app/api/cron/reconcile-blocked-transactions/route.ts) runs daily at 03:15 UTC and compares yesterday's `BlockedTransaction` row count against `stripe.charges.search` for `status:"failed"` charges with `outcome.type === "blocked"` in the same UTC window. Drift > 5% (via the exported `computeDriftRatio` helper) emits a `console.error` with the structured summary; OK runs emit a `console.log`. This is the ongoing safety net: if a future webhook regression silently drops blocked rows, the next day's reconcile alert flags it. Architecture detail: [architecture.md → Reconciliation cron — Phase D](./architecture.md#reconciliation-cron--phase-d).
+
+**Phase E (legacy code removal) is complete.** The legacy `listBlockedFromStripe` code path, its `MAX_PAYMENT_INTENTS_SCANNED` cap, the route's `?source=` query param, and the route's `maxDuration: 60` setting have all been removed — `listBlocked` is now the only read path. Rollback if needed is via `git revert` of the Phase E commit (re-introducing the Stripe-pagination escape hatch is no longer a query-string flip).

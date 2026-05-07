@@ -27,6 +27,32 @@
     {
       "path": "/api/cron/membership-daily-snapshot",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-blocked-transactions",
+      "schedule": "15 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/stripe/webhook/route.ts": { "memory": 1024, "maxDuration": 30 },
+    "src/app/api/upload/cloudinary/route.ts": { "memory": 1024, "maxDuration": 30 },
+    "src/app/api/upload/route.ts": { "memory": 1024, "maxDuration": 30 },
+    "src/app/api/admin/users/export/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/admin/major-draw/export/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/admin/major-draw/participants/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/admin/sync-klaviyo-profiles/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/admin/invoices/charge-past-due/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/admin/invoices/recover-past-due/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/admin/dashboard/recent-activities/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/admin/activity-log/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/cron/major-draw-transition/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/process-partner-discount-queues/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/ab-testing-aggregate-metrics/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/milestone-rewards-issuance/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/monthly-redeemables-issuance/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/admin/klaviyo/**/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/**/route.ts": { "memory": 512, "maxDuration": 10 }
+  }
 }

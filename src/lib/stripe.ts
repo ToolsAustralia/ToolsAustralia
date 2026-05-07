@@ -7,6 +7,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-08-27.basil",
   typescript: true,
+  // Auto-retry transient network errors and 429 rate-limits. The SDK only
+  // retries safely-idempotent reads and writes that carry an Idempotency-Key.
+  maxNetworkRetries: 2,
 });
 
 export const formatAmountForStripe = (amount: number, currency: string): number => {

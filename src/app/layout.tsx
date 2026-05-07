@@ -10,6 +10,7 @@ import GoogleTagManager from "@/components/GoogleTagManager";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import Script from "next/script";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
 import { getNonce } from "@/utils/security/getNonce";
@@ -107,8 +108,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
         />
         <WebSiteJsonLd name="Tools Australia" url={siteUrl} nonce={nonce} />
-        {/* Contentsquare UX analytics - load in head for accurate tracking */}
-        <script src="https://t.contentsquare.net/uxa/80b94ffdd640f.js" async />
+        {/* Contentsquare UX analytics — afterInteractive defers until Next is hydrated, removing it from the critical render path */}
+        <Script
+          src="https://t.contentsquare.net/uxa/80b94ffdd640f.js"
+          strategy="afterInteractive"
+          nonce={nonce}
+        />
       </head>
       <body
         className={`${inter.className} antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 transition-colors duration-200 ease-out`}
@@ -133,7 +138,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <KlaviyoPageTracker />
         <Providers>{children}</Providers>
         <Analytics />
-        <SpeedInsights />
+        <SpeedInsights sampleRate={0.1} />
       </body>
     </html>
   );

@@ -72,6 +72,19 @@ Visit `http://localhost:3000/test-pixels/` to fire test events for each tracking
 - Klaviyo activity feed
 - TikTok Events Manager
 
+## Force-charge test scripts
+
+```bash
+# Dry-run: print eligibility for a user (no writes)
+npm run test:force-charge:dry -- --email=user@example.com
+npm run test:force-charge:dry -- --customer=cus_xxx
+
+# Live execution (requires an admin user in DB)
+npm run test:force-charge:live -- --email=user@example.com --admin-email=admin@example.com
+```
+
+Both modes print `=== Target user ===`, `=== Eligibility ===`, and either `=== Plan (dry-run) ===` or `=== LIVE execution ===`. The live flag requires `--admin-email` and errors out if missing.
+
 ## Anti-checks
 
 - Set `NODE_ENV=production` locally → all dev routes must 404

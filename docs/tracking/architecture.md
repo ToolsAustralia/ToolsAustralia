@@ -74,3 +74,9 @@ Server-side `Purchase` event for shop orders fires from [finalizeShopOrder.servi
 | `Purchase` | `/checkout/success` page (Task 40) — deduped via `event_id = paymentIntentId` | ✅ | (Klaviyo "Placed Order" fires server-side) | ✅ from `finalizeShopOrder` |
 
 The generic [`POST /api/facebook/track`](../../src/app/api/facebook/track/route.ts) endpoint accepts all standard event names (`AddToCart`, `ViewContent`, `InitiateCheckout`, `Purchase`, etc.) and is available for future client→CAPI mirroring. Today, only `Purchase` runs server-side (canonical for ad attribution); the rest are client Pixel + Klaviyo only.
+
+## Observability sampling
+
+Speed Insights mounted globally in [`src/app/layout.tsx`](../../src/app/layout.tsx) with `sampleRate={0.1}` — beacons 10% of page views. Sufficient for stable Core Web Vitals trends; reduces Vercel Speed Insights data-point billing roughly 10×. Vercel Web Analytics (`<Analytics />`) is currently unsampled — see [`docs/superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md`](../superpowers/plans/2026-05-06-vercel-cost-optimization-tier-1.md) for follow-up.
+
+Contentsquare UX analytics is loaded via `next/script` with `strategy="afterInteractive"` from [`src/app/layout.tsx`](../../src/app/layout.tsx) — defers execution until after Next is hydrated so it never blocks LCP or competes with the critical render path. Klaviyo and GTM also use `next/script` ([`KlaviyoScriptLoader.tsx`](../../src/components/KlaviyoScriptLoader.tsx), [`GoogleTagManager.tsx`](../../src/components/GoogleTagManager.tsx)).

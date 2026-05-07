@@ -11,6 +11,8 @@ import type { WinnerSummary } from "@/types/winner";
 void User;
 void MajorDraw;
 
+export const revalidate = 300;
+
 // Helper to safely extract ObjectId string from populated or unpopulated fields
 const toIdString = (id: Types.ObjectId | string | { _id?: Types.ObjectId | string } | undefined): string => {
   if (!id) return "";
@@ -37,6 +39,7 @@ export async function GET(request: NextRequest) {
       // Importing MajorDraw ensures the model is registered before populate
       const majorDrawWinners = await Winner.find({ drawType: "major" })
         .sort({ selectedDate: -1 })
+        .limit(limit)
         .populate("userId", "firstName lastName state")
         .populate({
           path: "drawId",
@@ -106,6 +109,7 @@ export async function GET(request: NextRequest) {
     if (!drawType || drawType === "mini") {
       const miniDrawWinners = await Winner.find({ drawType: "mini" })
         .sort({ selectedDate: -1 })
+        .limit(limit)
         .populate("userId", "firstName lastName state")
         .lean();
 
@@ -169,10 +173,17 @@ export async function GET(request: NextRequest) {
 
     const limitedWinners = winners.slice(0, limit);
 
-    return NextResponse.json({
-      success: true,
-      winners: limitedWinners,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        winners: limitedWinners,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching all winners:", error);
     return NextResponse.json(
