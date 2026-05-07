@@ -136,6 +136,13 @@ The error message string distinguishes them.
   - `listManualRetries(filter)` — same filter shape as `listChargeRuns` plus a new `userSearch?: string` field on `ManualRetriesFilterInput`. When non-empty, the service first runs a User-collection regex pre-lookup (`{ $regex: escapeUserSearchRegex(trimmed), $options: "i" }`, capped at **500** matches and trimmed/sliced to **120 chars**) and constrains the main query to those user IDs. If no users match, the call returns `{ rows: [], total: 0 }` without touching `InvoiceChargeLog`. Rows include `declineCode?` (same select+map as `getChargeRunDetail`).
 
   The pure `formatDurationMs` formatter lives in [src/utils/admin/chargePastDueFormat.ts](../../src/utils/admin/chargePastDueFormat.ts) and is re-exported here for server callers — client components must import directly from `utils/admin/chargePastDueFormat` so Mongoose is not pulled into the client bundle.
+
+### `summariseDeclineCodes(filter)` — page-level decline reasons
+
+Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the given AEST-anchored range, groups by `declineCode → errorCode → "unknown"`, sorts desc, then delegates to the pure helper `bucketDeclineCodeCounts` for top-5-plus-other bucketing.
+
+`bucketDeclineCodeCounts` is exported separately and unit-tested in `chargePastDueHistory.test.ts`. The aggregation itself is verified manually against staging data.
+
 - `MembershipAnalyticsService` — renewal, past-due, and cancellation metrics.
   - `getAnalyticsBundle(startDate, endDate, dateRange, options?)` — returns `MembershipAnalyticsBundle`. Accepts optional `{ membershipAsOfMode, asOfDate }`. When `membershipAsOfMode === "snapshot"` and `asOfDate` is set, `cancelledMembershipRevenueImpact` is computed from the snapshot row's `scheduledCancelCount × current catalog price` (snapshot date-lock approximation). The `cancellationsInRange` count is always live (delta query).
   - `getMembershipByPackageLive()` — live per-package counts.
