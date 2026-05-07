@@ -209,6 +209,33 @@ export function resolveInvoicePaymentMethodId(
 }
 
 /**
+ * Pull the customer's `invoice_settings.default_payment_method` ID from an
+ * Invoice whose `customer` field has been expanded inline via
+ * `expand: ['data.customer']` on the list call. Lets the bulk past-due flows
+ * skip the N+1 `customers.retrieve` round-trip — eligibility now needs zero
+ * extra Stripe calls per customer.
+ *
+ * Returns null when the customer is unset, only an ID (not expanded), deleted,
+ * or has no default payment method configured.
+ */
+export function getCustomerDefaultPaymentMethodFromInvoice(
+  invoice: Stripe.Invoice
+): string | null {
+  const customer = invoice.customer;
+  if (!customer || typeof customer === "string") return null;
+  if ((customer as Stripe.DeletedCustomer).deleted) return null;
+
+  const fullCustomer = customer as Stripe.Customer & {
+    invoice_settings?: {
+      default_payment_method?: string | Stripe.PaymentMethod | null;
+    };
+  };
+  const dpm = fullCustomer.invoice_settings?.default_payment_method;
+  if (!dpm) return null;
+  return typeof dpm === "string" ? dpm : dpm.id;
+}
+
+/**
  * Reduce a customer's open invoices to the single invoice we should charge —
  * the one attached to the user's current subscription. Older or duplicate
  * cycle invoices (created when pause_collection didn't fire in time) are
