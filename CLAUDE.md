@@ -165,14 +165,17 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/BlockedTransaction.ts",
         "scripts/backfill-blocked-transactions.ts",
         "scripts/sync-allowlist-from-blocked-transactions.ts",
+        "scripts/investigate-blocked-transactions.ts",
         "src/app/api/stripe/**",
         "src/app/api/invoice/**",
         "src/app/api/admin/allowlist/**",
         "src/app/api/cron/reconcile-blocked-transactions/**",
         "src/hooks/queries/admin/useBlockedCards.ts",
-        "src/hooks/queries/admin/useAllowlistActions.ts"
+        "src/hooks/queries/admin/useAllowlistActions.ts",
+        "src/hooks/queries/admin/useAllowlistStats.ts",
+        "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-05-06"
+      "lastVerified": "2026-05-07"
     },
     "payment": {
       "docs": "docs/payment/",

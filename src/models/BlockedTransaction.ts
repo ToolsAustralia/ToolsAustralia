@@ -65,6 +65,7 @@ BlockedTransactionSchema.index({ createdAt: -1 });
 BlockedTransactionSchema.index({ cardFingerprint: 1 });
 BlockedTransactionSchema.index({ stripeCustomerId: 1, createdAt: -1 });
 BlockedTransactionSchema.index({ declineCode: 1, createdAt: -1 });
+BlockedTransactionSchema.index({ customerEmail: 1 }, { sparse: true });
 
 const modelName = "BlockedTransaction";
 if (mongoose.models[modelName]) {

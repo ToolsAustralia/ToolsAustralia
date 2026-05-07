@@ -2,12 +2,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/api-auth";
 import connectDB from "@/lib/mongodb";
 import { getAllowlistService } from "@/services/allowlist";
-import type { BlockedFilter } from "@/services/allowlist/types";
+import type { BlockedFilter, EligibilityKind } from "@/services/allowlist/types";
+
+const VALID_ELIGIBILITY: ReadonlySet<EligibilityKind> = new Set([
+  "auto_eligible",
+  "already_allowlisted",
+  "fraud_signal",
+  "permanent_issue",
+  "not_member",
+]);
 
 function parseDateOrDefault(raw: string | null, fallback: Date): Date {
   if (!raw) return fallback;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
+function parseCsvList(raw: string | null): string[] | undefined {
+  if (!raw) return undefined;
+  const items = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return items.length > 0 ? items : undefined;
 }
 
 export async function GET(request: NextRequest) {
@@ -20,14 +34,19 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  const eligibilityRaw = parseCsvList(searchParams.get("eligibility"));
+  const eligibility = eligibilityRaw
+    ? eligibilityRaw.filter((v): v is EligibilityKind =>
+        VALID_ELIGIBILITY.has(v as EligibilityKind)
+      )
+    : undefined;
+
   const filter: BlockedFilter = {
     dateFrom: parseDateOrDefault(searchParams.get("dateFrom"), thirtyDaysAgo),
     dateTo: parseDateOrDefault(searchParams.get("dateTo"), now),
-    memberStatus:
-      (searchParams.get("memberStatus") as BlockedFilter["memberStatus"]) ?? "any",
-    declineReason:
-      (searchParams.get("declineReason") as BlockedFilter["declineReason"]) ?? "any",
-    skippedOnly: searchParams.get("skippedOnly") === "true",
+    email: searchParams.get("email") ?? undefined,
+    declineCodes: parseCsvList(searchParams.get("declineCodes")),
+    eligibility,
   };
 
   try {

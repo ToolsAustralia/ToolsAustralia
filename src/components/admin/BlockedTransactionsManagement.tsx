@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { format } from "date-fns";
+import { createPortal } from "react-dom";
+import { format, subDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import {
   CreditCard,
   ShieldCheck,
@@ -12,71 +14,93 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  Calendar,
   ListChecks,
   Clock,
   AlertTriangle,
+  Search,
 } from "lucide-react";
-import Dropdown from "@/components/modals/ui/Dropdown";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
+import DateRangeToggle, { type DateRange } from "@/components/admin/DateRangeToggle";
+import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
+import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import {
+  useCurrentAndLastDrawDates,
+  useMajorDrawsForDateRange,
+} from "@/hooks/queries/useAdminQueries";
+import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import MultiSelectFilter, { type MultiSelectOption } from "@/components/admin/MultiSelectFilter";
 import { useToast } from "@/components/ui/Toast";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useBlockedCards } from "@/hooks/queries/admin/useBlockedCards";
+import { useAllowlistStats } from "@/hooks/queries/admin/useAllowlistStats";
 import {
   useAllowlistActions,
   useApplyAllowlist,
   useReverseAllowlist,
   type ClientAllowlistAction,
 } from "@/hooks/queries/admin/useAllowlistActions";
-import type { BlockedFilter, BlockedRow, EvalInput } from "@/services/allowlist/types";
+import type {
+  BlockedFilter,
+  BlockedRow,
+  EligibilityKind,
+  EvalInput,
+} from "@/services/allowlist/types";
+import { computeEligibilityKind } from "@/utils/admin/blockedTransactionEligibility";
+import {
+  DECLINE_CODE_LABELS,
+  getDeclineCodeLabel,
+} from "@/utils/billing/declineCodeLabels";
 
-const DEFAULT_FILTER: BlockedFilter = {
-  dateFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-  dateTo: new Date(),
-  memberStatus: "has_paid",
-  declineReason: "recoverable_only",
-  skippedOnly: false,
-};
+const AEST_TIMEZONE = "Australia/Sydney";
 
-const memberStatusOptions = [
-  { value: "any", label: "Any member status" },
-  { value: "has_paid", label: "Has paid before" },
-  { value: "never_paid", label: "Never paid" },
+const ELIGIBILITY_OPTIONS: ReadonlyArray<MultiSelectOption> = [
+  { value: "auto_eligible", label: "Auto-eligible" },
+  { value: "already_allowlisted", label: "Already allowlisted" },
+  { value: "fraud_signal", label: "Fraud signal" },
+  { value: "permanent_issue", label: "Permanent issue" },
+  { value: "not_member", label: "Skipped — not member" },
 ];
 
-const declineReasonOptions = [
-  { value: "any", label: "All decline reasons" },
-  { value: "recoverable_only", label: "Recoverable only (hide fraud + permanent issues)" },
-  { value: "transient_only", label: "Hide fraud signals" },
-  { value: "fraud_signals_only", label: "Fraud signals only" },
-];
+const DECLINE_CODE_OPTIONS: ReadonlyArray<MultiSelectOption> = (() => {
+  const groupOrder = ["recoverable", "fraud", "permanent", "other"] as const;
+  const groupLabels: Record<(typeof groupOrder)[number], string> = {
+    recoverable: "Recoverable",
+    fraud: "Fraud signals",
+    permanent: "Permanent issues",
+    other: "Other",
+  };
+  const opts: MultiSelectOption[] = [];
+  for (const group of groupOrder) {
+    for (const [code, meta] of Object.entries(DECLINE_CODE_LABELS)) {
+      if (meta.group !== group) continue;
+      opts.push({ value: code, label: meta.label, group: groupLabels[group] });
+    }
+  }
+  return opts;
+})();
 
-function formatDateInput(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function defaultLast30Days() {
+  const today = new Date();
+  return {
+    start: format(subDays(today, 29), "yyyy-MM-dd"),
+    end: format(today, "yyyy-MM-dd"),
+  };
 }
 
-function formatDateRangeLabel(from: Date, to: Date): string {
-  const sameDay =
-    from.getFullYear() === to.getFullYear() &&
-    from.getMonth() === to.getMonth() &&
-    from.getDate() === to.getDate();
-  if (sameDay) return format(from, "MMM d, yyyy");
-  if (from.getFullYear() === to.getFullYear()) {
-    return `${format(from, "MMM d")} – ${format(to, "MMM d, yyyy")}`;
-  }
-  return `${format(from, "MMM d, yyyy")} – ${format(to, "MMM d, yyyy")}`;
+function ymdToDate(ymd: string, endOfDay = false): Date {
+  const [y, m, d] = ymd.split("-").map((s) => parseInt(s, 10));
+  return endOfDay
+    ? new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59, 999)
+    : new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
 }
 
 function formatDateTime(value: Date | string): string {
   return format(new Date(value), "MMM d, yyyy HH:mm");
 }
 
-/**
- * Build the EvalInput payload an allowlist apply call expects from a single
- * blocked-transaction row. Used by both the bulk action and the per-row
- * "Allowlist" button so they share the exact same shape.
- */
 function rowToApplyPayload(r: BlockedRow): EvalInput {
   return {
     cardFingerprint: r.cardFingerprint,
@@ -91,64 +115,108 @@ function rowToApplyPayload(r: BlockedRow): EvalInput {
   };
 }
 
-type EligibilityKind = "auto" | "already" | "fraud" | "permanent" | "not_member";
-
-function getEligibility(row: BlockedRow): {
-  kind: EligibilityKind;
-  label: string;
-} {
-  if (row.alreadyAllowlisted) {
-    return { kind: "already", label: "Already allowlisted" };
-  }
-  if (row.preview.eligible) {
-    return { kind: "auto", label: "Auto-eligible" };
-  }
-  if (row.preview.reason === "filter_fraud_signal") {
-    return { kind: "fraud", label: "Fraud signal" };
-  }
-  if (row.preview.reason === "filter_permanent_issue") {
-    return { kind: "permanent", label: "Permanent issue" };
-  }
-  return { kind: "not_member", label: "Skipped — not member" };
-}
-
 const eligibilityBadgeClasses: Record<EligibilityKind, string> = {
-  auto: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200",
-  already: "bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-200",
-  fraud: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
-  permanent: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
+  auto_eligible: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200",
+  already_allowlisted: "bg-gray-100 text-gray-800 dark:bg-neutral-800 dark:text-neutral-200",
+  fraud_signal: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200",
+  permanent_issue: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
   not_member: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200",
 };
 
+const eligibilityBadgeLabel: Record<EligibilityKind, string> = {
+  auto_eligible: "Auto-eligible",
+  already_allowlisted: "Already allowlisted",
+  fraud_signal: "Fraud signal",
+  permanent_issue: "Permanent issue",
+  not_member: "Skipped — not member",
+};
+
 function EligibilityBadge({ row }: { row: BlockedRow }) {
-  const { kind, label } = getEligibility(row);
+  const kind = computeEligibilityKind({
+    alreadyAllowlisted: row.alreadyAllowlisted,
+    preview: row.preview,
+  });
   const Icon =
-    kind === "auto"
+    kind === "auto_eligible"
       ? CheckCircle
-      : kind === "fraud"
+      : kind === "fraud_signal" || kind === "permanent_issue"
         ? AlertTriangle
-        : kind === "permanent"
-          ? AlertTriangle
-          : kind === "already"
-            ? ShieldCheck
-            : AlertCircle;
+        : kind === "already_allowlisted"
+          ? ShieldCheck
+          : AlertCircle;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${eligibilityBadgeClasses[kind]}`}
     >
       <Icon className="h-3 w-3" />
-      {label}
+      {eligibilityBadgeLabel[kind]}
     </span>
   );
 }
 
 export default function BlockedTransactionsManagement() {
   const { showToast } = useToast();
-  const [filter, setFilter] = useState<BlockedFilter>(DEFAULT_FILTER);
+  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+
+  const initialRange = useMemo(() => defaultLast30Days(), []);
+  const [dateRange, setDateRange] = useState<DateRange>("custom");
+  const [startDate, setStartDate] = useState<string>(initialRange.start);
+  const [endDate, setEndDate] = useState<string>(initialRange.end);
+  const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+
+  const [emailInput, setEmailInput] = useState("");
+  const debouncedEmail = useDebounce(emailInput, 300);
+  const [eligibilitySelected, setEligibilitySelected] = useState<string[]>([]);
+  const [declineCodesSelected, setDeclineCodesSelected] = useState<string[]>([]);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [isDateRangeModalOpen, setIsDateRangeModalOpen] = useState(false);
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
+
+  const { data: drawDates } = useCurrentAndLastDrawDates();
+  const { data: majorDraws = [] } = useMajorDrawsForDateRange();
+
+  const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
+    let finalStart = start;
+    let finalEnd = end;
+
+    if (range === "today") {
+      finalStart = formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = finalStart;
+    } else if (range === "yesterday") {
+      finalStart = formatInTimeZone(subDays(new Date(), 1), AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = finalStart;
+    } else if (range === "current-draw" && drawDates?.currentDraw) {
+      finalStart = drawDates.currentDraw.startDate;
+      finalEnd = drawDates.currentDraw.endDate;
+    } else if (range === "last-draw" && drawDates?.lastDraw) {
+      finalStart = drawDates.lastDraw.startDate;
+      finalEnd = drawDates.lastDraw.endDate;
+    } else if (range === "all-time") {
+      finalStart = formatInTimeZone(getWebsiteLaunchDateUTC(), AEST_TIMEZONE, "yyyy-MM-dd");
+      finalEnd = formatInTimeZone(new Date(), AEST_TIMEZONE, "yyyy-MM-dd");
+    }
+
+    setDateRange(range);
+    if (finalStart && finalEnd) {
+      setStartDate(finalStart);
+      setEndDate(finalEnd);
+    }
+  };
+
+  const filter: BlockedFilter = useMemo(
+    () => ({
+      dateFrom: ymdToDate(startDate, false),
+      dateTo: ymdToDate(endDate, true),
+      email: debouncedEmail.trim() || undefined,
+      declineCodes: declineCodesSelected.length > 0 ? declineCodesSelected : undefined,
+      eligibility:
+        eligibilitySelected.length > 0
+          ? (eligibilitySelected as EligibilityKind[])
+          : undefined,
+    }),
+    [startDate, endDate, debouncedEmail, declineCodesSelected, eligibilitySelected]
+  );
 
   const {
     rows,
@@ -161,6 +229,7 @@ export default function BlockedTransactionsManagement() {
     refetch,
     error,
   } = useBlockedCards(filter);
+  const statsQuery = useAllowlistStats();
   const { data: recentActions = [] } = useAllowlistActions("added", 50);
   const applyMutation = useApplyAllowlist();
   const reverseMutation = useReverseAllowlist();
@@ -172,36 +241,25 @@ export default function BlockedTransactionsManagement() {
     let skippedFilter = 0;
     let fraud = 0;
     let permanent = 0;
-    let already = 0;
     for (const r of rows) {
-      if (r.alreadyAllowlisted) {
-        already += 1;
-        continue;
-      }
+      if (r.alreadyAllowlisted) continue;
       if (r.preview.eligible) {
         autoEligible += 1;
         continue;
       }
-      if (r.preview.reason === "filter_fraud_signal") {
-        fraud += 1;
-      } else if (r.preview.reason === "filter_permanent_issue") {
-        permanent += 1;
-      } else {
-        skippedFilter += 1;
-      }
+      if (r.preview.reason === "filter_fraud_signal") fraud += 1;
+      else if (r.preview.reason === "filter_permanent_issue") permanent += 1;
+      else skippedFilter += 1;
     }
-    return { total: rows.length, autoEligible, skippedFilter, fraud, permanent, already };
+    return { total: rows.length, autoEligible, skippedFilter, fraud, permanent };
   }, [rows]);
 
   const allEligibleSelected =
     eligibleRows.length > 0 && eligibleRows.every((r) => selected.has(r.cardFingerprint));
 
   function toggleAll() {
-    if (allEligibleSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(eligibleRows.map((r) => r.cardFingerprint)));
-    }
+    if (allEligibleSelected) setSelected(new Set());
+    else setSelected(new Set(eligibleRows.map((r) => r.cardFingerprint)));
   }
 
   function toggleRow(fp: string) {
@@ -262,7 +320,6 @@ export default function BlockedTransactionsManagement() {
           message: result.errors?.[0]?.message ?? "Stripe rejected the request.",
         });
       } else {
-        // Skipped by the filter rules without an error.
         showToast({
           type: "warning",
           title: "Skipped by filter",
@@ -294,12 +351,80 @@ export default function BlockedTransactionsManagement() {
   }
 
   function resetFilters() {
-    setFilter(DEFAULT_FILTER);
+    setEmailInput("");
+    setEligibilitySelected([]);
+    setDeclineCodesSelected([]);
+    updateDateFilter("custom", initialRange.start, initialRange.end);
     setSelected(new Set());
   }
 
+  const displayDate = useMemo(() => {
+    if (dateRange === "custom" && startDate && endDate) {
+      try {
+        const s = new Date(startDate);
+        const e = new Date(endDate);
+        if (format(s, "yyyy-MM-dd") === format(e, "yyyy-MM-dd")) {
+          return format(s, "MMM d, yyyy");
+        }
+        return `${format(s, "MMM d")} - ${format(e, "MMM d, yyyy")}`;
+      } catch {
+        return undefined;
+      }
+    }
+    if (dateRange === "all-time") return "All Time";
+    if (dateRange === "current-draw") return "Current Draw";
+    if (dateRange === "last-draw") return "Last Draw";
+    return undefined;
+  }, [dateRange, startDate, endDate]);
+
+  const dateRangeToggle = (
+    <DateRangeToggle
+      selectedRange={dateRange}
+      onRangeChange={(range) => {
+        if (range === "custom") setIsCustomDateModalOpen(true);
+        else updateDateFilter(range);
+      }}
+      onCustomClick={() => setIsCustomDateModalOpen(true)}
+      collapsed={false}
+      displayDate={displayDate}
+      onExpand={() => {}}
+      className={isLgUp ? undefined : "w-full"}
+    />
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+          Blocked Transactions
+        </h2>
+        {isLgUp ? <div className="flex items-center gap-2">{dateRangeToggle}</div> : null}
+      </div>
+
+      {!isLgUp && slotEl
+        ? createPortal(
+            <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>,
+            slotEl
+          )
+        : null}
+      {!isLgUp && !slotEl ? (
+        <div className="lg:hidden">
+          <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>
+        </div>
+      ) : null}
+
+      <CustomDateRangeModal
+        isOpen={isCustomDateModalOpen}
+        onClose={() => setIsCustomDateModalOpen(false)}
+        onApply={(start, end) => {
+          updateDateFilter("custom", start, end);
+          setIsCustomDateModalOpen(false);
+        }}
+        currentStartDate={startDate}
+        currentEndDate={endDate}
+        majorDraws={majorDraws}
+      />
+
       {/* Top stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
@@ -324,15 +449,14 @@ export default function BlockedTransactionsManagement() {
           subtitle={`${stats.fraud} fraud · ${stats.permanent} permanent`}
         />
         <MetricCard
-          title="Already allowlisted"
-          value={stats.already}
+          title="Total on allowlist"
+          value={statsQuery.data?.totalActiveAllowlisted ?? "—"}
           icon={ShieldCheck}
           color="purple"
-          subtitle="No action needed"
+          subtitle="All-time, currently active"
         />
       </div>
 
-      {/* Error banner — shown when the blocked-cards query fails */}
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -382,67 +506,38 @@ export default function BlockedTransactionsManagement() {
 
         <div className={`${isFiltersOpen ? "block" : "hidden sm:block"}`}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            <div className="block text-xs">
-              <span className="mb-1 flex items-center gap-1.5 font-semibold text-gray-700 dark:text-neutral-300">
-                <Calendar className="h-3.5 w-3.5 text-red-600" />
-                Date range
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsDateRangeModalOpen(true)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 hover:bg-gray-50 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white dark:hover:bg-neutral-700"
-              >
-                <span className="truncate">
-                  {formatDateRangeLabel(filter.dateFrom, filter.dateTo)}
-                </span>
-                <Calendar className="h-4 w-4 shrink-0 text-gray-400 dark:text-neutral-500" />
-              </button>
-            </div>
             <div>
               <span className="mb-1 block text-xs font-semibold text-gray-700 dark:text-neutral-300">
-                Member status
+                Email
               </span>
-              <Dropdown
-                options={memberStatusOptions}
-                value={filter.memberStatus}
-                onChange={(value) =>
-                  setFilter({ ...filter, memberStatus: value as BlockedFilter["memberStatus"] })
-                }
-              />
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
+                <input
+                  type="text"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="Search by email"
+                  className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white dark:placeholder:text-neutral-500"
+                />
+              </div>
             </div>
-            <div>
-              <span className="mb-1 block text-xs font-semibold text-gray-700 dark:text-neutral-300">
-                Decline reason
-              </span>
-              <Dropdown
-                options={declineReasonOptions}
-                value={filter.declineReason}
-                onChange={(value) =>
-                  setFilter({
-                    ...filter,
-                    declineReason: value as BlockedFilter["declineReason"],
-                  })
-                }
-              />
-            </div>
+            <MultiSelectFilter
+              label="Eligibility"
+              options={ELIGIBILITY_OPTIONS}
+              selected={eligibilitySelected}
+              onChange={setEligibilitySelected}
+              placeholder="Any eligibility"
+            />
+            <MultiSelectFilter
+              label="Decline code"
+              options={DECLINE_CODE_OPTIONS}
+              selected={declineCodesSelected}
+              onChange={setDeclineCodesSelected}
+              placeholder="Any decline code"
+            />
           </div>
         </div>
       </div>
-
-      <CustomDateRangeModal
-        isOpen={isDateRangeModalOpen}
-        onClose={() => setIsDateRangeModalOpen(false)}
-        onApply={(start, end) => {
-          setFilter({
-            ...filter,
-            dateFrom: new Date(start),
-            dateTo: new Date(end),
-          });
-          setIsDateRangeModalOpen(false);
-        }}
-        currentStartDate={formatDateInput(filter.dateFrom)}
-        currentEndDate={formatDateInput(filter.dateTo)}
-      />
 
       {/* Bulk action bar */}
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 p-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
@@ -506,7 +601,7 @@ export default function BlockedTransactionsManagement() {
               No blocked transactions in this range
             </h3>
             <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">
-              Try widening the date range or relaxing the filters.
+              Try widening the date range, clearing the email search, or relaxing filters.
             </p>
           </div>
         ) : (
@@ -516,24 +611,12 @@ export default function BlockedTransactionsManagement() {
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-neutral-700">
                     <th className="w-10 bg-gray-50 px-4 py-3 dark:bg-neutral-800"></th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Date
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Email
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Card
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Decline
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Eligibility
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Actions
-                    </th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Date</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Email</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Card</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Decline</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Eligibility</th>
+                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -565,7 +648,10 @@ export default function BlockedTransactionsManagement() {
                           {formatDateTime(r.createdAt)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                          {r.customerEmail ?? "—"}
+                          <ClickableUserDisplay
+                            displayText={r.customerEmail ?? "—"}
+                            userId={r.userId}
+                          />
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
                           <span className="font-mono">
@@ -573,7 +659,7 @@ export default function BlockedTransactionsManagement() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
-                          {r.declineCode ?? "—"}
+                          {getDeclineCodeLabel(r.declineCode)}
                         </td>
                         <td className="px-4 py-3">
                           <EligibilityBadge row={r} />
@@ -620,9 +706,11 @@ export default function BlockedTransactionsManagement() {
                   >
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {r.customerEmail ?? "—"}
-                        </p>
+                        <ClickableUserDisplay
+                          displayText={r.customerEmail ?? "—"}
+                          userId={r.userId}
+                          className="text-sm font-semibold text-gray-900 dark:text-white"
+                        />
                         <p className="mt-1 font-mono text-xs text-gray-600 dark:text-neutral-400">
                           {r.cardBrand} ••{r.cardLast4}
                         </p>
@@ -640,7 +728,7 @@ export default function BlockedTransactionsManagement() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-neutral-400">
                       <EligibilityBadge row={r} />
-                      {r.declineCode && <span>· {r.declineCode}</span>}
+                      {r.declineCode && <span>· {getDeclineCodeLabel(r.declineCode)}</span>}
                     </div>
                     <div className="mt-3 flex justify-end">
                       <button
@@ -658,7 +746,6 @@ export default function BlockedTransactionsManagement() {
               })}
             </div>
 
-            {/* Load more — only when more pages remain on the server */}
             {hasMore && (
               <div className="flex justify-center border-t border-gray-200 px-4 py-3 dark:border-neutral-700">
                 <button

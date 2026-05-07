@@ -29,6 +29,7 @@ Stripe → POST /api/stripe/webhook
         ├── invoice.payment_succeeded           → resumeAfterSuccessfulRenewalPayment, processPaymentBenefits, write PaymentEvent BenefitsGranted
         ├── invoice.payment_failed              → pauseAfterRenewalFailure, write MembershipStatusHistory past_due
         ├── invoice.finalized                   → ensure MembershipRenewalCycle row exists
+        ├── charge.failed                       → upsert BlockedTransaction (issuer-blocked dual-write; no allowlist apply here)
         ├── charge.refunded                     → processRefundReversal (full) or write RefundPartial (partial)
         ├── charge.dispute.closed (lost)        → reverse benefits (treat as full refund)
         └── charge.dispute.funds_withdrawn      → reverse benefits (provisional)
@@ -113,6 +114,8 @@ Migration script: `scripts/migrate-anchor-billing-24.ts` (`npm run migrate:ancho
 
 **Webhook dual-write for blocked PIs** — alongside the allowlist eligibility check, the `payment_intent.payment_failed` branch also persists the blocked PI to the [BlockedTransaction](./models.md#blockedtransaction) collection via `upsertBlockedTransaction()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts). Both writes are best-effort and wrapped in *independent* try/catch blocks so a failure in one cannot block the other. The persisted rows back the admin `/admin/blocked-transactions` page (see [`listBlocked`](#listblocked-mongo-backed-read-path) below). The shared `buildBlockedTransactionRecord()` projector is reused by [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) so historical and live rows have identical shape.
 
+Capture also runs from `charge.failed` — the universal "any failed charge" event — to cover issuer-blocked subscription renewals where `payment_intent.payment_failed` is sometimes not emitted. The `charge.failed` branch only writes the `BlockedTransaction` row; `AllowlistService.apply()` stays on `payment_intent.payment_failed` so we never double-record `AllowlistAction` rows.
+
 ### `listBlocked` — Mongo-backed read path
 
 The admin page's read path. Cursor-paged query over the `blockedtransactions` collection populated by Phase A (webhook) and Phase B (backfill). Phase E removed the legacy `listBlockedFromStripe` request-time Stripe pagination — `listBlocked` is now the only read path.
@@ -130,7 +133,7 @@ Per-page cost is bounded — independent of the date-window size.
 
 **Verdict logic.** Extracted as the pure top-level helper `computeEligibility(doc, maps: EligibilityMaps)` — same branch order as `evaluate` (fraud signal → permanent issue → user lookup → has-paid) but driven by pre-fetched maps, not new DB queries. Exported alongside the `EligibilityMaps` type so unit tests can exercise verdicts without Mongo.
 
-**Filter handling.** Decline-code filter is pushed into the Mongo query (`$nin` / `$in` against `FRAUD_SIGNAL_DECLINE_CODES` / `PERMANENT_ISSUE_DECLINE_CODES`); member-status and `skippedOnly` are applied in-memory after the joins (because the verdict depends on them). `nextCursor` encodes the last *raw* doc on the page, not the last filtered row, so pagination advances even when the in-memory filter drops every row.
+**Filter handling.** `email` is pushed into the Mongo query as a case-insensitive `$regex` against `customerEmail` (specials escaped); the `customerEmail` sparse index keeps this bounded. `declineCodes` is pushed as `$in`. `eligibility` is applied **post-join** via `computeEligibilityKind` ([src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts)) — the same mapper the UI badge uses, so they cannot disagree. `nextCursor` encodes the last *raw* doc on the page, not the last filtered row, so pagination advances even when the post-join filter drops every row on a page. Each row also exposes a resolved `userId` for the matched User (or `null` for guest / unmatched), so the admin UI can pass it straight to `ClickableUserDisplay`.
 
 **Caveat — duplicated `SUCCEEDED_EVENT_TYPES`.** The list (`PaymentProcessed`, `BenefitsGranted`, `SubscriptionActivated`) is re-declared at the top of `AllowlistService.ts` so the batched `PaymentEvent.distinct` matches `MongoAllowlistRepository.userHasSucceededPayment` semantics. Keep both in lockstep until extracted (TODO marker in code).
 
@@ -138,11 +141,12 @@ Per-page cost is bounded — independent of the date-window size.
 
 [src/app/api/cron/reconcile-blocked-transactions/route.ts](../../src/app/api/cron/reconcile-blocked-transactions/route.ts) is the daily safety net that detects drift between the `BlockedTransaction` Mongo collection and Stripe's blocked-PI universe.
 
-**What it does.** Once per UTC day:
-1. Counts `BlockedTransaction` documents with `createdAt` inside yesterday's UTC window `[00:00Z, 24:00Z)`.
-2. Iterates `stripe.charges.search({ query: "status:\"failed\" AND created>${from} AND created<${to}" })` for the same window and counts charges where `outcome.type === "blocked"`. (Outcome filtering is client-side because Search doesn't expose an outcome predicate.)
-3. Computes drift via the exported `computeDriftRatio(mongoCount, stripeCount)` helper — `|mongo - stripe| / stripe`, with both-zero collapsed to 0 and stripe-zero-with-mongo-rows collapsed to 1.
-4. If drift > 5%, logs a `console.error` with the structured summary (window / counts / ratio / durationMs). Otherwise logs a `console.log` "OK" line.
+**What it does.** Once per UTC day, against the **last 48 hours** (widened from yesterday-only to handle late-arriving events + DST edge cases):
+1. Counts `BlockedTransaction` documents with `createdAt` inside the window.
+2. Iterates `stripe.charges.search({ query: "status:\"failed\" AND created>${from} AND created<${to}" })` with `data.payment_intent` expanded; collects charges where `outcome.type === "blocked"`.
+3. **Self-heals**: for every blocked charge whose PI is missing in Mongo, calls `upsertBlockedTransaction()` — same projector as the live webhook. Drift is no longer just an alert; the cron patches the gap so the admin page is correct by the next morning.
+4. Computes drift via the exported `computeDriftRatio(mongoCount, stripeCount)` helper.
+5. If drift > 5% **or** any rows were recovered, logs a `console.error` with the structured summary (window / counts / ratio / `recovered` / `recoverErrors` / durationMs). Otherwise logs a `console.log` "OK" line.
 
 **Schedule.** `15 3 * * *` (03:15 UTC daily) — registered in `vercel.json`. Offset from the existing 03:00 UTC `ab-testing-aggregate-metrics` cron to avoid simultaneous Stripe API contention and easier log triage.
 

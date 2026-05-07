@@ -79,19 +79,20 @@ Backing the `/admin/blocked-transactions` page. All four require `role === "admi
 | POST | `/api/admin/allowlist/apply` | Bulk-allowlist selected rows |
 | POST | `/api/admin/allowlist/reverse` | Remove a previously-allowlisted fingerprint |
 | GET | `/api/admin/allowlist/actions` | Recent allowlist decisions — feeds the "Recently allowlisted" widget |
+| GET | `/api/admin/allowlist/stats` | All-time count of cards currently on the Stripe allowlist |
 
 #### `GET /api/admin/allowlist/blocked-cards`
 
 Query params:
 - `dateFrom` — ISO timestamp (inclusive)
 - `dateTo` — ISO timestamp (inclusive)
-- `memberStatus` — `any | has_paid | never_paid`
-- `declineReason` — `any | recoverable_only | transient_only | fraud_signals_only` (`recoverable_only` hides both fraud signals **and** permanent-issue codes; `transient_only` hides only fraud signals)
-- `skippedOnly` — `true | false`
+- `email` — case-insensitive substring match on `customerEmail`. Omitted = no filter.
+- `declineCodes` — comma-separated list of decline codes (e.g. `lost_card,generic_decline`). Omitted = no filter.
+- `eligibility` — comma-separated list of eligibility kinds: `auto_eligible`, `already_allowlisted`, `fraud_signal`, `permanent_issue`, `not_member`. Omitted = no filter.
 - `cursor` — opaque cursor for the next page. Omitted on first page; pass back the previous response's `nextCursor`.
 - `limit` — page size, 1–100, default 50.
 
-Response: `{ success, rows: BlockedRow[], nextCursor: string | null, total: number }`. Reads from the `blockedtransactions` collection — see [`listBlocked`](./architecture.md#listblocked-mongo-backed-read-path). Per-page cost is bounded and independent of the date window.
+Response: `{ success, rows: BlockedRow[], nextCursor: string | null, total: number }`. Reads from the `blockedtransactions` collection — see [`listBlocked`](./architecture.md#listblocked-mongo-backed-read-path). Per-page cost is bounded and independent of the date window. Each `BlockedRow` includes a resolved `userId` (or `null` for guests).
 
 Auth: admin.
 
@@ -110,6 +111,10 @@ Query params:
 - `action` — `added | skipped | removed | all`
 
 Returns `{ success, actions: AllowlistAction[] }`. Auth: admin. Used by the "Recently allowlisted" widget on `/admin/blocked-transactions`.
+
+#### `GET /api/admin/allowlist/stats`
+
+No params. Returns `{ success, totalActiveAllowlisted: number }` — the count of card fingerprints whose most-recent `AllowlistAction` is `"added"`. Drives the "Total on allowlist" metric on `/admin/blocked-transactions`. Stripe's `card_fingerprint_allowlist` Radar value list is the live allowlist; this count is an audit-log approximation. Auth: admin.
 
 ## Consistent response shape
 
