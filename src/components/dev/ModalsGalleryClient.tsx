@@ -50,6 +50,7 @@ import PastDrawsModal from "@/components/modals/PastDrawsModal";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import PackageDetailModal from "@/components/modals/PackageDetailModal";
 import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
+import DowngradeConfirmModal from "@/components/modals/DowngradeConfirmModal";
 import ExportModal from "@/components/modals/ExportModal";
 import IconPickerModal from "@/components/modals/ui/IconPickerModal";
 import SettingsModal from "@/components/modals/SettingsModal";
@@ -264,6 +265,7 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   upsell: "src/components/modals/UpsellModal.tsx",
   "success-screen": "src/components/loading/SuccessScreen.tsx",
   "cancellation-upsell": "src/components/modals/CancellationUpsellModal.tsx",
+  "downgrade-confirm": "src/components/modals/DowngradeConfirmModal.tsx",
   "mini-draw-package": "src/components/modals/MiniDrawPackageModal.tsx",
   "subscription-explainer": "src/components/modals/SubscriptionExplainerModal.tsx",
   "past-draws": "src/components/modals/PastDrawsModal.tsx",
@@ -336,6 +338,7 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
     note: "Transaction complete overlay (LoadingContext)",
   },
   { id: "cancellation-upsell", label: "CancellationUpsellModal", category: "Commerce" },
+  { id: "downgrade-confirm", label: "DowngradeConfirmModal", category: "Commerce" },
   { id: "mini-draw-package", label: "MiniDrawPackageModal", category: "Commerce" },
   {
     id: "stripe-payment",
@@ -982,7 +985,21 @@ export default function ModalsGalleryClient() {
         autoCloseDelay={0}
         onAutoClose={close}
       />
-      <CancellationUpsellModal isOpen={isOpen("cancellation-upsell")} onClose={close} onRedeem={close} onDecline={close} />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
       <MiniDrawPackageModal
         isOpen={isOpen("mini-draw-package")}
         onClose={close}
@@ -999,6 +1016,20 @@ export default function ModalsGalleryClient() {
       />
       <PastDrawsModal isOpen={isOpen("past-draws")} onClose={close} userId={PREVIEW_USER_ID} />
       <RenewalFailedModal isOpen={isOpen("renewal-failed")} onClose={close} />
+      <DowngradeConfirmModal
+        isOpen={isOpen("downgrade-confirm")}
+        onClose={close}
+        onConfirm={close}
+        fromPackageName="Foreman"
+        toPackageName="Tradie"
+        toPackagePrice={20}
+        toPartnerAccessPercent={50}
+        toPartnerDiscountDays={3}
+        toEntriesPerMonth={15}
+        currentEntries={60}
+        saveLabel="Save $19/mo"
+        effectiveDateLabel="Fri 26 Dec"
+      />
       <ReportProblemModal isOpen={isOpen("report-problem")} onClose={close} errorContext={MOCK_ERROR_CONTEXT} />
       <ConfirmationModal
         isOpen={isOpen("confirmation")}
