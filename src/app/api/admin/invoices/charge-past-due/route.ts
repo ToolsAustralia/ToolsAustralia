@@ -9,7 +9,7 @@ import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import Stripe from "stripe";
 import mongoose from "mongoose";
 import {
-  batchFetchCustomers,
+  getCustomerDefaultPaymentMethodFromInvoice,
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
   selectCurrentSubscriptionChargeable,
@@ -45,8 +45,11 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Fetch eligible invoices from Stripe with pagination
-    // Use explicit ordering for consistent results
+    // 2. Fetch eligible invoices from Stripe with pagination.
+    // `expand: ['data.customer']` returns each customer inline, so the
+    // payment-method fallback can be read off the invoice without a per-
+    // customer `customers.retrieve` round-trip — eliminates the N+1 that
+    // used to push this handler over Vercel's function timeout.
     const allInvoices: Stripe.Invoice[] = [];
     let hasMore = true;
     let startingAfter: string | undefined = undefined;
@@ -57,11 +60,12 @@ export async function GET(_request: NextRequest) {
         collection_method: "charge_automatically",
         limit: 100,
         starting_after: startingAfter,
+        expand: ["data.customer"],
       }) as Stripe.Response<Stripe.ApiList<Stripe.Invoice>>;
 
       allInvoices.push(...invoiceResponse.data);
       hasMore = invoiceResponse.has_more;
-      
+
       if (hasMore && invoiceResponse.data.length > 0) {
         startingAfter = invoiceResponse.data[invoiceResponse.data.length - 1].id;
       }
@@ -72,28 +76,24 @@ export async function GET(_request: NextRequest) {
       .map((inv) => (typeof inv.customer === "string" ? inv.customer : inv.customer?.id))
       .filter(Boolean) as string[];
 
-    // Get all users with these customer IDs (for debugging)
-    const allUsers = await User.find({
-      stripeCustomerId: { $in: customerIds },
-    })
-      .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
-      .lean();
-
-    // Get users with past_due status
-    const pastDueUsers = await User.find({
-      stripeCustomerId: { $in: customerIds },
-      "subscription.status": "past_due",
-    })
-      .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
-      .lean<PastDueUserLean[]>();
+    // Run the two user lookups in parallel — `allUsers` is purely diagnostic
+    // (drives the "Total Users Found" tile in the admin modal); `pastDueUsers`
+    // is what eligibility actually filters against.
+    const [allUsers, pastDueUsers] = await Promise.all([
+      User.find({ stripeCustomerId: { $in: customerIds } })
+        .select("_id stripeCustomerId")
+        .lean(),
+      User.find({
+        stripeCustomerId: { $in: customerIds },
+        "subscription.status": "past_due",
+      })
+        .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
+        .lean<PastDueUserLean[]>(),
+    ]);
 
     const userMap = new Map(pastDueUsers.map((u) => [u.stripeCustomerId, u]));
 
-    // 4. Batch fetch customers to get their default payment methods (fallback)
-    // Uses throttled batching with retry logic to respect Stripe rate limits
-    const customerPaymentMethodMap = await batchFetchCustomers(customerIds, 15, 200);
-
-    // 5. Filter invoices and build preview
+    // 4. Filter invoices and build preview
     const filterStats = {
       totalInvoices: allInvoices.length,
       wrongCollectionMethod: 0,
@@ -141,8 +141,8 @@ export async function GET(_request: NextRequest) {
         continue;
       }
 
-      const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-      const hasPaymentMethod = !!resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
+      const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+      const hasPaymentMethod = !!resolveInvoicePaymentMethodId(invoice, customerDefaultPm);
 
       if (!hasPaymentMethod) {
         filterStats.noPaymentMethod++;
@@ -331,8 +331,11 @@ export async function POST(request: NextRequest) {
     try {
       // 4. Fetch eligible invoices from Stripe with pagination
       // Note: Stripe invoices don't have "past_due" status - that's a subscription status
-      // We fetch "open" invoices and filter by database subscription status
-      // Use pagination to ensure we get all invoices consistently
+      // We fetch "open" invoices and filter by database subscription status.
+      // `expand: ['data.customer']` is mandatory here: it must mirror the GET
+      // preview's expansion so preview-vs-charge eligibility cannot diverge,
+      // and it removes the N+1 customer fetch that pushed POST over the
+      // Vercel function timeout for large past-due cohorts.
       const allInvoices: Stripe.Invoice[] = [];
       let hasMore = true;
       let startingAfter: string | undefined = undefined;
@@ -343,11 +346,12 @@ export async function POST(request: NextRequest) {
           collection_method: "charge_automatically",
           limit: 100,
           starting_after: startingAfter,
+          expand: ["data.customer"],
         }) as Stripe.Response<Stripe.ApiList<Stripe.Invoice>>;
 
         allInvoices.push(...invoiceResponse.data);
         hasMore = invoiceResponse.has_more;
-        
+
         if (hasMore && invoiceResponse.data.length > 0) {
           startingAfter = invoiceResponse.data[invoiceResponse.data.length - 1].id;
         }
@@ -386,12 +390,10 @@ export async function POST(request: NextRequest) {
 
       const userMap = new Map(users.map((u) => [u.stripeCustomerId, u]));
 
-      // 6. Batch fetch customers to get their default payment methods (fallback)
-      // Uses throttled batching with retry logic to respect Stripe rate limits
-      const customerPaymentMethodMap = await batchFetchCustomers(customerIds, 15, 200);
-
-      // 7. Filter invoices based on all criteria
-      // Note: invoice.status is already "open" from the list call above
+      // 6. Filter invoices based on all criteria.
+      // Note: invoice.status is already "open" from the list call above.
+      // Customer default payment methods come off the expanded `invoice.customer`
+      // — no separate `customers.retrieve` round-trip needed.
       const eligibleInvoices = allInvoices.filter((invoice) => {
         // Check collection method
         if (invoice.collection_method !== "charge_automatically") {
@@ -409,8 +411,8 @@ export async function POST(request: NextRequest) {
           return false;
         }
 
-        const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-        if (!resolveInvoicePaymentMethodId(invoice, customerPaymentMethod)) {
+        const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+        if (!resolveInvoicePaymentMethodId(invoice, customerDefaultPm)) {
           return false;
         }
 
@@ -502,8 +504,8 @@ export async function POST(request: NextRequest) {
                 return;
               }
 
-              const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-              const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerPaymentMethod);
+              const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+              const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerDefaultPm);
 
               if (!paymentMethodId) {
                 skipped++;
