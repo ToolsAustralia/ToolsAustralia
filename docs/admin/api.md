@@ -62,6 +62,29 @@ Each row includes `declineCode` alongside `errorCode`/`errorMessage` (same conve
 
 **Response:** `{ rows: InvoiceChargeLog[], total: number }`
 
+### `GET /api/admin/charge-past-due/decline-summary`
+
+Aggregates failed `InvoiceChargeLog` rows in the given AEST date range, grouped by decline reason (preferring `declineCode`, falling back to `errorCode`, finally `"unknown"`). Returns the top 5 reasons plus a single `"other"` row for the long tail.
+
+**Query:** `startDate?=YYYY-MM-DD`, `endDate?=YYYY-MM-DD` (AEST calendar dates; end is exclusive).
+
+**Auth:** admin (`session.user.role === "admin"`); 401 otherwise.
+
+**Response:**
+
+```json
+{
+  "totalFailed": 52,
+  "topCodes": [
+    { "code": "lost_card", "count": 18, "pct": 35 },
+    { "code": "insufficient_funds", "count": 14, "pct": 27 },
+    { "code": "other", "count": 3, "pct": 5 }
+  ]
+}
+```
+
+Empty range → `{ "totalFailed": 0, "topCodes": [] }`.
+
 ### `GET /api/admin/users/[userId]/recover-past-due-invoice`
 
 Pre-flight eligibility check — read-only (no Stripe writes, no DB writes). Used by [`RecoverInvoiceModal`](../../src/components/admin/RecoverInvoiceModal.tsx) on open to gate the confirmation UI before the admin has a chance to submit.

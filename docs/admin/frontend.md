@@ -116,6 +116,25 @@ Three TanStack Query hooks under `src/hooks/queries/admin/`:
 
 All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", ...]`. The two `useInfiniteQuery` hooks key on the full `filter` object so changing date range (or any other filter field) resets paging from offset 0. `getNextPageParam` returns `loaded < total ? loaded : undefined`. The Bulk Runs and Manual Retries cards each render a "Load more" button at the bottom (matching `BlockedTransactionsManagement`'s pattern); the table header shows `Showing X of Y`. Summary `MetricCard`s aggregate across **loaded** pages only — clicking "Load more" updates them.
 
+### Decline-code summary panel
+
+`PastDueChargeHistory.tsx` renders a "Why charges declined" panel between the top cards and the Bulk Runs section. Powered by `useChargePastDueDeclineSummary`, scoped to the current date filter. Each row shows the code, count, a proportional bar, and percent. Loading state = 5 skeleton bars; empty state = single "No failed attempts in selected range." line.
+
+### Top cards (reduced)
+
+Two cards only: **Succeeded** (count) and **Revenue recovered** (currency). Both aggregate Bulk Runs only — Manual Retries deliberately don't roll up here. Subtitle on Revenue recovered says "From bulk runs" to make this scope explicit.
+
+### Shared `AttemptsBreakdown` component
+
+`src/components/admin/AttemptsBreakdown.tsx` is the single source of stacked count-plus-chips rendering. Used in four places:
+
+- Bulk Runs row (size `cell`, with `eligibleHint`)
+- Manual Retries grouped row (size `cell`, no hint)
+- Drawer Summary `<dd>` (size `block`, with `eligibleHint`)
+- Drawer per-invoice section, per-user grouped row (size `cell`, no hint) — the inner per-attempt table is unchanged
+
+If any of those four breakdowns drift visually, fix the component — don't fork.
+
 ## Force Charge fallback in ChargePastDueUserModal
 
 [`ChargePastDueUserModal.tsx`](../../src/components/admin/ChargePastDueUserModal.tsx) includes a Force Charge fallback path for the case where the standard preview returns `eligibleCount: 0` (no chargeable open invoices found by the normal past-due filter). This happens when the user is still `past_due` in the DB but their current subscription cycle invoice is a held draft under `pause_collection` — which the normal filter excludes.

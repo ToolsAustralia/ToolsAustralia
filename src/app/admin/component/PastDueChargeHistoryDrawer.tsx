@@ -9,6 +9,7 @@ import {
   groupChargeAttemptsByUser,
   type UserAttemptGroup,
 } from "@/utils/admin/groupChargeAttemptsByUser";
+import AttemptsBreakdown from "@/components/admin/AttemptsBreakdown";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -154,25 +155,20 @@ export default function PastDueChargeHistoryDrawer({
                 </dd>
                 <dt className="text-gray-500 dark:text-neutral-400">Admin</dt>
                 <dd className="text-gray-900 dark:text-white">{detailQuery.data.run.adminName}</dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Eligible</dt>
-                <dd className="text-gray-900 dark:text-white">
-                  {detailQuery.data.run.totals.eligibleCount}
-                </dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Attempted</dt>
-                <dd className="text-gray-900 dark:text-white">
-                  {detailQuery.data.run.totals.attempted}
-                </dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Succeeded</dt>
-                <dd className="font-semibold text-emerald-700 dark:text-emerald-400">
-                  {detailQuery.data.run.totals.succeeded}
-                </dd>
-                <dt className="text-gray-500 dark:text-neutral-400">Failed</dt>
-                <dd className="font-semibold text-red-700 dark:text-red-400">
-                  {detailQuery.data.run.totals.failed}
-                </dd>
                 <dt className="text-gray-500 dark:text-neutral-400">Revenue</dt>
                 <dd className="font-semibold text-gray-900 dark:text-white">
                   {formatCents(detailQuery.data.run.totals.revenueCents)}
+                </dd>
+                <dt className="self-start text-gray-500 dark:text-neutral-400">Attempts</dt>
+                <dd>
+                  <AttemptsBreakdown
+                    size="block"
+                    total={detailQuery.data.run.totals.attempted}
+                    succeeded={detailQuery.data.run.totals.succeeded}
+                    failed={detailQuery.data.run.totals.failed}
+                    skipped={detailQuery.data.run.totals.skipped.total}
+                    eligibleHint={detailQuery.data.run.totals.eligibleCount}
+                  />
                 </dd>
               </dl>
 
@@ -242,7 +238,6 @@ export default function PastDueChargeHistoryDrawer({
                       <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
                       <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Attempts</th>
                       <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Latest</th>
-                      <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -269,24 +264,22 @@ export default function PastDueChargeHistoryDrawer({
                                 className="text-sm"
                               />
                             </td>
-                            <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
-                              {g.attempts.length}
-                              <span className="ml-2 text-xs text-gray-500 dark:text-neutral-400">
-                                {g.successCount > 0 && <span className="text-emerald-600">{g.successCount}✓ </span>}
-                                {g.failedCount > 0 && <span className="text-red-600">{g.failedCount}✗ </span>}
-                                {g.skippedCount > 0 && <span>{g.skippedCount}⏭</span>}
-                              </span>
+                            <td className="px-4 py-3">
+                              <AttemptsBreakdown
+                                size="cell"
+                                total={g.attempts.length}
+                                succeeded={g.successCount}
+                                failed={g.failedCount}
+                                skipped={g.skippedCount}
+                              />
                             </td>
                             <td className="px-4 py-3 text-sm">
                               <RetryStatusBadge status={g.latestStatus} />
                             </td>
-                            <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                              {formatCents(g.totalAmount)}
-                            </td>
                           </tr>
                           {isExpanded && (
                             <tr className="bg-gray-50/60 dark:bg-neutral-800/40">
-                              <td colSpan={5} className="px-4 py-3">
+                              <td colSpan={4} className="px-4 py-3">
                                 <table className="w-full">
                                   <thead>
                                     <tr>
