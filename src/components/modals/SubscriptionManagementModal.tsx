@@ -11,6 +11,7 @@ import ConfirmationModal from "./ConfirmationModal";
 import BenefitCountdown from "@/components/ui/BenefitCountdown";
 import StripePaymentModal from "./StripePaymentModal";
 import CancellationUpsellModal from "./CancellationUpsellModal";
+import DowngradeConfirmModal from "./DowngradeConfirmModal";
 import RenewalFailedModal from "./RenewalFailedModal";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -18,6 +19,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useLoading } from "@/contexts/LoadingContext";
@@ -239,6 +241,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
 
   // Helper function to get Tradie subscription package for non-subscribers
   const _getTradiePackage = (): LocalMembershipPlan => {
@@ -421,21 +424,46 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     ];
   }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
 
-  const downgradeConfirmationBenefits = useMemo(() => {
-    if (!selectedDowngrade) return undefined;
+  /** Cancellation upsell modal context — tier, locked-in entries, downgrade target, days to next draw. */
+  const cancellationUpsellContext = useMemo(() => {
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-    const currentAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
-    const { newLastMonthAccumulatedEntries } = calculateRenewalEntries(
-      selectedDowngrade.entriesPerMonth,
-      currentAccumulated
-    );
-    const firstCycleAdd = newLastMonthAccumulatedEntries - currentAccumulated;
-    return [
-      `When your plan changes at the next billing date, accumulated free entries are expected to reach ${newLastMonthAccumulatedEntries.toLocaleString()} (${currentAccumulated.toLocaleString()} now + ${firstCycleAdd.toLocaleString()} from the first month on ${selectedDowngrade.name}).`,
-      `Each billing cycle on this plan adds ${selectedDowngrade.entriesPerMonth} entries to your accumulated total.`,
-      `${selectedDowngrade.partnerDiscountDays} days partner access`,
-    ];
-  }, [selectedDowngrade, user.subscription]);
+    const accumulatedEntries = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+
+    let daysUntilDraw: number | undefined;
+    let drawCloseLabel: string | undefined;
+    const drawDateIso = currentMajorDraw?.freezeEntriesAt || currentMajorDraw?.drawDate;
+    if (drawDateIso) {
+      const drawDate = new Date(drawDateIso);
+      if (!Number.isNaN(drawDate.getTime())) {
+        daysUntilDraw = Math.max(0, Math.ceil((drawDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        drawCloseLabel = drawDate.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+      }
+    }
+
+    const firstDowngrade = subscriptionBenefits?.availableDowngrades?.[0];
+    const downgrade = firstDowngrade
+      ? {
+          packageName: firstDowngrade.name,
+          saveLabel:
+            membershipPackage && membershipPackage.price > firstDowngrade.price
+              ? `Save $${membershipPackage.price - firstDowngrade.price}/mo`
+              : undefined,
+          // Open the themed DowngradeConfirmModal ON TOP of the cancellation modal
+          // (don't close the parent — switch-plan is a child flow).
+          onConfirm: () => {
+            setSelectedDowngrade(firstDowngrade);
+            setShowDowngradeConfirm(true);
+          },
+        }
+      : undefined;
+
+    return {
+      accumulatedEntries,
+      daysUntilDraw,
+      drawCloseLabel,
+      downgrade,
+    };
+  }, [user.subscription, currentMajorDraw, subscriptionBenefits, membershipPackage]);
 
   /** Pending plan change banner: accumulated entries + partner access % (same rules as confirmation copy) */
   const pendingBenefitCountdownProps = useMemo(() => {
@@ -568,6 +596,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       }
       fetchSubscriptionBenefits();
       setSelectedDowngrade(null);
+      // User has chosen a downgrade; the cancellation upsell flow is over.
+      setShowCancellationUpsell(false);
     } catch (error) {
       console.error("Failed to downgrade subscription:", error);
       showToast({
@@ -1360,31 +1390,38 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           }
         />
 
-        {/* Downgrade Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={showDowngradeConfirm && !!selectedDowngrade}
-          onClose={() => setShowDowngradeConfirm(false)}
-          onConfirm={handleDowngradeSubscription}
-          type="downgrade"
-          title={`Downgrade to ${selectedDowngrade?.name || ""}`}
-          message={`Your ${
-            selectedDowngrade?.name || ""
-          } membership will start at the end of your current billing cycle.`}
-          confirmText="Schedule Downgrade"
-          cancelText="Keep Current Plan"
-          isLoading={isLoading}
-          details={
-            selectedDowngrade && downgradeConfirmationBenefits
-              ? {
-                  packageName: selectedDowngrade.name,
-                  price: selectedDowngrade.price,
-                  benefits: downgradeConfirmationBenefits,
-                  info: ["No charge today", "Keep current benefits until cycle end"],
-                  warnings: ["No refunds - you keep what you paid for"],
-                }
-              : undefined
-          }
-        />
+        {/* Themed Downgrade Confirmation — matches the cancellation modal's intensity */}
+        {selectedDowngrade && membershipPackage ? (
+          <DowngradeConfirmModal
+            isOpen={showDowngradeConfirm}
+            onClose={() => setShowDowngradeConfirm(false)}
+            onConfirm={handleDowngradeSubscription}
+            isLoading={isLoading}
+            fromPackageName={membershipPackage.name}
+            toPackageName={selectedDowngrade.name}
+            toPackagePrice={selectedDowngrade.price}
+            toPartnerAccessPercent={getPartnerCatalogAccessPercentForMembershipPackageId(selectedDowngrade.packageId)}
+            toPartnerDiscountDays={selectedDowngrade.partnerDiscountDays}
+            toEntriesPerMonth={selectedDowngrade.entriesPerMonth}
+            currentEntries={
+              (user.subscription as { lastMonthAccumulatedEntries?: number } | undefined)?.lastMonthAccumulatedEntries ?? 0
+            }
+            saveLabel={
+              membershipPackage.price > selectedDowngrade.price
+                ? `Save $${membershipPackage.price - selectedDowngrade.price}/mo`
+                : undefined
+            }
+            effectiveDateLabel={
+              activeSubscription?.endDate
+                ? new Date(activeSubscription.endDate).toLocaleDateString("en-AU", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })
+                : undefined
+            }
+          />
+        ) : null}
 
         {/* Stripe Payment Modal for Upgrades */}
         <StripePaymentModal
@@ -1408,6 +1445,15 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           onClose={() => setShowCancellationUpsell(false)}
           onRedeem={handleUpsellRedeem}
           onDecline={handleUpsellDecline}
+          isPastDue={hasFailed}
+          onResolvePayment={() => {
+            setShowCancellationUpsell(false);
+            setIsRenewalFailedModalOpen(true);
+          }}
+          accumulatedEntries={cancellationUpsellContext.accumulatedEntries}
+          daysUntilDraw={cancellationUpsellContext.daysUntilDraw}
+          drawCloseLabel={cancellationUpsellContext.drawCloseLabel}
+          downgrade={cancellationUpsellContext.downgrade}
         />
 
         {/* Renewal Failed Modal */}
