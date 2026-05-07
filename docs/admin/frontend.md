@@ -12,7 +12,12 @@
 [src/components/admin/](../../src/components/admin/):
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
 - `ChargePastDueModal.tsx` — bulk past-due retry
-- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection), so initial load is sub-100ms. Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom (single instance for desktop + mobile, spinner when `isFetchingNextPage`). Query errors surface in an amber banner above the filters card. Default decline-reason filter is `recoverable_only` (hides fraud signals + permanent-issue codes like `expired_card` / `incorrect_cvc`). Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract documented in [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice). The Filters card shows a single **Date range** button instead of separate From/To `<input type="date">` fields — clicking it opens [`CustomDateRangeModal`](../../src/components/admin/CustomDateRangeModal.tsx) (the calendar picker shared with the rest of admin); on apply it sets `filter.dateFrom` / `filter.dateTo`. The button label uses `formatDateRangeLabel()` to render `Apr 5 – May 5, 2026` style ranges. The Filters grid is `lg:grid-cols-3` (date / member status / decline reason).
+- `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection). Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom. Query errors surface in an amber banner above the filters card. Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract: [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
+  - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminMobileDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
+  - **Metric cards**: Total blocked (current filters) · Auto-eligible · Skipped — filter · **Total on allowlist** (all-time, all active fingerprints, driven by `useAllowlistStats()` against `GET /api/admin/allowlist/stats`).
+  - **Email column** is clickable via `ClickableUserDisplay` — opens the same `UserDetailModal` the users + past-due-history tabs use. `BlockedRow.userId` is resolved server-side in `listBlocked` (joins `User` by `stripeCustomerId` then `customerEmail`); guests render as plain text.
+  - **Eligibility verdict** is computed by the shared mapper [src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts) so the post-join filter and the in-row badge can never disagree.
+  - **MultiSelectFilter** popover component lives at [src/components/admin/MultiSelectFilter.tsx](../../src/components/admin/MultiSelectFilter.tsx) and powers both the eligibility and decline-code multi-selects.
 - (other admin-specific components)
 
 > _TODO: enumerate full component list._
@@ -110,6 +115,25 @@ Three TanStack Query hooks under `src/hooks/queries/admin/`:
 | `useChargePastDueManualRetries(filter)` | `GET /api/admin/charge-past-due/manual-retries` | `useInfiniteQuery` — offset paging, page size 50. Returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, isError, fetchNextPage }`. |
 
 All three are admin-only. Query keys are prefixed `["admin", "charge-past-due", ...]`. The two `useInfiniteQuery` hooks key on the full `filter` object so changing date range (or any other filter field) resets paging from offset 0. `getNextPageParam` returns `loaded < total ? loaded : undefined`. The Bulk Runs and Manual Retries cards each render a "Load more" button at the bottom (matching `BlockedTransactionsManagement`'s pattern); the table header shows `Showing X of Y`. Summary `MetricCard`s aggregate across **loaded** pages only — clicking "Load more" updates them.
+
+### Decline-code summary panel
+
+`PastDueChargeHistory.tsx` renders a "Why charges declined" panel between the top cards and the Bulk Runs section. Powered by `useChargePastDueDeclineSummary`, scoped to the current date filter. Each row shows the code, count, a proportional bar, and percent. Loading state = 5 skeleton bars; empty state = single "No failed attempts in selected range." line.
+
+### Top cards (reduced)
+
+Two cards only: **Succeeded** (count) and **Revenue recovered** (currency). Both aggregate Bulk Runs only — Manual Retries deliberately don't roll up here. Subtitle on Revenue recovered says "From bulk runs" to make this scope explicit.
+
+### Shared `AttemptsBreakdown` component
+
+`src/components/admin/AttemptsBreakdown.tsx` is the single source of stacked count-plus-chips rendering. Used in four places:
+
+- Bulk Runs row (size `cell`, with `eligibleHint`)
+- Manual Retries grouped row (size `cell`, no hint)
+- Drawer Summary `<dd>` (size `block`, with `eligibleHint`)
+- Drawer per-invoice section, per-user grouped row (size `cell`, no hint) — the inner per-attempt table is unchanged
+
+If any of those four breakdowns drift visually, fix the component — don't fork.
 
 ## Force Charge fallback in ChargePastDueUserModal
 

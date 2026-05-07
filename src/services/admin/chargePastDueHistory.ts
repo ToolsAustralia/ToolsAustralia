@@ -46,6 +46,90 @@ export function escapeUserSearchRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export interface DeclineCodeRow {
+  code: string;
+  count: number;
+  pct: number;
+}
+
+export interface DeclineCodeSummary {
+  totalFailed: number;
+  topCodes: DeclineCodeRow[];
+}
+
+interface RawDeclineBucket {
+  _id: string | null;
+  count: number;
+}
+
+const DECLINE_TOP_N = 5;
+
+/**
+ * Bucket a sorted-desc list of decline-code aggregation rows into the top N plus
+ * a single "other" row. Pure; tested in isolation. Input is expected to be
+ * sorted descending by count; the function preserves that order.
+ */
+export function bucketDeclineCodeCounts(rows: readonly RawDeclineBucket[]): DeclineCodeSummary {
+  const totalFailed = rows.reduce((sum, r) => sum + r.count, 0);
+  if (totalFailed === 0) return { totalFailed: 0, topCodes: [] };
+
+  const top = rows.slice(0, DECLINE_TOP_N).map<DeclineCodeRow>((r) => ({
+    code: r._id ?? "unknown",
+    count: r.count,
+    pct: Math.round((r.count / totalFailed) * 100),
+  }));
+
+  const tail = rows.slice(DECLINE_TOP_N);
+  if (tail.length > 0) {
+    const otherCount = tail.reduce((sum, r) => sum + r.count, 0);
+    top.push({
+      code: "other",
+      count: otherCount,
+      pct: Math.round((otherCount / totalFailed) * 100),
+    });
+  }
+
+  return { totalFailed, topCodes: top };
+}
+
+export interface DeclineSummaryFilterInput {
+  startDate?: Date;
+  endDate?: Date;
+}
+
+/**
+ * Aggregate failed `InvoiceChargeLog` rows in the given AEST-anchored date range,
+ * group by decline reason (declineCode → errorCode → "unknown"), bucket into top 5
+ * + "other". Caller is expected to pass dates already parsed via
+ * `parseAestDayStartUtc` / `parseAestDayEndExclusiveUtc`.
+ */
+export async function summariseDeclineCodes(
+  input: DeclineSummaryFilterInput
+): Promise<DeclineCodeSummary> {
+  const match: Record<string, unknown> = { status: "failed" };
+  if (input.startDate || input.endDate) {
+    const range: { $gte?: Date; $lt?: Date } = {};
+    if (input.startDate) range.$gte = input.startDate;
+    if (input.endDate) range.$lt = input.endDate;
+    match.attemptedAt = range;
+  }
+
+  const rows = await InvoiceChargeLog.aggregate<RawDeclineBucket>([
+    { $match: match },
+    {
+      $group: {
+        _id: {
+          $ifNull: ["$declineCode", { $ifNull: ["$errorCode", "unknown"] }],
+        },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { count: -1 } },
+  ]);
+
+  return bucketDeclineCodeCounts(rows);
+}
+
 export interface RunsFilterInput {
   startDate?: Date;
   endDate?: Date;

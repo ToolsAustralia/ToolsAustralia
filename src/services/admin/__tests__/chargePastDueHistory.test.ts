@@ -3,12 +3,13 @@ import { Types } from "mongoose";
 import {
   buildRunsFilter,
   buildManualRetriesFilter,
+  bucketDeclineCodeCounts,
+  escapeUserSearchRegex,
   formatDurationMs,
   parseAestDayStartUtc,
   parseAestDayEndExclusiveUtc,
   type RunsFilterInput,
 } from "../chargePastDueHistory";
-import { escapeUserSearchRegex } from "../chargePastDueHistory";
 
 function testRunsFilterEmptyReturnsEmptyObject() {
   const f = buildRunsFilter({});
@@ -112,6 +113,65 @@ function testEscapeUserSearchRegex() {
   assert.equal(escapeUserSearchRegex(""), "");
 }
 
+function testBucketEmpty() {
+  const out = bucketDeclineCodeCounts([]);
+  assert.deepEqual(out, { totalFailed: 0, topCodes: [] });
+}
+
+function testBucketSingleCode() {
+  const out = bucketDeclineCodeCounts([{ _id: "lost_card", count: 4 }]);
+  assert.equal(out.totalFailed, 4);
+  assert.deepEqual(out.topCodes, [{ code: "lost_card", count: 4, pct: 100 }]);
+}
+
+function testBucketTopFiveAndOther() {
+  const out = bucketDeclineCodeCounts([
+    { _id: "lost_card", count: 18 },
+    { _id: "insufficient_funds", count: 14 },
+    { _id: "generic_decline", count: 11 },
+    { _id: "do_not_honor", count: 6 },
+    { _id: "stolen_card", count: 4 },
+    { _id: "expired_card", count: 2 },
+    { _id: "fraudulent", count: 1 },
+  ]);
+  assert.equal(out.totalFailed, 56);
+  assert.equal(out.topCodes.length, 6);
+  assert.equal(out.topCodes[0].code, "lost_card");
+  assert.equal(out.topCodes[4].code, "stolen_card");
+  assert.equal(out.topCodes[5].code, "other");
+  assert.equal(out.topCodes[5].count, 3);
+  assert.equal(out.topCodes[5].pct, Math.round((3 / 56) * 100));
+}
+
+function testBucketExactlyFiveCodesNoOther() {
+  const out = bucketDeclineCodeCounts([
+    { _id: "a", count: 5 },
+    { _id: "b", count: 4 },
+    { _id: "c", count: 3 },
+    { _id: "d", count: 2 },
+    { _id: "e", count: 1 },
+  ]);
+  assert.equal(out.topCodes.length, 5);
+  assert.ok(!out.topCodes.some((r) => r.code === "other"));
+}
+
+function testBucketPercentRounding() {
+  const out = bucketDeclineCodeCounts([
+    { _id: "a", count: 3 },
+    { _id: "b", count: 2 },
+    { _id: "c", count: 2 },
+  ]);
+  assert.equal(out.totalFailed, 7);
+  assert.equal(out.topCodes[0].pct, 43);
+  assert.equal(out.topCodes[1].pct, 29);
+  assert.equal(out.topCodes[2].pct, 29);
+}
+
+function testBucketCoercesNullIdToUnknown() {
+  const out = bucketDeclineCodeCounts([{ _id: null as unknown as string, count: 2 }]);
+  assert.equal(out.topCodes[0].code, "unknown");
+}
+
 function run() {
   testRunsFilterEmptyReturnsEmptyObject();
   testRunsFilterDateRangeUsesGteAndLt();
@@ -126,6 +186,12 @@ function run() {
   testParseAestDayHandlesInvalid();
   testParseAestRespectsAestDstBoundary();
   testEscapeUserSearchRegex();
+  testBucketEmpty();
+  testBucketSingleCode();
+  testBucketTopFiveAndOther();
+  testBucketExactlyFiveCodesNoOther();
+  testBucketPercentRounding();
+  testBucketCoercesNullIdToUnknown();
   console.log("chargePastDueHistory tests passed");
 }
 

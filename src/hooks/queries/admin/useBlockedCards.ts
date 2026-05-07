@@ -32,10 +32,14 @@ function buildFilterKey(filter: BlockedFilter): string {
   const params = new URLSearchParams({
     dateFrom: filter.dateFrom.toISOString(),
     dateTo: filter.dateTo.toISOString(),
-    memberStatus: filter.memberStatus,
-    declineReason: filter.declineReason,
-    skippedOnly: String(filter.skippedOnly),
   });
+  if (filter.email && filter.email.trim()) params.set("email", filter.email.trim());
+  if (filter.declineCodes && filter.declineCodes.length > 0) {
+    params.set("declineCodes", filter.declineCodes.join(","));
+  }
+  if (filter.eligibility && filter.eligibility.length > 0) {
+    params.set("eligibility", filter.eligibility.join(","));
+  }
   return params.toString();
 }
 
@@ -44,11 +48,15 @@ function buildPageQueryString(filter: BlockedFilter, cursor: string | null): str
   const params = new URLSearchParams({
     dateFrom: filter.dateFrom.toISOString(),
     dateTo: filter.dateTo.toISOString(),
-    memberStatus: filter.memberStatus,
-    declineReason: filter.declineReason,
-    skippedOnly: String(filter.skippedOnly),
     limit: String(DEFAULT_PAGE_SIZE),
   });
+  if (filter.email && filter.email.trim()) params.set("email", filter.email.trim());
+  if (filter.declineCodes && filter.declineCodes.length > 0) {
+    params.set("declineCodes", filter.declineCodes.join(","));
+  }
+  if (filter.eligibility && filter.eligibility.length > 0) {
+    params.set("eligibility", filter.eligibility.join(","));
+  }
   if (cursor) params.set("cursor", cursor);
   return params.toString();
 }

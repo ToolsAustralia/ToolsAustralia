@@ -144,6 +144,7 @@ export const queryKeys = {
         ["admin", "allowlist", "blocked-cards", filterKey] as const,
       actions: (action: string, limit: number) =>
         ["admin", "allowlist", "actions", action, limit] as const,
+      stats: () => ["admin", "allowlist", "stats"] as const,
     },
   },
 } as const;

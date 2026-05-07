@@ -22,12 +22,22 @@ export type EvalResult =
 
 export type ApplySource = "webhook" | "admin_bulk";
 
+export type EligibilityKind =
+  | "auto_eligible"
+  | "already_allowlisted"
+  | "fraud_signal"
+  | "permanent_issue"
+  | "not_member";
+
 export type BlockedFilter = {
   dateFrom: Date;
   dateTo: Date;
-  memberStatus: "any" | "has_paid" | "never_paid";
-  declineReason: "any" | "recoverable_only" | "transient_only" | "fraud_signals_only";
-  skippedOnly: boolean;
+  /** Case-insensitive substring match against `customerEmail`. Empty/omitted = no filter. */
+  email?: string;
+  /** Specific decline codes to include. Empty array OR omitted = no filter. */
+  declineCodes?: string[];
+  /** Eligibility kinds to include (post-join). Empty array OR omitted = no filter. */
+  eligibility?: EligibilityKind[];
 };
 
 export type EligibilityPreview =
@@ -40,6 +50,8 @@ export type EligibilityPreview =
 export type BlockedRow = {
   paymentIntentId: string;
   chargeId: string;
+  /** Resolved User._id for the customer (null for guest / unmatched). */
+  userId: string | null;
   createdAt: Date;
   amount: number;
   currency: string;

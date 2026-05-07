@@ -5058,6 +5058,46 @@ export async function POST(request: NextRequest) {
         }
         break;
       }
+      case "charge.failed": {
+        const failedCharge = event.data.object as Stripe.Charge;
+
+        // Narrow gate: only Stripe-side blocks (issuer-directed auto-block).
+        // Matches buildBlockedTransactionRecord's predicate exactly.
+        if (failedCharge.outcome?.type !== "blocked") break;
+        if (!failedCharge.payment_method_details?.card?.fingerprint) break;
+
+        // Idempotent dual-write — second call from the existing PI branch (or
+        // a Stripe webhook retry) just refreshes capturedAt. AllowlistService
+        // is intentionally NOT called here: that lives on
+        // payment_intent.payment_failed and we don't want double records.
+        try {
+          const piRef = failedCharge.payment_intent;
+          const pi: Stripe.PaymentIntent | null =
+            typeof piRef === "string"
+              ? await stripe.paymentIntents.retrieve(piRef)
+              : piRef ?? null;
+          if (!pi) {
+            webhookLog(
+              "warn",
+              `charge.failed for ${failedCharge.id} has no payment_intent; skipping BlockedTransaction upsert`
+            );
+            break;
+          }
+
+          const { buildBlockedTransactionRecord, upsertBlockedTransaction } =
+            await import("@/services/allowlist/blockedTransactionRepo");
+          const record = buildBlockedTransactionRecord(pi, failedCharge);
+          if (record) await upsertBlockedTransaction(record);
+        } catch (err) {
+          webhookLog(
+            "error",
+            `BlockedTransaction upsert (charge.failed) failed for ${failedCharge.id}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
+        break;
+      }
       case "charge.succeeded":
         // Skip charge.succeeded to prevent duplicate processing
         break;
