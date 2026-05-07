@@ -1,51 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
-import { JwtPayload } from "jsonwebtoken";
-// Remove unused import
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-
-  try {
-    // Try to decode as JWT first using dynamic import
-    const jwtModule = await import("jsonwebtoken");
-    const jwt = jwtModule.default || jwtModule;
-    const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!) as JwtPayload;
-    const userId = decoded.userId || decoded.sub;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return user;
-  } catch {
-    // If JWT decoding fails, try treating it as a direct user ID
-    try {
-      const user = await User.findById(token);
-      if (!user) {
-        throw new Error("User not found");
-      }
-      return user;
-    } catch {
-      throw new Error("Invalid token or user not found");
-    }
-  }
+async function getRequestUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+  return User.findById(session.user.id);
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // Calculate totals from cart items
     let subtotal = 0;
@@ -69,20 +42,17 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Calculate tax (assuming 10% GST for Australia)
-    const tax = subtotal * 0.1;
-
-    // Calculate shipping (free shipping over $100, otherwise $10)
-    const shipping = subtotal >= 100 ? 0 : 10;
-
-    // Calculate total amount
-    const totalAmount = subtotal + tax + shipping;
+    // AU GST-inclusive pricing: prices already include GST. gstIncluded is the
+    // 1/11 portion of totalAmount — for display only.
+    const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 10;
+    const totalAmount = subtotal + shipping;
+    const gstIncluded = totalAmount === 0 ? 0 : Math.round((totalAmount / 11) * 100) / 100;
 
     const summary = {
       totalItems,
       totalAmount,
       subtotal,
-      tax,
+      gstIncluded,
       shipping,
       discount: 0,
       membershipDiscount: 0,

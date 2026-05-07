@@ -867,6 +867,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         fixedHeight="max-h-[90dvh]"
         closeOnBackdrop={false}
         className="flex flex-col sm:max-w-xl"
+        testId="special-packages-modal"
       >
         <ModalHeader title="" onClose={handleClose} showLogo={true} logoSize="sm" accent="none" />
 

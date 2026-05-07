@@ -961,6 +961,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       height="auto"
       closeOnBackdrop={environmentFlags.userSetupModalClosable()}
       className="flex flex-col max-h-[95dvh] sm:max-h-[90dvh]"
+      testId="user-setup-modal"
     >
       <ModalHeader
         title={headerTitle}
@@ -1080,7 +1081,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                     customInputPlaceholder="Enter your profession"
                     customInputError={inlineErrors.customProfession}
                   />
-                  <div ref={birthdateSectionRef}>
+                  <div ref={birthdateSectionRef} data-testid="user-setup-dob">
                     <BirthdatePicker
                       value={selectedBirthdate}
                       onChange={(val) => {
@@ -1244,6 +1245,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                 variant="metallic"
                 size="md"
                 className="flex-1"
+                data-testid="user-setup-submit"
               >
                 {isLoading
                   ? "Saving..."

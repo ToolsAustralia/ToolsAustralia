@@ -283,7 +283,7 @@ export default function AffiliateDashboardPage() {
                     {/* Advanced Stats Grid */}
                     <div className="grid grid-cols-3 gap-2">
                       {/* Total Signups */}
-                      <div className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 hover:scale-105">
+                      <div data-testid="affiliate-dashboard-signups" className="group relative bg-gradient-to-br from-blue-500/20 via-blue-400/10 to-indigo-500/20 backdrop-blur-sm rounded-xl p-3 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-300 hover:scale-105">
                         <div className="relative z-10 text-center">
                           <div className="flex items-center justify-center gap-1 mb-1">
                             <Users className="w-4 h-4 text-white/90" />
@@ -337,10 +337,12 @@ export default function AffiliateDashboardPage() {
                 type="text"
                 value={dashboard.affiliateLink}
                 readOnly
+                data-testid="affiliate-dashboard-link"
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
               />
               <button
                 onClick={copyLink}
+                data-testid="affiliate-dashboard-copy-link"
                 className="group relative bg-gradient-to-r from-[#ee0000] to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-[#cc0000] hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
               >
                 {copied ? (
@@ -568,7 +570,7 @@ export default function AffiliateDashboardPage() {
           </div>
 
           {/* Recent Commissions */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-14">
+          <div data-testid="affiliate-dashboard-commissions" className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-14">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 font-['Poppins']">
               Recent Unpaid Commissions
             </h2>

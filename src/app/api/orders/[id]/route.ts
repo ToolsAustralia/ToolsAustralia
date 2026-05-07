@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Order from "@/models/Order";
 import { z } from "zod";
-import { verify } from "jsonwebtoken";
-import { JWTPayload } from "@/types/api";
+import mongoose from "mongoose";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const paramsSchema = z.object({
   id: z.string().min(1),
@@ -15,26 +16,31 @@ const updateOrderSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verify(token, process.env.NEXTAUTH_SECRET!) as JWTPayload;
-  return decoded.userId;
+async function requireSessionUserId(): Promise<string | null> {
+  const session = await getServerSession(authOptions);
+  return session?.user?.id ?? null;
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const { id } = paramsSchema.parse(await params);
-    const userId = await getUserFromToken(request);
+    const userId = await requireSessionUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const order = await Order.findOne({ _id: id, user: userId }).populate("products.productId").lean();
+    // Accept either Mongo _id or human-readable orderNumber.
+    // The /my-account/orders/[orderNumber] page passes the order number.
+    const orFilter: mongoose.FilterQuery<typeof Order>[] = [{ orderNumber: id }];
+    if (mongoose.isValidObjectId(id)) orFilter.push({ _id: id });
+
+    const order = await Order.findOne({
+      $and: [{ $or: orFilter }, { user: userId }],
+    })
+      .populate("products.product")
+      .lean();
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -52,7 +58,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await connectDB();
 
     const { id } = paramsSchema.parse(await params);
-    const userId = await getUserFromToken(request);
+    const userId = await requireSessionUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
     const validatedData = updateOrderSchema.parse(body);
 
@@ -61,7 +70,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // Update order
     if (validatedData.status) order.status = validatedData.status;
     if (validatedData.trackingNumber) order.trackingNumber = validatedData.trackingNumber;
     if (validatedData.notes) order.notes = validatedData.notes;

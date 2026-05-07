@@ -129,6 +129,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       height="auto"
       className="max-h-[90dvh] !max-w-sm sm:!max-w-md rounded-xl sm:rounded-xl shadow-2xl"
       nestedSecondary
+      testId="confirmation-modal"
     >
       <div className="relative flex flex-col max-h-[90dvh] overflow-hidden w-full">
         {/* Header */}
@@ -342,7 +343,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
         {/* Actions */}
         <div className="flex gap-2 sm:gap-3 p-4 sm:p-6 pt-0">
-          <Button onClick={onClose} variant="secondary" className="flex-1 text-sm sm:text-base" disabled={isLoading}>
+          <Button
+            onClick={onClose}
+            variant="secondary"
+            className="flex-1 text-sm sm:text-base"
+            disabled={isLoading}
+            data-testid="confirmation-modal-cancel"
+          >
             {cancelText}
           </Button>
           <Button
@@ -355,6 +362,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               !!(details?.requireEmailConfirmation && details?.userEmail && emailConfirmation !== details.userEmail) ||
               !!(requireCheckboxToConfirm && !riskCheckbox)
             }
+            data-testid="confirmation-modal-confirm"
           >
             {confirmText}
           </Button>

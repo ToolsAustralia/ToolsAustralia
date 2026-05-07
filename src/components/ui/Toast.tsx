@@ -50,6 +50,8 @@ export interface ToastProps {
   reportable?: boolean; // Whether this error can be reported
   errorContext?: ErrorContext; // Error context for reporting
   onReportProblem?: (errorContext: ErrorContext) => void; // Callback to open report modal
+  // E2E testing hook — applied to the toast root element when set.
+  testId?: string;
 }
 
 interface ToastState extends ToastProps {
@@ -86,6 +88,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
   reportable = false,
   errorContext,
   onReportProblem,
+  testId,
 }) => {
   const [visible, setVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -264,6 +267,7 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
+      data-testid={testId}
     >
       <div
         className={`${styles.bg} ${styles.border} ${styles.shadow} border-2 rounded-lg sm:rounded-xl p-2 sm:p-4 backdrop-blur-sm`}

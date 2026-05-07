@@ -182,6 +182,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone number</label>
           <input
+            data-testid="account-update-phone"
             className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
@@ -192,6 +193,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               type="button"
               onClick={handleSaveMobile}
               disabled={isSavingMobile}
+              data-testid="account-update-phone-submit"
               className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSavingMobile ? "Saving..." : "Save phone"}
@@ -245,6 +247,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Profession</label>
           <input
+            data-testid="account-profile-profession"
             className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
             value={profession}
             onChange={(e) => setProfession(e.target.value)}
@@ -274,6 +277,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             type="button"
             onClick={handleSaveProfile}
             disabled={isSavingProfile}
+            data-testid="account-profile-save"
             className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSavingProfile ? "Saving..." : "Save profile"}

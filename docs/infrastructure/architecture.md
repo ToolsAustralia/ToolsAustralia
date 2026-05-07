@@ -27,6 +27,7 @@
 
 Plus:
 - `scripts/migrations/` — date-prefixed migrations
+  - [`scripts/migrations/add-shop-order-fields.ts`](../../scripts/migrations/add-shop-order-fields.ts) — backfills `gstAmount`/`shippingCost` and copies legacy `shippingAddress.address` → `addressLine1` for the shop checkout schema. Run via `npm run migrate:shop-order-fields:dry` first.
 - `scripts/seed-admin-data.ts` — dev seed
 - `scripts/fix-*.{ts,mjs,js}` — one-off operational fixes
 

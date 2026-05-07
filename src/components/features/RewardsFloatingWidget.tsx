@@ -315,6 +315,7 @@ export default function RewardsFloatingWidget({
           <motion.button
             ref={fabRef}
             key="rewards-fab"
+            data-testid="rewards-floating-widget"
             onClick={handleFabClick}
             className={`fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6"} ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
             aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
@@ -412,6 +413,7 @@ export default function RewardsFloatingWidget({
               <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-2">
                 <div className="inline-flex w-full rounded-xl bg-gray-100 p-1.5 shadow-inner">
                   <button
+                    data-testid="rewards-tab-claimable"
                     onClick={() => setActiveTab("claimable")}
                     className={`flex-1 h-11 sm:h-12 px-4 sm:px-5 text-sm sm:text-base font-semibold rounded-lg transition-all duration-200 ${
                       activeTab === "claimable"
@@ -428,6 +430,7 @@ export default function RewardsFloatingWidget({
                     </span>
                   </button>
                   <button
+                    data-testid="rewards-tab-past"
                     onClick={() => setActiveTab("past")}
                     className={`flex-1 h-11 rounded-lg px-4 text-sm font-semibold transition-all duration-200 sm:h-12 sm:px-5 sm:text-base ${
                       activeTab === "past"
@@ -531,6 +534,7 @@ export default function RewardsFloatingWidget({
                             })()
                           ) : (
                             <button
+                              data-testid="rewards-claim-button"
                               onClick={() => onRedeem(item.issuanceId, item.entriesAmount)}
                               disabled={redemptionMutation.isPending}
                               className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white text-[11px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95"

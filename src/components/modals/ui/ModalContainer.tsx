@@ -45,6 +45,13 @@ export interface ModalContainerProps {
    * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
    */
   presentation?: ModalPresentation;
+  /**
+   * Optional override for the modal panel's `data-testid`. Defaults to
+   * `"modal-container"` (back-compat for generic e2e queries). Per-modal call
+   * sites pass a modal-specific id so each modal is uniquely addressable in
+   * Playwright specs. Source of truth for testid strings: `e2e/utils/selectors.ts`.
+   */
+  testId?: string;
 }
 
 const ModalContainer: React.FC<ModalContainerProps> = ({
@@ -60,6 +67,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   nested = false,
   nestedSecondary = false,
   presentation = "dialog",
+  testId,
 }) => {
   const isDarkMode = useHtmlDarkForUi();
   const reduceMotion = useReducedMotion();
@@ -469,6 +477,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
       <motion.div
         ref={modalContentRef}
+        data-testid={testId ?? "modal-container"}
         className={`
         relative overflow-hidden flex flex-col ${isOpen ? "pointer-events-auto" : "pointer-events-none"} mx-auto
         ${

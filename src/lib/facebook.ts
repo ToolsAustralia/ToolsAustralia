@@ -665,3 +665,43 @@ export function trackViewContent(
     },
   };
 }
+
+// ============================================================
+// SHOP CAPI HELPER
+// ============================================================
+// Server-side Purchase event for shop orders. event_id = paymentIntentId so the
+// client-side Pixel Purchase fired from /shop/checkout/success can dedupe.
+
+import type { ValidatedItem } from "@/services/shop/cartValidation.service";
+
+export async function sendCapiShopPurchase(input: {
+  paymentIntentId: string;
+  email: string;
+  totalCents: number;
+  items: ValidatedItem[];
+  capi: { ip?: string; userAgent?: string; fbc?: string; fbp?: string; eventSourceUrl?: string };
+}): Promise<boolean> {
+  const event = buildFacebookPurchaseEventDev({
+    value: input.totalCents / 100,
+    currency: "AUD",
+    eventId: input.paymentIntentId,
+    userData: {
+      em: hashData(input.email),
+      client_ip_address: input.capi.ip,
+      client_user_agent: input.capi.userAgent,
+      fbc: input.capi.fbc,
+      fbp: input.capi.fbp,
+    },
+    eventSourceUrl: input.capi.eventSourceUrl,
+    customData: {
+      value: input.totalCents / 100,
+      currency: "AUD",
+      order_id: input.paymentIntentId,
+      content_ids: input.items.map((i) => i.productId),
+      content_type: "product",
+      num_items: input.items.reduce((s, i) => s + i.quantity, 0),
+    },
+  });
+  if (!event) return false;
+  return sendFacebookPurchaseEventDev(event);
+}

@@ -39,6 +39,7 @@ export function useEntryRewardToast() {
         title: "Reward added",
         message: parts.join(" · "),
         duration: 6000,
+        testId: "entry-reward-toast",
       });
     },
     [showToast]

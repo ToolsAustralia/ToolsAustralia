@@ -1004,6 +1004,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                         variant="primary"
                         className="bg-red-600 hover:bg-red-700 text-sm sm:text-base"
                         size="sm"
+                        data-testid="subscription-resolve-payment-button"
                       >
                         Resolve Payment Issue
                       </Button>
@@ -1097,6 +1098,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                                 setShowUpgradeConfirm(true);
                               }}
                               disabled={isLoading || benefitsLoading}
+                              data-testid={`subscription-upgrade-button-${upgrade.packageId}`}
                               className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${upgradeTextClass} ${upgradeColorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
                               style={upgradeButtonStyle}
                             >
@@ -1162,6 +1164,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                                 setShowDowngradeConfirm(true);
                               }}
                               disabled={isLoading || benefitsLoading}
+                              data-testid={`subscription-downgrade-button-${downgrade.packageId}`}
                               className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
                               style={buttonStyle}
                             >
@@ -1205,6 +1208,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     variant="secondary"
                     size="sm"
                     className="border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 w-full sm:w-auto text-xs sm:text-sm"
+                    data-testid="subscription-cancel-button"
                   >
                     Cancel
                   </Button>
@@ -1215,6 +1219,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                     variant="primary"
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto text-xs sm:text-sm shadow-sm hover:shadow-md"
+                    data-testid="subscription-resume-button"
                   >
                     Reactivate
                   </Button>

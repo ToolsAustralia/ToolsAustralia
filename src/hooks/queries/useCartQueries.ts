@@ -41,7 +41,8 @@ export interface CartSummary {
   totalItems: number;
   totalAmount: number;
   subtotal: number;
-  tax: number;
+  /** AU GST is included in `totalAmount` (1/11). Display as "incl. $X GST" — never added to total. */
+  gstIncluded: number;
   shipping: number;
   discount: number;
   membershipDiscount?: number;
@@ -245,7 +246,7 @@ export const useAddToCart = (userId: string | undefined) => {
               totalItems: quantity,
               totalAmount: price * quantity,
               subtotal: price * quantity,
-              tax: 0,
+              gstIncluded: 0,
               shipping: 0,
               discount: 0,
             },
@@ -277,9 +278,9 @@ export const useAddToCart = (userId: string | undefined) => {
 
         const totalItems = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
         const subtotal = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const tax = subtotal * 0.1;
-        const shipping = subtotal >= 100 ? 0 : 10;
-        const totalAmount = subtotal + tax + shipping;
+        const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 10;
+        const totalAmount = subtotal + shipping;
+        const gstIncluded = totalAmount === 0 ? 0 : Math.round((totalAmount / 11) * 100) / 100;
 
         return {
           ...old,
@@ -289,7 +290,7 @@ export const useAddToCart = (userId: string | undefined) => {
             totalItems,
             totalAmount,
             subtotal,
-            tax,
+            gstIncluded,
             shipping,
           },
           lastUpdated: new Date().toISOString(),
@@ -414,9 +415,9 @@ export const useRemoveFromCart = (userId: string | undefined) => {
         const updatedItems = old.items.filter((item) => item.productId !== productId);
         const totalItems = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
         const subtotal = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const tax = subtotal * 0.1;
-        const shipping = subtotal >= 100 ? 0 : 10;
-        const totalAmount = subtotal + tax + shipping;
+        const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 10;
+        const totalAmount = subtotal + shipping;
+        const gstIncluded = totalAmount === 0 ? 0 : Math.round((totalAmount / 11) * 100) / 100;
 
         return {
           ...old,
@@ -426,7 +427,7 @@ export const useRemoveFromCart = (userId: string | undefined) => {
             totalItems,
             totalAmount,
             subtotal,
-            tax,
+            gstIncluded,
             shipping,
           },
           lastUpdated: new Date().toISOString(),

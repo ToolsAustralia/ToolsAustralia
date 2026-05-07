@@ -194,6 +194,7 @@ const FloatingPromoBanner: React.FC = () => {
       {shouldShowBanner && (
         <motion.div
           key="floating-promo-banner"
+          data-testid="floating-promo-banner"
           role="button"
           tabIndex={0}
           aria-label="Scroll to membership and packages"

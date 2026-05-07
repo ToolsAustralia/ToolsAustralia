@@ -127,6 +127,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Current password</label>
           <input
             type="password"
+            data-testid="account-change-password-current"
             className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -139,6 +140,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
           <div className="relative">
             <input
               type={showNewPassword ? "text" : "password"}
+              data-testid="account-change-password-new"
               className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 pr-10 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -185,6 +187,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
           <div className="relative">
             <input
               type={showConfirmPassword ? "text" : "password"}
+              data-testid="account-change-password-confirm"
               className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 pr-10 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}
@@ -218,6 +221,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
             type="button"
             onClick={handleChangePassword}
             disabled={isUpdatingPassword}
+            data-testid="account-change-password-save"
             className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isUpdatingPassword ? "Updating..." : "Update password"}

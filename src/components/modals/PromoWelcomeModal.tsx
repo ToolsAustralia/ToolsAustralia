@@ -138,7 +138,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
   }, [onClose, openEntryFlow]);
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop>
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop testId="promo-welcome-modal">
       <ModalHeader
         title={title}
         onClose={onClose}

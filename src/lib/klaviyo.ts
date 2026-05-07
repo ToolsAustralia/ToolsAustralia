@@ -1858,3 +1858,75 @@ class KlaviyoClient {
 // ============================================================
 
 export const klaviyo = new KlaviyoClient();
+
+// ============================================================
+// SHOP EVENT HELPERS
+// ============================================================
+// Server-side `Placed Order` and `Ordered Product` events fired from the Stripe
+// webhook on shop PaymentIntent success. Schema matches Shopify's official
+// Klaviyo integration so existing flows / segments work unchanged.
+
+import {
+  buildKlaviyoPlacedOrderProperties,
+  buildKlaviyoItems,
+} from "@/services/shop/shopAnalytics";
+import type { ValidatedItem } from "@/services/shop/cartValidation.service";
+
+interface ShopKlaviyoCustomer {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export async function trackKlaviyoShopPlacedOrder(input: {
+  customer: ShopKlaviyoCustomer;
+  orderNumber: string;
+  items: ValidatedItem[];
+  totalCents: number;
+  shippingCents: number;
+  gstCents: number;
+}) {
+  const props = buildKlaviyoPlacedOrderProperties({
+    orderNumber: input.orderNumber,
+    items: input.items,
+    totalCents: input.totalCents,
+    shippingCents: input.shippingCents,
+    gstCents: input.gstCents,
+  });
+  return klaviyo.trackEvent({
+    event: "Placed Order",
+    customer_properties: {
+      email: input.customer.email,
+      first_name: input.customer.firstName,
+      last_name: input.customer.lastName,
+    },
+    properties: {
+      ...props,
+      user_id: input.customer.email,
+    },
+  });
+}
+
+export async function trackKlaviyoShopOrderedProducts(input: {
+  customer: ShopKlaviyoCustomer;
+  orderNumber: string;
+  items: ValidatedItem[];
+}) {
+  const klaviyoItems = buildKlaviyoItems(input.items);
+  for (const item of klaviyoItems) {
+    await klaviyo.trackEvent({
+      event: "Ordered Product",
+      customer_properties: {
+        email: input.customer.email,
+        first_name: input.customer.firstName,
+        last_name: input.customer.lastName,
+      },
+      properties: {
+        ...item,
+        OrderId: input.orderNumber,
+        $event_id: `${input.orderNumber}-${item.ProductID}`,
+        user_id: input.customer.email,
+      },
+    });
+  }
+}

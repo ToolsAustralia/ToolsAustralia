@@ -44,6 +44,7 @@ import CoverBanner from "./components/CoverBanner";
 import UserInfoBar from "./components/UserInfoBar";
 import QuickActions from "./components/QuickActions";
 import MajorDrawOverview from "./components/MajorDrawOverview";
+import RecentOrdersWidget from "./components/RecentOrdersWidget";
 import SocialLinksSection from "./components/SocialLinksSection";
 
 type PendingEntriesData = {
@@ -426,7 +427,7 @@ export default function MyAccountPage() {
   );
 
   return (
-    <div className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950">
+    <div data-testid="dashboard-root" className="min-h-screen-svh w-full min-w-0 max-w-full overflow-x-hidden bg-gray-50 dark:bg-neutral-950">
       <DashboardHeader showRenewalAlert={hasFailedRenewal(user as unknown as import("@/models/User").IUser)} />
 
       <CoverBanner />
@@ -469,6 +470,10 @@ export default function MyAccountPage() {
         activeOneTimePackageIds={activeOneTimePackageIds}
         className="mt-4 sm:mt-6"
       />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8">
+        <RecentOrdersWidget />
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 space-y-6 sm:space-y-8">
         <div>

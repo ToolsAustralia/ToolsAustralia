@@ -15,6 +15,8 @@ interface ButtonProps {
   iconPosition?: "left" | "right";
   className?: string;
   fullWidth?: boolean;
+  /** Optional test id forwarded to the underlying <button> for E2E selectors. */
+  "data-testid"?: string;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -29,6 +31,7 @@ const Button: React.FC<ButtonProps> = ({
   iconPosition = "left",
   className = "",
   fullWidth = false,
+  "data-testid": dataTestId,
 }) => {
   // Base styles
   const baseStyles =
@@ -78,6 +81,7 @@ const Button: React.FC<ButtonProps> = ({
       disabled={disabled || loading}
       className={buttonClasses}
       suppressHydrationWarning
+      data-testid={dataTestId}
     >
       {/* Loading Spinner */}
       {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}

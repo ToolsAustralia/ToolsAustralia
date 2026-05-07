@@ -41,3 +41,62 @@ Full UX details: see [api.md](./api.md#admin-cancel-subscription) and the migrat
 User-side cancellation runs through `/api/stripe/cancel-subscription` (the same `CancelSubscriptionService` powers it). The UI lives under `my-account` — see [dashboard-account](../dashboard-account/) for the page structure.
 
 > _TODO: link the specific user-facing component path once dashboard-account docs are written._
+
+## E2E test IDs
+
+The membership E2E specs live under `e2e/membership/*.spec.ts` and consume the testid registry at [e2e/utils/selectors.ts](../../e2e/utils/selectors.ts). New testids added for these specs:
+
+| testid | Component / call site | Purpose |
+|---|---|---|
+| `membership-modal` | `MembershipModal` `<ModalContainer>` | Identify the join/upgrade modal panel. |
+| `cancellation-upsell-modal` | `CancellationUpsellModal` outer wrapper | Identify the retention modal. |
+| `cancellation-upsell-accept` / `-decline` | CTA buttons inside `CancellationUpsellModal` | Click redeem vs decline. |
+| `renewal-failed-modal` | `RenewalFailedModal` (3 `<ModalContainer>` branches) | Identify the past-due modal in any state. |
+| `subscription-explainer-modal` | `SubscriptionExplainerModal` `<ModalContainer>` | Identify the one-time explainer. |
+| `package-detail-modal` | `PackageDetailModal` `<ModalContainer>` | Identify the badge-driven detail modal. |
+| `special-packages-modal` | `SpecialPackagesModal` `<ModalContainer>` | Identify the member-only catalog modal. |
+| `gate-closed-modal` | `GateClosedModal` `<ModalContainer>` | Identify the substituted modal when no draw is active. |
+| `confirmation-modal` | `ConfirmationModal` `<ModalContainer>` | Identify the generic confirmation dialog used by upgrade/downgrade/cancel. |
+| `confirmation-modal-confirm` / `-cancel` | `ConfirmationModal` action `<Button>`s | Click confirm/cancel deterministically. |
+| `package-card-{id}` | `PackageSelectionModal` plan card wrapper | One per plan, e.g. `package-card-tradie-subscription`, `package-card-foreman-subscription`. |
+| `subscription-cancel-button` | `SubscriptionManagementModal` Cancel `<Button>` | Trigger cancellation from settings panel. |
+| `subscription-resume-button` | `SubscriptionManagementModal` Reactivate `<Button>` | Trigger reactivation. |
+| `subscription-upgrade-button-{packageId}` | `SubscriptionManagementModal` upgrade `<button>` | Per-package upgrade trigger; e.g. `subscription-upgrade-button-foreman-subscription`. |
+| `subscription-downgrade-button-{packageId}` | `SubscriptionManagementModal` downgrade `<button>` | Per-package downgrade trigger. |
+| `subscription-resolve-payment-button` | `SubscriptionManagementModal` past-due alert `<Button>` | Open `RenewalFailedModal` in panel. |
+
+## E2E spec coverage
+
+Specs live under `e2e/membership/`. Each spec pins to a Playwright project (matched in [playwright.config.ts](../../playwright.config.ts)) that loads the per-worker storageState for that role.
+
+| Spec | Project | Status | Notes |
+|---|---|---|---|
+| `join.spec.ts` | `chromium-fresh` | NARROWED | Asserts MembershipModal opens via "Get More Entries" CTA on dashboard. Full Stripe purchase path skipped (multi-modal chain too brittle). |
+| `upgrade.spec.ts` | `chromium-tradie` | NARROWED | Asserts ConfirmationModal opens for Tradie→Foreman upgrade in settings panel. StripePaymentModal flow not driven. |
+| `downgrade.spec.ts` | `chromium-foreman` | NARROWED | Asserts ConfirmationModal opens for Foreman→Tradie downgrade. API confirm not driven (would mutate Stripe state on a non-Stripe fixture). |
+| `cancel.spec.ts` | `chromium-tradie` | NARROWED | Walks Cancel → ConfirmationModal → Confirm → CancellationUpsellModal → Decline → POST `/api/stripe/cancel-subscription`. Best-effort DB assertion. |
+| `cancel-upsell-redeem.spec.ts` | `chromium-tradie` | NARROWED | Walks Cancel → upsell → Redeem; soft-asserts DB if API succeeds. |
+| `resume.spec.ts` | `chromium-cancelling` | NARROWED | Asserts Reactivate button is visible/enabled for cancelled fixture. |
+| `renewal-failed.spec.ts` | `chromium-pastdue` | PASS-CANDIDATE | RenewalFailedModal auto-opens on dashboard via UnifiedModalManager. |
+| `update-payment-method.spec.ts` | `chromium-pastdue` | NARROWED | Asserts "Resolve Payment Issue" button opens RenewalFailedModal in settings panel. |
+| `benefits.spec.ts` | `chromium-fresh` | PASS-CANDIDATE | `/my-account/benefits` page renders hero + grid. |
+| `package-detail.spec.ts` | `chromium-fresh` | BLOCKED | Badge requires active membership; fresh fixture has none. Rescope to a member project to unblock. |
+| `special-packages.spec.ts` | `chromium-fresh` | BLOCKED | Trigger requires additional-package access AND active major draw seeding (UnifiedModalManager substitutes to `gate-closed` otherwise). |
+| `explainer-modal.spec.ts` | `chromium-tradie` | BLOCKED | Auto-trigger path has multiple state gates (orchestration cooldown, accumulator data, modal queue) that the fixture seed does not satisfy. Modal does not render in 25s after clearing localStorage + reloading. |
+
+> Note on `chromium-pastdue` testMatch: the pastdue project regex was extended to include `update-payment-method` alongside `renewal-failed`. Other matchers unchanged.
+
+## Upgrade / Downgrade toast specs (added 2026-05-05)
+
+`e2e/toasts/` (project: `chromium-fresh`) covers the two `UpgradeSuccessToast` branches (`src/components/UpgradeSuccessToast.tsx`):
+
+| Spec | Status | Notes |
+|---|---|---|
+| `upgrade-success.spec.ts` | PASS | Seeds `localStorage.subscription_upgraded` (fresh `timestamp`, packageName, entriesPerMonth) via `addInitScript`, navigates to `/my-account`, asserts `upgrade-success-toast` mounts within 10s and contains the "View Benefits" action button. The toast renders for 25s (longer than the default 8s) per the upgrade UX. |
+| `downgrade-scheduled.spec.ts` | PASS | Seeds `localStorage.subscription_downgraded` with currentPackageName="Boss", newPackageName="Foreman", asserts `downgrade-scheduled-toast` mounts and shows both package names. |
+
+Component edits:
+- `src/components/ui/Toast.tsx` — added optional `testId?: string` prop on `ToastProps`; rendered as `data-testid={testId}` on the toast root `<div>`.
+- `src/components/UpgradeSuccessToast.tsx` — passes `testId: "upgrade-success-toast"` and `testId: "downgrade-scheduled-toast"` to the respective `showToast` calls.
+
+Both specs are localStorage-driven (not subscription-state driven) — the toast component reads localStorage on mount via `useEffect`, so any authenticated session can exercise the assertion. We use `chromium-fresh` because providers.tsx (which mounts the toast) is rendered for every authenticated layout.

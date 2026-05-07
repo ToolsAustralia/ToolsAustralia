@@ -128,7 +128,7 @@ const PackageDetailModal: React.FC<PackageDetailModalProps> = ({
     ["tradie-subscription", "foreman-subscription", "boss-subscription"].includes(chartPackageId);
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="max-h-[80dvh]">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" height="fixed" fixedHeight="max-h-[80dvh]" testId="package-detail-modal">
       <ModalHeader
         title={isSubscription ? "Your membership" : "Your package"}
         onClose={onClose}

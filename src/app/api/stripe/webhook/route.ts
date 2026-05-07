@@ -4851,11 +4851,24 @@ export async function POST(request: NextRequest) {
 
     let event: Stripe.Event;
 
-    try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    } catch (err) {
-      console.error("❌ Webhook signature verification failed:", err);
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+    // Dev-only signature bypass for the local webhook fixture replay script
+    // (scripts/test-shop-webhook.ts). Lets us test shop finalization end-to-end
+    // without spinning up Stripe CLI. Strictly gated on NODE_ENV === "development".
+    if (process.env.NODE_ENV === "development" && signature === "test_bypass") {
+      try {
+        event = JSON.parse(body) as Stripe.Event;
+        webhookLog("warn", "[shop-webhook] DEV BYPASS — signature not verified");
+      } catch (err) {
+        console.error("❌ Dev bypass: invalid JSON body", err);
+        return NextResponse.json({ error: "Invalid bypass body" }, { status: 400 });
+      }
+    } else {
+      try {
+        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      } catch (err) {
+        console.error("❌ Webhook signature verification failed:", err);
+        return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+      }
     }
 
     const stripeEventId = event.id;
@@ -4973,8 +4986,27 @@ export async function POST(request: NextRequest) {
     let shouldMarkAsProcessed = false;
 
     switch (event.type) {
-      case "payment_intent.succeeded":
+      case "payment_intent.succeeded": {
         webhookLog("info", `📥 Received payment_intent.succeeded event for: ${event.data.object.id}`);
+
+        // Shop branch — finalizeShopOrder owns the full success path for shop PIs
+        // (atomic stock decrement, Order write, SendGrid invoice, Klaviyo, Meta CAPI).
+        // Returns early; never falls through to handlePaymentSuccess.
+        const pi = event.data.object as Stripe.PaymentIntent;
+        if (pi.metadata?.type === "shop") {
+          const { finalizeShopOrder } = await import("@/services/shop/finalizeShopOrder.service");
+          const result = await finalizeShopOrder({ paymentIntent: pi });
+          console.error(
+            `[shop-webhook] ${result.status}${result.orderNumber ? ` ${result.orderNumber}` : ""}`,
+          );
+          shouldMarkAsProcessed = result.status !== "skipped_not_shop";
+          await ackProcessedStripeEventOnce(event);
+          if (shouldMarkAsProcessed && paymentIntentId) {
+            await markEventProcessed(paymentIntentId);
+          }
+          return NextResponse.json({ received: true, shopResult: result.status });
+        }
+
         const paymentProcessed = await handlePaymentSuccess(event.data.object);
         shouldMarkAsProcessed = paymentProcessed !== false; // Only if actually processed
         webhookLog(
@@ -4984,6 +5016,7 @@ export async function POST(request: NextRequest) {
           } for ${event.data.object.id}`
         );
         break;
+      }
       case "payment_intent.payment_failed":
         await handlePaymentFailure(event.data.object);
         break;

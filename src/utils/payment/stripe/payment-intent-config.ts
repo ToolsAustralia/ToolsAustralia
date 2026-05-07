@@ -8,7 +8,12 @@
 import type Stripe from "stripe";
 import { getBaseUrl } from "@/utils/url/get-base-url";
 
-export type PaymentType = "subscription" | "one-time" | "upsell" | "mini-draw";
+// Subscription's happy-path success is rendered in-modal client-side, but 3DS
+// challenges force a real browser redirect — Stripe sends the user to
+// `return_url` after the bank confirms. So subscription still needs a target.
+// We point it at /my-account (where users land after a successful subscribe
+// anyway) rather than a dedicated success page.
+export type PaymentType = "subscription" | "one-time" | "upsell" | "mini-draw" | "shop";
 
 export interface PaymentIntentConfigOptions {
   amount: number; // Amount in cents
@@ -25,17 +30,18 @@ export interface PaymentIntentConfigOptions {
 /**
  * Get return URL for a specific payment type (server-side)
  * 
- * @param paymentType - Type of payment (subscription, one-time, upsell, mini-draw)
+ * @param paymentType - Type of payment (one-time, upsell, mini-draw, shop)
  * @returns Return URL path for the payment type
  */
 export function getReturnUrlForPaymentType(paymentType: PaymentType): string {
   const baseUrl = getBaseUrl();
   
   const returnUrls: Record<PaymentType, string> = {
-    subscription: `${baseUrl}/checkout/success`,
+    subscription: `${baseUrl}/my-account`,
     "one-time": `${baseUrl}/purchase-success`,
     upsell: `${baseUrl}/upsell-success`,
     "mini-draw": `${baseUrl}/mini-draw-success`,
+    shop: `${baseUrl}/shop/checkout/success`,
   };
 
   return returnUrls[paymentType];
@@ -45,7 +51,7 @@ export function getReturnUrlForPaymentType(paymentType: PaymentType): string {
  * Get return URL for a specific payment type (client-side)
  * Uses window.location.origin for client-side components
  * 
- * @param paymentType - Type of payment (subscription, one-time, upsell, mini-draw)
+ * @param paymentType - Type of payment (one-time, upsell, mini-draw, shop)
  * @returns Return URL path for the payment type
  */
 export function getReturnUrlForPaymentTypeClient(paymentType: PaymentType): string {
@@ -56,10 +62,11 @@ export function getReturnUrlForPaymentTypeClient(paymentType: PaymentType): stri
   const baseUrl = window.location.origin;
   
   const returnUrls: Record<PaymentType, string> = {
-    subscription: `${baseUrl}/checkout/success`,
+    subscription: `${baseUrl}/my-account`,
     "one-time": `${baseUrl}/purchase-success`,
     upsell: `${baseUrl}/upsell-success`,
     "mini-draw": `${baseUrl}/mini-draw-success`,
+    shop: `${baseUrl}/shop/checkout/success`,
   };
 
   return returnUrls[paymentType];

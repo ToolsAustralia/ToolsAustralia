@@ -571,6 +571,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             return (
               <div
                 key={plan.id}
+                data-testid={`package-card-${plan.id.replace(/-subscription$/, "").replace(/-pack$/, "")}`}
                 className={`relative rounded-2xl p-2.5 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.02] ${
                   isCurrentPlan(plan) ? "cursor-not-allowed opacity-75" : "cursor-pointer"
                 } ${

@@ -70,10 +70,10 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
   }, [profile?.code, shareLink, setReferralCode]);
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onCloseAction} size="lg">
+    <ModalContainer isOpen={isOpen} onClose={onCloseAction} size="lg" testId="refer-friend-modal">
       <ModalHeader
         title="Refer a Friend & Both Score 100 Bonus Entries"
-        
+
         onClose={onCloseAction}
         showLogo
       />
@@ -147,6 +147,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
                   <button
                     type="button"
                     onClick={() => handleCopy(profile.code, "code")}
+                    data-testid="refer-copy-code-button"
                     className="group/btn flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#ee0000] px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all duration-300 hover:bg-red-600 hover:shadow-lg hover:scale-105 active:scale-95 w-full sm:w-auto"
                   >
                     {copyStatus === "code" ? (
@@ -183,6 +184,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
                   <button
                     type="button"
                     onClick={() => handleCopy(shareLink, "link")}
+                    data-testid="refer-copy-link-button"
                     className="group/btn flex shrink-0 items-center gap-2 rounded-lg bg-gray-200 dark:bg-neutral-600 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 transition-all duration-300 hover:bg-gray-300 dark:hover:bg-neutral-500 hover:scale-105 active:scale-95"
                   >
                     {copyStatus === "link" ? (

@@ -26,11 +26,13 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const [quantity, setQuantity] = useState(1);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
-  const { addToCart, isLoading } = useCart();
+  const { addToCart, isAddingToCart: isProductAdding } = useCart();
   const { data: session } = useSession();
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { isAuthenticated: _isAuthenticated } = useUserContext();
+  const productIdValue = ("id" in product ? product.id : product._id) as string;
+  const isPendingForThisProduct = isProductAdding(productIdValue);
 
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));
@@ -47,29 +49,27 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
 
       // Track AddToCart event (standard Meta Pixel event)
       // This replaces the non-standard ButtonClick event with the official AddToCart event
-      const productId = "id" in product ? product.id : product._id;
-
       trackAddToCart({
         value: (product.price as number) * quantity,
         currency: "AUD",
-        productId: productId as string,
+        productId: productIdValue,
       });
 
       // Track Klaviyo add to cart event
       trackKlaviyoAddToCart({
         value: (product.price as number) * quantity,
         currency: "AUD",
-        productId: productId as string,
+        productId: productIdValue,
         productName: product.name,
         numItems: quantity,
       });
 
       await addToCart({
-        productId: productId as string,
+        productId: productIdValue,
         quantity,
         price: product.price as number,
         product: {
-          _id: productId as string,
+          _id: productIdValue,
           name: product.name,
           price: product.price as number,
           images: Array.isArray(product.images) ? product.images : [],
@@ -119,10 +119,10 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       {!isOutOfStock && (
         <div className="flex items-center gap-4">
           <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Quantity:</span>
-          <div className="flex items-center border border-gray-300 rounded-lg">
+          <div className="flex items-center border border-gray-300 dark:border-neutral-700 rounded-lg">
             <button
               onClick={() => handleQuantityChange(-1)}
-              className="p-2 hover:bg-gray-100 transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
               disabled={quantity <= 1}
             >
               <Minus className="w-4 h-4" />
@@ -130,7 +130,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
             <span className="px-4 py-2 font-medium">{quantity}</span>
             <button
               onClick={() => handleQuantityChange(1)}
-              className="p-2 hover:bg-gray-100 transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
               disabled={quantity >= (product.stock || 999)}
             >
               <Plus className="w-4 h-4" />
@@ -143,10 +143,10 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       <div className="flex gap-2 sm:gap-4">
         <button
           onClick={handleAddToCart}
-          disabled={isOutOfStock || isLoading || isAddingToCart}
+          disabled={isOutOfStock || isAddingToCart || isPendingForThisProduct}
           className={`w-full py-2 px-4 sm:py-3 sm:px-6 rounded-lg font-semibold text-sm sm:text-lg transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 ${
-            isOutOfStock || isLoading || isAddingToCart
-              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+            isOutOfStock || isAddingToCart || isPendingForThisProduct
+              ? "bg-gray-300 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400 cursor-not-allowed"
               : addedToCart
               ? "bg-green-600 text-white"
               : "bg-[#ee0000] text-white hover:bg-[#cc0000] hover:shadow-lg hover:scale-105"
@@ -155,7 +155,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
           <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
           {isOutOfStock
             ? "Out of Stock"
-            : isAddingToCart || isLoading
+            : isAddingToCart || isPendingForThisProduct
             ? "Adding..."
             : addedToCart
             ? "Added to Cart!"
@@ -164,7 +164,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       </div>
 
       {/* Trust Badges */}
-      <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-200">
+      <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-200 dark:border-neutral-800">
         <div className="text-center">
           <div className="w-8 h-8 mx-auto mb-2 bg-green-100 rounded-full flex items-center justify-center">
             <div className="w-4 h-4 bg-green-500 rounded-full"></div>

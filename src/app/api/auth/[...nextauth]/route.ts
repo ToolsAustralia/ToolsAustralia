@@ -37,7 +37,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ nextau
 
     // Only apply rate limiting to credentials sign-in callback
     // NextAuth credentials sign-in uses /api/auth/callback/credentials
-    if (pathname.includes("/callback/credentials")) {
+    // Skip rate limit in development (local dev / E2E parallel logins).
+    if (
+      pathname.includes("/callback/credentials") &&
+      process.env.NODE_ENV !== "development"
+    ) {
       // Extract client IP for rate limiting
       // Supports proxy/load balancer setups via x-real-ip and x-forwarded-for headers
       const identifier = getClientIdentifier(req.headers.get("x-real-ip"), req.headers.get("x-forwarded-for"));

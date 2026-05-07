@@ -4,8 +4,9 @@ import User from "@/models/User";
 import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
-import { JwtPayload } from "jsonwebtoken";
 import { Types } from "mongoose";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // Define the cart item type from the User model
 type CartItem = {
@@ -98,40 +99,11 @@ const removeFromCartSchema = z
     }
   );
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-
-  try {
-    // Try to decode as JWT first using dynamic import
-    const jwtModule = await import("jsonwebtoken");
-    const jwt = jwtModule.default || jwtModule;
-    const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!) as JwtPayload;
-    const userId = decoded.userId || decoded.sub;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return user;
-  } catch {
-    // If JWT decoding fails, try treating it as a direct user ID
-    try {
-      const user = await User.findById(token);
-      if (!user) {
-        throw new Error("User not found");
-      }
-      return user;
-    } catch {
-      throw new Error("Invalid token or user not found");
-    }
-  }
+// Helper: resolve the current user via NextAuth session.
+async function getRequestUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+  return User.findById(session.user.id);
 }
 
 // Helper function to find cart item
@@ -145,10 +117,13 @@ function findCartItem(cart: CartItem[], type: "product" | "ticket", id: string):
   });
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // Get cart items with product/mini draw details
     const cartItems: CartItemWithDetails[] = await Promise.all(
@@ -206,7 +181,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const validatedData = addToCartSchema.parse(body);
@@ -303,7 +281,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const validatedData = updateCartSchema.parse(body);
@@ -349,7 +330,10 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const validatedData = removeFromCartSchema.parse(body);

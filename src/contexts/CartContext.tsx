@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
@@ -33,6 +33,50 @@ interface CartItem {
       images: string[];
     };
   };
+}
+
+// localStorage persistence for guest carts (24h TTL, schema-versioned).
+// Logged-in users persist via /api/cart/*; guests stay client-side until login,
+// then `mergeGuestCartIntoServer` reconciles.
+const LS_KEY = "shop_cart_v1";
+const LS_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface LocalCartShape {
+  v: 1;
+  savedAt: number;
+  items: CartItem[];
+}
+
+export function loadLocalCart(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LocalCartShape;
+    if (parsed.v !== 1) return [];
+    if (Date.now() - parsed.savedAt > LS_TTL_MS) {
+      window.localStorage.removeItem(LS_KEY);
+      return [];
+    }
+    return parsed.items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCart(items: CartItem[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const data: LocalCartShape = { v: 1, savedAt: Date.now(), items };
+    window.localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch {
+    /* quota exceeded etc — ignore */
+  }
+}
+
+export function clearLocalCart() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(LS_KEY);
 }
 
 // Enhanced cart state with optimistic updates
@@ -95,19 +139,21 @@ export interface CartContextType extends OptimisticCartState {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // Helper functions for cart calculations
+// AU GST-inclusive pricing: prices already include GST. `gstIncluded` is the
+// 1/11 portion of the total — for display only, never added to the total.
 const calculateSummary = (items: CartItem[]): CartSummary => {
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.1;
-  const shipping = subtotal >= 100 ? 0 : 10;
-  const totalAmount = subtotal + tax + shipping;
+  const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 10;
+  const totalAmount = subtotal + shipping;
+  const gstIncluded = totalAmount === 0 ? 0 : Math.round((totalAmount / 11) * 100) / 100;
 
   return {
     totalItems,
     totalAmount,
     subtotal,
-    tax,
     shipping,
+    gstIncluded,
     discount: 0,
     membershipDiscount: 0,
     partnerDiscount: 0,
@@ -129,8 +175,11 @@ const createDebouncedSync = (syncFn: () => Promise<void>, delay: number = 1000) 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const userId = session?.user?.id;
-  const { trackRemoveFromCart } = usePixelTracking();
-  const { trackRemoveFromCart: trackKlaviyoRemoveFromCart } = useKlaviyoTracking();
+  const { trackRemoveFromCart, trackAddToCart: pixelTrackAddToCart } = usePixelTracking();
+  const {
+    trackRemoveFromCart: trackKlaviyoRemoveFromCart,
+    trackAddToCart: klaviyoTrackAddToCart,
+  } = useKlaviyoTracking();
 
   // Enhanced cart state
   const [cartState, setCartState] = useState<OptimisticCartState>({
@@ -139,7 +188,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       totalItems: 0,
       totalAmount: 0,
       subtotal: 0,
-      tax: 0,
+      gstIncluded: 0,
       shipping: 0,
       discount: 0,
     },
@@ -162,9 +211,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       const response = await fetch("/api/cart", {
-        headers: {
-          Authorization: `Bearer ${session?.user?.id}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) throw new Error("Failed to load cart");
@@ -186,7 +233,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [userId, session?.user?.id]);
+  }, [userId]);
 
   // Process pending operations
   const processPendingOperations = useCallback(async () => {
@@ -209,42 +256,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
             case "add":
               response = await fetch("/api/cart", {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(operation.data),
+                credentials: "include",
               });
               break;
 
             case "update":
               response = await fetch("/api/cart/update", {
                 method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(operation.data),
+                credentials: "include",
               });
               break;
 
             case "remove":
-              response = await fetch("/api/cart/remove", {
+              response = await fetch("/api/cart", {
                 method: "DELETE",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${session?.user?.id}`,
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(operation.data),
+                credentials: "include",
               });
               break;
 
             case "clear":
-              response = await fetch("/api/cart", {
+              response = await fetch("/api/cart/clear", {
                 method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${session?.user?.id}`,
-                },
+                credentials: "include",
               });
               break;
 
@@ -286,13 +325,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        // Both successful and failed ops must be cleared from pendingOperations,
+        // otherwise the auto-sync useEffect re-fires forever and isLoading flickers
+        // true on every retry, which keeps every "Add to cart" button stuck on "Adding..."
+        const successfulIds = new Set(successfulOperations);
+        const failedIds = new Set(failedOperations.map((op) => op.id));
+
         return {
           ...prev,
           items: updatedItems,
           summary: calculateSummary(updatedItems),
           isDirty: failedOperations.length > 0,
           lastSyncTime: Date.now(),
-          pendingOperations: prev.pendingOperations.filter((op) => !successfulOperations.includes(op.id)),
+          pendingOperations: prev.pendingOperations.filter(
+            (op) => !successfulIds.has(op.id) && !failedIds.has(op.id)
+          ),
           failedOperations: [...prev.failedOperations, ...failedOperations],
         };
       });
@@ -302,7 +349,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [cartState.pendingOperations, userId, session?.user?.id]);
+  }, [cartState.pendingOperations, userId]);
 
   // Debounced sync function
   const debouncedSync = useCallback(() => {
@@ -312,12 +359,78 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return createDebouncedSync(syncFn, 1000)();
   }, [processPendingOperations]);
 
-  // Load initial cart data
-  useEffect(() => {
-    if (userId) {
-      loadCartFromServer();
+  // Merge guest localStorage cart into server cart on login.
+  // Server wins per-item conflict; guest-only items get POST'd.
+  const mergeGuestCartIntoServer = useCallback(async () => {
+    const local = loadLocalCart();
+    if (local.length === 0) {
+      await loadCartFromServer();
+      return;
     }
-  }, [userId, loadCartFromServer]);
+
+    // Read current server cart
+    const serverRes = await fetch("/api/cart", { credentials: "include" });
+    const serverData = serverRes.ok ? await serverRes.json() : { cart: [] };
+    const serverItems: CartItem[] = (serverData.cart ?? []) as CartItem[];
+
+    // Server wins on conflict — only post items the server doesn't already have
+    const serverIds = new Set(
+      serverItems.map((i) => (i.type === "product" ? i.productId : i.miniDrawId)),
+    );
+    const toAdd = local.filter(
+      (i) => !serverIds.has(i.type === "product" ? i.productId : i.miniDrawId),
+    );
+
+    for (const item of toAdd) {
+      const apiData =
+        item.type === "ticket"
+          ? { type: "ticket" as const, miniDrawId: item.miniDrawId, quantity: item.quantity }
+          : { type: "product" as const, productId: item.productId, quantity: item.quantity };
+      await fetch("/api/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiData),
+        credentials: "include",
+      }).catch((err) => {
+        console.error("[cart] merge POST failed", err);
+      });
+    }
+    clearLocalCart();
+    await loadCartFromServer();
+  }, [loadCartFromServer]);
+
+  // Track previous userId so the merge fires only on guest → logged-in transition.
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+
+  // Load initial cart data — server for logged-in users, localStorage for guests.
+  // Trigger merge once when userId transitions from undefined → defined.
+  useEffect(() => {
+    const wasGuest = prevUserIdRef.current === undefined;
+    prevUserIdRef.current = userId;
+
+    if (userId && wasGuest) {
+      void mergeGuestCartIntoServer();
+    } else if (userId) {
+      loadCartFromServer();
+    } else {
+      const local = loadLocalCart();
+      if (local.length > 0) {
+        setCartState((prev) => ({
+          ...prev,
+          items: local,
+          summary: calculateSummary(local),
+        }));
+      }
+    }
+  }, [userId, loadCartFromServer, mergeGuestCartIntoServer]);
+
+  // Persist guest cart on every mutation. No-op for logged-in users — those
+  // sync via /api/cart/* through processPendingOperations.
+  useEffect(() => {
+    if (!userId) {
+      saveLocalCart(cartState.items);
+    }
+  }, [userId, cartState.items]);
 
   // Auto-sync when cart becomes dirty
   useEffect(() => {
@@ -430,8 +543,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
           },
         ],
       }));
+
+      // AddToCart tracking — shop products only (mini-draw tickets have their own funnel)
+      if (!isTicket && item.productId) {
+        try {
+          pixelTrackAddToCart({
+            value: item.price * item.quantity,
+            currency: "AUD",
+            productId: item.productId,
+            contentName: item.product?.name,
+            numItems: item.quantity,
+          });
+          klaviyoTrackAddToCart({
+            value: item.price * item.quantity,
+            currency: "AUD",
+            productId: item.productId,
+            productName: item.product?.name,
+            numItems: item.quantity,
+          });
+        } catch (error) {
+          console.error("Error tracking AddToCart:", error);
+          // tracking failures must not break cart functionality
+        }
+      }
     },
-    [cartState.items]
+    [cartState.items, pixelTrackAddToCart, klaviyoTrackAddToCart]
   );
 
   const updateCartItem = useCallback(

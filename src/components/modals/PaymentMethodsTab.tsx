@@ -453,6 +453,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
           <Button
             onClick={handleAddNewPaymentMethod}
             disabled={isCreatingSetupIntent}
+            data-testid="account-add-payment-method-button"
             className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 shadow-md hover:shadow-lg transition-all"
           >
             {isCreatingSetupIntent ? (
@@ -538,6 +539,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             return (
               <div
                 key={paymentMethod.paymentMethodId}
+                data-testid="account-saved-card-item"
                 className={`border-2 rounded-lg sm:rounded-xl p-2.5 sm:p-4 transition-all shadow-sm hover:shadow-md ${
                   paymentMethod.isDefault
                     ? "border-blue-500 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30"
@@ -581,6 +583,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                       <Button
                         onClick={() => handleSetDefault(paymentMethod.paymentMethodId)}
                         disabled={settingDefaultId !== null}
+                        data-testid="account-saved-card-set-default"
                         className="bg-gray-600 hover:bg-gray-700 text-white px-1.5 sm:px-3 py-0.5 sm:py-1.5 rounded text-[9px] sm:text-xs font-medium disabled:opacity-50 flex-shrink-0 h-6 sm:h-8"
                       >
                         {settingDefaultId === paymentMethod.paymentMethodId ? (
@@ -604,6 +607,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                       <Button
                         onClick={() => handleDeleteClick(paymentMethod.paymentMethodId)}
                         disabled={deletingId === paymentMethod.paymentMethodId}
+                        data-testid="account-saved-card-delete"
                         className="bg-red-600 hover:bg-red-700 text-white p-0 sm:p-2 rounded text-[9px] sm:text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 h-6 sm:h-8 w-6 sm:w-8 flex items-center justify-center"
                       >
                         {deletingId === paymentMethod.paymentMethodId ? (
@@ -624,6 +628,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             <Button
               onClick={handleAddNewPaymentMethod}
               disabled={isCreatingSetupIntent || showAddForm}
+              data-testid="account-add-payment-method-button"
               className="w-full bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 flex items-center justify-center gap-1.5 sm:gap-2 shadow-md hover:shadow-lg transition-all"
             >
               {isCreatingSetupIntent ? (

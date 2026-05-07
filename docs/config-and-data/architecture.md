@@ -13,6 +13,7 @@
 | File | Role |
 |---|---|
 | [src/config/brand-theme.ts](../../src/config/brand-theme.ts) | Brand color tokens |
+| [src/config/business.ts](../../src/config/business.ts) | Business identity config (legal name, ABN, ACN, address, shop settings) |
 | [src/config/featureFlags.ts](../../src/config/featureFlags.ts) | Feature-flag values (currently env / static) |
 | [src/config/prizes.ts](../../src/config/prizes.ts) | Prize catalog config |
 | [src/config/promo-landing-slugs.ts](../../src/config/promo-landing-slugs.ts) | Slug allowlist for promo pages |

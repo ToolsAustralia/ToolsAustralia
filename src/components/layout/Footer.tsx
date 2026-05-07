@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { BUSINESS } from "@/config/business";
 
 export default function Footer() {
   return (
@@ -32,7 +33,7 @@ export default function Footer() {
                   quality, reliability, and exceptional service.
                 </p>
                 <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px] mb-3 sm:mb-4">
-                  ABN:54 690 397 061 | ACN: 690 397 061 | License: TP/04720
+                  ABN: {BUSINESS.abn} | ACN: {BUSINESS.acn} | License: {BUSINESS.license}
                 </p>
                 <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px]">
                   Notification Number: NTP/16579 (Major Giveaway)

@@ -40,6 +40,148 @@ function getBaseUrl(): string {
 const SUPPORT_EMAIL = 'support@toolsaustralia.com.au';
 
 /**
+ * Shop order confirmation = AU tax invoice (matches shop-order-confirmation-email-template.html).
+ * Sent by SendGrid after a shop PaymentIntent succeeds and the Order row is written.
+ */
+export interface ShopOrderConfirmationData {
+  orderNumber: string;
+  orderDate: string; // ISO yyyy-mm-dd
+  items: { name: string; quantity: number; priceCents: number; lineTotalCents: number }[];
+  subtotalCents: number;
+  shippingCents: number;
+  gstCents: number;
+  totalCents: number;
+  shippingAddress: {
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  business: {
+    legalName: string;
+    abn: string;
+    addressLine: string;
+  };
+}
+
+function fmtMoney(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+export function createShopOrderConfirmationEmailTemplate(data: ShopOrderConfirmationData): string {
+  const safeOrderNumber = escapeHtml(data.orderNumber);
+  const safeOrderDate = escapeHtml(data.orderDate);
+  const safeBizName = escapeHtml(data.business.legalName);
+  const safeBizAbn = escapeHtml(data.business.abn);
+  const safeBizAddr = escapeHtml(data.business.addressLine);
+  const itemRows = data.items
+    .map((i) => {
+      const safeName = escapeHtml(i.name);
+      return `<tr>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;">${safeName}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">${i.quantity}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">$${fmtMoney(i.priceCents)}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">$${fmtMoney(i.lineTotalCents)}</td>
+      </tr>`;
+    })
+    .join('');
+  const a = data.shippingAddress;
+  const safeShipFirstName = escapeHtml(a.firstName);
+  const safeShipLastName = escapeHtml(a.lastName);
+  const safeShipAddr1 = escapeHtml(a.addressLine1);
+  const safeShipAddr2 = a.addressLine2 ? `${escapeHtml(a.addressLine2)}<br />` : '';
+  const safeShipCity = escapeHtml(a.city);
+  const safeShipState = escapeHtml(a.state);
+  const safeShipPostcode = escapeHtml(a.postalCode);
+  const safeShipCountry = escapeHtml(a.country);
+  const safeShipPhone = a.phone ? escapeHtml(a.phone) : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tax Invoice — ${safeOrderNumber}</title>
+  </head>
+  <body style="font-family:Arial,sans-serif;color:#111;background:#fff;margin:0;padding:24px;">
+    <div style="max-width:640px;margin:0 auto;">
+      <h1 style="font-size:24px;margin:0 0 8px;">Tax Invoice</h1>
+      <p style="margin:0 0 24px;color:#666;">Order #${safeOrderNumber} · ${safeOrderDate}</p>
+
+      <div style="background:#f6f6f6;padding:16px;border-radius:8px;margin-bottom:24px;">
+        <strong>${safeBizName}</strong><br />
+        ABN: ${safeBizAbn}<br />
+        ${safeBizAddr}<br />
+      </div>
+
+      <h2 style="font-size:16px;margin:0 0 8px;">Items</h2>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:16px;">
+        <thead>
+          <tr style="text-align:left;border-bottom:1px solid #ddd;">
+            <th style="padding:8px 0;">Item</th>
+            <th style="padding:8px 0;text-align:right;">Qty</th>
+            <th style="padding:8px 0;text-align:right;">Price</th>
+            <th style="padding:8px 0;text-align:right;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows}
+        </tbody>
+      </table>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:24px;">
+        <tr><td>Subtotal</td><td style="text-align:right;">$${fmtMoney(data.subtotalCents)}</td></tr>
+        <tr><td>Shipping</td><td style="text-align:right;">$${fmtMoney(data.shippingCents)}</td></tr>
+        <tr style="font-weight:bold;border-top:1px solid #ddd;"><td style="padding-top:8px;">Total (incl. GST)</td><td style="padding-top:8px;text-align:right;">$${fmtMoney(data.totalCents)} AUD</td></tr>
+        <tr><td style="color:#666;font-size:12px;">GST included</td><td style="color:#666;font-size:12px;text-align:right;">$${fmtMoney(data.gstCents)}</td></tr>
+      </table>
+
+      <h2 style="font-size:16px;margin:0 0 8px;">Shipping to</h2>
+      <p style="margin:0 0 24px;line-height:1.6;">
+        ${safeShipFirstName} ${safeShipLastName}<br />
+        ${safeShipAddr1}<br />
+        ${safeShipAddr2}
+        ${safeShipCity} ${safeShipState} ${safeShipPostcode}<br />
+        ${safeShipCountry}<br />
+        ${safeShipPhone}
+      </p>
+
+      <p style="color:#666;font-size:12px;margin-top:32px;">This is your tax invoice. Please keep it for your records.</p>
+    </div>
+  </body>
+</html>`;
+}
+
+/**
+ * Sold-out refund email — sent when a shop PI succeeds but stock ran out before finalize.
+ */
+export interface ShopStockRefundData {
+  firstName: string;
+  amountAud: string; // already formatted, e.g. "75.00"
+}
+
+export function createShopStockRefundEmailTemplate(data: ShopStockRefundData): string {
+  const safeFirst = escapeHtml(data.firstName);
+  const safeAmount = escapeHtml(data.amountAud);
+  return `<!doctype html>
+<html><head><meta charset="utf-8"/><title>Refund — Order Couldn't Be Completed</title></head>
+<body style="font-family:Arial,sans-serif;color:#111;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;">
+    <h1>We're sorry — your order couldn't be completed</h1>
+    <p>Hi ${safeFirst},</p>
+    <p>An item in your order sold out before we could ship it. We've fully refunded your payment of <strong>$${safeAmount} AUD</strong> — it should appear on your statement within 5-10 business days.</p>
+    <p>If you have any questions, reply to this email.</p>
+    <p>— The Tools Australia team</p>
+  </div>
+</body></html>`;
+}
+
+/**
  * Create HTML email template for verification code
  */
 export function createVerificationEmailTemplate(userName: string, verificationCode: string): string {

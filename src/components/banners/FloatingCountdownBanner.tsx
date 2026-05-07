@@ -167,6 +167,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
           exit={{ opacity: 0, y: 100 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
           className={`fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none ${className}`}
+          data-testid="floating-countdown-banner"
         >
           <motion.div
             animate={{

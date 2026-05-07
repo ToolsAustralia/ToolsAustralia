@@ -22,6 +22,10 @@ import {
   createLoginCodeEmailTemplate,
   createAdminReplyEmailTemplate,
   createMiniDrawFullCapacityTemplate,
+  createShopOrderConfirmationEmailTemplate,
+  createShopStockRefundEmailTemplate,
+  type ShopOrderConfirmationData,
+  type ShopStockRefundData,
 } from './templates';
 import { getMiniDrawNotificationRecipients } from './mini-draw-notification-config';
 import { EmailCategory, getSenderIdentity, getContactEmail } from './sender-identities';
@@ -275,6 +279,54 @@ class EmailService {
       to: recipients,
       from: { email: sender.fromEmail, name: sender.fromName },
       subject: `[Tools Australia] Mini Draw 100% - ${payload.miniDrawName} ready for winner`,
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send the AU tax invoice / order confirmation for a shop purchase.
+   * Sender: no-reply@toolsaustralia.com.au (TRANSACTIONAL) | replyTo: support@…
+   */
+  public async sendShopOrderConfirmation(
+    to: string,
+    payload: ShopOrderConfirmationData
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const sender = getSenderIdentity(EmailCategory.TRANSACTIONAL);
+    const htmlContent = createShopOrderConfirmationEmailTemplate(payload);
+    const textContent = `Tax Invoice — Order #${payload.orderNumber}\n\n${payload.business.legalName}\nABN: ${payload.business.abn}\n${payload.business.addressLine}\n\nItems:\n${payload.items.map((i) => `  ${i.quantity} × ${i.name} — $${(i.lineTotalCents / 100).toFixed(2)}`).join('\n')}\n\nSubtotal: $${(payload.subtotalCents / 100).toFixed(2)}\nShipping: $${(payload.shippingCents / 100).toFixed(2)}\nTotal (incl. GST $${(payload.gstCents / 100).toFixed(2)}): $${(payload.totalCents / 100).toFixed(2)} AUD\n\nThank you for your purchase!`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: `Tax Invoice — Order #${payload.orderNumber}`,
+      html: htmlContent,
+      text: textContent,
+      replyTo: sender.replyTo,
+    });
+  }
+
+  /**
+   * Send sold-out refund apology email when a shop order can't be fulfilled because stock ran out.
+   * Sender: no-reply@toolsaustralia.com.au (TRANSACTIONAL) | replyTo: support@…
+   */
+  public async sendShopStockRefund(
+    to: string,
+    payload: ShopStockRefundData
+  ): Promise<EmailResult> {
+    this.ensureInitialized();
+
+    const sender = getSenderIdentity(EmailCategory.TRANSACTIONAL);
+    const htmlContent = createShopStockRefundEmailTemplate(payload);
+    const textContent = `Hi ${payload.firstName},\n\nAn item in your order sold out before we could ship it. We've fully refunded your payment of $${payload.amountAud} AUD — it should appear on your statement within 5–10 business days.\n\nIf you have any questions, reply to this email.\n\n— The Tools Australia team`;
+
+    return this.client.sendEmail({
+      to,
+      from: { email: sender.fromEmail, name: sender.fromName },
+      subject: 'Refund — Your Order Couldn\'t Be Completed',
       html: htmlContent,
       text: textContent,
       replyTo: sender.replyTo,

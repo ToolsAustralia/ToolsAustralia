@@ -30,15 +30,20 @@ Webhook payment_intent.succeeded → write Order, processPaymentBenefits
 
 ## Routes & pages
 
-- `/shop` — product list
-- `/checkout` — cart + payment
-- `/purchase-success` — post-purchase confirmation
+- `/shop` — product list (and `/shop/[slug]` for detail)
+- `/shop/checkout` — single-page checkout (contact + shipping + Stripe PaymentElement)
+- `/shop/checkout/success` — shop post-purchase confirmation (polls `/api/orders/by-payment-intent/[id]`, fires Pixel `Purchase`, 30s timeout fallback)
+- `/my-account/orders` and `/my-account/orders/[orderNumber]` — order history
 
 ## Hooks
 
 | Hook | Purpose |
 |---|---|
 | `usePurchaseInvalidation()` | Invalidates relevant TanStack queries after a purchase succeeds |
+
+## Services
+
+- **`computeShopTotals`** — server-side totals computed by [src/services/shop/shopTotals.service.ts](../../src/services/shop/shopTotals.service.ts). Pure function; returns subtotal/shipping/total/gst in cents. GST is the AU 1/11 portion of `totalCents`. Free shipping kicks in at the configured threshold (`BUSINESS.shop.freeShippingThreshold`).
 
 ## Models
 

@@ -94,6 +94,7 @@ const Button = ({
   icon: Icon,
   iconPosition = "left",
   className = "",
+  "data-testid": dataTestid,
 }: {
   type?: "button" | "submit";
   onClick?: () => void;
@@ -103,6 +104,7 @@ const Button = ({
   icon?: React.ComponentType<{ className?: string }>;
   iconPosition?: "left" | "right";
   className?: string;
+  "data-testid"?: string;
 }) => {
   const baseClasses =
     "inline-flex items-center justify-center px-6 py-3 rounded-xl font-semibold text-sm transition-all duration-200 font-['Inter']";
@@ -116,6 +118,7 @@ const Button = ({
       type={type}
       onClick={onClick}
       disabled={loading}
+      data-testid={dataTestid}
       className={`${baseClasses} ${variantClasses} ${loading ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
     >
       {Icon && iconPosition === "left" && <Icon className="w-4 h-4 mr-2" />}
@@ -311,7 +314,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8" data-testid="partner-application-form">
           <FormSection title="Personal Information" icon={User}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
@@ -399,6 +402,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
               icon={Send}
               iconPosition="left"
               className="px-12 py-4 text-lg"
+              data-testid="partner-application-submit"
             >
               {isSubmitting ? "Submitting..." : "Submit Partnership Application"}
             </Button>

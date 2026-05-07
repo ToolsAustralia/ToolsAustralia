@@ -1,0 +1,142 @@
+[
+  {
+    "proj": "chromium-guest",
+    "file": "consent/theme-toggle.spec.ts",
+    "line": 33,
+    "title": "clicking the toggle flips html.dark and persists across navigation",
+    "error": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n\nCall Log:\n- Timeout 5000ms exceeded while waiting on the predicate\n\n  41 |\n  42 |     // Class flips on <html>.\n> 43 |     await expect\n     |     ^\n  44 |       .poll(() => page.evaluate(() => document.documentElement.classList.contains(\"dark\")), {\n  45 |         timeout: 5_000,\n  46 |       })\n    at c:"
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "contact/newsletter-subscribe.spec.ts",
+    "line": 11,
+    "title": "submits a valid email and receives 200 success",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "global-ui/cart-drawer.spec.ts",
+    "line": 21,
+    "title": "cart drawer: opens, qty +/-/remove, checkout navigates",
+    "error": "Error: expect(locator).toHaveText(expected) failed\n\nLocator: locator('[data-testid=\"header-cart-drawer\"]').locator('span.text-sm.font-medium.w-8.text-center').first()\nExpected: \"1\"\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toHaveText\" with timeout 5000ms\n  - waiting for locator('[data-testid=\"header-cart-drawer\"]').locator('span.text-sm.font-medium.w-8.text-center').first("
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "referrals/signup-with-ref.spec.ts",
+    "line": 16,
+    "title": "ref query param is captured into sessionStorage on landing",
+    "error": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"E2E-TEST-REF-CODE\"\nReceived: null\n\nCall Log:\n- Timeout 10000ms exceeded while waiting on the predicate\n\n  18 |\n  19 |   // The hook runs in a useEffect after hydration — give it a beat then poll.\n> 20 |   await expect\n     |   ^\n  21 |     .poll(\n  22 |       async () =>\n  23 |         page.evaluate(\n    at c:\\Codes\\ToolsAust"
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/cart-icon-badge.spec.ts",
+    "line": 13,
+    "title": "header cart icon shows count badge after adding a product",
+    "error": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('button', { name: /open cart/i }).locator('span')\nExpected substring: \"1\"\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toContainText\" with timeout 5000ms\n  - waiting for getByRole('button', { name: /open cart/i }).locator('span')\n\n\n  24 |\n  25 |   // Badge appears with count \"1\"\n> 26 |   await expect(ca"
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/cart-icon-badge.spec.ts",
+    "line": 33,
+    "title": "badge clears after cart is emptied",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/cart-persistence.spec.ts",
+    "line": 13,
+    "title": "guest cart persists across reload",
+    "error": "Error: expect(received).toBeGreaterThan(expected)\n\nExpected: > 0\nReceived:   0\n\n  24 |   const parsed = JSON.parse(ls!);\n  25 |   expect(parsed.v).toBe(1);\n> 26 |   expect(parsed.items.length).toBeGreaterThan(0);\n     |                               ^\n  27 |\n  28 |   // Cart icon should reflect the count after reload\n  29 |   await expect(page.getByRole(\"button\", { name: /open cart/i })).toContain"
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/cart-persistence.spec.ts",
+    "line": 32,
+    "title": "guest cart drops after 24h TTL expires",
+    "error": "Error: expect(received).toBeNull()\n\nReceived: \"{\\\"v\\\":1,\\\"savedAt\\\":1778019151619,\\\"items\\\":[]}\"\n\n  48 |   // Loader removes the entry on stale read\n  49 |   const ls = await page.evaluate(() => localStorage.getItem(\"shop_cart_v1\"));\n> 50 |   expect(ls).toBeNull();\n     |              ^\n  51 | });\n  52 |\n    at c:\\Codes\\ToolsAustralia\\.worktrees\\shop-setup\\e2e\\shop\\cart-persistence.spec.ts:50:14"
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/guest-checkout.spec.ts",
+    "line": 18,
+    "title": "guest can complete checkout (card + redirect to /shop/checkout/success)",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "shop/three-ds.spec.ts",
+    "line": 15,
+    "title": "3DS challenge completes and redirects back to /shop/checkout/success",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-guest",
+    "file": "url-params/referral-code-capture.spec.ts",
+    "line": 21,
+    "title": "ref query param is captured into sessionStorage on landing",
+    "error": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"E2E-REF-CODE\"\nReceived: null\n\nCall Log:\n- Timeout 10000ms exceeded while waiting on the predicate\n\n  21 | test(\"ref query param is captured into sessionStorage on landing\", async ({ page }) => {\n  22 |   await page.goto(`/?ref=${TEST_CODE}`);\n> 23 |   await expect\n     |   ^\n  24 |     .poll(\n  25 |       async () =>\n  26 |  "
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "auth/logout.spec.ts",
+    "line": 4,
+    "title": "logout from header user menu clears session and gates /my-account",
+    "error": "Error: expect(locator).toBeVisible() failed\n\nLocator:  locator('[data-testid=\"header-user-menu\"]').first()\nExpected: visible\nReceived: hidden\nTimeout:  15000ms\n\nCall log:\n  - Expect \"toBeVisible\" with timeout 15000ms\n  - waiting for locator('[data-testid=\"header-user-menu\"]').first()\n    18 × locator resolved to <div tabindex=\"0\" role=\"button\" data-testid=\"header-user-menu\" class=\"flex items-cente"
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "referrals/copy-code-link.spec.ts",
+    "line": 10,
+    "title": "copy code button writes the referral code to the clipboard",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "referrals/refer-modal.spec.ts",
+    "line": 12,
+    "title": "clicking Refer a Friend opens the modal with the user's code",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "referrals/refer-reward-modal.spec.ts",
+    "line": 11,
+    "title": "ReferFriendModal auto-opens 10s after setup-completed flag is set",
+    "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: locator('[data-testid=\"refer-friend-modal\"]')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeVisible\" with timeout 10000ms\n  - waiting for locator('[data-testid=\"refer-friend-modal\"]')\n\n\n  35 |\n  36 |   const modal = page.locator(byTestId(testid.referFriendModal));\n> 37 |   await expect(modal).toBeVisi"
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "rewards/catalog.spec.ts",
+    "line": 43,
+    "title": "FAB opens the catalog drawer and tabs work",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "rewards/claim-redeemable.spec.ts",
+    "line": 93,
+    "title": "user can claim a seeded redeemable from the widget",
+    "error": "Error: fresh fixture user not found — seed not run?\n\n  47 |\n  48 |   const user = await User.findOne({ email: emailFor(\"fresh\") }).lean();\n> 49 |   if (!user) throw new Error(\"fresh fixture user not found — seed not run?\");\n     |                    ^\n  50 |\n  51 |   const monthKey = new Date().toISOString().slice(0, 7);\n  52 |\n    at c:\\Codes\\ToolsAustralia\\.worktrees\\shop-setup\\e2e\\rewards\\claim"
+  },
+  {
+    "proj": "chromium-fresh",
+    "file": "shop/member-checkout.spec.ts",
+    "line": 15,
+    "title": "logged-in user can complete checkout and order appears in /my-account/orders",
+    "error": "Test timeout of 90000ms exceeded."
+  },
+  {
+    "proj": "chromium-tradie",
+    "file": "membership/cancel-upsell-redeem.spec.ts",
+    "line": 25,
+    "title": "redeem path grants 100 entries; subscription remains active",
+    "error": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n\n  57 |         email: emailFor(\"tradie\", test.info().parallelIndex),\n  58 |       }).lean();\n> 59 |       expect(user?.subscription?.autoRenew).toBe(true);\n     |                                             ^\n  60 |       expect(user?.subscription?.isActive).toBe(true);\n  61 |       expect((user as { canc"
+  },
+  {
+    "proj": "chromium-pastdue",
+    "file": "membership/update-payment-method.spec.ts",
+    "line": 14,
+    "title": "Resolve Payment Issue button opens RenewalFailedModal in settings",
+    "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: locator('[data-testid=\"renewal-failed-modal\"]')\nExpected: visible\nError: strict mode violation: locator('[data-testid=\"renewal-failed-modal\"]') resolved to 2 elements:\n    1) <div role=\"document\" data-testid=\"renewal-failed-modal\" class=\"↵        relative overflow-hidden flex flex-col pointer-events-auto mx-auto↵        bg-white border border-g"
+  }
+]

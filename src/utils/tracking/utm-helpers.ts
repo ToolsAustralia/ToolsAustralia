@@ -54,21 +54,19 @@ export function extractAttributionParams(urlOrParams: string | URLSearchParams):
 
     // Handle both URL string and URLSearchParams
     if (typeof urlOrParams === "string") {
-      // If it's a full URL, extract search params
-      if (urlOrParams.includes("?")) {
+      const isFullUrl = /^https?:\/\//i.test(urlOrParams);
+      if (isFullUrl) {
+        // Full URL — extract search params from it
         const url = new URL(urlOrParams);
         searchParams = url.searchParams;
-      } else if (urlOrParams.includes("=")) {
-        // If it's just query string, parse it directly
-        searchParams = new URLSearchParams(urlOrParams);
+      } else if (urlOrParams.includes("=") || urlOrParams.startsWith("?")) {
+        // Query string (e.g. "?ref=XXX" from window.location.search, or "ref=XXX")
+        // Strip a leading "?" — URLSearchParams accepts both but be explicit.
+        const qs = urlOrParams.startsWith("?") ? urlOrParams.slice(1) : urlOrParams;
+        searchParams = new URLSearchParams(qs);
       } else {
-        // Try to parse as URL
-        try {
-          const url = new URL(urlOrParams);
-          searchParams = url.searchParams;
-        } catch {
-          return {};
-        }
+        // Bare token, no params — return empty
+        return {};
       }
     } else {
       searchParams = urlOrParams;

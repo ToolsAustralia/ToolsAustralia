@@ -272,7 +272,7 @@ export default function ContactForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" ref={formRef}>
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" ref={formRef} data-testid="contact-form">
           {/* First Name and Last Name Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="relative">
@@ -281,6 +281,7 @@ export default function ContactForm() {
                 <input
                   type="text"
                   name="firstName"
+                  data-testid="contact-first-name"
                   value={formData.firstName}
                   onChange={handleInputChange}
                   className={`form-input ${
@@ -319,6 +320,7 @@ export default function ContactForm() {
                 <input
                   type="text"
                   name="lastName"
+                  data-testid="contact-last-name"
                   value={formData.lastName}
                   onChange={handleInputChange}
                   className={`form-input ${
@@ -356,6 +358,7 @@ export default function ContactForm() {
               <input
                 type="email"
                 name="email"
+                data-testid="contact-email"
                 value={formData.email}
                 onChange={handleInputChange}
                 className={`form-input ${
@@ -392,6 +395,7 @@ export default function ContactForm() {
               <input
                 type="tel"
                 name="phone"
+                data-testid="contact-phone"
                 value={formData.phone}
                 onChange={handleInputChange}
                 className={`form-input ${
@@ -463,6 +467,7 @@ export default function ContactForm() {
             <div className="relative">
               <textarea
                 name="message"
+                data-testid="contact-message"
                 value={formData.message}
                 onChange={handleInputChange}
                 rows={4}

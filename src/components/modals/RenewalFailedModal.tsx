@@ -626,7 +626,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   // Success state
   if (isSuccess) {
     return (
-      <ModalContainer isOpen={isOpen} onClose={onClose} size="md">
+      <ModalContainer isOpen={isOpen} onClose={onClose} size="md" testId="renewal-failed-modal">
         <ModalHeader title="Payment Successful" onClose={onClose} />
         <ModalContent className="p-6">
           <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -644,7 +644,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
   // Payment Element state (requires confirmation)
   if (paymentState?.requiresConfirmation && paymentState.clientSecret) {
     return (
-      <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
+      <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false} testId="renewal-failed-modal">
         <ModalHeader title="Complete Payment" onClose={onClose} />
         <ModalContent className="p-4 sm:p-6">
           {requiresDifferentPaymentMethod && (
@@ -842,7 +842,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
   // Initial/Loading state
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false}>
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" closeOnBackdrop={false} testId="renewal-failed-modal">
       <ModalHeader title="Subscription Renewal Failed" onClose={onClose} />
       <ModalContent className="p-4 sm:p-6">
         {requiresDifferentPaymentMethod && (

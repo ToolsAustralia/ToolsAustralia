@@ -4,8 +4,9 @@ import User from "@/models/User";
 import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
-import { JwtPayload } from "jsonwebtoken";
 import { Types } from "mongoose";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // Define the cart item type from the User model
 type CartItem = {
@@ -63,40 +64,10 @@ const updateCartSchema = z
     }
   );
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-
-  try {
-    // Try to decode as JWT first using dynamic import
-    const jwtModule = await import("jsonwebtoken");
-    const jwt = jwtModule.default || jwtModule;
-    const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!) as JwtPayload;
-    const userId = decoded.userId || decoded.sub;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    return user;
-  } catch {
-    // If JWT decoding fails, try treating it as a direct user ID
-    try {
-      const user = await User.findById(token);
-      if (!user) {
-        throw new Error("User not found");
-      }
-      return user;
-    } catch {
-      throw new Error("Invalid token or user not found");
-    }
-  }
+async function getRequestUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+  return User.findById(session.user.id);
 }
 
 // Helper function to find cart item
@@ -113,7 +84,10 @@ function findCartItem(cart: CartItem[], type: "product" | "ticket", id: string):
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const body = await request.json();
     const validatedData = updateCartSchema.parse(body);
@@ -178,11 +152,11 @@ export async function PUT(request: NextRequest) {
       miniDraw: item.miniDraw,
     }));
 
-    // Calculate summary
+    // Calculate summary — AU GST-inclusive pricing
     const subtotal = transformedItems.reduce((total, item) => total + item.price * item.quantity, 0);
-    const tax = subtotal * 0.1;
-    const shipping = subtotal >= 100 ? 0 : 10;
-    const totalAmount = subtotal + tax + shipping;
+    const shipping = subtotal === 0 ? 0 : subtotal >= 100 ? 0 : 10;
+    const totalAmount = subtotal + shipping;
+    const gstIncluded = totalAmount === 0 ? 0 : Math.round((totalAmount / 11) * 100) / 100;
     const totalItems = transformedItems.reduce((count, item) => count + item.quantity, 0);
 
     const response = {
@@ -191,7 +165,7 @@ export async function PUT(request: NextRequest) {
         totalItems,
         totalAmount,
         subtotal,
-        tax,
+        gstIncluded,
         shipping,
         discount: 0,
         membershipDiscount: 0,

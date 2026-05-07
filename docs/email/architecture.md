@@ -33,6 +33,15 @@ Per CLAUDE.md "Subsystems with their own conventions": HTML templates live at th
                                                   (SendGrid is system of record for delivery)
 ```
 
+## Shop transactional emails
+
+Two new senders, both `TRANSACTIONAL` (`no-reply@toolsaustralia.com.au`, replyTo `support@`), fired as background jobs from [src/services/shop/finalizeShopOrder.service.ts](../../src/services/shop/finalizeShopOrder.service.ts):
+
+| Method | Template fn | Root HTML | Trigger |
+|---|---|---|---|
+| `emailService.sendShopOrderConfirmation` | `createShopOrderConfirmationEmailTemplate` | [`shop-order-confirmation-email-template.html`](../../shop-order-confirmation-email-template.html) | Order written successfully — AU tax invoice with ABN, GST line, line items, shipping address. Order row's `invoiceSentAt` is set after success. |
+| `emailService.sendShopStockRefund` | `createShopStockRefundEmailTemplate` | [`shop-stock-refund-email-template.html`](../../shop-stock-refund-email-template.html) | Stock ran out between PI confirm and finalize → refund issued, customer apologized. |
+
 ## Migrated from `docs/EMAIL_MODULE.md`
 
 > _TODO: read root file and merge full content._

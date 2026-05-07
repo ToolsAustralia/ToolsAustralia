@@ -69,6 +69,7 @@ export default function UpgradeSuccessToast() {
             title: "Membership Upgraded Successfully!",
             message: `Welcome to ${packageName} membership! You now have ${displayEntries} Free Accumulated Entries${partnerClause}. Your new benefits are active immediately!`,
             duration: 25000, // Show for 25 seconds for important upgrade info
+            testId: "upgrade-success-toast",
             action: {
               label: "View Benefits",
               onClick: () => (window.location.href = "/my-account"),
@@ -126,6 +127,7 @@ export default function UpgradeSuccessToast() {
               effectiveDate
             ).toLocaleDateString()}. No refunds, but you keep what you paid for!`,
             duration: 15000, // Show for 15 seconds for important info
+            testId: "downgrade-scheduled-toast",
           });
 
           // Invalidate caches immediately

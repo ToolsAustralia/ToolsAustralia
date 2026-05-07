@@ -24,6 +24,7 @@ export function ThemeToggleButton({
   return (
     <button
       type="button"
+      data-testid="theme-toggle-button"
       onClick={hold.onClick}
       onPointerDown={hold.onPointerDown}
       onPointerUp={hold.onPointerUp}

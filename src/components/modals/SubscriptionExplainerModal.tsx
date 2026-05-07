@@ -26,7 +26,7 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
   selectedPackageId,
 }) => {
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="md">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="md" testId="subscription-explainer-modal">
       <ModalHeader title="How your membership entries work" onClose={onClose} />
       <ModalContent className="p-4 sm:p-6 space-y-4">
         <p className="text-gray-700 dark:text-neutral-200 text-sm sm:text-base">

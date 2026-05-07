@@ -141,7 +141,10 @@ export default function SettingsPage() {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {activeSection === null ? (
-          <ul className="divide-y divide-gray-200 dark:divide-neutral-700">
+          <ul
+            data-testid="account-settings-tabs"
+            className="divide-y divide-gray-200 dark:divide-neutral-700"
+          >
             {SETTINGS_ITEMS.map((item) => {
               const Icon = item.icon;
               const showAlert = item.id === "subscription" && hasFailed;
@@ -150,6 +153,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setActiveSection(item.id)}
+                    data-testid={`account-settings-tab-${item.id}`}
                     className="w-full flex items-center gap-3 py-4 sm:py-5 text-left hover:opacity-80 transition-opacity"
                   >
                     <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-[#ee0000] dark:text-red-500 flex-shrink-0" />

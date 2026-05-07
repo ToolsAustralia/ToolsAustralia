@@ -145,6 +145,7 @@ export default function MembershipBadge({
     <Wrapper
       type={onClick ? "button" : undefined}
       onClick={handleClick}
+      data-testid={onClick ? "header-membership-badge" : undefined}
       className={`inline-flex items-center ${textOnly ? "gap-0 px-2.5" : "gap-1 px-2"} font-bold text-xs py-1 rounded-full shadow-lg relative overflow-hidden ${colorScheme.text} ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
         onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
       }`}

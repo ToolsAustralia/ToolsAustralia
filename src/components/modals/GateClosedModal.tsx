@@ -61,7 +61,7 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
   });
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose}>
+    <ModalContainer isOpen={isOpen} onClose={onClose} testId="gate-closed-modal">
     
         {/* Header - matching MembershipModal design */}
         <ModalHeader title="Gates Are Closed" onClose={onClose} showLogo={true} />

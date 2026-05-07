@@ -119,7 +119,9 @@ export {
 // Re-export MiniDraw type from types file
 export type { MiniDrawType } from "@/types/mini-draw";
 
-// Order hooks
+// Order hooks (legacy — `useOrder` was used by the now-deleted /checkout/success page;
+// `useOrderPrefetch` is still consumed by usePrefetching.ts. The shop's order
+// hooks live in `./useOrdersQueries` (plural) — separate file.)
 export {
   useOrders,
   useInfiniteOrders,

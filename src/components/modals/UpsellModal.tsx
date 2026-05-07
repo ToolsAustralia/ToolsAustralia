@@ -939,6 +939,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         size="lg"
         height="auto"
         className="!max-w-xs sm:!max-w-lg overflow-hidden shadow-2xl sm:rounded-3xl"
+        testId="upsell-modal"
       >
         {/* Hero Section - Image Display - No Padding */}
         <div className="relative w-full overflow-hidden">
@@ -1013,6 +1014,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 handleAccept();
               }}
               disabled={isProcessing || !resolvedChargePm || isCheckingPaymentMethod}
+              data-testid="upsell-redeem-button"
               className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isProcessing ? (
@@ -1092,6 +1094,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 // });
                 handleDecline();
               }}
+              data-testid="upsell-decline-button"
               className="w-full rounded-xl border border-red-300 py-2 px-4 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/45 dark:text-red-400 dark:hover:bg-red-950/40 sm:py-2.5 sm:px-6 sm:text-base"
             >
               No thanks, maybe later

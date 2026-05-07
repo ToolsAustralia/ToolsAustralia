@@ -54,3 +54,21 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 `utils/motion/` — Framer Motion presets and helpers.
 
 **Updated 2026-05-04**: bumped `ToolboxSelector` unselected text to full white for legibility across brand themes; switched `LatestWinnerHero` CTA arrow to inherit `currentColor` so it stays visible in dark mode for light-primary brands.
+
+## E2E test IDs (Phase 3 auth domain)
+
+Added by the Playwright auth-spec authoring pass (2026-05-05). Source registry is `e2e/utils/selectors.ts` — see [docs/auth/frontend.md](../auth/frontend.md#e2e-test-ids) for the full list and which spec consumes each.
+
+- `src/components/layout/Header.tsx`: `header-user-menu` (desktop user-menu trigger) and `header-logout-button` (Sign Out inside the dropdown). Used by `e2e/auth/logout.spec.ts`.
+- `src/components/modals/UserSetupModal.tsx`: forwards `testId="user-setup-modal"` via `<ModalContainer>`; adds `user-setup-dob` (BirthdatePicker wrapper) and `user-setup-submit` (primary action Button). Used by `e2e/auth/user-setup-modal.spec.ts`.
+- `src/components/modals/ui/Button.tsx`: now accepts an optional `data-testid` prop (forwarded to the underlying `<button>`). Lets specs target Button-rendered actions (e.g. `user-setup-submit`) without wrapper divs.
+
+## Toast testId pass-through (added 2026-05-05)
+
+`src/components/ui/Toast.tsx` — `ToastProps` now accepts an optional `testId?: string`. When set, it's stamped on the toast root `<div>` as `data-testid={testId}`. Used to target specific toast variants (upgrade, downgrade, entry-reward) from Playwright specs without coupling to fragile text content.
+
+Example consumers:
+- `src/components/UpgradeSuccessToast.tsx` passes `testId: "upgrade-success-toast"` and `testId: "downgrade-scheduled-toast"`.
+- `src/hooks/useEntryRewardToast.ts` passes `testId: "entry-reward-toast"`.
+
+The prop is purely additive — existing `showToast({...})` calls continue to render an untagged toast root.

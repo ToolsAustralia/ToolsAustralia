@@ -5144,7 +5144,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   return (
     <>
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false}>
+    <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg" closeOnBackdrop={false} testId="membership-modal">
       <ModalHeader
         title=""
         titleNode={

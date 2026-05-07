@@ -1,31 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { verify } from "jsonwebtoken";
-import { JWTPayload } from "@/types/api";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-// Helper function to get user from token
-async function getUserFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("No token provided");
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verify(token, process.env.NEXTAUTH_SECRET!) as JWTPayload;
-  const user = await User.findById(decoded.userId);
-
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  return user;
+async function getRequestUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+  return User.findById(session.user.id);
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
     await connectDB();
-    const user = await getUserFromToken(request);
+    const user = await getRequestUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     user.cart = [];
     await user.save();

@@ -206,6 +206,7 @@ function ResetPasswordContent() {
                   emailError ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-red-500"
                 }`}
                 placeholder="you@example.com"
+                data-testid="reset-password-email"
               />
               {emailError && <p className="text-sm text-red-600 mt-1">{emailError}</p>}
             </div>
@@ -213,6 +214,7 @@ function ResetPasswordContent() {
               type="submit"
               disabled={isRequesting}
               className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="reset-password-submit"
             >
               {isRequesting ? "Sending link..." : "Send reset link"}
             </button>
@@ -232,6 +234,7 @@ function ResetPasswordContent() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
                 placeholder="Enter your new password"
+                data-testid="reset-password-new"
               />
             </div>
             <div className="flex flex-col gap-2">
@@ -247,12 +250,14 @@ function ResetPasswordContent() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
                 placeholder="Re-enter your new password"
+                data-testid="reset-password-confirm"
               />
             </div>
             <button
               type="submit"
               disabled={isResetting}
               className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="reset-password-submit"
             >
               {isResetting ? "Updating password..." : "Update password"}
             </button>

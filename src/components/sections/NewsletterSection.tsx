@@ -65,6 +65,7 @@ export default function NewsletterSection() {
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-400 z-10" />
                   <input
                     type="email"
+                    data-testid="newsletter-email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter email"
@@ -77,6 +78,7 @@ export default function NewsletterSection() {
                 <button
                   onClick={handleSubscribe}
                   disabled={isLoading || !email}
+                  data-testid="newsletter-subscribe"
                   className="bg-white dark:bg-neutral-700 hover:bg-gray-100 dark:hover:bg-neutral-600 text-black dark:text-white font-semibold py-3 sm:py-3 lg:py-4 px-4 sm:px-5 lg:px-8 rounded-[10px] sm:rounded-[12px] lg:rounded-[16px] text-sm sm:text-sm lg:text-[16px] transition-all duration-300 flex items-center justify-center gap-2 sm:gap-2 lg:gap-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (

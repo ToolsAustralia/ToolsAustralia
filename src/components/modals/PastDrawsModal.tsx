@@ -28,6 +28,7 @@ const PastDrawsModal: React.FC<PastDrawsModalProps> = ({
       size="lg"
       height="fixed"
       fixedHeight="max-h-[85dvh]"
+      testId="past-draws-modal"
     >
       <ModalHeader
         title="Your Draw History"

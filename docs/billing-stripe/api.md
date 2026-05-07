@@ -46,8 +46,9 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 |---|---|---|
 | POST | `/api/stripe/create-one-time-purchase` | Mini-draw / one-time pack purchase (new user) |
 | POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user |
+| POST | `/api/stripe/create-shop-purchase` | Create PI for a shop order — guest or logged-in. Validates cart server-side (`cartValidation.service`), computes totals (`shopTotals.service`), then creates PaymentIntent with `metadata.type = "shop"`. Returns 400 with line-item errors on validation failure. |
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice |
-| POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
+| POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches. `payment_intent.succeeded` branches on `metadata.type === "shop"` → `finalizeShopOrder` (atomic stock, Order write, SendGrid invoice, Klaviyo, Meta CAPI). Shop branch returns early; non-shop PIs fall through to `handlePaymentSuccess`. |
 
 ### Invoice surface
 

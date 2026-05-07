@@ -136,7 +136,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4">
+    <div data-testid="cancellation-upsell-modal" className="fixed inset-0 z-[80] flex items-center justify-center p-2 sm:p-4">
       {/* Animated Backdrop */}
       <div
         className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
@@ -200,6 +200,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
             <button
               onClick={handleRedeem}
               disabled={isProcessing}
+              data-testid="cancellation-upsell-accept"
               className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-3 sm:py-4 px-4 sm:px-6 rounded-xl font-bold text-base sm:text-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isProcessing ? (
@@ -218,6 +219,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({ isOpe
             {/* Secondary Action */}
             <button
               onClick={handleDecline}
+              data-testid="cancellation-upsell-decline"
               className="w-full text-gray-500 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl hover:bg-gray-100 transition-colors font-medium text-sm sm:text-base"
             >
               No thanks, continue with cancellation

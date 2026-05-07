@@ -163,7 +163,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/stripe/**",
         "src/app/api/invoice/**"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-04"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -223,7 +223,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/rewardsGuard.ts",
         "src/hooks/usePrizeCatalog.ts",
         "src/hooks/useEntryRewardToast.ts",
-        "src/utils/rewards-widget-spotlight-storage.ts"
+        "src/utils/rewards-widget-spotlight-storage.ts",
+        "src/components/features/RewardsFloatingWidget.tsx"
       ],
       "lastVerified": "2026-04-28"
     },
@@ -317,9 +318,15 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/Product.ts",
         "src/models/Order.ts",
         "src/contexts/CartContext.tsx",
-        "src/hooks/usePurchaseInvalidation.ts"
+        "src/hooks/usePurchaseInvalidation.ts",
+        "src/services/shop/**",
+        "src/app/(site)/my-account/orders/**",
+        "src/hooks/queries/useOrdersQueries.ts",
+        "src/components/payment/ShopCheckoutPaymentElement.tsx",
+        "shop-order-confirmation-email-template.html",
+        "shop-stock-refund-email-template.html"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -365,7 +372,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/email-preview/**",
         "*-email-template.html"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "tracking": {
       "docs": "docs/tracking/",
@@ -397,7 +404,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -479,7 +486,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/package-colors/**",
         "src/utils/prize-brand-colors.ts"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-04"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -501,7 +508,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-04"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -524,7 +531,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -589,7 +596,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/dev/**",
         "src/examples/**",
         "scripts/test-*.ts",
-        "scripts/wt-*.sh"
+        "scripts/wt-*.sh",
+        "e2e/**",
+        "playwright.config.ts"
       ],
       "lastVerified": "2026-05-04"
     },
@@ -600,7 +609,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-04"
     }
   }
 }

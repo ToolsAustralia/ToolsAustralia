@@ -92,6 +92,7 @@ function AffiliateLoginContent() {
                   name="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  data-testid="affiliate-login-username"
                   className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border-[1.5px] border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
                   placeholder=""
                   required
@@ -110,6 +111,7 @@ function AffiliateLoginContent() {
                   name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  data-testid="affiliate-login-password"
                   className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200 pr-12"
                   placeholder="Password"
                   required
@@ -139,6 +141,7 @@ function AffiliateLoginContent() {
             <button
               type="submit"
               disabled={loading}
+              data-testid="affiliate-login-submit"
               className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-[#ec0000] text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Signing in..." : "Sign in"}

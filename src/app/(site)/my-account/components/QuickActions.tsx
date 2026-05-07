@@ -22,6 +22,7 @@ export default function QuickActions({
         <div className={`flex flex-row flex-wrap gap-2 sm:gap-3 w-full ${showGetMoreEntries ? "" : ""}`}>
           <button
             onClick={onReferFriend}
+            data-testid="refer-friend-trigger"
             className="group relative flex-1 min-w-0 refer-friend-cta overflow-hidden rounded-xl font-bold px-2.5 py-3.5 sm:px-3 sm:py-4 text-black dark:text-gray-900 bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-400 dark:from-amber-500 dark:via-amber-400 dark:to-orange-500 border border-amber-400/50 dark:border-amber-400/30 shadow-[0_2px_12px_rgba(251,191,36,0.35),0_0_1px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4),0_0_20px_rgba(251,191,36,0.15)] hover:shadow-[0_4px_20px_rgba(251,191,36,0.45),0_0_1px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_6px_28px_rgba(0,0,0,0.5),0_0_28px_rgba(251,191,36,0.2)] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <div className="refer-friend-shimmer rounded-xl" aria-hidden="true" />

@@ -448,6 +448,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {!isTopBarHidden && authStateResolved && !shouldHideTopBar && (
         <div
           data-top-bar
+          data-testid="promo-banner"
           className={`w-full flex items-center justify-center relative z-[1] animate-slideDown shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${
             isAuthenticated && isSetupRequired
               ? "bg-blue-600 h-[24px] sm:h-[28px]" // Blue for setup reminder
@@ -503,6 +504,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             )}
           </div>
           <button
+            data-testid="promo-banner-dismiss"
             className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center touch-manipulation"
             onClick={() => setIsTopBarHidden(true)}
             aria-label="Close banner"
@@ -734,6 +736,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   <div
                     role="button"
                     tabIndex={0}
+                    data-testid="header-user-menu"
                     onClick={() => setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -899,6 +902,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       <hr className="my-2 border-gray-100 dark:border-neutral-700" />
                       <button
                         onClick={handleSignOut}
+                        data-testid="header-logout-button"
                         className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                       >
                         <LogOut className="w-4 h-4 text-red-500" />
@@ -980,12 +984,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
-            {/* Theme (replaces cart until shop is live) */}
+            {/* Theme + Cart (shop is live) */}
             <div className="relative z-10 flex items-center justify-center">
               <ThemeToggleButton
                 className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
               />
             </div>
+            <button
+              type="button"
+              aria-label="Open cart"
+              data-testid="header-cart-icon"
+              onClick={() => setIsCartOpen(true)}
+              className="relative z-10 flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11"
+            >
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700 dark:text-neutral-200" />
+              {cartItemCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
+                  {cartItemCount > 9 ? "9+" : cartItemCount}
+                </span>
+              )}
+            </button>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
@@ -1119,7 +1137,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
       {/* Mobile Search Overlay - Viewport Width Only */}
       {isSearchOpen && (
-        <div className="lg:hidden fixed inset-0 bg-white dark:bg-neutral-900 z-[55] animate-fade-in overflow-hidden w-full">
+        <div data-testid="header-search-overlay" className="lg:hidden fixed inset-0 bg-white dark:bg-neutral-900 z-[55] animate-fade-in overflow-hidden w-full">
           <div className="flex items-center justify-between p-2 sm:p-3 border-b border-gray-200 dark:border-neutral-700 w-full">
             <form onSubmit={handleSearchSubmit} className="flex-1 mr-3">
               <div className="relative">
@@ -1523,6 +1541,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
           {/* Cart Sidebar */}
           <div
+            data-testid="header-cart-drawer"
             className={`cart-sidebar-container absolute top-0 right-0 h-full w-96 max-w-[90vw] bg-white dark:bg-neutral-900 z-10 shadow-2xl ${
               isClosingCart ? "sidebar-slide-out-right" : "sidebar-slide-in-right"
             } flex flex-col`}
@@ -1674,7 +1693,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                   {/* Checkout Button */}
                   <Link
-                    href="/shop"
+                    href="/shop/checkout"
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 mb-2"
                     onClick={handleCloseCart}
                   >

@@ -3,10 +3,13 @@
 ## Pages
 
 - `src/app/(site)/my-account/` — main account area
+- [`src/app/(site)/my-account/orders/page.tsx`](../../src/app/(site)/my-account/orders/page.tsx) — order history list (TanStack Query → `/api/orders`)
+- [`src/app/(site)/my-account/orders/[orderNumber]/page.tsx`](../../src/app/(site)/my-account/orders/[orderNumber]/page.tsx) — order detail with status timeline + AusPost tracking link
 
 ## Components
 
 - [src/app/(site)/components/LandingPageTrigger.tsx](../../src/app/(site)/components/LandingPageTrigger.tsx) — triggers landing-page experiences
+- [`RecentOrdersWidget`](../../src/app/(site)/my-account/components/RecentOrdersWidget.tsx) — top-3 recent orders surfaced on the dashboard, links to `/my-account/orders` and per-order detail.
 
 ## Hooks
 

@@ -1,8 +1,10 @@
 # Cart-Shop-Products — Gotchas
 
-## Cart desync between devices
+## Guest vs logged-in cart split
 
-Cart is localStorage per-browser. Multi-device users see different carts. Acceptable — sync is more trouble than it's worth at current scale.
+Guest cart is `localStorage` per-browser, key `shop_cart_v1`, 24h TTL. Logged-in cart is server-side (`User.cart`, accessed via `/api/cart/*` with `getServerSession` cookie auth). On login, the guest cart is merged into the server cart (see [frontend.md](./frontend.md)) and localStorage is cleared. Multi-device guests see different carts — acceptable; sync arrives once they log in.
+
+> Stale: Earlier docs said "cart is localStorage per-browser" universally — that only applies to guests now.
 
 ## Stale cart after purchase
 

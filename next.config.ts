@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { buildSecurityHeaders, buildSecurityHeadersForWebhook } from "./src/utils/security/csp";
 
-const DEFAULT_IMAGE_HOSTS = ["toolsaustralia.com.au", "assets.toolsaustralia.com.au", "res.cloudinary.com"];
+const DEFAULT_IMAGE_HOSTS = ["toolsaustralia.com.au", "assets.toolsaustralia.com.au", "res.cloudinary.com", "placehold.co"];
 const configuredImageHosts = (process.env.NEXT_PUBLIC_IMAGE_HOSTS || "")
   .split(",")
   .map((host) => host.trim())

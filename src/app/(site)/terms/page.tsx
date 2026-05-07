@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
 import { getContactEmail } from "@/lib/email/sender-identities";
+import { BUSINESS } from "@/config/business";
 
 export const metadata: Metadata = {
   title: "Terms and Conditions | Tools Australia",
@@ -45,11 +46,16 @@ export default async function TermsPage() {
             <h2 className="text-2xl font-semibold text-white">1. Company Information</h2>
             <div className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
               <span className="font-semibold text-white">Name:</span>
-              <span>Tools Australia Pty Ltd</span>
+              <span>{BUSINESS.legalName}</span>
               <span className="font-semibold text-white">ABN:</span>
-              <span>54690397061</span>
+              <span>{BUSINESS.abn}</span>
               <span className="font-semibold text-white">ACN:</span>
-              <span>690397061</span>
+              <span>{BUSINESS.acn}</span>
+              <span className="font-semibold text-white">Registered Address:</span>
+              <span>
+                {BUSINESS.address.line1}, {BUSINESS.address.suburb} {BUSINESS.address.state}{" "}
+                {BUSINESS.address.postcode}, {BUSINESS.address.country}
+              </span>
               <span className="font-semibold text-white">Website:</span>
               <span>
                 <a className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline" href={baseUrl}>
