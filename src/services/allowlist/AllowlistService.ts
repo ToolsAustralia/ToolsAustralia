@@ -16,12 +16,18 @@ import type {
   EvalResult,
 } from "./types";
 import {
-  FRAUD_SIGNAL_DECLINE_CODES,
-  PERMANENT_ISSUE_DECLINE_CODES,
   isFraudSignalDeclineCode,
   isPermanentIssueDeclineCode,
 } from "./declineCodes";
 import { getAllowCardFingerprintListId } from "./stripeListResolver";
+
+/**
+ * Escape regex specials so user input in the email filter behaves as a
+ * substring match — not as a regex pattern that could match unintended rows.
+ */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** Default page size for `listBlocked`. */
 const DEFAULT_LIST_BLOCKED_LIMIT = 50;
@@ -301,33 +307,25 @@ export class AllowlistService {
       Math.min(MAX_LIST_BLOCKED_LIMIT, Math.floor(requestedLimit) || DEFAULT_LIST_BLOCKED_LIMIT)
     );
 
-    // Date-range + decline-code filter pushed into the Mongo query.
-    // The `{ createdAt: -1 }` index covers the date range; combined with
-    // `_id` for tie-breaking we get a stable sort for cursor pagination.
     const baseFilter: Record<string, unknown> = {
       createdAt: { $gte: filter.dateFrom, $lte: filter.dateTo },
     };
 
-    // Decline-code filter pushed into the Mongo query as a `$nin`/`$in`
-    // predicate so we don't fetch rows we'll immediately discard.
-    const fraudCodes = Array.from(FRAUD_SIGNAL_DECLINE_CODES);
-    const permanentCodes = Array.from(PERMANENT_ISSUE_DECLINE_CODES);
-    if (filter.declineReason === "recoverable_only") {
-      baseFilter.declineCode = { $nin: [...fraudCodes, ...permanentCodes] };
-    } else if (filter.declineReason === "transient_only") {
-      baseFilter.declineCode = { $nin: fraudCodes };
-    } else if (filter.declineReason === "fraud_signals_only") {
-      baseFilter.declineCode = { $in: fraudCodes };
+    // Email substring (case-insensitive). Empty/omitted = no filter.
+    if (filter.email && filter.email.trim()) {
+      baseFilter.customerEmail = {
+        $regex: escapeRegex(filter.email.trim()),
+        $options: "i",
+      };
     }
 
-    // Cursor predicate — a row is "before" the cursor if its createdAt is
-    // strictly less, OR createdAt equal AND _id strictly less. Combined
-    // with `sort({ createdAt: -1, _id: -1 })` this yields stable pagination.
+    // Decline codes — pushed into Mongo as `$in`. Empty array = no filter.
+    if (filter.declineCodes && filter.declineCodes.length > 0) {
+      baseFilter.declineCode = { $in: filter.declineCodes };
+    }
+
     const cursorRaw = opts?.cursor ?? null;
     const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
-    // `dbFilter`'s top-level `createdAt` and `$or` are AND-ed by Mongo:
-    // (dateFrom <= createdAt <= dateTo) AND (cursor predicate).
-    // Do NOT collapse — the date range bound IS preserved by the implicit AND.
     const dbFilter: Record<string, unknown> = cursor
       ? {
           ...baseFilter,
@@ -338,8 +336,6 @@ export class AllowlistService {
         }
       : baseFilter;
 
-    // Total count uses the filter MINUS the cursor predicate — we want the
-    // full filtered total for "Showing X of Y" UI, not the remaining count.
     const [rawTotal, rawDocs] = await Promise.all([
       BlockedTransaction.countDocuments(baseFilter),
       BlockedTransaction.find(dbFilter)
@@ -368,7 +364,6 @@ export class AllowlistService {
       return { rows: [], nextCursor: null, total: rawTotal };
     }
 
-    // Build dedup'd lookup keys for the three batched queries.
     const cardFingerprints = Array.from(
       new Set(rawDocs.map((d) => d.cardFingerprint).filter(Boolean))
     );
@@ -379,17 +374,11 @@ export class AllowlistService {
       new Set(rawDocs.map((d) => d.customerEmail).filter((v): v is string => Boolean(v)))
     );
 
-    // Phase 1 (serial): fetch users — this is the gate to the paid-user
-    // check, which needs user IDs. Running this once (instead of in two
-    // parallel Promise.all branches) avoids a duplicate indexed query and
-    // removes the theoretical consistency risk of two reads diverging.
     const users =
       customerIds.length || emails.length
         ? await User.find({
             $or: [
-              ...(customerIds.length
-                ? [{ stripeCustomerId: { $in: customerIds } }]
-                : []),
+              ...(customerIds.length ? [{ stripeCustomerId: { $in: customerIds } }] : []),
               ...(emails.length ? [{ email: { $in: emails } }] : []),
             ],
           })
@@ -409,8 +398,6 @@ export class AllowlistService {
 
     const userIds = users.map((u) => u._id);
 
-    // Phase 2 (parallel): the two queries that depend on user-ids OR
-    // fingerprints — independent of each other, so run together.
     const [allowlistedActions, paidUserIds] = await Promise.all([
       cardFingerprints.length
         ? AllowlistAction.find({
@@ -432,7 +419,6 @@ export class AllowlistService {
           })(),
     ]);
 
-    // Build O(1) lookup maps from the result arrays.
     const userByCustomerId = new Map<string, { _id: Types.ObjectId | string }>();
     const userByEmail = new Map<string, { _id: Types.ObjectId | string }>();
     for (const u of users) {
@@ -449,11 +435,20 @@ export class AllowlistService {
       paidUserIds,
     };
 
+    // Lazy-import to keep utils → service direction one-way.
+    const { computeEligibilityKind } = await import(
+      "@/utils/admin/blockedTransactionEligibility"
+    );
+
     const builtRows: BlockedRow[] = rawDocs.map((doc) => {
       const preview = computeEligibility(doc, eligibilityMaps);
+      let resolvedUser: { _id: Types.ObjectId | string } | undefined;
+      if (doc.stripeCustomerId) resolvedUser = userByCustomerId.get(doc.stripeCustomerId);
+      if (!resolvedUser && doc.customerEmail) resolvedUser = userByEmail.get(doc.customerEmail);
       return {
         paymentIntentId: doc.paymentIntentId,
         chargeId: doc.chargeId,
+        userId: resolvedUser ? String(resolvedUser._id) : null,
         createdAt: doc.createdAt,
         amount: doc.amount,
         currency: doc.currency,
@@ -469,27 +464,19 @@ export class AllowlistService {
       };
     });
 
-    // Member-status filter is in-memory because the verdict depends on
-    // joins we already computed.
-    const filteredRows = builtRows.filter((r) => {
-      if (filter.memberStatus === "has_paid") {
-        return r.preview.eligible || r.preview.reason !== "filter_not_member";
-      }
-      if (filter.memberStatus === "never_paid") {
-        return !r.preview.eligible && r.preview.reason === "filter_not_member";
-      }
-      return true;
-    });
+    // Eligibility post-filter — applied via the shared mapper so the UI badge
+    // and this filter cannot disagree. Empty/omitted = no filter.
+    const finalRows =
+      filter.eligibility && filter.eligibility.length > 0
+        ? builtRows.filter((row) => {
+            const kind = computeEligibilityKind({
+              alreadyAllowlisted: row.alreadyAllowlisted,
+              preview: row.preview,
+            });
+            return filter.eligibility!.includes(kind);
+          })
+        : builtRows;
 
-    // skippedOnly: only return rows that were not eligible.
-    const finalRows = filter.skippedOnly
-      ? filteredRows.filter((r) => !r.preview.eligible)
-      : filteredRows;
-
-    // nextCursor encodes the LAST raw doc on the page (not the last filtered
-    // row) because the cursor advances the underlying Mongo scan, not the
-    // post-filter view. If a page is full but every row got dropped by the
-    // member-status filter, the next call will pick up where the scan left off.
     const lastRaw = rawDocs[rawDocs.length - 1];
     const nextCursor =
       rawDocs.length === limit && lastRaw

@@ -8,15 +8,14 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
-  CreditCard,
   DollarSign,
-  ListChecks,
   RefreshCw,
   Search,
   UserCog,
 } from "lucide-react";
 import { useChargePastDueRuns } from "@/hooks/queries/admin/useChargePastDueRuns";
 import { useChargePastDueManualRetries } from "@/hooks/queries/admin/useChargePastDueManualRetries";
+import { useChargePastDueDeclineSummary } from "@/hooks/queries/admin/useChargePastDueDeclineSummary";
 import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import DateRangeToggle, { type DateRange } from "@/components/admin/DateRangeToggle";
@@ -32,6 +31,7 @@ import PastDueChargeHistoryDrawer from "./PastDueChargeHistoryDrawer";
 import RecoverInvoiceModal from "@/components/admin/RecoverInvoiceModal";
 import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import AttemptsBreakdown from "@/components/admin/AttemptsBreakdown";
 import {
   groupChargeAttemptsByUser,
   type UserAttemptGroup,
@@ -171,6 +171,10 @@ export default function PastDueChargeHistory() {
 
   const runsQuery = useChargePastDueRuns(filter);
   const retriesQuery = useChargePastDueManualRetries(filter);
+  const declineSummaryQuery = useChargePastDueDeclineSummary({
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+  });
 
   const toggleRow = (key: string) => {
     setSelectedRows((prev) => {
@@ -320,21 +324,7 @@ export default function PastDueChargeHistory() {
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <MetricCard
-          title="Bulk runs"
-          value={isLoading ? "—" : summary.runs}
-          icon={ListChecks}
-          color="blue"
-          subtitle="In selected range"
-        />
-        <MetricCard
-          title="Invoices attempted"
-          value={isLoading ? "—" : summary.attempted}
-          icon={CreditCard}
-          color="indigo"
-          subtitle={`${summary.failed} failed`}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <MetricCard
           title="Succeeded"
           value={isLoading ? "—" : summary.succeeded}
@@ -349,6 +339,68 @@ export default function PastDueChargeHistory() {
           color="purple"
           subtitle="From bulk runs"
         />
+      </div>
+
+      {/* Decline-code summary */}
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-neutral-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Why charges declined
+          </h3>
+          <span className="text-xs text-gray-500 dark:text-neutral-400">
+            Selected range
+          </span>
+        </div>
+        <div className="p-4">
+          {declineSummaryQuery.isLoading ? (
+            <div className="space-y-2" aria-label="Loading decline summary">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-neutral-800"
+                />
+              ))}
+            </div>
+          ) : declineSummaryQuery.isError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              Failed to load decline summary.
+            </p>
+          ) : !declineSummaryQuery.data || declineSummaryQuery.data.totalFailed === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
+              No failed attempts in selected range.
+            </p>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-gray-500 dark:text-neutral-400">
+                {declineSummaryQuery.data.totalFailed} failed attempts
+              </p>
+              <ul className="space-y-2">
+                {declineSummaryQuery.data.topCodes.map((row) => (
+                  <li
+                    key={row.code}
+                    className="flex items-center gap-3 text-sm"
+                  >
+                    <span className="w-44 truncate font-mono text-xs text-gray-700 dark:text-neutral-300">
+                      {row.code}
+                    </span>
+                    <span className="w-8 text-right tabular-nums text-gray-700 dark:text-neutral-300">
+                      {row.count}
+                    </span>
+                    <div className="relative h-2 flex-1 overflow-hidden rounded bg-gray-100 dark:bg-neutral-800">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded bg-red-500/70 dark:bg-red-500/60"
+                        style={{ width: `${row.pct}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right text-xs tabular-nums text-gray-500 dark:text-neutral-400">
+                      {row.pct}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
 
       {isError && (
@@ -397,19 +449,7 @@ export default function PastDueChargeHistory() {
                       Admin
                     </th>
                     <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Eligible
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Attempted
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Succeeded
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Failed
-                    </th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
-                      Skipped
+                      Attempts
                     </th>
                     <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       Revenue
@@ -435,20 +475,15 @@ export default function PastDueChargeHistory() {
                       <td className="px-4 py-3 text-sm text-gray-700 dark:text-neutral-300">
                         {r.adminName}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
-                        {r.totals.eligibleCount}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
-                        {r.totals.attempted}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                        {r.totals.succeeded}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-semibold text-red-700 dark:text-red-400">
-                        {r.totals.failed}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-gray-500 dark:text-neutral-400">
-                        {r.totals.skipped.total}
+                      <td className="px-4 py-3">
+                        <AttemptsBreakdown
+                          size="cell"
+                          total={r.totals.attempted}
+                          succeeded={r.totals.succeeded}
+                          failed={r.totals.failed}
+                          skipped={r.totals.skipped.total}
+                          eligibleHint={r.totals.eligibleCount}
+                        />
                       </td>
                       <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
                         {formatCents(r.totals.revenueCents)}
@@ -548,7 +583,6 @@ export default function PastDueChargeHistory() {
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
                     <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Attempts</th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Latest</th>
-                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -608,25 +642,23 @@ export default function PastDueChargeHistory() {
                               className="text-sm"
                             />
                           </td>
-                          <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-neutral-300">
-                            {g.attempts.length}
-                            <span className="ml-2 text-xs text-gray-500 dark:text-neutral-400">
-                              {g.successCount > 0 && <span className="text-emerald-600">{g.successCount}✓ </span>}
-                              {g.failedCount > 0 && <span className="text-red-600">{g.failedCount}✗ </span>}
-                              {g.skippedCount > 0 && <span>{g.skippedCount}⏭</span>}
-                            </span>
+                          <td className="px-4 py-3">
+                            <AttemptsBreakdown
+                              size="cell"
+                              total={g.attempts.length}
+                              succeeded={g.successCount}
+                              failed={g.failedCount}
+                              skipped={g.skippedCount}
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <RetryStatusBadge status={g.latestStatus} />
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                            {formatCents(g.totalAmount)}
                           </td>
                         </tr>
 
                         {isExpanded && (
                           <tr className="bg-gray-50/60 dark:bg-neutral-800/40">
-                            <td colSpan={8} className="px-4 py-3">
+                            <td colSpan={7} className="px-4 py-3">
                               <table className="w-full">
                                 <thead>
                                   <tr>
