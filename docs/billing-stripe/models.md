@@ -134,6 +134,7 @@ Indexes:
 - `{ cardFingerprint: 1 }` — by-card lookup
 - `{ stripeCustomerId: 1, createdAt: -1 }` — by-customer history
 - `{ declineCode: 1, createdAt: -1 }` — decline-reason filter
+- `{ customerEmail: 1 }` (sparse) — added 2026-05-07 to support the admin email-substring filter without a collection scan
 
 **Deliberate non-decisions** (documented so a future change doesn't unwittingly add coupling):
 - `userId` is not denormalized — captured `stripeCustomerId`/`customerEmail` are the keys; user resolution happens at read time so newly-signed-up users' historical blocks reflect the up-to-date verdict.
@@ -142,7 +143,9 @@ Indexes:
 - `rawOutcome` IS stored as `Mixed` — cheap insurance against Stripe surfacing fields we'll later want to filter on.
 
 Writers:
-- Webhook: [src/app/api/stripe/webhook/route.ts](../../src/app/api/stripe/webhook/route.ts) `payment_intent.payment_failed` branch — best-effort, wrapped in its own try/catch so a Mongo write failure does not block the allowlist evaluation that follows it.
-- Backfill: [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) — uses Stripe Search API (`status:"failed"` query) for efficiency. Idempotent on `_id`.
+- Webhook `payment_intent.payment_failed` branch — best-effort; also calls `AllowlistService.apply()`.
+- Webhook `charge.failed` branch (added 2026-05-07) — covers issuer-blocked subscription renewals where the PI event sometimes does not fire. Write-side only; does NOT call `AllowlistService.apply()` (avoids double-recording).
+- Backfill: [scripts/backfill-blocked-transactions.ts](../../scripts/backfill-blocked-transactions.ts) — uses Stripe Search API (`status:"failed"` query). Idempotent on `_id`.
+- Reconcile cron (self-healing): [src/app/api/cron/reconcile-blocked-transactions/route.ts](../../src/app/api/cron/reconcile-blocked-transactions/route.ts) — daily, 48h window, upserts any rows the live path missed.
 
 Both write paths share `buildBlockedTransactionRecord()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts) so live and historical rows are byte-identical.
