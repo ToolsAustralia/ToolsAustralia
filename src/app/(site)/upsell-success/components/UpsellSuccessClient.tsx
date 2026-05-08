@@ -15,7 +15,7 @@ interface UpsellSuccessClientProps {
 
 export default function UpsellSuccessClient({ searchParams: _searchParams }: UpsellSuccessClientProps) {
   return (
-    <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+    <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
       <SectionContainer variant="narrow" className="py-8">
         {/* Success Header */}
         <div className="text-center mb-8">

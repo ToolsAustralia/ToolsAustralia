@@ -224,3 +224,7 @@ Success (green) and error (red) panels use `{color}-50` light backgrounds with `
 ## Theme
 
 Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — separate from member theme.
+
+## className conventions (2026-05-08)
+
+All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.

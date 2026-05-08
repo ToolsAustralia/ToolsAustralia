@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon, TrendingUp, TrendingDown } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface AdminStatsCardProps {
   title: string | React.ReactNode;
@@ -98,7 +99,7 @@ export default function AdminStatsCard({
   if (loading) {
     return (
       <div
-        className={`bg-white dark:bg-neutral-900 rounded-xl shadow-sm dark:shadow-none border border-gray-100 dark:border-neutral-700 overflow-hidden ${className}`}
+        className={cn("bg-white dark:bg-neutral-900 rounded-xl shadow-sm dark:shadow-none border border-gray-100 dark:border-neutral-700 overflow-hidden", className)}
       >
         <div className="p-4">
           <div className="animate-pulse">
@@ -116,35 +117,35 @@ export default function AdminStatsCard({
 
   return (
     <div
-      className={`relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 hover:shadow-xl transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950 ${className}`}
+      className={cn("relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600 hover:shadow-xl transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950", className)}
     >
       {/* Gradient overlay on hover */}
       <div
-        className={`absolute inset-0 ${selectedColor.bg} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}
+        className={cn("absolute inset-0", selectedColor.bg, "opacity-0 group-hover:opacity-5 transition-opacity duration-300")}
       ></div>
 
       <div className="relative p-2.5 sm:p-4 lg:p-5">
         <div className="flex items-start justify-between mb-2 sm:mb-4">
           <div className="flex-1 min-w-0">
             {typeof title === "string" ? (
-              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-2xs sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                 {title}
               </p>
             ) : (
-              <div className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
+              <div className="text-slate-600 dark:text-neutral-400 font-semibold text-2xs sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
                 {title}
               </div>
             )}
             {subtitle && (
-              <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 dark:text-neutral-500 font-medium mb-1 sm:mb-2 leading-tight">
+              <p className="hidden sm:block text-3xs sm:text-xs text-slate-500 dark:text-neutral-500 font-medium mb-1 sm:mb-2 leading-tight">
                 {subtitle}
               </p>
             )}
           </div>
           <div
-            className={`w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14 ${selectedColor.bg} rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+            className={cn("w-8 h-8 sm:w-12 sm:h-12 lg:w-14 lg:h-14", selectedColor.bg, "rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0")}
           >
-            <Icon className={`w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7 ${selectedColor.icon}`} />
+            <Icon className={cn("w-4 h-4 sm:w-6 sm:h-6 lg:w-7 lg:h-7", selectedColor.icon)} />
           </div>
         </div>
 
@@ -155,7 +156,7 @@ export default function AdminStatsCard({
 
           {trend && (
             <div
-              className={`flex items-center gap-1 text-[10px] sm:text-xs lg:text-sm font-semibold ${
+              className={`flex items-center gap-1 text-2xs sm:text-xs lg:text-sm font-semibold ${
                 trend.isPositive ? "text-emerald-600" : "text-red-600"
               }`}
             >
@@ -168,7 +169,7 @@ export default function AdminStatsCard({
                 {trend.isPositive ? "+" : ""}
                 {trend.value}%
               </span>
-              <span className="text-slate-500 dark:text-neutral-400 text-[9px] sm:text-xs ml-1 font-normal hidden sm:inline">
+              <span className="text-slate-500 dark:text-neutral-400 text-3xs sm:text-xs ml-1 font-normal hidden sm:inline">
                 vs last period
               </span>
             </div>
@@ -178,7 +179,7 @@ export default function AdminStatsCard({
 
       {/* Bottom gradient accent bar */}
       <div
-        className={`h-1.5 ${selectedColor.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+        className={cn("h-1.5", selectedColor.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}
       ></div>
     </div>
   );

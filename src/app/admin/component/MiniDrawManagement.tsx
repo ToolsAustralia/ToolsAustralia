@@ -42,6 +42,7 @@ import Image from "next/image";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import { cn } from "@/utils/cn";
 
 interface MiniDraw extends AdminMiniDrawSummary {
   totalEntries: number;
@@ -764,7 +765,7 @@ function MiniDrawCard({
 
   const isAt100 = capacityPercentage >= 100 || draw.status === "completed";
   const iconBtn =
-    "flex items-center gap-2 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] md:text-xs font-medium text-gray-800 dark:text-neutral-200";
+    "flex items-center gap-2 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed text-2xs md:text-xs font-medium text-gray-800 dark:text-neutral-200";
 
   return (
     <div
@@ -778,7 +779,7 @@ function MiniDrawCard({
         tabIndex={reorderMode ? undefined : 0}
         onClick={reorderMode ? undefined : onEdit}
         onKeyDown={reorderMode ? undefined : (e) => e.key === "Enter" && onEdit()}
-        className={`relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px] ${reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60"}`}
+        className={cn("relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px]", reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60")}
       >
         <div className="relative w-full h-32 md:h-44 bg-gray-100 dark:bg-neutral-800">
           <Image
@@ -802,7 +803,7 @@ function MiniDrawCard({
           </div>
           {isAt100 && (
             <div
-              className="absolute top-1.5 left-1.5 z-10 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold"
+              className="absolute top-1.5 left-1.5 z-10 px-2 py-0.5 rounded-full bg-amber-500 text-white text-2xs font-bold"
               title="100% - select winner"
             >
               100%
@@ -819,7 +820,7 @@ function MiniDrawCard({
             </h3>
           </div>
           <div className="space-y-1.5 shrink-0">
-            <div className="flex items-center justify-between text-[10px] md:text-xs font-semibold text-gray-700 dark:text-neutral-300">
+            <div className="flex items-center justify-between text-2xs md:text-xs font-semibold text-gray-700 dark:text-neutral-300">
               <span className="truncate">
                 {totalEntries.toLocaleString()}/{minimumEntries.toLocaleString()}
               </span>
@@ -839,7 +840,7 @@ function MiniDrawCard({
                 e.stopPropagation();
                 onEditLatestWinner();
               }}
-              className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-300/80 dark:border-amber-700/80 bg-amber-50 dark:bg-amber-950/45 px-2 py-2 text-[10px] sm:text-xs font-semibold text-amber-950 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+              className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-300/80 dark:border-amber-700/80 bg-amber-50 dark:bg-amber-950/45 px-2 py-2 text-2xs sm:text-xs font-semibold text-amber-950 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
               title="Edit winner photo, testimony, and draw result link"
             >
               <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-amber-700 dark:text-amber-300" />

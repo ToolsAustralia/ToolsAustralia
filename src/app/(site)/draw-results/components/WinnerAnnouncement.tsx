@@ -14,7 +14,7 @@ export default function WinnerAnnouncement({ latestWinner }: WinnerAnnouncementP
     latestWinner.imageUrl || latestWinner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
 
   return (
-    <div className="bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 rounded-2xl shadow-xl p-6 sm:p-8 mb-8 text-white relative overflow-hidden">
+    <div className="bg-gradient-to-br from-red-600 via-red-600 to-red-700 rounded-2xl shadow-xl p-6 sm:p-8 mb-8 text-white relative overflow-hidden">
       <div className="absolute inset-0 bg-black/10"></div>
       <div className="relative">
         {/* Header */}
@@ -107,7 +107,7 @@ export default function WinnerAnnouncement({ latestWinner }: WinnerAnnouncementP
             </div>
             <Link
               href="/mini-draws"
-              className="inline-flex items-center justify-center bg-white text-[#ee0000] px-4 sm:px-6 py-2 sm:py-3 rounded-xl hover:bg-gray-100 transition-colors duration-200 font-semibold text-sm sm:text-base shadow-lg w-auto"
+              className="inline-flex items-center justify-center bg-white text-red-600 px-4 sm:px-6 py-2 sm:py-3 rounded-xl hover:bg-gray-100 transition-colors duration-200 font-semibold text-sm sm:text-base shadow-lg w-auto"
             >
               <Target className="w-4 h-4 mr-2" />
               View Active Draws

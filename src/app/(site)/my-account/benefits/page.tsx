@@ -91,7 +91,7 @@ function PartnerBenefitsContent() {
   return (
     <div className="min-h-screen-svh w-full bg-gray-50">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 text-white pt-[90px] sm:pt-[106px] pb-16 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-red-600 via-red-600 to-red-700 text-white pt-[90px] sm:pt-[var(--app-header-h-lg)] pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-transparent to-black/20"></div>

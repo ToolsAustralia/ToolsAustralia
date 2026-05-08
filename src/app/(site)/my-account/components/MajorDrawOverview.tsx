@@ -7,6 +7,7 @@ import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import type { PackageDetailModalPackageData, SubscriptionAccumulationData } from "@/components/modals/PackageDetailModal";
 import { formatRenewalDate } from "@/utils/dates/month-helpers";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cn } from "@/utils/cn";
 
 interface MajorDrawOverviewProps {
   drawName: string;
@@ -81,7 +82,7 @@ function CountdownDisplay({ targetDate }: { targetDate: string }) {
           {value.toString().padStart(2, '0')}
         </div>
       </div>
-      <div className="text-white/50 dark:text-slate-500 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] mt-1">
+      <div className="text-white/50 dark:text-slate-500 text-3xs sm:text-3xs font-bold uppercase tracking-[0.2em] mt-1">
         {label}
       </div>
     </div>
@@ -200,7 +201,7 @@ export default function MajorDrawOverview({
   })();
 
   return (
-    <div className={`px-4 sm:px-6 ${className}`}>
+    <div className={cn("px-4 sm:px-6", className)}>
       <div className="max-w-7xl mx-auto">
         <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.25),0_4px_20px_-8px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] border border-slate-200/80 dark:border-slate-700/60 overflow-hidden">
 
@@ -253,7 +254,7 @@ export default function MajorDrawOverview({
                     className={`max-w-full text-center text-red-100/90 transition-opacity duration-500 whitespace-nowrap ${
                       pendingEntriesData && showProjected
                         ? "font-semibold normal-case tracking-normal text-xs xs:text-sm sm:text-base leading-tight"
-                        : "font-bold uppercase text-[10px] xs:text-xs sm:text-sm tracking-[0.35em]"
+                        : "font-bold uppercase text-2xs xs:text-xs sm:text-sm tracking-[0.35em]"
                     }`}
                   >
                     {heroLabel}
@@ -314,7 +315,7 @@ export default function MajorDrawOverview({
                       )}
 
                       <div className="relative flex flex-col items-center flex-1 justify-center w-full">
-                        <div className="relative flex items-center justify-center gap-1.5 text-red-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
+                        <div className="relative flex items-center justify-center gap-1.5 text-red-200/80 text-2xs sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
                           <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300/70" />
                           <span>Membership</span>
                         </div>
@@ -346,7 +347,7 @@ export default function MajorDrawOverview({
                       {pendingEntriesData && (
                         <div className="relative w-full text-center mt-2 pt-2 border-t border-white/10">
                           <span
-                            className={`text-[10px] sm:text-xs font-semibold ${
+                            className={`text-2xs sm:text-xs font-semibold ${
                               pendingEntriesData.isFailedRenewal ? "text-amber-300/80" : "text-red-300/70"
                             }`}
                           >
@@ -389,7 +390,7 @@ export default function MajorDrawOverview({
                         <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03] pointer-events-none" />
 
                         <div className="relative flex flex-col items-center gap-1.5 z-[1]">
-                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em]">
+                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-2xs sm:text-xs font-bold uppercase tracking-[0.15em]">
                             <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300/70" />
                             <span>One-time</span>
                           </div>
@@ -407,7 +408,7 @@ export default function MajorDrawOverview({
                         <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03] pointer-events-none" />
 
                         <div className="relative flex flex-col items-center gap-1.5 z-[1]">
-                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em]">
+                          <div className="flex items-center gap-1.5 text-emerald-200/80 text-2xs sm:text-xs font-bold uppercase tracking-[0.15em]">
                             <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300/70" />
                             <span>One-time</span>
                           </div>

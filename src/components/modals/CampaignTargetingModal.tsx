@@ -6,6 +6,7 @@ import { ModalContainer, ModalHeader, ModalContent, Input, Button } from "@/comp
 import Dropdown from "@/components/modals/ui/Dropdown";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { formatDisplayName } from "@/utils/display-name";
+import { cn } from "@/utils/cn";
 
 export type RedeemableTierId = "tradie-subscription" | "foreman-subscription" | "boss-subscription";
 
@@ -375,7 +376,7 @@ export default function CampaignTargetingModal({
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm text-gray-800 dark:text-neutral-100"
               >
                 {statesSummary}
-                <ChevronDown className={`w-4 h-4 shrink-0 transition ${statesOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={cn("w-4 h-4 shrink-0 transition", statesOpen ? "rotate-180" : "")} />
               </button>
               {statesOpen && (
                 <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg py-1">

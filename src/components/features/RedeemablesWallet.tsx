@@ -85,8 +85,8 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
       <div className="px-5 py-4 border-b border-gray-100">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-[#ee0000]/10">
-              <Gift className="w-5 h-5 text-[#ee0000]" />
+            <div className="p-2 rounded-xl bg-red-600/10">
+              <Gift className="w-5 h-5 text-red-600" />
             </div>
             <div>
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 font-['Poppins']">Redeemables Wallet</h3>
@@ -108,13 +108,13 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
               value={codeInput}
               onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
               placeholder="Enter code (e.g. TA-202603-ABC123)"
-              className="flex-1 h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ee0000]/30 focus:border-[#ee0000]"
+              className="flex-1 h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-600/30 focus:border-red-600"
               aria-label="Redeemable code input"
             />
             <button
               onClick={() => onRedeem({ code: codeInput })}
               disabled={!codeInput.trim() || redemptionMutation.isPending}
-              className="h-11 px-4 rounded-lg bg-gradient-to-r from-[#ee0000] to-red-600 text-white text-sm font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="h-11 px-4 rounded-lg bg-gradient-to-r from-red-600 to-red-600 text-white text-sm font-semibold hover:from-red-600 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {redemptionMutation.isPending ? (
                 <>
@@ -148,7 +148,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                 {displayedWallet.map((item) => (
                   <article
                     key={item.issuanceId}
-                    className="rounded-xl border border-gray-200 bg-white p-3.5 hover:border-[#ee0000]/30 transition-colors"
+                    className="rounded-xl border border-gray-200 bg-white p-3.5 hover:border-red-600/30 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -160,13 +160,13 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                           {item.entriesAmount.toLocaleString()} free entries
                         </p>
                         {item.purchaseRequirement !== "none" && (
-                          <p className="mt-1 text-[11px] sm:text-xs text-amber-700 font-medium">
+                          <p className="mt-1 text-2xs sm:text-xs text-amber-700 font-medium">
                             {item.purchaseRequirement === "membership" && "Code for membership purchase"}
                             {item.purchaseRequirement === "one-time" && "Code for one-time purchase"}
                             {item.purchaseRequirement === "any" && "Coupon valid for any purchase"}
                           </p>
                         )}
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-gray-500">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs sm:text-xs text-gray-500">
                           <span className="inline-flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
                             {item.neverExpires ? "No expiry" : item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleDateString()}` : "No expiry"}
@@ -196,7 +196,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard", onReq
                           <button
                             onClick={() => onRedeem({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount })}
                             disabled={redemptionMutation.isPending}
-                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-[#ee0000] text-white text-xs sm:text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-600 text-white text-xs sm:text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             Redeem

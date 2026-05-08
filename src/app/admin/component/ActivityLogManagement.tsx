@@ -167,14 +167,14 @@ export default function ActivityLogManagement() {
                       <ClickableUserDisplay
                         displayText={activity.user}
                         userId={activity.userId ?? null}
-                        className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400"
+                        className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400"
                       />
-                      <span className="text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
-                      <span className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400">{activity.time}</span>
+                      <span className="text-2xs sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
+                      <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">{activity.time}</span>
                       {activity.amount && (
                         <>
-                          <span className="text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
-                          <span className="text-[10px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          <span className="text-2xs sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
+                          <span className="text-2xs sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                             ${activity.amount.toLocaleString()}
                           </span>
                         </>

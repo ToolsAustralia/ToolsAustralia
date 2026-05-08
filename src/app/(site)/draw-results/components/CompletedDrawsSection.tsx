@@ -5,6 +5,7 @@ import { Award, Loader2 } from "lucide-react";
 import { useCompletedMajorDraws } from "@/hooks/queries/useMajorDrawQueries";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import UnifiedCompletedDrawCard from "./UnifiedCompletedDrawCard";
+import { cn } from "@/utils/cn";
 
 function getContrastText(hex: string) {
   const clean = hex.replace("#", "");
@@ -87,7 +88,7 @@ const CompletedDrawsSection: React.FC<CompletedDrawsSectionProps> = ({ className
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={cn("relative", className)}>
       <div className="space-y-8 sm:space-y-10">
         {completedDraws.map((draw, index) => {
           const drawKey = String(draw._id);

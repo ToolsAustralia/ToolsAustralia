@@ -87,14 +87,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     return (
       <div className="h-screen-dvh bg-gray-50 dark:bg-neutral-950 flex items-center justify-center">
         <div className="max-w-md mx-auto text-center bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border-2 border-red-100 dark:border-red-900/40 p-12">
-          <div className="w-20 h-20 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full mx-auto mb-6 flex items-center justify-center">
+          <div className="w-20 h-20 bg-gradient-to-r from-red-600 to-red-400 rounded-full mx-auto mb-6 flex items-center justify-center">
             <Shield className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">Access Denied</h2>
           <p className="text-gray-600 dark:text-neutral-300 mb-8 text-lg">You don&apos;t have permission to access the admin panel.</p>
           <button
             onClick={() => navigateTo("home")}
-            className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] text-white font-semibold px-8 py-3 rounded-xl transition-all duration-200"
+            className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 text-white font-semibold px-8 py-3 rounded-xl transition-all duration-200"
           >
             Return to Home
           </button>

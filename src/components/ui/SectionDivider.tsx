@@ -1,5 +1,7 @@
 "use client";
 
+
+import { cn } from "@/utils/cn";
 interface SectionDividerProps {
   type?: "wave" | "curve" | "diagonal" | "zigzag";
   color?: string;
@@ -31,7 +33,7 @@ export default function SectionDivider({
   };
 
   return (
-    <div className={`w-full ${className}`}>
+    <div className={cn("w-full", className)}>
       {/* Height is controlled by Tailwind classes: h-16 = 64px (mobile), sm:h-24 = 96px (desktop) */}
       {/* To adjust: Change h-16 and sm:h-24 to your desired Tailwind height classes */}
       {/* Common options: h-12 (48px), h-16 (64px), h-20 (80px), h-24 (96px), h-28 (112px), h-32 (128px) */}

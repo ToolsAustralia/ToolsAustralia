@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 
 import { queryKeys } from "@/lib/queryKeys";
+import { cn } from "@/utils/cn";
 
 // Google Icon Component
 
@@ -65,7 +66,7 @@ function SquareCheckbox({ checked, onChange }: { checked: boolean; onChange: (ch
       <div
         className={`w-6 h-6 border-2 rounded ${
           checked
-            ? "border-[#ee0000] bg-[#ee0000]"
+            ? "border-red-600 bg-red-600"
             : "border-[#d9d9d9] bg-white dark:border-neutral-500 dark:bg-neutral-900"
         } flex items-center justify-center`}
       >
@@ -96,7 +97,7 @@ function AnimatedOffers() {
 
       subtitle: "Exclusive Offers",
 
-      color: "bg-[#ec0000]",
+      color: "bg-red-500",
     },
 
     {
@@ -106,7 +107,7 @@ function AnimatedOffers() {
 
       subtitle: "VIP Access",
 
-      color: "bg-[#ec0000]",
+      color: "bg-red-500",
     },
 
     {
@@ -116,7 +117,7 @@ function AnimatedOffers() {
 
       subtitle: "Daily Deals",
 
-      color: "bg-[#ec0000]",
+      color: "bg-red-500",
     },
 
     {
@@ -126,7 +127,7 @@ function AnimatedOffers() {
 
       subtitle: "Safe Shopping",
 
-      color: "bg-[#ec0000]",
+      color: "bg-red-500",
     },
   ];
 
@@ -143,7 +144,7 @@ function AnimatedOffers() {
   return (
     <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
       <div
-        className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-14 lg:h-14 ${current.color} rounded-full flex items-center justify-center transition-all duration-500 ease-in-out`}
+        className={cn("w-8 h-8 sm:w-10 sm:h-10 lg:w-14 lg:h-14", current.color, "rounded-full flex items-center justify-center transition-all duration-500 ease-in-out")}
       >
         <div className="transition-all duration-500 ease-in-out transform scale-50 sm:scale-75 lg:scale-100">
           {current.icon}
@@ -151,11 +152,11 @@ function AnimatedOffers() {
       </div>
 
       <div className="transition-all duration-500 ease-in-out">
-        <p className="text-[10px] sm:text-[12px] lg:text-[14px] font-medium text-[#ec0000] tracking-[-0.28px] transition-all duration-500 ease-in-out">
+        <p className="text-2xs sm:text-[12px] lg:text-[14px] font-medium text-red-500 tracking-[-0.28px] transition-all duration-500 ease-in-out">
           {current.title}
         </p>
 
-        <p className="text-[14px] sm:text-[16px] lg:text-[24px] font-bold text-[#ec0000] tracking-[-0.48px] transition-all duration-500 ease-in-out">
+        <p className="text-[14px] sm:text-[16px] lg:text-[24px] font-bold text-red-500 tracking-[-0.48px] transition-all duration-500 ease-in-out">
           {current.subtitle}
         </p>
       </div>
@@ -496,7 +497,7 @@ function LoginPageContent() {
                   required
                 />
 
-                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-[11px] sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
+                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-2xs sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
                   Email
                 </label>
               </div>
@@ -545,7 +546,7 @@ function LoginPageContent() {
 
               <Link
                 href="/reset-password"
-                className="text-[12px] sm:text-[13px] lg:text-[14px] font-medium text-[#ee0000] hover:underline"
+                className="text-[12px] sm:text-[13px] lg:text-[14px] font-medium text-red-600 hover:underline"
               >
                 Forgot password?
               </Link>
@@ -564,7 +565,7 @@ function LoginPageContent() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-[#ec0000] text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-red-500 text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
@@ -601,7 +602,7 @@ function LoginPageContent() {
               Need an account?{" "}
               <Link
                 href="/membership"
-                className="text-[#ee0000] font-semibold underline hover:no-underline"
+                className="text-red-600 font-semibold underline hover:no-underline"
                 onClick={(e) => {
                   // If we're already on the membership page, scroll to the section
 
@@ -673,7 +674,7 @@ function LoginPageContent() {
               {/* Card Content */}
 
               <div className="relative z-30 max-w-[180px] sm:max-w-[240px] lg:max-w-[280px] pr-2 sm:pr-4 lg:pr-0">
-                <h2 className="text-[20px] sm:text-[24px] lg:text-[34px] font-bold text-[#ec0000] mb-3 sm:mb-4 tracking-[-0.68px] leading-[1.1] sm:leading-[37px]">
+                <h2 className="text-[20px] sm:text-[24px] lg:text-[34px] font-bold text-red-500 mb-3 sm:mb-4 tracking-[-0.68px] leading-[1.1] sm:leading-[37px]">
                   Achieve More with the Right Tools
                 </h2>
 
@@ -682,7 +683,7 @@ function LoginPageContent() {
                   discounts, and access to premium offers.
                 </p>
 
-                <button className="bg-[#ec0000] text-[#f7fafc] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[70px] text-[12px] sm:text-[14px] font-medium tracking-[-0.28px] hover:bg-[#d40000] transition-colors">
+                <button className="bg-red-500 text-[#f7fafc] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[70px] text-[12px] sm:text-[14px] font-medium tracking-[-0.28px] hover:bg-[#d40000] transition-colors">
                   Learn more
                 </button>
               </div>

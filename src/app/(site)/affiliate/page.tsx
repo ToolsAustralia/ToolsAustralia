@@ -230,7 +230,7 @@ export default function AffiliateDashboardPage() {
   return (
     <div className="min-h-screen-svh bg-gray-50 w-full overflow-hidden">
       {/* Premium Dashboard Hero Section */}
-      <div className="relative bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 pt-[86px] sm:pt-[106px] overflow-hidden">
+      <div className="relative bg-gradient-to-br from-red-600 via-red-600 to-red-700 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] overflow-hidden">
         {/* Premium Background Effects */}
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
@@ -341,7 +341,7 @@ export default function AffiliateDashboardPage() {
               />
               <button
                 onClick={copyLink}
-                className="group relative bg-gradient-to-r from-[#ee0000] to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-[#cc0000] hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                className="group relative bg-gradient-to-r from-red-600 to-red-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-red-675 hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
               >
                 {copied ? (
                   <>
@@ -375,7 +375,7 @@ export default function AffiliateDashboardPage() {
                   setAccountError(null);
                   setAccountSuccess(false);
                 }}
-                className="text-sm font-medium text-[#ee0000] hover:text-[#cc0000] transition-colors"
+                className="text-sm font-medium text-red-600 hover:text-red-675 transition-colors"
               >
                 {showAccountSettings ? "Cancel" : "Update"}
               </button>
@@ -458,7 +458,7 @@ export default function AffiliateDashboardPage() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#ee0000] to-red-600 text-white rounded-xl font-semibold hover:from-[#cc0000] hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-red-600 to-red-600 text-white rounded-xl font-semibold hover:from-red-675 hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
                 >
                   Update Account
                 </button>
@@ -476,7 +476,7 @@ export default function AffiliateDashboardPage() {
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 font-['Poppins']">Bank Details</h2>
               <button
                 onClick={() => setShowBankForm(!showBankForm)}
-                className="text-sm font-medium text-[#ee0000] hover:text-[#cc0000] transition-colors"
+                className="text-sm font-medium text-red-600 hover:text-red-675 transition-colors"
               >
                 {showBankForm ? "Cancel" : dashboard.bankDetails ? "Edit" : "Add"}
               </button>
@@ -530,7 +530,7 @@ export default function AffiliateDashboardPage() {
                 </div>
                 <button
                   type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-[#ee0000] to-red-600 text-white rounded-xl font-semibold hover:from-[#cc0000] hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
+                  className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-600 text-white rounded-xl font-semibold hover:from-red-675 hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
                 >
                   Save Bank Details
                 </button>

@@ -19,14 +19,14 @@ import {
 
 // Tools Australia brand red (matches site nav, login, AdminSidebar) - Milwaukee overrides package theme
 const TOOLS_AUSTRALIA_RED: PrizeBrandColors = {
-  gradient: "from-[#d40000] via-[#ee0000] to-[#ff4444]",
-  borderColor: "border-[#ee0000]",
+  gradient: "from-[#d40000] via-red-600 to-red-400",
+  borderColor: "border-red-600",
   shadowColor: "shadow-[0_0_20px_rgba(238,0,0,0.4)]",
   textColor: "text-white",
   subtitleTextColor: "text-white/90",
-  checkmarkColor: "text-[#ee0000]",
-  hoverBorderColor: "hover:border-[#ff4444]",
-  hoverTextColor: "hover:text-[#ee0000]",
+  checkmarkColor: "text-red-600",
+  hoverBorderColor: "hover:border-red-400",
+  hoverTextColor: "hover:text-red-600",
 } as const;
 
 /**

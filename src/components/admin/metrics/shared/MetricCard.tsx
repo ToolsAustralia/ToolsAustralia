@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export interface MetricCardProps {
   title: string | React.ReactNode;
@@ -43,7 +44,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
   if (loading) {
     return (
       <div
-        className={`bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2.5 sm:p-4 lg:p-6 animate-pulse ${className}`}
+        className={cn("bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2.5 sm:p-4 lg:p-6 animate-pulse", className)}
       >
         <div className="h-3 sm:h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/2 mb-1.5 sm:mb-2"></div>
         <div className="h-5 sm:h-7 lg:h-8 bg-gray-200 dark:bg-neutral-700 rounded w-3/4"></div>
@@ -112,16 +113,16 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
     >
       <div className="flex items-start justify-between gap-1.5 mb-1 sm:mb-2">
         {typeof title === "string" ? (
-          <h3 className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+          <h3 className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
             {title}
           </h3>
         ) : (
-          <div className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+          <div className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
             {title}
           </div>
         )}
-        <div className={`shrink-0 p-1.5 sm:p-2 rounded-md sm:rounded-lg ring-1 ring-black/5 dark:ring-white/10 shadow-sm ${colorClasses[normalizedColor]}`}>
-          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
+        <div className={cn("shrink-0 p-1.5 sm:p-2 rounded-md sm:rounded-lg ring-1 ring-black/5 dark:ring-white/10 shadow-sm", colorClasses[normalizedColor])}>
+          <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5", iconColorClasses[normalizedColor])} aria-hidden="true" />
         </div>
       </div>
       <div className="flex items-baseline justify-between gap-1.5 min-w-0">
@@ -135,7 +136,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         </p>
         {trend && trendDirection && (
           <div
-            className={`shrink-0 text-[10px] sm:text-xs font-semibold ${
+            className={`shrink-0 text-2xs sm:text-xs font-semibold ${
               trendDirection === "up"
                 ? "text-emerald-600"
                 : trendDirection === "down"
@@ -148,13 +149,13 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         )}
       </div>
       {count !== undefined && count !== null && (
-        <div className="text-[11px] sm:text-xs font-medium text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
+        <div className="text-2xs sm:text-xs font-medium text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
           {count.toLocaleString()} {countLabel || "items"}
         </div>
       )}
       {subtitle && (
         <div
-          className="text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug"
+          className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug"
           aria-label={`${titleString} subtitle`}
         >
           {subtitle}

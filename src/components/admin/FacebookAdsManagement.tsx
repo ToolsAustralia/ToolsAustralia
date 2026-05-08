@@ -38,6 +38,7 @@ import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import SpendByUrlSection from "./SpendByUrlSection";
+import { cn } from "@/utils/cn";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -1128,25 +1129,25 @@ export default function FacebookAdsManagement() {
                   <div className="flex items-center justify-end">Spend{getHourlySortIcon("spend")}</div>
                 </th>
                 <th
-                  className={`sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("impressions")}
                 >
                   <div className="flex items-center justify-end">Impressions{getHourlySortIcon("impressions")}</div>
                 </th>
                 <th
-                  className={`sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("clicks")}
                 >
                   <div className="flex items-center justify-end">Clicks{getHourlySortIcon("clicks")}</div>
                 </th>
                 <th
-                  className={`sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("ctr")}
                 >
                   <div className="flex items-center justify-end">CTR{getHourlySortIcon("ctr")}</div>
                 </th>
                 <th
-                  className={`sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("cpc")}
                 >
                   <div className="flex items-center justify-end">CPC{getHourlySortIcon("cpc")}</div>
@@ -1158,7 +1159,7 @@ export default function FacebookAdsManagement() {
                   <div className="flex items-center justify-end" title="Revenue">Rev{getHourlySortIcon("revenue")}</div>
                 </th>
                 <th
-                  className={`sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                  className={cn("sticky top-0 z-10 bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700/90 transition-colors select-none", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}
                   onClick={() => handleHourlySort("profit")}
                 >
                   <div className="flex items-center justify-end">Profit{getHourlySortIcon("profit")}</div>
@@ -1182,15 +1183,15 @@ export default function FacebookAdsManagement() {
                 <tr key={hour.hour} className="border-b border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors">
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white font-medium">{hour.label}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hour.spend)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.impressions)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hour.clicks)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hour.ctr)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hour.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.impressions)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hour.clicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hour.ctr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hour.cpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold">{formatCurrency(hour.revenue)}</td>
-                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                  <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold", hour.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hour.profit)}
                   </td>
-                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold ${hour.roas >= 2 ? "text-emerald-600 dark:text-emerald-400" : hour.roas >= 1 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}>
+                  <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right font-semibold", hour.roas >= 2 ? "text-emerald-600 dark:text-emerald-400" : hour.roas >= 1 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400")}>
                     {formatROAS(hour.roas)}
                   </td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{hour.conversions}</td>
@@ -1200,15 +1201,15 @@ export default function FacebookAdsManagement() {
                 <tr className="border-t-2 border-gray-200 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800 font-semibold">
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white">Total</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.spend)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.impressions)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatNumber(hourlyTotals.clicks)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatPercentage(hourlyTotals.ctr)}</td>
-                  <td className={`py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>{formatCurrency(hourlyTotals.cpc)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.impressions)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatNumber(hourlyTotals.clicks)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatPercentage(hourlyTotals.ctr)}</td>
+                  <td className={cn("py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>{formatCurrency(hourlyTotals.cpc)}</td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{formatCurrency(hourlyTotals.revenue)}</td>
-                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} ${!hourlyColumnsExpanded ? "hidden sm:table-cell" : ""}`}>
+                  <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right", hourlyTotals.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400", !hourlyColumnsExpanded ? "hidden sm:table-cell" : "")}>
                     {formatCurrency(hourlyTotals.profit)}
                   </td>
-                  <td className={`py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right ${hourlyTotals.roas >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  <td className={cn("py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right", hourlyTotals.roas >= 1 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
                     {formatROAS(hourlyTotals.roas)}
                   </td>
                   <td className="py-1.5 px-0.5 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white">{hourlyTotals.conversions}</td>

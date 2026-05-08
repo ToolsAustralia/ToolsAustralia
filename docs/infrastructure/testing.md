@@ -25,7 +25,14 @@ npm run migrate:<name>:dry
 New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
 
 ```bash
-npm run test:past-due-history   # pure aggregation helpers (no env vars needed)
+npm run test:past-due-history       # pure aggregation helpers (no env vars needed)
+npm run test:cancellation-upsell    # smoke-renders CancellationUpsellModal in 12 prop combos
+npm run test:refer-friend           # smoke-renders ReferFriendModal in 3 open + 1 closed combos
+npm run test:upgrade-confirm        # smoke-renders UpgradeConfirmModal (3 tiers + full props + closed)
+npm run test:downgrade-confirm      # smoke-renders DowngradeConfirmModal
+npm run test:renewal-failed         # smoke-renders RenewalFailedModal (open + closed)
+npm run test:ui-primitives          # Button, Badge, Card primitives
+npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
 ```
 
 ## Diagnostic find scripts

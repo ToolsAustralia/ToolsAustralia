@@ -7,11 +7,11 @@ import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageC
 import { useMemberships } from "@/hooks/useMemberships";
 import { useToast } from "@/components/ui/Toast";
 import { useRenewSubscription } from "@/hooks/queries/useSubscriptionQueries";
-import ConfirmationModal from "./ConfirmationModal";
 import BenefitCountdown from "@/components/ui/BenefitCountdown";
 import StripePaymentModal from "./StripePaymentModal";
 import CancellationUpsellModal from "./CancellationUpsellModal";
 import DowngradeConfirmModal from "./DowngradeConfirmModal";
+import UpgradeConfirmModal from "./UpgradeConfirmModal";
 import RenewalFailedModal from "./RenewalFailedModal";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -24,6 +24,7 @@ import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellati
 import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useLoading } from "@/contexts/LoadingContext";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { cn } from "@/utils/cn";
 
 interface User {
   _id: string;
@@ -172,7 +173,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   renderAsPanel = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCancellationUpsell, setShowCancellationUpsell] = useState(false);
   const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [showDowngradeConfirm, setShowDowngradeConfirm] = useState(false);
@@ -404,24 +404,18 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     return activeOneTimeData?.packageData || null;
   })();
 
-  const upgradeConfirmationBenefits = useMemo(() => {
-    if (!selectedUpgrade || !membershipPackage) return undefined;
+  /** Numeric data for UpgradeConfirmModal — extracted separately from upgradeConfirmationBenefits
+   * so the new modal can render its own copy from raw numbers instead of pre-formatted strings. */
+  const upgradeModalData = useMemo(() => {
+    if (!selectedUpgrade || !membershipPackage) return null;
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-    const currentAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
-    const { entriesToGrant, newLastMonthAccumulatedEntries } = calculateUpgradeEntries(
+    const currentEntries = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const { entriesToGrant } = calculateUpgradeEntries(
       selectedUpgrade.entriesPerMonth,
-      currentAccumulated,
+      currentEntries,
       membershipPromoMultiplier
     );
-    const promoNote =
-      membershipPromoMultiplier > 1
-        ? ` Includes ${membershipPromoMultiplier}× promo on this upgrade’s monthly grant.`
-        : "";
-    return [
-      `Accumulated free entries after upgrade: ${newLastMonthAccumulatedEntries.toLocaleString()} (${currentAccumulated.toLocaleString()} you have now + ${entriesToGrant.toLocaleString()} from ${selectedUpgrade.name}’s monthly grant).${promoNote}`,
-      `Every billing cycle on this plan, your balance grows by ${selectedUpgrade.entriesPerMonth} accumulated entries.`,
-      `${selectedUpgrade.partnerDiscountDays} days partner access`,
-    ];
+    return { currentEntries, upgradeEntriesGrant: entriesToGrant };
   }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
 
   /** Cancellation upsell modal context — tier, locked-in entries, downgrade target, days to next draw. */
@@ -617,7 +611,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     if (user.cancellationUpsellRedeemed) {
       await proceedWithCancellation();
     } else if (canOfferCancellationUpsellRedeem(user)) {
-      setShowCancelConfirm(false);
       setShowCancellationUpsell(true);
     } else {
       await proceedWithCancellation();
@@ -680,7 +673,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         onSubscriptionUpdate();
       }
       fetchSubscriptionBenefits();
-      setShowCancelConfirm(false);
     } catch (error) {
       console.error("Failed to cancel subscription:", error);
       showToast({
@@ -888,7 +880,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       <React.Fragment>
         <div className="space-y-4 sm:space-y-6">
             <div
-              className={`rounded-lg p-4 sm:p-6 relative overflow-hidden shadow-lg ${currentPlanColorScheme.enterNowButtonTextClass ?? currentPlanColorScheme.text}`}
+              className={cn("rounded-lg p-4 sm:p-6 relative overflow-hidden shadow-lg", currentPlanColorScheme.enterNowButtonTextClass ?? currentPlanColorScheme.text)}
               style={{
                 ...currentPlanColorScheme.badgeStyle,
                 border: `2px solid ${currentPlanColorScheme.accentHex}${currentPlanColorScheme.cardBorderOpacity || "CC"}`,
@@ -941,7 +933,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-300" />
                       <span className="text-yellow-300 font-semibold text-xs sm:text-sm">Subscription Cancelled</span>
                     </div>
-                    <p className="text-yellow-100 text-[10px] sm:text-xs">
+                    <p className="text-yellow-100 text-2xs sm:text-xs">
                       Your subscription will end on{" "}
                       {formatDate(subscriptionBenefits.endDate || activeSubscription.endDate) ||
                         "the end of your billing period"}
@@ -953,7 +945,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 <div className="flex justify-between items-center">
                   <span className="text-xs sm:text-sm opacity-90">Auto Renewal:</span>
                   <span
-                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
+                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-medium ${
                       activeSubscription.autoRenew ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"
                     }`}
                   >
@@ -1038,7 +1030,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                         Resolve Payment Issue
                       </Button>
                       <Button
-                        onClick={() => setShowCancelConfirm(true)}
+                        onClick={() => void handleCancelSubscription()}
                         variant="outline"
                         className="border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 text-sm sm:text-base"
                         size="sm"
@@ -1112,13 +1104,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">${upgrade.price}/mo</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{upgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span className="font-medium">{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
                               <span>{upgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
                           <div
-                            className={`w-full sm:w-auto sm:ml-4 rounded-2xl ${upgradeColorScheme.glow}`}
+                            className={cn("w-full sm:w-auto sm:ml-4 rounded-2xl", upgradeColorScheme.glow)}
                           >
                             <button
                               type="button"
@@ -1127,7 +1119,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                                 setShowUpgradeConfirm(true);
                               }}
                               disabled={isLoading || benefitsLoading}
-                              className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${upgradeTextClass} ${upgradeColorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                              className={cn("font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105", upgradeTextClass, upgradeColorScheme.borderGlow, "membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100")}
                               style={upgradeButtonStyle}
                             >
                               <span className="relative z-10" style={upgradeColorScheme.textGradientStyle ?? undefined}>
@@ -1179,12 +1171,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span className="text-base sm:text-lg font-bold" style={{ color: colorScheme.accentHex }}>${downgrade.price}/mo</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{downgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span className="font-medium">{downgradeEntries} Free Accumulated Entries</span>
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
                           </div>
-                          <div className={`w-full sm:w-auto sm:ml-4 rounded-2xl ${colorScheme.glow}`}>
+                          <div className={cn("w-full sm:w-auto sm:ml-4 rounded-2xl", colorScheme.glow)}>
                             <button
                               type="button"
                               onClick={() => {
@@ -1192,7 +1184,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                                 setShowDowngradeConfirm(true);
                               }}
                               disabled={isLoading || benefitsLoading}
-                              className={`font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105 ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                              className={cn("font-agency font-black uppercase rounded-2xl px-4 py-2.5 flex items-center justify-center text-xs sm:text-sm transition-all duration-300 transform hover:scale-[1.02] hover:brightness-105", textClass, colorScheme.borderGlow, "membership-enter-cta-animation w-full sm:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100")}
                               style={buttonStyle}
                             >
                               <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
@@ -1215,7 +1207,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
               >
                 <div className="flex items-start sm:items-center gap-2 sm:gap-3 flex-1 min-w-0">
                   <XCircle
-                    className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0 ${subscriptionBenefits?.isCancelled ? "text-yellow-600 dark:text-yellow-500" : "text-red-600 dark:text-red-400"}`}
+                    className={cn("w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 sm:mt-0", subscriptionBenefits?.isCancelled ? "text-yellow-600 dark:text-yellow-500" : "text-red-600 dark:text-red-400")}
                   />
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
@@ -1230,7 +1222,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 </div>
                 {!subscriptionBenefits?.isCancelled ? (
                   <Button
-                    onClick={() => setShowCancelConfirm(true)}
+                    onClick={() => void handleCancelSubscription()}
                     disabled={isLoading}
                     variant="secondary"
                     size="sm"
@@ -1286,7 +1278,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 Subscribe to Membership Packages
               </Button>
@@ -1312,7 +1304,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 {user.subscription.status === "canceled" ? "Reactivate Subscription" : "Subscribe to Membership Packages"}
               </Button>
@@ -1332,7 +1324,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 Subscribe to Membership Packages
               </Button>
@@ -1340,55 +1332,27 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           </div>
         )}
 
-        {/* Cancel Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={showCancelConfirm}
-          onClose={() => setShowCancelConfirm(false)}
-          onConfirm={handleCancelSubscription}
-          type="cancel"
-          title="Cancel Subscription"
-          message="Are you sure you want to cancel your subscription? You'll retain access to all benefits until the end of your current billing period."
-          confirmText="Cancel Subscription"
-          cancelText="Keep Subscription"
-          isLoading={isLoading}
-          details={{
-            packageName: membershipPackage?.name || "Current Plan",
-            warnings: [
-              "You'll lose access to subscription benefits after the current billing period",
-              "No refunds for unused time",
-            ],
-            info: ["You'll keep current benefits until cycle end", "You can resubscribe anytime"],
-          }}
-        />
+        {/* Cancel confirmation modal removed — clicking Cancel now goes straight
+         * to handleCancelSubscription() which either offers the cancellation
+         * upsell (if eligible) or proceeds with the API cancel. */}
 
-        {/* Upgrade Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={showUpgradeConfirm && !!selectedUpgrade}
-          onClose={() => setShowUpgradeConfirm(false)}
-          onConfirm={handleUpgradeSubscription}
-          type="upgrade"
-          title={`Upgrade to ${selectedUpgrade?.name || ""}`}
-          message={`You'll be charged the full upgrade amount now. Your billing cycle will restart today.`}
-          confirmText="Continue to Payment"
-          cancelText="Keep Current Plan"
-          isLoading={isLoading}
-          details={
-            selectedUpgrade && membershipPackage && upgradeConfirmationBenefits
-              ? {
-                  packageName: selectedUpgrade.name,
-                  price: selectedUpgrade.price,
-                  benefits: upgradeConfirmationBenefits,
-                  info: [
-                    "✓ Pay full plan price now",
-                    "✓ Upgrade activates immediately",
-                    "✓ Billing cycle restarts today",
-                    `✓ Next bill: $${selectedUpgrade.price}/month`,
-                  ],
-                  warnings: ["No credit/refund is applied. Billing resets to the new plan."],
-                }
-              : undefined
-          }
-        />
+        {/* Themed Upgrade Confirmation — mirrors DowngradeConfirmModal's infographic intensity */}
+        {selectedUpgrade && membershipPackage ? (
+          <UpgradeConfirmModal
+            isOpen={showUpgradeConfirm && !!selectedUpgrade}
+            onClose={() => setShowUpgradeConfirm(false)}
+            onConfirm={handleUpgradeSubscription}
+            isLoading={isLoading}
+            fromPackageName={membershipPackage.name}
+            toPackageName={selectedUpgrade.name}
+            toPackagePrice={selectedUpgrade.price}
+            toPartnerAccessPercent={getPartnerCatalogAccessPercentForMembershipPackageId(selectedUpgrade.packageId)}
+            toPartnerDiscountDays={selectedUpgrade.partnerDiscountDays}
+            toEntriesPerMonth={selectedUpgrade.entriesPerMonth}
+            upgradeEntriesGrant={upgradeModalData?.upgradeEntriesGrant}
+            currentEntries={upgradeModalData?.currentEntries}
+          />
+        ) : null}
 
         {/* Themed Downgrade Confirmation — matches the cancellation modal's intensity */}
         {selectedDowngrade && membershipPackage ? (

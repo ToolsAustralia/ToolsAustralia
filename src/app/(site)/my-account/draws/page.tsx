@@ -216,19 +216,19 @@ export default function DrawsPage() {
         >
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-9 h-9 xs:w-10 xs:h-10 rounded-xl bg-gradient-to-br from-[#ee0000] to-[#cc0000] dark:from-red-600 dark:to-red-700 flex items-center justify-center shadow-lg shadow-[#ee0000]/20">
+              <div className="w-9 h-9 xs:w-10 xs:h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-675 dark:from-red-600 dark:to-red-700 flex items-center justify-center shadow-lg shadow-red-600/20">
                 <Trophy className="w-4 h-4 xs:w-5 xs:h-5 text-white" />
               </div>
               <div>
                 <h2 className="text-lg xs:text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Mini Draws</h2>
-                <p className="text-[10px] xs:text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                <p className="text-2xs xs:text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                   Win premium tools &amp; gear from $1 per entry
                 </p>
               </div>
             </div>
             <Link
               href="/mini-draws"
-              className="hidden sm:flex items-center gap-1 text-sm font-semibold text-[#ee0000] dark:text-red-500 hover:text-[#cc0000] dark:hover:text-red-400 transition-colors"
+              className="hidden sm:flex items-center gap-1 text-sm font-semibold text-red-600 dark:text-red-500 hover:text-red-675 dark:hover:text-red-400 transition-colors"
             >
               View All
               <ChevronRight className="w-4 h-4" />
@@ -267,7 +267,7 @@ export default function DrawsPage() {
                     </div>
                     <Link
                       href="/mini-draws"
-                      className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#ee0000] to-[#cc0000] hover:from-[#dd0000] hover:to-[#bb0000] text-white text-sm font-bold py-2.5 px-5 rounded-lg transition-all duration-200 shadow-lg shadow-[#ee0000]/25 flex-shrink-0"
+                      className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-red-675 hover:from-[#dd0000] hover:to-[#bb0000] text-white text-sm font-bold py-2.5 px-5 rounded-lg transition-all duration-200 shadow-lg shadow-red-600/25 flex-shrink-0"
                     >
                       Browse Mini Packs
                       <ChevronRight className="w-4 h-4" />
@@ -322,7 +322,7 @@ export default function DrawsPage() {
                   {participantMiniDraws.length > 0 && (
                     <div className="mt-6 sm:mt-8 mb-3 sm:mb-4">
                       <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-[#ee0000] dark:text-red-500" />
+                        <Sparkles className="w-4 h-4 text-red-600 dark:text-red-500" />
                         {hasMiniPackEntries ? "Enter More Draws" : "Explore Mini Draws"}
                       </h3>
                     </div>
@@ -338,7 +338,7 @@ export default function DrawsPage() {
               <div className="mt-4 sm:hidden text-center">
                 <Link
                   href="/mini-draws"
-                  className="inline-flex items-center gap-1 text-sm font-semibold text-[#ee0000] dark:text-red-500"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-red-600 dark:text-red-500"
                 >
                   View All Mini Draws
                   <ChevronRight className="w-4 h-4" />

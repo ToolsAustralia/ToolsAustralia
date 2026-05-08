@@ -15,6 +15,7 @@ import {
   sheetPanelVariants,
 } from "@/utils/motion/modalPresets";
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+import { cn } from "@/utils/cn";
 
 export type ModalPresentation = "dialog" | "sheet";
 
@@ -42,6 +43,12 @@ export interface ModalContainerProps {
    */
   nestedSecondary?: boolean;
   /**
+   * Override the resolved z-index. Use ONLY when this modal must sit in a
+   * non-standard micro-stack outside the Z_INDEX scale (e.g. CancellationUpsellModal
+   * uses `zIndex={80}` to sit above its parent SubscriptionManagementModal).
+   */
+  zIndex?: number;
+  /**
    * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
    */
   presentation?: ModalPresentation;
@@ -59,6 +66,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   preventBackButton = true,
   nested = false,
   nestedSecondary = false,
+  zIndex,
   presentation = "dialog",
 }) => {
   const isDarkMode = useHtmlDarkForUi();
@@ -110,7 +118,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   };
 
   const heightStyles = {
-    auto: "max-h-[95dvh]",
+    auto: "max-h-[88dvh] max-xs:max-h-[92dvh]",
     screen: "h-screen-dvh",
     fixed: fixedHeight || "h-[90dvh]",
   };
@@ -127,6 +135,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         : dialogPanelVariants;
 
   const resolveZIndex = () => {
+    if (zIndex !== undefined) return zIndex;
     if (nestedSecondary) return Z_INDEX.MODAL_NESTED_SECONDARY;
     if (nested) return Z_INDEX.MODAL_NESTED;
     return Z_INDEX.MODAL_BASE;
@@ -451,14 +460,14 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   const modalContent = (
     <div
-      className={`fixed inset-0 flex ${outerFlex} pointer-events-none`}
+      className={cn("fixed inset-0 flex", outerFlex, "pointer-events-none")}
       style={{ zIndex: modalZIndex }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
       <motion.div
-        className={`absolute inset-0 bg-black/50 touch-none ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        className={cn("absolute inset-0 bg-black/85 backdrop-blur-md touch-none", isOpen ? "pointer-events-auto" : "pointer-events-none")}
         variants={backdropV}
         initial="closed"
         animate={isOpen ? "open" : "closed"}

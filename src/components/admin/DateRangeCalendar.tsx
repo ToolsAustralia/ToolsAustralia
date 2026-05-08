@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, addMonths, subMonths, isBefore, isAfter, startOfDay } from "date-fns";
+import { cn } from "@/utils/cn";
 
 interface DateRangeCalendarProps {
   startDate: Date | null;
@@ -211,7 +212,7 @@ export default function DateRangeCalendar({
   };
 
   return (
-    <div className={`${className}`}>
+    <div className={cn(className)}>
       {isMobile ? (
         // Single calendar view on mobile
         <div className="w-full">{renderCalendar(currentMonth, setCurrentMonth)}</div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export interface MetallicAccordionItem {
   id: string;
@@ -25,7 +26,7 @@ const getIconColor = (variant: string, customColor?: string) => {
 
   switch (variant) {
     case "red":
-      return "text-[#ee0000]";
+      return "text-red-600";
     case "blue":
       return "text-blue-400";
     case "purple":
@@ -33,7 +34,7 @@ const getIconColor = (variant: string, customColor?: string) => {
     case "gold":
       return "text-yellow-400";
     default:
-      return "text-[#ee0000]";
+      return "text-red-600";
   }
 };
 
@@ -95,14 +96,14 @@ export default function MetallicAccordion({
   const hoverShadowClass = getHoverShadowColor(variant);
 
   return (
-    <div className={`space-y-3 sm:space-y-4 ${className}`}>
+    <div className={cn("space-y-3 sm:space-y-4", className)}>
       {items.map((item) => {
         const isExpanded = expandedItems.has(item.id);
 
         return (
           <div
             key={item.id}
-            className={`relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 hover:border-[#ee0000]/50 ${hoverShadowClass} transition-all duration-300`}
+            className={cn("relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 hover:border-red-600/50", hoverShadowClass, "transition-all duration-300")}
           >
             {/* Glass-morphism overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
@@ -121,12 +122,12 @@ export default function MetallicAccordion({
               <div className="flex-shrink-0">
                 {isExpanded ? (
                   <ChevronUp
-                    className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass ?? ""} transition-transform duration-300`}
+                    className={cn("w-5 h-5 sm:w-6 sm:h-6", iconColorClass ?? "", "transition-transform duration-300")}
                     style={iconStyle}
                   />
                 ) : (
                   <ChevronDown
-                    className={`w-5 h-5 sm:w-6 sm:h-6 ${iconColorClass ?? ""} transition-transform duration-300`}
+                    className={cn("w-5 h-5 sm:w-6 sm:h-6", iconColorClass ?? "", "transition-transform duration-300")}
                     style={iconStyle}
                   />
                 )}

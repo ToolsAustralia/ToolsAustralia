@@ -3,6 +3,7 @@
 import React from "react";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import { formatDisplayName } from "@/utils/display-name";
+import { cn } from "@/utils/cn";
 
 interface UserInfoBarProps {
   firstName: string;
@@ -27,7 +28,7 @@ export default function UserInfoBar({
   className = "",
 }: UserInfoBarProps) {
   return (
-    <div className={`px-4 sm:px-6 pt-12 xs:pt-14 sm:pt-16 pb-4 ${className}`}>
+    <div className={cn("px-4 sm:px-6 pt-12 xs:pt-14 sm:pt-16 pb-4", className)}>
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-row items-start justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">

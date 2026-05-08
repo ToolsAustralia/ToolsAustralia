@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { BarChart3, Target, Award, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { cn } from "@/utils/cn";
 
 interface ExperimentResultsDashboardProps {
   experimentId: string;
@@ -186,7 +187,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
 
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 dark:text-neutral-400 mb-1">Lift</p>
-            <p className={`text-2xl font-bold ${significance.lift != null && significance.lift > 0 ? "text-green-600" : "text-red-600"}`}>
+            <p className={cn("text-2xl font-bold", significance.lift != null && significance.lift > 0 ? "text-green-600" : "text-red-600")}>
               {significance.lift != null
                 ? `${significance.lift > 0 ? "+" : ""}${significance.lift.toFixed(2)}%`
                 : "N/A"}

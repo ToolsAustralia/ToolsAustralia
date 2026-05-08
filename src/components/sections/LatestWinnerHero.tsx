@@ -7,6 +7,7 @@ import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import WinnerCard from "@/components/cards/WinnerCard";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { WinnerSummary } from "@/types/winner";
+import { cn } from "@/utils/cn";
 
 interface LatestWinnerHeroProps {
   className?: string;
@@ -90,7 +91,7 @@ export default function LatestWinnerHero({
 
   if (loading) {
     return (
-      <section className={`py-6 sm:py-8 ${className}`}>
+      <section className={cn("py-6 sm:py-8", className)}>
         <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3].map((index) => (
@@ -121,7 +122,7 @@ export default function LatestWinnerHero({
   }
 
   return (
-    <section id="latest-winners" className={`relative overflow-hidden py-8 sm:py-10 ${className}`}>
+    <section id="latest-winners" className={cn("relative overflow-hidden py-8 sm:py-10", className)}>
       <div className={contentWrapperClassName || "max-w-7xl mx-auto"}>
         <div className="mb-8 text-center">
           <div className="mx-auto mb-3 h-1 w-24 rounded-full" style={{ background: theme.gradient }} />

@@ -50,14 +50,14 @@ export default function MiniDrawsFilters({
   const filterButtonClass = (isSelected: boolean) =>
     `flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all ${
       isSelected
-        ? "border-[#ee0000]/35 bg-[#ee0000]/5 text-gray-900 shadow-[0_4px_14px_rgba(238,0,0,0.08)] dark:bg-gradient-to-r dark:from-[#ee0000] dark:to-[#ff4444] dark:border-transparent dark:text-white dark:shadow-md"
+        ? "border-red-600/35 bg-red-600/5 text-gray-900 shadow-[0_4px_14px_rgba(238,0,0,0.08)] dark:bg-gradient-to-r dark:from-red-600 dark:to-red-400 dark:border-transparent dark:text-white dark:shadow-md"
         : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/70 text-gray-700 dark:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
     }`;
 
   const selectionMarkClass = (isSelected: boolean) =>
     `inline-flex h-5 w-5 items-center justify-center rounded-full border ${
       isSelected
-        ? "border-[#ee0000] bg-[#ee0000] text-white dark:border-white/30 dark:bg-white/20 dark:text-white"
+        ? "border-red-600 bg-red-600 text-white dark:border-white/30 dark:bg-white/20 dark:text-white"
         : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-transparent"
     }`;
 
@@ -67,7 +67,7 @@ export default function MiniDrawsFilters({
         <div className="rounded-2xl border border-gray-200 dark:border-red-900/35 bg-gradient-to-b from-white to-gray-50/80 dark:from-neutral-900 dark:to-neutral-900 p-4 shadow-sm dark:shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#ee0000]/10 text-[#ee0000]">
+              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600/10 text-red-600">
                 <SlidersHorizontal className="h-4 w-4" />
               </div>
               <div>
@@ -99,7 +99,7 @@ export default function MiniDrawsFilters({
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="text-xs font-semibold text-[#ee0000] dark:text-red-400 transition-colors hover:text-[#c70000] dark:hover:text-red-300"
+                className="text-xs font-semibold text-red-600 dark:text-red-400 transition-colors hover:text-[#c70000] dark:hover:text-red-300"
               >
                 Clear all
               </button>
@@ -114,7 +114,7 @@ export default function MiniDrawsFilters({
             value={brandSearch}
             onChange={(e) => setBrandSearch(e.target.value)}
             placeholder="Search brands..."
-            className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-[#ee0000]/40 focus:bg-white dark:focus:bg-neutral-800 focus:ring-2 focus:ring-[#ee0000]/10"
+            className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:bg-white dark:focus:bg-neutral-800 focus:ring-2 focus:ring-red-600/10"
           />
         </div>
 

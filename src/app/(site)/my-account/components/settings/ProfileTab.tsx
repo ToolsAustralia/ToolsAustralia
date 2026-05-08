@@ -163,7 +163,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               <button
                 type="button"
                 onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-                className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md"
+                className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md"
               >
                 Verify Email
               </button>
@@ -192,7 +192,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               type="button"
               onClick={handleSaveMobile}
               disabled={isSavingMobile}
-              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSavingMobile ? "Saving..." : "Save phone"}
             </button>
@@ -274,7 +274,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             type="button"
             onClick={handleSaveProfile}
             disabled={isSavingProfile}
-            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSavingProfile ? "Saving..." : "Save profile"}
           </button>

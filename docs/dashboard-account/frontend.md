@@ -24,3 +24,7 @@ See [architecture.md](./architecture.md#hooks) — `useDashboardEntryDisplay`, `
 
 - All data via TanStack Query from feature-domain API
 - No local state for things that should be global
+
+## className conventions (2026-05-08)
+
+Dashboard/account components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.

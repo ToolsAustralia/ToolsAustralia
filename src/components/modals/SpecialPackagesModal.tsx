@@ -42,6 +42,7 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 
@@ -890,7 +891,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
               />
               <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 animate-[fadeSlideUp_0.5s_ease-out_forwards] opacity-0" style={{ animationDelay: "0.35s" }}>
                 <Zap className="w-3.5 h-3.5 shrink-0 text-amber-500 sm:w-4 sm:h-4 animate-[pulse_2s_ease-in-out_infinite]" style={{ animationDelay: "1s" }} />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 sm:text-xs">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 sm:text-xs">
                   Special Packages Activated
                 </span>
               </div>
@@ -960,7 +961,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                           alt={`${pkg.name} icon`}
                           fill
                           sizes="(max-width: 640px) 32px, 48px"
-                          className={`w-full h-full object-contain opacity-90 ${colorScheme.glow}`}
+                          className={cn("w-full h-full object-contain opacity-90", colorScheme.glow)}
                         />
                       </div>
                     </div>
@@ -1000,7 +1001,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                           e.stopPropagation();
                           handlePackageSelect(pkg);
                         }}
-                        className={`min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90 ${selectTextClass} ${colorScheme.borderGlow} ${isSelected ? "shadow-md" : ""}`}
+                        className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", selectTextClass, colorScheme.borderGlow, isSelected ? "shadow-md" : "")}
                         style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                       >
                         <span style={colorScheme.textGradientStyle ?? undefined}>{isSelected ? "✓" : "SELECT"}</span>
@@ -1025,7 +1026,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                   setCouponError(null);
                 }}
                 placeholder="Enter coupon code"
-                className="flex-1 min-w-0 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#ee0000] focus:border-transparent transition-all duration-300 text-sm sm:text-base bg-white text-gray-900 placeholder:text-gray-500 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100 dark:placeholder:text-gray-400"
+                className="flex-1 min-w-0 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all duration-300 text-sm sm:text-base bg-white text-gray-900 placeholder:text-gray-500 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100 dark:placeholder:text-gray-400"
               />
               {couponApplied ? (
                 <div className="h-11 bg-green-500 text-white px-2 sm:px-3 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2 flex-shrink-0">
@@ -1108,7 +1109,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                   type="button"
                   onClick={() => resolvedChargePm && handlePurchase(selectedPackage)}
                   disabled={isProcessing || !resolvedChargePm || needsInlineCardSetup || paymentMethodsLoading}
-                  className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden`}
+                  className={cn("font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform", textClass, colorScheme.borderGlow, "membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden")}
                   style={buttonStyle}
                 >
                   {isProcessing ? (

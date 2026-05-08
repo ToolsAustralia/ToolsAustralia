@@ -13,6 +13,7 @@ import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
@@ -332,11 +333,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           aria-hidden
         />
         <div className="absolute bottom-0 left-0 right-0 z-10 space-y-0.5 p-1.5 sm:space-y-1 sm:p-2">
-          <p className="line-clamp-2 text-[7px] font-bold uppercase leading-tight tracking-wide text-white drop-shadow-sm sm:text-[8px]">
+          <p className="line-clamp-2 text-[7px] font-bold uppercase leading-tight tracking-wide text-white drop-shadow-sm sm:text-3xs">
             {winner.drawName?.trim() || "Major draw"}
           </p>
-          <p className="text-[7px] tabular-nums text-white/90 drop-shadow-sm sm:text-[8px]">{displayDate}</p>
-          <p className="truncate font-['Poppins'] text-[8px] font-bold text-white drop-shadow-sm sm:text-[9px]">
+          <p className="text-[7px] tabular-nums text-white/90 drop-shadow-sm sm:text-3xs">{displayDate}</p>
+          <p className="truncate font-['Poppins'] text-3xs font-bold text-white drop-shadow-sm sm:text-3xs">
             {displayName}
           </p>
         </div>
@@ -5167,7 +5168,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           <div className="relative w-full shrink-0">
             {showHeaderPromoBadge && (
               <div
-                className={`absolute -top-1.5 sm:-top-2 z-20 pointer-events-none ${currentStep === 2 ? "-right-0.5" : "-left-0.5"}`}
+                className={cn("absolute -top-1.5 sm:-top-2 z-20 pointer-events-none", currentStep === 2 ? "-right-0.5" : "-left-0.5")}
               >
                 {packageBadgeSrc ? (
                   <Image
@@ -5200,7 +5201,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 aria-current={currentStep === 1 ? "step" : undefined}
               >
                 <span
-                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[10px] sm:text-[11px] font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
+                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-2xs sm:text-2xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
                     currentStep === 1 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
                   }`}
                   style={currentStep === 1 ? { color: promoTheme.primary } : undefined}
@@ -5226,7 +5227,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 title={!hasCompletedRegistration ? "Complete your details first" : undefined}
               >
                 <span
-                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-[10px] sm:text-[11px] font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
+                  className={`flex h-6 w-6 sm:h-6 sm:w-6 items-center justify-center rounded-full text-2xs sm:text-2xs font-black shrink-0 shadow-sm ring-1 ring-black/10 dark:ring-white/30 ${
                     currentStep === 2 ? "bg-[#ffffff]" : "bg-gray-400 text-white dark:bg-neutral-600"
                   }`}
                   style={currentStep === 2 ? { color: promoTheme.primary } : undefined}
@@ -5240,23 +5241,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         )}
 
         <div
-          className={`px-3 sm:px-6 pb-3 sm:pb-6 ${!isAuthenticated ? "pt-3 sm:pt-4" : "pt-3 sm:pt-6"}`}
+          className={cn("px-3 sm:px-6 pb-3 sm:pb-6", !isAuthenticated ? "pt-3 sm:pt-4" : "pt-3 sm:pt-6")}
         >
           {/* Active promo for entries - bonus from link (below header, centered) */}
-          <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
+          <div className={cn("text-center", currentStep === 2 ? "hidden sm:block" : "")}>
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period !== "one-time" &&
             promoLinkInfo.appliesToMembership && (
               <p
-                className="text-[11px] sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis mb-2"
+                className="text-2xs sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis mb-2"
                 style={{
                   color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
                   borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Get <span className="text-[11px] sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join
+                Get <span className="text-2xs sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries when you join
               </p>
             )}
           {promoLinkInfo?.isValid &&
@@ -5264,14 +5265,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             activePlan.period === "one-time" &&
             promoLinkInfo.appliesToOneTime && (
               <p
-                className="text-[11px] sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis"
+                className="text-2xs sm:text-sm font-extrabold px-3 py-2 rounded-lg border-2 inline-block shadow-sm whitespace-nowrap max-w-full overflow-hidden text-ellipsis"
                 style={{
                   color: "#FFFFFF",
                   backgroundColor: promoTheme.primary,
                   borderColor: "rgba(255, 255, 255, 0.45)",
                 }}
               >
-                Get <span className="text-[11px] sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
+                Get <span className="text-2xs sm:text-base">{promoLinkInfo.bonusEntries}</span> extra entries with this purchase
               </p>
             )}
         </div>
@@ -5672,13 +5673,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex flex-col gap-0.5 min-w-0">
                               <h4
-                                className={`font-bold text-xs sm:text-sm leading-tight ${nameStyle ? "" : ""}`}
+                                className={cn("font-bold text-xs sm:text-sm leading-tight", nameStyle ? "" : "")}
                                 style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
                               >
                                 {promoEnhancedPlan?.name || "No package selected"}
                               </h4>
                               <p
-                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
+                                className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
@@ -5693,7 +5694,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                               </p>
                               {selectedEntriesCount > 0 ? (
                                 <p
-                                  className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
+                                  className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                                   style={
                                     isPackageCard && pkgScheme.textGradientStyle
                                       ? { ...pkgScheme.textGradientStyle, opacity: 0.85 }
@@ -5710,7 +5711,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                             </div>
                             <div className="flex flex-col gap-0.5 items-end shrink-0">
                               <div
-                                className={`font-bold text-xs sm:text-sm leading-tight ${pkgScheme.textGradientStyle ? "" : ""}`}
+                                className={cn("font-bold text-xs sm:text-sm leading-tight", pkgScheme.textGradientStyle ? "" : "")}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? pkgScheme.textGradientStyle

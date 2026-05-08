@@ -39,15 +39,54 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 ### RenewalFailedModal
 
-[`src/components/modals/RenewalFailedModal.tsx`](../../src/components/modals/RenewalFailedModal.tsx) handles failed subscription renewal payments. It calls `POST /api/stripe/pay-failed-invoice` via `usePayFailedInvoice` (TanStack Query mutation). When that flow returns an error matching "no payable invoice" or similar phrases, the modal renders a fallback "Pay overdue amount" CTA that calls `POST /api/stripe/force-charge-overdue`.
+[`src/components/modals/RenewalFailedModal/`](../../src/components/modals/RenewalFailedModal/) (Plan 3 Phase 1 complete) handles failed subscription renewal payments. Entry point: `index.tsx` (orchestrator, 587 LOC). The former 1,292-line monolith `RenewalFailedModal.tsx` has been deleted.
 
-**Force Charge fallback state variables:** `forceChargeProcessing` (boolean), `forceChargeResult` (nullable object with `success`, `chargedInvoiceId`, `paymentStatus`, `amount`, `reason`, `message`). Both are reset when the modal opens.
+**Public interface** — `{ isOpen: boolean; onClose: () => void }`.
 
-**`isNoPayableInvoiceError(errMsg)`** — inline helper that matches the error state variable `error` against known "no payable invoice" phrases. When it returns `true` and `forceChargeResult` is null, the amber "Pay overdue amount" button appears. On result, success renders a green panel and failure renders a red panel. Full flow documented in [docs/admin/frontend.md](../admin/frontend.md#force-charge-ui).
+**State (13 slices):** `paymentState` (null or `{ requiresConfirmation, clientSecret?, paymentIntentId?, amount?, currency?, invoiceId? }`), `requiresDifferentPaymentMethod`, `isLoading`, `isSuccess`, `error`, `errorDetails`, `selectedPaymentMethod`, `terminalCollectionFailure`, `showInlineCardSetup`, `setupIntentSecret`, `loadingSetupIntent`, `forceChargeProcessing`, `forceChargeResult`. All reset on `isOpen` becoming `true`.
+
+**Three render branches:**
+1. `isSuccess === true` — success Shell (tone: "success") with "Payment received" eyebrow.
+2. `paymentState?.requiresConfirmation && clientSecret` — confirmation Shell (tone: "danger") with `<Elements key={clientSecret || "no-secret"}>` provider wrapping `PaymentForm`. Hardcoded Stripe appearance (not `membershipStripeAppearance`).
+3. Default — initial/inline-card/terminal Shell. Eyebrow/title/sub copy varies by `terminalCollectionFailure`, `showInlineCardSetup`.
+
+**Callbacks:**
+- `handleResolvePayment` — calls `payFailedInvoiceMutation.mutateAsync()`. On success: `setIsSuccess(true)` + `queryClient.invalidateQueries` (user detail + account) + `setTimeout(() => onClose(), 2000)`. On `requiresPaymentConfirmation`: sets `paymentState`. On ApiError with `requiresNewCardPreflight` or missing default PM: `setShowInlineCardSetup(true)`. On `requiresDifferentPaymentMethod`: sets alert. On terminal failure code: sets `terminalCollectionFailure`.
+- `handlePayOverdue` — `POST /api/stripe/force-charge-overdue` → sets `forceChargeResult`.
+- `handlePaymentSuccess` — `setIsSuccess(true)` + invalidateQueries + showToast + `setTimeout(() => onClose(), 2000)`.
+- `handlePaymentError` — sets `error` / `errorDetails` / `requiresDifferentPaymentMethod`.
+- `handleBackFromPayment` — clears `showInlineCardSetup` + `setupIntentSecret`.
+- `handleCardSetupSuccess` — saves PM, calls `updateSubscriptionPaymentMethod.mutateAsync`, invalidates PM cache, calls `handleResolvePayment`.
+
+**SetupIntent effect** — async IIFE with `cancelled` guard; fetches `POST /api/stripe/create-setup-intent`, sets `setupIntentSecret` on `data.client_secret`. Fires when `isOpen && showInlineCardSetup && !setupIntentSecret`.
+
+**Module-scope:** `stripePromise = getStripePromise()` (singleton). `renewalBillingSupportMailto()` pure helper.
+
+**isNoPayableInvoiceError(errMsg)** — matches "no longer be paid", "no longer payable", "can't be paid", "cannot be paid", "no payable invoice". When true and `!forceChargeResult`, renders amber "Pay overdue amount" CTA inline (calls `handlePayOverdue`). Success: green panel. Failure: red panel.
+
+**Sub-components:**
+- **`Shell.tsx`** — dark-hero + white-body modal frame. Props: `isOpen`, `onClose`, `tone?: "danger" | "success"`, `eyebrow`, `title`, `sub`, `children`, `closeOnBackdrop?`. CVA `shellTone` variant; visual tone applied via `data-tone={tone}` activating CSS module rules. Status icon: `AlertTriangle` / `CheckCircle` at 36px. Accent words: `<span data-rf-accent>…</span>`. z-index 80 via inline style.
+- **`AlertBanner.tsx`** — CVA `banner` with `warn` (amber) and `error` (red). Props: `variant`, `title?`, `message?`.
+- **`PaymentMethodPicker.tsx`** — saved-card radio list + "Enter new payment method" option. Props: `paymentMethods`, `selectedPaymentMethod`, `onSelect`.
+- **`ActionButtons.tsx`** — 3-state CTA row: loading spinner, terminal failure (support mailto + account link + close), normal (resolve/back/close). CVA `button` `primary`/`outline`/`ghost`. Uses `styles.btn` + `styles.btnPrimary`.
+- **`InlineCardSetup.tsx`** — wraps `<StripeInlineCardSetupForm>` inside its own `<Elements>` provider (key: `${setupIntentSecret}-inline-${isDarkMode?d:l}`). Props: `setupIntentSecret`, `loadingSetupIntent`, `isDarkMode`, `membershipStripeAppearance`, `userData`, `isLoading`, `onSuccess`.
+- **`PaymentForm.tsx`** — Stripe confirmation form inside the orchestrator's `<Elements>`. Props: `clientSecret`, `paymentIntentId?`, `amount`, `currency`, `selectedPaymentMethod?`, `onPaymentSuccess`, `onPaymentError`, `onCancel`. Saved PM path: `stripe.confirmCardPayment`. New PM path: `elements.submit()` + `stripe.confirmPayment`. On error: analyzes PI via `POST /api/stripe/analyze-payment-intent`.
+- **`styles.module.css`** — `.heroBg`, `.heroStripeOverlay`, `.scrollFrame`, `.btn`, `.btnPrimary`. Tone variables via `:global([data-tone="danger"/"success"])`. Accent coloring via `:global([data-tone]) :global([data-rf-accent]), :global([data-tone]) strong`.
 
 ### CancellationUpsellModal
 
-[`src/components/modals/CancellationUpsellModal.tsx`](../../src/components/modals/CancellationUpsellModal.tsx) is the retention modal shown when a member tries to cancel their subscription. Layout is an infographic-style three-band frame: dark hero (radial red + gold glow over `#0a0a0a`, Anton headline) → white lose grid (3 cells: ticket / trophy / calendar + amber encouragement banner) → light slate trust footer (SSL secure / NTP/16264 / Drawn live / Cancel anytime — single-line bold labels). All styles are scoped via `<style jsx>`. Layout structure stays identical at every viewport size; the `@media (max-width: 540px)` breakpoint shrinks sizes only (no column collapse).
+[`src/components/modals/CancellationUpsellModal/`](../../src/components/modals/CancellationUpsellModal/) is the retention modal shown when a member tries to cancel their subscription. The component is now a folder-based module composed of 6 sub-components and an orchestrator:
+
+- **`index.tsx`** — orchestrator; owns all state, effects, callbacks, and the bespoke modal shell. Deliberately does NOT use `ModalContainer` — the full-bleed dark hero design requires bespoke wrapper chrome.
+- **`Hero.tsx`** — dark hero band (radial red + gold glow, Anton headline, progress bar, prize banner)
+- **`LoseGrid.tsx`** — 3-cell grid: ticket / trophy / calendar cells
+- **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
+- **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
+- **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/16264 / Cancel anytime)
+- **`hero.module.css`** — composite gradients, scrollbar chrome, and stripe overlay that don't translate to single Tailwind utilities
+
+Layout is an infographic-style three-band frame: dark hero → white lose grid → light slate trust footer. Layout structure stays identical at every viewport size; the `max-xs:` breakpoint shrinks sizes only (no column collapse). Styles migrated from `<style jsx>` to Tailwind + CSS Modules.
 
 **Props:** `isOpen`, `onClose`, `onRedeem`, `onDecline`, plus optional `isPastDue`, `onResolvePayment`, `accumulatedEntries`, `daysUntilDraw`, `drawCloseLabel`, and `downgrade?: { packageName; saveLabel?; onConfirm }`.
 
@@ -70,11 +109,22 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 **Updated 2026-05-07**: copy + state pass — past-due variant ("Resolve payment", no bonus pill); 0-entries variant ("accumulated entries"); switched cash hero to $10k; random prize per open; always-green positive progress bar; centred entries number; cash badge scales down on small screens; downgrade card switched to nested-modal flow (cancellation stays open) and now opens themed `DowngradeConfirmModal`. Trust footer collapsed from 4 cells to 3 (dropped Facebook), restored bold-label + sub-line layout. Lose grid uses `align-items: stretch` + flex-column cells so the 3 cells share the same height. Downgrade card restructured: package icon → tilted top-left badge in tier colours that mirror MembershipSection (cyan/yellow/red); headline + CTA on top row; 3-column tick row at the bottom; CTA arrow hidden on mobile to keep the button slim.
 
+**Updated 2026-05-08**: `CancellationUpsellModal` decomposed from 1,495-line monolith (`CancellationUpsellModal.tsx`) into a folder-based module (`CancellationUpsellModal/index.tsx` + 6 sub-components + `hero.module.css`). The old single-file monolith is deleted; the import path `@/components/modals/CancellationUpsellModal` now resolves to `index.tsx` automatically. All state, effects, and callbacks are preserved verbatim in the orchestrator.
+
 ### DowngradeConfirmModal
 
 [`src/components/modals/DowngradeConfirmModal.tsx`](../../src/components/modals/DowngradeConfirmModal.tsx) — themed downgrade confirmation that opens on top of `CancellationUpsellModal` (z-index 90) when a member taps "Switch plan". Visual intensity matches the cancellation modal: dark hero with tier-coloured radial glow + Anton headline, From → To tier comparison cards using `getPackageIconByName`, then a white body with three benefit stats in the order **partner offer access % → days of access → free entries / cycle** (matches MembershipSection ordering), a tick-list of guarantees ("entries stay locked in / keep current benefits / save $X/mo / activates {date} / no refund"), and Cancel + Schedule action buttons. Tier colours (Tradie / Foreman / Boss) are switched via `.tier-*` class modifiers using the same red / silver / gold palette as the cancellation modal's downgrade card. Replaces the generic `ConfirmationModal` previously used for downgrades.
 
 **Props:** `isOpen`, `onClose`, `onConfirm`, `isLoading?`, `fromPackageName`, `toPackageName`, `toPackagePrice`, `toPartnerAccessPercent`, `toPartnerDiscountDays`, `toEntriesPerMonth`, `effectiveDateLabel?`, `currentEntries?`, `saveLabel?`. The parent computes `toPartnerAccessPercent` via [`getPartnerCatalogAccessPercentForMembershipPackageId`](../../src/utils/partner-discounts/partner-catalog-visibility.ts) and the effective date from `activeSubscription.endDate`. On success the parent closes both this modal and the cancellation upsell.
+
+**Sub-components (Plan 3 Phase 2 decomposition in progress):**
+
+- **`Shell.tsx`** — modal frame: backdrop, scroll container, close button, tier-themed `data-tier` frame that cascades all `--tier-*` CSS custom properties to child cells.
+- **`Hero.tsx`** — dark hero band: tier-coloured radial glow (`styles.heroBg`), Anton headline, From → To tier comparison cards with package icons.
+- **`BenefitsBody.tsx`** — white body section under the hero: uppercase body title (`{toPackageName} benefits from your next billing date`), 3-column stat grid (Partner offers % / Days access / Free entries per cycle), and tick-list of guarantees. All tier-themed cells use `var(--tier-stat-bg)`, `var(--tier-stat-border)`, `var(--tier-icon-bg-light)`, `var(--tier-color-deep)` inline styles that cascade from `[data-tier]`. Tick-list renders conditionally: `currentEntries > 0` → personalised entries count; always renders the keep-current-benefits line; `saveLabel` → savings line; `effectiveDateLabel` → activation date; always renders the no-refund `<Tag>`-icon line.
+- **`styles.module.css`** — composite gradients (`heroBg`, `heroStripeOverlay`), scrollbar chrome (`scrollFrame`), button transitions (`btn`, `btnConfirm`), and all `--tier-*` CSS custom properties for the three tiers (tradie / foreman / boss) via `:global([data-tier="…"])` selectors.
+
+**Updated 2026-05-08**: `BenefitsBody.tsx` sub-component created; extracted from original monolith lines 127-160 + 360-434. Stat order: Partner offers % → Days access → Free entries / cycle (matches MembershipSection). Stat num color kept at `#0a0a0a` (matches original CSS, NOT tier-colored). Icon backgrounds use `var(--tier-icon-bg-light)`; icon foreground uses `var(--tier-color-deep)`. Checks list icon color applied via inline style on wrapping `<span>` (replaces original `:global(svg)` CSS selector).
 
 ## Z-index ordering
 

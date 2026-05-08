@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface UserStatsCardProps {
   title: string;
@@ -79,13 +80,13 @@ export default function UserStatsCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6 transition-all duration-200 hover:shadow-xl ${className}`}
+      className={cn("bg-white rounded-xl shadow-lg border border-gray-100 p-4 sm:p-6 transition-all duration-200 hover:shadow-xl", className)}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <div className={`w-10 h-10 ${config.iconBg} rounded-lg flex items-center justify-center`}>
-              <Icon className={`w-5 h-5 ${config.icon}`} />
+            <div className={cn("w-10 h-10", config.iconBg, "rounded-lg flex items-center justify-center")}>
+              <Icon className={cn("w-5 h-5", config.icon)} />
             </div>
             <div>
               <h3 className="text-sm font-medium text-gray-600 dark:text-neutral-400">{title}</h3>
@@ -164,11 +165,11 @@ export function UserStatsCardCompact({
 
   return (
     <div
-      className={`bg-white rounded-lg shadow-sm border border-gray-100 p-3 transition-all duration-200 hover:shadow-md ${className}`}
+      className={cn("bg-white rounded-lg shadow-sm border border-gray-100 p-3 transition-all duration-200 hover:shadow-md", className)}
     >
       <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 ${config.iconBg} rounded-lg flex items-center justify-center`}>
-          <Icon className={`w-4 h-4 ${config.icon}`} />
+        <div className={cn("w-8 h-8", config.iconBg, "rounded-lg flex items-center justify-center")}>
+          <Icon className={cn("w-4 h-4", config.icon)} />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-gray-600 dark:text-neutral-400 truncate">{title}</p>

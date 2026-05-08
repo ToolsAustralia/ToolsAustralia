@@ -149,7 +149,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
               ? "bg-gray-300 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400 cursor-not-allowed"
               : addedToCart
               ? "bg-green-600 text-white"
-              : "bg-[#ee0000] text-white hover:bg-[#cc0000] hover:shadow-lg hover:scale-105"
+              : "bg-red-600 text-white hover:bg-red-675 hover:shadow-lg hover:scale-105"
           }`}
         >
           <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />

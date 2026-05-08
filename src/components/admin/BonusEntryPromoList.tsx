@@ -7,6 +7,7 @@ import type { BonusEntryPromo } from "@/types/admin";
 import { Gift, Edit2, Trash2, Calendar, Loader2, RefreshCw, CheckCircle } from "lucide-react";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface BonusEntryPromoListProps {
   filters?: {
@@ -112,7 +113,7 @@ export default function BonusEntryPromoList({ filters }: BonusEntryPromoListProp
               title="Refresh"
               type="button"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("w-4 h-4", isLoading ? "animate-spin" : "")} />
             </button>
           </div>
         </div>
