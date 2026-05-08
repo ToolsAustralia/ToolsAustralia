@@ -63,6 +63,15 @@ User-facing and admin-facing routes that perform the same operation must share a
 
 The service accepts an `analytics` option (`actor: "user" | "admin"`, `adminUserId?`) so audit rows distinguish the path.
 
+## P10. One-shot idempotency-retry on key collisions
+
+Where a Stripe-mutating call uses a per-attempt UUID as the idempotency key (instead of a stable resource-derived key per [P3](#p3-stable-idempotency-keys-derived-from-the-resource)) and the request body includes any non-deterministic field (capi_*, attribution, IP), wrap the call so that on `StripeIdempotencyError` it:
+
+1. Cancels the orphan incomplete resource on Stripe (matched by `customer + metadata.packageId` for subscriptions).
+2. Retries once with a fresh `crypto.randomUUID()` idempotency key.
+
+Reference implementation: [`createSubscriptionWithIdempotencyRetry`](../../src/utils/payment/stripe/createSubscriptionWithIdempotencyRetry.ts) — used by both `/api/stripe/create-subscription` and `/api/stripe/create-subscription-existing-user`. The retry is one-shot only — a second collision is rethrown so it surfaces in error reports rather than looping.
+
 ## Cursor agent boundary
 
 The Cursor `.cursor/agents/stripe-billing.md` subagent owns this domain. Read its boundary description before non-trivial changes — the orchestrator rule (`.cursor/rules/orchestrator.mdc`) requires QA review for changes touching payments. Cursor-only; not invocable from Claude Code.
