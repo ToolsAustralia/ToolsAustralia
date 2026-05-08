@@ -37,3 +37,11 @@ Anyone wiring a new endpoint that stores a referer / location URL into Stripe me
 - [Pixel Integration](../tracking/architecture.md) → _TODO: read `src/docs/PIXEL_INTEGRATION.md`_
 
 Read all five and merge content during a refresh pass.
+
+## Server-side fbc reads `_fbc` cookie first; URL fallback uses `Date.now()`
+
+[`extractFBCFromRequest`](../../src/utils/tracking/facebook-helpers.ts) reads the Facebook Pixel `_fbc` cookie first. Only when no cookie is present does it fall back to building `fb.1.{Date.now()}.{fbclid}` from a URL `?fbclid=…` parameter.
+
+The fallback's timestamp is **the request time, not the click time** — Meta's spec calls for click time. We prefer it over rejecting fbc entirely so cookie-blocked visitors still contribute partial attribution.
+
+Important: the fallback is non-deterministic across calls. Any code path that uses the returned fbc in a Stripe idempotency-keyed request body (subscription create) must wrap the call with the [billing-stripe P10 pattern](../billing-stripe/patterns.md#p10-one-shot-idempotency-retry-on-key-collisions). For other CAPI flows (the standard `/api/facebook/*` event endpoints), the drift is harmless.

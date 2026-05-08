@@ -25,6 +25,7 @@ import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
+import { createSubscriptionWithIdempotencyRetry } from "@/utils/payment/stripe/createSubscriptionWithIdempotencyRetry";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -314,10 +315,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const subscription = await stripe.subscriptions.create(
-      createPayload,
-      { idempotencyKey }
-    );
+    const subscription = await createSubscriptionWithIdempotencyRetry({
+      stripe,
+      payload: createPayload,
+      idempotencyKey,
+      customerId: stripeCustomerId,
+      packageId: validatedData.packageId,
+      correlationId,
+    });
 
     if (correlationId) {
       console.log("[create-subscription-existing-user] subscription created", {
