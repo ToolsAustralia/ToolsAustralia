@@ -25,6 +25,7 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import Image from "next/image";
 import { hasBundledMultiplierAssets, isPromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 /**
  * X2 / X10 multiplier badge — only used here. Anchored to the countdown cluster’s
@@ -954,11 +955,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={cn("rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3", isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : "")}
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`${rightSectionTextClass} font-black font-sans drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={cn(rightSectionTextClass, "font-black font-sans drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap", isScrolled ? "max-[360px]:text-sm" : "")}
                       >
                         {NO_PROMO_RIGHT_LABEL}
                       </div>
@@ -971,11 +972,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={cn("rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3", isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : "")}
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-sans drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={cn("flex items-center justify-center gap-1.5", rightSectionTextClass, "font-black font-sans drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap", isScrolled ? "max-[360px]:text-sm" : "")}
                       >
                         {countdownDisplay.label}
                         <UrgencyClockIcon className={rightSectionTextClass} size="md" />

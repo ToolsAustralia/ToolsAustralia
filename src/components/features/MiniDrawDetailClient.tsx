@@ -6,6 +6,7 @@ import { Trophy, Users, Gift, GaugeCircle } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
 import { getBrandMeta } from "@/utils/brand-utils";
 import { SectionContainer } from "@/components/ui";
+import { cn } from "@/utils/cn";
 
 interface MiniDrawDetailClientProps {
   miniDraw: {
@@ -79,7 +80,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
 
     const badge = badges[badgeKey];
     return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${badge.color}`}>
+      <span className={cn("inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", badge.color)}>
         {badge.text}
       </span>
     );
@@ -94,7 +95,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
           <p className="text-lg text-gray-600 dark:text-neutral-400 mb-4">{miniDraw.description}</p>
           <div className="flex items-center gap-3 flex-wrap mb-4">
             <span
-              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${brandBadgeClass}`}
+              className={cn("inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold shadow-sm", brandBadgeClass)}
             >
               <Trophy className="w-4 h-4" />
               {brandLabel}

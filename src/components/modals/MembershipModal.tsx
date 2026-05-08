@@ -13,6 +13,7 @@ import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
@@ -5167,7 +5168,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           <div className="relative w-full shrink-0">
             {showHeaderPromoBadge && (
               <div
-                className={`absolute -top-1.5 sm:-top-2 z-20 pointer-events-none ${currentStep === 2 ? "-right-0.5" : "-left-0.5"}`}
+                className={cn("absolute -top-1.5 sm:-top-2 z-20 pointer-events-none", currentStep === 2 ? "-right-0.5" : "-left-0.5")}
               >
                 {packageBadgeSrc ? (
                   <Image
@@ -5240,10 +5241,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         )}
 
         <div
-          className={`px-3 sm:px-6 pb-3 sm:pb-6 ${!isAuthenticated ? "pt-3 sm:pt-4" : "pt-3 sm:pt-6"}`}
+          className={cn("px-3 sm:px-6 pb-3 sm:pb-6", !isAuthenticated ? "pt-3 sm:pt-4" : "pt-3 sm:pt-6")}
         >
           {/* Active promo for entries - bonus from link (below header, centered) */}
-          <div className={`text-center ${currentStep === 2 ? "hidden sm:block" : ""}`}>
+          <div className={cn("text-center", currentStep === 2 ? "hidden sm:block" : "")}>
           {promoLinkInfo?.isValid &&
             promoLinkInfo.bonusEntries > 0 &&
             activePlan.period !== "one-time" &&
@@ -5672,13 +5673,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex flex-col gap-0.5 min-w-0">
                               <h4
-                                className={`font-bold text-xs sm:text-sm leading-tight ${nameStyle ? "" : ""}`}
+                                className={cn("font-bold text-xs sm:text-sm leading-tight", nameStyle ? "" : "")}
                                 style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
                               >
                                 {promoEnhancedPlan?.name || "No package selected"}
                               </h4>
                               <p
-                                className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
+                                className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
@@ -5693,7 +5694,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                               </p>
                               {selectedEntriesCount > 0 ? (
                                 <p
-                                  className={`text-xs sm:text-sm leading-tight ${!isPackageCard ? "text-gray-600 dark:text-neutral-400" : ""}`}
+                                  className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                                   style={
                                     isPackageCard && pkgScheme.textGradientStyle
                                       ? { ...pkgScheme.textGradientStyle, opacity: 0.85 }
@@ -5710,7 +5711,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                             </div>
                             <div className="flex flex-col gap-0.5 items-end shrink-0">
                               <div
-                                className={`font-bold text-xs sm:text-sm leading-tight ${pkgScheme.textGradientStyle ? "" : ""}`}
+                                className={cn("font-bold text-xs sm:text-sm leading-tight", pkgScheme.textGradientStyle ? "" : "")}
                                 style={
                                   isPackageCard && pkgScheme.textGradientStyle
                                     ? pkgScheme.textGradientStyle

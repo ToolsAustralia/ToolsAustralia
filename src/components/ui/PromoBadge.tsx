@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface PromoBadgeProps {
   multiplier: PromoMultiplier;
@@ -119,7 +120,7 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
 
         {/* Multiplier text with metallic gradient */}
         <span
-          className={`font-black ${customText ? "text-2xs sm:text-[13px]" : ""}`}
+          className={cn("font-black", customText ? "text-2xs sm:text-[13px]" : "")}
           style={{
             background: `linear-gradient(135deg, #1f2937 0%, #374151 50%, #1f2937 100%)`,
             WebkitBackgroundClip: "text",
@@ -133,7 +134,7 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
         {/* "PROMO" or custom text with metallic effect - conditionally rendered */}
         {showPromoText && (
           <span
-            className={`font-semibold ${customText ? "text-2xs sm:text-[12px]" : ""}`}
+            className={cn("font-semibold", customText ? "text-2xs sm:text-[12px]" : "")}
             style={{
               background: `linear-gradient(135deg, #1f2937 0%, #374151 50%, #1f2937 100%)`,
               WebkitBackgroundClip: "text",

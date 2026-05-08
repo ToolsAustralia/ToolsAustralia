@@ -85,8 +85,8 @@ const DowngradeCard: React.FC<DowngradeCardProps> = ({ tier, packageName, saveLa
   return (
     <>
       {/* Divider with centered text */}
-      <div className="text-center text-[9px] font-extrabold tracking-[0.22em] uppercase text-neutral-600 my-3 mb-2 relative max-xs:my-2 max-xs:mb-1.5 max-xs:text-[8px] before:content-[''] before:absolute before:left-0 before:right-0 before:top-1/2 before:h-px before:bg-neutral-200 before:z-[1]">
-        <span className="bg-white px-3 relative z-[2]">Not feeling the price?</span>
+      <div className="text-center text-[9px] font-extrabold tracking-[0.22em] uppercase text-neutral-600 dark:text-neutral-400 my-3 mb-2 relative max-xs:my-2 max-xs:mb-1.5 max-xs:text-[8px] before:content-[''] before:absolute before:left-0 before:right-0 before:top-1/2 before:h-px before:bg-neutral-200 dark:before:bg-neutral-700 before:z-[1]">
+        <span className="bg-white dark:bg-neutral-950 px-3 relative z-[2]">Not feeling the price?</span>
       </div>
 
       <div className={cn(card({ tier }))}>

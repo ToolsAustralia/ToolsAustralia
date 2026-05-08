@@ -12,6 +12,7 @@ import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import "swiper/css";
 import "swiper/css/thumbs";
 import "swiper/css/free-mode";
+import { cn } from "@/utils/cn";
 
 export interface FullscreenImageCaption {
   drawName: string;
@@ -361,7 +362,7 @@ export function FullscreenTriggerButton({
         onClick();
       }}
       aria-label={label}
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${className}`}
+      className={cn("inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white", className)}
     >
       <Expand className="h-4 w-4" />
     </button>

@@ -1,0 +1,80 @@
+/* ReferFriendModal — composite gradients, scrollbar, stripe overlay,
+ * and tier-themed CSS custom properties. Adapted from UpgradeConfirmModal/styles.module.css.
+ */
+
+/* ---------------------------------------------------------------- Scroll frame */
+
+.scrollFrame {
+  scrollbar-width: thin;
+}
+.scrollFrame::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollFrame::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+@media (max-width: 540px) {
+  .scrollFrame {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollFrame::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Tier theming */
+
+/* Tier-themed CSS custom properties. Set on the frame element via data-tier.
+ * Consumed by hero glow, tier-card backgrounds, stat backgrounds, CTA buttons.
+ * Scoped to .scrollFrame to avoid leaking to any [data-tier] element on the page.
+ */
+.scrollFrame[data-tier="tradie"] {
+  --tier-color: #5ce0ff;
+  --tier-color-deep: #0b7e88;
+  --tier-glow-1: rgba(0, 194, 237, 0.34);
+  --tier-glow-2: rgba(92, 169, 236, 0.18);
+  --tier-card-bg: rgba(0, 194, 237, 0.14);
+  --tier-border: rgba(0, 194, 237, 0.42);
+  --tier-icon-bg: rgba(0, 194, 237, 0.18);
+  --tier-icon-bg-light: #e0f9ff;
+  --tier-stat-bg: linear-gradient(180deg, #f0fbff, #fff);
+  --tier-stat-border: #bae6fd;
+  --tier-cta-bg: linear-gradient(135deg, #5ca9ec, #00c2ed);
+  --tier-cta-text: #fff;
+  --tier-cta-shadow: 0 8px 18px rgba(0, 194, 237, 0.42);
+}
+.scrollFrame[data-tier="foreman"] {
+  --tier-color: #ffe066;
+  --tier-color-deep: #a17b00;
+  --tier-glow-1: rgba(255, 210, 0, 0.32);
+  --tier-glow-2: rgba(255, 210, 0, 0.16);
+  --tier-card-bg: rgba(255, 210, 0, 0.14);
+  --tier-border: rgba(255, 210, 0, 0.45);
+  --tier-icon-bg: rgba(255, 210, 0, 0.2);
+  --tier-icon-bg-light: #fffbe6;
+  --tier-stat-bg: linear-gradient(180deg, #fffce6, #fff);
+  --tier-stat-border: #fde68a;
+  --tier-cta-bg: linear-gradient(135deg, #ffe066, #ffd200);
+  --tier-cta-text: #0a0a0a;
+  --tier-cta-shadow: 0 8px 18px rgba(255, 210, 0, 0.45);
+}
+.scrollFrame[data-tier="boss"] {
+  --tier-color: #ff6b6b;
+  --tier-color-deep: #b91c1c;
+  --tier-glow-1: rgba(238, 0, 0, 0.34);
+  --tier-glow-2: rgba(238, 0, 0, 0.16);
+  --tier-card-bg: rgba(238, 0, 0, 0.14);
+  --tier-border: rgba(238, 0, 0, 0.4);
+  --tier-icon-bg: rgba(238, 0, 0, 0.18);
+  --tier-icon-bg-light: #fef2f2;
+  --tier-stat-bg: linear-gradient(180deg, #fff5f5, #fff);
+  --tier-stat-border: #fee2e2;
+  --tier-cta-bg: linear-gradient(135deg, #ff3333, #ee0000);
+  --tier-cta-text: #fff;
+  --tier-cta-shadow: 0 8px 18px rgba(238, 0, 0, 0.42);
+}

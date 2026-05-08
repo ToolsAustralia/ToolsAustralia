@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { Upload, X, Image as ImageIcon, Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface ImageUploadProps {
   onUpload: (urls: string[]) => void;
@@ -198,7 +199,7 @@ export default function ImageUpload({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       {/* Label */}
       {label && (
         <h3 className="text-lg font-semibold text-gray-900">

@@ -5,7 +5,13 @@
  *
  * This does NOT assert on visual output. Visual parity is verified manually
  * via /dev/modals (see Plan 2 Task 11).
+ *
+ * Why react/no-children-prop is disabled: SessionProvider's TS types require
+ * `children` in the props object (see SessionProviderProps in next-auth/react).
+ * Passing children as the 3rd arg of React.createElement() satisfies the
+ * lint rule but fails the type-check.
  */
+/* eslint-disable react/no-children-prop */
 
 import assert from "node:assert/strict";
 import * as React from "react";
@@ -142,23 +148,14 @@ for (const combo of combos) {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
-    const tree = React.createElement(
-      SessionProvider,
-      { session: null },
-      React.createElement(
-        QueryClientProvider,
-        { client: queryClient },
-        React.createElement(
-          LoadingProvider,
-          null,
-          React.createElement(
-            ToastProvider,
-            null,
-            React.createElement(CancellationUpsellModal, combo.props)
-          )
-        )
-      )
-    );
+    // SessionProvider's TS types require `children` in the props object
+    // (not as the 3rd createElement arg) — build the tree by nesting
+    // each provider's `children` prop explicitly.
+    const modalEl = React.createElement(CancellationUpsellModal, combo.props);
+    const toastEl = React.createElement(ToastProvider, { children: modalEl });
+    const loadingEl = React.createElement(LoadingProvider, { children: toastEl });
+    const queryEl = React.createElement(QueryClientProvider, { client: queryClient, children: loadingEl });
+    const tree = React.createElement(SessionProvider, { session: null, children: queryEl });
     const html = renderToString(tree);
     assert.ok(typeof html === "string", "renderToString must return a string");
     if (combo.props.isOpen) {

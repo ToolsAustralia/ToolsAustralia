@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 interface ModalContentProps {
   children: React.ReactNode;
@@ -27,7 +28,7 @@ const ModalContent: React.FC<ModalContentProps> = ({
 
   return (
     <div
-      className={`modal-panel-body flex-1 overflow-y-auto min-h-0 bg-white dark:bg-neutral-950 dark:border-t dark:border-neutral-800/80 text-gray-700 dark:text-neutral-200 antialiased ${scrollbarClass} ${paddingStyles[padding]} ${className}`}
+      className={cn("modal-panel-body flex-1 overflow-y-auto min-h-0 bg-white dark:bg-neutral-950 dark:border-t dark:border-neutral-800/80 text-gray-700 dark:text-neutral-200 antialiased", scrollbarClass, paddingStyles[padding], className)}
       style={{
         // Ensure proper scrolling with flexbox
         minHeight: 0,

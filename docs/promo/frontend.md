@@ -27,3 +27,7 @@
 - Banner text reads via TanStack Query (rarely changes)
 - Per-page promo state via `usePromoLink()` hook
 - Theme overrides via Zustand (synchronous client-side decisions)
+
+## className conventions (2026-05-08)
+
+Promo components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.

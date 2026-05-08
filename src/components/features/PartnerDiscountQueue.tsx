@@ -24,6 +24,7 @@ import {
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -472,7 +473,7 @@ export default function PartnerDiscountQueue({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white ${className}`}
+      className={cn("relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white", className)}
       style={cardBorderStyle}
     >
       {/* Premium Background Effects */}
@@ -581,7 +582,7 @@ export default function PartnerDiscountQueue({
             ].map((card) => (
               <div
                 key={card.label}
-                className={`p-4 rounded-2xl bg-gradient-to-br ${card.accent} backdrop-blur border text-white shadow-inner`}
+                className={cn("p-4 rounded-2xl bg-gradient-to-br", card.accent, "backdrop-blur border text-white shadow-inner")}
               >
                 <p className="text-2xs font-semibold uppercase tracking-[0.3em] text-white/70">{card.label}</p>
                 <p className="text-2xl font-bold mt-1 drop-shadow">{card.value}</p>

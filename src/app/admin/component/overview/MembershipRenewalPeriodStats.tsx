@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
+import { cn } from "@/utils/cn";
 
 export type MembershipRenewalsSummary = NonNullable<AdminDashboardStats["users"]["membershipRenewals"]>;
 
@@ -65,7 +66,7 @@ export default function MembershipRenewalPeriodStats({
               {item.label}
             </div>
             <div
-              className={`text-sm sm:text-lg font-bold tabular-nums text-gray-900 dark:text-white mt-0.5 sm:mt-1 tracking-tight ${item.valueClass ?? ""}`}
+              className={cn("text-sm sm:text-lg font-bold tabular-nums text-gray-900 dark:text-white mt-0.5 sm:mt-1 tracking-tight", item.valueClass ?? "")}
             >
               {item.value}
             </div>

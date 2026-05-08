@@ -5,6 +5,7 @@ import useEmblaCarousel from "embla-carousel-react";
 import AutoScroll from "embla-carousel-auto-scroll";
 import { brandLogos, BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
+import { cn } from "@/utils/cn";
 
 interface BrandScrollerProps {
   speed?: number; // seconds for one full brand set pass (desktop default)
@@ -94,7 +95,7 @@ export default function BrandScroller({
   const [emblaRef] = useEmblaCarousel({ loop: true, align: "start", dragFree: true, skipSnaps: true }, plugins);
 
   return (
-    <div className={`w-full overflow-hidden ${className}`} ref={emblaRef}>
+    <div className={cn("w-full overflow-hidden", className)} ref={emblaRef}>
       <div className="flex items-center gap-4 sm:gap-6 lg:gap-8">
         {/* Leading gap so the wrap from the last item back to the first has space */}
         <div className="w-1 sm:w-2 flex-shrink-0"></div>

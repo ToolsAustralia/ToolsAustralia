@@ -37,6 +37,7 @@ import {
   type UserAttemptGroup,
 } from "@/utils/admin/groupChargeAttemptsByUser";
 import { useDebounce } from "@/hooks/useDebounce";
+import { cn } from "@/utils/cn";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -508,7 +509,7 @@ export default function PastDueChargeHistory() {
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   <RefreshCw
-                    className={`h-3.5 w-3.5 ${runsQuery.isFetchingNextPage ? "animate-spin" : ""}`}
+                    className={cn("h-3.5 w-3.5", runsQuery.isFetchingNextPage ? "animate-spin" : "")}
                   />
                   {runsQuery.isFetchingNextPage ? "Loading more..." : "Load more"}
                 </button>
@@ -747,7 +748,7 @@ export default function PastDueChargeHistory() {
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   <RefreshCw
-                    className={`h-3.5 w-3.5 ${retriesQuery.isFetchingNextPage ? "animate-spin" : ""}`}
+                    className={cn("h-3.5 w-3.5", retriesQuery.isFetchingNextPage ? "animate-spin" : "")}
                   />
                   {retriesQuery.isFetchingNextPage ? "Loading more..." : "Load more"}
                 </button>

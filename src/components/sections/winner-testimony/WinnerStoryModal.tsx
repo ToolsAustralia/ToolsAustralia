@@ -9,6 +9,7 @@ import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 import { stripRichTextHtml } from "@/utils/winners";
 import WinnerCinematicHero from "./WinnerCinematicHero";
 import { readableBrandOnLight } from "./theme";
+import { cn } from "@/utils/cn";
 
 interface WinnerStoryModalProps {
   winner: WinnerSummary | null;
@@ -42,7 +43,7 @@ export default function WinnerStoryModal({ winner, onClose }: WinnerStoryModalPr
     >
       {/* ModalContainer keeps children mounted during close animation, so winner can be null here. */}
       {winner ? (
-        <div className={`relative flex h-full flex-col overflow-hidden ${shellBg}`}>
+        <div className={cn("relative flex h-full flex-col overflow-hidden", shellBg)}>
           {/* Close button overlaid on hero */}
           <button
             type="button"
@@ -77,7 +78,7 @@ export default function WinnerStoryModal({ winner, onClose }: WinnerStoryModalPr
             </div>
 
             {/* Story prose with brand-colored drop cap on first paragraph */}
-            <div className={`font-serif text-[16px] leading-[1.7] tracking-[-0.1px] sm:text-[18px] sm:leading-[1.75] ${proseColor}`}>
+            <div className={cn("font-serif text-[16px] leading-[1.7] tracking-[-0.1px] sm:text-[18px] sm:leading-[1.75]", proseColor)}>
               {paragraphs.length === 0 ? (
                 <p className="italic opacity-70">No story shared yet.</p>
               ) : (

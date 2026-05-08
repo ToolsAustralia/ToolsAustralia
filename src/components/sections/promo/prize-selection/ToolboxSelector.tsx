@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { TOOLBOX_IMAGES, TOOLBOX_LABELS, TOOLBOX_SIZES, TOOLBOX_UNIFIED_FRAME } from "./constants";
+import { cn } from "@/utils/cn";
 
 /** Toolbox types that have images (excludes cash) — order: Milwaukee, Kincrome (centre), Sidchrome */
 const TOOLBOX_OPTIONS = ["milwaukee", "kincrome", "sidchrome"] as const;
@@ -68,7 +69,7 @@ export function ToolboxSelector({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className={`flex w-full flex-row flex-wrap items-stretch justify-center gap-2 sm:gap-5 md:gap-7 ${className}`}
+      className={cn("flex w-full flex-row flex-wrap items-stretch justify-center gap-2 sm:gap-5 md:gap-7", className)}
       role="group"
       aria-label="Select toolbox"
     >

@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export interface MetricCardProps {
   title: string | React.ReactNode;
@@ -43,7 +44,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
   if (loading) {
     return (
       <div
-        className={`bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2.5 sm:p-4 lg:p-6 animate-pulse ${className}`}
+        className={cn("bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2.5 sm:p-4 lg:p-6 animate-pulse", className)}
       >
         <div className="h-3 sm:h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/2 mb-1.5 sm:mb-2"></div>
         <div className="h-5 sm:h-7 lg:h-8 bg-gray-200 dark:bg-neutral-700 rounded w-3/4"></div>
@@ -120,8 +121,8 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
             {title}
           </div>
         )}
-        <div className={`shrink-0 p-1.5 sm:p-2 rounded-md sm:rounded-lg ring-1 ring-black/5 dark:ring-white/10 shadow-sm ${colorClasses[normalizedColor]}`}>
-          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
+        <div className={cn("shrink-0 p-1.5 sm:p-2 rounded-md sm:rounded-lg ring-1 ring-black/5 dark:ring-white/10 shadow-sm", colorClasses[normalizedColor])}>
+          <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5", iconColorClasses[normalizedColor])} aria-hidden="true" />
         </div>
       </div>
       <div className="flex items-baseline justify-between gap-1.5 min-w-0">

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 export interface MonthProjectionTooltipProps {
   /** Whether the tooltip is visible */
@@ -58,7 +59,7 @@ export default function MonthProjectionTooltip({
 
   return (
     <div
-      className={`absolute px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white text-2xs sm:text-sm rounded-xl shadow-2xl border border-slate-500/50 pointer-events-none w-[180px] sm:w-auto sm:min-w-[220px] backdrop-blur-sm ${className}`}
+      className={cn("absolute px-3 py-2 sm:px-4 sm:py-3 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white text-2xs sm:text-sm rounded-xl shadow-2xl border border-slate-500/50 pointer-events-none w-[180px] sm:w-auto sm:min-w-[220px] backdrop-blur-sm", className)}
       style={{
         zIndex: 10000,
         left: `${position.left}px`,

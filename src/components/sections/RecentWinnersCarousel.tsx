@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Trophy, Calendar, Award, MapPin, ChevronLeft, ChevronRight, Gift } from "lucide-react";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { cn } from "@/utils/cn";
 
 interface Winner {
   id: string;
@@ -88,7 +89,7 @@ export default function WinnersSection({
 
   return (
     <section
-      className={`relative py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-hidden ${className}`}
+      className={cn("relative py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-hidden", className)}
     >
       <div className="relative w-full px-4 sm:px-6 lg:px-8 lg:max-w-7xl lg:mx-auto">
         {/* Section Header */}

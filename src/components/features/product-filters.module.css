@@ -1,0 +1,51 @@
+/* ProductFilters dual-handle range slider — webkit/moz pseudo-elements
+ * that don't have Tailwind utilities. Imported as a CSS module by
+ * ProductFilters.tsx.
+ */
+
+.sliderThumb {
+  pointer-events: none;
+}
+
+.sliderThumb::-webkit-slider-thumb {
+  appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #ee0000;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(238, 0, 0, 0.28);
+  pointer-events: auto;
+}
+
+.sliderThumb::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #ee0000;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(238, 0, 0, 0.28);
+  pointer-events: auto;
+}
+
+.sliderThumb::-webkit-slider-track {
+  background: transparent;
+  height: 2px;
+  pointer-events: none;
+}
+
+.sliderThumb::-moz-range-track {
+  background: transparent;
+  height: 2px;
+  pointer-events: none;
+}
+
+:global(html.dark) .sliderThumb::-webkit-slider-thumb {
+  border: 2px solid #404040;
+}
+
+:global(html.dark) .sliderThumb::-moz-range-thumb {
+  border: 2px solid #404040;
+}

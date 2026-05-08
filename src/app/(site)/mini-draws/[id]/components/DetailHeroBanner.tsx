@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { ChevronRight, Ticket, Trophy, Share2 } from "lucide-react";
 import MetallicDivider from "@/components/ui/MetallicDivider";
+import { cn } from "@/utils/cn";
 
 interface DetailHeroBannerProps {
   prizeName: string;
@@ -98,7 +99,7 @@ export default function DetailHeroBanner({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: d, delay: 0.1 }}
         >
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${gradient} ${textClass} shadow-sm`}>
+          <span className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r", gradient, textClass, "shadow-sm")}>
             <Trophy className="w-3 h-3" />
             {brandLabel}
           </span>

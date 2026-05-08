@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { X } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export interface ModalHeaderProps {
   title: string;
@@ -97,7 +98,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
 
   return (
     <div
-      className={`${headerBaseClass} ${accentClass} ${paddingClass} ${textClass} relative ${className}`}
+      className={cn(headerBaseClass, accentClass, paddingClass, textClass, "relative", className)}
       style={headerStyle}
     >
       {/* Close Button - Conditionally rendered based on showCloseButton prop */}
@@ -118,18 +119,18 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
 
       {/* Logo */}
       {showLogo && (
-        <div className={`flex justify-center ${compact ? "mb-1 sm:mb-2" : "mb-2"}`}>
-          <Image src={logoSrc} alt={logoAlt} width={120} height={40} className={`${logoHeightClass} w-auto`} />
+        <div className={cn("flex justify-center", compact ? "mb-1 sm:mb-2" : "mb-2")}>
+          <Image src={logoSrc} alt={logoAlt} width={120} height={40} className={cn(logoHeightClass, "w-auto")} />
         </div>
       )}
 
       {/* Title — horizontal padding keeps copy clear of the close control */}
-      <h2 className={`${titleTypographyClass} ${titleGutterClass}`}>{titleNode ?? title}</h2>
+      <h2 className={cn(titleTypographyClass, titleGutterClass)}>{titleNode ?? title}</h2>
 
       {/* Subtitle */}
       {subtitle && (
         <p
-          className={`text-center ${subtitleClass} ${compact ? "text-xs sm:text-sm mt-0.5 sm:mt-1" : "text-sm mt-1"}`}
+          className={cn("text-center", subtitleClass, compact ? "text-xs sm:text-sm mt-0.5 sm:mt-1" : "text-sm mt-1")}
         >
           {subtitle}
         </p>

@@ -14,6 +14,7 @@ import {
   getPrizeSpecificationsModalTheme,
 } from "@/utils/prize-brand-colors";
 import { useThemeStore } from "@/stores/useThemeStore";
+import { cn } from "@/utils/cn";
 
 interface PrizeSpecificationsModalProps {
   isOpen: boolean;
@@ -96,7 +97,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
               />
             </div>
             <span
-              className={`text-2xs sm:text-sm ${surface.bodyClass} leading-snug sm:leading-relaxed font-['Inter']`}
+              className={cn("text-2xs sm:text-sm", surface.bodyClass, "leading-snug sm:leading-relaxed font-['Inter']")}
             >
               {item}
             </span>
@@ -109,7 +110,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
   const renderSpecItem = (item: PrizeSpecItem, index: number) => (
     <div
       key={`${item.name}-${index}`}
-      className={`group relative rounded-lg sm:rounded-xl ${surface.cardClass} p-3 sm:p-6 transition-all duration-300 hover:shadow-lg ${surface.cardHoverClass}`}
+      className={cn("group relative rounded-lg sm:rounded-xl", surface.cardClass, "p-3 sm:p-6 transition-all duration-300 hover:shadow-lg", surface.cardHoverClass)}
       style={{
         borderLeftWidth: "4px",
         borderLeftColor: surface.cardAccentBorder,
@@ -119,19 +120,19 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
       <div className="mb-2 sm:mb-4">
         <div className="flex items-start gap-2 sm:gap-3">
           <div className="flex-shrink-0 mt-0.5 sm:mt-1">
-            <Package className={`h-4 w-4 sm:h-6 sm:w-6 ${brandColors?.checkmarkColor ?? "text-red-600"}`} />
+            <Package className={cn("h-4 w-4 sm:h-6 sm:w-6", brandColors?.checkmarkColor ?? "text-red-600")} />
           </div>
           <div className="flex-1 min-w-0">
             <h4
-              className={`text-sm sm:text-xl font-bold ${surface.titleClass} font-['Poppins'] leading-tight tracking-tight`}
+              className={cn("text-sm sm:text-xl font-bold", surface.titleClass, "font-['Poppins'] leading-tight tracking-tight")}
             >
               {item.name}
             </h4>
             {item.model && (
               <p
-                className={`text-2xs sm:text-sm ${surface.mutedClass} font-medium mt-1 sm:mt-1.5 flex items-center gap-1.5`}
+                className={cn("text-2xs sm:text-sm", surface.mutedClass, "font-medium mt-1 sm:mt-1.5 flex items-center gap-1.5")}
               >
-                <span className={`inline-block w-1.5 h-1.5 rounded-full ${surface.dotClass}`} />
+                <span className={cn("inline-block w-1.5 h-1.5 rounded-full", surface.dotClass)} />
                 Model: {item.model}
               </p>
             )}
@@ -141,7 +142,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
 
       {item.description && (
         <p
-          className={`text-2xs sm:text-sm ${surface.bodyClass} mb-3 sm:mb-5 leading-snug sm:leading-relaxed font-['Inter'] pl-6 sm:pl-9`}
+          className={cn("text-2xs sm:text-sm", surface.bodyClass, "mb-3 sm:mb-5 leading-snug sm:leading-relaxed font-['Inter'] pl-6 sm:pl-9")}
         >
           {item.description}
         </p>
@@ -150,7 +151,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
       {item.specifications && item.specifications.length > 0 && (
         <div className="mb-3 sm:mb-5 pl-6 sm:pl-9">
           <h5
-            className={`text-xs sm:text-base font-semibold ${surface.titleClass} mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2`}
+            className={cn("text-xs sm:text-base font-semibold", surface.titleClass, "mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2")}
           >
             <span className="inline-block w-0.5 sm:w-1 h-4 sm:h-5 shrink-0 rounded-full" style={surface.specBarStyle} />
             Specifications
@@ -166,9 +167,9 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
         >
           <div className="rounded-md p-2 sm:p-4" style={surface.includesInnerStyle}>
             <h5
-              className={`text-xs sm:text-base font-semibold ${surface.titleClass} mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2`}
+              className={cn("text-xs sm:text-base font-semibold", surface.titleClass, "mb-1.5 sm:mb-3 font-['Poppins'] flex items-center gap-1.5 sm:gap-2")}
             >
-              <Package className={`h-3.5 w-3.5 sm:h-5 sm:w-5 shrink-0 ${brandColors?.checkmarkColor ?? "text-red-600"}`} />
+              <Package className={cn("h-3.5 w-3.5 sm:h-5 sm:w-5 shrink-0", brandColors?.checkmarkColor ?? "text-red-600")} />
               What&apos;s Included
             </h5>
             {renderList(item.includes)}
@@ -196,15 +197,15 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
 
       <ModalContent scrollbar="metallic" padding="none" className="max-h-[88dvh] sm:max-h-[80vh]">
         <div
-          className={`min-h-full w-full px-2.5 py-2 sm:p-6 ${surface.contentRootClass}`}
+          className={cn("min-h-full w-full px-2.5 py-2 sm:p-6", surface.contentRootClass)}
           style={surface.canvasStyle}
         >
           {!prize ? (
-            <div className={`py-8 sm:py-12 text-center text-xs sm:text-base ${surface.emptyStateClass}`}>
+            <div className={cn("py-8 sm:py-12 text-center text-xs sm:text-base", surface.emptyStateClass)}>
               Prize information is loading. Please try again in a moment.
             </div>
           ) : sections.length === 0 ? (
-            <div className={`py-8 sm:py-12 text-center text-xs sm:text-base ${surface.emptyStateClass}`}>
+            <div className={cn("py-8 sm:py-12 text-center text-xs sm:text-base", surface.emptyStateClass)}>
               Detailed specifications for this prize will be available soon.
             </div>
           ) : (
@@ -256,7 +257,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
                   style={surface.summaryBannerStyle}
                 >
                   <p
-                    className={`text-xs sm:text-base ${surface.summaryTextClass} leading-snug sm:leading-relaxed font-['Inter'] font-medium`}
+                    className={cn("text-xs sm:text-base", surface.summaryTextClass, "leading-snug sm:leading-relaxed font-['Inter'] font-medium")}
                   >
                     {activeSection.summary}
                   </p>

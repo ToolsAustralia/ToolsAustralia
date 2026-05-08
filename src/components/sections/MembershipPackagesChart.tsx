@@ -18,6 +18,7 @@ import {
 } from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
 type StaticImageData = PackageIconData;
 
@@ -277,7 +278,7 @@ export default function MembershipPackagesChart() {
                       : "bg-slate-700"
                   }`}
                 >
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-300 ${showMemberExclusive ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                  <span className={cn("inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-300", showMemberExclusive ? "translate-x-[18px]" : "translate-x-0.5")} />
                 </button>
               </div>
             )}

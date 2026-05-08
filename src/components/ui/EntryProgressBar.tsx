@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { cn } from "@/utils/cn";
 
 interface EntryProgressBarProps {
   totalEntries: number;
@@ -42,11 +43,11 @@ export default function EntryProgressBar({
   const trackRounding = "rounded-full";
 
   return (
-    <div className={`w-full ${className}`}>
+    <div className={cn("w-full", className)}>
       {showLabel && (
-        <div className={`flex items-center justify-between ${isCompact ? "mb-1" : "mb-2"}`}>
+        <div className={cn("flex items-center justify-between", isCompact ? "mb-1" : "mb-2")}>
           <span
-            className={`font-medium ${isCompact ? "text-2xs sm:text-xs" : "text-xs sm:text-sm"} text-gray-700 dark:text-white`}
+            className={cn("font-medium", isCompact ? "text-2xs sm:text-xs" : "text-xs sm:text-sm", "text-gray-700 dark:text-white")}
           >
             {isClosed ? (
               <span className="text-red-600 dark:text-red-400 font-semibold">Entries Closed</span>
@@ -57,7 +58,7 @@ export default function EntryProgressBar({
             )}
           </span>
           {!isCompact && (
-            <span className={`text-xs font-semibold ${percentage >= 85 ? "text-red-600 dark:text-red-500" : "text-gray-500 dark:text-gray-400"}`}>
+            <span className={cn("text-xs font-semibold", percentage >= 85 ? "text-red-600 dark:text-red-500" : "text-gray-500 dark:text-gray-400")}>
               {percentage}%
             </span>
           )}
@@ -67,9 +68,9 @@ export default function EntryProgressBar({
         </div>
       )}
 
-      <div className={`w-full bg-gray-200 dark:bg-neutral-700 ${trackRounding} ${trackHeight} overflow-hidden`}>
+      <div className={cn("w-full bg-gray-200 dark:bg-neutral-700", trackRounding, trackHeight, "overflow-hidden")}>
         <motion.div
-          className={`${trackHeight} ${trackRounding} bg-gradient-to-r ${colorGradient}`}
+          className={cn(trackHeight, trackRounding, "bg-gradient-to-r", colorGradient)}
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
           transition={

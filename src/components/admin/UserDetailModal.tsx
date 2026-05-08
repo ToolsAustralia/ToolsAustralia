@@ -72,6 +72,7 @@ import {
   SubscriptionHistoryStatusBadge,
   VerificationBadge,
 } from "@/components/admin/ui/AdminBadge";
+import { cn } from "@/utils/cn";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -1423,9 +1424,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               </p>
                             </div>
                             <div
-                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                              className={cn("w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10", iconConfig.bg, "rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0")}
                             >
-                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                              <Icon className={cn("w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5", iconConfig.icon)} />
                             </div>
                           </div>
                           <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
@@ -1433,7 +1434,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </p>
                         </div>
                         <div
-                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                          className={cn("h-1", iconConfig.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}
                         ></div>
                       </div>
                     );
@@ -2470,9 +2471,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               </p>
                             </div>
                             <div
-                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                              className={cn("w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10", iconConfig.bg, "rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0")}
                             >
-                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                              <Icon className={cn("w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5", iconConfig.icon)} />
                             </div>
                           </div>
                           <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
@@ -2480,7 +2481,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           </p>
                         </div>
                         <div
-                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                          className={cn("h-1", iconConfig.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}
                         ></div>
                       </div>
                     );

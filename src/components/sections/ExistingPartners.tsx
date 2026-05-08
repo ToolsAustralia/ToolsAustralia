@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Star, Quote } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export default function ExistingPartners() {
   const partnerTestimonials = [
@@ -74,7 +75,7 @@ export default function ExistingPartners() {
             {partnerBrands.map((brand, index) => (
               <div key={index} className="group">
                 <div
-                  className={`${brand.color} rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 w-full h-32 flex items-center justify-center`}
+                  className={cn(brand.color, "rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 w-full h-32 flex items-center justify-center")}
                 >
                   <Image
                     src={brand.logo}
@@ -98,7 +99,7 @@ export default function ExistingPartners() {
               {partnerBrands.map((brand, index) => (
                 <div key={index} className="flex-shrink-0 w-32">
                   <div
-                    className={`${brand.color} rounded-xl p-4 shadow-lg border border-gray-100 h-24 flex items-center justify-center`}
+                    className={cn(brand.color, "rounded-xl p-4 shadow-lg border border-gray-100 h-24 flex items-center justify-center")}
                   >
                     <Image
                       src={brand.logo}

@@ -8,6 +8,7 @@ import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { getWinnerDisplayDate, getWinnerTestimonyExcerpt } from "@/utils/winners";
 import { buildHeroEdgeGlow } from "./theme";
+import { cn } from "@/utils/cn";
 
 interface WinnerCinematicHeroProps {
   winner: WinnerSummary;
@@ -43,7 +44,7 @@ export default function WinnerCinematicHero({
   if (isCard) {
     return (
       <div
-        className={`relative flex h-[340px] w-full flex-col overflow-hidden p-6 sm:h-[360px] sm:p-8 lg:h-[380px] lg:p-10 text-white ${className}`}
+        className={cn("relative flex h-[340px] w-full flex-col overflow-hidden p-6 sm:h-[360px] sm:p-8 lg:h-[380px] lg:p-10 text-white", className)}
         style={{ background: stageBackground }}
       >
         {/* Top row: draw-type pill + date/state pill — always single row, smaller on mobile */}
@@ -110,7 +111,7 @@ export default function WinnerCinematicHero({
   // Modal variant: short typographic band, centered editorial header.
   return (
     <div
-      className={`relative flex w-full flex-col items-center justify-center px-6 py-6 text-center sm:px-10 sm:py-7 text-white ${className}`}
+      className={cn("relative flex w-full flex-col items-center justify-center px-6 py-6 text-center sm:px-10 sm:py-7 text-white", className)}
       style={{ background: stageBackground, minHeight: "150px" }}
     >
       <span

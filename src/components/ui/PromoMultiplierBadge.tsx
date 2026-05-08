@@ -3,6 +3,7 @@
 import React from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface PromoMultiplierBadgeProps {
   multiplier: PromoMultiplier;
@@ -26,7 +27,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
   const theme = usePromoTheme();
   const preferDark = theme.preferDarkBackground ?? false;
   return (
-    <div className={`absolute -top-1.5 -right-1.5 z-10 ${className}`}>
+    <div className={cn("absolute -top-1.5 -right-1.5 z-10", className)}>
       <div
         className="px-1.5 py-0.5 text-3xs font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden"
         style={{
@@ -38,7 +39,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
         {/* Subtle static highlight - no shimmer/light shine effect */}
         {/* Content - Multiplier with optional PROMO text */}
         <span
-          className={`relative z-10 font-black ${preferDark ? "text-black" : "text-white"}`}
+          className={cn("relative z-10 font-black", preferDark ? "text-black" : "text-white")}
           style={{
             textShadow: preferDark ? "0 1px 2px rgba(255, 255, 255, 0.3)" : "0 1px 2px rgba(0, 0, 0, 0.5)",
           }}

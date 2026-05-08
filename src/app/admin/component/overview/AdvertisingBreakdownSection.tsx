@@ -11,6 +11,7 @@ import type { DateRange } from "@/components/admin/DateRangeToggle";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 /** Same calendar-day semantics as Facebook Ads → Spend by URL (Australia/Sydney) */
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -241,7 +242,7 @@ export default function AdvertisingBreakdownSection({
             disabled={!dateReady || syncMutation.isPending}
             className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg bg-slate-900 text-white text-2xs sm:text-sm font-medium hover:bg-slate-800 dark:bg-neutral-200 dark:text-neutral-900 dark:hover:bg-white disabled:opacity-50 shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", syncMutation.isPending ? "animate-spin" : "")} />
             <span className="sm:hidden">{syncMutation.isPending ? "…" : "Sync"}</span>
             <span className="hidden sm:inline">{syncMutation.isPending ? "Syncing…" : "Sync from Meta"}</span>
           </button>
@@ -342,7 +343,7 @@ export default function AdvertisingBreakdownSection({
                             alt={metric.brand}
                             width={96}
                             height={48}
-                            className={`object-contain max-h-7 sm:max-h-10 md:max-h-12 ${metric.logoScale || ""}`}
+                            className={cn("object-contain max-h-7 sm:max-h-10 md:max-h-12", metric.logoScale || "")}
                           />
                         </div>
                       </div>

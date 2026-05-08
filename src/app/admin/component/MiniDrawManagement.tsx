@@ -42,6 +42,7 @@ import Image from "next/image";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import { cn } from "@/utils/cn";
 
 interface MiniDraw extends AdminMiniDrawSummary {
   totalEntries: number;
@@ -778,7 +779,7 @@ function MiniDrawCard({
         tabIndex={reorderMode ? undefined : 0}
         onClick={reorderMode ? undefined : onEdit}
         onKeyDown={reorderMode ? undefined : (e) => e.key === "Enter" && onEdit()}
-        className={`relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px] ${reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60"}`}
+        className={cn("relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px]", reorderMode ? "cursor-grab active:cursor-grabbing touch-none" : "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60")}
       >
         <div className="relative w-full h-32 md:h-44 bg-gray-100 dark:bg-neutral-800">
           <Image

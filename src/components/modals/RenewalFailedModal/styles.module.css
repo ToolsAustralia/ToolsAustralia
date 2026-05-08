@@ -1,0 +1,123 @@
+/* RenewalFailedModal — composite gradients, scrollbar, stripe overlay, and
+ * shared button styles that don't translate cleanly to single Tailwind
+ * utilities. Imported as a CSS module by Shell.tsx, PaymentForm.tsx, and
+ * ActionButtons.tsx (the orchestrator + components consuming these classes).
+ */
+
+/* ---------------------------------------------------------------- Hero */
+
+/* Hero — 3-layer composite background.
+ * Original: <style jsx> Block 1, lines 197-201 of pre-refactor file.
+ *   tone-glow (varies per tone variant) + radial gold + linear black.
+ * The --tone-glow custom property is set per-instance via the CVA tone variant
+ * applied to the hero element (data-tone="danger" | "success").
+ */
+.heroBg {
+  background:
+    radial-gradient(900px 320px at 50% -120px, var(--tone-glow), transparent 65%),
+    radial-gradient(600px 280px at 50% 120%, rgba(212, 175, 55, 0.14), transparent 60%),
+    linear-gradient(180deg, #0a0a0a 0%, #141416 60%, #0a0a0a 100%);
+}
+
+/* Hero pinstripe overlay applied via ::before.
+ * Original: lines 205-215. The repeating-linear-gradient is a 14px/14px stripe.
+ */
+.heroStripeOverlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 14px,
+    rgba(255, 255, 255, 0.012) 14px 28px
+  );
+  pointer-events: none;
+}
+
+/* Tone-themed CSS custom properties. Set on the hero/frame element via the
+ * `data-tone` attribute. Consumed by .heroBg and any element using
+ * var(--tone-accent) inline.
+ *
+ * Original: lines 277-284 of pre-refactor file (.rf-frame.tone-danger /
+ * .rf-frame.tone-success blocks).
+ */
+.heroBg[data-tone="danger"] {
+  --tone-glow: rgba(238, 0, 0, 0.34);
+  --tone-accent: #ff6b6b;
+}
+.heroBg[data-tone="success"] {
+  --tone-glow: rgba(34, 197, 94, 0.32);
+  --tone-accent: #4ade80;
+}
+
+/* ---------------------------------------------------------------- Scroll frame */
+
+/* Custom scrollbar for the modal frame.
+ * Original: lines 166-171 (`.rf-frame::-webkit-scrollbar`).
+ * Tailwind doesn't have first-class utilities for ::-webkit-scrollbar.
+ */
+.scrollFrame {
+  scrollbar-width: thin;
+}
+.scrollFrame::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollFrame::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+/* Mobile (<=540px) — hide scrollbar on small screens.
+ * Original: lines 290-293.
+ */
+@media (max-width: 540px) {
+  .scrollFrame {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-gutter: auto;
+  }
+  .scrollFrame::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Buttons */
+
+/* Shared button transitions (multi-property compound — Tailwind's `transition`
+ * utility doesn't combine all four properties cleanly).
+ * Original: lines 537 + 1254 (.rf-btn / .rfx-btn — the two button namespaces
+ * in the original; collapsed to one .btn here per audit recommendation).
+ */
+.btn {
+  transition:
+    transform 160ms ease,
+    filter 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+/* Primary button hover lift + brightness (the :not(:disabled) compound is
+ * Tailwind 3 hover:[&:not(:disabled)]: territory but combined with filter+transform
+ * is cleaner here).
+ * Original: lines 558-560 + 1266-1268.
+ */
+.btnPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+/* ---------------------------------------------------------------- Tone accent auto-color */
+
+/* Headline accent + sub <strong> are automatically colored via the [data-tone]
+ * scope set on the hero element. Callers wrap accent text in
+ * `<span data-rf-accent>…</span>` or `<strong>…</strong>` — no inline style needed.
+ *
+ * Original coloring was done via styled-jsx :global() selectors
+ * (.rf-headline :global(.accent) and .rf-sub :global(strong)).
+ */
+.heroBg [data-rf-accent],
+.heroBg strong {
+  color: var(--tone-accent);
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { cn } from "@/utils/cn";
 
 export interface AttemptsBreakdownProps {
   total: number;
@@ -75,7 +76,7 @@ export default function AttemptsBreakdown({
         )}
       </div>
       {chips.length > 0 && (
-        <div className={`${CHIPS_WRAP[size]} ${size === "cell" ? "justify-end" : ""}`}>
+        <div className={cn(CHIPS_WRAP[size], size === "cell" ? "justify-end" : "")}>
           {chips.map((c) => (
             <Fragment key={c.key}>{c.node}</Fragment>
           ))}

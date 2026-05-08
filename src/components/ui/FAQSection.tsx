@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import MetallicAccordion, { MetallicAccordionItem } from "./MetallicAccordion";
+import { cn } from "@/utils/cn";
 
 export interface FAQItem {
   id: string;
@@ -69,7 +70,7 @@ export default function FAQSection({
   }));
 
   return (
-    <div className={`w-full px-4 sm:px-6 lg:px-8 py-8 ${className}`}>
+    <div className={cn("w-full px-4 sm:px-6 lg:px-8 py-8", className)}>
       <div className={`${getMaxWidthClass(maxWidth)} mx-auto`}>
         {/* Section Header */}
         {(title || subtitle) && (

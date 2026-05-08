@@ -19,6 +19,7 @@ import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorSche
 import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDisplayName } from "@/utils/display-name";
 import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
+import { cn } from "@/utils/cn";
 
 interface UserRowProps {
   user: AdminUserListItem;
@@ -67,7 +68,7 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
               }}
             >
               <div
-                className={`relative w-full h-full flex-shrink-0 flex items-center justify-center ${packageIconScaleClass}`}
+                className={cn("relative w-full h-full flex-shrink-0 flex items-center justify-center", packageIconScaleClass)}
               >
                 <Image
                   src={packageIcon}

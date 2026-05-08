@@ -11,6 +11,7 @@ import {
   Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
   type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
@@ -188,7 +189,7 @@ function PrizeShowcaseResponsiveImage({
             src={mobile}
             alt={resolvedAlt}
             fill
-            className={`object-contain ${scaleClass} ${translateClass}`}
+            className={cn("object-contain", scaleClass, translateClass)}
             style={objectPosition}
             priority={priority}
             sizes={sizes}
@@ -199,7 +200,7 @@ function PrizeShowcaseResponsiveImage({
             src={image.src}
             alt={resolvedAlt}
             fill
-            className={`object-contain ${scaleClass} ${translateClass}`}
+            className={cn("object-contain", scaleClass, translateClass)}
             style={objectPosition}
             priority={priority}
             sizes={sizes}
@@ -213,7 +214,7 @@ function PrizeShowcaseResponsiveImage({
       src={image.src}
       alt={resolvedAlt}
       fill
-      className={`object-contain ${scaleClass} ${translateClass}`}
+      className={cn("object-contain", scaleClass, translateClass)}
       style={objectPosition}
       priority={priority}
       sizes={sizes}
@@ -908,7 +909,7 @@ export default function PrizeShowcase({
           {/* Prize description section - hidden for now */}
           <div className="hidden">
             <div className={`inline-block bg-gradient-to-br ${brandColors.gradient} rounded-xl sm:rounded-2xl px-4 sm:px-6 py-2 sm:py-3 mb-4 shadow-lg border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')}`}>
-              <h2 className={`text-2xl sm:text-4xl lg:text-5xl font-bold ${brandColors.textColor} font-sans drop-shadow-lg`}>
+              <h2 className={cn("text-2xl sm:text-4xl lg:text-5xl font-bold", brandColors.textColor, "font-sans drop-shadow-lg")}>
                 {activePrize.heroHeading}
               </h2>
             </div>
@@ -1039,7 +1040,7 @@ export default function PrizeShowcase({
                   {toolboxType === "cash" && (
                     <div className="absolute inset-0 z-0 bg-gradient-to-br from-green-600/85 via-green-600/75 to-green-700/85" />
                   )}
-                  <span className={`relative z-10 text-md sm:text-2xl ${toolboxType === "cash" ? "text-white drop-shadow-lg" : ""}`}>$10,000 cash</span>
+                  <span className={cn("relative z-10 text-md sm:text-2xl", toolboxType === "cash" ? "text-white drop-shadow-lg" : "")}>$10,000 cash</span>
                 </button>
 
                 
@@ -1177,12 +1178,12 @@ export default function PrizeShowcase({
                   suppressHydrationWarning
                   className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`}></div>
+                  <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)}></div>
                   <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent"></div>
                   <div className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace('/40', '/25')} blur-xl animate-pulse`}></div>
                   <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace('/40', '/20')} blur-xl`}></div>
                   <div className={`relative z-10 flex items-center justify-center gap-2 px-3 py-2 sm:px-4 sm:py-2 border-2 ${brandColors.borderColor.replace('border-', 'border-').replace('-500', '-400/30')} rounded-full`}>
-                    <span className={`font-acumin font-[950] text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}>
+                    <span className={cn("font-acumin font-[950] text-xs sm:text-sm", brandColors.textColor, "drop-shadow-lg whitespace-nowrap")}>
                       VIEW SPECS
                     </span>
                   </div>
@@ -1322,7 +1323,7 @@ export default function PrizeShowcase({
                         className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-br from-white/35 via-white/10 to-transparent sm:rounded-xl"
                         aria-hidden
                       />
-                      <Icon className={`relative z-10 w-3.5 h-3.5 sm:w-5 sm:h-5 ${highlightIconClassName}`} strokeWidth={2.25} />
+                      <Icon className={cn("relative z-10 w-3.5 h-3.5 sm:w-5 sm:h-5", highlightIconClassName)} strokeWidth={2.25} />
                     </div>
                     <div className="flex-1 relative z-10 min-w-0 flex flex-col justify-center">
                       <h3 className="text-2xs sm:text-lg font-bold text-white font-sans mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
@@ -1360,8 +1361,8 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className={`font-sans font-extrabold font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
-                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className={cn("font-sans font-extrabold font-bold text-base sm:text-lg", isRyobiOrDewaltTheme ? "text-black" : "text-white", "drop-shadow-lg")}>ENTER NOW</span>
+                <svg className={cn("w-4 h-4 sm:w-5 sm:h-5", isRyobiOrDewaltTheme ? "text-black" : "text-white")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>
@@ -1386,8 +1387,8 @@ export default function PrizeShowcase({
               style={{ background: theme.gradientSolid }}
             >
               <div className="flex items-center justify-center gap-3">
-                <span className={`font-sans font-extrabold font-bold text-base sm:text-lg ${isRyobiOrDewaltTheme ? "text-black" : "text-white"} drop-shadow-lg`}>ENTER NOW</span>
-                <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${isRyobiOrDewaltTheme ? "text-black" : "text-white"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className={cn("font-sans font-extrabold font-bold text-base sm:text-lg", isRyobiOrDewaltTheme ? "text-black" : "text-white", "drop-shadow-lg")}>ENTER NOW</span>
+                <svg className={cn("w-4 h-4 sm:w-5 sm:h-5", isRyobiOrDewaltTheme ? "text-black" : "text-white")} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </div>

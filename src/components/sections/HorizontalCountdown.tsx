@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface HorizontalCountdownProps {
   className?: string;
@@ -73,7 +74,7 @@ const HorizontalCountdown: React.FC<HorizontalCountdownProps> = ({ className = "
 
   return (
     <div
-      className={`bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-2xl shadow-2xl border border-red-500/50 p-4 sm:p-6 relative overflow-hidden max-w-xl mx-auto backdrop-blur-sm ${className}`}
+      className={cn("bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-2xl shadow-2xl border border-red-500/50 p-4 sm:p-6 relative overflow-hidden max-w-xl mx-auto backdrop-blur-sm", className)}
     >
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10 pattern-dots-white"></div>

@@ -6,6 +6,7 @@ import { ChartData, useRevenueBreakdown } from "@/hooks/queries/useAdminQueries"
 import { formatInTimeZone } from "date-fns-tz";
 import { subMonths, addMonths } from "date-fns";
 import { createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 // Component now manages its own data fetching
 // No props needed
@@ -671,7 +672,7 @@ export default function RevenueOverview() {
           {/* Tooltip - Positioned outside overflow container */}
           {tooltipPosition && tooltipData && (
             <div
-              className={`${isMobile ? "absolute" : "fixed"} z-50 pointer-events-none`}
+              className={cn(isMobile ? "absolute" : "fixed", "z-50 pointer-events-none")}
               style={
                 isMobile
                   ? {

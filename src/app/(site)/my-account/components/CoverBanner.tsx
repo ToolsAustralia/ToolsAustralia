@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { cn } from "@/utils/cn";
 
 interface CoverBannerProps {
   className?: string;
@@ -11,7 +12,7 @@ const COVER_BANNER_SRC = "/images/coverBanner.webp";
 
 export default function CoverBanner({ className = "" }: CoverBannerProps) {
   return (
-    <div className={`relative w-full ${className}`}>
+    <div className={cn("relative w-full", className)}>
       <div className="relative w-full h-40 xs:h-48 sm:h-56 md:h-64 lg:h-72 overflow-hidden">
         <Image
           src={COVER_BANNER_SRC}

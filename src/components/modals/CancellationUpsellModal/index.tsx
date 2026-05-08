@@ -242,7 +242,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({
     >
       <div
         className={cn(
-          "absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300",
+          "absolute inset-0 bg-black/85 backdrop-blur-md transition-opacity duration-300",
           isVisible ? "opacity-100" : "opacity-0"
         )}
         onClick={onClose}
@@ -251,7 +251,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({
 
       <div
         className={cn(
-          "relative transform transition-all duration-300 ease-out w-full max-w-[600px] font-sans text-neutral-950 antialiased max-h-[calc(100dvh-16px)] flex max-xs:max-h-[calc(100dvh-8px)]",
+          "relative transform transition-all duration-300 ease-out w-full max-w-[600px] font-sans text-neutral-950 antialiased max-h-[82dvh] flex max-xs:max-h-[88dvh]",
           isVisible ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4"
         )}
         role="dialog"
@@ -269,7 +269,7 @@ const CancellationUpsellModal: React.FC<CancellationUpsellModalProps> = ({
         </button>
 
         {/* Frame: scrollable container with custom scrollbar */}
-        <div className={cn("relative rounded-[22px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)] w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] max-xs:rounded-2xl", styles.scrollFrame)}>
+        <div className={cn("relative rounded-[22px] bg-white dark:bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.45),0_8px_24px_rgba(0,0,0,0.2)] w-full max-h-full overflow-y-auto overflow-x-hidden [-webkit-overflow-scrolling:touch] max-xs:rounded-2xl", styles.scrollFrame)}>
           <Hero entriesCopy={heroEntriesCopy} accumulatedEntries={accumulatedEntries} />
 
           <LoseGrid

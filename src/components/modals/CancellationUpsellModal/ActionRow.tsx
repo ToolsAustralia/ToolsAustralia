@@ -35,11 +35,11 @@ const ActionRow: React.FC<ActionRowProps> = ({ isPastDue, isProcessing, onDeclin
         type="button"
         onClick={onDecline}
         disabled={isProcessing}
-        className="group/cancel rounded-[10px] px-3 py-[9px] font-sans font-extrabold tracking-[0.01em] flex items-center gap-2 text-left transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed bg-white border-[1.5px] border-neutral-200 text-neutral-600 hover:[&:not(:disabled)]:bg-neutral-50 hover:[&:not(:disabled)]:border-neutral-400 hover:[&:not(:disabled)]:text-red-700 max-xs:px-[9px] max-xs:py-[7px] max-xs:rounded-[9px] max-xs:gap-1.5"
+        className="group/cancel rounded-[10px] px-3 py-[9px] font-sans font-extrabold tracking-[0.01em] flex items-center gap-2 text-left transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed bg-white dark:bg-neutral-900 border-[1.5px] border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:[&:not(:disabled)]:bg-neutral-50 dark:hover:[&:not(:disabled)]:bg-neutral-800 hover:[&:not(:disabled)]:border-neutral-400 dark:hover:[&:not(:disabled)]:border-neutral-600 hover:[&:not(:disabled)]:text-red-700 dark:hover:[&:not(:disabled)]:text-red-300 max-xs:px-[9px] max-xs:py-[7px] max-xs:rounded-[9px] max-xs:gap-1.5"
       >
         <span
           data-icn
-          className="w-7 h-7 rounded-[7px] inline-flex items-center justify-center grow-0 shrink-0 basis-7 bg-neutral-100 text-neutral-600 transition-colors duration-150 group-hover/cancel:bg-red-50 group-hover/cancel:text-red-700 group-disabled/cancel:bg-neutral-100 group-disabled/cancel:text-neutral-600 max-xs:w-6 max-xs:h-6 max-xs:basis-6 max-xs:rounded-md"
+          className="w-7 h-7 rounded-[7px] inline-flex items-center justify-center grow-0 shrink-0 basis-7 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors duration-150 group-hover/cancel:bg-red-50 dark:group-hover/cancel:bg-red-950/40 group-hover/cancel:text-red-700 dark:group-hover/cancel:text-red-300 group-disabled/cancel:bg-neutral-100 dark:group-disabled/cancel:bg-neutral-800 group-disabled/cancel:text-neutral-600 dark:group-disabled/cancel:text-neutral-300 max-xs:w-6 max-xs:h-6 max-xs:basis-6 max-xs:rounded-md"
         >
           <LogOut size={16} className="max-xs:size-3" />
         </span>

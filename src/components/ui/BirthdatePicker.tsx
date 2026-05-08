@@ -15,6 +15,7 @@ import {
   getMonth,
   getDate,
 } from "date-fns";
+import { cn } from "@/utils/cn";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -197,7 +198,7 @@ export default function BirthdatePicker({
     : placeholder;
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={cn("relative", className)}>
       {label && (
         <label
           htmlFor={id}
@@ -229,7 +230,7 @@ export default function BirthdatePicker({
           {displayLabel}
         </span>
         <ChevronDown
-          className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={cn("w-4 h-4 ml-auto text-gray-400 transition-transform", isOpen ? "rotate-180" : "")}
         />
       </button>
 
@@ -259,7 +260,7 @@ export default function BirthdatePicker({
                 >
                   <span className="truncate">{MONTHS[getMonth(viewDate)]}</span>
                   <ChevronDown
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 lg:w-3 lg:h-3 text-gray-400 dark:text-neutral-500 flex-shrink-0 transition-transform duration-200 ${openDropdown === "month" ? "rotate-180" : ""}`}
+                    className={cn("absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 lg:w-3 lg:h-3 text-gray-400 dark:text-neutral-500 flex-shrink-0 transition-transform duration-200", openDropdown === "month" ? "rotate-180" : "")}
                   />
                 </button>
                 {openDropdown === "month" && (
@@ -309,7 +310,7 @@ export default function BirthdatePicker({
                 >
                   <span className="truncate">{getYear(viewDate)}</span>
                   <ChevronDown
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 lg:w-3 lg:h-3 text-gray-400 dark:text-neutral-500 flex-shrink-0 transition-transform duration-200 ${openDropdown === "year" ? "rotate-180" : ""}`}
+                    className={cn("absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 lg:w-3 lg:h-3 text-gray-400 dark:text-neutral-500 flex-shrink-0 transition-transform duration-200", openDropdown === "year" ? "rotate-180" : "")}
                   />
                 </button>
                 {openDropdown === "year" && (

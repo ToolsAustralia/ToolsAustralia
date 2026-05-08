@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import Link from "next/link";
 import { Trophy, Zap, Wrench, Shield, Car, TreePine, Settings, Ruler } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 // Mini draw categories
 const miniDrawCategories = [
@@ -129,7 +130,7 @@ export default function PrizeCategories() {
               >
                 <div className="bg-white rounded-[20px] sm:rounded-[25px] p-4 sm:p-6 shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] hover:shadow-xl transition-all duration-300 group-hover:scale-105 h-full flex flex-col items-center text-center">
                   <div
-                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full ${category.color} flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}
+                    className={cn("w-12 h-12 sm:w-14 sm:h-14 rounded-full", category.color, "flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300")}
                   >
                     <category.icon className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                   </div>
@@ -158,7 +159,7 @@ export default function PrizeCategories() {
             >
               <div className="bg-white rounded-[25px] p-8 shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] hover:shadow-xl transition-all duration-300 group-hover:scale-105 h-full flex flex-col items-center text-center">
                 <div
-                  className={`w-16 h-16 rounded-full ${category.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}
+                  className={cn("w-16 h-16 rounded-full", category.color, "flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300")}
                 >
                   <category.icon className="w-8 h-8 text-white" />
                 </div>

@@ -14,6 +14,7 @@ import { hasWinnerTestimony } from "@/utils/winners";
 import WinnerCinematicCard from "./WinnerCinematicCard";
 import WinnerStoryModal from "./WinnerStoryModal";
 import { buildSectionBackground, readableBrandOnLight } from "./theme";
+import { cn } from "@/utils/cn";
 
 interface WinnerTestimonySectionProps {
   winners: WinnerSummary[];
@@ -66,23 +67,23 @@ export default function WinnerTestimonySection({
   if (winnersWithTestimonies.length === 0) {
     return (
       <section
-        className={`relative py-12 sm:py-16 ${className}`}
+        className={cn("relative py-12 sm:py-16", className)}
         style={{ background: sectionBackground }}
       >
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
             <div
-              className={`mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full ${isDark ? "bg-white/10 text-white/80" : "bg-slate-900/5 text-slate-700"}`}
+              className={cn("mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full", isDark ? "bg-white/10 text-white/80" : "bg-slate-900/5 text-slate-700")}
             >
               <MessageSquareQuote className="h-7 w-7" />
             </div>
             <div className="mb-3 text-2xs font-extrabold uppercase tracking-[0.32em]" style={eyebrowColor}>
               — Real Stories —
             </div>
-            <h2 className={`font-['Poppins'] text-3xl font-bold sm:text-4xl ${titleColor}`}>
+            <h2 className={cn("font-['Poppins'] text-3xl font-bold sm:text-4xl", titleColor)}>
               Hear From Our Winners
             </h2>
-            <p className={`mt-3 text-sm sm:text-base ${subtitleColor}`}>
+            <p className={cn("mt-3 text-sm sm:text-base", subtitleColor)}>
               Check back soon. We&apos;re collecting more winner stories to showcase the real people behind the prizes.
             </p>
             <div className="mt-8">
@@ -191,7 +192,7 @@ function PopulatedSection({
   return (
     <>
       <section
-        className={`relative overflow-hidden py-12 sm:py-16 lg:py-20 ${className}`}
+        className={cn("relative overflow-hidden py-12 sm:py-16 lg:py-20", className)}
         style={{ background: sectionBackground }}
       >
         <SectionContainer>
@@ -203,7 +204,7 @@ function PopulatedSection({
             >
               — Real Stories —
             </div>
-            <h2 className={`font-['Poppins'] text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.65rem] ${titleColor}`}>
+            <h2 className={cn("font-['Poppins'] text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.65rem]", titleColor)}>
               Hear From Our Winners
             </h2>
             <div className="mx-auto mt-3 h-[2px] w-12 rounded-full" style={{ background: theme.gradient }} />
@@ -218,7 +219,7 @@ function PopulatedSection({
                   onClick={scrollPrev}
                   disabled={!canScrollPrev}
                   aria-label="Previous winner story"
-                  className={`absolute left-0 top-1/2 z-20 hidden h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border ${arrowBg} ${arrowText} backdrop-blur-sm shadow-[0_14px_30px_rgba(0,0,0,0.35)] lg:flex`}
+                  className={cn("absolute left-0 top-1/2 z-20 hidden h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border", arrowBg, arrowText, "backdrop-blur-sm shadow-[0_14px_30px_rgba(0,0,0,0.35)] lg:flex")}
                   style={arrowBorderStyle}
                 >
                   <ChevronLeft className="h-5 w-5" style={{ color: chevronColor }} />
@@ -228,7 +229,7 @@ function PopulatedSection({
                   onClick={scrollNext}
                   disabled={!canScrollNext}
                   aria-label="Next winner story"
-                  className={`absolute right-0 top-1/2 z-20 hidden h-12 w-12 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border ${arrowBg} ${arrowText} backdrop-blur-sm shadow-[0_14px_30px_rgba(0,0,0,0.35)] lg:flex`}
+                  className={cn("absolute right-0 top-1/2 z-20 hidden h-12 w-12 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border", arrowBg, arrowText, "backdrop-blur-sm shadow-[0_14px_30px_rgba(0,0,0,0.35)] lg:flex")}
                   style={arrowBorderStyle}
                 >
                   <ChevronRight className="h-5 w-5" style={{ color: chevronColor }} />
@@ -256,19 +257,19 @@ function PopulatedSection({
                   type="button"
                   onClick={scrollPrev}
                   aria-label="Previous winner story"
-                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${arrowBg} ${arrowText}`}
+                  className={cn("flex h-11 w-11 items-center justify-center rounded-full border", arrowBg, arrowText)}
                   style={arrowBorderStyle}
                 >
                   <ChevronLeft className="h-5 w-5" style={{ color: chevronColor }} />
                 </button>
-                <div className={`text-sm font-medium ${isDark ? "text-white/80" : "text-slate-700"}`}>
+                <div className={cn("text-sm font-medium", isDark ? "text-white/80" : "text-slate-700")}>
                   {selectedIndex + 1} / {winners.length}
                 </div>
                 <button
                   type="button"
                   onClick={scrollNext}
                   aria-label="Next winner story"
-                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${arrowBg} ${arrowText}`}
+                  className={cn("flex h-11 w-11 items-center justify-center rounded-full border", arrowBg, arrowText)}
                   style={arrowBorderStyle}
                 >
                   <ChevronRight className="h-5 w-5" style={{ color: chevronColor }} />
@@ -277,7 +278,7 @@ function PopulatedSection({
             )}
 
             {!hasMultiple && (
-              <div className={`mt-6 text-center text-sm font-medium ${isDark ? "text-white/80" : "text-slate-700"}`}>
+              <div className={cn("mt-6 text-center text-sm font-medium", isDark ? "text-white/80" : "text-slate-700")}>
                 1 / 1
               </div>
             )}

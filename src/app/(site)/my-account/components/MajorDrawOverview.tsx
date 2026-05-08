@@ -7,6 +7,7 @@ import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import type { PackageDetailModalPackageData, SubscriptionAccumulationData } from "@/components/modals/PackageDetailModal";
 import { formatRenewalDate } from "@/utils/dates/month-helpers";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cn } from "@/utils/cn";
 
 interface MajorDrawOverviewProps {
   drawName: string;
@@ -200,7 +201,7 @@ export default function MajorDrawOverview({
   })();
 
   return (
-    <div className={`px-4 sm:px-6 ${className}`}>
+    <div className={cn("px-4 sm:px-6", className)}>
       <div className="max-w-7xl mx-auto">
         <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-[0_8px_40px_-12px_rgba(0,0,0,0.25),0_4px_20px_-8px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] border border-slate-200/80 dark:border-slate-700/60 overflow-hidden">
 

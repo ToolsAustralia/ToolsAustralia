@@ -101,11 +101,11 @@ Total: ~1 weak signal. **Don't decompose.** It's a long-but-coherent form.
 
 ## Screening tool
 
-Plan 5 ships `scripts/codemods/audit-component-decomposition.ts` — a one-shot audit that walks `src/components/` + `src/app/` and scores each component against the criteria above. Output: `docs/shared-ui/decomposition-backlog.md` — a ranked list of candidates with their scores.
+Run `npm run audit:decomposition` to walk `src/components/` + `src/app/` and score each file against the criteria above. Output: [docs/shared-ui/decomposition-backlog.md](./decomposition-backlog.md) — ranked list of candidates with their scores.
 
 The backlog is the work queue for incremental decomposition. Pick from the top down as time permits. Don't blanket-refactor; high-score components yield the most value.
 
-Run the audit periodically (when adding features, before a major release) to catch new offenders.
+Re-run the audit periodically (when adding features, before a major release) to catch new offenders.
 
 ## Workflow
 

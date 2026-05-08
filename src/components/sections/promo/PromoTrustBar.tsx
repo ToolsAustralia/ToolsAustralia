@@ -2,6 +2,7 @@
 
 import { CalendarDays, Shield, Trophy, type LucideIcon } from "lucide-react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { cn } from "@/utils/cn";
 
 const linkClass =
   "text-inherit visited:text-inherit no-underline decoration-transparent [text-decoration-line:none] transition-opacity hover:opacity-90";
@@ -73,7 +74,7 @@ export default function PromoTrustBar() {
               return (
                 <div
                   key={key}
-                  className={`flex min-w-0 items-center justify-center sm:flex-1 ${shellMobile}`}
+                  className={cn("flex min-w-0 items-center justify-center sm:flex-1", shellMobile)}
                 >
                   <div className="inline-flex min-w-0 max-w-full items-center gap-0.5 sm:gap-2">
                     <Icon
@@ -85,14 +86,14 @@ export default function PromoTrustBar() {
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${labelCn} min-w-0 text-gray-900 dark:text-white sm:hidden ${linkClass}`}
+                      className={cn(labelCn, "min-w-0 text-gray-900 dark:text-white sm:hidden", linkClass)}
                       aria-label="Government-certified draws — randomdraws.com.au"
                     >
                       {item.host}
                     </a>
-                    <p className={`${labelCn} hidden min-w-0 max-w-full text-gray-900 dark:text-white sm:inline`}>
+                    <p className={cn(labelCn, "hidden min-w-0 max-w-full text-gray-900 dark:text-white sm:inline")}>
                       <span>{item.lineDesktopBeforeLink}</span>
-                      <a href={item.href} target="_blank" rel="noopener noreferrer" className={`${linkClass} inline`}>
+                      <a href={item.href} target="_blank" rel="noopener noreferrer" className={cn(linkClass, "inline")}>
                         {item.host}
                       </a>
                     </p>
@@ -104,7 +105,7 @@ export default function PromoTrustBar() {
             return (
               <div
                 key={key}
-                className={`flex min-w-0 items-center justify-center sm:flex-1 lg:justify-center ${shellMobile}`}
+                className={cn("flex min-w-0 items-center justify-center sm:flex-1 lg:justify-center", shellMobile)}
               >
                 <div className="inline-flex max-w-full items-center gap-0.5 sm:gap-2">
                   <Icon
@@ -113,7 +114,7 @@ export default function PromoTrustBar() {
                     aria-hidden
                   />
                   <p
-                    className={`${labelCn} m-0 max-w-full text-gray-900 dark:text-white sm:leading-snug`}
+                    className={cn(labelCn, "m-0 max-w-full text-gray-900 dark:text-white sm:leading-snug")}
                   >
                     <span className="sm:hidden">{item.lineMobile}</span>
                     <span className="hidden sm:inline">

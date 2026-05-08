@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 export type ComparisonMode = "month" | "major-draw";
 
@@ -26,7 +27,7 @@ export function ComparisonModeToggle({
 
   return (
     <div
-      className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
+      className={cn("bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0", className)}
     >
       <div className="flex items-center gap-1 sm:gap-2">
         {modes.map((m) => (

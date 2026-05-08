@@ -2089,3 +2089,13 @@
     transform: translateY(-20px) rotate(5deg);
   }
 }
+
+/* my-account layout opts out of site chrome (header, footer, newsletter section).
+ * Set via useEffect in src/app/(site)/my-account/layout.tsx so the opt-in is
+ * explicit and reversible (cleanup runs on unmount). The data-attribute scope
+ * is more discoverable than the previous .site-header/.site-footer global hide. */
+body[data-account-layout] .site-header,
+body[data-account-layout] .site-footer,
+body[data-account-layout] .newsletter-section {
+  display: none !important;
+}

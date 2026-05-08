@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Gift, Clock, Star } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface GiveawaySectionProps {
   className?: string;
@@ -10,7 +11,7 @@ interface GiveawaySectionProps {
 export default function GiveawaySection({ className = "" }: GiveawaySectionProps) {
   return (
     <section
-      className={`relative  lg:py-16 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-visible ${className}`}
+      className={cn("relative lg:py-16 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-visible", className)}
     >
       <div className="relative w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto overflow-visible">
         {/* Large Image Container with Absolute Positioning - Positioned relative to section */}

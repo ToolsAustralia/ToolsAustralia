@@ -4,6 +4,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
 import type { PackageColorsVariantConfig } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { cn } from "@/utils/cn";
 
 /** When set (e.g. in my-account explainer), chart shows user's actual accumulation from lastMonthAccumulatedEntries; multiplier is not applied and promo badge is hidden. */
 export interface UserAccumulationInput {
@@ -183,7 +184,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-6 sm:-top-7 left-1/2 transform -translate-x-1/2 text-xs sm:text-sm font-extrabold text-neutral-900 dark:text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(255,255,255,0.7)] dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month1.toLocaleString()}
                         </div>
                       </div>
@@ -214,7 +215,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-6 sm:-top-7 left-1/2 transform -translate-x-1/2 text-xs sm:text-sm font-extrabold text-neutral-900 dark:text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(255,255,255,0.7)] dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month2.toLocaleString()}
                         </div>
                       </div>
@@ -245,7 +246,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-6 sm:-top-7 left-1/2 transform -translate-x-1/2 text-xs sm:text-sm font-extrabold text-neutral-900 dark:text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(255,255,255,0.7)] dark:drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month3.toLocaleString()}
                         </div>
                       </div>
@@ -262,9 +263,9 @@ export default function VerticalAccumulationChart({
           {/* Package Legend */}
           <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
             {packageData.map((pkg) => (
-              <div key={pkg.id} className={`flex items-center gap-1.5 sm:gap-2 ${pkg.isSelected ? "scale-110" : ""}`}>
+              <div key={pkg.id} className={cn("flex items-center gap-1.5 sm:gap-2", pkg.isSelected ? "scale-110" : "")}>
                 <div
-                  className={`w-3 h-3 sm:w-4 sm:h-4 rounded ${pkg.isSelected ? "ring-2 ring-yellow-400" : ""}`}
+                  className={cn("w-3 h-3 sm:w-4 sm:h-4 rounded", pkg.isSelected ? "ring-2 ring-yellow-400" : "")}
                   style={{ background: pkg.colorScheme.barGradientCss }}
                 ></div>
                 <span

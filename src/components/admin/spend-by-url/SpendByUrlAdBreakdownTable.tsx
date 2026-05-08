@@ -13,6 +13,7 @@ import {
   type SpendByUrlAdSortColumn,
   type SpendByUrlAdSortDir,
 } from "@/utils/admin/spendByUrlAdBreakdown";
+import { cn } from "@/utils/cn";
 
 const COL_SPAN = 8;
 
@@ -142,12 +143,12 @@ export default function SpendByUrlAdBreakdownTable({
 
   if (rows.length === 0) {
     return (
-      <p className={`text-gray-500 dark:text-neutral-400 ${textSize}`}>No ads in this breakdown.</p>
+      <p className={cn("text-gray-500 dark:text-neutral-400", textSize)}>No ads in this breakdown.</p>
     );
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={cn("space-y-2", className)}>
       {showSearch && (
         <div className="relative max-w-md">
           <Search
@@ -190,52 +191,52 @@ export default function SpendByUrlAdBreakdownTable({
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <table
-          className={`w-full min-w-[260px] sm:min-w-[640px] ${textSize} border-collapse`}
+          className={cn("w-full min-w-[260px] sm:min-w-[640px]", textSize, "border-collapse")}
           aria-label={ariaLabel}
         >
           <thead>
             <tr
-              className={`border-b border-slate-200 text-gray-600 dark:border-neutral-600 dark:text-neutral-300 ${theadBg}`}
+              className={cn("border-b border-slate-200 text-gray-600 dark:border-neutral-600 dark:text-neutral-300", theadBg)}
             >
               <SortHeader
                 column="ad"
                 align="left"
-                className={`sticky top-0 z-10 ${theadBg} text-left ${cellPad} font-semibold`}
+                className={cn("sticky top-0 z-10", theadBg, "text-left", cellPad, "font-semibold")}
               >
                 Ad
               </SortHeader>
               <SortHeader
                 column="spend"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold whitespace-nowrap`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold whitespace-nowrap")}
               >
                 Spend
               </SortHeader>
               <SortHeader
                 column="clicks"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold ${moreColsHidden ? "hidden md:table-cell" : ""}`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold", moreColsHidden ? "hidden md:table-cell" : "")}
               >
                 Clicks
               </SortHeader>
               <SortHeader
                 column="impressions"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold ${moreColsHidden ? "hidden lg:table-cell" : ""}`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold", moreColsHidden ? "hidden lg:table-cell" : "")}
               >
                 Impr.
               </SortHeader>
               <SortHeader
                 column="cpc"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold whitespace-nowrap ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold whitespace-nowrap", moreColsHidden ? "hidden sm:table-cell" : "")}
               >
                 CPC
               </SortHeader>
               <SortHeader
                 column="revenue"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold text-emerald-900 dark:text-emerald-300 whitespace-nowrap`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold text-emerald-900 dark:text-emerald-300 whitespace-nowrap")}
               >
                 <span className="sm:hidden">Rev</span>
                 <span className="hidden sm:inline">Meta rev.</span>
@@ -243,7 +244,7 @@ export default function SpendByUrlAdBreakdownTable({
               <SortHeader
                 column="conversions"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold whitespace-nowrap ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold whitespace-nowrap", moreColsHidden ? "hidden sm:table-cell" : "")}
               >
                 <span className="sm:hidden">Conv</span>
                 <span className="hidden sm:inline">Conv.</span>
@@ -251,7 +252,7 @@ export default function SpendByUrlAdBreakdownTable({
               <SortHeader
                 column="roas"
                 align="right"
-                className={`sticky top-0 z-10 ${theadBg} text-right ${cellPad} font-semibold whitespace-nowrap`}
+                className={cn("sticky top-0 z-10", theadBg, "text-right", cellPad, "font-semibold whitespace-nowrap")}
               >
                 ROAS
               </SortHeader>
@@ -262,7 +263,7 @@ export default function SpendByUrlAdBreakdownTable({
               <tr>
                 <td
                   colSpan={COL_SPAN}
-                  className={`${cellPad} text-center text-gray-500 dark:text-neutral-400`}
+                  className={cn(cellPad, "text-center text-gray-500 dark:text-neutral-400")}
                 >
                   No ads match your search.
                 </td>
@@ -273,11 +274,11 @@ export default function SpendByUrlAdBreakdownTable({
               return (
               <React.Fragment key={group.format}>
                 <tr
-                  className={`${sectionBg} border-b border-slate-200/90 dark:border-neutral-600/80`}
+                  className={cn(sectionBg, "border-b border-slate-200/90 dark:border-neutral-600/80")}
                 >
                   <td
                     colSpan={COL_SPAN}
-                    className={`${cellPad} font-semibold text-gray-800 dark:text-neutral-100 uppercase tracking-wide`}
+                    className={cn(cellPad, "font-semibold text-gray-800 dark:text-neutral-100 uppercase tracking-wide")}
                   >
                     {group.label}
                   </td>
@@ -287,7 +288,7 @@ export default function SpendByUrlAdBreakdownTable({
                     key={d.adId}
                     className="border-b border-slate-100/80 dark:border-neutral-800/90"
                   >
-                    <td className={`${cellPad} text-gray-900 dark:text-neutral-100 max-w-[7rem] sm:max-w-none`}>
+                    <td className={cn(cellPad, "text-gray-900 dark:text-neutral-100 max-w-[7rem] sm:max-w-none")}>
                       <span
                         className={`font-mono text-gray-500 dark:text-neutral-500 block truncate ${
                           density === "comfortable" ? "text-2xs sm:text-xs" : "text-3xs sm:text-2xs"
@@ -305,35 +306,35 @@ export default function SpendByUrlAdBreakdownTable({
                         </span>
                       ) : null}
                     </td>
-                    <td className={`${cellPad} text-right whitespace-nowrap tabular-nums`}>
+                    <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums")}>
                       {formatAud(d.spend)}
                     </td>
                     <td
-                      className={`${cellPad} text-right whitespace-nowrap tabular-nums ${moreColsHidden ? "hidden md:table-cell" : ""}`}
+                      className={cn(cellPad, "text-right whitespace-nowrap tabular-nums", moreColsHidden ? "hidden md:table-cell" : "")}
                     >
                       {formatNum(d.clicks)}
                     </td>
                     <td
-                      className={`${cellPad} text-right whitespace-nowrap tabular-nums ${moreColsHidden ? "hidden lg:table-cell" : ""}`}
+                      className={cn(cellPad, "text-right whitespace-nowrap tabular-nums", moreColsHidden ? "hidden lg:table-cell" : "")}
                     >
                       {formatNum(d.impressions)}
                     </td>
                     <td
-                      className={`${cellPad} text-right whitespace-nowrap tabular-nums ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                      className={cn(cellPad, "text-right whitespace-nowrap tabular-nums", moreColsHidden ? "hidden sm:table-cell" : "")}
                     >
                       {formatAud(d.cpc)}
                     </td>
                     <td
-                      className={`${cellPad} text-right whitespace-nowrap tabular-nums text-emerald-800 dark:text-emerald-300`}
+                      className={cn(cellPad, "text-right whitespace-nowrap tabular-nums text-emerald-800 dark:text-emerald-300")}
                     >
                       {formatAud(d.revenue)}
                     </td>
                     <td
-                      className={`${cellPad} text-right whitespace-nowrap tabular-nums ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                      className={cn(cellPad, "text-right whitespace-nowrap tabular-nums", moreColsHidden ? "hidden sm:table-cell" : "")}
                     >
                       {formatNum(d.conversions)}
                     </td>
-                    <td className={`${cellPad} text-right whitespace-nowrap tabular-nums`}>
+                    <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums")}>
                       {d.roas.toFixed(2)}x
                     </td>
                   </tr>
@@ -342,40 +343,40 @@ export default function SpendByUrlAdBreakdownTable({
                   className="border-b border-slate-200 bg-slate-100/95 dark:bg-slate-800/60"
                 >
                   <td
-                    className={`${cellPad} text-left text-gray-800 dark:text-neutral-100 font-semibold`}
+                    className={cn(cellPad, "text-left text-gray-800 dark:text-neutral-100 font-semibold")}
                     aria-label={`${group.label} subtotal, ${t.adCount} ads`}
                   >
                     <span className="normal-case tracking-normal">
                       Total · {t.adCount} ad{t.adCount === 1 ? "" : "s"}
                     </span>
                   </td>
-                  <td className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white`}>
+                  <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white")}>
                     {formatAud(t.spend)}
                   </td>
                   <td
-                    className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white ${moreColsHidden ? "hidden md:table-cell" : ""}`}
+                    className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white", moreColsHidden ? "hidden md:table-cell" : "")}
                   >
                     {formatNum(t.clicks)}
                   </td>
                   <td
-                    className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white ${moreColsHidden ? "hidden lg:table-cell" : ""}`}
+                    className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white", moreColsHidden ? "hidden lg:table-cell" : "")}
                   >
                     {formatNum(t.impressions)}
                   </td>
                   <td
-                    className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                    className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white", moreColsHidden ? "hidden sm:table-cell" : "")}
                   >
                     {t.clicks > 0 ? formatAud(t.cpc) : "—"}
                   </td>
-                  <td className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-emerald-900 dark:text-emerald-300`}>
+                  <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-emerald-900 dark:text-emerald-300")}>
                     {formatAud(t.revenue)}
                   </td>
                   <td
-                    className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white ${moreColsHidden ? "hidden sm:table-cell" : ""}`}
+                    className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white", moreColsHidden ? "hidden sm:table-cell" : "")}
                   >
                     {formatNum(t.conversions)}
                   </td>
-                  <td className={`${cellPad} text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white`}>
+                  <td className={cn(cellPad, "text-right whitespace-nowrap tabular-nums font-semibold text-gray-900 dark:text-white")}>
                     {t.spend > 0 ? `${t.roas.toFixed(2)}x` : "—"}
                   </td>
                 </tr>

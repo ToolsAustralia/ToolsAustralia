@@ -52,6 +52,7 @@ import Dropdown from "@/components/modals/ui/Dropdown";
 import Checkbox from "@/components/modals/ui/Checkbox";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
+import { cn } from "@/utils/cn";
 
 function AdminStatesMultiSelect({
   selected,
@@ -95,7 +96,7 @@ function AdminStatesMultiSelect({
 
   return (
     <div
-      className={`relative w-full min-w-[220px] ${open ? "z-[100]" : ""}`}
+      className={cn("relative w-full min-w-[220px]", open ? "z-[100]" : "")}
       ref={ref}
     >
       <button
@@ -512,7 +513,7 @@ export default function UsersManagement() {
               className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 hover:border-red-500 hover:bg-red-50 dark:hover:bg-neutral-800 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
               aria-label="Toggle filters"
             >
-              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400"}`} />
+              <Filter className={cn("w-4 h-4", hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400")} />
               {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
               {isFiltersOpen ? (
                 <ChevronUp className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
@@ -804,7 +805,7 @@ export default function UsersManagement() {
                                 }}
                               >
                                 <div
-                                  className={`relative w-full h-full flex-shrink-0 flex items-center justify-center ${packageIconScaleClass}`}
+                                  className={cn("relative w-full h-full flex-shrink-0 flex items-center justify-center", packageIconScaleClass)}
                                 >
                                   <Image
                                     src={packageIcon}

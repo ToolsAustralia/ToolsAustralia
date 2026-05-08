@@ -9,6 +9,7 @@ import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-col
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import { getToolsetFromSlug } from "./utils";
 import type { PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface PowerToolsetCarouselProps {
   /** All toolset options for the current toolbox type */
@@ -209,7 +210,7 @@ export function PowerToolsetCarousel({
                         }}
                       >
                         <p
-                          className={`max-w-[min(100%,18rem)] whitespace-normal font-sans text-center text-3xs font-extrabold font-bold leading-snug line-clamp-2 sm:max-w-none sm:text-xs sm:leading-tight lg:text-sm ${scheme.buttonText}`}
+                          className={cn("max-w-[min(100%,18rem)] whitespace-normal font-sans text-center text-3xs font-extrabold font-bold leading-snug line-clamp-2 sm:max-w-none sm:text-xs sm:leading-tight lg:text-sm", scheme.buttonText)}
                         >
                           {POWERSET_LABELS[activeToolset]} + $5000 CASH
                         </p>
@@ -295,7 +296,7 @@ export function PowerToolsetCarousel({
                 border: badgeStyle.border,
               }}
             >
-              <p className={`font-sans font-extrabold font-bold text-3xs sm:text-3xs lg:text-2xs leading-tight text-center line-clamp-2 break-words hyphens-auto ${scheme.buttonText}`}>
+              <p className={cn("font-sans font-extrabold font-bold text-3xs sm:text-3xs lg:text-2xs leading-tight text-center line-clamp-2 break-words hyphens-auto", scheme.buttonText)}>
                 {label} + $5000 CASH
               </p>
             </div>
@@ -307,7 +308,7 @@ export function PowerToolsetCarousel({
   };
 
   return (
-    <div className={`flex flex-col items-center gap-2 sm:gap-3 ${className}`}>
+    <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {/* Carousel label - brand logo for active toolset */}
       {activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
         <AnimatePresence mode="wait">
@@ -395,7 +396,7 @@ export function PowerToolsetCarousel({
               )}
 
               <div
-                className={`mx-auto flex w-full min-w-0 max-w-6xl items-center justify-center gap-1 pt-0 sm:gap-2 md:gap-4 lg:gap-6 ${showStepButtons ? "sm:px-10" : "px-1 sm:px-2"}`}
+                className={cn("mx-auto flex w-full min-w-0 max-w-6xl items-center justify-center gap-1 pt-0 sm:gap-2 md:gap-4 lg:gap-6", showStepButtons ? "sm:px-10" : "px-1 sm:px-2")}
               >
                 <div
                   className={`flex min-h-0 min-w-0 flex-1 items-center justify-end self-center ${

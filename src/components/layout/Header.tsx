@@ -50,6 +50,7 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 /** Full wordmark: light UI uses default PNG; dark UI uses high-contrast white artwork */
 const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
@@ -639,7 +640,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               >
                 Results
                 <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${isResultsMenuOpen ? "rotate-180" : ""}`}
+                  className={cn("w-4 h-4 transition-transform duration-200", isResultsMenuOpen ? "rotate-180" : "")}
                 />
               </button>
 

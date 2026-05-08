@@ -1,6 +1,7 @@
 "use client";
 
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { cn } from "@/utils/cn";
 
 type RibbonPlacement = "topLeft" | "overlayCenter";
 
@@ -44,14 +45,14 @@ export default function CompletedDrawRibbon({
       <div
         role="status"
         aria-label={kind === "mini" ? "Mini draw" : "Major draw"}
-        className={`pointer-events-none absolute left-0 top-0 z-20 w-max max-w-[min(100%,calc(100%-0.5rem))] select-none shadow-md ${className}`}
+        className={cn("pointer-events-none absolute left-0 top-0 z-20 w-max max-w-[min(100%,calc(100%-0.5rem))] select-none shadow-md", className)}
         style={{
           ...barStyle,
           clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%)",
         }}
       >
         <span
-          className={`${labelClass} block whitespace-nowrap px-3 py-2 text-[0.55rem] tracking-[0.1em] sm:px-4 sm:py-2.5 sm:text-[0.65rem] sm:tracking-[0.14em]`}
+          className={cn(labelClass, "block whitespace-nowrap px-3 py-2 text-[0.55rem] tracking-[0.1em] sm:px-4 sm:py-2.5 sm:text-[0.65rem] sm:tracking-[0.14em]")}
           style={{ textShadow: baseShadow }}
         >
           {ribbonLabel}
@@ -62,12 +63,12 @@ export default function CompletedDrawRibbon({
 
   return (
     <div
-      className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-3 pt-2 sm:px-4 sm:pt-3 ${className}`}
+      className={cn("pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center px-3 pt-2 sm:px-4 sm:pt-3", className)}
     >
       <div
         role="status"
         aria-label={kind === "mini" ? "Mini draw" : "Major draw"}
-        className={`relative isolate flex max-w-[calc(100%-1.5rem)] items-center justify-center whitespace-nowrap rounded-t-md px-9 py-2 ${labelClass} text-xs shadow-md sm:max-w-[min(100%,20rem)] sm:px-11 sm:py-2.5 sm:text-sm sm:tracking-[0.12em]`}
+        className={cn("relative isolate flex max-w-[calc(100%-1.5rem)] items-center justify-center whitespace-nowrap rounded-t-md px-9 py-2", labelClass, "text-xs shadow-md sm:max-w-[min(100%,20rem)] sm:px-11 sm:py-2.5 sm:text-sm sm:tracking-[0.12em]")}
         style={{
           ...barStyle,
           clipPath: "polygon(4% 0%, 96% 0%, 100% 100%, 50% 88%, 0% 100%)",

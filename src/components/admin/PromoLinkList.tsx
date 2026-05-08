@@ -7,6 +7,7 @@ import type { PromoLink } from "@/types/admin";
 import { Link2, Edit2, Trash2, Calendar, Loader2, RefreshCw, Copy, Check, CheckCircle } from "lucide-react";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface PromoLinkListProps {
   filters?: {
@@ -107,7 +108,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
               title="Refresh"
               type="button"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("w-4 h-4", isLoading ? "animate-spin" : "")} />
             </button>
           </div>
         </div>

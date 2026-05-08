@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { Users, Gift, Award } from "lucide-react";
 import { useCompletedMajorDraws } from "@/hooks/queries/useMajorDrawQueries";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cn } from "@/utils/cn";
 
 interface MajorDrawStats {
   totalDraws: number;
@@ -74,7 +75,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
   // Note: We don't show loading spinner anymore - stats will display with 0 values while loading
 
   return (
-    <div className={`absolute left-1/2 transform -translate-x-1/2 z-20 w-full sm:max-w-6xl px-2 sm:px-4 ${className}`}>
+    <div className={cn("absolute left-1/2 transform -translate-x-1/2 z-20 w-full sm:max-w-6xl px-2 sm:px-4", className)}>
       {/* Mobile: Single Card with 3 Sections */}
       <div className="sm:hidden">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black border border-red-500/50 rounded-2xl p-3 overflow-hidden w-full shadow-2xl backdrop-blur-sm">

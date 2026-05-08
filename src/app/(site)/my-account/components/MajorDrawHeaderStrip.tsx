@@ -13,6 +13,7 @@ import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { formatMajorDrawStripSchedule } from "@/utils/draws/major-draw-strip-schedule";
 import { isPromoMultiplier } from "@/types/promo-multiplier";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cn } from "@/utils/cn";
 
 /** How long each slide stays visible before cross-fading to the other */
 const ROTATE_MS = 10_000;
@@ -126,7 +127,7 @@ export default function MajorDrawHeaderStrip({
           aria-hidden={Boolean(schedule && showSchedule)}
         >
           <p className={titleClass}>{drawName}</p>
-          <p className={`${entriesLabelClass} mt-0.5 lg:mt-1`}>
+          <p className={cn(entriesLabelClass, "mt-0.5 lg:mt-1")}>
             Your Entries:{" "}
             <span className={entriesValueClass} style={entriesValueStyle}>
               <AnimatedNumber value={entryCount} />
@@ -142,7 +143,7 @@ export default function MajorDrawHeaderStrip({
             aria-hidden={!showSchedule}
           >
             <p className={dateTitleClass}>{schedule.dateLine}</p>
-            <p className={`${timeLineClass} mt-0.5 lg:mt-1`}>{schedule.timeLine}</p>
+            <p className={cn(timeLineClass, "mt-0.5 lg:mt-1")}>{schedule.timeLine}</p>
           </div>
         ) : null}
       </div>

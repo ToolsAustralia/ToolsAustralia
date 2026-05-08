@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { AlertCircle, ChevronDown, Search, Check } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface SelectOption {
   value: string;
@@ -229,7 +230,7 @@ const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`space-y-1.5 sm:space-y-2 ${className}`} ref={selectRef}>
+    <div className={cn("space-y-1.5 sm:space-y-2", className)} ref={selectRef}>
       {/* Label */}
       {label && (
         <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -284,7 +285,7 @@ const Select: React.FC<SelectProps> = ({
           <div
             ref={optionsListRef}
             data-dropdown-list
-            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-700 rounded-xl shadow-lg overflow-y-scroll overflow-x-hidden`}
+            className={cn("absolute z-50 w-full", openUpward ? "bottom-full mb-1" : "mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-700 rounded-xl shadow-lg overflow-y-scroll overflow-x-hidden")}
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",

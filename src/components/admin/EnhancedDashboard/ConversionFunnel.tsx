@@ -3,6 +3,7 @@
 import React from "react";
 import type { EnhancedDashboardMetrics } from "@/types/admin/EnhancedMetrics";
 import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
+import { cn } from "@/utils/cn";
 
 export interface ConversionFunnelProps {
   data: EnhancedDashboardMetrics["conversionFunnel"];
@@ -65,7 +66,7 @@ export function ConversionFunnel({ data, loading = false }: ConversionFunnelProp
             </div>
             <div className="w-full bg-gray-200 dark:bg-neutral-800 rounded-full h-6 relative overflow-hidden">
               <div
-                className={`${stage.color} h-6 rounded-full flex items-center justify-end pr-2 transition-all duration-500`}
+                className={cn(stage.color, "h-6 rounded-full flex items-center justify-end pr-2 transition-all duration-500")}
                 style={{ width: `${stage.percentage}%` }}
               >
                 {stage.percentage > 10 && (

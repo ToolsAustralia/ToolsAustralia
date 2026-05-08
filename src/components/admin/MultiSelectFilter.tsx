@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export type MultiSelectOption = {
   value: string;
@@ -65,7 +66,7 @@ export default function MultiSelectFilter({
   let prevGroup: string | undefined;
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={cn("relative", className)}>
       <span className="mb-1 block text-xs font-semibold text-gray-700 dark:text-neutral-300">
         {label}
       </span>

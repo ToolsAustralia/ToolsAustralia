@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Table, BarChart3 } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export type ViewMode = "table" | "chart";
 
@@ -23,7 +24,7 @@ export function ViewSwitcher({ currentView, onViewChange, className = "" }: View
 
   return (
     <div
-      className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
+      className={cn("bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0", className)}
     >
       <div className="flex items-center gap-1 sm:gap-2">
         {views.map(({ mode, label, shortLabel, icon: Icon }) => (

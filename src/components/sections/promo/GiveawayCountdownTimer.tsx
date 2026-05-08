@@ -8,6 +8,7 @@ import { getLandingPageThemeFromSlug } from "@/utils/package-colors/packageColor
 import { formatMajorDrawLiveDateLineUtc } from "@/utils/common/timezone";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import type { PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface GiveawayCountdownTimerProps {
   activeSlug: PrizeSlug;
@@ -171,14 +172,14 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
-      className={`relative ${className}`}
+      className={cn("relative", className)}
     >
       {shouldShowCountdown ? (
         <div
           role="button"
           tabIndex={0}
           aria-label={`Enter now — ${drawTitle}, countdown to live draw`}
-          className={`relative overflow-hidden rounded-xl border-2 shadow-xl dark:shadow-black/40 sm:rounded-2xl sm:shadow-2xl ${countdownCardInteractiveClass} ${useLightCountdownInner ? "focus-visible:ring-black/40" : "focus-visible:ring-white/60"}`}
+          className={cn("relative overflow-hidden rounded-xl border-2 shadow-xl dark:shadow-black/40 sm:rounded-2xl sm:shadow-2xl", countdownCardInteractiveClass, useLightCountdownInner ? "focus-visible:ring-black/40" : "focus-visible:ring-white/60")}
           style={{
             ...accentBorderStyle,
             boxShadow: `0 14px 36px -10px rgba(0,0,0,0.32), 0 0 0 1px ${lpTheme.borderRgba}`,
@@ -227,7 +228,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                 >
                   <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-md sm:rounded-xl sm:p-3">
                     <div className="text-center">
-                      <div className={`text-2xs font-bold uppercase tracking-wider sm:text-xs ${surfaceText}`}>
+                      <div className={cn("text-2xs font-bold uppercase tracking-wider sm:text-xs", surfaceText)}>
                         Entry period closed
                       </div>
                     </div>
@@ -238,7 +239,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
             <div className="mb-2 text-center sm:mb-3">
               <h3
-                className={`font-sans font-extrabold text-sm font-[950] uppercase leading-tight tracking-wide sm:text-xl lg:text-2xl ${surfaceText} drop-shadow-sm ${useLightCountdownInner ? "[text-shadow:0_1px_0_rgba(255,255,255,0.6)]" : ""}`}
+                className={cn("font-sans font-extrabold text-sm font-[950] uppercase leading-tight tracking-wide sm:text-xl lg:text-2xl", surfaceText, "drop-shadow-sm", useLightCountdownInner ? "[text-shadow:0_1px_0_rgba(255,255,255,0.6)]" : "")}
               >
                 {drawTitle}
               </h3>
@@ -261,7 +262,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                   className="relative group"
                 >
                   <div
-                    className={`absolute -inset-0.5 rounded-xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100 sm:rounded-2xl ${useLightCountdownInner ? "bg-black/10" : ""}`}
+                    className={cn("absolute -inset-0.5 rounded-xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100 sm:rounded-2xl", useLightCountdownInner ? "bg-black/10" : "")}
                     style={useLightCountdownInner ? undefined : { backgroundColor: lpTheme.borderRgba }}
                   />
 
@@ -285,7 +286,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
                     {unit.label === "Secs" && (
                       <motion.div
-                        className={`absolute inset-0 ${useLightCountdownInner ? "bg-black/[0.06]" : "bg-white/5"}`}
+                        className={cn("absolute inset-0", useLightCountdownInner ? "bg-black/[0.06]" : "bg-white/5")}
                         animate={{ opacity: [0, useLightCountdownInner ? 0.35 : 0.25, 0] }}
                         transition={{ duration: 1, repeat: Infinity }}
                       />
@@ -299,13 +300,13 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                           animate={{ rotateX: 0, opacity: 1 }}
                           exit={{ rotateX: 90, opacity: 0 }}
                           transition={{ duration: 0.3 }}
-                          className={`mb-0.5 font-sans text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl ${surfaceText}`}
+                          className={cn("mb-0.5 font-sans text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl", surfaceText)}
                         >
                           {String(unit.value).padStart(2, "0")}
                         </motion.div>
                       </AnimatePresence>
 
-                      <div className={`text-3xs font-bold uppercase tracking-wider sm:text-2xs lg:text-xs ${surfaceMuted}`}>
+                      <div className={cn("text-3xs font-bold uppercase tracking-wider sm:text-2xs lg:text-xs", surfaceMuted)}>
                         {unit.label}
                       </div>
                     </div>
@@ -334,11 +335,11 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
               }
             >
               <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center leading-snug">
-                <span className={`text-3xs font-semibold uppercase tracking-wider sm:text-2xs lg:text-xs ${liveDrawLabelClass}`}>
+                <span className={cn("text-3xs font-semibold uppercase tracking-wider sm:text-2xs lg:text-xs", liveDrawLabelClass)}>
                   Live draw
                 </span>
-                <span className={`hidden sm:inline ${liveDrawLabelClass}`}>·</span>
-                <span className={`text-2xs sm:text-xs lg:text-sm ${liveDrawDateClass}`}>{drawDateLabel}</span>
+                <span className={cn("hidden sm:inline", liveDrawLabelClass)}>·</span>
+                <span className={cn("text-2xs sm:text-xs lg:text-sm", liveDrawDateClass)}>{drawDateLabel}</span>
               </div>
             </motion.div>
 
@@ -359,7 +360,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
           role="button"
           tabIndex={0}
           aria-label={`Enter now — ${drawTitle}, ${drawDateLabel}`}
-          className={`relative overflow-hidden rounded-xl border-2 border-neutral-300 bg-gradient-to-br from-neutral-100 via-white to-neutral-100 shadow-lg dark:border-neutral-600 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 dark:shadow-black/50 sm:rounded-2xl sm:shadow-2xl ${countdownCardInteractiveClass} focus-visible:ring-neutral-500`}
+          className={cn("relative overflow-hidden rounded-xl border-2 border-neutral-300 bg-gradient-to-br from-neutral-100 via-white to-neutral-100 shadow-lg dark:border-neutral-600 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 dark:shadow-black/50 sm:rounded-2xl sm:shadow-2xl", countdownCardInteractiveClass, "focus-visible:ring-neutral-500")}
           style={{ boxShadow: `0 0 0 1px ${lpTheme.borderRgba}33, 0 14px 36px -10px rgba(0,0,0,0.22)` }}
           onClick={handleOpenMembership}
           onKeyDown={(e) => {
@@ -409,10 +410,10 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
         </div>
       )}
 
-      <div className={`${cornerAccentClass} -left-1 -top-1 rounded-tl-2xl border-l-2 border-t-2`} style={accentBorderStyle} />
-      <div className={`${cornerAccentClass} -right-1 -top-1 rounded-tr-2xl border-r-2 border-t-2`} style={accentBorderStyle} />
-      <div className={`${cornerAccentClass} -bottom-1 -left-1 rounded-bl-2xl border-b-2 border-l-2`} style={accentBorderStyle} />
-      <div className={`${cornerAccentClass} -bottom-1 -right-1 rounded-br-2xl border-b-2 border-r-2`} style={accentBorderStyle} />
+      <div className={cn(cornerAccentClass, "-left-1 -top-1 rounded-tl-2xl border-l-2 border-t-2")} style={accentBorderStyle} />
+      <div className={cn(cornerAccentClass, "-right-1 -top-1 rounded-tr-2xl border-r-2 border-t-2")} style={accentBorderStyle} />
+      <div className={cn(cornerAccentClass, "-bottom-1 -left-1 rounded-bl-2xl border-b-2 border-l-2")} style={accentBorderStyle} />
+      <div className={cn(cornerAccentClass, "-bottom-1 -right-1 rounded-br-2xl border-b-2 border-r-2")} style={accentBorderStyle} />
     </motion.div>
   );
 }

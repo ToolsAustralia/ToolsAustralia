@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
+import { cn } from "@/utils/cn";
 
 interface ClickableUserDisplayProps {
   displayText: string;
@@ -36,7 +37,7 @@ export default function ClickableUserDisplay({
           e.stopPropagation();
           openUserModal(userId);
         }}
-        className={`text-left font-medium hover:text-red-600 hover:underline cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded ${typographyClasses}`}
+        className={cn("text-left font-medium hover:text-red-600 hover:underline cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded", typographyClasses)}
       >
         {displayText}
         {subtext && <span className="block text-xs text-gray-500 font-normal">{subtext}</span>}

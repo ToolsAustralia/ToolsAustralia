@@ -14,6 +14,7 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
+import { cn } from "@/utils/cn";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
@@ -166,7 +167,7 @@ export function OtherToolsetsCarousel({
               className="flex-shrink-0 p-2 rounded-b-lg"
               style={{ background: badgeStyle.background, borderTop: badgeStyle.border }}
             >
-              <p className={`font-sans font-extrabold font-[950] text-base sm:text-sm leading-tight text-center line-clamp-2 ${scheme.buttonText}`}>
+              <p className={cn("font-sans font-extrabold font-[950] text-base sm:text-sm leading-tight text-center line-clamp-2", scheme.buttonText)}>
                 {formatToolsetLabel(slug)}
               </p>
             </div>
@@ -179,8 +180,8 @@ export function OtherToolsetsCarousel({
   if (displayToolsets.length === 0) return null;
 
   return (
-    <div className={`pt-4 sm:pt-8 sm:mt-8 mt-4 border-t border-gray-200 dark:border-neutral-700 ${className}`}>
-      <div className={`${SECTION_CONTAINER_CLASSES} flex flex-col items-center`}>
+    <div className={cn("pt-4 sm:pt-8 sm:mt-8 mt-4 border-t border-gray-200 dark:border-neutral-700", className)}>
+      <div className={cn(SECTION_CONTAINER_CLASSES, "flex flex-col items-center")}>
         <h3 className="text-center font-sans font-extrabold font-[950] uppercase text-black dark:text-white text-lg sm:text-2xl mb-4 sm:mb-6">
           Explore other toolsets
         </h3>

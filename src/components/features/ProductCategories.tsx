@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import { cn } from "@/utils/cn";
 
 // Partner brands data with equal representation
 const partnerBrands = [
@@ -265,7 +266,7 @@ export default function ProductCategories({
         <div className="lg:hidden brand-scroll-container">
           <div
             ref={scrollContainerRef}
-            className={`flex gap-4 w-max ${isPaused ? "" : "animate-scroll-right-to-left"}`}
+            className={cn("flex gap-4 w-max", isPaused ? "" : "animate-scroll-right-to-left")}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onTouchStart={handleTouchStart}
@@ -315,7 +316,7 @@ export default function ProductCategories({
                       {/* Metallic brand badge */}
                       <div className="relative inline-block">
                         <div
-                          className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-2xs sm:text-[12px] font-semibold border-2 border-white/20`}
+                          className={cn("bg-gradient-to-br", brand.metallicGradient, "text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-2xs sm:text-[12px] font-semibold border-2 border-white/20")}
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
                           <span className="relative z-10">{brand.productCount}</span>
@@ -371,7 +372,7 @@ export default function ProductCategories({
                     {/* Metallic brand badge */}
                     <div className="relative inline-block">
                       <div
-                        className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-3 py-1 rounded-full text-[12px] font-semibold border-2 border-white/20`}
+                        className={cn("bg-gradient-to-br", brand.metallicGradient, "text-white px-3 py-1 rounded-full text-[12px] font-semibold border-2 border-white/20")}
                       >
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
                         <span className="relative z-10">{brand.productCount}</span>

@@ -32,6 +32,7 @@ import Button from "@/components/modals/ui/Button";
 import Input from "@/components/modals/ui/Input";
 import Textarea from "@/components/modals/ui/Textarea";
 import Checkbox from "@/components/modals/ui/Checkbox";
+import { cn } from "@/utils/cn";
 
 interface AffiliateDetail {
   affiliate: {
@@ -712,7 +713,7 @@ export default function AffiliateDetailModal({
           )}
 
           {data && (
-            <div className={`space-y-6 ${isLoading && !isInitialLoad ? "opacity-60" : ""}`}>
+            <div className={cn("space-y-6", isLoading && !isInitialLoad ? "opacity-60" : "")}>
               {activeTab === "overview" && (
                 <div className="space-y-5 sm:space-y-6">
                   <section className="min-w-0" aria-labelledby="affiliate-basic-heading">

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -83,13 +84,13 @@ const Button: React.FC<ButtonProps> = ({
       {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}
 
       {/* Left Icon */}
-      {Icon && iconPosition === "left" && !loading && <Icon className={`w-4 h-4 ${children ? "mr-2" : ""}`} />}
+      {Icon && iconPosition === "left" && !loading && <Icon className={cn("w-4 h-4", children ? "mr-2" : "")} />}
 
       {/* Button Text */}
       {children}
 
       {/* Right Icon */}
-      {Icon && iconPosition === "right" && !loading && <Icon className={`w-4 h-4 ${children ? "ml-2" : ""}`} />}
+      {Icon && iconPosition === "right" && !loading && <Icon className={cn("w-4 h-4", children ? "ml-2" : "")} />}
     </button>
   );
 };

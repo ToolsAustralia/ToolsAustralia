@@ -12,6 +12,7 @@ import type { BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
+import { cn } from "@/utils/cn";
 
 // Types
 interface ProductItem {
@@ -480,7 +481,7 @@ export default function ProductCard({
             {/* Stock Status for Products */}
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
+                <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>
@@ -664,7 +665,7 @@ export default function ProductCard({
             {/* Stock Status for Products */}
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
+                <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>

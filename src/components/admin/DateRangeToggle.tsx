@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ChevronRight } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export type DateRange = "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw";
 
@@ -42,7 +43,7 @@ export default function DateRangeToggle({
   if (collapsed && displayDate) {
     return (
       <div
-        className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 ${className}`}
+        className={cn("bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0", className)}
       >
         <button
           onClick={() => {
@@ -63,7 +64,7 @@ export default function DateRangeToggle({
   // Expanded view - show all filter buttons
   return (
     <div
-      className={`bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 max-w-full lg:w-auto ${className}`}
+      className={cn("bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-none p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0 max-w-full lg:w-auto", className)}
     >
       <div
         className="overflow-x-auto scrollbar-hide w-full max-w-full"

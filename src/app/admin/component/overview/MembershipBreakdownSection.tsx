@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { RefreshCw, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { cn } from "@/utils/cn";
 
 interface MembershipBreakdownSectionProps {
   isExpanded: boolean;
@@ -183,7 +184,7 @@ export default function MembershipBreakdownSection({
                     <tr key={row.key} className="border-t border-gray-100">
                       <th
                         scope="row"
-                        className={`text-left py-1 pr-1 font-semibold align-middle ${row.labelClass}`}
+                        className={cn("text-left py-1 pr-1 font-semibold align-middle", row.labelClass)}
                       >
                         {row.label}
                       </th>
@@ -208,7 +209,7 @@ export default function MembershipBreakdownSection({
                                 });
                                 setIsMembershipByPackageModalOpen(true);
                               }}
-                              className={`w-full min-w-0 rounded px-0.5 py-0.5 font-semibold ${row.buttonClass}`}
+                              className={cn("w-full min-w-0 rounded px-0.5 py-0.5 font-semibold", row.buttonClass)}
                             >
                               {value.toLocaleString()}
                             </button>

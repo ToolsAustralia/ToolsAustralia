@@ -6,6 +6,7 @@ import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface FloatingCountdownBannerProps {
   className?: string;
@@ -166,7 +167,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 100 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className={`fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none ${className}`}
+          className={cn("fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none", className)}
         >
           <motion.div
             animate={{
@@ -203,8 +204,8 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                 <div className="flex items-center justify-center gap-3 py-2">
                   {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
                   <div className="relative">
-                    <div className={`w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-pulse`}></div>
-                    <div className={`absolute inset-0 w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-ping opacity-75`}></div>
+                    <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
+                    <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
                   </div>
 
                   {/* Text - Only title, no subtitle */}
@@ -258,35 +259,35 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                       ) : (
                         <div className="grid grid-cols-4 gap-2 sm:gap-2">
                           {/* Days */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.days.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>DAYS</div>
+                            <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>DAYS</div>
                           </div>
 
                           {/* Hours */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.hours.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>HRS</div>
+                            <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>HRS</div>
                           </div>
 
                           {/* Minutes */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.minutes.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>MINS</div>
+                            <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>MINS</div>
                           </div>
 
                           {/* Seconds */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded-lg px-2 py-2 sm:px-4 sm:py-2 shadow-lg w-full ring-2", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-lg sm:text-xl font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.seconds.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>SECS</div>
+                            <div className={cn("text-xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>SECS</div>
                           </div>
                         </div>
                       )}
@@ -313,8 +314,8 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                     <div className="flex items-center justify-center gap-2 mb-2">
                       {/* Pulsing Indicator - Yellow/Orange when gates closed, Green when open */}
                       <div className="relative">
-                        <div className={`w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-pulse`}></div>
-                        <div className={`absolute inset-0 w-3 h-3 ${gatesClosed ? "bg-yellow-400" : "bg-green-400"} rounded-full animate-ping opacity-75`}></div>
+                        <div className={cn("w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-pulse")}></div>
+                        <div className={cn("absolute inset-0 w-3 h-3", gatesClosed ? "bg-yellow-400" : "bg-green-400", "rounded-full animate-ping opacity-75")}></div>
                       </div>
                       {gatesClosed && <Lock className="w-3 h-3 text-yellow-400 flex-shrink-0" />}
                       <p className="text-sm sm:text-base font-semibold text-yellow-400 font-['Poppins']">
@@ -344,35 +345,35 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                         {/* Countdown Timer - 4 columns in one row */}
                         <div className="grid grid-cols-4 gap-1 flex-1">
                           {/* Days */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded px-1 py-1 shadow-lg ring-1 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.days.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>DAYS</div>
+                            <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>DAYS</div>
                           </div>
 
                           {/* Hours */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded px-1 py-1 shadow-lg ring-1 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.hours.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>HRS</div>
+                            <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>HRS</div>
                           </div>
 
                           {/* Minutes */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded px-1 py-1 shadow-lg ring-1 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.minutes.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>MINS</div>
+                            <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>MINS</div>
                           </div>
 
                           {/* Seconds */}
-                          <div className={`bg-gradient-to-br ${gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700"} rounded px-1 py-1 shadow-lg ring-1 ${gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20"}`}>
+                          <div className={cn("bg-gradient-to-br", gatesClosed ? "from-yellow-500 via-orange-500 to-orange-600" : "from-red-500 via-red-600 to-red-700", "rounded px-1 py-1 shadow-lg ring-1", gatesClosed ? "ring-yellow-300/20" : "ring-red-300/20")}>
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.seconds.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>SECS</div>
+                            <div className={cn("text-2xs", gatesClosed ? "text-yellow-100" : "text-red-100", "font-medium")}>SECS</div>
                           </div>
                         </div>
 

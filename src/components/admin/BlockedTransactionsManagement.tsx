@@ -53,6 +53,7 @@ import {
   DECLINE_CODE_LABELS,
   getDeclineCodeLabel,
 } from "@/utils/billing/declineCodeLabels";
+import { cn } from "@/utils/cn";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -146,7 +147,7 @@ function EligibilityBadge({ row }: { row: BlockedRow }) {
           : AlertCircle;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${eligibilityBadgeClasses[kind]}`}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold", eligibilityBadgeClasses[kind])}
     >
       <Icon className="h-3 w-3" />
       {eligibilityBadgeLabel[kind]}
@@ -490,7 +491,7 @@ export default function BlockedTransactionsManagement() {
               disabled={isFetching}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("h-3.5 w-3.5", isFetching ? "animate-spin" : "")} />
               Refresh
             </button>
             <button
@@ -504,7 +505,7 @@ export default function BlockedTransactionsManagement() {
           </div>
         </div>
 
-        <div className={`${isFiltersOpen ? "block" : "hidden sm:block"}`}>
+        <div className={cn(isFiltersOpen ? "block" : "hidden sm:block")}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             <div>
               <span className="mb-1 block text-xs font-semibold text-gray-700 dark:text-neutral-300">
@@ -755,7 +756,7 @@ export default function BlockedTransactionsManagement() {
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 >
                   <RefreshCw
-                    className={`h-3.5 w-3.5 ${isFetchingNextPage ? "animate-spin" : ""}`}
+                    className={cn("h-3.5 w-3.5", isFetchingNextPage ? "animate-spin" : "")}
                   />
                   {isFetchingNextPage ? "Loading more..." : "Load more"}
                 </button>

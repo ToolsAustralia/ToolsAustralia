@@ -15,6 +15,7 @@ import {
   sheetPanelVariants,
 } from "@/utils/motion/modalPresets";
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+import { cn } from "@/utils/cn";
 
 export type ModalPresentation = "dialog" | "sheet";
 
@@ -117,7 +118,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   };
 
   const heightStyles = {
-    auto: "max-h-[95dvh]",
+    auto: "max-h-[88dvh] max-xs:max-h-[92dvh]",
     screen: "h-screen-dvh",
     fixed: fixedHeight || "h-[90dvh]",
   };
@@ -459,14 +460,14 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   const modalContent = (
     <div
-      className={`fixed inset-0 flex ${outerFlex} pointer-events-none`}
+      className={cn("fixed inset-0 flex", outerFlex, "pointer-events-none")}
       style={{ zIndex: modalZIndex }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
       <motion.div
-        className={`absolute inset-0 bg-black/50 touch-none ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        className={cn("absolute inset-0 bg-black/85 backdrop-blur-md touch-none", isOpen ? "pointer-events-auto" : "pointer-events-none")}
         variants={backdropV}
         initial="closed"
         animate={isOpen ? "open" : "closed"}

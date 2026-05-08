@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface BenefitCountdownProps {
   effectiveDate: Date;
@@ -112,9 +113,9 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
       : "border-green-200 dark:border-green-800 border-l-4 border-l-green-500 dark:border-l-green-500";
 
   return (
-    <div className={`rounded-lg border-2 bg-white p-3 shadow-sm sm:p-4 dark:bg-neutral-800 ${cardFrame}`}>
+    <div className={cn("rounded-lg border-2 bg-white p-3 shadow-sm sm:p-4 dark:bg-neutral-800", cardFrame)}>
       <div className="mb-3 flex items-center gap-2">
-        <Clock className={`h-4 w-4 flex-shrink-0 ${urgency.accent}`} />
+        <Clock className={cn("h-4 w-4 flex-shrink-0", urgency.accent)} />
         <span className="text-sm font-semibold text-gray-900 dark:text-white">
           {changeType === "downgrade" ? "Downgrade" : "Upgrade"} scheduled
         </span>
@@ -123,19 +124,19 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
       {/* Countdown Timer */}
       <div className="mb-4 flex items-center justify-center gap-2 sm:gap-4">
         <div className="text-center">
-          <div className={`text-xl font-bold tabular-nums sm:text-2xl ${urgency.accent}`}>{timeLeft.days}</div>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>{timeLeft.days}</div>
           <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">days</div>
         </div>
         <div className="text-lg font-bold text-gray-400 dark:text-neutral-500">:</div>
         <div className="text-center">
-          <div className={`text-xl font-bold tabular-nums sm:text-2xl ${urgency.accent}`}>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>
             {timeLeft.hours.toString().padStart(2, "0")}
           </div>
           <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">hours</div>
         </div>
         <div className="text-lg font-bold text-gray-400 dark:text-neutral-500">:</div>
         <div className="text-center">
-          <div className={`text-xl font-bold tabular-nums sm:text-2xl ${urgency.accent}`}>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>
             {timeLeft.minutes.toString().padStart(2, "0")}
           </div>
           <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">min</div>

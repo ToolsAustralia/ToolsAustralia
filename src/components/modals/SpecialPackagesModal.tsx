@@ -42,6 +42,7 @@ import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 
@@ -960,7 +961,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                           alt={`${pkg.name} icon`}
                           fill
                           sizes="(max-width: 640px) 32px, 48px"
-                          className={`w-full h-full object-contain opacity-90 ${colorScheme.glow}`}
+                          className={cn("w-full h-full object-contain opacity-90", colorScheme.glow)}
                         />
                       </div>
                     </div>
@@ -1000,7 +1001,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                           e.stopPropagation();
                           handlePackageSelect(pkg);
                         }}
-                        className={`min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90 ${selectTextClass} ${colorScheme.borderGlow} ${isSelected ? "shadow-md" : ""}`}
+                        className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", selectTextClass, colorScheme.borderGlow, isSelected ? "shadow-md" : "")}
                         style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
                       >
                         <span style={colorScheme.textGradientStyle ?? undefined}>{isSelected ? "✓" : "SELECT"}</span>
@@ -1108,7 +1109,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                   type="button"
                   onClick={() => resolvedChargePm && handlePurchase(selectedPackage)}
                   disabled={isProcessing || !resolvedChargePm || needsInlineCardSetup || paymentMethodsLoading}
-                  className={`font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden`}
+                  className={cn("font-agency font-black uppercase w-full rounded-2xl py-2 sm:py-3 flex items-center justify-center gap-3 sm:gap-4 text-sm sm:text-base transition-all duration-300 transform", textClass, colorScheme.borderGlow, "membership-enter-cta-animation disabled:cursor-not-allowed relative overflow-hidden")}
                   style={buttonStyle}
                 >
                   {isProcessing ? (

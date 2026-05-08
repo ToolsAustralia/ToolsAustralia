@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import type { TrendData } from "@/types/admin/trend-types";
+import { cn } from "@/utils/cn";
 
 interface DashboardStats {
   revenue: {
@@ -353,7 +354,7 @@ export default function KPIMetricsGrid({
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
           {/* Total Users — hidden on small screens when Users & Performance row is collapsed */}
-          <div className={`${!isUsersPerformanceExpanded ? "hidden lg:block" : ""}`}>
+          <div className={cn(!isUsersPerformanceExpanded ? "hidden lg:block" : "")}>
             <MetricCard
               title="Total Users"
               value={loading ? "..." : dashboardStats?.users.total.toLocaleString() ?? "0"}
@@ -404,7 +405,7 @@ export default function KPIMetricsGrid({
           />
 
           {/* Cancellations — hidden on small screens when Users & Performance row is collapsed */}
-          <div className={`${!isUsersPerformanceExpanded ? "hidden lg:block" : ""}`}>
+          <div className={cn(!isUsersPerformanceExpanded ? "hidden lg:block" : "")}>
             <MetricCard
               title="Cancellations"
               value={

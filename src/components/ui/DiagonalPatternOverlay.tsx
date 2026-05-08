@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useId } from "react";
+import { cn } from "@/utils/cn";
 
 interface DiagonalPatternOverlayProps {
   className?: string;
@@ -53,7 +54,7 @@ export default function DiagonalPatternOverlay({
   );
 
   return (
-    <div className={`absolute left-0 right-0 bottom-0 pointer-events-none ${className}`} style={{ top: topOffset }}>
+    <div className={cn("absolute left-0 right-0 bottom-0 pointer-events-none", className)} style={{ top: topOffset }}>
       {createDiagonalPattern()}
     </div>
   );
@@ -83,7 +84,7 @@ export function CSSDiagonalPatternOverlay({
 
   return (
     <div
-      className={`absolute left-0 right-0 bottom-0 pointer-events-none ${className}`}
+      className={cn("absolute left-0 right-0 bottom-0 pointer-events-none", className)}
       style={{ ...patternStyle, top: topOffset }}
     />
   );
@@ -108,7 +109,7 @@ export function JaggedDiagonalPatternOverlay({
 
   return (
     <div
-      className={`absolute left-0 right-0 bottom-0 pointer-events-none ${className}`}
+      className={cn("absolute left-0 right-0 bottom-0 pointer-events-none", className)}
       style={{ ...jaggedPatternStyle, top: topOffset }}
     />
   );

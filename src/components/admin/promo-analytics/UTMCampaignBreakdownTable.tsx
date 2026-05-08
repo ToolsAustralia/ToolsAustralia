@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatNumber, formatPercentage, formatCurrency } from "@/utils/metrics/formatters";
 import { formatCampaignDisplay, formatMediumDisplay } from "@/utils/promo-analytics/display-formatters";
+import { cn } from "@/utils/cn";
 
 interface CampaignRow {
   utmSource?: string;
@@ -78,28 +79,28 @@ export default function UTMCampaignBreakdownTable({
 
   return (
     <div className="overflow-x-auto -mx-1 sm:mx-0">
-      <table className={`w-full min-w-[360px] ${textSize}`}>
+      <table className={cn("w-full min-w-[360px]", textSize)}>
         <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
           <tr>
             {showSourceColumn && (
               <th
-                className={`text-left ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+                className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
               >
                 Channel
               </th>
             )}
             <th
-              className={`text-left ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 min-w-[100px]`}
+              className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 min-w-[100px]")}
             >
               Campaign
             </th>
             <th
-              className={`text-left ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               Medium
             </th>
             <th
-              className={`text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               <button
                 onClick={() => handleSort("visits")}
@@ -109,7 +110,7 @@ export default function UTMCampaignBreakdownTable({
               </button>
             </th>
             <th
-              className={`text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               <button
                 onClick={() => handleSort("signups")}
@@ -119,7 +120,7 @@ export default function UTMCampaignBreakdownTable({
               </button>
             </th>
             <th
-              className={`text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               <button
                 onClick={() => handleSort("conversions")}
@@ -129,7 +130,7 @@ export default function UTMCampaignBreakdownTable({
               </button>
             </th>
             <th
-              className={`text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               <button
                 onClick={() => handleSort("revenue")}
@@ -139,17 +140,17 @@ export default function UTMCampaignBreakdownTable({
               </button>
             </th>
             <th
-              className={`hidden md:table-cell text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               V→S
             </th>
             <th
-              className={`hidden md:table-cell text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               S→C
             </th>
             <th
-              className={`hidden md:table-cell text-right ${cellPad} font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap`}
+              className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               Conv
             </th>
@@ -177,7 +178,7 @@ export default function UTMCampaignBreakdownTable({
                   </td>
                 )}
                 <td
-                  className={`${cellPad} font-medium text-gray-900 dark:text-white break-words`}
+                  className={cn(cellPad, "font-medium text-gray-900 dark:text-white break-words")}
                   title={formatCampaignDisplay(row.utmCampaign)}
                 >
                   {formatCampaignDisplay(row.utmCampaign)}
@@ -196,28 +197,28 @@ export default function UTMCampaignBreakdownTable({
                   </span>
                 </td>
                 <td
-                  className={`${cellPad} text-right font-mono text-gray-900 dark:text-white tabular-nums`}
+                  className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
                 >
                   {formatNumber(row.visits)}
                 </td>
                 <td
-                  className={`${cellPad} text-right font-mono text-gray-900 dark:text-white tabular-nums`}
+                  className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
                 >
                   {formatNumber(row.signups)}
                 </td>
                 <td
-                  className={`${cellPad} text-right font-mono text-gray-900 dark:text-white tabular-nums`}
+                  className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
                 >
                   {formatNumber(row.conversions)}
                 </td>
                 <td
-                  className={`${cellPad} text-right font-mono text-gray-900 dark:text-white tabular-nums`}
+                  className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
                 >
                   {formatCurrency(row.revenue)}
                 </td>
-                <td className={`hidden md:table-cell ${cellPad} text-right text-gray-600 dark:text-neutral-400 tabular-nums`}>{formatPercentage(row.visitToSignupRate)}</td>
-                <td className={`hidden md:table-cell ${cellPad} text-right text-gray-600 dark:text-neutral-400 tabular-nums`}>{formatPercentage(row.signupToConversionRate)}</td>
-                <td className={`hidden md:table-cell ${cellPad} text-right text-gray-600 dark:text-neutral-400 tabular-nums`}>{formatPercentage(row.overallConversionRate)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.visitToSignupRate)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.signupToConversionRate)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.overallConversionRate)}</td>
               </tr>
             );
           })}

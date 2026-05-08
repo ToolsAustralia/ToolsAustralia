@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 
 import { queryKeys } from "@/lib/queryKeys";
+import { cn } from "@/utils/cn";
 
 // Google Icon Component
 
@@ -143,7 +144,7 @@ function AnimatedOffers() {
   return (
     <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
       <div
-        className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-14 lg:h-14 ${current.color} rounded-full flex items-center justify-center transition-all duration-500 ease-in-out`}
+        className={cn("w-8 h-8 sm:w-10 sm:h-10 lg:w-14 lg:h-14", current.color, "rounded-full flex items-center justify-center transition-all duration-500 ease-in-out")}
       >
         <div className="transition-all duration-500 ease-in-out transform scale-50 sm:scale-75 lg:scale-100">
           {current.icon}

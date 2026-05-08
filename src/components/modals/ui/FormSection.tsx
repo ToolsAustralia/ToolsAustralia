@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface FormSectionProps {
   title: string;
@@ -12,7 +13,7 @@ interface FormSectionProps {
 
 const FormSection: React.FC<FormSectionProps> = ({ title, icon: Icon, children, className = "" }) => {
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       {/* Section Header */}
       <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 flex items-center gap-2">
         {Icon && <Icon className="w-5 h-5" />}

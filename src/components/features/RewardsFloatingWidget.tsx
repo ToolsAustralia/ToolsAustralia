@@ -16,6 +16,7 @@ import {
 import { MODAL_DURATION_ENTER_S } from "@/utils/motion/modalPresets";
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { cn } from "@/utils/cn";
 
 const claimableCountFormat = (n: number) => {
   const r = Math.round(n);
@@ -316,7 +317,7 @@ export default function RewardsFloatingWidget({
             ref={fabRef}
             key="rewards-fab"
             onClick={handleFabClick}
-            className={`fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95 ${positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6"} ${buttonShadowClass} ${showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : ""}`}
+            className={cn("fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95", positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6", buttonShadowClass, showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : "")}
             aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
             animate={{

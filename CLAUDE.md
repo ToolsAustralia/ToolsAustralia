@@ -145,6 +145,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/subscription/**",
         "src/app/api/memberships/**",
         "src/components/modals/CancellationUpsellModal/**",
+        "src/components/modals/RenewalFailedModal/**",
+        "src/components/modals/DowngradeConfirmModal/**",
+        "src/components/modals/StripePaymentModal/**",
         "src/hooks/useStripeSubscription.ts",
         "src/hooks/useMemberships.ts",
         "src/hooks/useActivePackage.ts",
@@ -289,9 +292,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/referral.ts",
         "src/models/ReferralEvent.ts",
         "src/app/api/referrals/**",
-        "src/hooks/useReferralCode.ts"
+        "src/hooks/useReferralCode.ts",
+        "src/components/modals/ReferFriendModal/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-08"
     },
     "partner": {
       "docs": "docs/partner/",
@@ -481,6 +485,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/sections/**",
         "src/components/seo/**",
         "src/components/system/**",
+        "src/components/features/**",
         "src/components/filters/**",
         "src/components/index.ts",
         "src/utils/dom/**",

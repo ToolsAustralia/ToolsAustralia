@@ -56,3 +56,7 @@ The shop product detail page (`src/app/(site)/shop/[slug]/page.tsx`) and its com
 - Disabled button state (`bg-gray-300 text-gray-500`) → also `dark:bg-neutral-800 dark:text-neutral-400`
 
 Match these classes when extending the slug page or adding new card-style sections under `src/app/(site)/shop/`.
+
+## className conventions (2026-05-08)
+
+Shop/cart components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.

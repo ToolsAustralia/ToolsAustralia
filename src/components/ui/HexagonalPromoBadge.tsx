@@ -3,6 +3,7 @@
 import React from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface HexagonalPromoBadgeProps {
   multiplier: PromoMultiplier;
@@ -54,7 +55,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
   const config = sizeConfig[size];
 
   return (
-    <div className={`${config.container} ${className} relative`}>
+    <div className={cn(config.container, className, "relative")}>
       {/* Outer glowing burst effect - pulsing animation */}
       <div
         className="absolute inset-0 animate-pulse"
@@ -134,7 +135,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
 
         {/* Multiplier text - White with strong shadow for contrast - Perfectly centered */}
         <span
-          className={`${config.text} font-black text-white relative z-10`}
+          className={cn(config.text, "font-black text-white relative z-10")}
           style={{
             textShadow: `
               0 0 10px rgba(255, 255, 255, 0.8),

@@ -25,6 +25,7 @@ import Dropdown from "./ui/Dropdown";
 import { useRevenueDetails, type RevenueCategory } from "@/hooks/queries/useAdminQueries";
 import { format } from "date-fns";
 import { formatDisplayName } from "@/utils/display-name";
+import { cn } from "@/utils/cn";
 
 interface RevenueDetailModalProps {
   isOpen: boolean;
@@ -381,7 +382,7 @@ export default function RevenueDetailModal({
                 }`}
                 aria-label="Toggle filter"
               >
-                <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400"}`} />
+                <Filter className={cn("w-4 h-4", hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400")} />
                 {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
               </button>
 

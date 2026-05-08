@@ -21,6 +21,7 @@ import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/packa
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -622,7 +623,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {/* Price - Absolute top-left, no background */}
                 <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
                   <div
-                    className={`font-bold text-base sm:text-lg leading-tight ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                    className={cn("font-bold text-base sm:text-lg leading-tight", colorScheme.textGradientStyle ? "" : colorScheme.priceText)}
                     style={colorScheme.textGradientStyle ?? { color: accentHex }}
                   >
                     ${plan.price}
@@ -672,7 +673,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                         alt={`${plan.name} icon`}
                         fill
                         sizes="(max-width: 640px) 32px, 48px"
-                        className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                        className={cn("w-full h-full object-contain", colorScheme.glow, "opacity-90")}
                       />
                     </div>
                   </div>

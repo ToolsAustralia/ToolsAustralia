@@ -6,6 +6,7 @@ import { getBrandGlowColor } from "@/utils/prize-brand-colors";
 import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import type { PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface StaticToolsetHighlightProps {
   /** Toolset key: ryobi, milwaukee, dewalt, makita */
@@ -41,7 +42,7 @@ export function StaticToolsetHighlight({
   if (!imgSrc) return null;
 
   return (
-    <div className={`flex flex-col items-center gap-2 sm:gap-3 ${className}`}>
+    <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {brandTextSrc && (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
@@ -105,7 +106,7 @@ export function StaticToolsetHighlight({
               }}
             >
               <p
-                className={`font-sans font-extrabold font-bold text-2xs sm:text-xs lg:text-sm leading-tight text-center ${scheme.buttonText}`}
+                className={cn("font-sans font-extrabold font-bold text-2xs sm:text-xs lg:text-sm leading-tight text-center", scheme.buttonText)}
               >
                 {label} + $5000 CASH
               </p>

@@ -10,6 +10,7 @@ import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import EntryProgressBar from "@/components/ui/EntryProgressBar";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
+import { cn } from "@/utils/cn";
 
 export interface MiniDrawCardData {
   _id: string;
@@ -170,7 +171,7 @@ export default function MiniDrawCard({
                     </span>
                     {urgencyBadge && (
                       <span
-                        className={`text-3xs px-1.5 py-0.5 rounded-full font-bold ${urgencyBadge.className}`}
+                        className={cn("text-3xs px-1.5 py-0.5 rounded-full font-bold", urgencyBadge.className)}
                       >
                         {urgencyBadge.label}
                       </span>
@@ -259,10 +260,10 @@ export default function MiniDrawCard({
             {/* Urgency Badge */}
             {urgencyBadge && (
               <div
-                className={`absolute ${userEntries > 0 ? "top-2 right-2" : "top-2 left-2"} z-10`}
+                className={cn("absolute", userEntries > 0 ? "top-2 right-2" : "top-2 left-2", "z-10")}
               >
                 <span
-                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold ${urgencyBadge.className}`}
+                  className={cn("inline-flex items-center gap-0.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold", urgencyBadge.className)}
                 >
                   <urgencyBadge.icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   {urgencyBadge.label}

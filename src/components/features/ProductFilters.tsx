@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Search, SlidersHorizontal, X } from "lucide-react";
+import sliderStyles from "./product-filters.module.css";
 
 interface FilterState {
   category: string[];
@@ -124,55 +125,6 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
 
   return (
     <div className="space-y-4">
-      <style jsx>{`
-        .slider-thumb {
-          pointer-events: none;
-        }
-
-        .slider-thumb::-webkit-slider-thumb {
-          appearance: none;
-          height: 18px;
-          width: 18px;
-          border-radius: 50%;
-          background: #ee0000;
-          cursor: pointer;
-          border: 2px solid #fff;
-          box-shadow: 0 4px 12px rgba(238, 0, 0, 0.28);
-          pointer-events: auto;
-        }
-
-        .slider-thumb::-moz-range-thumb {
-          height: 18px;
-          width: 18px;
-          border-radius: 50%;
-          background: #ee0000;
-          cursor: pointer;
-          border: 2px solid #fff;
-          box-shadow: 0 4px 12px rgba(238, 0, 0, 0.28);
-          pointer-events: auto;
-        }
-
-        .slider-thumb::-webkit-slider-track {
-          background: transparent;
-          height: 2px;
-          pointer-events: none;
-        }
-
-        .slider-thumb::-moz-range-track {
-          background: transparent;
-          height: 2px;
-          pointer-events: none;
-        }
-
-        :global(html.dark) .slider-thumb::-webkit-slider-thumb {
-          border: 2px solid #404040;
-        }
-
-        :global(html.dark) .slider-thumb::-moz-range-thumb {
-          border: 2px solid #404040;
-        }
-      `}</style>
-
       {!isMobile && (
         <div className="rounded-2xl border border-gray-200 dark:border-red-900/35 bg-gradient-to-b from-white to-gray-50/80 dark:from-neutral-900 dark:to-neutral-900 p-4 shadow-sm dark:shadow-lg">
           <div className="flex items-center justify-between gap-3">
@@ -319,7 +271,7 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
                   max={MAX_PRICE}
                   value={selectedFilters.priceRange[0]}
                   onChange={(e) => handlePriceRangeChange(Number(e.target.value), selectedFilters.priceRange[1])}
-                  className="slider-thumb absolute h-2 w-full cursor-pointer appearance-none bg-transparent"
+                  className={`${sliderStyles.sliderThumb} absolute h-2 w-full cursor-pointer appearance-none bg-transparent`}
                 />
                 <input
                   type="range"
@@ -327,7 +279,7 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
                   max={MAX_PRICE}
                   value={selectedFilters.priceRange[1]}
                   onChange={(e) => handlePriceRangeChange(selectedFilters.priceRange[0], Number(e.target.value))}
-                  className="slider-thumb absolute h-2 w-full cursor-pointer appearance-none bg-transparent"
+                  className={`${sliderStyles.sliderThumb} absolute h-2 w-full cursor-pointer appearance-none bg-transparent`}
                 />
               </div>
             </div>

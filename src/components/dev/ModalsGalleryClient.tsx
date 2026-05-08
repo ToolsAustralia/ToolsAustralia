@@ -257,7 +257,7 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "gate-closed": "src/components/modals/GateClosedModal.tsx",
   partner: "src/components/modals/PartnerModal.tsx",
   "pixel-consent": "src/components/modals/PixelConsentModal.tsx",
-  "refer-friend": "src/components/modals/ReferFriendModal.tsx",
+  "refer-friend": "src/components/modals/ReferFriendModal/index.tsx",
   membership: "src/components/modals/MembershipModal.tsx",
   "special-packages": "src/components/modals/SpecialPackagesModal.tsx",
   "package-selection": "src/components/modals/PackageSelectionModal.tsx",
