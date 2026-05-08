@@ -210,26 +210,39 @@ export function getEventSourceURL(): string | undefined {
 }
 
 /**
- * Extract Facebook Click ID (fbc) from NextRequest
- * Server-side helper to extract fbc from request URL or cookies
- * @param request - NextRequest object
- * @returns Facebook Click ID if found, undefined otherwise
+ * Extract Facebook Click ID (fbc) from NextRequest.
+ *
+ * Reads the `_fbc` cookie set by Facebook Pixel first — this value is
+ * stable across server retries (set client-side at click time). Falls back
+ * to building from `fbclid` query param using `Date.now()` only when no
+ * cookie is present; that fallback drifts between calls and should be
+ * avoided where the value flows into a Stripe idempotency-keyed request
+ * body. See docs/tracking/gotchas.md.
  */
-export function extractFBCFromRequest(request: { url?: string; headers?: Headers }): string | undefined {
+export function extractFBCFromRequest(request: {
+  url?: string;
+  headers?: Headers;
+  cookies?: { get: (name: string) => { value: string } | undefined };
+}): string | undefined {
   try {
+    if (request.cookies) {
+      const fbcCookie = request.cookies.get("_fbc");
+      if (fbcCookie?.value) {
+        return fbcCookie.value;
+      }
+    }
+
     if (!request.url) return undefined;
 
     const url = new URL(request.url);
     const urlParams = url.searchParams;
 
-    // Check for fbclid parameter
     const fbclid = urlParams.get("fbclid");
     if (fbclid) {
       const timestamp = Date.now();
       return `fb.1.${timestamp}.${fbclid}`;
     }
 
-    // Check for fbc parameter (already formatted)
     const fbc = urlParams.get("fbc");
     if (fbc) {
       return fbc;
@@ -237,7 +250,6 @@ export function extractFBCFromRequest(request: { url?: string; headers?: Headers
 
     return undefined;
   } catch {
-    // console.warn("Error extracting fbc from request:", error);
     return undefined;
   }
 }
