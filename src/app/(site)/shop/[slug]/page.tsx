@@ -254,7 +254,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                         product.brand.toLowerCase().includes("festool")
                         ? "bg-gradient-to-r from-green-700 to-green-800 text-white"
                         : // Default fallback
-                          "bg-gradient-to-r from-[#ee0000] to-red-600 text-white"
+                          "bg-gradient-to-r from-red-600 to-red-600 text-white"
                     }`}
                   >
                     {product.brand}
@@ -289,7 +289,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
             {/* Price */}
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-[#ee0000] font-['Poppins']">${product.price}</span>
+              <span className="text-3xl font-bold text-red-600 font-['Poppins']">${product.price}</span>
               <span className="text-sm text-gray-500 dark:text-neutral-500 line-through">${(product.price * 1.2).toFixed(2)}</span>
               <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 rounded-full text-sm font-bold">
                 Save 20%

@@ -348,7 +348,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.days.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-[10px] ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>DAYS</div>
+                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>DAYS</div>
                           </div>
 
                           {/* Hours */}
@@ -356,7 +356,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.hours.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-[10px] ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>HRS</div>
+                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>HRS</div>
                           </div>
 
                           {/* Minutes */}
@@ -364,7 +364,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.minutes.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-[10px] ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>MINS</div>
+                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>MINS</div>
                           </div>
 
                           {/* Seconds */}
@@ -372,7 +372,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
                             <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] drop-shadow-md">
                               {timeLeft.seconds.toString().padStart(2, "0")}
                             </div>
-                            <div className={`text-[10px] ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>SECS</div>
+                            <div className={`text-2xs ${gatesClosed ? "text-yellow-100" : "text-red-100"} font-medium`}>SECS</div>
                           </div>
                         </div>
 

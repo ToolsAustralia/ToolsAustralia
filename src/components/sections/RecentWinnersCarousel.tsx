@@ -94,7 +94,7 @@ export default function WinnersSection({
         {/* Section Header */}
         <div className="text-center mb-12 sm:mb-16">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-xl shadow-lg">
+            <div className="p-3 bg-gradient-to-br from-red-600 to-red-700 rounded-xl shadow-lg">
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 font-['Poppins']">{title}</h2>
@@ -181,9 +181,9 @@ export default function WinnersSection({
                       {/* Draw Type Badge - Top Left */}
                       <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-20">
                         <div
-                          className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-bold shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-sm border ${
+                          className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-2xs sm:text-xs font-bold shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-sm border ${
                             winner.drawType === "major"
-                              ? "bg-gradient-to-r from-[#ee0000] via-red-600 to-[#ee0000] text-white border-red-400/40 shadow-red-500/20"
+                              ? "bg-gradient-to-r from-red-600 via-red-600 to-red-600 text-white border-red-400/40 shadow-red-500/20"
                               : "bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 text-black border-amber-300/50 shadow-amber-500/20"
                           }`}
                         >
@@ -197,7 +197,7 @@ export default function WinnersSection({
                           <div className="bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                             <div className="flex items-center gap-1.5 sm:gap-2">
                               <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
-                              <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
+                              <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
                                 {winner.selectedPrize}
                               </span>
                             </div>
@@ -241,7 +241,7 @@ export default function WinnersSection({
                       <div className="flex items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-5 pb-4 sm:pb-6 border-b border-gray-100">
                         {/* Draw Name */}
                         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                          <div className="p-1.5 sm:p-2 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
+                          <div className="p-1.5 sm:p-2 bg-gradient-to-br from-red-600 to-red-700 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
                             <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                           </div>
                           <span className="text-sm sm:text-lg font-bold text-gray-900 font-['Poppins'] tracking-tight truncate">
@@ -255,7 +255,7 @@ export default function WinnersSection({
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-neutral-400" />
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
+                            <span className="text-2xs sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
                             <p className="text-xs sm:text-sm text-gray-900 font-['Inter'] font-semibold whitespace-nowrap">
                               {wonOnDate.toLocaleDateString("en-AU", {
                                 month: "short",
@@ -281,7 +281,7 @@ export default function WinnersSection({
                     onClick={() => setCurrentIndex(index * itemsPerView)}
                     className={`h-2 rounded-full transition-all duration-200 ${
                       Math.floor(currentIndex / itemsPerView) === index
-                        ? "w-8 bg-[#ee0000]"
+                        ? "w-8 bg-red-600"
                         : "w-2 bg-gray-300 hover:bg-gray-400"
                     }`}
                     aria-label={`Go to page ${index + 1}`}

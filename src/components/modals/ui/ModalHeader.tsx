@@ -64,7 +64,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
   const headerBaseClass = customBackground
     ? ""
     : resolvedVariant === "brand"
-      ? "bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444]"
+      ? "bg-gradient-to-r from-red-600 via-[#ff3333] to-red-400"
       : resolvedVariant === "metallic-red"
         ? "metal-header-red"
         : "metal-header";

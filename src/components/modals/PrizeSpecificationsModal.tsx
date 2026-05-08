@@ -96,7 +96,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
               />
             </div>
             <span
-              className={`text-[11px] sm:text-sm ${surface.bodyClass} leading-snug sm:leading-relaxed font-['Inter']`}
+              className={`text-2xs sm:text-sm ${surface.bodyClass} leading-snug sm:leading-relaxed font-['Inter']`}
             >
               {item}
             </span>
@@ -129,7 +129,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
             </h4>
             {item.model && (
               <p
-                className={`text-[11px] sm:text-sm ${surface.mutedClass} font-medium mt-1 sm:mt-1.5 flex items-center gap-1.5`}
+                className={`text-2xs sm:text-sm ${surface.mutedClass} font-medium mt-1 sm:mt-1.5 flex items-center gap-1.5`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${surface.dotClass}`} />
                 Model: {item.model}
@@ -141,7 +141,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
 
       {item.description && (
         <p
-          className={`text-[11px] sm:text-sm ${surface.bodyClass} mb-3 sm:mb-5 leading-snug sm:leading-relaxed font-['Inter'] pl-6 sm:pl-9`}
+          className={`text-2xs sm:text-sm ${surface.bodyClass} mb-3 sm:mb-5 leading-snug sm:leading-relaxed font-['Inter'] pl-6 sm:pl-9`}
         >
           {item.description}
         </p>
@@ -219,7 +219,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
                         type="button"
                         onClick={() => setActiveSectionId(section.id)}
                         className={`
-                          relative px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full font-semibold text-[11px] sm:text-sm 
+                          relative px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-full font-semibold text-2xs sm:text-sm 
                           transition-all duration-300 border-2 whitespace-nowrap
                           ${
                             isActive
@@ -236,7 +236,7 @@ const PrizeSpecificationsModal = ({ isOpen, onClose, prize }: PrizeSpecification
                           {section.items.length > 0 && (
                             <span
                               className={`
-                              inline-flex items-center justify-center min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 px-1 sm:px-1.5 rounded-full text-[9px] sm:text-[11px] font-bold
+                              inline-flex items-center justify-center min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 px-1 sm:px-1.5 rounded-full text-3xs sm:text-2xs font-bold
                               ${isActive ? "bg-white/20 text-white" : surface.tabBadgeInactiveClass}
                             `}
                             >

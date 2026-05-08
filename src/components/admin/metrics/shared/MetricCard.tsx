@@ -112,11 +112,11 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
     >
       <div className="flex items-start justify-between gap-1.5 mb-1 sm:mb-2">
         {typeof title === "string" ? (
-          <h3 className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+          <h3 className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
             {title}
           </h3>
         ) : (
-          <div className="text-[11px] leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+          <div className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
             {title}
           </div>
         )}
@@ -135,7 +135,7 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         </p>
         {trend && trendDirection && (
           <div
-            className={`shrink-0 text-[10px] sm:text-xs font-semibold ${
+            className={`shrink-0 text-2xs sm:text-xs font-semibold ${
               trendDirection === "up"
                 ? "text-emerald-600"
                 : trendDirection === "down"
@@ -148,13 +148,13 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         )}
       </div>
       {count !== undefined && count !== null && (
-        <div className="text-[11px] sm:text-xs font-medium text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
+        <div className="text-2xs sm:text-xs font-medium text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
           {count.toLocaleString()} {countLabel || "items"}
         </div>
       )}
       {subtitle && (
         <div
-          className="text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug"
+          className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug"
           aria-label={`${titleString} subtitle`}
         >
           {subtitle}

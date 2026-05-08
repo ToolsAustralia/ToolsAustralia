@@ -48,13 +48,13 @@ export default function ExistingPartners() {
       <div className="w-full px-4 sm:px-6 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1 text-sm font-medium mb-3">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1 text-sm font-medium mb-3">
             Our Partners
           </div>
 
           <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
             Trusted by Australia&apos;s
-            <span className="block text-[#ee0000]">Leading Brands</span>
+            <span className="block text-red-600">Leading Brands</span>
           </h2>
 
           <p className="text-[16px] sm:text-[18px] lg:text-[20px] text-[rgba(0,0,0,0.7)] font-normal leading-relaxed max-w-3xl mx-auto font-['Inter']">
@@ -128,8 +128,8 @@ export default function ExistingPartners() {
             {partnerTestimonials.map((testimonial, index) => (
               <div key={index} className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 relative">
                 {/* Quote Icon */}
-                <div className="absolute top-6 right-6 w-8 h-8 bg-[#ee0000]/10 rounded-full flex items-center justify-center">
-                  <Quote className="w-4 h-4 text-[#ee0000]" />
+                <div className="absolute top-6 right-6 w-8 h-8 bg-red-600/10 rounded-full flex items-center justify-center">
+                  <Quote className="w-4 h-4 text-red-600" />
                 </div>
 
                 {/* Company Logo */}
@@ -164,7 +164,7 @@ export default function ExistingPartners() {
                 <div className="border-t pt-4">
                   <p className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins']">{testimonial.representative}</p>
                   <p className="text-sm text-gray-500 font-['Inter']">{testimonial.position}</p>
-                  <p className="text-sm font-medium text-[#ee0000] font-['Inter']">{testimonial.company}</p>
+                  <p className="text-sm font-medium text-red-600 font-['Inter']">{testimonial.company}</p>
                 </div>
               </div>
             ))}
@@ -184,22 +184,22 @@ export default function ExistingPartners() {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">150%</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">150%</div>
               <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Sales Increase</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">12K</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">12K</div>
               <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Avg New Customers</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">99%</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">99%</div>
               <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Partner Satisfaction</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">4.9</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">4.9</div>
               <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Rating</div>
             </div>
           </div>

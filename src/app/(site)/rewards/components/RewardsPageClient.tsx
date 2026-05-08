@@ -38,7 +38,7 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
           <div className="group relative">
             <Link
               href="/shop"
-              className="bg-[#ee0000] text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
+              className="bg-red-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
             >
               <ShoppingCart className="w-5 h-5" />
             </Link>
@@ -77,7 +77,7 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
         </div>
       )}
 
-      <div className="bg-gray-50 pt-[86px] sm:pt-[106px]">
+      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
             {/* Left Column - Rewards Overview and Package Redemption */}

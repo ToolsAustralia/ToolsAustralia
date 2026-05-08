@@ -162,7 +162,7 @@ export function ToolboxSelector({
                     : "border-white/15 bg-black/55"
                 }`}
               >
-                <span className="font-sans text-[10px] font-extrabold leading-tight text-white sm:text-xs">
+                <span className="font-sans text-2xs font-extrabold leading-tight text-white sm:text-xs">
                   {TOOLBOX_LABELS[type]}
                 </span>
               </div>

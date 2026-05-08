@@ -628,7 +628,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                     ${plan.price}
                   </div>
                   <div
-                    className="text-[9px] sm:text-[10px] font-semibold"
+                    className="text-3xs sm:text-2xs font-semibold"
                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.9)" }}
                   >
                     {plan.period === "one-time" ? "One Time" : "Per Giveaway"}

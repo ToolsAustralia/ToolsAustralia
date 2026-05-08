@@ -25,7 +25,7 @@ const getIconColor = (variant: string, customColor?: string) => {
 
   switch (variant) {
     case "red":
-      return "text-[#ee0000]";
+      return "text-red-600";
     case "blue":
       return "text-blue-400";
     case "purple":
@@ -33,7 +33,7 @@ const getIconColor = (variant: string, customColor?: string) => {
     case "gold":
       return "text-yellow-400";
     default:
-      return "text-[#ee0000]";
+      return "text-red-600";
   }
 };
 
@@ -102,7 +102,7 @@ export default function MetallicAccordion({
         return (
           <div
             key={item.id}
-            className={`relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 hover:border-[#ee0000]/50 ${hoverShadowClass} transition-all duration-300`}
+            className={`relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 hover:border-red-600/50 ${hoverShadowClass} transition-all duration-300`}
           >
             {/* Glass-morphism overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>

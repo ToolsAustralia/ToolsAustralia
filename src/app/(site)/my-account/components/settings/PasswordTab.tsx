@@ -218,7 +218,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
             type="button"
             onClick={handleChangePassword}
             disabled={isUpdatingPassword}
-            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isUpdatingPassword ? "Updating..." : "Update password"}
           </button>

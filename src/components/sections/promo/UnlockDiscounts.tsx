@@ -250,7 +250,7 @@ export default function UnlockDiscounts({
                   </div>
                   {/* Discount Message - Flexible middle section */}
                   <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
-                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
+                    <p className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
                       {highlightDiscountMessage(partner.discountMessage, {
                         backgroundImage: theme.gradientSolid,
                         WebkitBackgroundClip: "text",

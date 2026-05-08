@@ -227,7 +227,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                 >
                   <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-md sm:rounded-xl sm:p-3">
                     <div className="text-center">
-                      <div className={`text-[11px] font-bold uppercase tracking-wider sm:text-xs ${surfaceText}`}>
+                      <div className={`text-2xs font-bold uppercase tracking-wider sm:text-xs ${surfaceText}`}>
                         Entry period closed
                       </div>
                     </div>
@@ -305,7 +305,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                         </motion.div>
                       </AnimatePresence>
 
-                      <div className={`text-[8px] font-bold uppercase tracking-wider sm:text-[10px] lg:text-xs ${surfaceMuted}`}>
+                      <div className={`text-3xs font-bold uppercase tracking-wider sm:text-2xs lg:text-xs ${surfaceMuted}`}>
                         {unit.label}
                       </div>
                     </div>
@@ -334,11 +334,11 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
               }
             >
               <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center leading-snug">
-                <span className={`text-[9px] font-semibold uppercase tracking-wider sm:text-[11px] lg:text-xs ${liveDrawLabelClass}`}>
+                <span className={`text-3xs font-semibold uppercase tracking-wider sm:text-2xs lg:text-xs ${liveDrawLabelClass}`}>
                   Live draw
                 </span>
                 <span className={`hidden sm:inline ${liveDrawLabelClass}`}>·</span>
-                <span className={`text-[11px] sm:text-xs lg:text-sm ${liveDrawDateClass}`}>{drawDateLabel}</span>
+                <span className={`text-2xs sm:text-xs lg:text-sm ${liveDrawDateClass}`}>{drawDateLabel}</span>
               </div>
             </motion.div>
 
@@ -381,7 +381,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
           />
 
           <div className="relative z-10 px-3 py-3 text-center sm:px-5 sm:py-4">
-            <p className="font-sans font-extrabold text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-300 sm:text-xs">
+            <p className="font-sans font-extrabold text-2xs font-bold uppercase tracking-[0.18em] text-neutral-600 dark:text-neutral-300 sm:text-xs">
               {drawTitle}
             </p>
             <p className="mt-1.5 font-sans font-extrabold text-base font-bold text-neutral-900 dark:text-white sm:text-xl lg:text-2xl">
@@ -400,7 +400,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                   className="h-2 w-2 animate-pulse rounded-full"
                   style={{ backgroundColor: lpTheme.primary }}
                 />
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300 sm:text-xs">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-300 sm:text-xs">
                   {isCompleted ? "Draw completed" : "Next draw coming soon"}
                 </span>
               </motion.div>

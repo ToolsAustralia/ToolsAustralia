@@ -315,7 +315,7 @@ export default function ProductCategories({
                       {/* Metallic brand badge */}
                       <div className="relative inline-block">
                         <div
-                          className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-[12px] font-semibold border-2 border-white/20`}
+                          className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-2xs sm:text-[12px] font-semibold border-2 border-white/20`}
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
                           <span className="relative z-10">{brand.productCount}</span>

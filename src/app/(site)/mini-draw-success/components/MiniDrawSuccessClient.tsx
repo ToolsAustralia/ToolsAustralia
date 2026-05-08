@@ -14,7 +14,7 @@ interface MiniDrawSuccessClientProps {
 
 export default function MiniDrawSuccessClient({ searchParams: _searchParams }: MiniDrawSuccessClientProps) {
   return (
-    <div className="bg-gray-50 dark:bg-neutral-950 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+    <div className="bg-gray-50 dark:bg-neutral-950 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Success Header */}
         <div className="text-center mb-8">

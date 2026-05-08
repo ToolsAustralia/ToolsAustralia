@@ -242,7 +242,7 @@ export default function BirthdatePicker({
           {/* Month & year — pick the day from the calendar below */}
           <div className="grid grid-cols-2 gap-3 mb-4 lg:gap-2 lg:mb-3">
             <div className="space-y-1 lg:space-y-0.5">
-              <span className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 lg:text-[10px]">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 lg:text-2xs">
                 Month
               </span>
               <div className="relative">
@@ -292,7 +292,7 @@ export default function BirthdatePicker({
               </div>
             </div>
             <div className="space-y-1 lg:space-y-0.5">
-              <span className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 lg:text-[10px]">
+              <span className="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 lg:text-2xs">
                 Year
               </span>
               <div className="relative">
@@ -348,7 +348,7 @@ export default function BirthdatePicker({
             {DAY_NAMES.map((day) => (
               <div
                 key={day}
-                className="text-center text-xs font-medium text-gray-500 dark:text-neutral-400 py-1 lg:text-[10px] lg:py-0.5"
+                className="text-center text-xs font-medium text-gray-500 dark:text-neutral-400 py-1 lg:text-2xs lg:py-0.5"
               >
                 {day}
               </div>

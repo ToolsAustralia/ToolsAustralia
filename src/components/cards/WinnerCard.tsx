@@ -67,7 +67,7 @@ export default function WinnerCard({
         <div className="relative z-10">
           <div className="mb-3 text-center lg:mb-2">
             <span
-              className="inline-flex max-w-full whitespace-nowrap rounded-full border px-2.5 py-1 text-[8px] font-bold uppercase leading-none tracking-[0.08em] shadow-sm backdrop-blur sm:px-3 sm:text-[10px] sm:tracking-[0.12em] lg:px-2.5 lg:text-[9px] lg:tracking-[0.1em]"
+              className="inline-flex max-w-full whitespace-nowrap rounded-full border px-2.5 py-1 text-3xs font-bold uppercase leading-none tracking-[0.08em] shadow-sm backdrop-blur sm:px-3 sm:text-2xs sm:tracking-[0.12em] lg:px-2.5 lg:text-3xs lg:tracking-[0.1em]"
               style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.62)" }}
             >
               {badgeLabel}
@@ -97,7 +97,7 @@ export default function WinnerCard({
               {formattedName}
             </h3>
             <span
-              className="inline-flex flex-shrink-0 items-center rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] shadow-[0_8px_18px_rgba(15,23,42,0.20)] lg:px-2.5 lg:py-1 lg:text-[9px] lg:tracking-[0.12em]"
+              className="inline-flex flex-shrink-0 items-center rounded-full px-3 py-1.5 text-2xs font-bold uppercase tracking-[0.16em] shadow-[0_8px_18px_rgba(15,23,42,0.20)] lg:px-2.5 lg:py-1 lg:text-3xs lg:tracking-[0.12em]"
               style={{ background: theme.gradient, color: themeTextColor }}
             >
               <span className="sm:hidden">1st Prize</span>

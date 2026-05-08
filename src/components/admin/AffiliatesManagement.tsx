@@ -174,9 +174,9 @@ export default function AffiliatesManagement() {
       return <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />;
     }
     return sortOrder === "asc" ? (
-      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     ) : (
-      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     );
   };
 
@@ -186,14 +186,14 @@ export default function AffiliatesManagement() {
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white truncate">Affiliates Management</h1>
-          <p className="text-[11px] sm:text-sm text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
+          <p className="text-2xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
             Manage affiliate accounts and track commissions
           </p>
         </div>
         <button
           type="button"
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white text-xs sm:text-sm font-medium hover:from-[#cc0000] hover:to-[#e60000] transition-all shadow-sm hover:shadow-md"
+          className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white text-xs sm:text-sm font-medium hover:from-red-675 hover:to-red-650 transition-all shadow-sm hover:shadow-md"
         >
           <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span className="sm:hidden">Create</span>
@@ -232,7 +232,7 @@ export default function AffiliatesManagement() {
           <button
             type="button"
             onClick={() => fetchAffiliates()}
-            className="text-[#ee0000] hover:text-[#cc0000] transition-colors flex items-center gap-1 font-medium"
+            className="text-red-600 hover:text-red-675 transition-colors flex items-center gap-1 font-medium"
           >
             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Refresh
@@ -265,7 +265,7 @@ export default function AffiliatesManagement() {
             <p className="text-gray-600 dark:text-neutral-400 mb-4">{error}</p>
             <button
               onClick={() => fetchAffiliates()}
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
             >
               Try Again
             </button>
@@ -281,7 +281,7 @@ export default function AffiliatesManagement() {
             {!search && (
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
               >
                 Create Affiliate
               </button>
@@ -298,7 +298,7 @@ export default function AffiliatesManagement() {
                       <button
                         type="button"
                         onClick={() => handleSortHeaderClick("name")}
-                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Affiliate
                         <SortHeaderIcon field="name" />
@@ -308,7 +308,7 @@ export default function AffiliatesManagement() {
                       <button
                         type="button"
                         onClick={() => handleSortHeaderClick("affiliateCode")}
-                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Code
                         <SortHeaderIcon field="affiliateCode" />
@@ -319,7 +319,7 @@ export default function AffiliatesManagement() {
                         type="button"
                         onClick={() => handleSortHeaderClick("totalSignups")}
                         title="Sort by signups"
-                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Stats
                         <SortHeaderIcon field="totalSignups" />
@@ -330,7 +330,7 @@ export default function AffiliatesManagement() {
                         type="button"
                         onClick={() => handleSortHeaderClick("totalSales")}
                         title="Sort by sales"
-                        className="flex w-full items-center justify-end gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-end gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Sales
                         <SortHeaderIcon field="totalSales" />
@@ -340,7 +340,7 @@ export default function AffiliatesManagement() {
                       <button
                         type="button"
                         onClick={() => handleSortHeaderClick("unpaidAmount")}
-                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Unpaid
                         <SortHeaderIcon field="unpaidAmount" />
@@ -350,13 +350,13 @@ export default function AffiliatesManagement() {
                       <button
                         type="button"
                         onClick={() => handleSortHeaderClick("isActive")}
-                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
                       >
                         Status
                         <SortHeaderIcon field="isActive" />
                       </button>
                     </th>
-                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-left text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-left text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
                       Actions
                     </th>
                   </tr>
@@ -370,31 +370,31 @@ export default function AffiliatesManagement() {
                     >
                       <td className="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 lg:px-6">
                         <div>
-                          <div className="text-[10px] font-semibold text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.name}</div>
-                          <div className="truncate text-[9px] text-gray-500 dark:text-neutral-400 sm:text-xs">{affiliate.email}</div>
+                          <div className="text-2xs font-semibold text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.name}</div>
+                          <div className="truncate text-3xs text-gray-500 dark:text-neutral-400 sm:text-xs">{affiliate.email}</div>
                         </div>
                       </td>
                       <td className="hidden whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 lg:table-cell lg:px-6">
-                        <div className="font-mono text-[10px] text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.affiliateCode}</div>
+                        <div className="font-mono text-2xs text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.affiliateCode}</div>
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 md:hidden lg:px-6">
-                        <div className="text-[10px] text-gray-900 dark:text-neutral-100 sm:text-xs">
+                        <div className="text-2xs text-gray-900 dark:text-neutral-100 sm:text-xs">
                           <div>Signups: {affiliate.totalSignups}</div>
                           <div>Sales: {formatCurrency(affiliate.totalSales)}</div>
                         </div>
                       </td>
                       <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-gray-900 dark:text-white md:table-cell">
-                        <span className="text-[10px] sm:text-xs">{affiliate.totalSignups}</span>
+                        <span className="text-2xs sm:text-xs">{affiliate.totalSignups}</span>
                       </td>
                       <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-right text-gray-900 dark:text-white md:table-cell">
-                        <span className="text-[10px] sm:text-xs">{formatCurrency(affiliate.totalSales)}</span>
+                        <span className="text-2xs sm:text-xs">{formatCurrency(affiliate.totalSales)}</span>
                       </td>
                       <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
                         <div>
-                          <div className="text-[10px] sm:text-xs font-semibold text-green-600 dark:text-green-400">
+                          <div className="text-2xs sm:text-xs font-semibold text-green-600 dark:text-green-400">
                             {formatCurrency(affiliate.unpaidAmount)}
                           </div>
-                          <div className="text-[9px] sm:text-xs text-gray-500 dark:text-neutral-400">
+                          <div className="text-3xs sm:text-xs text-gray-500 dark:text-neutral-400">
                             {affiliate.unpaidCommissions} comm.
                           </div>
                         </div>
@@ -402,12 +402,12 @@ export default function AffiliatesManagement() {
                       <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
                         <AccountActiveBadge isActive={affiliate.isActive} />
                       </td>
-                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-[10px] sm:text-xs font-medium">
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-2xs sm:text-xs font-medium">
                         <div className="flex items-center gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => handleAffiliateClick(affiliate)}
-                            className="flex items-center gap-1 text-[#ee0000] transition-colors hover:text-[#cc0000]"
+                            className="flex items-center gap-1 text-red-600 transition-colors hover:text-red-675"
                           >
                             <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             <span className="hidden lg:inline">View</span>
@@ -586,7 +586,7 @@ function CreateAffiliateModal({
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.name}</p>}
@@ -597,7 +597,7 @@ function CreateAffiliateModal({
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.email}</p>}
@@ -608,7 +608,7 @@ function CreateAffiliateModal({
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
             />
           </div>
           <div>
@@ -617,7 +617,7 @@ function CreateAffiliateModal({
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.username && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.username}</p>}
@@ -628,7 +628,7 @@ function CreateAffiliateModal({
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
             {errors.password && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password}</p>}
@@ -642,11 +642,11 @@ function CreateAffiliateModal({
               step="0.1"
               value={formData.commissionRate}
               onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
-              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-[#ee0000] dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               placeholder="30"
               required
             />
-            <p className="mt-1 text-[11px] text-gray-500 dark:text-neutral-400 sm:text-xs">
+            <p className="mt-1 text-2xs text-gray-500 dark:text-neutral-400 sm:text-xs">
               Enter commission rate as percentage (0-100%). Default: 30%
             </p>
             {errors.commissionRate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.commissionRate}</p>}
@@ -662,7 +662,7 @@ function CreateAffiliateModal({
             </button>
             <button
               type="submit"
-              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 text-sm font-semibold text-white transition-all hover:from-[#cc0000] hover:to-[#e60000] sm:h-8 sm:min-h-8 sm:px-3.5"
+              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md bg-gradient-to-r from-red-600 to-red-400 px-3 text-sm font-semibold text-white transition-all hover:from-red-675 hover:to-red-650 sm:h-8 sm:min-h-8 sm:px-3.5"
             >
               Create
             </button>

@@ -202,7 +202,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
 
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 min-w-0 w-full">
           <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <label className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-700 dark:text-neutral-200 cursor-pointer select-none min-w-0">
+            <label className="flex items-center gap-1.5 sm:gap-2 text-2xs sm:text-xs text-gray-700 dark:text-neutral-200 cursor-pointer select-none min-w-0">
               <input
                 type="checkbox"
                 className="rounded border-gray-300 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0"
@@ -215,7 +215,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
               </span>
             </label>
             {unresolvedRowCount > 0 && !showUnresolvedUrls && (
-              <span className="text-[10px] sm:text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 sm:px-2 sm:py-1 truncate max-w-full">
+              <span className="text-2xs sm:text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 sm:px-2 sm:py-1 truncate max-w-full">
                 Hiding {unresolvedRowCount} (unknown://)
               </span>
             )}
@@ -268,7 +268,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
               <button
                 type="button"
                 onClick={() => setUrlColumnsExpanded((v) => !v)}
-                className="sm:hidden inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900"
+                className="sm:hidden inline-flex items-center gap-1.5 text-2xs font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900"
               >
                 {urlColumnsExpanded ? (
                   <>
@@ -283,7 +283,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                 )}
               </button>
               {isFetching && !isLoading && (
-                <span className="text-[10px] sm:text-xs text-gray-500 shrink-0">Refreshing…</span>
+                <span className="text-2xs sm:text-xs text-gray-500 shrink-0">Refreshing…</span>
               )}
             </div>
           </div>
@@ -298,14 +298,14 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="url"
                     align="left"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-[11px] sm:text-sm text-gray-700 dark:text-neutral-200 min-w-[100px] sm:min-w-[180px] whitespace-nowrap"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-2xs sm:text-sm text-gray-700 dark:text-neutral-200 min-w-[100px] sm:min-w-[180px] whitespace-nowrap"
                   >
                     URL
                   </SortHeader>
                   <SortHeader
                     column="spend"
                     align="right"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-[11px] sm:text-sm"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-2xs sm:text-sm"
                   >
                     Spend
                   </SortHeader>
@@ -333,7 +333,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="revenue"
                     align="right"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-emerald-900 whitespace-nowrap text-[11px] sm:text-sm"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-emerald-900 whitespace-nowrap text-2xs sm:text-sm"
                   >
                     <span className="sm:hidden">Rev</span>
                     <span className="hidden sm:inline">Meta revenue</span>
@@ -341,7 +341,7 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                   <SortHeader
                     column="conversions"
                     align="right"
-                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-[11px] sm:text-sm"
+                    className="sticky top-0 z-10 bg-gray-50 py-1.5 px-0.5 sm:py-2 sm:px-2 text-right text-gray-700 dark:text-neutral-200 whitespace-nowrap text-2xs sm:text-sm"
                   >
                     <span className="sm:hidden">Conv</span>
                     <span className="hidden sm:inline">Conv.</span>
@@ -407,11 +407,11 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                           </button>
                         </td>
                         <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-gray-900 max-w-[9rem] sm:max-w-md">
-                          <span className="block break-all text-[11px] sm:text-sm leading-snug line-clamp-3 sm:line-clamp-none">
+                          <span className="block break-all text-2xs sm:text-sm leading-snug line-clamp-3 sm:line-clamp-none">
                             {row.canonicalUrl}
                           </span>
                         </td>
-                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium whitespace-nowrap tabular-nums text-[11px] sm:text-sm">
+                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium whitespace-nowrap tabular-nums text-2xs sm:text-sm">
                           {formatAud(row.spend)}
                         </td>
                         <td
@@ -425,28 +425,28 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                           {formatNum(row.impressions)}
                         </td>
                         <td
-                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-[11px] sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-2xs sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                         >
                           {formatAud(row.cpc)}
                         </td>
-                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium text-emerald-800 whitespace-nowrap tabular-nums text-[11px] sm:text-sm">
+                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium text-emerald-800 whitespace-nowrap tabular-nums text-2xs sm:text-sm">
                           {formatAud(row.revenue)}
                         </td>
-                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-[11px] sm:text-sm">
+                        <td className="py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-2xs sm:text-sm">
                           {formatNum(row.conversions)}
                         </td>
                         <td
-                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-[11px] sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-2xs sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                         >
                           {row.conversions > 0 ? formatAud(cpa) : "—"}
                         </td>
                         <td
-                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-[11px] sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
+                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right whitespace-nowrap tabular-nums text-2xs sm:text-sm ${!urlColumnsExpanded ? "hidden sm:table-cell" : ""}`}
                         >
                           {row.roas.toFixed(2)}x
                         </td>
                         <td
-                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium whitespace-nowrap tabular-nums text-[11px] sm:text-sm ${
+                          className={`py-1.5 px-0.5 sm:py-2.5 sm:px-2 text-right font-medium whitespace-nowrap tabular-nums text-2xs sm:text-sm ${
                             profit >= 0 ? "text-emerald-700" : "text-red-600"
                           } ${!urlColumnsExpanded ? "hidden xl:table-cell" : ""}`}
                         >
@@ -457,10 +457,10 @@ export default function SpendByUrlSection({ startDate, endDate, dateReady }: Spe
                         <tr className="bg-slate-50">
                           <td colSpan={COL_SPAN} className="px-2 py-2 sm:px-3 sm:py-3">
                             {detailQuery.isLoading && (
-                              <p className="text-[11px] sm:text-xs text-gray-600 dark:text-neutral-400">Loading ads…</p>
+                              <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400">Loading ads…</p>
                             )}
                             {detailQuery.error && (
-                              <p className="text-[11px] sm:text-xs text-red-600 leading-snug">
+                              <p className="text-2xs sm:text-xs text-red-600 leading-snug">
                                 {detailQuery.error instanceof Error
                                   ? detailQuery.error.message
                                   : "Failed to load ads"}

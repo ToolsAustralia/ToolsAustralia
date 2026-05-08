@@ -33,7 +33,7 @@ export function ComparisonModeToggle({
           <button
             key={m.value}
             onClick={() => onModeChange(m.value)}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none ${
+            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-2xs sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none ${
               mode === m.value
                 ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
                 : "text-slate-300 hover:text-white hover:bg-slate-700/50"

@@ -22,7 +22,7 @@ export default function ClickableUserDisplay({
 }: ClickableUserDisplayProps) {
   const { openUserModal } = useAdminUserModal();
 
-  // When callers pass text size (e.g. text-[10px] sm:text-xs), use it as the full typography
+  // When callers pass text size (e.g. text-2xs sm:text-xs), use it as the full typography
   // token set — do not merge a default text-sm or Tailwind may pick the wrong winner.
   const typographyClasses = className.trim()
     ? className

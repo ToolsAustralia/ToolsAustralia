@@ -136,10 +136,10 @@ export default function PrizeCategories() {
                   <h3 className="text-[12px] sm:text-[14px] font-bold text-black mb-1 sm:mb-2 leading-tight">
                     {category.name}
                   </h3>
-                  <p className="text-[10px] sm:text-[11px] text-gray-600 dark:text-neutral-400 mb-2 sm:mb-3 leading-tight">
+                  <p className="text-2xs sm:text-2xs text-gray-600 dark:text-neutral-400 mb-2 sm:mb-3 leading-tight">
                     {category.description}
                   </p>
-                  <div className="text-[10px] sm:text-[11px] text-red-600 font-semibold">
+                  <div className="text-2xs sm:text-2xs text-red-600 font-semibold">
                     {category.prizeCount} prizes
                   </div>
                 </div>

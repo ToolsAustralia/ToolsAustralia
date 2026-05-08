@@ -156,19 +156,19 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
               {currentBenefits.accumulatedEntries.toLocaleString()}
             </div>
-            <div className="text-[11px] font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
               {currentBenefits.partnerDiscountAccessPercent}%
             </div>
-            <div className="text-[10px] font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-[11px]">
+            <div className="text-2xs font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-2xs">
               Partner offers access %
             </div>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{currentBenefits.partnerDiscountDays}</div>
-            <div className="text-[11px] font-medium text-gray-600 dark:text-neutral-400">partner days</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner days</div>
           </div>
         </div>
       </div>
@@ -183,19 +183,19 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
               {newBenefits.accumulatedEntries.toLocaleString()}
             </div>
-            <div className="text-[11px] font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
           </div>
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
               {newBenefits.partnerDiscountAccessPercent}%
             </div>
-            <div className="text-[10px] font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-[11px]">
+            <div className="text-2xs font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-2xs">
               Partner offers access %
             </div>
           </div>
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
             <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{newBenefits.partnerDiscountDays}</div>
-            <div className="text-[11px] font-medium text-gray-600 dark:text-neutral-400">partner days</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner days</div>
           </div>
         </div>
       </div>

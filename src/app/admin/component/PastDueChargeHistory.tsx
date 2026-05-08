@@ -662,13 +662,13 @@ export default function PastDueChargeHistory() {
                               <table className="w-full">
                                 <thead>
                                   <tr>
-                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500 w-8" />
-                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">When</th>
-                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Invoice</th>
-                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Status</th>
-                                    <th className="px-2 py-2 text-right text-[10px] uppercase text-gray-500">Amount</th>
-                                    <th className="px-2 py-2 text-left text-[10px] uppercase text-gray-500">Error</th>
-                                    <th className="px-2 py-2 text-right text-[10px] uppercase text-gray-500">Action</th>
+                                    <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500 w-8" />
+                                    <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">When</th>
+                                    <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">Invoice</th>
+                                    <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">Status</th>
+                                    <th className="px-2 py-2 text-right text-2xs uppercase text-gray-500">Amount</th>
+                                    <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">Error</th>
+                                    <th className="px-2 py-2 text-right text-2xs uppercase text-gray-500">Action</th>
                                   </tr>
                                 </thead>
                                 <tbody>

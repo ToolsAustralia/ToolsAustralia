@@ -941,7 +941,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                       <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-300" />
                       <span className="text-yellow-300 font-semibold text-xs sm:text-sm">Subscription Cancelled</span>
                     </div>
-                    <p className="text-yellow-100 text-[10px] sm:text-xs">
+                    <p className="text-yellow-100 text-2xs sm:text-xs">
                       Your subscription will end on{" "}
                       {formatDate(subscriptionBenefits.endDate || activeSubscription.endDate) ||
                         "the end of your billing period"}
@@ -953,7 +953,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                 <div className="flex justify-between items-center">
                   <span className="text-xs sm:text-sm opacity-90">Auto Renewal:</span>
                   <span
-                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium ${
+                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-medium ${
                       activeSubscription.autoRenew ? "bg-green-500/20 text-green-300" : "bg-red-500/20 text-red-300"
                     }`}
                   >
@@ -1112,7 +1112,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">${upgrade.price}/mo</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{upgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span className="font-medium">{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
                               <span>{upgrade.partnerDiscountDays} days partner access</span>
                             </div>
@@ -1179,7 +1179,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                               <span className="text-base sm:text-lg font-bold" style={{ color: colorScheme.accentHex }}>${downgrade.price}/mo</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-1.5 sm:mb-2">{downgrade.description}</p>
-                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-gray-500 dark:text-neutral-400">
+                            <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
                               <span className="font-medium">{downgradeEntries} Free Accumulated Entries</span>
                               <span>{downgrade.partnerDiscountDays} days partner access</span>
                             </div>
@@ -1286,7 +1286,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 Subscribe to Membership Packages
               </Button>
@@ -1312,7 +1312,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 {user.subscription.status === "canceled" ? "Reactivate Subscription" : "Subscribe to Membership Packages"}
               </Button>
@@ -1332,7 +1332,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
                   whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
                 }}
                 variant="primary"
-                className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] hover:from-[#cc0000] hover:to-[#e60000] shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-red-600 to-red-400 hover:from-red-675 hover:to-red-650 shadow-md hover:shadow-lg transition-all"
               >
                 Subscribe to Membership Packages
               </Button>

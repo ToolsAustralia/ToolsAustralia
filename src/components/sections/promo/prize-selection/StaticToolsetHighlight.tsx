@@ -105,7 +105,7 @@ export function StaticToolsetHighlight({
               }}
             >
               <p
-                className={`font-sans font-extrabold font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center ${scheme.buttonText}`}
+                className={`font-sans font-extrabold font-bold text-2xs sm:text-xs lg:text-sm leading-tight text-center ${scheme.buttonText}`}
               >
                 {label} + $5000 CASH
               </p>

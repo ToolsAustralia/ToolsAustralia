@@ -80,7 +80,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
 
       <ModalContent className="space-y-5">
         {/* Hero Banner with Gradient */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#ee0000] via-[#ff3333] to-[#ff4444] p-6 shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-600 via-[#ff3333] to-red-400 p-6 shadow-lg">
           <div className="absolute top-0 right-0 opacity-10">
             <Award className="h-32 w-32 text-white" />
           </div>
@@ -97,7 +97,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
 
         {isLoading && (
           <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-600 bg-gray-50/50 dark:bg-neutral-800/50 p-8 text-center">
-            <div className="inline-flex h-8 w-8 animate-spin rounded-full border-4 border-gray-300 dark:border-neutral-600 border-t-[#ee0000]" />
+            <div className="inline-flex h-8 w-8 animate-spin rounded-full border-4 border-gray-300 dark:border-neutral-600 border-t-red-600" />
             <p className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-400">Fetching your personal referral code...</p>
           </div>
         )}
@@ -132,8 +132,8 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
             {/* Referral Code Section - Compact on mobile */}
             <section className="group rounded-2xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-3 sm:p-6 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center gap-2 mb-1.5 sm:mb-3">
-                <div className="flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-[#ee0000]/10 dark:bg-[#ee0000]/20">
-                  <LinkIcon className="h-3 w-3 sm:h-4 sm:w-4 text-[#ee0000]" />
+                <div className="flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-red-600/10 dark:bg-red-600/20">
+                  <LinkIcon className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
                 </div>
                 <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Your Referral Code</h3>
               </div>
@@ -142,12 +142,12 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
               </p>
 
               <div className="relative">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border-2 border-gray-200 dark:border-neutral-600 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-neutral-700 dark:to-neutral-800 px-3 py-2.5 sm:px-5 sm:py-4 transition-all duration-300 hover:border-[#ee0000]/50 dark:hover:border-[#ee0000]/50">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border-2 border-gray-200 dark:border-neutral-600 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-neutral-700 dark:to-neutral-800 px-3 py-2.5 sm:px-5 sm:py-4 transition-all duration-300 hover:border-red-600/50 dark:hover:border-red-600/50">
                   <span className="text-lg sm:text-3xl font-black tracking-[0.1em] sm:tracking-[0.3em] text-gray-900 dark:text-white break-all text-center sm:text-left min-w-0">{profile.code}</span>
                   <button
                     type="button"
                     onClick={() => handleCopy(profile.code, "code")}
-                    className="group/btn flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#ee0000] px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all duration-300 hover:bg-red-600 hover:shadow-lg hover:scale-105 active:scale-95 w-full sm:w-auto"
+                    className="group/btn flex shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-md transition-all duration-300 hover:bg-red-600 hover:shadow-lg hover:scale-105 active:scale-95 w-full sm:w-auto"
                   >
                     {copyStatus === "code" ? (
                       <>
@@ -216,12 +216,12 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
             <section className="grid gap-4 sm:grid-cols-2">
               <div className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-neutral-700 bg-gradient-to-br from-white to-gray-50 dark:from-neutral-800 dark:to-neutral-900 p-5 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
                 <div className="absolute top-0 right-0 opacity-5 dark:opacity-10">
-                  <Users className="h-24 w-24 text-[#ee0000]" />
+                  <Users className="h-24 w-24 text-red-600" />
                 </div>
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ee0000]/10 dark:bg-[#ee0000]/20">
-                      <Users className="h-5 w-5 text-[#ee0000]" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600/10 dark:bg-red-600/20">
+                      <Users className="h-5 w-5 text-red-600" />
                     </div>
                     <div className="flex-1">
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Successful Referrals</p>
@@ -265,7 +265,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
               </div>
               <ul className="space-y-3">
                 <li className="flex items-start gap-3 group/item">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ee0000] text-white text-xs font-bold mt-0.5">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold mt-0.5">
                     1
                   </div>
                   <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -273,7 +273,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
                   </span>
                 </li>
                 <li className="flex items-start gap-3 group/item">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ee0000] text-white text-xs font-bold mt-0.5">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold mt-0.5">
                     2
                   </div>
                   <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -281,7 +281,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
                   </span>
                 </li>
                 <li className="flex items-start gap-3 group/item">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ee0000] text-white text-xs font-bold mt-0.5">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-xs font-bold mt-0.5">
                     3
                   </div>
                   <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -294,7 +294,7 @@ export const ReferFriendModal: React.FC<ReferFriendModalProps> = ({ isOpen, onCl
             {/* Footer CTA - Enhanced with better contrast */}
             <footer className="relative overflow-hidden rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-gradient-to-r from-amber-50 via-orange-50 to-red-50 dark:from-amber-950/30 dark:via-orange-950/30 dark:to-red-950/30 p-6 shadow-sm">
               <div className="absolute top-0 right-0 opacity-10 dark:opacity-5">
-                <Sparkles className="h-20 w-20 text-[#ee0000]" />
+                <Sparkles className="h-20 w-20 text-red-600" />
               </div>
               <div className="relative z-10">
                 <p className="text-base font-bold text-gray-900 dark:text-white">

@@ -60,7 +60,7 @@ export default function WinnerStoryModal({ winner, onClose }: WinnerStoryModalPr
           <div className="flex-1 overflow-y-auto px-6 py-8 sm:px-10 sm:py-9 lg:px-11 lg:py-10">
             {/* Eyebrow with flanking gradient lines */}
             <div
-              className="mb-6 flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-[0.32em]"
+              className="mb-6 flex items-center gap-3 text-2xs font-extrabold uppercase tracking-[0.32em]"
               style={{ color: accentColor }}
             >
               <span

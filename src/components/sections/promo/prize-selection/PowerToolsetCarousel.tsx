@@ -209,7 +209,7 @@ export function PowerToolsetCarousel({
                         }}
                       >
                         <p
-                          className={`max-w-[min(100%,18rem)] whitespace-normal font-sans text-center text-[9px] font-extrabold font-bold leading-snug line-clamp-2 sm:max-w-none sm:text-xs sm:leading-tight lg:text-sm ${scheme.buttonText}`}
+                          className={`max-w-[min(100%,18rem)] whitespace-normal font-sans text-center text-3xs font-extrabold font-bold leading-snug line-clamp-2 sm:max-w-none sm:text-xs sm:leading-tight lg:text-sm ${scheme.buttonText}`}
                         >
                           {POWERSET_LABELS[activeToolset]} + $5000 CASH
                         </p>
@@ -295,7 +295,7 @@ export function PowerToolsetCarousel({
                 border: badgeStyle.border,
               }}
             >
-              <p className={`font-sans font-extrabold font-bold text-[8px] sm:text-[9px] lg:text-[11px] leading-tight text-center line-clamp-2 break-words hyphens-auto ${scheme.buttonText}`}>
+              <p className={`font-sans font-extrabold font-bold text-3xs sm:text-3xs lg:text-2xs leading-tight text-center line-clamp-2 break-words hyphens-auto ${scheme.buttonText}`}>
                 {label} + $5000 CASH
               </p>
             </div>

@@ -612,9 +612,9 @@ export default function AffiliateDetailModal({
       return <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />;
     }
     return commissionOrder === "asc" ? (
-      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     ) : (
-      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     );
   };
 
@@ -624,9 +624,9 @@ export default function AffiliateDetailModal({
       return <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />;
     }
     return referredOrder === "asc" ? (
-      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     ) : (
-      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-[#ee0000]" aria-hidden />
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
     );
   };
 
@@ -682,7 +682,7 @@ export default function AffiliateDetailModal({
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 sm:gap-2 py-3 sm:py-3 px-3 sm:px-4 border-b-2 font-semibold text-xs sm:text-sm transition-all whitespace-nowrap min-h-[48px] shrink-0 ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30 dark:bg-red-950/25"
+                        ? "border-red-600 text-red-600 bg-red-50/30 dark:bg-red-950/25"
                         : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50"
                     }`}
                   >
@@ -794,7 +794,7 @@ export default function AffiliateDetailModal({
                         <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm dark:shadow-none overflow-hidden ring-1 ring-gray-100/70 dark:ring-neutral-800/80">
                           <dl className="grid grid-cols-2 xl:grid-cols-4 divide-x divide-y divide-gray-100 dark:divide-neutral-800 [&>*]:min-h-0">
                             <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                              <dt className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Name
                               </dt>
                               <dd className="mt-1 text-sm text-gray-900 dark:text-white font-medium break-words leading-snug">
@@ -802,25 +802,25 @@ export default function AffiliateDetailModal({
                               </dd>
                             </div>
                             <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                              <dt className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Email
                               </dt>
                               <dd className="mt-1 text-sm min-w-0">
                                 <a
                                   href={`mailto:${data.affiliate.email}`}
-                                  className="text-[#ee0000] hover:underline font-medium break-all leading-snug"
+                                  className="text-red-600 hover:underline font-medium break-all leading-snug"
                                 >
                                   {data.affiliate.email}
                                 </a>
                               </dd>
                             </div>
                             <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                              <dt className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Phone
                               </dt>
                               <dd className="mt-1 text-sm text-gray-900 dark:text-white leading-snug">
                                 {data.affiliate.phone ? (
-                                  <a href={`tel:${data.affiliate.phone}`} className="hover:text-[#ee0000] font-medium">
+                                  <a href={`tel:${data.affiliate.phone}`} className="hover:text-red-600 font-medium">
                                     {data.affiliate.phone}
                                   </a>
                                 ) : (
@@ -829,7 +829,7 @@ export default function AffiliateDetailModal({
                               </dd>
                             </div>
                             <div className="p-2 sm:p-3.5 xl:p-4 bg-white dark:bg-neutral-900 min-w-0">
-                              <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                              <dt className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                 Username
                               </dt>
                               <dd className="mt-1 text-sm font-mono text-[12px] sm:text-[13px] text-gray-900 dark:text-white break-all leading-snug">
@@ -838,7 +838,7 @@ export default function AffiliateDetailModal({
                             </div>
                             <div className="p-2 sm:p-3.5 xl:p-4 col-span-2 xl:col-span-4 bg-gradient-to-br from-red-50/90 via-white to-white dark:from-red-950/40 dark:via-neutral-900 dark:to-neutral-900 min-w-0 flex flex-row items-center justify-between gap-2 sm:gap-4">
                               <div>
-                                <dt className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:text-neutral-400">
+                                <dt className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-600 dark:text-neutral-400">
                                   Commission rate
                                 </dt>
                                 <dd className="mt-0.5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-white tabular-nums tracking-tight">
@@ -847,7 +847,7 @@ export default function AffiliateDetailModal({
                               </div>
                               <div className="hidden sm:block h-10 w-px bg-red-200/60 dark:bg-red-900/50 shrink-0" aria-hidden />
                               <div className="flex flex-col items-end gap-1">
-                                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                                <span className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                                   Status
                                 </span>
                                 {data.affiliate.isActive ? (
@@ -884,14 +884,14 @@ export default function AffiliateDetailModal({
                     <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm dark:shadow-none p-2.5 sm:p-4 ring-1 ring-gray-100/70 dark:ring-neutral-800/80">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
                         <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                          <p className="text-2xs sm:text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
                             Shareable URL
                           </p>
                           <div
                             className="min-h-[2.75rem] sm:min-h-[3rem] flex-1 rounded-lg border border-gray-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-950/80 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center"
                             title={data.affiliate.affiliateLink}
                           >
-                            <span className="font-mono text-[10px] sm:text-xs md:text-sm text-gray-800 dark:text-neutral-100 select-all break-all leading-relaxed">
+                            <span className="font-mono text-2xs sm:text-xs md:text-sm text-gray-800 dark:text-neutral-100 select-all break-all leading-relaxed">
                               {data.affiliate.affiliateLink}
                             </span>
                           </div>
@@ -1037,7 +1037,7 @@ export default function AffiliateDetailModal({
                           setAttachSuccess(null);
                         }}
                         placeholder="Search user by name or email to attach..."
-                        className="w-full rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 pl-9 pr-3 py-1.5 text-sm text-gray-900 dark:text-neutral-100 placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:ring-2 focus:ring-[#ee0000]/20 focus:border-[#ee0000] transition-colors"
+                        className="w-full rounded-md border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 pl-9 pr-3 py-1.5 text-sm text-gray-900 dark:text-neutral-100 placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:ring-2 focus:ring-red-600/20 focus:border-red-600 transition-colors"
                       />
                       {isSearching && (
                         <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
@@ -1119,7 +1119,7 @@ export default function AffiliateDetailModal({
                   ) : (
                     <>
                       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700 -mx-1 sm:mx-0 touch-pan-x">
-                        <table className="w-full min-w-[580px] text-[10px] sm:text-sm">
+                        <table className="w-full min-w-[580px] text-2xs sm:text-sm">
                           <thead className="border-b-2 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60">
                             <tr>
                               <th className="p-0 text-left font-medium uppercase tracking-wider text-gray-500 dark:text-neutral-400">
@@ -1273,12 +1273,12 @@ export default function AffiliateDetailModal({
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-2xs text-gray-500">
                     Sort by clicking column headers. Sorting by Type groups rows by commission type on this page.
                   </p>
 
                   <div className="overflow-x-auto rounded-lg border border-gray-200 touch-pan-x">
-                    <table className="w-full min-w-[640px] text-[10px] sm:text-xs lg:text-sm">
+                    <table className="w-full min-w-[640px] text-2xs sm:text-xs lg:text-sm">
                       <thead className="sticky top-0 z-[1] border-b-2 border-gray-200 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
                         <tr>
                           <th className="p-0 text-left font-medium text-gray-500 uppercase tracking-wider">
@@ -1387,7 +1387,7 @@ export default function AffiliateDetailModal({
                                       displayText={item.commission.referredUser.name || "N/A"}
                                       subtext={item.commission.referredUser.email}
                                       userId={item.commission.referredUser.id ?? null}
-                                      className="text-[10px] sm:text-xs lg:text-sm text-gray-900"
+                                      className="text-2xs sm:text-xs lg:text-sm text-gray-900"
                                     />
                                   ) : (
                                     <span className="text-gray-400">N/A</span>
@@ -1410,11 +1410,11 @@ export default function AffiliateDetailModal({
                                 </td>
                                 <td className="px-2 py-2 sm:px-4 sm:py-3 whitespace-nowrap">
                                   {item.commission.status === "paid" ? (
-                                    <span className="px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium bg-green-100 text-green-800">
+                                    <span className="px-2 py-1 rounded-full text-2xs sm:text-xs font-medium bg-green-100 text-green-800">
                                       Paid
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <span className="px-2 py-1 rounded-full text-2xs sm:text-xs font-medium bg-yellow-100 text-yellow-800">
                                       Pending
                                     </span>
                                   )}

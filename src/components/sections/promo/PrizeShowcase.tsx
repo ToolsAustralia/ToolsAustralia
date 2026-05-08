@@ -879,7 +879,7 @@ export default function PrizeShowcase({
                   />
                 ) : (
                   <p className="font-sans font-extrabold font-black uppercase text-xl sm:text-2xl text-gray-900 dark:text-white">
-                    <span className="text-[#ee0000] dark:text-red-400">{multiplierForFirstBanner}X</span> promo active
+                    <span className="text-red-600 dark:text-red-400">{multiplierForFirstBanner}X</span> promo active
                   </p>
                 )}
               </div>
@@ -1019,7 +1019,7 @@ export default function PrizeShowcase({
               <div className="mt-2 sm:mt-4 max-w-5xl mx-auto flex flex-col gap-6 sm:gap-8">
                 <div className="relative flex items-center justify-center py-1 sm:py-2">
                   <div className="h-px w-full bg-gray-300 dark:bg-neutral-700" />
-                  <div className="absolute px-3 py-1 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-[10px] sm:text-xs font-bold tracking-[0.22em] text-gray-600 dark:text-neutral-400">
+                  <div className="absolute px-3 py-1 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-2xs sm:text-xs font-bold tracking-[0.22em] text-gray-600 dark:text-neutral-400">
                     OR
                   </div>
                 </div>
@@ -1325,10 +1325,10 @@ export default function PrizeShowcase({
                       <Icon className={`relative z-10 w-3.5 h-3.5 sm:w-5 sm:h-5 ${highlightIconClassName}`} strokeWidth={2.25} />
                     </div>
                     <div className="flex-1 relative z-10 min-w-0 flex flex-col justify-center">
-                      <h3 className="text-[11px] sm:text-lg font-bold text-white font-sans mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
+                      <h3 className="text-2xs sm:text-lg font-bold text-white font-sans mb-0 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                         {highlight.title}
                       </h3>
-                      <p className="text-[10px] sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
+                      <p className="text-2xs sm:text-base text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
                         {highlight.description}
                       </p>
                     </div>

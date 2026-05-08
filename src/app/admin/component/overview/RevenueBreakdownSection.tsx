@@ -79,7 +79,7 @@ export default function RevenueBreakdownSection({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 sm:gap-3 lg:gap-4">
           <MetricCard
             title={
-              <span className="block leading-tight text-[10px] sm:text-sm">
+              <span className="block leading-tight text-2xs sm:text-sm">
                 <span className="block">Membership</span>
                 <span className="block">New</span>
               </span>
@@ -97,7 +97,7 @@ export default function RevenueBreakdownSection({
           />
           <MetricCard
             title={
-              <span className="block leading-tight text-[10px] sm:text-sm">
+              <span className="block leading-tight text-2xs sm:text-sm">
                 <span className="block">Membership</span>
                 <span className="block">Renewal</span>
               </span>
@@ -115,7 +115,7 @@ export default function RevenueBreakdownSection({
           />
           <MetricCard
             title={
-              <span className="block leading-tight text-[10px] sm:text-sm">
+              <span className="block leading-tight text-2xs sm:text-sm">
                 <span className="block">One-Time</span>
                 <span className="block">First</span>
               </span>
@@ -133,7 +133,7 @@ export default function RevenueBreakdownSection({
           />
           <MetricCard
             title={
-              <span className="block leading-tight text-[10px] sm:text-sm">
+              <span className="block leading-tight text-2xs sm:text-sm">
                 <span className="block">One-Time</span>
                 <span className="block">Additional</span>
               </span>
@@ -151,7 +151,7 @@ export default function RevenueBreakdownSection({
           />
           <MetricCard
             title={
-              <span className="block leading-tight text-[10px] sm:text-sm">
+              <span className="block leading-tight text-2xs sm:text-sm">
                 <span className="block">Mini</span>
                 <span className="block">Draws</span>
               </span>

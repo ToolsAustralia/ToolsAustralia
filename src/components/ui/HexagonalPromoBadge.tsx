@@ -21,7 +21,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
   const sizeConfig = {
     xs: {
       container: "w-7 h-7",
-      text: "text-[8px]",
+      text: "text-3xs",
       clipPath: "polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)",
     },
     small: {

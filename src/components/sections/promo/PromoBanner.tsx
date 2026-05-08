@@ -63,11 +63,11 @@ function PromoBannerUnifiedCountdown({
   const isCompact = size === "compact";
   /* Left promo art uses max-[360px]:h-* ~0.87× the base mobile h-* — mirror that on typography + padding below */
   const numCn = isCompact
-    ? `${textClassName} font-black font-sans tracking-tight tabular-nums text-[13px] leading-none max-[360px]:text-[11px] sm:text-sm md:text-base lg:text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`
+    ? `${textClassName} font-black font-sans tracking-tight tabular-nums text-[13px] leading-none max-[360px]:text-2xs sm:text-sm md:text-base lg:text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`
     : `${textClassName} font-black font-sans tracking-tight tabular-nums text-[15px] leading-none max-[360px]:text-[13px] sm:text-xl md:text-2xl lg:text-3xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]`;
   const labelCn = isCompact
-    ? `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[8px] max-[360px]:text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] mt-0.5 opacity-95`
-    : `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[7.5px] max-[360px]:text-[6.5px] sm:text-[9px] md:text-[10px] lg:text-xs mt-0.5 sm:mt-1 opacity-95`;
+    ? `${labelClassName} font-semibold uppercase tracking-[0.12em] text-3xs max-[360px]:text-[7px] sm:text-3xs md:text-3xs lg:text-2xs mt-0.5 opacity-95`
+    : `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[7.5px] max-[360px]:text-[6.5px] sm:text-3xs md:text-2xs lg:text-xs mt-0.5 sm:mt-1 opacity-95`;
 
   const segmentCount = segments.length;
   /* Timer: slightly wider cap on mobile than before; ≤360px tighter cap (tracks left column %) */
@@ -917,7 +917,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
               // Gap period: "NEXT DRAW IN" label + countdown timer (compact padding to align with left height)
               if (isGapPeriod) {
-                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -926,7 +926,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     className="flex flex-col items-center justify-center"
                   >
                     <div
-                      className="font-semibold text-[10px] max-[360px]:text-[8px] sm:text-[10px] uppercase tracking-wider"
+                      className="font-semibold text-2xs max-[360px]:text-3xs sm:text-2xs uppercase tracking-wider"
                       style={{
                         color: theme.primary,
                         textShadow: "0 1px 3px rgba(0,0,0,0.65)",
@@ -988,7 +988,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               // Scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
-                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
                 const scheduledSegments: PromoBannerCountdownSegment[] = [];
                 if (useDays && scheduledEndTimeLeft.days != null) {
                   scheduledSegments.push({
@@ -1036,7 +1036,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                           { value: "00", label: "SECS" },
                         ]}
                         textClassName={rightSectionTextClass}
-                        labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                        labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
                         surfaceStyle={rightSectionTileStyle}
                       />
                     </div>
@@ -1057,7 +1057,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         { value: freezeTimeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
                       ]}
                       textClassName={rightSectionTextClass}
-                      labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                      labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
                       surfaceStyle={rightSectionTileStyle}
                     />
                   </motion.div>
@@ -1075,7 +1075,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                         { value: "00", label: "SECS" },
                       ]}
                       textClassName={rightSectionTextClass}
-                      labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                      labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
                       surfaceStyle={rightSectionTileStyle}
                     />
                   </div>
@@ -1096,7 +1096,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                       { value: timeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
                     ]}
                     textClassName={rightSectionTextClass}
-                    labelClassName={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}
+                    labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
                     surfaceStyle={rightSectionTileStyle}
                   />
                 </motion.div>

@@ -127,16 +127,16 @@ export default function AdminStatsCard({
         <div className="flex items-start justify-between mb-2 sm:mb-4">
           <div className="flex-1 min-w-0">
             {typeof title === "string" ? (
-              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-2xs sm:text-xs lg:text-sm mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                 {title}
               </p>
             ) : (
-              <div className="text-slate-600 dark:text-neutral-400 font-semibold text-[10px] sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
+              <div className="text-slate-600 dark:text-neutral-400 font-semibold text-2xs sm:text-xs lg:text-sm mb-0.5 sm:mb-1 uppercase tracking-wide">
                 {title}
               </div>
             )}
             {subtitle && (
-              <p className="hidden sm:block text-[9px] sm:text-xs text-slate-500 dark:text-neutral-500 font-medium mb-1 sm:mb-2 leading-tight">
+              <p className="hidden sm:block text-3xs sm:text-xs text-slate-500 dark:text-neutral-500 font-medium mb-1 sm:mb-2 leading-tight">
                 {subtitle}
               </p>
             )}
@@ -155,7 +155,7 @@ export default function AdminStatsCard({
 
           {trend && (
             <div
-              className={`flex items-center gap-1 text-[10px] sm:text-xs lg:text-sm font-semibold ${
+              className={`flex items-center gap-1 text-2xs sm:text-xs lg:text-sm font-semibold ${
                 trend.isPositive ? "text-emerald-600" : "text-red-600"
               }`}
             >
@@ -168,7 +168,7 @@ export default function AdminStatsCard({
                 {trend.isPositive ? "+" : ""}
                 {trend.value}%
               </span>
-              <span className="text-slate-500 dark:text-neutral-400 text-[9px] sm:text-xs ml-1 font-normal hidden sm:inline">
+              <span className="text-slate-500 dark:text-neutral-400 text-3xs sm:text-xs ml-1 font-normal hidden sm:inline">
                 vs last period
               </span>
             </div>

@@ -28,7 +28,7 @@ const PromoMultiplierBadge: React.FC<PromoMultiplierBadgeProps> = ({
   return (
     <div className={`absolute -top-1.5 -right-1.5 z-10 ${className}`}>
       <div
-        className="px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden"
+        className="px-1.5 py-0.5 text-3xs font-bold uppercase tracking-wide rounded-full shadow-lg relative overflow-hidden"
         style={{
           background: `linear-gradient(135deg, ${theme.primaryLight} 0%, ${theme.primary} 25%, ${theme.primaryDark} 50%, ${theme.primary} 75%, ${theme.primaryLight} 100%)`,
           boxShadow: `0 0 20px ${theme.shadowRgba}, 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4)`,

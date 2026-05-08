@@ -266,7 +266,7 @@ export default async function BrandShopPage({ params }: BrandPageProps) {
       />
       <div className="min-h-screen-svh bg-white">
         {/* Hero section mirrors the main shop layout for design consistency */}
-        <section className={`relative pt-[86px] sm:pt-[106px] pb-12 text-white ${gradientClass}`}>
+        <section className={`relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-12 text-white ${gradientClass}`}>
           <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
           <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-10 px-4 pt-8 sm:px-6 lg:px-8">
             <div className="flex flex-col items-center justify-between gap-8 lg:flex-row">

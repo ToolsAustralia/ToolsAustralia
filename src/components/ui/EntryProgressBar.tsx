@@ -11,7 +11,7 @@ interface EntryProgressBarProps {
 }
 
 function getProgressColor(percentage: number): string {
-  if (percentage >= 85) return "from-[#ee0000] to-[#cc0000]";
+  if (percentage >= 85) return "from-red-600 to-red-675";
   if (percentage >= 60) return "from-yellow-400 to-yellow-500";
   return "from-green-500 to-green-600";
 }
@@ -46,10 +46,10 @@ export default function EntryProgressBar({
       {showLabel && (
         <div className={`flex items-center justify-between ${isCompact ? "mb-1" : "mb-2"}`}>
           <span
-            className={`font-medium ${isCompact ? "text-[10px] sm:text-xs" : "text-xs sm:text-sm"} text-gray-700 dark:text-white`}
+            className={`font-medium ${isCompact ? "text-2xs sm:text-xs" : "text-xs sm:text-sm"} text-gray-700 dark:text-white`}
           >
             {isClosed ? (
-              <span className="text-[#ee0000] dark:text-red-400 font-semibold">Entries Closed</span>
+              <span className="text-red-600 dark:text-red-400 font-semibold">Entries Closed</span>
             ) : (
               <>
                 <span className="font-semibold">{remaining.toLocaleString()}</span> remaining
@@ -57,12 +57,12 @@ export default function EntryProgressBar({
             )}
           </span>
           {!isCompact && (
-            <span className={`text-xs font-semibold ${percentage >= 85 ? "text-[#ee0000] dark:text-red-500" : "text-gray-500 dark:text-gray-400"}`}>
+            <span className={`text-xs font-semibold ${percentage >= 85 ? "text-red-600 dark:text-red-500" : "text-gray-500 dark:text-gray-400"}`}>
               {percentage}%
             </span>
           )}
           {isCompact && urgencyText && !isClosed && (
-            <span className="text-[9px] sm:text-[10px] font-bold text-[#ee0000] animate-pulse">{urgencyText}</span>
+            <span className="text-3xs sm:text-2xs font-bold text-red-600 animate-pulse">{urgencyText}</span>
           )}
         </div>
       )}
@@ -83,10 +83,10 @@ export default function EntryProgressBar({
       {!isCompact && urgencyText && !isClosed && (
         <div className="mt-1.5 flex items-center gap-1">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ee0000] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#ee0000]" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-600 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
           </span>
-          <span className="text-xs font-semibold text-[#ee0000]">{urgencyText}</span>
+          <span className="text-xs font-semibold text-red-600">{urgencyText}</span>
         </div>
       )}
     </div>

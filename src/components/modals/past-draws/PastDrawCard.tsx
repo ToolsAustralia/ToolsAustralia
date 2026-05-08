@@ -68,7 +68,7 @@ const PastDrawCard: React.FC<PastDrawCardProps> = ({
           {/* Header Row */}
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center bg-gray-100 text-gray-600 dark:text-neutral-400 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center bg-gray-100 text-gray-600 dark:text-neutral-400 text-2xs sm:text-xs font-semibold px-2 py-0.5 rounded-full">
                 Draw #{drawNumber}
               </span>
             </div>

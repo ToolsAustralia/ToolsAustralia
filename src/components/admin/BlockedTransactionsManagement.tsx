@@ -565,7 +565,7 @@ export default function BlockedTransactionsManagement() {
             type="button"
             disabled={selected.size === 0 || applyMutation.isPending}
             onClick={() => handleApplySelected(false)}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ShieldCheck className="h-4 w-4" />
             Allowlist {selected.size > 0 ? `${selected.size} ` : ""}selected
@@ -793,7 +793,7 @@ export default function BlockedTransactionsManagement() {
                     <span className="text-xs text-gray-500 dark:text-neutral-400">
                       {formatDateTime(action.createdAt)}
                     </span>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-700 dark:bg-neutral-800 dark:text-neutral-300">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wider text-gray-700 dark:bg-neutral-800 dark:text-neutral-300">
                       {action.source}
                     </span>
                   </div>

@@ -13,6 +13,6 @@ type MetallicDividerProps = {
  */
 export default function MetallicDivider({ height = "h-px", className = "" }: MetallicDividerProps) {
   return (
-    <div className={`w-full bg-gradient-to-r from-transparent via-[#ee0000] to-transparent ${height} ${className}`} />
+    <div className={`w-full bg-gradient-to-r from-transparent via-red-600 to-transparent ${height} ${className}`} />
   );
 }

@@ -56,7 +56,7 @@ export default function DetailHeroBanner({
   };
 
   return (
-    <div className="relative pt-[86px] sm:pt-[106px] pb-8 sm:pb-12 bg-gradient-to-b from-black via-slate-900 to-slate-900 overflow-hidden">
+    <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-8 sm:pb-12 bg-gradient-to-b from-black via-slate-900 to-slate-900 overflow-hidden">
       {/* Blurred Prize Image Background */}
       {prizeImage && (
         <div className="absolute inset-0 z-0">
@@ -103,7 +103,7 @@ export default function DetailHeroBanner({
             {brandLabel}
           </span>
           {isActive && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 backdrop-blur-sm">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs sm:text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 backdrop-blur-sm">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400" />
@@ -112,17 +112,17 @@ export default function DetailHeroBanner({
             </span>
           )}
           {isSoldOut && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs sm:text-xs font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
               Entries Closed
             </span>
           )}
           {isCompleted && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs sm:text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30">
               Completed
             </span>
           )}
           {isCancelled && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs sm:text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30">
               Cancelled
             </span>
           )}
@@ -131,12 +131,12 @@ export default function DetailHeroBanner({
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto flex-shrink-0">
             {isActive && (
               <div className="flex items-center gap-1 sm:gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg sm:rounded-xl px-1.5 py-1 sm:px-4 sm:py-2.5">
-                <div className="w-5 h-5 sm:w-8 sm:h-8 rounded sm:rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center shadow-md sm:shadow-lg shadow-[#ee0000]/25">
+                <div className="w-5 h-5 sm:w-8 sm:h-8 rounded sm:rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center shadow-md sm:shadow-lg shadow-red-600/25">
                   <Ticket className="w-2.5 h-2.5 sm:w-4 sm:h-4 text-white" />
                 </div>
                 <div className="text-left">
-                  <div className="text-white font-bold text-[10px] sm:text-sm leading-tight">$1</div>
-                  <div className="text-gray-400 text-[8px] sm:text-[10px] leading-tight">Entry</div>
+                  <div className="text-white font-bold text-2xs sm:text-sm leading-tight">$1</div>
+                  <div className="text-gray-400 text-3xs sm:text-2xs leading-tight">Entry</div>
                 </div>
               </div>
             )}
@@ -171,7 +171,7 @@ export default function DetailHeroBanner({
             <span className="text-xs sm:text-sm text-gray-400">
               {entriesRemaining > 0
                 ? <><span className="text-white font-semibold">{entriesRemaining.toLocaleString()}</span> entries remaining</>
-                : <span className="text-[#ee0000] font-semibold">All entries allocated</span>}
+                : <span className="text-red-600 font-semibold">All entries allocated</span>}
             </span>
             <span className="text-xs text-gray-500 font-medium">
               {totalEntries.toLocaleString()} / {minimumEntries.toLocaleString()}
@@ -181,7 +181,7 @@ export default function DetailHeroBanner({
             <motion.div
               className={`h-full rounded-full bg-gradient-to-r ${
                 entriesRemaining <= 0 || percentage >= 85
-                  ? "from-[#ee0000] to-[#ff4444]"
+                  ? "from-red-600 to-red-400"
                   : percentage >= 60
                   ? "from-yellow-400 to-yellow-500"
                   : "from-green-400 to-green-500"

@@ -76,7 +76,7 @@ export default function WinnerTestimonySection({
             >
               <MessageSquareQuote className="h-7 w-7" />
             </div>
-            <div className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.32em]" style={eyebrowColor}>
+            <div className="mb-3 text-2xs font-extrabold uppercase tracking-[0.32em]" style={eyebrowColor}>
               — Real Stories —
             </div>
             <h2 className={`font-['Poppins'] text-3xl font-bold sm:text-4xl ${titleColor}`}>
@@ -198,7 +198,7 @@ function PopulatedSection({
           {/* Header */}
           <div className="mb-8 text-center lg:mb-10">
             <div
-              className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.32em]"
+              className="mb-3 text-2xs font-extrabold uppercase tracking-[0.32em]"
               style={eyebrowColor}
             >
               — Real Stories —

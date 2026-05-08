@@ -197,7 +197,7 @@ export default function KPIMetricsGrid({
               }
               icon={TrendingUp}
               subtitle={
-                <span className="text-[10px] sm:text-[11px] leading-tight text-gray-500">
+                <span className="text-2xs sm:text-2xs leading-tight text-gray-500">
                   {(membershipSummary?.totalActiveCount ?? 0).toLocaleString()} active
                   {(membershipSummary?.totalPastDueCount ?? 0) > 0 && (
                     <> · {(membershipSummary?.totalPastDueCount ?? 0).toLocaleString()} past due</>
@@ -414,7 +414,7 @@ export default function KPIMetricsGrid({
               }
               icon={UserX}
               subtitle={
-                <span className="text-[10px] sm:text-[11px] leading-tight text-gray-500">
+                <span className="text-2xs sm:text-2xs leading-tight text-gray-500">
                   Est. membership revenue at risk:{" "}
                   <span className="font-semibold text-gray-700 dark:text-neutral-300">
                     $

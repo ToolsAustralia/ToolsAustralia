@@ -28,13 +28,13 @@ const LatestWinnersBadge: React.FC<LatestWinnersBadgeProps> = ({
       icon: "w-2 h-2",
     },
     small: {
-      container: "px-2 py-1 text-[8px]",
-      text: "text-[8px]",
+      container: "px-2 py-1 text-3xs",
+      text: "text-3xs",
       icon: "w-2.5 h-2.5",
     },
     medium: {
-      container: "px-2.5 py-1 text-[10px]",
-      text: "text-[10px]",
+      container: "px-2.5 py-1 text-2xs",
+      text: "text-2xs",
       icon: "w-3 h-3",
     },
     large: {

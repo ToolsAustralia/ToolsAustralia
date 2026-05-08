@@ -87,7 +87,7 @@ export default function MultiSelectFilter({
             return (
               <React.Fragment key={opt.value}>
                 {showGroup && (
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                  <div className="px-3 pt-2 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
                     {opt.group}
                   </div>
                 )}

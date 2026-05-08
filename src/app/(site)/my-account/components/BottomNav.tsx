@@ -75,7 +75,7 @@ export default function BottomNav() {
                   <Icon className="w-6 h-6 group-active:fill-current group-active:stroke-[1.5] group-active:stroke-white dark:group-active:stroke-black" />
                 )}
                 {item.badge && (
-                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-[#ee0000] dark:bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 dark:bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                     {item.badge}
                   </div>
                 )}

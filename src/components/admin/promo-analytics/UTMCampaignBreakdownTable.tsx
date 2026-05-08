@@ -166,7 +166,7 @@ export default function UTMCampaignBreakdownTable({
                 {showSourceColumn && (
                   <td className={cellPad}>
                     <span
-                      className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium whitespace-nowrap ${
+                      className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap ${
                         row.utmSource === "Direct"
                           ? "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
                           : "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50"
@@ -184,7 +184,7 @@ export default function UTMCampaignBreakdownTable({
                 </td>
                 <td className={cellPad}>
                   <span
-                    className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium whitespace-nowrap ${
+                    className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap ${
                       row.utmMedium?.toLowerCase() === "email"
                         ? "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50"
                         : row.utmMedium?.toLowerCase() === "sms"

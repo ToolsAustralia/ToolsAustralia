@@ -95,7 +95,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
             className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-2.5 sm:py-3.5 lg:py-4 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md min-h-[3.5rem] sm:min-h-[4.5rem] lg:min-h-[5rem]"
           >
             <Trophy className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-            <span className="text-[11px] sm:text-sm font-medium leading-tight text-center px-0.5">Create Major Draw</span>
+            <span className="text-2xs sm:text-sm font-medium leading-tight text-center px-0.5">Create Major Draw</span>
           </button>
 
           {/* Add Product */}
@@ -104,7 +104,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
             className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-2.5 sm:py-3.5 lg:py-4 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[3.5rem] sm:min-h-[4.5rem] lg:min-h-[5rem]"
           >
             <Package className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-            <span className="text-[11px] sm:text-sm font-medium leading-tight">Add Product</span>
+            <span className="text-2xs sm:text-sm font-medium leading-tight">Add Product</span>
           </button>
 
           {/* Send Broadcast */}
@@ -112,7 +112,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
             className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-2.5 sm:py-3.5 lg:py-4 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[3.5rem] sm:min-h-[4.5rem] lg:min-h-[5rem]"
           >
             <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-            <span className="text-[11px] sm:text-sm font-medium leading-tight text-center px-0.5">Send Broadcast</span>
+            <span className="text-2xs sm:text-sm font-medium leading-tight text-center px-0.5">Send Broadcast</span>
           </button>
 
           {/* Export Participants */}
@@ -121,7 +121,7 @@ export default function QuickActionsPanel({ onRefreshStats }: QuickActionsPanelP
             className="bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-700 hover:border-gray-300 dark:hover:border-neutral-500 py-2.5 sm:py-3.5 lg:py-4 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-200 shadow-sm dark:shadow-none hover:shadow-md min-h-[3.5rem] sm:min-h-[4.5rem] lg:min-h-[5rem]"
           >
             <Download className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-            <span className="text-[11px] sm:text-sm font-medium leading-tight text-center px-0.5">Export Participants</span>
+            <span className="text-2xs sm:text-sm font-medium leading-tight text-center px-0.5">Export Participants</span>
           </button>
         </div>
       </DashboardSection>

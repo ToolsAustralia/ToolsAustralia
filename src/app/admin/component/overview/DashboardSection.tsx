@@ -55,7 +55,7 @@ export default function DashboardSection({
               <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white leading-snug">{title}</h3>
             )}
             {subtitle && (
-              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
+              <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
                 {subtitle}
               </p>
             )}

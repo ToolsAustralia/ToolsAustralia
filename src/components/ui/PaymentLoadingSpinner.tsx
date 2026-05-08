@@ -56,13 +56,12 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
         />
         {/* Inner ring - red accent with reverse spin */}
         <div
-          className={`absolute ${innerSizeClasses[size]} ${borderWidth[size]} border-red-600 rounded-full`}
+          className={`absolute ${innerSizeClasses[size]} ${borderWidth[size]} border-red-600 rounded-full animate-spin-reverse`}
           style={{
             borderTopColor: "#ee0000",
             borderRightColor: "transparent",
             borderBottomColor: "transparent",
             borderLeftColor: "transparent",
-            animation: "spin-reverse 1.5s linear infinite",
             boxShadow: "0 0 15px rgba(238, 0, 0, 0.4), inset 0 0 10px rgba(238, 0, 0, 0.2)",
           }}
         />
@@ -81,16 +80,6 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
         <p className="text-xs text-gray-500 mt-1">Please wait...</p>
       </div>
 
-      <style jsx global>{`
-        @keyframes spin-reverse {
-          from {
-            transform: rotate(360deg);
-          }
-          to {
-            transform: rotate(0deg);
-          }
-        }
-      `}</style>
     </div>
   );
 };

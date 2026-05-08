@@ -130,17 +130,17 @@ export default function VerticalAccumulationChart({
         {/* Month Titles - Inside Chart Container */}
         <div className="absolute top-2 sm:top-3 left-8 sm:left-10 right-0 flex items-center justify-center gap-4 sm:gap-8 z-20">
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-2xs sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Current Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-2xs sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Next Month
             </div>
           </div>
           <div className="flex-1 flex justify-center max-w-[80px] sm:max-w-[100px]">
-            <div className="text-[10px] sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
+            <div className="text-2xs sm:text-[12px] font-semibold text-slate-700 dark:text-white font-['Poppins'] whitespace-nowrap">
               Following Month
             </div>
           </div>
@@ -149,7 +149,7 @@ export default function VerticalAccumulationChart({
         {/* Chart Area */}
         <div className="relative h-[200px] sm:h-[250px] lg:h-[300px] mt-2 sm:mt-3">
           {/* Y-Axis Labels */}
-          <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] sm:text-[10px] text-slate-500 dark:text-gray-500 font-['Poppins'] pr-2 z-10">
+          <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-3xs sm:text-2xs text-slate-500 dark:text-gray-500 font-['Poppins'] pr-2 z-10">
             <span>{maxValue.toLocaleString()}</span>
             <span>{Math.round(maxValue * 0.75).toLocaleString()}</span>
             <span>{Math.round(maxValue * 0.5).toLocaleString()}</span>
@@ -183,7 +183,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month1.toLocaleString()}
                         </div>
                       </div>
@@ -214,7 +214,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month2.toLocaleString()}
                         </div>
                       </div>
@@ -245,7 +245,7 @@ export default function VerticalAccumulationChart({
                         }}
                       >
                         {/* Value Label on Bar */}
-                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-[8px] sm:text-[10px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <div className="absolute -top-5 sm:-top-6 left-1/2 transform -translate-x-1/2 text-3xs sm:text-2xs font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pkg.month3.toLocaleString()}
                         </div>
                       </div>
@@ -268,7 +268,7 @@ export default function VerticalAccumulationChart({
                   style={{ background: pkg.colorScheme.barGradientCss }}
                 ></div>
                 <span
-                  className={`text-[10px] sm:text-[12px] font-semibold font-['Poppins'] ${
+                  className={`text-2xs sm:text-[12px] font-semibold font-['Poppins'] ${
                     pkg.isSelected ? "text-yellow-400" : ""
                   }`}
                   style={pkg.isSelected ? undefined : { color: pkg.colorScheme.accentHex }}
@@ -284,7 +284,7 @@ export default function VerticalAccumulationChart({
         {promoMultiplier > 1 && !userAccumulation && (
           <div className="mt-1 text-center">
             <div className="inline-flex items-center gap-1.5 bg-yellow-400/20 border border-yellow-400/30 rounded-full px-2.5 py-1">
-              <span className="text-yellow-400 text-[10px] sm:text-[12px] font-bold font-['Poppins']">
+              <span className="text-yellow-400 text-2xs sm:text-[12px] font-bold font-['Poppins']">
                 ⚡ {promoMultiplier}x Promo Active
               </span>
             </div>

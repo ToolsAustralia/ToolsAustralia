@@ -254,26 +254,26 @@ export default function FullscreenImageViewer({
               >
                 <div className="mx-auto grid max-w-4xl grid-cols-3 gap-2 sm:gap-4">
                   <div className="min-w-0 text-center">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
                       {activeCaption.drawKind === "mini" ? "Mini draw" : "Major draw"}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-tight text-white sm:text-sm">
+                    <p className="mt-0.5 line-clamp-2 text-2xs font-bold leading-tight text-white sm:text-sm">
                       {activeCaption.drawName}
                     </p>
                   </div>
                   <div className="min-w-0 text-center">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
                       Winner
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[11px] font-bold leading-tight text-white sm:text-sm">
+                    <p className="mt-0.5 line-clamp-2 text-2xs font-bold leading-tight text-white sm:text-sm">
                       {activeCaption.winnerName}
                     </p>
                   </div>
                   <div className="min-w-0 text-center">
-                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/55 sm:text-[10px]">
+                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
                       Won date
                     </p>
-                    <p className="mt-0.5 text-[11px] font-bold tabular-nums leading-tight text-white sm:text-sm">
+                    <p className="mt-0.5 text-2xs font-bold tabular-nums leading-tight text-white sm:text-sm">
                       {activeCaption.wonDate}
                     </p>
                   </div>

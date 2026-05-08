@@ -613,7 +613,7 @@ export default function RevenueDetailModal({
                                   e.stopPropagation();
                                   onUserClick(user.userId);
                                 }}
-                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444] text-white hover:shadow-lg transition-all duration-200"
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-lg bg-gradient-to-r from-red-600 via-[#ff3333] to-red-400 text-white hover:shadow-lg transition-all duration-200"
                               >
                                 <User className="w-4 h-4" />
                                 View User

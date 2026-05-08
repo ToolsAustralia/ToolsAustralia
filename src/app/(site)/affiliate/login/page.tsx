@@ -96,7 +96,7 @@ function AffiliateLoginContent() {
                   placeholder=""
                   required
                 />
-                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-[11px] sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
+                <label className="absolute -top-[10.5px] left-3 bg-white dark:bg-neutral-950 px-1 text-2xs sm:text-[12px] lg:text-[14px] font-medium text-neutral-500 dark:text-neutral-400">
                   Username
                 </label>
               </div>
@@ -139,7 +139,7 @@ function AffiliateLoginContent() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-[#ec0000] text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-red-500 text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
@@ -148,7 +148,7 @@ function AffiliateLoginContent() {
           {/* Back to Home Link */}
           <div className="mt-3 sm:mt-4 lg:mt-6 text-center">
             <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-600 dark:text-neutral-400">
-              <Link href="/" className="text-[#ee0000] font-semibold underline hover:no-underline">
+              <Link href="/" className="text-red-600 font-semibold underline hover:no-underline">
                 Back to home
               </Link>
             </p>
@@ -185,7 +185,7 @@ function AffiliateLoginContent() {
 
               {/* Card Content */}
               <div className="relative z-30 max-w-[180px] sm:max-w-[240px] lg:max-w-[280px] pr-2 sm:pr-4 lg:pr-0">
-                <h2 className="text-[20px] sm:text-[24px] lg:text-[34px] font-bold text-[#ec0000] mb-3 sm:mb-4 tracking-[-0.68px] leading-[1.1] sm:leading-[37px]">
+                <h2 className="text-[20px] sm:text-[24px] lg:text-[34px] font-bold text-red-500 mb-3 sm:mb-4 tracking-[-0.68px] leading-[1.1] sm:leading-[37px]">
                   Earn More with Affiliate Program
                 </h2>
                 <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-[#718096] dark:text-neutral-400 mb-4 sm:mb-6 lg:mb-8 leading-[1.4] sm:leading-[28px] tracking-[-0.32px] max-w-[240px] sm:max-w-none">
@@ -194,7 +194,7 @@ function AffiliateLoginContent() {
                 </p>
                 <Link
                   href="/partner"
-                  className="inline-block bg-[#ec0000] text-[#f7fafc] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[70px] text-[12px] sm:text-[14px] font-medium tracking-[-0.28px] hover:bg-[#d40000] transition-colors"
+                  className="inline-block bg-red-500 text-[#f7fafc] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[70px] text-[12px] sm:text-[14px] font-medium tracking-[-0.28px] hover:bg-[#d40000] transition-colors"
                 >
                   Learn more
                 </Link>

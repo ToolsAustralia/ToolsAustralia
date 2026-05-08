@@ -212,7 +212,7 @@ function ResetPasswordContent() {
             <button
               type="submit"
               disabled={isRequesting}
-              className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isRequesting ? "Sending link..." : "Send reset link"}
             </button>
@@ -252,7 +252,7 @@ function ResetPasswordContent() {
             <button
               type="submit"
               disabled={isResetting}
-              className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isResetting ? "Updating password..." : "Update password"}
             </button>
@@ -261,7 +261,7 @@ function ResetPasswordContent() {
 
         <div className="mt-6 text-center text-sm text-gray-600 dark:text-neutral-400">
           <span>Remembered your password? </span>
-          <Link href="/login" className="font-semibold text-[#ee0000] hover:underline">
+          <Link href="/login" className="font-semibold text-red-600 hover:underline">
             Back to sign in
           </Link>
         </div>

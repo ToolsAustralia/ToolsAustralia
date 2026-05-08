@@ -27,7 +27,7 @@ export default function QuickActions({
             <div className="refer-friend-shimmer rounded-xl" aria-hidden="true" />
             <div className="absolute -top-3 -right-1 z-20">
               <span
-                className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
+                className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-3xs sm:text-2xs font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
                 style={{
                   background: "linear-gradient(135deg, #dc2626 0%, #ea580c 40%, #dc2626 70%, #b91c1c 100%)",
                   boxShadow: "0 0 12px rgba(238,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25)",
@@ -51,7 +51,7 @@ export default function QuickActions({
               <div className="get-more-entries-shimmer rounded-xl" aria-hidden="true" />
               <div className="absolute -top-3 -right-1 z-20">
                 <span
-                  className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
+                  className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-3xs sm:text-2xs font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
                   style={{
                     background: "linear-gradient(135deg, #dc2626 0%, #ea580c 40%, #dc2626 70%, #b91c1c 100%)",
                     boxShadow: "0 0 12px rgba(238,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25)",

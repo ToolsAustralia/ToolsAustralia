@@ -134,7 +134,7 @@ export default function SpendByUrlAdBreakdownTable({
       ? "py-1.5 px-1 sm:py-2 sm:px-2"
       : "py-1 px-0.5 sm:py-1.5 sm:px-1";
   const textSize =
-    density === "comfortable" ? "text-xs sm:text-sm" : "text-[10px] sm:text-xs";
+    density === "comfortable" ? "text-xs sm:text-sm" : "text-2xs sm:text-xs";
   const theadBg = "bg-slate-50 dark:bg-neutral-800/95";
   const sectionBg = "bg-slate-200/80 dark:bg-neutral-800/60";
 
@@ -169,7 +169,7 @@ export default function SpendByUrlAdBreakdownTable({
         <button
           type="button"
           onClick={() => setColumnsExpanded((v) => !v)}
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
+          className="inline-flex items-center gap-1 text-2xs font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
         >
           {columnsExpanded ? (
             <>
@@ -290,7 +290,7 @@ export default function SpendByUrlAdBreakdownTable({
                     <td className={`${cellPad} text-gray-900 dark:text-neutral-100 max-w-[7rem] sm:max-w-none`}>
                       <span
                         className={`font-mono text-gray-500 dark:text-neutral-500 block truncate ${
-                          density === "comfortable" ? "text-[11px] sm:text-xs" : "text-[9px] sm:text-[11px]"
+                          density === "comfortable" ? "text-2xs sm:text-xs" : "text-3xs sm:text-2xs"
                         }`}
                       >
                         {d.adId}
@@ -298,7 +298,7 @@ export default function SpendByUrlAdBreakdownTable({
                       {d.adName ? (
                         <span
                           className={`block text-gray-700 dark:text-neutral-200 leading-snug line-clamp-2 sm:line-clamp-none ${
-                            density === "comfortable" ? "text-xs sm:text-sm" : "text-[10px] sm:text-xs"
+                            density === "comfortable" ? "text-xs sm:text-sm" : "text-2xs sm:text-xs"
                           }`}
                         >
                           {d.adName}

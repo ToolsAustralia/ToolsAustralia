@@ -88,18 +88,18 @@ export default function MajorDrawHeaderStrip({
     "truncate text-sm font-semibold leading-tight sm:text-base lg:text-lg lg:font-bold " +
     (isDark ? "text-neutral-50" : "text-neutral-900");
   const entriesLabelClass =
-    "text-[11px] sm:text-xs lg:text-sm font-medium " + (isDark ? "text-neutral-400" : "text-neutral-600");
+    "text-2xs sm:text-xs lg:text-sm font-medium " + (isDark ? "text-neutral-400" : "text-neutral-600");
   const entriesValueClass =
     "tabular-nums font-extrabold leading-none tracking-tight text-sm sm:text-xl lg:text-2xl";
   const entriesValueStyle = { color: isDark ? lp.primaryLight : lp.primaryDark };
   const entriesWordClass =
-    "tabular-nums font-extrabold text-[11px] sm:text-sm lg:text-lg leading-none";
+    "tabular-nums font-extrabold text-2xs sm:text-sm lg:text-lg leading-none";
 
   const dateTitleClass =
     "text-left text-sm font-semibold leading-tight sm:text-base lg:text-lg lg:font-bold line-clamp-2 " +
     (isDark ? "text-neutral-50" : "text-neutral-900");
   const timeLineClass =
-    "text-left text-[11px] sm:text-xs lg:text-sm font-medium lg:font-semibold " +
+    "text-left text-2xs sm:text-xs lg:text-sm font-medium lg:font-semibold " +
     (isDark ? "text-neutral-300" : "text-neutral-700");
 
   const boostButtonClass =
@@ -150,7 +150,7 @@ export default function MajorDrawHeaderStrip({
         <div className="get-more-entries-shimmer rounded-xl" aria-hidden="true" />
         <div className="absolute -top-3 -left-1 z-20 pointer-events-none">
           <span
-            className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
+            className="inline-flex items-center px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full text-3xs sm:text-2xs font-black uppercase tracking-wide sm:tracking-wider text-white animate-badge-pulse"
             style={{
               background: "linear-gradient(135deg, #dc2626 0%, #ea580c 40%, #dc2626 70%, #b91c1c 100%)",
               boxShadow: "0 0 12px rgba(238,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.25)",

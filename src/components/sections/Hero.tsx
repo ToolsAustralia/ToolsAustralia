@@ -41,7 +41,7 @@ export default function Hero() {
   }, []);
   return (
     <section
-      className={`relative hero-bg min-h-screen-svh flex flex-col  pb-10 sm:pb-8 pt-[60px] sm:pt-[100px] lg:pt-[106px] w-full overflow-visible hero-section ${
+      className={`relative hero-bg min-h-screen-svh flex flex-col  pb-10 sm:pb-8 pt-[60px] sm:pt-[100px] lg:pt-[var(--app-header-h-lg)] w-full overflow-visible hero-section ${
         isTopBarVisible ? "top-bar-visible" : ""
       }`}
     >
@@ -107,7 +107,7 @@ export default function Hero() {
                   {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
                     200+
                   </div> */}
-                  <div className="text-[10px] sm:text-[11px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
+                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
                     Australia’s Best Brands
                   </div>
                 </div>
@@ -116,7 +116,7 @@ export default function Hero() {
                   {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
                     2,000+
                   </div> */}
-                  <div className="text-[10px] sm:text-[11px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
+                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
                     High-Quality Products
                   </div>
                 </div>
@@ -125,7 +125,7 @@ export default function Hero() {
                   {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
                     30,000+
                   </div> */}
-                  <div className="text-[10px] sm:text-[11px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
+                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
                     Happy Customers
                   </div>
                 </div>

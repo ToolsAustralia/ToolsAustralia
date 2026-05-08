@@ -49,12 +49,12 @@ export default function WinnerCinematicHero({
         {/* Top row: draw-type pill + date/state pill — always single row, smaller on mobile */}
         <div className="mb-5 flex flex-nowrap items-center gap-1.5 sm:mb-6 sm:gap-2">
           <span
-            className="inline-flex shrink-0 rounded-full border bg-black/40 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-sm sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.24em]"
+            className="inline-flex shrink-0 rounded-full border bg-black/40 px-2 py-0.5 text-3xs font-bold uppercase tracking-[0.16em] text-white backdrop-blur-sm sm:px-3 sm:py-1.5 sm:text-2xs sm:tracking-[0.24em]"
             style={labelBorderStyle}
           >
             {drawTypeLabel}
           </span>
-          <span className="inline-flex min-w-0 truncate rounded-full border border-white/20 bg-black/40 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-white/80 backdrop-blur-sm sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.16em]">
+          <span className="inline-flex min-w-0 truncate rounded-full border border-white/20 bg-black/40 px-2 py-0.5 text-3xs font-semibold uppercase tracking-[0.12em] text-white/80 backdrop-blur-sm sm:px-3 sm:py-1.5 sm:text-2xs sm:tracking-[0.16em]">
             {getWinnerDisplayDate(winner)}
             {winner.winnerState ? ` · ${winner.winnerState}` : ""}
           </span>
@@ -114,7 +114,7 @@ export default function WinnerCinematicHero({
       style={{ background: stageBackground, minHeight: "150px" }}
     >
       <span
-        className="mb-3 inline-flex rounded-full border bg-black/40 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] text-white backdrop-blur-sm"
+        className="mb-3 inline-flex rounded-full border bg-black/40 px-3 py-1.5 text-2xs font-bold uppercase tracking-[0.24em] text-white backdrop-blur-sm"
         style={labelBorderStyle}
       >
         {drawTypeLabel}
@@ -122,7 +122,7 @@ export default function WinnerCinematicHero({
       <h3 className="font-['Inter'] text-2xl font-extrabold tracking-[-0.5px] sm:text-3xl lg:text-[2rem]">
         {formattedName}
       </h3>
-      <p className="mt-1 max-w-[520px] font-['Inter'] text-[11px] font-semibold uppercase leading-relaxed tracking-[0.18em] text-white/70 sm:text-[12px]">
+      <p className="mt-1 max-w-[520px] font-['Inter'] text-2xs font-semibold uppercase leading-relaxed tracking-[0.18em] text-white/70 sm:text-[12px]">
         {prizeLabel}
       </p>
     </div>

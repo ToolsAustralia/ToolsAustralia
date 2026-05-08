@@ -462,21 +462,21 @@ function UnifiedModalGalleryTriggers() {
   return (
     <div className="fixed bottom-4 right-4 z-[10001] max-w-sm rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm dark:border-neutral-600 dark:bg-neutral-900/95">
       <p className="mb-2 text-xs font-semibold text-neutral-800 dark:text-neutral-200">Modal priority triggers</p>
-      <p className="mb-2 text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
+      <p className="mb-2 text-2xs leading-snug text-neutral-500 dark:text-neutral-400">
         Opens the same modals as production via <code className="rounded bg-neutral-100 px-0.5 dark:bg-neutral-800">requestModal</code>.
         Pixel consent is wired with <code className="rounded bg-neutral-100 px-0.5 dark:bg-neutral-800">isOpen=&#123;false&#125;</code> in the manager — use the dedicated gallery item for that UI.
       </p>
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("user-setup", true)}
         >
           User setup
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("upsell", true, {
               offer: SAMPLE_UPSELL_OFFERS[0],
@@ -489,14 +489,14 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("special-packages", true)}
         >
           Special packages
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("gate-closed", true, {
               nextActivationDate: new Date(Date.now() + 7 * 86400000).toISOString(),
@@ -508,7 +508,7 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("subscription-explainer", true, {
               entriesPerMonth: 100,
@@ -523,14 +523,14 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("renewal-failed", true)}
         >
           Renewal failed
         </button>
         <button
           type="button"
-          className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+          className="rounded-md border border-red-200 px-2 py-1 text-2xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
           onClick={() => closeAll()}
         >
           Close active
@@ -740,7 +740,7 @@ export default function ModalsGalleryClient() {
                         {e.sourcePath ? (
                           reachablePathSet.has(e.sourcePath) ? (
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${
                                 isEntryActive(e)
                                   ? "bg-white/20 text-white"
                                   : "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-200"
@@ -751,7 +751,7 @@ export default function ModalsGalleryClient() {
                             </span>
                           ) : (
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${
                                 isEntryActive(e)
                                   ? "bg-white/20 text-white"
                                   : "bg-amber-100 text-amber-950 dark:bg-amber-900/45 dark:text-amber-200"
@@ -763,7 +763,7 @@ export default function ModalsGalleryClient() {
                           )
                         ) : (
                           <span
-                            className={`shrink-0 text-[10px] font-medium ${
+                            className={`shrink-0 text-2xs font-medium ${
                               isEntryActive(e) ? "text-white/70" : "text-neutral-400 dark:text-neutral-500"
                             }`}
                             title="Gallery-only shell or not mapped to a single tracked file."

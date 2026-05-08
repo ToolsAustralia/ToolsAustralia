@@ -155,7 +155,7 @@ export default function MembershipPageClient() {
   return (
     <>
       {/* Hero + brand scroller */}
-      <section className="relative pt-[86px] sm:pt-[106px] pb-12 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden min-h-[100svh]">
+      <section className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-12 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden min-h-[100svh]">
         <div className="absolute inset-0 z-0">
           <Image
             src="/images/background/memebership.webp"
@@ -171,11 +171,11 @@ export default function MembershipPageClient() {
           <div className="py-10 sm:py-14 text-center">
             <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
               <span className="text-white">U</span>
-              <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">n</span>
+              <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">n</span>
               <span className="text-white">lock Exclusive</span>
               <br />
               <span className="text-white">M</span>
-              <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">e</span>
+              <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">e</span>
               <span className="text-white">mbership Benefits</span>
             </h1>
             <p className="text-[16px] text-gray-200 mb-4 font-['Poppins']">

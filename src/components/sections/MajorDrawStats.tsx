@@ -90,7 +90,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="text-sm font-bold text-white mb-0.5 font-['Poppins']">
                 {formatCurrency(stats.totalPrizeValue)}
               </div>
-              <p className="text-[10px] text-gray-300 font-medium leading-tight">Total given in prizes</p>
+              <p className="text-2xs text-gray-300 font-medium leading-tight">Total given in prizes</p>
             </div>
 
             {/* Winners to Date */}
@@ -101,7 +101,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="text-sm font-bold text-white mb-0.5 font-['Poppins']">
                 {stats.totalWinners.toLocaleString()}
               </div>
-              <p className="text-[10px] text-gray-300 font-medium leading-tight">Winners to date</p>
+              <p className="text-2xs text-gray-300 font-medium leading-tight">Winners to date</p>
             </div>
 
             {/* Total Entries */}
@@ -112,7 +112,7 @@ const MajorDrawStats: React.FC<MajorDrawStatsProps> = ({ className = "" }) => {
               <div className="text-sm font-bold text-white mb-0.5 font-['Poppins'] tabular-nums">
                 <AnimatedNumber value={stats.totalEntries} className="font-['Poppins'] font-bold" />
               </div>
-              <p className="text-[10px] text-gray-300 font-medium leading-tight">Total entries</p>
+              <p className="text-2xs text-gray-300 font-medium leading-tight">Total entries</p>
             </div>
           </div>
         </div>

@@ -94,7 +94,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                 <div className="flex items-center gap-2 mb-2 sm:mb-3">
                   <div className="h-0.5 w-6 rounded-full" style={{ background: theme.gradient }} />
                   <span
-                    className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] bg-clip-text text-transparent"
+                    className="text-2xs sm:text-xs font-bold uppercase tracking-[0.2em] bg-clip-text text-transparent"
                     style={{
                       backgroundImage: theme.gradient,
                       WebkitBackgroundClip: "text",
@@ -142,7 +142,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                         <p className="text-xs sm:text-[13px] font-bold text-white font-sans leading-tight mb-0.5">
                           {b.title}
                         </p>
-                        <p className="text-[11px] sm:text-xs text-gray-400 font-sans leading-snug">
+                        <p className="text-2xs sm:text-xs text-gray-400 font-sans leading-snug">
                           {b.text}
                         </p>
                       </div>
@@ -155,7 +155,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                   <MetallicButton onClick={handleViewPackages} variant="primary" size="sm" borderRadius="lg">
                     VIEW PACKAGES
                   </MetallicButton>
-                  <span className="text-[11px] text-gray-400 font-sans flex items-center gap-1.5">
+                  <span className="text-2xs text-gray-400 font-sans flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                     Cancel anytime — no lock-in
                   </span>
@@ -174,7 +174,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                           className="object-contain drop-shadow-[0_2px_6px_rgba(238,0,0,0.25)]"
                         />
                       </div>
-                      <span className="text-[9px] sm:text-[10px] text-gray-500 font-sans font-medium uppercase tracking-wide">
+                      <span className="text-3xs sm:text-2xs text-gray-500 font-sans font-medium uppercase tracking-wide">
                         {pkg.name}
                       </span>
                     </div>
@@ -200,10 +200,13 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                       >
                         {/* Icon */}
                         <div
-                          className={`relative flex-shrink-0 ${
+                          className={`relative flex-shrink-0 animate-member-benefit-float ${
                             isBoss ? "w-14 h-14" : isCenter ? "w-12 h-12" : "w-10 h-10"
                           }`}
-                          style={{ animation: `memberBenefitFloat ${4 + i * 0.6}s ease-in-out infinite ${i * 0.2}s` }}
+                          style={{
+                            animationDuration: `${4 + i * 0.6}s`,
+                            animationDelay: `${i * 0.2}s`,
+                          }}
                         >
                           <Image
                             src={tier.src}
@@ -219,7 +222,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                           <p className="text-sm font-bold text-white font-sans uppercase tracking-wide">
                             {tier.name}
                           </p>
-                          <p className="text-[11px] text-gray-400 font-sans">
+                          <p className="text-2xs text-gray-400 font-sans">
                             {tier.entries} entries/mo &middot; {tier.price}/giveaway
                           </p>
                         </div>
@@ -253,19 +256,19 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                             className="object-contain"
                           />
                         </div>
-                        <span className="text-[10px] text-gray-500 font-sans font-medium uppercase">
+                        <span className="text-2xs text-gray-500 font-sans font-medium uppercase">
                           {pkg.name}
                         </span>
                       </div>
                     ))}
-                    <span className="text-[10px] text-gray-600 dark:text-neutral-400 font-sans">
+                    <span className="text-2xs text-gray-600 dark:text-neutral-400 font-sans">
                       + one-time packs
                     </span>
                   </div>
 
                   {/* Accumulation visual */}
                   <div className="rounded-lg bg-white/[0.04] p-3 mt-1">
-                    <p className="text-[10px] text-gray-500 font-sans uppercase tracking-wider mb-2 text-center font-semibold">
+                    <p className="text-2xs text-gray-500 font-sans uppercase tracking-wider mb-2 text-center font-semibold">
                       How entries accumulate
                     </p>
                     <div className="flex items-end justify-center gap-1.5">
@@ -281,7 +284,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                                 opacity: 0.3 + month * 0.14,
                               }}
                             />
-                            <span className="text-[8px] text-gray-600 dark:text-neutral-400 font-sans">M{month}</span>
+                            <span className="text-3xs text-gray-600 dark:text-neutral-400 font-sans">M{month}</span>
                           </div>
                         );
                       })}
@@ -300,12 +303,6 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
         </div>
       </div>
 
-      <style jsx>{`
-        @keyframes memberBenefitFloat {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
-        }
-      `}</style>
     </section>
   );
 }

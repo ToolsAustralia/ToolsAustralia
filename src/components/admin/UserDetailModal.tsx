@@ -696,7 +696,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   ];
 
   const inputClasses =
-    "mt-1 w-full rounded-lg border-2 border-gray-300 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#ee0000]";
+    "mt-1 w-full rounded-lg border-2 border-gray-300 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-red-600";
 
   if (!isOpen) return null;
 
@@ -705,7 +705,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
         <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ee0000] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-neutral-400">Loading user details...</p>
           </div>
         </div>
@@ -723,7 +723,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             <p className="text-gray-600 dark:text-neutral-400 mb-4">{error?.message || "Failed to load user details"}</p>
             <button
               onClick={onCloseAction}
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
             >
               Close
             </button>
@@ -1307,7 +1307,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   {formatDisplayName(user?.firstName, user?.lastName)}
                 </h2>
                 <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 mt-0.5">
-                  <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate min-w-0">
+                  <p className="text-2xs sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate min-w-0">
                     {user?.email}
                   </p>
                   {user?.email ? (
@@ -1348,7 +1348,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 sm:gap-2 py-4 sm:py-3 lg:py-4 px-4 sm:px-3 border-b-2 font-semibold text-xs sm:text-xs lg:text-sm transition-all whitespace-nowrap min-h-[48px] ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30 dark:bg-red-950/25"
+                        ? "border-red-600 text-red-600 bg-red-50/30 dark:bg-red-950/25"
                         : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50"
                     }`}
                   >
@@ -1418,7 +1418,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
@@ -1508,7 +1508,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save"}
                           </button>
@@ -1837,7 +1837,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   >
                                     <span className="truncate max-w-[140px]">{pm.paymentMethodId}</span>
                                     {pm.isDefault && (
-                                      <AdminBadge variant="success" className="!px-1.5 !py-0 !text-[10px] !gap-1">
+                                      <AdminBadge variant="success" className="!px-1.5 !py-0 !text-2xs !gap-1">
                                         Default
                                       </AdminBadge>
                                     )}
@@ -1887,7 +1887,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
                               {formatDate(user.createdAt)}
                             </p>
-                            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug">
+                            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5 leading-snug">
                               {user.statistics.accountAge} days ago
                             </p>
                           </div>
@@ -1900,7 +1900,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
                               {user.lastLogin ? formatDate(user.lastLogin) : "No login recorded"}
                             </p>
-                            <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-snug">
+                            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5 leading-snug">
                               {user.statistics.daysSinceLastLogin !== undefined &&
                               user.statistics.daysSinceLastLogin !== null
                                 ? `${user.statistics.daysSinceLastLogin} days ago`
@@ -1917,16 +1917,16 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-700 p-2 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                       <div>
-                        <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                        <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                           Referral Program
                         </h3>
-                        <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                        <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                           Track referral conversions and rewards earned from {user.firstName}&apos;s invite code.
                         </p>
                       </div>
                       {user.referral.code && (
-                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-gray-700 dark:text-neutral-200">
-                          <span className="uppercase tracking-wide text-[9px] sm:text-xs text-gray-500">Code</span>
+                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-semibold text-gray-700 dark:text-neutral-200">
+                          <span className="uppercase tracking-wide text-3xs sm:text-xs text-gray-500">Code</span>
                           <span className="text-sm sm:text-lg font-bold text-gray-900">{user.referral.code}</span>
                         </div>
                       )}
@@ -1934,19 +1934,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                     <div className="mt-2 sm:mt-4 grid grid-cols-3 gap-1.5 sm:gap-4">
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Conversions</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Conversions</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.successfulConversions}
                         </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Entries</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Entries</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.totalEntriesAwarded}
                         </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Pending</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Pending</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.pendingCount}
                         </p>
@@ -1992,7 +1992,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Quick Actions - Minimized on mobile */}
                 <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
-                  <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
+                  <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
                     Quick Actions
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
@@ -2053,10 +2053,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                          <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                             Manage Subscription
                           </h3>
-                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                          <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Assign or update the member&apos;s subscription package and adjust benefit totals.
                           </p>
                         </div>
@@ -2064,14 +2064,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("subscription")}
-                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -2095,7 +2095,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 })),
                               ]}
                               placeholder="Select package"
-                              className="text-[10px] sm:text-xs lg:text-sm"
+                              className="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -2109,12 +2109,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               onChange={field.onChange}
                               placeholder="active | cancelled | past_due"
                               error={fieldState.error?.message}
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
+                          <label className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             Start Date
                           </label>
                           <input
@@ -2124,7 +2124,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
+                          <label className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             End Date
                           </label>
                           <input
@@ -2142,7 +2142,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Subscription active"
-                                className="text-[10px] sm:text-xs lg:text-sm"
+                                className="text-2xs sm:text-xs lg:text-sm"
                               />
                             </div>
                           )}
@@ -2156,7 +2156,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Auto renew enabled"
-                                className="text-[10px] sm:text-xs lg:text-sm"
+                                className="text-2xs sm:text-xs lg:text-sm"
                               />
                             </div>
                           )}
@@ -2178,7 +2178,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -2196,7 +2196,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -2214,7 +2214,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -2396,9 +2396,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="font-medium text-xs sm:text-sm text-gray-900">
                                   {resolvedPackageName || sub.packageId || "Package"}
                                 </p>
-                                <p className="text-[10px] sm:text-xs text-slate-600 mt-0.5">{billingKind}</p>
+                                <p className="text-2xs sm:text-xs text-slate-600 mt-0.5">{billingKind}</p>
                                 {sub.timestamp && (
-                                  <p className="text-[10px] text-gray-500 mt-0.5">
+                                  <p className="text-2xs text-gray-500 mt-0.5">
                                     {formatDate(
                                       typeof sub.timestamp === "string" ? sub.timestamp : String(sub.timestamp)
                                     )}
@@ -2465,7 +2465,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
@@ -2509,7 +2509,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -2554,7 +2554,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveOneTime(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-sm font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
@@ -2674,7 +2674,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniPackage(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-sm font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
@@ -2837,7 +2837,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                             type="checkbox"
                                             checked={field.value}
                                             onChange={(event) => field.onChange(event.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-600"
                                           />
                                           <span>Package active</span>
                                         </label>
@@ -2855,17 +2855,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     <>
                       <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                          <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                             Packages & Entries
                           </h3>
-                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                          <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Review package purchases below or switch to edit mode to grant additional entries.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("purchases")}
-                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Packages
                         </button>
@@ -2896,7 +2896,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <p className="font-medium text-xs sm:text-sm text-gray-900">
                                 Order #{order.orderNumber || order._id || "--"}
                               </p>
-                              <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                              <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                 {formatDate(order.createdAt || new Date().toISOString())}
                               </p>
                             </div>
@@ -2987,18 +2987,18 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {pkg.packageName || pkg.packageId || "Package"}
                                 </p>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400">
+                                  <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400">
                                     {formatDate(pkg.purchaseDate || new Date().toISOString())}
                                   </p>
                                 </div>
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                              <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
                                 {pkg.entriesGranted || 0} entries
                               </p>
                               {pkg.price && (
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                <p className="text-3xs sm:text-2xs lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatCurrency(pkg.price)}
                                 </p>
                               )}
@@ -3046,18 +3046,18 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="font-medium text-xs sm:text-sm text-gray-900">
                                   {md.packageName || md.packageId || "Mini draw package"}
                                 </p>
-                                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatDate(md.purchaseDate || new Date().toISOString())}
                                   {md.miniDrawId ? ` · Draw ${md.miniDrawId}` : ""}
                                 </p>
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                              <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
                                 {md.entriesGranted || 0} entries
                               </p>
                               {md.price != null && (
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                <p className="text-3xs sm:text-2xs lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatCurrency(Number(md.price))}
                                 </p>
                               )}
@@ -3099,7 +3099,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -3134,7 +3134,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMajorDraw(index)}
-                                      className="text-xs font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
@@ -3206,7 +3206,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniDraw(index)}
-                                      className="text-xs font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
@@ -3500,11 +3500,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   <p className="font-semibold text-xs sm:text-sm text-gray-900 break-words">
                                     {title}
                                   </p>
-                                  <p className="text-[9px] sm:text-[10px] text-slate-600 mt-0.5">{kind}</p>
+                                  <p className="text-3xs sm:text-2xs text-slate-600 mt-0.5">{kind}</p>
                                   {event.eventType === "BenefitsGranted" &&
                                     event.hasRefundProcessed &&
                                     (event.refundProcessedAt ? (
-                                      <p className="text-[9px] sm:text-[10px] mt-0.5">
+                                      <p className="text-3xs sm:text-2xs mt-0.5">
                                         <span className="font-semibold text-amber-800 dark:text-amber-200">
                                           Refunded
                                         </span>
@@ -3513,14 +3513,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                         </span>
                                       </p>
                                     ) : (
-                                      <p className="text-[9px] sm:text-[10px] font-semibold text-amber-800 dark:text-amber-200 mt-0.5">
+                                      <p className="text-3xs sm:text-2xs font-semibold text-amber-800 dark:text-amber-200 mt-0.5">
                                         Refunded
                                       </p>
                                     ))}
                                   {event.eventType === "BenefitsGranted" &&
                                     event.hasPartialRefundSkipped &&
                                     typeof event.partialRefundAmountCents === "number" && (
-                                      <p className="text-[9px] sm:text-[10px] mt-0.5">
+                                      <p className="text-3xs sm:text-2xs mt-0.5">
                                         <span className="font-semibold text-amber-700 dark:text-amber-300">
                                           Partial refund — no benefits reversed ($
                                           {(event.partialRefundAmountCents / 100).toFixed(2)})
@@ -3530,7 +3530,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {event.eventType === "BenefitsGranted" &&
                                     Array.isArray(event.refundReversalIssues) &&
                                     event.refundReversalIssues.length > 0 && (
-                                      <p className="text-[9px] sm:text-[10px] text-amber-900 dark:text-amber-100 mt-0.5">
+                                      <p className="text-3xs sm:text-2xs text-amber-900 dark:text-amber-100 mt-0.5">
                                         {event.refundReversalIssues.length} reversal follow-up(s) — check
                                         RefundProcessed row
                                       </p>
@@ -3539,7 +3539,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     event.data &&
                                     typeof (event.data as { reversed?: unknown }).reversed === "object" &&
                                     (event.data as { reversed?: unknown }).reversed != null && (
-                                      <p className="text-[9px] sm:text-[10px] text-gray-600 dark:text-neutral-400 mt-0.5 break-words max-w-full">
+                                      <p className="text-3xs sm:text-2xs text-gray-600 dark:text-neutral-400 mt-0.5 break-words max-w-full">
                                         Ledger:{" "}
                                         {JSON.stringify((event.data as { reversed: unknown }).reversed)}
                                       </p>
@@ -3548,7 +3548,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     Array.isArray((event.data as { reversalIssues?: unknown[] })?.reversalIssues) &&
                                     ((event.data as { reversalIssues: { step?: string; error?: string }[] })
                                       .reversalIssues?.length ?? 0) > 0 && (
-                                      <p className="text-[9px] sm:text-[10px] text-amber-900 dark:text-amber-100 mt-0.5">
+                                      <p className="text-3xs sm:text-2xs text-amber-900 dark:text-amber-100 mt-0.5">
                                         {
                                           (event.data as { reversalIssues: unknown[] }).reversalIssues
                                             ?.length
@@ -3556,11 +3556,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                         non-fatal issue(s)
                                       </p>
                                     )}
-                                  <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
+                                  <p className="text-3xs sm:text-2xs lg:text-xs text-gray-500 mt-0.5">
                                     {formatDate(event.timestamp || new Date().toISOString())}
                                   </p>
                                   {entries > 0 && (
-                                    <p className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">
+                                    <p className="text-3xs sm:text-2xs text-gray-500 mt-0.5">
                                       +{entries} entries
                                     </p>
                                   )}
@@ -3568,12 +3568,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               </div>
                               <div className="text-right flex-shrink-0 max-w-[40%]">
                                 {!Number.isNaN(price) && (
-                                  <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                                  <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
                                     {formatCurrency(price)}
                                   </p>
                                 )}
                                 <div className="mt-0.5 flex justify-end">
-                                  <AdminBadge variant="neutral" className="!text-[8px] sm:!text-[9px] lg:!text-xs">
+                                  <AdminBadge variant="neutral" className="!text-3xs sm:!text-3xs lg:!text-xs">
                                     {kind}
                                   </AdminBadge>
                                 </div>
@@ -3590,7 +3590,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             {paymentEventsInfinite.isFetchingNextPage ? (
                               <span className="text-xs text-gray-500">Loading more…</span>
                             ) : (
-                              <span className="text-[10px] text-gray-400">Scroll for more</span>
+                              <span className="text-2xs text-gray-400">Scroll for more</span>
                             )}
                           </div>
                         )}
@@ -3620,7 +3620,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   value={actionInput}
                   onChange={(e) => setActionInput(e.target.value)}
                   placeholder={showActionModal.inputPlaceholder}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
                   rows={3}
                 />
               </div>
@@ -3639,7 +3639,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 onClick={executeAction}
                 disabled={actionLoading === showActionModal.action}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-50 transition-all"
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 disabled:opacity-50 transition-all"
               >
                 {actionLoading === showActionModal.action ? "Processing..." : "Confirm"}
               </button>

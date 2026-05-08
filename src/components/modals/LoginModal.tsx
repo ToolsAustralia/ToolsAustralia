@@ -782,7 +782,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                             setCodeDigits(["", "", "", "", "", ""]);
                             setError("");
                           }}
-                          className="text-sm font-medium text-[#ee0000] hover:underline"
+                          className="text-sm font-medium text-red-600 hover:underline"
                         >
                           Use password instead
                         </button>
@@ -803,7 +803,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                       <button
                         type="button"
                         onClick={() => setLoginCodeFlow(false)}
-                        className="text-sm font-medium text-[#ee0000] hover:underline"
+                        className="text-sm font-medium text-red-600 hover:underline"
                       >
                         Use password instead
                       </button>
@@ -831,7 +831,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                       <button
                         type="button"
                         onClick={() => setLoginCodeFlow(true)}
-                        className="text-sm font-medium text-[#ee0000] hover:underline"
+                        className="text-sm font-medium text-red-600 hover:underline"
                       >
                         Send code to sign in instead
                       </button>

@@ -776,9 +776,9 @@ export default function MembershipSection({
                                   <div className={`flex items-baseline gap-1 justify-center ${colorScheme.buttonText}`}>
                                     <span className="font-bold text-[20px] sm:text-lg">${plan.price}</span>
                                     {plan.period !== "one-time" ? (
-                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">Per Giveaway</span>
+                                      <span className="font-semibold text-[14px] sm:text-2xs opacity-90">Per Giveaway</span>
                                     ) : (
-                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">One Time Payment</span>
+                                      <span className="font-semibold text-[14px] sm:text-2xs opacity-90">One Time Payment</span>
                                     )}
                                   </div>
                                 </button>

@@ -793,7 +793,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
-              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
+              <p className="text-2xs sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
                 {highlight.description}
               </p>
             </div>
@@ -1023,7 +1023,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                         Entry Period Closed
                       </div>
-                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                      <div className="text-white/80 text-2xs sm:text-xs mt-1">
                         {nextDrawName
                           ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                           : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -1037,25 +1037,25 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.days).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Days</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.hours).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Hours</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.minutes).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Mins</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.seconds).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Secs</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
                   </div>
                 </div>
 
@@ -1116,7 +1116,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         {Boolean(isProcessing) && pendingEntries > 0 && (
                           <div className="flex items-center gap-1">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-[10px] text-green-600 font-medium">+{String(pendingEntries)}</span>
+                            <span className="text-2xs text-green-600 font-medium">+{String(pendingEntries)}</span>
                           </div>
                         )}
                         <svg
@@ -1353,7 +1353,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                           Entry Period Closed
                         </div>
-                        <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                        <div className="text-white/80 text-2xs sm:text-xs mt-1">
                           {nextDrawName
                             ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                             : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -1376,7 +1376,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
                           {String(item.value).padStart(2, "0")}
                         </div>
-                        <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{item.label}</div>
+                        <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
                       </div>
                     ))}
                   </div>

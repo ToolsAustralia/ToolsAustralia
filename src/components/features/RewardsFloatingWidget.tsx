@@ -345,7 +345,7 @@ export default function RewardsFloatingWidget({
           </motion.span>
           {hasUnclaimed && (
             <motion.span
-              className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-amber-300 text-[10px] leading-5 font-black text-gray-900 shadow-[0_6px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/75"
+              className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-amber-300 text-2xs leading-5 font-black text-gray-900 shadow-[0_6px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/75"
               animate={prefersReducedMotion ? { scale: 1 } : { scale: [1, 1.1, 1] }}
               transition={
                 prefersReducedMotion
@@ -390,7 +390,7 @@ export default function RewardsFloatingWidget({
                       {claimableCount > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
                           <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-300" />
-                          <span className="text-[10px] sm:text-xs font-bold text-white tabular-nums">
+                          <span className="text-2xs sm:text-xs font-bold text-white tabular-nums">
                             <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
                           </span>
                         </span>
@@ -492,13 +492,13 @@ export default function RewardsFloatingWidget({
                           </h4>
 
                           {/* Entries amount */}
-                          <p className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-neutral-100 sm:mb-2 sm:text-sm">
+                          <p className="mb-1 text-2xs font-semibold text-gray-900 dark:text-neutral-100 sm:mb-2 sm:text-sm">
                             <span className="text-red-600 dark:text-red-400">{item.entriesAmount.toLocaleString()}</span>{" "}
                             free entries
                           </p>
 
                           {/* Meta info - expiry only; code is on the button so no duplicate */}
-                          <div className="flex items-center gap-x-2 text-[10px] text-gray-500 dark:text-neutral-400 sm:text-xs">
+                          <div className="flex items-center gap-x-2 text-2xs text-gray-500 dark:text-neutral-400 sm:text-xs">
                             <span className="inline-flex items-center gap-1">
                               <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                               {item.neverExpires
@@ -522,7 +522,7 @@ export default function RewardsFloatingWidget({
                                   onClick={() =>
                                     isMembershipOnly ? openMembershipModalWithTradie(code) : openSpecialPackagesModal(code)
                                   }
-                                  className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white text-[11px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-amber-600 hover:to-amber-700 transition-all duration-200 active:scale-95"
+                                  className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white text-2xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-amber-600 hover:to-amber-700 transition-all duration-200 active:scale-95"
                                 >
                                   <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
                                   {unlockCode ? `USE ${unlockCode}` : "USE CODE"}
@@ -533,7 +533,7 @@ export default function RewardsFloatingWidget({
                             <button
                               onClick={() => onRedeem(item.issuanceId, item.entriesAmount)}
                               disabled={redemptionMutation.isPending}
-                              className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white text-[11px] sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95"
+                              className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white text-2xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-red-700 hover:to-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95"
                             >
                               {redemptionMutation.isPending ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -546,7 +546,7 @@ export default function RewardsFloatingWidget({
                             </button>
                           )
                         ) : activeTab === "past" ? (
-                          <span className="inline-flex h-9 min-w-[80px] shrink-0 items-center justify-center gap-1 rounded-lg bg-emerald-100 px-2.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 sm:h-11 sm:min-w-[100px] sm:rounded-xl sm:px-4 sm:text-sm">
+                          <span className="inline-flex h-9 min-w-[80px] shrink-0 items-center justify-center gap-1 rounded-lg bg-emerald-100 px-2.5 text-2xs font-semibold text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 sm:h-11 sm:min-w-[100px] sm:rounded-xl sm:px-4 sm:text-sm">
                             <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
                             {item.status === "redeemed" ? "Claimed" : item.status === "expired" ? "Expired" : item.status || "Claimed"}
                           </span>
@@ -556,7 +556,7 @@ export default function RewardsFloatingWidget({
                       {/* Purchase note - full width at bottom */}
                       {item.purchaseRequirement !== "none" && (
                         <div className="-mx-2.5 -mb-2.5 mt-2 w-full rounded-b-xl border-t border-amber-200/50 bg-amber-50/80 px-2.5 pb-2 pt-2 dark:border-amber-700/40 dark:bg-amber-950/45 sm:-mx-4 sm:-mb-4 sm:rounded-b-2xl sm:px-4 sm:pb-3">
-                          <div className="flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-medium text-amber-800 dark:text-amber-200/95 sm:text-xs">
+                          <div className="flex items-center justify-center gap-1.5 py-1.5 text-2xs font-medium text-amber-800 dark:text-amber-200/95 sm:text-xs">
                             <Tag className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400 sm:h-3.5 sm:w-3.5" />
                             {item.purchaseRequirement === "membership" && "Code for membership purchase"}
                             {item.purchaseRequirement === "one-time" && "Code for one-time purchase"}

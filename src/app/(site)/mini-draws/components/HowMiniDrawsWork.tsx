@@ -78,7 +78,7 @@ export default function HowMiniDrawsWork() {
             >
               {/* Step Number + Icon */}
               <div className="relative inline-flex mb-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-[#ee0000] to-[#cc0000] rounded-2xl flex items-center justify-center shadow-lg shadow-[#ee0000]/20 group-hover:shadow-xl group-hover:shadow-[#ee0000]/30 group-hover:scale-105 transition-all duration-300">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-600 to-red-675 rounded-2xl flex items-center justify-center shadow-lg shadow-red-600/20 group-hover:shadow-xl group-hover:shadow-red-600/30 group-hover:scale-105 transition-all duration-300">
                   <step.icon className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
                 </div>
                 <span className="absolute -top-2 -right-2 w-6 h-6 bg-gray-900 text-white text-xs font-bold rounded-full flex items-center justify-center shadow-md">
@@ -91,7 +91,7 @@ export default function HowMiniDrawsWork() {
                 {step.href ? (
                   <>
                     Check the{" "}
-                    <a href={step.href} className="text-[#ee0000] dark:text-red-400 hover:underline font-medium">
+                    <a href={step.href} className="text-red-600 dark:text-red-400 hover:underline font-medium">
                       results page
                     </a>{" "}
                     to see who took home the prize.

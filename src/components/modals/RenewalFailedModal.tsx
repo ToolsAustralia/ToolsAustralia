@@ -461,7 +461,7 @@ const PaymentForm: React.FC<{
                 {selectedPaymentMethod.card?.brand?.toUpperCase() || "Card"} ••••{" "}
                 {selectedPaymentMethod.card?.last4 || ""}
               </p>
-              <p className="text-[10px] sm:text-xs text-neutral-500">Using saved payment method</p>
+              <p className="text-2xs sm:text-xs text-neutral-500">Using saved payment method</p>
             </div>
           </div>
         </div>
@@ -471,7 +471,7 @@ const PaymentForm: React.FC<{
         <div className="border border-neutral-200 rounded-xl p-3 sm:p-4 bg-white">
           {!stripe || !elements ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-[#ee0000]" />
+              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-red-600" />
               <span className="ml-3 text-neutral-600 text-sm">Loading payment form...</span>
             </div>
           ) : (
@@ -519,7 +519,7 @@ const PaymentForm: React.FC<{
         </button>
       </div>
 
-      <div className="text-[10px] sm:text-xs text-neutral-500 text-center">
+      <div className="text-2xs sm:text-xs text-neutral-500 text-center">
         Your payment is secured by Stripe. Card details are never stored on our servers.
       </div>
 
@@ -944,7 +944,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
         {paymentMethods.length > 0 && (
           <div className="mb-4">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500 mb-2">
+            <h4 className="text-2xs font-bold uppercase tracking-[0.18em] text-neutral-500 mb-2">
               Choose a payment method
             </h4>
             <div className="space-y-2">
@@ -957,7 +957,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                     onClick={() => setSelectedPaymentMethod(pm)}
                     className={`w-full p-3 sm:p-4 border-2 rounded-xl text-left transition-colors ${
                       active
-                        ? "border-[#ee0000] bg-red-50"
+                        ? "border-red-600 bg-red-50"
                         : "border-neutral-200 hover:border-neutral-300 bg-white"
                     }`}
                   >
@@ -969,12 +969,12 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                             {formatCardDisplay(pm)}
                           </p>
                           {pm.isDefault && (
-                            <p className="text-[10px] sm:text-xs text-neutral-500">Default payment method</p>
+                            <p className="text-2xs sm:text-xs text-neutral-500">Default payment method</p>
                           )}
                         </div>
                       </div>
                       {active && (
-                        <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#ee0000] flex items-center justify-center flex-shrink-0">
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
                           <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />
                         </div>
                       )}
@@ -987,7 +987,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                 onClick={() => setSelectedPaymentMethod(null)}
                 className={`w-full p-3 sm:p-4 border-2 rounded-xl text-left transition-colors ${
                   !selectedPaymentMethod
-                    ? "border-[#ee0000] bg-red-50"
+                    ? "border-red-600 bg-red-50"
                     : "border-neutral-200 hover:border-neutral-300 bg-white"
                 }`}
               >
@@ -996,11 +996,11 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
                     <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="font-semibold text-neutral-900 text-xs sm:text-sm">Enter new payment method</p>
-                      <p className="text-[10px] sm:text-xs text-neutral-500">Use a different card</p>
+                      <p className="text-2xs sm:text-xs text-neutral-500">Use a different card</p>
                     </div>
                   </div>
                   {!selectedPaymentMethod && (
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#ee0000] flex items-center justify-center flex-shrink-0">
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
                       <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white" />
                     </div>
                   )}
@@ -1100,9 +1100,9 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       )}
 
       {showInlineCardSetup && (
-        <div className="mb-4 space-y-3 rounded-xl border-2 border-neutral-200 border-l-4 border-l-[#ee0000] p-3 sm:p-4 bg-neutral-50 shadow-sm">
+        <div className="mb-4 space-y-3 rounded-xl border-2 border-neutral-200 border-l-4 border-l-red-600 p-3 sm:p-4 bg-neutral-50 shadow-sm">
           <div className="flex items-start gap-2">
-            <CreditCard className="w-5 h-5 text-[#ee0000] flex-shrink-0 mt-0.5" />
+            <CreditCard className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="min-w-0">
               <h4 className="text-sm font-semibold text-neutral-900">Add a payment method</h4>
               <p className="text-xs sm:text-sm text-neutral-600 mt-1">
@@ -1183,7 +1183,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
       {/* Action area */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-6 sm:py-8">
-          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-[#ee0000] animate-spin mb-3" />
+          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 animate-spin mb-3" />
           <p className="text-sm text-neutral-600">Loading payment options…</p>
         </div>
       ) : terminalCollectionFailure ? (
@@ -1231,7 +1231,7 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
         </div>
       )}
 
-      <div className="mt-4 text-[10px] sm:text-xs text-neutral-500 text-center">
+      <div className="mt-4 text-2xs sm:text-xs text-neutral-500 text-center">
         {terminalCollectionFailure
           ? "Our team may need to fix your invoice in billing before you can pay. You can still update saved cards under your account."
           : showInlineCardSetup
