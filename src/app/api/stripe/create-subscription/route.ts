@@ -14,6 +14,7 @@ import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import {
   attachPaymentMethodToCustomer,
 } from "@/utils/payment/stripe/payment-method-utils";
+import { createSubscriptionWithIdempotencyRetry } from "@/utils/payment/stripe/createSubscriptionWithIdempotencyRetry";
 import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payment/stripe/customer-utils";
 import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
 // Klaviyo integration handled by webhook for best practices
@@ -514,12 +515,14 @@ export async function POST(request: NextRequest) {
 
     let subscription;
     try {
-      subscription = await stripe.subscriptions.create(
-        createPayload,
-        {
-          idempotencyKey: idempotencyKey,
-        }
-      );
+      subscription = await createSubscriptionWithIdempotencyRetry({
+        stripe,
+        payload: createPayload,
+        idempotencyKey,
+        customerId: customer.id,
+        packageId: validatedData.packageId,
+        correlationId,
+      });
 
       if (correlationId) {
         console.log("[create-subscription] subscription created", {
@@ -528,7 +531,6 @@ export async function POST(request: NextRequest) {
           subscriptionStatus: subscription.status,
         });
       }
-      // console.log(`📊 Subscription status: ${subscription.status}`);
     } catch (stripeError) {
       console.error("❌ Stripe subscription creation failed:", stripeError, correlationId ? { correlationId } : {});
       throw new Error(

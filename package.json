@@ -65,6 +65,8 @@
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
+    "test:facebook-fbc-extract": "tsx src/utils/tracking/__tests__/extractFBCFromRequest.test.ts",
+    "test:stripe-idempotency-retry": "tsx src/utils/payment/stripe/__tests__/createSubscriptionWithIdempotencyRetry.test.ts",
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
     "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
     "test:dashboard-date-range": "tsx src/utils/admin/__tests__/dashboardDateRange.test.ts",
