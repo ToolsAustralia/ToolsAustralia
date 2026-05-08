@@ -144,12 +144,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChargeJobLock.ts",
         "src/app/api/subscription/**",
         "src/app/api/memberships/**",
+        "src/components/modals/CancellationUpsellModal/**",
         "src/hooks/useStripeSubscription.ts",
         "src/hooks/useMemberships.ts",
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-04-29"
+      "lastVerified": "2026-05-08"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",

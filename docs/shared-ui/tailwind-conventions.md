@@ -2,6 +2,10 @@
 
 This doc captures the rules that the UI/Tailwind cleanup work locked in. Future code follows these.
 
+**Sibling docs:**
+- [component-decomposition-criteria.md](./component-decomposition-criteria.md) — when to split a component into a folder
+- [frontend-architecture-principles.md](./frontend-architecture-principles.md) — how the whole frontend is organized (atomic design, SRP, composition, props discipline, folder conventions, a11y, performance, testing)
+
 ## 1. No arbitrary values for things that have tokens
 
 | Don't | Do | Why |

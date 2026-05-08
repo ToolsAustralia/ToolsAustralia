@@ -42,6 +42,12 @@ export interface ModalContainerProps {
    */
   nestedSecondary?: boolean;
   /**
+   * Override the resolved z-index. Use ONLY when this modal must sit in a
+   * non-standard micro-stack outside the Z_INDEX scale (e.g. CancellationUpsellModal
+   * uses `zIndex={80}` to sit above its parent SubscriptionManagementModal).
+   */
+  zIndex?: number;
+  /**
    * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
    */
   presentation?: ModalPresentation;
@@ -59,6 +65,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   preventBackButton = true,
   nested = false,
   nestedSecondary = false,
+  zIndex,
   presentation = "dialog",
 }) => {
   const isDarkMode = useHtmlDarkForUi();
@@ -127,6 +134,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         : dialogPanelVariants;
 
   const resolveZIndex = () => {
+    if (zIndex !== undefined) return zIndex;
     if (nestedSecondary) return Z_INDEX.MODAL_NESTED_SECONDARY;
     if (nested) return Z_INDEX.MODAL_NESTED;
     return Z_INDEX.MODAL_BASE;

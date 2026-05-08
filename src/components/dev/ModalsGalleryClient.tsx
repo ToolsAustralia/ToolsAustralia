@@ -265,6 +265,17 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   upsell: "src/components/modals/UpsellModal.tsx",
   "success-screen": "src/components/loading/SuccessScreen.tsx",
   "cancellation-upsell": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-foreman": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-boss": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-savelabel": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-downgrade": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-past-due": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-past-due-no-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-days": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-label": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-long-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-processing": "src/components/modals/CancellationUpsellModal.tsx",
   "downgrade-confirm": "src/components/modals/DowngradeConfirmModal.tsx",
   "mini-draw-package": "src/components/modals/MiniDrawPackageModal.tsx",
   "subscription-explainer": "src/components/modals/SubscriptionExplainerModal.tsx",
@@ -338,6 +349,17 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
     note: "Transaction complete overlay (LoadingContext)",
   },
   { id: "cancellation-upsell", label: "CancellationUpsellModal", category: "Commerce" },
+  { id: "cancellation-upsell-foreman", label: "CancellationUpsell — Foreman tier", category: "Commerce" },
+  { id: "cancellation-upsell-boss", label: "CancellationUpsell — Boss tier", category: "Commerce" },
+  { id: "cancellation-upsell-no-savelabel", label: "CancellationUpsell — Tradie no saveLabel", category: "Commerce" },
+  { id: "cancellation-upsell-no-downgrade", label: "CancellationUpsell — no downgrade option", category: "Commerce" },
+  { id: "cancellation-upsell-no-entries", label: "CancellationUpsell — 0 accumulated entries", category: "Commerce" },
+  { id: "cancellation-upsell-past-due", label: "CancellationUpsell — past due (60 entries)", category: "Commerce" },
+  { id: "cancellation-upsell-past-due-no-entries", label: "CancellationUpsell — past due (0 entries)", category: "Commerce" },
+  { id: "cancellation-upsell-no-days", label: "CancellationUpsell — no daysUntilDraw", category: "Commerce" },
+  { id: "cancellation-upsell-no-label", label: "CancellationUpsell — no drawCloseLabel", category: "Commerce" },
+  { id: "cancellation-upsell-long-entries", label: "CancellationUpsell — 12,500 entries", category: "Commerce" },
+  { id: "cancellation-upsell-processing", label: "CancellationUpsell — processing state", category: "Commerce" },
   { id: "downgrade-confirm", label: "DowngradeConfirmModal", category: "Commerce" },
   { id: "mini-draw-package", label: "MiniDrawPackageModal", category: "Commerce" },
   {
@@ -987,6 +1009,160 @@ export default function ModalsGalleryClient() {
       />
       <CancellationUpsellModal
         isOpen={isOpen("cancellation-upsell")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-foreman")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Foreman",
+          saveLabel: "Save $9/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-boss")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Boss",
+          saveLabel: "Save $5/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-savelabel")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-downgrade")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={0}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-past-due")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        isPastDue
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-past-due-no-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        isPastDue
+        accumulatedEntries={0}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-days")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-label")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-long-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={12500}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-processing")}
         onClose={close}
         onRedeem={close}
         onDecline={close}

@@ -84,7 +84,8 @@
     "test:force-charge:live": "tsx scripts/test-force-charge.ts --live",
     "confirm-stuck-pi": "tsx scripts/confirm-stuck-pi.ts",
     "confirm-stuck-pi:dry": "tsx scripts/confirm-stuck-pi.ts --dry-run",
-    "test:codemods": "tsx scripts/codemods/__tests__/replace-classname.test.ts"
+    "test:codemods": "tsx scripts/codemods/__tests__/replace-classname.test.ts",
+    "test:cancellation-upsell": "tsx --require ./src/components/modals/CancellationUpsellModal/__tests__/asset-stubs.cjs src/components/modals/CancellationUpsellModal/__tests__/CancellationUpsellModal.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
