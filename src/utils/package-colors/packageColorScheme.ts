@@ -223,7 +223,7 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
   "milwaukee-red": getBrandMembershipSectionRow("milwaukee"),
   "boss-red": {
     bgGradient: "linear-gradient(135deg, #d40000 0%, #ee0000 40%, #ff4444 50%, #ee0000 60%, #d40000 100%)",
-    gradient: "from-[#d40000] via-[#ff4444] to-[#d40000]",
+    gradient: "from-[#d40000] via-red-400 to-[#d40000]",
     badgeStyle: {
       background: "#ee0000",
       boxShadow: "0 0 40px rgba(238, 0, 0, 0.85), 0 4px 20px rgba(238, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
@@ -670,7 +670,7 @@ export function getPackageGlowColor(planIdOrColorKey: string): string {
     case "makita-teal": return "from-[#00c2ed]/22 via-[#000000]/8 to-transparent";
     case "dewalt-yellow": return "from-[#ffd200]/20 via-[#000000]/8 to-transparent";
     case "milwaukee-red": return "from-[#ce2b05]/20 via-[#000000]/8 to-transparent";
-    case "boss-red": return "from-[#ee0000]/20 via-[#000000]/8 to-transparent";
+    case "boss-red": return "from-red-600/20 via-[#000000]/8 to-transparent";
     case "black": return "from-[#D4AF37]/15 via-[#000000]/8 to-transparent";
     case "mint-green": return "from-[#66DD99]/20 via-[#000000]/8 to-transparent";
     case "cash-green": return "from-[#22c55e]/20 via-[#000000]/8 to-transparent";
@@ -894,21 +894,21 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
   },
   "boss-red": {
     bgGradient: BRAND_GRADIENTS["boss-red"].bg,
-    gradient: "from-[#ee0000] via-[#ff4444] to-[#ee0000]",
+    gradient: "from-red-600 via-red-400 to-red-600",
     text: "text-white",
     textMuted: "text-white/90",
     textOnLight: "text-[#6a0a0a]",
     featureOnLight: "text-gray-700",
     priceText: "text-white",
     priceBadgeBg: "bg-white/25 backdrop-blur-sm",
-    buttonBg: "bg-[#000000] hover:bg-[#ee0000] active:scale-[0.98] border border-white/10",
+    buttonBg: "bg-[#000000] hover:bg-red-600 active:scale-[0.98] border border-white/10",
     buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
     buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,0,0,0.25)]",
     buttonText: "text-white",
     glow: "drop-shadow-[0_0_20px_rgba(238,0,0,0.85)]",
-    border: "border-[#ee0000]/55",
-    shadow: "shadow-[#ee0000]/50",
-    hoverShadow: "hover:shadow-[#ee0000]/70",
+    border: "border-red-600/55",
+    shadow: "shadow-red-600/50",
+    hoverShadow: "hover:shadow-red-600/70",
     borderGlow: "animate-border-glow-boss-red",
     badgeStyle: {
       background: "#ee0000",
@@ -921,10 +921,10 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     accentHexLight: "#ff4444",
     entriesText: "text-white",
     cardBorderOpacity: "CC",
-    barColor: "bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000]",
-    barColorLight: "bg-gradient-to-r from-[#ff4444] via-[#ee0000] to-[#ff4444]",
-    barColorVertical: "bg-gradient-to-t from-[#ee0000] via-[#ff4444] to-[#ee0000]",
-    barColorLightVertical: "bg-gradient-to-t from-[#ff4444] via-[#ee0000] to-[#ff4444]",
+    barColor: "bg-gradient-to-r from-red-600 via-red-400 to-red-600",
+    barColorLight: "bg-gradient-to-r from-red-400 via-red-600 to-red-400",
+    barColorVertical: "bg-gradient-to-t from-red-600 via-red-400 to-red-600",
+    barColorLightVertical: "bg-gradient-to-t from-red-400 via-red-600 to-red-400",
     barGradientCss: "linear-gradient(to top, #ee0000 0%, #ff4444 50%, #ee0000 100%)",
   },
   black: {

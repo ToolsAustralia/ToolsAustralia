@@ -10,7 +10,7 @@ export default function MiniDrawsHero() {
   const duration = prefersReduced ? 0 : 0.6;
 
   return (
-    <div className="relative pt-[86px] sm:pt-[106px] pb-10 sm:pb-14 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden">
+    <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-10 sm:pb-14 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -50,7 +50,7 @@ export default function MiniDrawsHero() {
             transition={{ duration, delay: 0.2 }}
           >
             <span className="text-white">Mini </span>
-            <span className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] bg-clip-text text-transparent">Draws</span>
+            <span className="bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent">Draws</span>
           </motion.h1>
 
           {/* Subtitle */}
@@ -72,22 +72,22 @@ export default function MiniDrawsHero() {
             transition={{ duration, delay: 0.5 }}
           >
             <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 sm:px-5 sm:py-3">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center shadow-lg shadow-[#ee0000]/30">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center shadow-lg shadow-red-600/30">
                 <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="text-left">
                 <div className="text-white font-bold text-sm sm:text-base">From $1</div>
-                <div className="text-gray-400 text-[10px] sm:text-xs">Per Entry</div>
+                <div className="text-gray-400 text-2xs sm:text-xs">Per Entry</div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 sm:px-5 sm:py-3">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center shadow-lg shadow-[#ee0000]/30">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center shadow-lg shadow-red-600/30">
                 <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="text-left">
                 <div className="text-white font-bold text-sm sm:text-base">Real Winners</div>
-                <div className="text-gray-400 text-[10px] sm:text-xs">Every Draw</div>
+                <div className="text-gray-400 text-2xs sm:text-xs">Every Draw</div>
               </div>
             </div>
           </motion.div>

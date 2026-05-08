@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { Building, Mail, User, Target, Send, CheckCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface PartnershipFormSectionProps {
   className?: string;
@@ -81,7 +82,7 @@ const Textarea = ({
     onChange={onChange}
     placeholder={placeholder}
     rows={rows}
-    className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 font-['Inter'] text-gray-900 placeholder-gray-500 resize-none ${className}`}
+    className={cn("w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 font-['Inter'] text-gray-900 placeholder-gray-500 resize-none", className)}
   />
 );
 
@@ -116,7 +117,7 @@ const Button = ({
       type={type}
       onClick={onClick}
       disabled={loading}
-      className={`${baseClasses} ${variantClasses} ${loading ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+      className={cn(baseClasses, variantClasses, loading ? "opacity-50 cursor-not-allowed" : "", className)}
     >
       {Icon && iconPosition === "left" && <Icon className="w-4 h-4 mr-2" />}
       {loading ? "Submitting..." : children}
@@ -266,7 +267,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
 
   if (isSubmitted) {
     return (
-      <section className={`py-16 sm:py-20 pb-32 sm:pb-40 bg-gradient-to-br from-green-50 to-white ${className}`}>
+      <section className={cn("py-16 sm:py-20 pb-32 sm:pb-40 bg-gradient-to-br from-green-50 to-white", className)}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
@@ -290,7 +291,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
   }
 
   return (
-    <section className={`py-16 sm:py-20 bg-gradient-to-br from-gray-50 to-white mb-16${className}`}>
+    <section className={cn("py-16 sm:py-20 bg-gradient-to-br from-gray-50 to-white mb-16", className)}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">

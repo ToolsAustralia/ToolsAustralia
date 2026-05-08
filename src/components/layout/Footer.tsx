@@ -31,10 +31,10 @@ export default function Footer() {
                   Equipping professionals with premium tools and exclusive member benefits. Your trusted partner for
                   quality, reliability, and exceptional service.
                 </p>
-                <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px] mb-3 sm:mb-4">
+                <p className="text-gray-500 text-2xs sm:text-2xs lg:text-[12px] mb-3 sm:mb-4">
                   ABN:54 690 397 061 | ACN: 690 397 061 | License: TP/04720
                 </p>
-                <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px]">
+                <p className="text-gray-500 text-2xs sm:text-2xs lg:text-[12px]">
                   Notification Number: NTP/16579 (Major Giveaway)
                 </p>
               </div>

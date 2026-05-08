@@ -16,6 +16,7 @@ import { formatPaymentError } from "@/utils/payment/stripe/payment-error-message
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 
@@ -765,7 +766,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
 
   if (loading) {
     return (
-      <div className={`space-y-2 sm:space-y-3 ${className}`}>
+      <div className={cn("space-y-2 sm:space-y-3", className)}>
         {/* Payment Method Skeleton */}
         <div className="border border-gray-200 dark:border-neutral-700 rounded-lg sm:rounded-xl p-3 sm:p-4">
           <div className="flex items-center space-x-3 sm:space-x-4">
@@ -803,7 +804,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   }
 
   return (
-    <div className={`space-y-2 sm:space-y-3 ${className}`}>
+    <div className={cn("space-y-2 sm:space-y-3", className)}>
       {/* Show card form directly for new users - no Payment Method section */}
       {!isAuthenticated && (
         <>
@@ -986,7 +987,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
           {/* Show card form when adding new payment method, OR mount hidden form for subscription invoice when using saved method (so confirmStripeIntent can run) */}
           {(showCardForm || (clientSecretForElements && activeIntentType === "payment")) && (
             <div
-              className={`space-y-4 ${selectedPaymentMethod && !showCardForm ? "absolute -left-[9999px] w-[400px] h-[200px] overflow-hidden opacity-0 pointer-events-none" : ""}`}
+              className={cn("space-y-4", selectedPaymentMethod && !showCardForm ? "absolute -left-[9999px] w-[400px] h-[200px] overflow-hidden opacity-0 pointer-events-none" : "")}
               aria-hidden={!!(selectedPaymentMethod && !showCardForm)}
             >
               {isCreatingIntent ? (

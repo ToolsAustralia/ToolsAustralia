@@ -27,9 +27,9 @@ export default function NotFound() {
           {/* Glass-morphism Content Card */}
           <div
             className="relative backdrop-blur-md bg-black/40 rounded-2xl p-8 md:p-12
-            border border-[#ee0000]/30 shadow-2xl shadow-[#ee0000]/20
+            border border-red-600/30 shadow-2xl shadow-red-600/20
             before:absolute before:inset-0 before:rounded-2xl 
-            before:bg-gradient-to-br before:from-[#ee0000]/10 before:to-transparent before:pointer-events-none"
+            before:bg-gradient-to-br before:from-red-600/10 before:to-transparent before:pointer-events-none"
           >
             {/* Logo with Metallic Effect */}
             <div className="mb-6 relative">
@@ -77,8 +77,8 @@ export default function NotFound() {
             Need assistance?{" "}
             <Link
               href="/contact"
-              className="text-[#ee0000] hover:text-[#ff4444] font-semibold 
-                transition-colors underline decoration-[#ee0000]/50 hover:decoration-[#ee0000]"
+              className="text-red-600 hover:text-red-400 font-semibold 
+                transition-colors underline decoration-red-600/50 hover:decoration-red-600"
             >
               Contact our support team
             </Link>
@@ -88,8 +88,8 @@ export default function NotFound() {
 
       {/* Animated Glow Effects */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-[5]">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#ee0000]/10 rounded-full blur-[100px] animate-pulse-slow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#ee0000]/10 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-[100px] animate-pulse-slow" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
       </div>
     </div>
   );

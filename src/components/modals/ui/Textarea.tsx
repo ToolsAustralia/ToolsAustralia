@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AlertCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface TextareaProps {
   id?: string;
@@ -35,7 +36,7 @@ const Textarea: React.FC<TextareaProps> = ({
   wrapperClassName = "",
 }) => {
   return (
-    <div className={`space-y-2 ${wrapperClassName}`}>
+    <div className={cn("space-y-2", wrapperClassName)}>
       {/* Label */}
       {label && (
         <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-neutral-300">

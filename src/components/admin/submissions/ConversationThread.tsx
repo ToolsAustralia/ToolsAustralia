@@ -67,7 +67,7 @@ export default function ConversationThread({
                       {msg.senderName}
                     </span>
                     {isAdmin && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-2xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300">
                         Admin
                       </span>
                     )}

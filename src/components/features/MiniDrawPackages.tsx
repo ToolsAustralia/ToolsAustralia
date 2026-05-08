@@ -594,14 +594,14 @@ export default function MiniDrawPackages({
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center">
+          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center">
             <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
           </div>
           <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Choose Your Pack</h3>
         </div>
         {calculatedUserEntryCount > 0 && (
           <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
-            <span className="text-[10px] sm:text-xs font-bold text-green-700">
+            <span className="text-2xs sm:text-xs font-bold text-green-700">
               {calculatedUserEntryCount.toLocaleString()}{" "}
               {calculatedUserEntryCount === 1 ? "free entry" : "free entries"}
             </span>
@@ -612,7 +612,7 @@ export default function MiniDrawPackages({
       {/* Remaining / Sold Out */}
       {entriesRemaining !== undefined && (
         <div
-          className={`mb-3 sm:mb-4 text-center text-[10px] sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
+          className={`mb-3 sm:mb-4 text-center text-2xs sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
             isSoldOut
               ? "bg-red-50 dark:bg-red-950/35 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40"
               : "bg-gray-50 dark:bg-neutral-800/80 text-gray-600 dark:text-neutral-300 border border-gray-100 dark:border-neutral-700"
@@ -661,7 +661,7 @@ export default function MiniDrawPackages({
                     {isProcessing ? (
                       <div className="flex flex-col items-center justify-center gap-1 py-1">
                         <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-black/20 border-t-black" />
-                        <span className="text-[8px] sm:text-[10px] text-black/60 font-medium">
+                        <span className="text-3xs sm:text-2xs text-black/60 font-medium">
                           Processing
                         </span>
                       </div>
@@ -673,13 +673,13 @@ export default function MiniDrawPackages({
                         </span>
 
                         {/* Free entries */}
-                        <span className="text-[9px] sm:text-xs font-bold leading-tight text-black/70">
+                        <span className="text-3xs sm:text-xs font-bold leading-tight text-black/70">
                           {pkg.entries} {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
                         </span>
 
                         {/* Capacity warning */}
                         {isExceedsCapacity(pkg.entries) && (
-                          <span className="text-[8px] sm:text-[10px] font-bold text-red-800 leading-tight mt-0.5">
+                          <span className="text-3xs sm:text-2xs font-bold text-red-800 leading-tight mt-0.5">
                             {entriesRemaining} left
                           </span>
                         )}
@@ -699,7 +699,7 @@ export default function MiniDrawPackages({
                   onMouseLeave={() => {
                     if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
                   }}
-                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center shadow-md transition-all duration-200 hover:scale-110 z-20 bg-[#ee0000] text-white hover:bg-[#cc0000]"
+                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center shadow-md transition-all duration-200 hover:scale-110 z-20 bg-red-600 text-white hover:bg-red-675"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedPackageId(pkg._id);

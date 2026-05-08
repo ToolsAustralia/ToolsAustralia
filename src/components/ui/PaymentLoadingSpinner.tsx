@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 interface PaymentLoadingSpinnerProps {
   message?: string;
@@ -45,7 +46,7 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
       <div className="relative">
         {/* Outer ring - metallic black with shadow */}
         <div
-          className={`${sizeClasses[size]} ${borderWidth[size]} border-gray-900 rounded-full animate-spin`}
+          className={cn(sizeClasses[size], borderWidth[size], "border-gray-900 rounded-full animate-spin")}
           style={{
             borderTopColor: "transparent",
             borderRightColor: "transparent",
@@ -56,19 +57,18 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
         />
         {/* Inner ring - red accent with reverse spin */}
         <div
-          className={`absolute ${innerSizeClasses[size]} ${borderWidth[size]} border-red-600 rounded-full`}
+          className={cn("absolute", innerSizeClasses[size], borderWidth[size], "border-red-600 rounded-full animate-spin-reverse")}
           style={{
             borderTopColor: "#ee0000",
             borderRightColor: "transparent",
             borderBottomColor: "transparent",
             borderLeftColor: "transparent",
-            animation: "spin-reverse 1.5s linear infinite",
             boxShadow: "0 0 15px rgba(238, 0, 0, 0.4), inset 0 0 10px rgba(238, 0, 0, 0.2)",
           }}
         />
         {/* Center dot - red glow */}
         <div
-          className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600 ${dotSizeClasses[size]}`}
+          className={cn("absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-600", dotSizeClasses[size])}
           style={{
             boxShadow: "0 0 10px rgba(238, 0, 0, 0.6), 0 0 20px rgba(238, 0, 0, 0.3)",
           }}
@@ -81,16 +81,6 @@ export const PaymentLoadingSpinner: React.FC<PaymentLoadingSpinnerProps> = ({
         <p className="text-xs text-gray-500 mt-1">Please wait...</p>
       </div>
 
-      <style jsx global>{`
-        @keyframes spin-reverse {
-          from {
-            transform: rotate(360deg);
-          }
-          to {
-            transform: rotate(0deg);
-          }
-        }
-      `}</style>
     </div>
   );
 };

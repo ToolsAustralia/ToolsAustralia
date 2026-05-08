@@ -34,6 +34,7 @@ import { CheckCircle, AlertCircle, XCircle, Info, X, Bug } from "lucide-react";
 import { ErrorContext } from "@/types/error-reporting";
 import { Z_INDEX } from "@/constants/z-index";
 import { TOAST_TRANSITION_MS } from "@/utils/motion/modalPresets";
+import { cn } from "@/utils/cn";
 
 export interface ToastProps {
   id?: string;
@@ -266,11 +267,11 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
       onTouchEnd={onTouchEnd}
     >
       <div
-        className={`${styles.bg} ${styles.border} ${styles.shadow} border-2 rounded-lg sm:rounded-xl p-2 sm:p-4 backdrop-blur-sm`}
+        className={cn(styles.bg, styles.border, styles.shadow, "border-2 rounded-lg sm:rounded-xl p-2 sm:p-4 backdrop-blur-sm")}
       >
         <div className="flex items-start gap-2 sm:gap-3">
           {/* Icon with background */}
-          <div className={`flex-shrink-0 ${styles.iconBg} rounded-md sm:rounded-lg p-1.5 sm:p-2`}>{getIcon()}</div>
+          <div className={cn("flex-shrink-0", styles.iconBg, "rounded-md sm:rounded-lg p-1.5 sm:p-2")}>{getIcon()}</div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">

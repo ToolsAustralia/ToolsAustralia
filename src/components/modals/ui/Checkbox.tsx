@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Check } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface CheckboxProps {
   id?: string;
@@ -27,7 +28,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
   // Ensure checked is always a boolean to prevent controlled/uncontrolled switching
   const isChecked = Boolean(checked);
   return (
-    <div className={`flex items-start gap-2.5 sm:gap-3 ${className}`}>
+    <div className={cn("flex items-start gap-2.5 sm:gap-3", className)}>
       {/* Custom Checkbox */}
       <div className="relative flex items-center">
         <input

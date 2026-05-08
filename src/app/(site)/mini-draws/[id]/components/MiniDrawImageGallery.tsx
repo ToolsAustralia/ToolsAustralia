@@ -145,7 +145,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
               <div
                 className={`relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white dark:bg-neutral-900 ${
                   activeIndex === index
-                    ? "border-[#ee0000] shadow-md shadow-[#ee0000]/20"
+                    ? "border-red-600 shadow-md shadow-red-600/20"
                     : "border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500"
                 }`}
               >

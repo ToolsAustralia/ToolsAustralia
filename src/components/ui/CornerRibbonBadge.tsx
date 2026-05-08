@@ -3,6 +3,7 @@
 import React from "react";
 import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
 export type CornerRibbonPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -175,7 +176,7 @@ const CornerRibbonBadge: React.FC<CornerRibbonBadgeProps> = ({
 
   return (
     <div
-      className={`corner-ribbon ${className}`}
+      className={cn("corner-ribbon", className)}
       style={wrapperStyle}
       role={label ? "img" : undefined}
       aria-label={label}

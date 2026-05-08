@@ -49,13 +49,13 @@ export default function PartnerBenefits() {
       <div className="w-full px-4 sm:px-6 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1  text-sm font-medium mb-3">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1  text-sm font-medium mb-3">
             Partnership Benefits
           </div>
 
           <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
             Why Choose
-            <span className="block text-[#ee0000]">Tools Australia?</span>
+            <span className="block text-red-600">Tools Australia?</span>
           </h2>
 
           <p className="text-[16px] sm:text-[18px] lg:text-[20px] text-[rgba(0,0,0,0.7)] font-normal leading-relaxed max-w-3xl mx-auto font-['Inter']">
@@ -72,7 +72,7 @@ export default function PartnerBenefits() {
               className="group bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 hover:scale-105"
             >
               {/* Content */}
-              <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins'] group-hover:text-[#ee0000] transition-colors duration-300">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100 mb-3 font-['Poppins'] group-hover:text-red-600 transition-colors duration-300">
                 {benefit.title}
               </h3>
 
@@ -104,7 +104,7 @@ export default function PartnerBenefits() {
                 <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">PowerTool Pro</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Tool Retailer</p>
               </div>
-              <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Poppins']">+250%</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">+250%</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">
                 Increase in online sales within 6 months of partnership
               </p>
@@ -116,7 +116,7 @@ export default function PartnerBenefits() {
                 <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">BuildMaster</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Construction Tools</p>
               </div>
-              <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Poppins']">15,000+</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">15,000+</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">New customers acquired through our platform</p>
             </div>
 
@@ -126,7 +126,7 @@ export default function PartnerBenefits() {
                 <h4 className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins'] mb-1">TradeMax</h4>
                 <p className="text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">Professional Tools</p>
               </div>
-              <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Poppins']">#1</div>
+              <div className="text-2xl font-bold text-red-600 mb-2 font-['Poppins']">#1</div>
               <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] text-sm">
                 Top-rated partner in their category for 2 years running
               </p>

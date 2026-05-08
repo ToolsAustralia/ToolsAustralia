@@ -5,6 +5,7 @@
 import type { CSSProperties } from "react";
 
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { cn } from "@/utils/cn";
 
 
 
@@ -88,7 +89,7 @@ export default function WinnerFilterToggle({
 
     <div
 
-      className={`inline-flex rounded-2xl border bg-slate-950/95 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.22)] backdrop-blur dark:bg-slate-950 ${className}`}
+      className={cn("inline-flex rounded-2xl border bg-slate-950/95 p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.22)] backdrop-blur dark:bg-slate-950", className)}
 
       style={{ borderColor: theme.borderRgba, ...vars }}
 

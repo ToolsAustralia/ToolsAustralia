@@ -87,7 +87,7 @@ export default function HomeMiniDraws() {
         {/* Section Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center shadow-lg shadow-[#ee0000]/20">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center shadow-lg shadow-red-600/20">
               <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
@@ -96,7 +96,7 @@ export default function HomeMiniDraws() {
           </div>
           <Link
             href="/mini-draws"
-            className="flex items-center gap-1 text-sm font-semibold text-[#ee0000] hover:text-[#cc0000] transition-colors"
+            className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-675 transition-colors"
           >
             View All
             <ChevronRight className="w-4 h-4" />

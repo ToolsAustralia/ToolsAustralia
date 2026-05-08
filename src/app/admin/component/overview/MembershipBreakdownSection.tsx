@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { RefreshCw, Package } from "lucide-react";
 import Image from "next/image";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { cn } from "@/utils/cn";
 
 interface MembershipBreakdownSectionProps {
   isExpanded: boolean;
@@ -74,7 +75,7 @@ export default function MembershipBreakdownSection({
         {!membershipByPackageLoading && membershipByPackageData && (
           <>
             {/* Summary Bar */}
-            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/40 rounded-md sm:rounded-lg border border-emerald-200 dark:border-emerald-800 text-[11px] sm:text-sm text-gray-700 dark:text-neutral-200 leading-snug">
+            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/40 dark:to-green-950/40 rounded-md sm:rounded-lg border border-emerald-200 dark:border-emerald-800 text-2xs sm:text-sm text-gray-700 dark:text-neutral-200 leading-snug">
               <div className="flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2">
                 <button
                   type="button"
@@ -124,7 +125,7 @@ export default function MembershipBreakdownSection({
 
             {/* Mobile: compact matrix — packages as columns, status as rows */}
             <div className="sm:hidden mb-2 overflow-x-auto -mx-1 px-1 brand-scrollbar">
-              <table className="w-full min-w-[280px] text-[10px] border-collapse table-fixed">
+              <table className="w-full min-w-[280px] text-2xs border-collapse table-fixed">
                 <thead>
                   <tr>
                     <th className="w-[22%] p-0" aria-hidden />
@@ -146,7 +147,7 @@ export default function MembershipBreakdownSection({
                                 <Package className="w-3.5 h-3.5 text-gray-400" />
                               </div>
                             )}
-                            <span className="leading-tight line-clamp-2 text-[9px] font-semibold normal-case">
+                            <span className="leading-tight line-clamp-2 text-3xs font-semibold normal-case">
                               {pkg.packageName}
                             </span>
                           </div>
@@ -183,7 +184,7 @@ export default function MembershipBreakdownSection({
                     <tr key={row.key} className="border-t border-gray-100">
                       <th
                         scope="row"
-                        className={`text-left py-1 pr-1 font-semibold align-middle ${row.labelClass}`}
+                        className={cn("text-left py-1 pr-1 font-semibold align-middle", row.labelClass)}
                       >
                         {row.label}
                       </th>
@@ -208,7 +209,7 @@ export default function MembershipBreakdownSection({
                                 });
                                 setIsMembershipByPackageModalOpen(true);
                               }}
-                              className={`w-full min-w-0 rounded px-0.5 py-0.5 font-semibold ${row.buttonClass}`}
+                              className={cn("w-full min-w-0 rounded px-0.5 py-0.5 font-semibold", row.buttonClass)}
                             >
                               {value.toLocaleString()}
                             </button>
@@ -252,11 +253,11 @@ export default function MembershipBreakdownSection({
                       <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white truncate">
                         {pkg.packageName}
                       </p>
-                      <p className="text-[11px] sm:text-sm text-gray-600 dark:text-neutral-400">
+                      <p className="text-2xs sm:text-sm text-gray-600 dark:text-neutral-400">
                         Active: {pkg.activeCount.toLocaleString()}
                       </p>
-                      <p className="text-[11px] sm:text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
-                      <p className="text-[11px] sm:text-sm text-amber-700">Past due: {(pkg.pastDueCount ?? 0).toLocaleString()}</p>
+                      <p className="text-2xs sm:text-sm text-red-600">Cancelled: {pkg.cancelledCount.toLocaleString()}</p>
+                      <p className="text-2xs sm:text-sm text-amber-700">Past due: {(pkg.pastDueCount ?? 0).toLocaleString()}</p>
                     </div>
                   </button>
                 );

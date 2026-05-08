@@ -227,7 +227,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                         )}
                       </div>
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold ${
                           campaign.isActive
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
                             : "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200"

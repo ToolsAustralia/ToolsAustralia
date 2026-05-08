@@ -7,6 +7,7 @@ import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { cn } from "@/utils/cn";
 
 interface PackageInclusionsExpandedProps {
   isExpanded: boolean;
@@ -100,10 +101,10 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
           {plan.features.map((feature, index) => (
             <li
               key={index}
-              className={`flex items-baseline gap-2 sm:gap-3 ${colorScheme.textOnLight ?? colorScheme.text} text-sm sm:text-base leading-relaxed`}
+              className={cn("flex items-baseline gap-2 sm:gap-3", colorScheme.textOnLight ?? colorScheme.text, "text-sm sm:text-base leading-relaxed")}
             >
-              <span className={`${colorScheme.textOnLight ?? colorScheme.text} font-bold flex-shrink-0`}>-</span>
-              <span className={`flex-1 min-w-0 ${colorScheme.textOnLight ?? colorScheme.text}`}>{feature.text}</span>
+              <span className={cn(colorScheme.textOnLight ?? colorScheme.text, "font-bold flex-shrink-0")}>-</span>
+              <span className={cn("flex-1 min-w-0", colorScheme.textOnLight ?? colorScheme.text)}>{feature.text}</span>
             </li>
           ))}
         </ul>

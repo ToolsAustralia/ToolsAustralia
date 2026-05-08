@@ -6,6 +6,7 @@ import {
   getMembershipSectionColorScheme,
   derivePlanIdFromPackage,
 } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -153,7 +154,7 @@ export default function MembershipBadge({
     >
       {/* Package Icon */}
       {!textOnly && packageIcon && (
-        <div className={`relative w-5 h-5 flex-shrink-0 ${iconScaleClass}`}>
+        <div className={cn("relative w-5 h-5 flex-shrink-0", iconScaleClass)}>
           <Image
             src={packageIcon}
             alt={`${packageData.name} icon`}

@@ -29,6 +29,7 @@ import {
 } from "@/utils/prize-brand-colors";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface MajorDrawSectionProps {
   className?: string;
@@ -618,7 +619,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       )}
                       {isActive && (
                         <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
-                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                          <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
@@ -662,7 +663,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Desktop: grid */}
             {layout === "desktop" && (
               <div
-                className={`grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-4 max-w-5xl mx-auto overflow-visible`}
+                className={cn("grid", filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2", "gap-4 max-w-5xl mx-auto overflow-visible")}
               >
                 {filteredPrizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === displaySlug;
@@ -709,7 +710,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       )}
                       {isActive && (
                         <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
-                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                          <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
@@ -754,11 +755,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             >
               {isActive && (
                 <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
-                  <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                  <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                 </div>
               )}
               <div className="relative z-10">
-                <div className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"}`}>
+                <div className={cn("text-base font-bold font-['Poppins'] leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
                   <div className="block">{formattedLabel.line1}</div>
                   {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                   {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
@@ -772,7 +773,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   };
 
   const renderHighlights = (gridClasses: string) => (
-    <div className={`${gridClasses} overflow-hidden`}>
+    <div className={cn(gridClasses, "overflow-hidden")}>
       {resolvedHighlights.map((highlight, index) => {
         const Icon = resolveHighlightIcon(highlight.icon);
         return (
@@ -787,13 +788,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 .replace("border-", "border-")
                 .replace("-500", "-400/30")} shadow-lg z-10`}
             >
-              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${brandColors.textColor}`} />
+              <Icon className={cn("w-3.5 h-3.5 sm:w-5 sm:h-5", brandColors.textColor)} />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
               <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
-              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
+              <p className="text-2xs sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
                 {highlight.description}
               </p>
             </div>
@@ -827,7 +828,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   return (
     <>
-      <section className={`relative py-8 sm:py-12   w-full overflow-visible ${className}`}>
+      <section className={cn("relative py-8 sm:py-12 w-full overflow-visible", className)}>
         <div className="relative w-full max-w-7xl mx-auto overflow-visible">
           <div className="text-center mb-0 sm:mb-8">
             <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold tracking-[0.35em] text-red-600 uppercase">
@@ -881,7 +882,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     onClick={() => setIsSpecsModalOpen(true)}
                     className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                   >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
+                    <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
                     <div
                       className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
@@ -900,7 +901,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         .replace("border-", "border-")
                         .replace("-500", "-400/30")} rounded-full`}
                     >
-                      <span className={`font-bold text-xs ${brandColors.textColor} drop-shadow-lg`}>VIEW SPECS</span>
+                      <span className={cn("font-bold text-xs", brandColors.textColor, "drop-shadow-lg")}>VIEW SPECS</span>
                     </div>
                   </button>
                 </div>
@@ -1023,7 +1024,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                         Entry Period Closed
                       </div>
-                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                      <div className="text-white/80 text-2xs sm:text-xs mt-1">
                         {nextDrawName
                           ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                           : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -1037,25 +1038,25 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.days).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Days</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.hours).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Hours</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.minutes).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Mins</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                     <div className="text-lg sm:text-2xl font-bold text-white">
                       {String(timeLeft.seconds).padStart(2, "0")}
                     </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Secs</div>
+                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
                   </div>
                 </div>
 
@@ -1116,7 +1117,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         {Boolean(isProcessing) && pendingEntries > 0 && (
                           <div className="flex items-center gap-1">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-[10px] text-green-600 font-medium">+{String(pendingEntries)}</span>
+                            <span className="text-2xs text-green-600 font-medium">+{String(pendingEntries)}</span>
                           </div>
                         )}
                         <svg
@@ -1157,11 +1158,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => openEntryFlow()}
-                className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                className={cn("promo-hero-cta-button relative w-full overflow-visible rounded-full group", ctaColorScheme.borderGlow, "membership-enter-cta-animation")}
                 style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
               >
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                <div className={cn("relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full", ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white"))}>
                   <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
                   <span className="font-bold text-base drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
                     {primaryCtaLabel}
@@ -1212,7 +1213,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
                     suppressHydrationWarning
                   >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
+                    <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
                     <div
                       className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
@@ -1232,7 +1233,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         .replace("-500", "-400/30")} rounded-full`}
                     >
                       <span
-                        className={`font-bold text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}
+                        className={cn("font-bold text-xs sm:text-sm", brandColors.textColor, "drop-shadow-lg whitespace-nowrap")}
                       >
                         VIEW SPECS
                       </span>
@@ -1353,7 +1354,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                           Entry Period Closed
                         </div>
-                        <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                        <div className="text-white/80 text-2xs sm:text-xs mt-1">
                           {nextDrawName
                             ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                             : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -1376,7 +1377,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
                           {String(item.value).padStart(2, "0")}
                         </div>
-                        <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{item.label}</div>
+                        <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
                       </div>
                     ))}
                   </div>
@@ -1419,7 +1420,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       .replace("-500", "-400/30")} mb-2`}
                   >
                     <h2
-                      className={`text-4xl font-bold ${brandColors.textColor} font-['Poppins'] leading-tight drop-shadow-lg`}
+                      className={cn("text-4xl font-bold", brandColors.textColor, "font-['Poppins'] leading-tight drop-shadow-lg")}
                     >
                       {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                     </h2>
@@ -1504,11 +1505,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               <div className="flex flex-col gap-3 border-t border-gray-200 dark:border-neutral-700 pt-4">
                 <button
                   onClick={() => openEntryFlow()}
-                  className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                  className={cn("promo-hero-cta-button relative w-full overflow-visible rounded-full group", ctaColorScheme.borderGlow, "membership-enter-cta-animation")}
                   style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
                 >
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                  <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                  <div className={cn("relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full", ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white"))}>
                     <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
                     <span className="font-bold text-lg drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
                       {primaryCtaLabel}

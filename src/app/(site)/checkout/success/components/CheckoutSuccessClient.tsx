@@ -32,7 +32,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
   if (isLoading) {
     return (
-      <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           <Skeleton className="h-24 w-full rounded-2xl" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -46,7 +46,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
   if (isError || !order) {
     return (
-      <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
         <div className="max-w-4xl mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Couldn&apos;t load order</h1>
           <p className="text-gray-600 mb-6">{error instanceof Error ? error.message : "Please check your order ID or try again later."}</p>
@@ -66,7 +66,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
   const shipName = `${addr.firstName} ${addr.lastName}`.trim();
 
   return (
-    <div className="bg-gray-50 pt-[86px] sm:pt-[106px] min-h-screen-svh">
+    <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Payment Status Handler - Handles 3DS redirects */}
         <PaymentSuccessHandler paymentType="one-time" successMessage="Your payment was successful!">

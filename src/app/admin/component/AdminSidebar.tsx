@@ -277,7 +277,7 @@ export default function AdminSidebar({
       <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-800">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-400 rounded-xl flex items-center justify-center">
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -340,7 +340,7 @@ export default function AdminSidebar({
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <GroupIcon className="w-4 h-4 shrink-0 text-red-600" aria-hidden />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500 group-hover:text-gray-800 dark:text-neutral-100 dark:hover:text-neutral-100 dark:group-hover:text-white truncate">
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500 group-hover:text-gray-800 dark:text-neutral-100 dark:hover:text-neutral-100 dark:group-hover:text-white truncate">
                       {group.label}
                     </span>
                   </span>
@@ -383,7 +383,7 @@ export default function AdminSidebar({
                       onClick={() => handleTabChange(tab.id)}
                       className={`group w-full flex items-center gap-2 px-2 py-2 text-left text-sm rounded-lg transition-all duration-200 ${
                         isActive
-                          ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-md"
+                          ? "bg-gradient-to-r from-red-600 to-red-400 text-white shadow-md"
                           : "text-gray-700 dark:text-neutral-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                       }`}
                     >

@@ -15,7 +15,7 @@ import type { AdminUserListItem } from "@/types/admin";
 
 /** Matches subscription column badges in admin users table */
 export const ADMIN_BADGE_BASE =
-  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-semibold shadow-sm ring-1 transition-colors";
+  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-2xs sm:text-xs font-semibold shadow-sm ring-1 transition-colors";
 
 export const adminBadgeVariants = {
   neutral:

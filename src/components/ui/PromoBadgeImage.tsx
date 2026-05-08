@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { hasBundledMultiplierAssets, type PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface PromoBadgeImageProps {
   multiplier: PromoMultiplier;
@@ -41,7 +42,7 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
         alt={`${multiplier}x promo`}
         width={dimensions.width}
         height={dimensions.height}
-        className={`object-contain ${sizeClassMap[size]} ${className}`}
+        className={cn("object-contain", sizeClassMap[size], className)}
       />
     );
   }
@@ -50,7 +51,7 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
     <div
       role="img"
       aria-label={`${multiplier}x promo`}
-      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 font-black text-white shadow-lg border-2 border-amber-300/60 ${sizeClassMap[size]} ${className}`}
+      className={cn("flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 font-black text-white shadow-lg border-2 border-amber-300/60", sizeClassMap[size], className)}
       style={{ minWidth: dimensions.width, minHeight: dimensions.height }}
     >
       <span className="text-sm sm:text-base">{multiplier}x</span>

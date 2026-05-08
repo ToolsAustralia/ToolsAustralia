@@ -97,7 +97,7 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
         <div className="flex flex-col items-center sm:items-start">
           <div className="mb-3 h-1 w-20 rounded-full" style={{ background: theme.gradient }} />
           <span
-            className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
+            className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
             style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.55)" }}
           >
             <Sparkles className="h-3.5 w-3.5" style={{ color: theme.primaryLight }} />
@@ -132,7 +132,7 @@ export default function DrawResultsHero({ majorCompleted, miniWins, allWinners }
           >
             {stats.map((stat) => (
               <div key={stat.label} className="text-center sm:text-left">
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-slate-400">
                   {stat.label}
                 </dt>
                 <dd className="mt-1 font-['Poppins'] text-2xl font-bold tabular-nums tracking-tight text-white sm:text-3xl">

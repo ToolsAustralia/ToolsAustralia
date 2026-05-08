@@ -182,7 +182,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" closeOnBackdrop={false}>
       {/* Custom Header for Partner Modal - Highly optimized for mobile */}
-      <div className="bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444] p-2 sm:p-6 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-red-600 via-[#ff3333] to-red-400 p-2 sm:p-6 text-white relative overflow-hidden">
         <button
           onClick={onClose}
           type="button"

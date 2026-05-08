@@ -88,14 +88,14 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
             <div className="flex-1 flex items-center justify-center py-4">
               <div className="max-w-[621px] w-full text-center">
                 {/* Badge */}
-                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1  text-sm font-medium mb-3">
+                <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1  text-sm font-medium mb-3">
                   Partnership Program
                 </div>
 
                 {/* Main Title */}
                 <h1 className="text-[32px] sm:text-[48px] font-black leading-[32px] sm:leading-[48px] text-white font-['Poppins',_sans-serif] mb-4 sm:mb-6 drop-shadow-lg">
                   Partner with the
-                  <span className="block text-[#ee0000]">Tool Experts</span>
+                  <span className="block text-red-600">Tool Experts</span>
                 </h1>
 
                 {/* Description */}
@@ -178,14 +178,14 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
             {/* Left Content */}
             <div className="max-w-[621px]">
               {/* Badge */}
-              <div className="inline-flex items-center  bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1  text-sm font-medium mb-1">
+              <div className="inline-flex items-center  bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1  text-sm font-medium mb-1">
                 Partnership Program
               </div>
 
               {/* Main Title */}
               <h1 className="text-[64px] font-black leading-[64px] text-white font-['Poppins',_sans-serif] mb-6 drop-shadow-lg">
                 Partner with the
-                <span className="block text-[#ee0000]">Tool Experts</span>
+                <span className="block text-red-600">Tool Experts</span>
               </h1>
 
               {/* Description */}

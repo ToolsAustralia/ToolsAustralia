@@ -134,7 +134,7 @@ export default function UserList({
           <thead className="bg-gray-50 border-b-2 border-gray-200">
             <tr>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("createdAt")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -142,11 +142,11 @@ export default function UserList({
                   {getSortIcon("createdAt", filters.sortBy || "createdAt", filters.sortOrder || "desc")}
                 </div>
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
+              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
                 Subscription
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("totalSpent")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -155,7 +155,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
                 onClick={() => onSort("majorDrawEntries")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -164,7 +164,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("miniDrawCount")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -173,7 +173,7 @@ export default function UserList({
                 </div>
               </th>
               <th
-                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => onSort("lastLogin")}
               >
                 <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -181,7 +181,7 @@ export default function UserList({
                   {getSortIcon("lastLogin", filters.sortBy || "createdAt", filters.sortOrder || "desc")}
                 </div>
               </th>
-              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
+              <th className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-700 dark:text-neutral-200 uppercase tracking-wider">
                 Actions
               </th>
             </tr>

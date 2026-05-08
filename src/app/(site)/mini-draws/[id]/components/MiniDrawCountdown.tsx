@@ -67,19 +67,19 @@ export default function MiniDrawCountdown({ drawDate, freezeEntriesAt, status }:
       <div className="grid grid-cols-4 gap-2 sm:gap-3">
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-4 text-center border border-white/20">
           <div className="text-xl sm:text-[28px] font-bold text-white">{timeLeft.days}</div>
-          <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Days</div>
+          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
         </div>
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-4 text-center border border-white/20">
           <div className="text-xl sm:text-[28px] font-bold text-white">{timeLeft.hours}</div>
-          <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Hours</div>
+          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
         </div>
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-4 text-center border border-white/20">
           <div className="text-xl sm:text-[28px] font-bold text-white">{timeLeft.minutes}</div>
-          <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Mins</div>
+          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
         </div>
         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-4 text-center border border-white/20">
           <div className="text-xl sm:text-[28px] font-bold text-white">{timeLeft.seconds}</div>
-          <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Secs</div>
+          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
         </div>
       </div>
 

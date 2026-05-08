@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Settings, ArrowLeft, AlertTriangle, Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
 import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
+import { cn } from "@/utils/cn";
 
 interface DashboardHeaderProps {
   title?: string;
@@ -76,7 +77,7 @@ export default function DashboardHeader({
                           : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-neutral-800"
                       }`}
                     >
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? "fill-current" : ""}`} strokeWidth={1.5} />
+                      <Icon className={cn("w-4 h-4 shrink-0", isActive ? "fill-current" : "")} strokeWidth={1.5} />
                       <span>{item.label}</span>
                     </Link>
                   );

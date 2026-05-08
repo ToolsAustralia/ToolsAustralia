@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { cn } from "@/utils/cn";
 
 const SIZE_MAP = {
   sm: "w-4 h-4",
@@ -30,7 +31,7 @@ export default function UrgencyClockIcon({
     <motion.span
       role="img"
       aria-label={ariaLabel}
-      className={`relative inline-flex items-center justify-center text-red-500 ${sizeClass} ${className}`}
+      className={cn("relative inline-flex items-center justify-center text-red-500", sizeClass, className)}
       animate={
         shouldAnimate
           ? {

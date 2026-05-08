@@ -40,4 +40,48 @@ Full UX details: see [api.md](./api.md#admin-cancel-subscription) and the migrat
 
 User-side cancellation runs through `/api/stripe/cancel-subscription` (the same `CancelSubscriptionService` powers it). The UI lives under `my-account` — see [dashboard-account](../dashboard-account/) for the page structure.
 
-> _TODO: link the specific user-facing component path once dashboard-account docs are written._
+The cancel flow is a two-step modal sequence inside `SubscriptionManagementModal`:
+
+1. **`CancelSubscriptionModal`** (`src/components/modals/CancelSubscriptionModal/`) — lightweight "are you sure?" stop-and-confirm. Tier-themed (tradie/foreman/boss) dark hero with a loss grid showing what the user gives up, reversed action buttons (Keep = primary/red on the right, Yes cancel = outline/neutral on the left), and a trust bar footer. Calls `handleCancelSubscription` on confirm.
+2. **`CancellationUpsellModal`** — heavy save-modal that opens after cancel succeeds (or when `showCancellationUpsell` is set). Offers downgrade and resubscribe paths.
+
+`CancelSubscriptionModal` accepts `fromPackageName` (drives tier theming + "Keep {name}" label), `accumulatedEntries` (shown in loss grid cell 1), and `billingEndDateLabel` (shown in hero sub-copy). It does **not** display pricing or charge anything — it is purely a confirmation gate.
+
+## StripePaymentModal
+
+`src/components/modals/StripePaymentModal/` (folder/index.tsx pattern) — the "Complete Payment" modal shown during upgrade flows that require a PaymentIntent confirmation. Decomposed in Plan 6 Phase 4 from a 725-LOC monolith.
+
+**Architecture:**
+- `index.tsx` — orchestrator; holds all state slices, `useRef` for `activePaymentIntentRef`, and the `handlePaymentSuccess` / `handleProcessingSuccess` callbacks. Delegates to sub-components.
+- `Shell.tsx` — modal frame with dark hero, scroll-lock, Escape handler, and entry animation (mirrors RenewalFailedModal/Shell.tsx pattern).
+- `OrderSummary.tsx` — gain-framed order summary card using Plan 4 `<Card>` + `<Card.Header>` + `<Card.Body>`. Shows upgrade from/to details and billing cycle info when `upgradeInfo` is provided.
+- `PaymentMethodCard.tsx` — saved-card display ("VISA •••• 4242 / Default Payment Method / Change").
+- `PaymentForm.tsx` — exports `PaymentFormWithoutElements` (saved card path) and `PaymentFormWithElements` (new card path). All Stripe logic is preserved byte-identically from the original monolith. Uses Plan 4 `<Button>` for action buttons.
+- `styles.module.css` — composite hero gradients, scrollbar, pinstripe overlay.
+
+**Stripe preservation invariants:**
+1. `stripePromise` is a module-scope singleton in `PaymentForm.tsx` — Stripe prohibits re-instantiation.
+2. `<Elements key={clientSecret || "no-secret"}>` re-mount key is required for Stripe correctness.
+3. All `useStripe()`, `useElements()`, `stripe.confirmPayment()`, `stripe.confirmCardPayment()` calls are unchanged.
+4. Upgrade API call flow (create upgrade payment → get clientSecret → confirm) is preserved.
+5. `IMMEDIATE_UPGRADE_NO_PI` sentinel for server-side-only upgrades is preserved.
+
+**Public props interface (unchanged from original):**
+```ts
+interface StripePaymentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  clientSecret: string;        // empty string = dynamic creation on submit
+  packageName: string;
+  packageId: string;
+  amount: number;              // in cents
+  onPaymentSuccess: (paymentIntentId: string) => void;
+  upgradeInfo?: {
+    fromPackage: { name: string; price: number };
+    toPackage: { name: string; price: number };
+    billingInfo?: { currentBillingDate: string; nextBillingDate: string; nextBillingAmount: number; billingDateStays: boolean; };
+  };
+}
+```
+
+Smoke test: `npm run test:stripe-payment`.

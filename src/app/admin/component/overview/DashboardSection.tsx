@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface DashboardSectionProps {
   title?: string;
@@ -41,7 +42,7 @@ export default function DashboardSection({
 
   return (
     <div
-      className={`bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none ${className}`}
+      className={cn("bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-none", className)}
     >
       {(title || action || collapsible || headerTrailing) && (
         <div
@@ -55,7 +56,7 @@ export default function DashboardSection({
               <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white leading-snug">{title}</h3>
             )}
             {subtitle && (
-              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
+              <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug">
                 {subtitle}
               </p>
             )}
@@ -77,7 +78,7 @@ export default function DashboardSection({
               aria-label={isExpanded ? "Collapse section" : "Expand section"}
             >
               <svg
-                className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 transition-transform ${isExpanded ? "" : "rotate-180"}`}
+                className={cn("w-4 h-4 sm:w-5 sm:h-5 shrink-0 transition-transform", isExpanded ? "" : "rotate-180")}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

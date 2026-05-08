@@ -32,7 +32,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen-svh bg-white pb-16 sm:pb-24">
       {/* Page Header - Metallic Industrial Design */}
-      <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
+      <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
           <Image
@@ -52,7 +52,7 @@ export default function ContactPage() {
             <div className="text-center lg:text-left">
               <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
                 <span className="text-white">C</span>
-                <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">o</span>
+                <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">o</span>
                 <span className="text-white">ntact</span>
               </h1>
             </div>

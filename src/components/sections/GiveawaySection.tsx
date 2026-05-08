@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Gift, Clock, Star } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface GiveawaySectionProps {
   className?: string;
@@ -10,7 +11,7 @@ interface GiveawaySectionProps {
 export default function GiveawaySection({ className = "" }: GiveawaySectionProps) {
   return (
     <section
-      className={`relative  lg:py-16 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-visible ${className}`}
+      className={cn("relative lg:py-16 bg-gradient-to-br from-gray-50 via-white to-gray-50 w-full overflow-visible", className)}
     >
       <div className="relative w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto overflow-visible">
         {/* Large Image Container with Absolute Positioning - Positioned relative to section */}
@@ -55,7 +56,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
               {/* Coming Soon Indicator */}
               <div className="flex items-center justify-start gap-2 text-gray-600 dark:text-neutral-400">
                 <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="text-[11px] sm:text-[12px] lg:text-[18px] font-semibold">Details Coming Soon</span>
+                <span className="text-2xs sm:text-[12px] lg:text-[18px] font-semibold">Details Coming Soon</span>
               </div>
 
               {/* Star Rating for Excitement */}
@@ -63,7 +64,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star key={star} className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-6 lg:h-6 text-yellow-400 fill-current" />
                 ))}
-                <span className="text-[10px] sm:text-[11px] lg:text-[17px] text-gray-600 dark:text-neutral-400 ml-1 font-medium">
+                <span className="text-2xs sm:text-2xs lg:text-[17px] text-gray-600 dark:text-neutral-400 ml-1 font-medium">
                   Premium Quality
                 </span>
               </div>
@@ -71,7 +72,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
               {/* Don't Miss Out Button - Desktop only */}
               <div className="hidden lg:block pt-2 sm:pt-3">
                 <div className="inline-flex items-center gap-1 bg-gradient-to-r from-black to-gray-800 text-white px-4 py-2 sm:px-6 sm:py-2.5 rounded-full shadow-xl hover:shadow-2xl transition-all duration-300">
-                  <span className="text-[11px] sm:text-[12px] lg:text-[18px] font-semibold">Don&apos;t Miss Out!</span>
+                  <span className="text-2xs sm:text-[12px] lg:text-[18px] font-semibold">Don&apos;t Miss Out!</span>
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-yellow-400 rounded-full animate-pulse"></div>
                 </div>
               </div>

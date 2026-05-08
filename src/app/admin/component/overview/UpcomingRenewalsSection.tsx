@@ -32,7 +32,7 @@ export default function UpcomingRenewalsSchedulePanel({
             key={days}
             type="button"
             onClick={() => onRangeChange(days)}
-            className={`flex-1 min-w-[3.25rem] sm:flex-none sm:min-w-0 px-2 py-1.5 rounded-lg text-center text-[10px] sm:text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[3.25rem] sm:flex-none sm:min-w-0 px-2 py-1.5 rounded-lg text-center text-2xs sm:text-xs font-semibold transition-all ${
               upcomingRenewalsRange === days
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-300 dark:hover:border-emerald-600"
@@ -57,23 +57,23 @@ export default function UpcomingRenewalsSchedulePanel({
           ) : (
             <>
               {upcomingRenewalsData.total > pageSize && (
-                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mb-1">
+                <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mb-1">
                   {(upcomingRenewalsPage - 1) * pageSize + 1}–
                   {Math.min(upcomingRenewalsPage * pageSize, upcomingRenewalsData.total)} of {upcomingRenewalsData.total}
                 </p>
               )}
 
               <div className="overflow-x-auto rounded-xl border border-gray-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-sm ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
-                <table className="w-full text-[10px] sm:text-xs border-collapse min-w-[280px]">
+                <table className="w-full text-2xs sm:text-xs border-collapse min-w-[280px]">
                   <thead>
                     <tr className="bg-gradient-to-b from-gray-50 to-gray-50/80 dark:from-neutral-800 dark:to-neutral-800/90 border-b border-gray-200 dark:border-neutral-700">
-                      <th className="text-left py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+                      <th className="text-left py-2.5 px-3 sm:px-3.5 text-3xs sm:text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
                         Customer
                       </th>
-                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
+                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-3xs sm:text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
                         Amount
                       </th>
-                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
+                      <th className="text-right py-2.5 px-3 sm:px-3.5 text-3xs sm:text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400 whitespace-nowrap">
                         Renews
                       </th>
                     </tr>
@@ -92,7 +92,7 @@ export default function UpcomingRenewalsSchedulePanel({
                             <ClickableUserDisplay
                               displayText={displayName}
                               userId={r.userId ?? null}
-                              className="text-[10px] sm:text-xs text-gray-900 dark:text-white font-medium leading-snug"
+                              className="text-2xs sm:text-xs text-gray-900 dark:text-white font-medium leading-snug"
                             />
                           </td>
                           <td className="py-2.5 px-3 sm:px-3.5 text-right tabular-nums whitespace-nowrap align-middle font-semibold text-gray-900 dark:text-white">
@@ -135,7 +135,7 @@ export default function UpcomingRenewalsSchedulePanel({
                           <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <span className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 tabular-nums">
+                      <span className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 tabular-nums">
                         {upcomingRenewalsPage}/{totalPages}
                       </span>
                       <div className="flex items-center gap-0.5">

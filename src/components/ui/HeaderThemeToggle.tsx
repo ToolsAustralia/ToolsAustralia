@@ -3,6 +3,7 @@
 import { Sun, Moon } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useThemeToggleWithHold } from "@/hooks/useThemeToggleWithHold";
+import { cn } from "@/utils/cn";
 
 /**
  * Header bar moon/sun control (matches user dashboard pattern).
@@ -21,7 +22,7 @@ export function HeaderThemeToggle({ className = "" }: { className?: string }) {
       onPointerCancel={hold.onPointerCancel}
       onPointerLeave={hold.onPointerLeave}
       title="Tap: light / dark · Hold: match time of day (Sydney)"
-      className={`p-2 rounded-lg touch-manipulation hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors ${className}`}
+      className={cn("p-2 rounded-lg touch-manipulation hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors", className)}
       aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode. Hold to restore automatic theme by time of day.`}
     >
       {theme === "light" ? (

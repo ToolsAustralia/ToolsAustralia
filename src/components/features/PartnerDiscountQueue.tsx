@@ -24,6 +24,7 @@ import {
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -472,7 +473,7 @@ export default function PartnerDiscountQueue({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white ${className}`}
+      className={cn("relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white", className)}
       style={cardBorderStyle}
     >
       {/* Premium Background Effects */}
@@ -581,9 +582,9 @@ export default function PartnerDiscountQueue({
             ].map((card) => (
               <div
                 key={card.label}
-                className={`p-4 rounded-2xl bg-gradient-to-br ${card.accent} backdrop-blur border text-white shadow-inner`}
+                className={cn("p-4 rounded-2xl bg-gradient-to-br", card.accent, "backdrop-blur border text-white shadow-inner")}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/70">{card.label}</p>
+                <p className="text-2xs font-semibold uppercase tracking-[0.3em] text-white/70">{card.label}</p>
                 <p className="text-2xl font-bold mt-1 drop-shadow">{card.value}</p>
                 <p className="text-sm text-white/70 mt-1">{card.hint}</p>
               </div>
@@ -613,7 +614,7 @@ export default function PartnerDiscountQueue({
                           ✅ {summary.isActiveSubscription ? "Active Subscription" : "Active Period"}
                         </h3>
                         <span
-                          className={`px-2 py-0.5 text-[10px] sm:text-xs font-bold rounded-full border uppercase tracking-wide bg-white/10 text-white ${getPackageBadgeColor(
+                          className={`px-2 py-0.5 text-2xs sm:text-xs font-bold rounded-full border uppercase tracking-wide bg-white/10 text-white ${getPackageBadgeColor(
                             activePeriod.source || "",
                             activePeriod.packageName || undefined
                           )}`}
@@ -642,7 +643,7 @@ export default function PartnerDiscountQueue({
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                        <span className="font-medium text-[11px] sm:text-sm">{formatDate(activePeriod.endsAt!)}</span>
+                        <span className="font-medium text-2xs sm:text-sm">{formatDate(activePeriod.endsAt!)}</span>
                       </div>
                     </div>
                   )}
@@ -662,7 +663,7 @@ export default function PartnerDiscountQueue({
                         }}
                       ></div>
                     </div>
-                    <p className="text-[10px] sm:text-xs text-emerald-200 mt-1 sm:mt-2 font-medium">
+                    <p className="text-2xs sm:text-xs text-emerald-200 mt-1 sm:mt-2 font-medium">
                       {activePeriod.daysRemaining} days until next benefit
                     </p>
                   </div>
@@ -696,7 +697,7 @@ export default function PartnerDiscountQueue({
                   <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-red-400 flex-shrink-0" />
                   <span className="truncate">Upcoming</span>
                 </h3>
-                <span className="px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-white border border-yellow-400/30 rounded-full text-[10px] sm:text-xs lg:text-sm font-bold shadow-sm whitespace-nowrap">
+                <span className="px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-white border border-yellow-400/30 rounded-full text-2xs sm:text-xs lg:text-sm font-bold shadow-sm whitespace-nowrap">
                   {totalQueuedItems} queued
                 </span>
               </div>
@@ -719,7 +720,7 @@ export default function PartnerDiscountQueue({
                           <h4 className="font-bold text-white text-xs sm:text-sm lg:text-lg truncate">
                             {item.packageName}
                           </h4>
-                          <p className="text-[10px] sm:text-xs lg:text-sm text-white/70 font-medium truncate">
+                          <p className="text-2xs sm:text-xs lg:text-sm text-white/70 font-medium truncate">
                             <span className="text-orange-300 font-bold">{Math.round(item.daysOfAccess)}</span> day
                             {Math.round(item.daysOfAccess) !== 1 ? "s" : ""} access
                           </p>
@@ -727,11 +728,11 @@ export default function PartnerDiscountQueue({
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="inline-block px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-400/30 rounded-md sm:rounded-lg">
-                          <span className="text-[10px] sm:text-xs lg:text-sm font-bold text-white whitespace-nowrap">
+                          <span className="text-2xs sm:text-xs lg:text-sm font-bold text-white whitespace-nowrap">
                             #{item.queuePosition}
                           </span>
                         </div>
-                        <p className="text-[9px] sm:text-[10px] lg:text-xs text-white/50 font-medium mt-0.5 sm:mt-1">
+                        <p className="text-3xs sm:text-2xs lg:text-xs text-white/50 font-medium mt-0.5 sm:mt-1">
                           {formatDate(item.purchaseDate)}
                         </p>
                       </div>
@@ -758,7 +759,7 @@ export default function PartnerDiscountQueue({
                       <strong className="text-sm sm:text-base">Total:</strong> {displayQueuedDaysTotal} day
                       {displayQueuedDaysTotal !== 1 ? "s" : ""}
                     </p>
-                    <p className="text-[10px] sm:text-xs text-white/70">
+                    <p className="text-2xs sm:text-xs text-white/70">
                       Activates automatically when current period ends
                     </p>
                   </div>

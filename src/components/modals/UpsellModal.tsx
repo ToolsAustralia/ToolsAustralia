@@ -36,6 +36,7 @@ import {
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
+import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
 
@@ -1059,7 +1060,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
                 >
                   <span>{showFullInclusions ? "Hide package inclusions" : "See full package inclusions"}</span>
                   <ChevronDown
-                    className={`h-4 w-4 shrink-0 transition-transform duration-200 sm:h-5 sm:w-5 ${showFullInclusions ? "rotate-180" : ""}`}
+                    className={cn("h-4 w-4 shrink-0 transition-transform duration-200 sm:h-5 sm:w-5", showFullInclusions ? "rotate-180" : "")}
                     aria-hidden
                   />
                 </button>
