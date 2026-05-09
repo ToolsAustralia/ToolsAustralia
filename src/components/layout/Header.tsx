@@ -56,6 +56,58 @@ import { cn } from "@/utils/cn";
 const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
 const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.webp";
 
+/**
+ * Leaf component owning the 3s alternation between the membership CTA and the
+ * promotional/giveaway CTA in the top bar. Only this small component re-renders
+ * on the toggle — the entire Header used to re-render every 3 seconds.
+ */
+function TopBarPromoLeaf({
+  topBarActivePromoMultiplier,
+}: {
+  topBarActivePromoMultiplier: number | null | undefined;
+}) {
+  const [slide, setSlide] = useState<0 | 1>(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSlide((s) => (s === 0 ? 1 : 0));
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
+      {slide === 0 ? (
+        <p
+          key="topbar-membership"
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
+          <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
+            Join Now
+          </Link>
+        </p>
+      ) : (
+        <p
+          key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          {topBarActivePromoMultiplier != null ? (
+            <>
+              <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
+              <span className="font-normal"> are live now — monthly tool giveaway. </span>
+            </>
+          ) : (
+            <span className="font-normal">Monthly tool giveaway. </span>
+          )}
+          <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
+            View giveaway
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+}
+
 type HeaderProps = {
   /**
    * Controls whether the header stays fixed to the top of the viewport.
@@ -86,8 +138,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
-  /** 0 = membership CTA, 1 = promotion/giveaway CTA — swapped each animation cycle */
-  const [topBarPromoSlide, setTopBarPromoSlide] = useState(0);
   const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -240,15 +290,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
     };
   }, [isMobileMenuOpen, isCartOpen, handleCloseMobileMenu, handleCloseCart]);
 
-  // Rotate promotional top-bar message every 3s (matches `.animate-topbar-reappear-once` duration in globals.css)
-  useEffect(() => {
-    if (isTopBarHidden || !authStateResolved || shouldHideTopBar) return;
-    if (isAuthenticated && isSetupRequired) return;
-    const id = window.setInterval(() => {
-      setTopBarPromoSlide((s) => (s === 0 ? 1 : 0));
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, [isTopBarHidden, authStateResolved, shouldHideTopBar, isAuthenticated, isSetupRequired]);
+  // Note: the 3s top-bar promo alternation is now owned by <TopBarPromoLeaf>
+  // so the entire Header no longer re-renders every 3 seconds.
 
   // Initialize localStorage values on mount for better UX
   useEffect(() => {
@@ -439,6 +482,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   return (
     <header
+      data-sticky="true"
       className={`bg-white dark:bg-neutral-900 ${
         isFixed ? "fixed top-0 left-0 right-0 z-40" : "relative"
       } shadow-sm dark:shadow-none dark:border-b dark:border-neutral-800 w-full overflow-visible`}
@@ -471,36 +515,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
               </p>
             ) : (
-              <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
-                {topBarPromoSlide === 0 ? (
-                  <p
-                    key="topbar-membership"
-                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
-                  >
-                    <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
-                    <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
-                      Join Now
-                    </Link>
-                  </p>
-                ) : (
-                  <p
-                    key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
-                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
-                  >
-                    {topBarActivePromoMultiplier != null ? (
-                      <>
-                        <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
-                        <span className="font-normal"> are live now — monthly tool giveaway. </span>
-                      </>
-                    ) : (
-                      <span className="font-normal">Monthly tool giveaway. </span>
-                    )}
-                    <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
-                      View giveaway
-                    </Link>
-                  </p>
-                )}
-              </div>
+              <TopBarPromoLeaf topBarActivePromoMultiplier={topBarActivePromoMultiplier} />
             )}
           </div>
           <button

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Users, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
@@ -35,6 +36,37 @@ interface MajorDrawSectionProps {
   className?: string;
 }
 
+interface MajorDrawCountdownValues {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+// Leaf component owning the 1s tick so the parent (MajorDrawSection) does not
+// re-render every second. Computes Days/Hours/Mins/Secs from `targetMs` and
+// passes them to the render prop.
+function MajorDrawCountdownLeaf({
+  targetMs,
+  render,
+}: {
+  targetMs: number;
+  render: (values: MajorDrawCountdownValues) => React.ReactNode;
+}) {
+  const now = useLeafTimer(1000);
+  const difference = targetMs - now;
+  const values: MajorDrawCountdownValues =
+    difference > 0
+      ? {
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((difference % (1000 * 60)) / 1000),
+        }
+      : { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  return <>{render(values)}</>;
+}
+
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
 const getOrdinalSuffix = (day: number): string => {
   if (day > 3 && day < 21) return "th";
@@ -62,12 +94,6 @@ const formatTimeWithoutPeriod = (date: Date): string => {
 
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const [mobileMainSwiper, setMobileMainSwiper] = useState<SwiperType | null>(null);
@@ -228,34 +254,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   //   note: "Now showing only current major draw entries (not accumulated total)",
   // });
 
-  // Update countdown timer
-  useEffect(() => {
-    // Show countdown for active, frozen, or any draw with a valid date
-    if (!currentMajorDraw || !currentMajorDraw?.drawDate) return;
-
-    const updateTimer = () => {
-      const now = new Date().getTime();
-      // Use drawDate for countdown
-      const endTime = new Date(currentMajorDraw.drawDate || "").getTime();
-      const difference = endTime - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-
-    return () => clearInterval(timer);
-  }, [currentMajorDraw]);
+  // Countdown target — the actual ticking happens inside <MajorDrawCountdownLeaf>
+  // below so this parent component does not re-render every second.
+  const drawTargetMs = currentMajorDraw?.drawDate
+    ? new Date(currentMajorDraw.drawDate).getTime()
+    : null;
 
   // Set the default plan when component mounts or when user/package data changes
   useEffect(() => {
@@ -1033,32 +1036,39 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 )}
 
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.days).padStart(2, "0")}
-                    </div>
-                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.hours).padStart(2, "0")}
-                    </div>
-                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.minutes).padStart(2, "0")}
-                    </div>
-                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.seconds).padStart(2, "0")}
-                    </div>
-                    <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
-                  </div>
-                </div>
+                {drawTargetMs !== null && (
+                  <MajorDrawCountdownLeaf
+                    targetMs={drawTargetMs}
+                    render={(timeLeft) => (
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.days).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.hours).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.minutes).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.seconds).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
+                        </div>
+                      </div>
+                    )}
+                  />
+                )}
 
               </div>
             ) : !isCompleted ? (
@@ -1363,24 +1373,31 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   )}
 
-                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                    {[
-                      { label: "Days", value: timeLeft.days },
-                      { label: "Hours", value: timeLeft.hours },
-                      { label: "Mins", value: timeLeft.minutes },
-                      { label: "Secs", value: timeLeft.seconds },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
-                      >
-                        <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
-                          {String(item.value).padStart(2, "0")}
+                  {drawTargetMs !== null && (
+                    <MajorDrawCountdownLeaf
+                      targetMs={drawTargetMs}
+                      render={(timeLeft) => (
+                        <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                          {[
+                            { label: "Days", value: timeLeft.days },
+                            { label: "Hours", value: timeLeft.hours },
+                            { label: "Mins", value: timeLeft.minutes },
+                            { label: "Secs", value: timeLeft.seconds },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
+                            >
+                              <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
+                                {String(item.value).padStart(2, "0")}
+                              </div>
+                              <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
+                            </div>
+                          ))}
                         </div>
-                        <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    />
+                  )}
 
                 </div>
               ) : !isCompleted ? (

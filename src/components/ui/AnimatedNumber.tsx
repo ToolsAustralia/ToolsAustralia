@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 const easeOutExpo = (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
 
@@ -20,8 +21,15 @@ export function AnimatedNumber({
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
   const rafRef = useRef<number | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInViewportAnimation(ref);
 
   useEffect(() => {
+    if (!inView) {
+      setDisplay(value);
+      fromRef.current = value;
+      return;
+    }
     const prefersReduced =
       typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReduced || fromRef.current === value) {
@@ -41,7 +49,7 @@ export function AnimatedNumber({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [value, duration]);
+  }, [value, duration, inView]);
 
-  return <span className={className}>{format(display)}</span>;
+  return <span ref={ref} className={className}>{format(display)}</span>;
 }

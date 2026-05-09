@@ -49,6 +49,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         id="gtm-script"
         strategy="afterInteractive"
         nonce={nonce}
+        data-tracking-pixel="true"
         dangerouslySetInnerHTML={{ __html: gtmScript }}
       />
     </>

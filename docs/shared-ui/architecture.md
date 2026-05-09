@@ -20,7 +20,7 @@
 
 | Folder | Purpose |
 |---|---|
-| [src/utils/dom/](../../src/utils/dom/) | DOM utilities |
+| [src/utils/dom/](../../src/utils/dom/) | DOM utilities (incl. `listenerHelpers.ts` — passive/RAF-throttled scroll/resize) |
 | [src/utils/motion/](../../src/utils/motion/) | Animation helpers |
 | [src/utils/url/](../../src/utils/url/) | URL parsing/building |
 | [src/utils/common/](../../src/utils/common/) | Generic helpers |
@@ -29,6 +29,21 @@
 | [src/utils/display-name.ts](../../src/utils/display-name.ts) | Generic display-name helper |
 | [src/utils/brand-utils.ts](../../src/utils/brand-utils.ts) | Brand-related display helpers |
 | [src/utils/prize-brand-colors.ts](../../src/utils/prize-brand-colors.ts) | Prize/brand color resolution |
+| [src/lib/device/](../../src/lib/device/) | Device-tier resolution (`deviceTier.ts` — `mobile`/`tablet`/`desktop` + Save-Data) |
+
+## Cross-cutting hooks
+
+| Hook | Purpose |
+|---|---|
+| [`useDeviceProfile`](../../src/hooks/useDeviceProfile.ts) | Reactive `{ tier, viewportTier, flags }` for JS-side tier branching |
+| [`useInViewportAnimation`](../../src/hooks/useInViewportAnimation.ts) | IntersectionObserver gate to pause offscreen animations |
+| [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) | Self-contained `setInterval` so parents don't re-render on every tick |
+
+See [patterns.md](./patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for usage and the device-tier token system.
+
+## Embla carousel wrappers
+
+[src/components/ui/embla/](../../src/components/ui/embla/) — `EmblaCarousel`, `EmblaThumbsGallery`, `EmblaCarouselButton`. Wrap `embla-carousel-react` with the touch-action and reinit-contract conventions documented in [patterns.md](./patterns.md#embla-wrappers).
 
 ## Index
 

@@ -18,6 +18,82 @@ import { cn } from "@/utils/cn";
 /** How long each slide stays visible before cross-fading to the other */
 const ROTATE_MS = 10_000;
 
+/**
+ * Leaf component owning the slide toggle (5s/10s alternation between the
+ * draw-name slide and the date/time slide). Only this leaf re-renders on the
+ * toggle — the parent <MajorDrawHeaderStrip> stays put.
+ */
+function MajorDrawHeaderStripSlides({
+  drawName,
+  entryCount,
+  schedule,
+  titleClass,
+  entriesLabelClass,
+  entriesValueClass,
+  entriesValueStyle,
+  entriesWordClass,
+  dateTitleClass,
+  timeLineClass,
+  slideOn,
+  slideOff,
+}: {
+  drawName: string;
+  entryCount: number;
+  schedule: { dateLine: string; timeLine: string } | null;
+  titleClass: string;
+  entriesLabelClass: string;
+  entriesValueClass: string;
+  entriesValueStyle: CSSProperties;
+  entriesWordClass: string;
+  dateTitleClass: string;
+  timeLineClass: string;
+  slideOn: string;
+  slideOff: string;
+}) {
+  const [showSchedule, setShowSchedule] = useState(false);
+
+  useEffect(() => {
+    if (!schedule) {
+      setShowSchedule(false);
+      return;
+    }
+    setShowSchedule(false);
+    const id = window.setInterval(() => {
+      setShowSchedule((prev) => !prev);
+    }, ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, [schedule]);
+
+  return (
+    <>
+      <div
+        className={!schedule || !showSchedule ? slideOn : slideOff}
+        aria-hidden={Boolean(schedule && showSchedule)}
+      >
+        <p className={titleClass}>{drawName}</p>
+        <p className={cn(entriesLabelClass, "mt-0.5 lg:mt-1")}>
+          Your Entries:{" "}
+          <span className={entriesValueClass} style={entriesValueStyle}>
+            <AnimatedNumber value={entryCount} />
+          </span>{" "}
+          <span className={entriesWordClass} style={entriesValueStyle}>
+            {entryCount === 1 ? "Entry" : "Entries"}
+          </span>
+        </p>
+      </div>
+      {schedule ? (
+        <div
+          className={showSchedule ? slideOn : slideOff}
+          aria-hidden={!showSchedule}
+        >
+          <p className={dateTitleClass}>{schedule.dateLine}</p>
+          <p className={cn(timeLineClass, "mt-0.5 lg:mt-1")}>{schedule.timeLine}</p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 interface MajorDrawHeaderStripProps {
   /** Fallback before promo store sync (e.g. first paint / no showcase yet) */
   prizeSlug?: PrizeSlug;
@@ -43,20 +119,6 @@ export default function MajorDrawHeaderStrip({
   const prizeSlug = ((storeSlug as PrizeSlug | null) ?? prizeSlugFallback) as PrizeSlug;
 
   const schedule = drawDateIso ? formatMajorDrawStripSchedule(drawDateIso) : null;
-  const [showSchedule, setShowSchedule] = useState(false);
-
-  useEffect(() => {
-    const s = drawDateIso ? formatMajorDrawStripSchedule(drawDateIso) : null;
-    if (!s) {
-      setShowSchedule(false);
-      return;
-    }
-    setShowSchedule(false);
-    const id = window.setInterval(() => {
-      setShowSchedule((prev) => !prev);
-    }, ROTATE_MS);
-    return () => window.clearInterval(id);
-  }, [drawDateIso]);
 
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
@@ -122,30 +184,20 @@ export default function MajorDrawHeaderStrip({
         className="relative min-h-[2.75rem] sm:min-h-[3.25rem] lg:min-h-[3.75rem] flex-1 min-w-0 pr-1"
         aria-live="polite"
       >
-        <div
-          className={!schedule || !showSchedule ? slideOn : slideOff}
-          aria-hidden={Boolean(schedule && showSchedule)}
-        >
-          <p className={titleClass}>{drawName}</p>
-          <p className={cn(entriesLabelClass, "mt-0.5 lg:mt-1")}>
-            Your Entries:{" "}
-            <span className={entriesValueClass} style={entriesValueStyle}>
-              <AnimatedNumber value={entryCount} />
-            </span>{" "}
-            <span className={entriesWordClass} style={entriesValueStyle}>
-              {entryCount === 1 ? "Entry" : "Entries"}
-            </span>
-          </p>
-        </div>
-        {schedule ? (
-          <div
-            className={showSchedule ? slideOn : slideOff}
-            aria-hidden={!showSchedule}
-          >
-            <p className={dateTitleClass}>{schedule.dateLine}</p>
-            <p className={cn(timeLineClass, "mt-0.5 lg:mt-1")}>{schedule.timeLine}</p>
-          </div>
-        ) : null}
+        <MajorDrawHeaderStripSlides
+          drawName={drawName}
+          entryCount={entryCount}
+          schedule={schedule}
+          titleClass={titleClass}
+          entriesLabelClass={entriesLabelClass}
+          entriesValueClass={entriesValueClass}
+          entriesValueStyle={entriesValueStyle}
+          entriesWordClass={entriesWordClass}
+          dateTitleClass={dateTitleClass}
+          timeLineClass={timeLineClass}
+          slideOn={slideOn}
+          slideOff={slideOff}
+        />
       </div>
       <button type="button" onClick={onBoostEntries} className={boostButtonClass}>
         <div className="get-more-entries-shimmer rounded-xl" aria-hidden="true" />

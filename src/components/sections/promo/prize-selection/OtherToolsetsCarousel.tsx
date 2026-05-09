@@ -14,6 +14,7 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
+import { addThrottledResize } from "@/utils/dom/listenerHelpers";
 import { cn } from "@/utils/cn";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
@@ -95,8 +96,7 @@ export function OtherToolsetsCarousel({
       }
     };
     check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return addThrottledResize(check);
   }, [otherToolsets.length]);
 
   useEffect(() => {
@@ -130,10 +130,12 @@ export function OtherToolsetsCarousel({
 
   const displayToolsets = isMobile ? shuffledToolsets : otherToolsets;
 
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    { loop: true, align: "center", dragFree: true, slidesToScroll: 1 },
+  const emblaOptions = useMemo(
+    () => ({ loop: true, align: "center" as const, dragFree: true, slidesToScroll: 1 }),
     []
   );
+  const emblaPlugins = useMemo(() => [], []);
+  const [emblaRef, emblaApi] = useEmblaCarousel(emblaOptions, emblaPlugins);
 
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
