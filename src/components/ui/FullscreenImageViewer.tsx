@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, Expand } from "lucide-react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Keyboard, Thumbs, FreeMode } from "swiper/modules";
-import type { Swiper as SwiperType } from "swiper";
+import useEmblaCarousel from "embla-carousel-react";
+import ClassNames from "embla-carousel-class-names";
+import type { EmblaOptionsType } from "embla-carousel";
 
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
-import "swiper/css";
-import "swiper/css/thumbs";
-import "swiper/css/free-mode";
 import { cn } from "@/utils/cn";
 
 export interface FullscreenImageCaption {
@@ -59,8 +56,6 @@ export default function FullscreenImageViewer({
   const [canSlidePrev, setCanSlidePrev] = useState(false);
   const [canSlideNext, setCanSlideNext] = useState(false);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
-  const swiperRef = useRef<SwiperType | null>(null);
-  const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
   const hasMultipleImages = images.length > 1;
   const chevronColor = theme.primaryDark;
   const chevronGlow = theme.shadowRgba;
@@ -68,10 +63,51 @@ export default function FullscreenImageViewer({
   const themedPanelGlow = `0 0 14px ${theme.shadowRgba}, 0 4px 14px rgba(0,0,0,0.45)`;
   const themedPanelBg = `linear-gradient(135deg, ${theme.primaryDark}66 0%, ${theme.primary}4d 55%, ${theme.primaryDark}66 100%)`;
 
-  const updateNavigationState = (swiper: SwiperType) => {
-    setCanSlidePrev(!swiper.isBeginning);
-    setCanSlideNext(!swiper.isEnd);
-  };
+  const computedInitialIndex = useMemo(
+    () => clampIndex(initialIndex, images.length),
+    [initialIndex, images.length]
+  );
+
+  // Main carousel — single slide visible, drag-to-navigate, drives currentIndex.
+  const mainOptions = useMemo<EmblaOptionsType>(
+    () => ({ loop: false, startIndex: computedInitialIndex, duration: 25 }),
+    [computedInitialIndex]
+  );
+  const mainPlugins = useMemo(() => [ClassNames()], []);
+  const [mainRef, mainApi] = useEmblaCarousel(mainOptions, mainPlugins);
+
+  // Thumbs carousel — free-drag strip; clicking a thumb scrolls the main.
+  const thumbsOptions = useMemo<EmblaOptionsType>(
+    () => ({ containScroll: "keepSnaps", dragFree: true }),
+    []
+  );
+  const thumbsPlugins = useMemo(() => [ClassNames()], []);
+  const [thumbsRef, thumbsApi] = useEmblaCarousel(thumbsOptions, thumbsPlugins);
+
+  const onSelect = useCallback(() => {
+    if (!mainApi) return;
+    const i = mainApi.selectedScrollSnap();
+    setCurrentIndex(i);
+    setCanSlidePrev(mainApi.canScrollPrev());
+    setCanSlideNext(mainApi.canScrollNext());
+    thumbsApi?.scrollTo(i);
+  }, [mainApi, thumbsApi]);
+
+  useEffect(() => {
+    if (!mainApi) return;
+    onSelect();
+    mainApi.on("select", onSelect);
+    mainApi.on("reInit", onSelect);
+    return () => {
+      mainApi.off("select", onSelect);
+      mainApi.off("reInit", onSelect);
+    };
+  }, [mainApi, onSelect]);
+
+  const onThumbClick = useCallback(
+    (i: number) => mainApi?.scrollTo(i),
+    [mainApi]
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -79,10 +115,10 @@ export default function FullscreenImageViewer({
     lastFocusedElementRef.current = document.activeElement as HTMLElement | null;
     const nextIndex = clampIndex(initialIndex, images.length);
     setCurrentIndex(nextIndex);
-    if (swiperRef.current) {
-      swiperRef.current.slideTo(nextIndex, 0);
+    if (mainApi) {
+      mainApi.scrollTo(nextIndex, true);
     }
-  }, [isOpen, initialIndex, images.length]);
+  }, [isOpen, initialIndex, images.length, mainApi]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -98,25 +134,25 @@ export default function FullscreenImageViewer({
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        swiperRef.current?.slideNext();
+        mainApi?.scrollNext();
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        swiperRef.current?.slidePrev();
+        mainApi?.scrollPrev();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, hasMultipleImages, images.length, onClose]);
+  }, [isOpen, hasMultipleImages, images.length, onClose, mainApi]);
 
   useEffect(() => {
     if (isOpen) return;
     lastFocusedElementRef.current?.focus();
   }, [isOpen]);
 
-  const goNext = () => swiperRef.current?.slideNext();
-  const goPrevious = () => swiperRef.current?.slidePrev();
+  const goNext = () => mainApi?.scrollNext();
+  const goPrevious = () => mainApi?.scrollPrev();
 
   const showCounter = images.length > 0;
   const activeCaption = images[currentIndex]?.captionDetail;
@@ -173,43 +209,32 @@ export default function FullscreenImageViewer({
           <div className="flex min-h-0 flex-1 flex-col pt-14 sm:pt-16">
             {/* Image stage only — caption + thumbs are separate rows so nothing covers the photo */}
             <div className="relative min-h-0 w-full flex-1 overflow-hidden">
-              <Swiper
-                modules={[Keyboard, Thumbs]}
-                onSwiper={(swiper) => {
-                  swiperRef.current = swiper;
-                  updateNavigationState(swiper);
-                }}
-                thumbs={{
-                  swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null,
-                }}
-                navigation={false}
-                keyboard={{ enabled: true }}
-                watchSlidesProgress={true}
-                slidesPerView={1}
-                initialSlide={clampIndex(initialIndex, images.length)}
-                className="fullscreen-image-viewer-swiper h-full w-full max-w-full overflow-hidden"
-                wrapperClass="!max-w-full"
-                onSlideChange={(swiper) => {
-                  setCurrentIndex(swiper.activeIndex);
-                  updateNavigationState(swiper);
-                }}
-                onResize={updateNavigationState}
+              <div
+                ref={mainRef}
+                data-carousel="true"
+                style={{ touchAction: "pan-y pinch-zoom" }}
+                className="fullscreen-image-viewer-embla h-full w-full max-w-full overflow-hidden"
               >
-                {images.map((image, index) => (
-                  <SwiperSlide key={`${image.src}-${index}`} className="!box-border max-w-full overflow-hidden">
-                    <div className="relative h-full w-full max-w-full overflow-hidden">
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Fullscreen image ${index + 1}`}
-                        fill
-                        sizes="100vw"
-                        className="box-border object-contain p-3 sm:p-4"
-                        priority={index === currentIndex}
-                      />
+                <div className="flex h-full">
+                  {images.map((image, index) => (
+                    <div
+                      key={`${image.src}-${index}`}
+                      className="embla__slide flex-[0_0_100%] min-w-0 box-border max-w-full overflow-hidden"
+                    >
+                      <div className="relative h-full w-full max-w-full overflow-hidden">
+                        <Image
+                          src={image.src}
+                          alt={image.alt || `Fullscreen image ${index + 1}`}
+                          fill
+                          sizes="100vw"
+                          className="box-border object-contain p-3 sm:p-4"
+                          priority={index === currentIndex}
+                        />
+                      </div>
                     </div>
-                  </SwiperSlide>
-                ))}
-              </Swiper>
+                  ))}
+                </div>
+              </div>
 
               {hasMultipleImages ? (
                 <>
@@ -292,47 +317,48 @@ export default function FullscreenImageViewer({
                     boxShadow: themedPanelGlow,
                   }}
                 >
-                  <Swiper
-                    modules={[FreeMode, Thumbs]}
-                    onSwiper={setThumbsSwiper}
-                    spaceBetween={8}
-                    slidesPerView="auto"
-                    freeMode={true}
-                    watchSlidesProgress={true}
-                    slideToClickedSlide={true}
-                    className="fullscreen-thumbs-swiper"
+                  <div
+                    ref={thumbsRef}
+                    data-carousel="true"
+                    style={{ touchAction: "pan-y pinch-zoom" }}
+                    className="fullscreen-thumbs-embla overflow-hidden"
                   >
-                    {images.map((image, index) => (
-                      <SwiperSlide key={`thumb-${image.src}-${index}`} className="!w-14 !h-14 sm:!w-16 sm:!h-16">
-                        <button
-                          type="button"
-                          onClick={() => swiperRef.current?.slideTo(index)}
-                          aria-label={`Open image ${index + 1}`}
-                          className={`relative h-full w-full overflow-hidden rounded-lg border-2 transition-all duration-200 ${
-                            currentIndex === index ? "" : "hover:brightness-110"
-                          }`}
-                          style={
-                            currentIndex === index
-                              ? {
-                                  borderColor: chevronColor,
-                                  boxShadow: `0 0 0 2px ${theme.borderRgba}, 0 0 14px ${chevronGlow}`,
-                                }
-                              : {
-                                  borderColor: theme.borderRgba,
-                                }
-                          }
-                        >
-                          <Image
-                            src={image.src}
-                            alt={image.alt || `Thumbnail ${index + 1}`}
-                            fill
-                            sizes="64px"
-                            className="object-cover"
-                          />
-                        </button>
-                      </SwiperSlide>
-                    ))}
-                  </Swiper>
+                    <div className="flex gap-2">
+                      {images.map((image, index) => {
+                        const isActive = currentIndex === index;
+                        return (
+                          <button
+                            key={`thumb-${image.src}-${index}`}
+                            type="button"
+                            onClick={() => onThumbClick(index)}
+                            aria-label={`Open image ${index + 1}`}
+                            aria-current={isActive}
+                            className={`embla__thumb flex-[0_0_auto] relative h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-lg border-2 transition-all duration-200 ${
+                              isActive ? "" : "hover:brightness-110"
+                            }`}
+                            style={
+                              isActive
+                                ? {
+                                    borderColor: chevronColor,
+                                    boxShadow: `0 0 0 2px ${theme.borderRgba}, 0 0 14px ${chevronGlow}`,
+                                  }
+                                : {
+                                    borderColor: theme.borderRgba,
+                                  }
+                            }
+                          >
+                            <Image
+                              src={image.src}
+                              alt={image.alt || `Thumbnail ${index + 1}`}
+                              fill
+                              sizes="80px"
+                              className="object-cover"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
