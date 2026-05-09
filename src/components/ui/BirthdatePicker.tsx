@@ -266,6 +266,7 @@ export default function BirthdatePicker({
                 {openDropdown === "month" && (
                   <div
                     role="listbox"
+                    data-dropdown-list
                     className="absolute left-0 right-0 z-[60] mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 bg-[#ffffff] py-1 shadow-lg dark:border-neutral-600 dark:bg-[#171717] overscroll-contain scroll-smooth touch-pan-y"
                     style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                   >
@@ -316,6 +317,7 @@ export default function BirthdatePicker({
                 {openDropdown === "year" && (
                   <div
                     role="listbox"
+                    data-dropdown-list
                     className="absolute left-0 right-0 z-[60] mt-1 max-h-[200px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-300 bg-[#ffffff] py-1 shadow-lg dark:border-neutral-600 dark:bg-[#171717] overscroll-contain scroll-smooth touch-pan-y"
                     style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                   >
