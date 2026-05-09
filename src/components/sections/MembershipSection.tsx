@@ -619,7 +619,7 @@ export default function MembershipSection({
 
                         {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                         <div
-                          className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
+                          className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 pt-8 sm:pt-10 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
                           style={
                             {
                               background: colorScheme.bgGradient,
@@ -937,7 +937,7 @@ export default function MembershipSection({
 
                   {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                   <div
-                    className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 sm:p-2 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
+                    className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 sm:p-2 sm:pt-8 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
                     style={
                       {
                         background: colorScheme.bgGradient,
