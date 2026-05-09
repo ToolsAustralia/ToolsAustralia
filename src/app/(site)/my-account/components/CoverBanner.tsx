@@ -33,6 +33,7 @@ export default function CoverBanner({ className = "" }: CoverBannerProps) {
             alt="Tools Australia"
             fill
             className="object-cover"
+            sizes="(max-width: 640px) 96px, 128px"
           />
         </div>
       </div>

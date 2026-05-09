@@ -89,6 +89,7 @@ const Hero: React.FC<HeroProps> = ({
                   width={56}
                   height={56}
                   style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  sizes="44px"
                 />
               ) : null}
             </div>
@@ -140,6 +141,7 @@ const Hero: React.FC<HeroProps> = ({
                   width={56}
                   height={56}
                   style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  sizes="44px"
                 />
               ) : null}
             </div>

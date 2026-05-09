@@ -17,7 +17,11 @@ import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
-import MembershipModal from "@/components/modals/MembershipModal";
+import dynamic from "next/dynamic";
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import ReferFriendModal from "@/components/modals/ReferFriendModal";
 import PastDrawsModal from "@/components/modals/PastDrawsModal";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";

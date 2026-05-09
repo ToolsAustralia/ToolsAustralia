@@ -344,6 +344,7 @@ export default function AdvertisingBreakdownSection({
                             width={96}
                             height={48}
                             className={cn("object-contain max-h-7 sm:max-h-10 md:max-h-12", metric.logoScale || "")}
+                            sizes="(max-width: 640px) 48px, 96px"
                           />
                         </div>
                       </div>

@@ -207,6 +207,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                       width={160}
                       height={160}
                       className="w-40 h-40 object-cover rounded-xl border border-yellow-200"
+                      sizes="160px"
                     />
                   </div>
                 )}

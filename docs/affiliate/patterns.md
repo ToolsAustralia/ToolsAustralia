@@ -1,5 +1,9 @@
 # Affiliate — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+`affiliate/login/page.tsx` shipped its background, logo, and card-overlay `<Image fill>` elements without `sizes` hints. Phase 5B added accurate hints (`(max-width: 640px) 40px, 50px` for the small profile mark; `(max-width: 1024px) 100vw, calc(100vw - 591px)` for the right-column background; `(max-width: 640px) 150px, (max-width: 1024px) 200px, 276px` for the card overlay). Markup only.
+
 ## P1. Reverser pattern for commission refunds
 
 `reverse-commission.ts` plugs into the `src/utils/payment/reversers/` pipeline. Same pattern as redeemables, draws, promo bonuses.

@@ -43,6 +43,7 @@ const PromoBadgeImage: React.FC<PromoBadgeImageProps> = ({
         width={dimensions.width}
         height={dimensions.height}
         className={cn("object-contain", sizeClassMap[size], className)}
+        sizes={`${dimensions.width}px`}
       />
     );
   }

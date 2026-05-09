@@ -40,6 +40,7 @@ export default function NotFound() {
                   width={180}
                   height={60}
                   className="h-12 w-auto object-contain drop-shadow-[0_0_10px_rgba(238,0,0,0.3)]"
+                  sizes="180px"
                   priority
                 />
               </div>

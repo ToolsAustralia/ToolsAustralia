@@ -156,28 +156,36 @@ const Dropdown: React.FC<DropdownProps> = ({
 
     calculatePositionAndHeight();
 
-    let scrollTimeout: NodeJS.Timeout;
+    // rAF-coalesced, passive, capture-phase scroll listener: capture is required so that
+    // scroll events from any nested scrollable ancestor (e.g. a modal body) reposition the dropdown.
+    let scrollRaf = 0;
     const handleScroll = () => {
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(calculatePositionAndHeight, 50);
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        calculatePositionAndHeight();
+      });
     };
-    
-    document.addEventListener("scroll", handleScroll, true);
+
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
     window.addEventListener("resize", calculatePositionAndHeight);
 
+    // NOTE: non-passive wheel listener — we call e.stopPropagation() so wheel-scrolling inside the
+    // open option list does not also scroll the page behind. Capture-phase intercepts the event
+    // before any ancestor handlers.
     const handleWheel = (e: WheelEvent) => {
       if (optionsRef.current && optionsRef.current.contains(e.target as Node)) {
         e.stopPropagation();
       }
     };
-    
+
     document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
       window.removeEventListener("resize", calculatePositionAndHeight);
-      document.removeEventListener("scroll", handleScroll, true);
+      document.removeEventListener("scroll", handleScroll, { capture: true });
       document.removeEventListener("wheel", handleWheel, { capture: true });
-      if (scrollTimeout) clearTimeout(scrollTimeout);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
     };
   }, [isOpen]);
 

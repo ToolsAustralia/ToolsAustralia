@@ -401,6 +401,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 width={500}
                 height={400}
                 className="w-full h-80 object-contain rounded-lg border border-gray-300 bg-gray-50"
+                sizes="(max-width: 768px) 100vw, 500px"
               />
 
               {/* Overlay for drag and drop replacement */}

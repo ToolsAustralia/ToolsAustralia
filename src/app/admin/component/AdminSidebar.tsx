@@ -435,6 +435,7 @@ export default function AdminSidebar({
               width={40}
               height={40}
               className="h-full w-full object-cover"
+              sizes="40px"
             />
           </div>
           <div className="flex-1 min-w-0 text-gray-900 dark:text-neutral-100">

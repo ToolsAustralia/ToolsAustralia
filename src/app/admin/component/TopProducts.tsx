@@ -54,6 +54,7 @@ export default function TopProducts({ products }: TopProductsProps) {
                       width={48}
                       height={48}
                       className="rounded-lg object-cover"
+                      sizes="48px"
                     />
                   ) : (
                     <ShoppingCart className="h-6 w-6 text-gray-400 dark:text-neutral-500" />

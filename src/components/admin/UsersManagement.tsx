@@ -813,6 +813,7 @@ export default function UsersManagement() {
                                     className="w-5 h-5 sm:w-7 sm:h-7 lg:w-9 lg:h-9 object-contain"
                                     width={36}
                                     height={36}
+                                    sizes="(max-width: 640px) 20px, (max-width: 1024px) 28px, 36px"
                                   />
                                 </div>
                               </span>
@@ -824,6 +825,7 @@ export default function UsersManagement() {
                                   className="w-full h-full object-cover"
                                   width={48}
                                   height={48}
+                                  sizes="(max-width: 640px) 32px, (max-width: 1024px) 40px, 48px"
                                 />
                               </div>
                             )}

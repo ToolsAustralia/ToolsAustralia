@@ -1,5 +1,9 @@
 # Auth — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+`/login` and `/reset-password` shipped `<Image fill>` background and logo elements without `sizes` hints. Phase 5B added accurate hints: the login background uses `(max-width: 1024px) 100vw, calc(100vw - 591px)` (the right column is 100vw on narrow viewports and `calc(100vw - 591px)` once the 591px login form sits beside it), the login card overlay uses `(max-width: 640px) 150px, (max-width: 1024px) 200px, 276px`, and the small profile/logo marks use `(max-width: 640px) 40px, 50px`. These are pure markup additions — no behavioural change.
+
 ## P1. Session via `getServerSession()` in handlers
 
 ```ts

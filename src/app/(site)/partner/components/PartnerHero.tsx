@@ -5,8 +5,6 @@ import Image from "next/image";
 import MetallicButton from "@/components/ui/MetallicButton";
 // No icons needed for this component
 
-// Import Swiper styles
-import "swiper/css";
 import BrandScroller from "@/components/ui/BrandScroller";
 
 interface PartnerHeroProps {

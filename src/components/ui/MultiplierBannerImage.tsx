@@ -18,6 +18,8 @@ export type MultiplierBannerImageProps = {
   width?: number;
   height?: number;
   priority?: boolean;
+  /** next/image sizes hint; defaults to a full-width banner heuristic. */
+  sizes?: string;
   /** Fired after all candidate URLs fail to load. */
   onExhausted?: () => void;
 };
@@ -35,6 +37,7 @@ export default function MultiplierBannerImage({
   width = BANNER_DIMENSIONS.width,
   height = BANNER_DIMENSIONS.height,
   priority,
+  sizes = "(max-width: 768px) 100vw, 1024px",
   onExhausted,
 }: MultiplierBannerImageProps) {
   const paths = getMultiplierBannerImagePaths(multiplier, slug, toolsetSlug);
@@ -60,6 +63,7 @@ export default function MultiplierBannerImage({
       height={height}
       className={className}
       priority={priority}
+      sizes={sizes}
       onError={() => {
         if (safeIndex < paths.length - 1) {
           setIndex(safeIndex + 1);

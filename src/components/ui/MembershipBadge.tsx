@@ -161,6 +161,7 @@ export default function MembershipBadge({
             className="w-full h-full object-contain"
             width={20}
             height={20}
+            sizes="20px"
           />
         </div>
       )}

@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import MembershipModal from "@/components/modals/MembershipModal";
+import dynamic from "next/dynamic";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
@@ -598,6 +603,7 @@ export default function MembershipSection({
                               width={96}
                               height={96}
                               className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                              sizes="(max-width: 640px) 80px, 96px"
                             />
                           </div>
                         )}
@@ -912,6 +918,7 @@ export default function MembershipSection({
                         width={120}
                         height={120}
                         className="w-24 h-24 object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+                        sizes="96px"
                       />
                     </div>
                   )}
@@ -928,6 +935,7 @@ export default function MembershipSection({
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}
                           className={cn("w-full h-full object-contain", isVip ? "animate-vip-icon-halo" : colorScheme.glow, "opacity-90")}
+                          sizes="96px"
                         />
                         {/* Promo Badge positioned on top of the image icon */}
                         {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}

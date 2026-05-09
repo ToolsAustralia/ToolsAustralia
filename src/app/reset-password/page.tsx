@@ -171,6 +171,7 @@ function ResetPasswordContent() {
               alt="Tools Australia Logo"
               fill
               className="object-contain"
+              sizes="(max-width: 640px) 40px, 50px"
               priority
             />
           </div>

@@ -120,7 +120,7 @@ const ModalHeader: React.FC<ModalHeaderProps> = ({
       {/* Logo */}
       {showLogo && (
         <div className={cn("flex justify-center", compact ? "mb-1 sm:mb-2" : "mb-2")}>
-          <Image src={logoSrc} alt={logoAlt} width={120} height={40} className={cn(logoHeightClass, "w-auto")} />
+          <Image src={logoSrc} alt={logoAlt} width={120} height={40} className={cn(logoHeightClass, "w-auto")} sizes="120px" />
         </div>
       )}
 

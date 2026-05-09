@@ -21,6 +21,7 @@ export default function GiveawaySection({ className = "" }: GiveawaySectionProps
             src="/images/giveAway.webp"
             alt="Red Cantilever Toolbox - Next Giveaway"
             fill
+            sizes="(max-width: 640px) 160px, (max-width: 1024px) 240px, 500px"
             className="object-contain drop-shadow-2xl relative z-10"
             priority
           />

@@ -93,7 +93,7 @@ const DowngradeCard: React.FC<DowngradeCardProps> = ({ tier, packageName, saveLa
         {/* Corner badge */}
         <div className={cn(badge({ tier }))} aria-hidden>
           {icon ? (
-            <Image src={icon} alt="" width={48} height={48} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <Image src={icon} alt="" width={48} height={48} style={{ width: "100%", height: "100%", objectFit: "contain" }} sizes="48px" />
           ) : null}
         </div>
 

@@ -6,9 +6,14 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useMyAccountData } from "@/hooks/queries";
 import { useUserMajorDrawStats, useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
+import dynamic from "next/dynamic";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMemberships } from "@/hooks/useMemberships";
-import MembershipModal from "@/components/modals/MembershipModal";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import MembershipSection from "@/components/sections/MembershipSection";
 import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";

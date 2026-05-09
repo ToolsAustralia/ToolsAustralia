@@ -936,6 +936,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
                         width={64}
                         height={64}
                         className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                        sizes="(max-width: 640px) 48px, 56px"
                       />
                     </div>
                   )}

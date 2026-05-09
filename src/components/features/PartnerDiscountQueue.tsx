@@ -538,6 +538,7 @@ export default function PartnerDiscountQueue({
                       className="w-full h-full object-contain"
                       width={40}
                       height={40}
+                      sizes="(max-width: 640px) 32px, 40px"
                     />
                   </div>
                 </span>

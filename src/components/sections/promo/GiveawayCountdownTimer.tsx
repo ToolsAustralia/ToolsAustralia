@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
@@ -8,6 +8,7 @@ import { getLandingPageThemeFromSlug } from "@/utils/package-colors/packageColor
 import { formatMajorDrawLiveDateLineUtc } from "@/utils/common/timezone";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 import type { PrizeSlug } from "@/config/prizes";
 import { cn } from "@/utils/cn";
 
@@ -51,6 +52,8 @@ function GiveawayCountdownLeaf({
 export default function GiveawayCountdownTimer({ activeSlug, className = "" }: GiveawayCountdownTimerProps) {
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
@@ -171,6 +174,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
   return (
     <motion.div
+      ref={rootRef}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
@@ -206,8 +210,8 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent dark:via-white/5"
-            animate={{ x: ["-200%", "200%"] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: "easeInOut" }}
+            animate={inView ? { x: ["-200%", "200%"] } : { x: "-200%" }}
+            transition={inView ? { duration: 3, repeat: Infinity, repeatDelay: 2, ease: "easeInOut" } : { duration: 0 }}
           />
 
           <div
@@ -292,8 +296,8 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                         {unit.label === "Secs" && (
                           <motion.div
                             className={cn("absolute inset-0", useLightCountdownInner ? "bg-black/[0.06]" : "bg-white/5")}
-                            animate={{ opacity: [0, useLightCountdownInner ? 0.35 : 0.25, 0] }}
-                            transition={{ duration: 1, repeat: Infinity }}
+                            animate={inView ? { opacity: [0, useLightCountdownInner ? 0.35 : 0.25, 0] } : { opacity: 0 }}
+                            transition={inView ? { duration: 1, repeat: Infinity } : { duration: 0 }}
                           />
                         )}
 
@@ -384,8 +388,8 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-black/[0.03] to-transparent dark:via-white/[0.04]"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 4, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
+            animate={inView ? { x: ["-100%", "100%"] } : { x: "-100%" }}
+            transition={inView ? { duration: 4, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" } : { duration: 0 }}
           />
 
           <div className="relative z-10 px-3 py-3 text-center sm:px-5 sm:py-4">

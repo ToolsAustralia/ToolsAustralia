@@ -141,6 +141,7 @@ export default function MembershipBreakdownSection({
                                 width={32}
                                 height={32}
                                 className={`w-7 h-7 object-contain ${getPackageIconWrapperScaleClass(pkg.packageId, "badge")}`}
+                                sizes="32px"
                               />
                             ) : (
                               <div className="w-7 h-7 rounded flex items-center justify-center bg-gray-100">
@@ -243,6 +244,7 @@ export default function MembershipBreakdownSection({
                         width={48}
                         height={48}
                         className={`flex-shrink-0 rounded w-10 h-10 sm:w-12 sm:h-12 object-contain ${getPackageIconWrapperScaleClass(pkg.packageId, "badge")}`}
+                        sizes="(max-width: 640px) 40px, 48px"
                       />
                     ) : (
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded flex items-center justify-center bg-gray-100 flex-shrink-0">
