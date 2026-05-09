@@ -16,7 +16,12 @@
 |---|---|
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx` | Countdown timer to mini-draw end |
 | `src/app/(site)/mini-draws/[id]/components/ShareButton.tsx` | Social-share for mini-draw |
+| `src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx` | Prize-image carousel: main slide + thumbnail strip + pagination dots + nav chevrons + image counter, with click-to-fullscreen via `FullscreenImageViewer`. |
 | _other major-draw components_ | _TODO: enumerate from src/components/ that map to draws (per the manifest, draws-domain components are not pulled out separately — they live near pages)._ |
+
+### MiniDrawImageGallery
+
+[src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx](../../src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx) is the prize-image gallery on the mini-draw detail page. As of Phase 3 of the [Site-wide Interaction Smoothness plan](../superpowers/plans/2026-05-09-site-smoothness.md) (2026-05-10) it uses two inline `useEmblaCarousel` instances (replacing the previous Swiper `[Navigation, Pagination, Thumbs]` + `[FreeMode, Thumbs]` pair) so the rounded main card can carry absolutely-positioned overlay UI — see [shared-ui/patterns.md `Inline two-Embla pattern`](../shared-ui/patterns.md#embla-wrappers) for the rationale. Behaviour: the main viewport drives `activeIndex`; clicking a thumbnail calls `mainApi.scrollTo(i)`; the thumbs strip scrolls into the active slide via `thumbsApi.scrollTo(i)` whenever `mainApi` selects. Tap-vs-drag detection uses `pointerStartRef` with an 8px deadzone — taps open `FullscreenImageViewer` at the clicked index, drags scroll the carousel without opening fullscreen.
 
 ## Hooks
 
