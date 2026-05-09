@@ -2099,3 +2099,57 @@ body[data-account-layout] .site-footer,
 body[data-account-layout] .newsletter-section {
   display: none !important;
 }
+
+/* ===== Device-tier tokens (added 2026-05-09) ===== */
+:root {
+  --ta-blur:               12px;
+  --ta-shadow-card:        0 16px 48px rgb(0 0 0 / 0.40);
+  --ta-shadow-card-hover:  0 24px 60px rgb(0 0 0 / 0.55);
+  --ta-card-hover-y:       -4px;
+  --ta-transition-dur:     200ms;
+  --ta-marquee-state:      running;
+}
+html[data-tier="mobile"] {
+  --ta-blur:               0px;
+  --ta-shadow-card:        0 4px 12px rgb(0 0 0 / 0.30);
+  --ta-shadow-card-hover:  0 4px 12px rgb(0 0 0 / 0.30);
+  --ta-card-hover-y:       0px;
+  --ta-transition-dur:     150ms;
+}
+html[data-tier="tablet"] {
+  --ta-blur:               4px;
+  --ta-shadow-card:        0 8px 24px rgb(0 0 0 / 0.35);
+  --ta-shadow-card-hover:  0 12px 32px rgb(0 0 0 / 0.45);
+  --ta-card-hover-y:       -2px;
+}
+html[data-save-data="true"] {
+  --ta-marquee-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --ta-transition-dur: 1ms; --ta-marquee-state: paused; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --ta-blur: 0px; }
+}
+
+/* iOS Safari requires -webkit-backdrop-filter alongside backdrop-filter.
+   Tailwind v3 emits only the unprefixed form. Mirror it here. */
+[class*="backdrop-blur"] {
+  -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+}
+
+@media print {
+  [data-print="hide"],
+  header[data-sticky="true"],
+  [data-floating-widget],
+  [data-tracking-pixel] {
+    display: none !important;
+  }
+  html, body { background: #fff !important; color: #000 !important; }
+}

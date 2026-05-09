@@ -51,3 +51,7 @@ Refactored 2026-05-04: the photo is now used as a full-bleed cinematic backgroun
 ## className conventions (2026-05-08)
 
 Draw components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.
+
+## Interaction smoothness (Phase 1, 2026-05-09)
+
+[`MiniDrawCountdown`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx) is now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the mini-draw detail page does not re-render on every tick of the countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.

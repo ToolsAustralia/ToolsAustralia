@@ -32,3 +32,7 @@ Pixels load third-party scripts. CSP must allow these domains (Facebook, Google,
 ## className conventions (2026-05-08)
 
 Tracking/pixel components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.
+
+## Print-stylesheet markers (2026-05-09)
+
+Pixel `<Script>` tags are tagged with `data-tracking-pixel="true"` (`GoogleTagManager`, `KlaviyoScriptLoader`, the Contentsquare loader in `app/layout.tsx`). The print stylesheet in [src/app/globals.css](../../src/app/globals.css) hides any `[data-tracking-pixel]` element so they don't leak into printed pages. When wiring a new pixel script, add the same attribute. See [shared-ui/patterns.md](../shared-ui/patterns.md#print-stylesheet) for the full set of print-hidden markers.

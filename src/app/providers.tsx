@@ -19,7 +19,9 @@ import { defaultQueryOptions, defaultMutationOptions, retryConfig } from "@/lib/
 import UpgradeSuccessToast from "@/components/UpgradeSuccessToast";
 import { ToastProvider } from "@/components/ui/Toast";
 import { useState } from "react";
-import FloatingPromoBanner from "@/components/banners/FloatingPromoBanner";
+import { MotionConfig } from "framer-motion";
+import DeviceTierProvider from "@/components/system/DeviceTierProvider";
+import FloatingPromoBannerHost from "@/components/banners/FloatingPromoBannerHost";
 import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
@@ -93,14 +95,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   <CartProvider>
                     <LoadingProvider>
                       <ToastProvider>
-                        <AffiliateTracker />
-                        <ReferralTracker />
-                        <PromoLinkTracker />
-                        <KlaviyoUserIdentifier />
-                        <UpgradeSuccessToast />
-                        {children}
-                        <FloatingPromoBanner />
-                        {process.env.NODE_ENV === "development" ? <MajorDrawTestControls /> : null}
+                        <MotionConfig reducedMotion="user">
+                          <DeviceTierProvider />
+                          <AffiliateTracker />
+                          <ReferralTracker />
+                          <PromoLinkTracker />
+                          <KlaviyoUserIdentifier />
+                          <UpgradeSuccessToast />
+                          {children}
+                          <FloatingPromoBannerHost />
+                          {process.env.NODE_ENV === "development" ? <MajorDrawTestControls /> : null}
+                        </MotionConfig>
                       </ToastProvider>
                     </LoadingProvider>
                     {/* React Query DevTools - temporarily disabled */}

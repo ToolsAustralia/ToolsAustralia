@@ -150,15 +150,17 @@ function PopulatedSection({
 }: PopulatedSectionProps) {
   const theme = usePromoTheme();
   const hasMultiple = winners.length > 1;
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    {
-      align: "center",
+  const emblaOptions = useMemo(
+    () => ({
+      align: "center" as const,
       loop: hasMultiple,
-      containScroll: hasMultiple ? undefined : "trimSnaps",
+      containScroll: hasMultiple ? undefined : ("trimSnaps" as const),
       dragFree: false,
-    },
-    []
+    }),
+    [hasMultiple]
   );
+  const emblaPlugins = useMemo(() => [], []);
+  const [emblaRef, emblaApi] = useEmblaCarousel(emblaOptions, emblaPlugins);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { addRAFScrollListener } from "@/utils/dom/listenerHelpers";
 
 export default function FloatingGetEntriesButton() {
   const [isVisible, setIsVisible] = useState(false);
@@ -10,8 +11,7 @@ export default function FloatingGetEntriesButton() {
 
   // Handle scroll detection for visibility + animate when Winners or How it Works in view
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
+    const handleScroll = (scrollY: number) => {
       const heroSectionHeight = window.innerHeight;
       const viewportHeight = window.innerHeight;
 
@@ -45,9 +45,8 @@ export default function FloatingGetEntriesButton() {
       setIsInWinnersOrHowItWorks(checkInView(winners) || checkInView(howItWorks));
     };
 
-    handleScroll();
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    handleScroll(window.scrollY);
+    return addRAFScrollListener(window, handleScroll);
   }, []);
 
   const theme = usePromoTheme();
@@ -65,6 +64,7 @@ export default function FloatingGetEntriesButton() {
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          data-floating-widget="true"
           initial={{ opacity: 0, scale: 0, y: 100 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0, y: 100 }}

@@ -115,7 +115,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={defaultPrizeSlug} toolsetSlug={toolsetSlug} />
-        <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
+        <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
           <main className="w-full overflow-hidden ">

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Grid, EffectFade } from "swiper/modules";
-import type { Swiper as SwiperType } from "swiper";
+import useEmblaCarousel from "embla-carousel-react";
+import Fade from "embla-carousel-fade";
+import ClassNames from "embla-carousel-class-names";
+import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import {
   Zap, Package, Battery, Wrench, DollarSign, Star, Banknote, Shield, Award,
   type LucideIcon,
@@ -55,11 +56,6 @@ import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getMajorDrawHeroUrgencyFromMajorDraw } from "@/utils/promo/promo-hero-images";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
-
-import "swiper/css";
-import "swiper/css/thumbs";
-import "swiper/css/grid";
-import "swiper/css/effect-fade";
 
 const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
@@ -447,13 +443,30 @@ export default function PrizeShowcase({
   const { data: majorDrawForLanding } = useCurrentMajorDraw();
   const landingHeroUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDrawForLanding ?? null);
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
-  const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
-  const mainSwiperRef = useRef<SwiperType | null>(null);
-  const [thumbCanSlidePrev, setThumbCanSlidePrev] = useState(false);
-  const [thumbCanSlideNext, setThumbCanSlideNext] = useState(false);
   const [mainCanSlidePrev, setMainCanSlidePrev] = useState(false);
   const [mainCanSlideNext, setMainCanSlideNext] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+
+  // Main image carousel: cross-fade between full-frame slides.
+  // Speed analogue: Swiper speed:420ms ≈ Embla duration:25 frames at 60fps (raise/lower if visual feel diverges).
+  const mainOptions = useMemo<EmblaOptionsType>(
+    () => ({ loop: false, duration: 25 }),
+    []
+  );
+  const mainPlugins = useMemo(() => [Fade(), ClassNames()], []);
+  const [mainRef, mainApi] = useEmblaCarousel(mainOptions, mainPlugins);
+
+  // Thumbs carousel: column-grouping. Each Embla slide is one COLUMN that stacks
+  // 2 thumbs vertically (replaces Swiper Grid rows:2 / fill:"column").
+  // Slide width = 1 / visibleColumns; columns visible per row = 4 / 5 / 6 (mobile / sm / lg).
+  // This naturally handles non-divisible totals (no unreachable trailing thumbs) and
+  // removes the snap-back caused by Swiper slidesPerGroup + slideToClickedSlide.
+  const thumbsOptions = useMemo<EmblaOptionsType>(
+    () => ({ containScroll: "keepSnaps" as const, dragFree: true }),
+    []
+  );
+  const thumbsPlugins = useMemo(() => [ClassNames()], []);
+  const [thumbsRef, thumbsApi] = useEmblaCarousel(thumbsOptions, thumbsPlugins);
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [isNavigating, _setIsNavigating] = useState(false);
@@ -621,13 +634,13 @@ export default function PrizeShowcase({
     setStoreSlug(activeSlug);
   }, [activeSlug, toolsetMode, isPromotionsPage, setStoreSlug]);
 
+  // Sync the thumbs Embla to the column containing the active gallery item
+  // (each column holds 2 thumbs — see thumbs render below).
   useEffect(() => {
-    if (!thumbsSwiper || thumbsSwiper.destroyed) return;
-    const slidesPerGroup = Number(thumbsSwiper.params.slidesPerGroup) || 1;
-    const pageStartIndex = Math.floor(activeGalleryIndex / slidesPerGroup) * slidesPerGroup;
-    thumbsSwiper.slideTo(pageStartIndex);
-    updateThumbNavigationState(thumbsSwiper);
-  }, [activeGalleryIndex, thumbsSwiper]);
+    if (!thumbsApi) return;
+    const columnIndex = Math.floor(activeGalleryIndex / 2);
+    thumbsApi.scrollTo(columnIndex);
+  }, [activeGalleryIndex, thumbsApi]);
   
   // On mobile, prevent scroll when slug changes (navigation) — evergreen pages only.
   // Toolset landing pages should always scroll to top so users see the hero.
@@ -686,15 +699,31 @@ export default function PrizeShowcase({
     setIsFullscreenOpen(true);
   };
 
-  const updateThumbNavigationState = (swiper: SwiperType) => {
-    setThumbCanSlidePrev(!swiper.isBeginning);
-    setThumbCanSlideNext(!swiper.isEnd);
-  };
+  const onMainSelect = useCallback((api: EmblaCarouselType) => {
+    const i = api.selectedScrollSnap();
+    setActiveGalleryIndex(i);
+    setMainCanSlidePrev(api.canScrollPrev());
+    setMainCanSlideNext(api.canScrollNext());
+  }, []);
 
-  const updateMainNavigationState = (swiper: SwiperType) => {
-    setMainCanSlidePrev(!swiper.isBeginning);
-    setMainCanSlideNext(!swiper.isEnd);
-  };
+  useEffect(() => {
+    if (!mainApi) return;
+    onMainSelect(mainApi);
+    mainApi.on("select", onMainSelect);
+    mainApi.on("reInit", onMainSelect);
+    return () => {
+      mainApi.off("select", onMainSelect);
+      mainApi.off("reInit", onMainSelect);
+    };
+  }, [mainApi, onMainSelect]);
+
+  // When the gallery resets to index 0 on prize change, ensure the main carousel scrolls back too.
+  useEffect(() => {
+    if (!mainApi) return;
+    if (mainApi.selectedScrollSnap() !== activeGalleryIndex) {
+      mainApi.scrollTo(activeGalleryIndex);
+    }
+  }, [mainApi, activeGalleryIndex]);
 
   const handleSelectPrize = (nextSlug: string) => {
     if (!nextSlug || nextSlug === activeSlug) return;
@@ -894,6 +923,7 @@ export default function PrizeShowcase({
                 height={200}
                 className="w-full max-w-4xl lg:max-w-2xl h-auto object-contain"
                 priority
+                sizes="(max-width: 1024px) 100vw, 800px"
               />
             </div>
           ) : null}
@@ -1058,49 +1088,42 @@ export default function PrizeShowcase({
               }}
             >
               {enhancedGallery.length > 1 ? (
-                <Swiper
-                  modules={[EffectFade]}
-                  onSwiper={(swiper) => {
-                    mainSwiperRef.current = swiper;
-                    setActiveGalleryIndex(swiper.activeIndex ?? 0);
-                    updateMainNavigationState(swiper);
-                  }}
-                  onSlideChange={(swiper) => {
-                    setActiveGalleryIndex(swiper.activeIndex);
-                    updateMainNavigationState(swiper);
-                  }}
-                  onResize={updateMainNavigationState}
-                  className="main-swiper"
+                <div
+                  ref={mainRef}
+                  className="main-swiper overflow-hidden"
                   data-brand-slug={activeSlug}
-                  spaceBetween={0}
-                  slidesPerView={1}
-                  speed={420}
-                  effect="fade"
-                  fadeEffect={{ crossFade: true }}
+                  data-carousel="true"
+                  style={{ touchAction: "pan-y pinch-zoom" }}
                 >
-                  {enhancedGallery.map((image, index) => {
-                    const { scaleClass, translateClass, objectPosition } = getPrizeGalleryImageLayout(
-                      image.src,
-                      { isLandingImage: image.isLandingImage }
-                    );
-                    return (
-                    <SwiperSlide key={`${image.src}-${index}`}>
-                      <div
-                        className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
-                      >
-                        <PrizeShowcaseResponsiveImage
-                          image={image}
-                          index={index}
-                          scaleClass={scaleClass}
-                          translateClass={translateClass}
-                          objectPosition={objectPosition}
-                          priority={index === 0}
-                          sizes="(max-width: 1024px) 100vw, 50vw"
-                        />
-                      </div>
-                    </SwiperSlide>
-                  );})}
-                </Swiper>
+                  <div className="flex">
+                    {enhancedGallery.map((image, index) => {
+                      const { scaleClass, translateClass, objectPosition } = getPrizeGalleryImageLayout(
+                        image.src,
+                        { isLandingImage: image.isLandingImage }
+                      );
+                      return (
+                        <div
+                          key={`${image.src}-${index}`}
+                          className="flex-[0_0_100%] min-w-0"
+                        >
+                          <div
+                            className="relative aspect-[5/6] sm:aspect-[4/3] lg:aspect-[6/5] overflow-hidden cursor-zoom-in"
+                          >
+                            <PrizeShowcaseResponsiveImage
+                              image={image}
+                              index={index}
+                              scaleClass={scaleClass}
+                              translateClass={translateClass}
+                              objectPosition={objectPosition}
+                              priority={index === 0}
+                              sizes="(max-width: 1024px) 100vw, 50vw"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 (() => {
                   const firstSlide = enhancedGallery[0];
@@ -1139,7 +1162,7 @@ export default function PrizeShowcase({
               {enhancedGallery.length > 1 && mainCanSlidePrev && (
                 <button
                   type="button"
-                  onClick={() => mainSwiperRef.current?.slidePrev()}
+                  onClick={() => mainApi?.scrollPrev()}
                   aria-label="Show previous prize image"
                   className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
                   style={{
@@ -1157,7 +1180,7 @@ export default function PrizeShowcase({
               {enhancedGallery.length > 1 && mainCanSlideNext && (
                 <button
                   type="button"
-                  onClick={() => mainSwiperRef.current?.slideNext()}
+                  onClick={() => mainApi?.scrollNext()}
                   aria-label="Show next prize image"
                   className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
                   style={{
@@ -1193,109 +1216,68 @@ export default function PrizeShowcase({
 
             {enhancedGallery.length > 1 && (
               <div className="relative">
-                <Swiper
-                  modules={[Grid]}
-                  onSwiper={(swiper) => {
-                    setThumbsSwiper(swiper);
-                    updateThumbNavigationState(swiper);
-                  }}
-                  onSlideChange={updateThumbNavigationState}
-                  onResize={updateThumbNavigationState}
-                  spaceBetween={8}
-                  slidesPerView={4}
-                  slidesPerGroup={8}
-                  grid={{
-                    rows: 2,
-                    fill: "column",
-                  }}
-                  breakpoints={{
-                    640: {
-                      slidesPerView: 5,
-                      slidesPerGroup: 10,
-                    },
-                    1024: {
-                      slidesPerView: 6,
-                      slidesPerGroup: 12,
-                    },
-                  }}
-                  watchSlidesProgress
-                  slideToClickedSlide
+                <div
+                  ref={thumbsRef}
                   className="thumbs-swiper h-[120px] sm:h-[140px] lg:h-[156px]"
                   data-brand-slug={activeSlug}
+                  data-carousel="true"
+                  style={{ touchAction: "pan-y pinch-zoom" }}
                 >
-                  {enhancedGallery.map((image, index) => {
-                    const { scaleClass, translateClass, objectPosition } = getPrizeGalleryImageLayout(
-                      image.src,
-                      { isLandingImage: image.isLandingImage, thumb: true }
-                    );
-                    return (
-                    <SwiperSlide key={`thumb-${image.src}-${index}`}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          mainSwiperRef.current?.slideTo(index);
-                        }}
-                        aria-label={`View prize image ${index + 1}`}
-                      aria-current={activeGalleryIndex === index ? "true" : "false"}
-                      className={`relative w-full h-full rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer touch-manipulation ${
-                        activeGalleryIndex === index
-                          ? "border-gray-500 dark:border-neutral-500 opacity-100"
-                          : "border-gray-200/90 dark:border-neutral-600 opacity-[0.82]"
-                      }`}
-                        style={{
-                          backgroundColor: "#EEEEEC",
-                        }}
-                      >
-                        <PrizeShowcaseResponsiveImage
-                          image={image}
-                          index={index}
-                          scaleClass={scaleClass}
-                          translateClass={translateClass}
-                          objectPosition={objectPosition}
-                          priority={false}
-                          sizes="64px"
-                          alt={image.alt || `Prize thumbnail ${index + 1}`}
-                        />
-                      </button>
-                    </SwiperSlide>
-                  );})}
-                </Swiper>
+                  {/* Column grouping: each Embla slide is one column holding 2 thumbs stacked vertically.
+                      Visible columns per row: 4 (mobile) / 5 (sm) / 6 (lg) — total visible thumbs = columns × 2.
+                      Replaces Swiper Grid rows:2 / slidesPerGroup. Naturally reaches partial-final-column
+                      (no unreachable trailing items) and avoids slidesPerGroup snap-back on click. */}
+                  <div className="flex gap-2 h-full">
+                    {Array.from({ length: Math.ceil(enhancedGallery.length / 2) }, (_, columnIndex) => {
+                      const top = enhancedGallery[columnIndex * 2];
+                      const bottom = enhancedGallery[columnIndex * 2 + 1];
+                      return (
+                        <div
+                          key={`thumb-col-${columnIndex}`}
+                          className="flex-[0_0_25%] sm:flex-[0_0_20%] lg:flex-[0_0_16.66%] flex flex-col gap-2 h-full"
+                        >
+                          {[top, bottom].map((image, rowIndex) => {
+                            if (!image) return <div key={`thumb-empty-${columnIndex}-${rowIndex}`} className="flex-1 min-h-0" />;
+                            const flatIndex = columnIndex * 2 + rowIndex;
+                            const { scaleClass, translateClass, objectPosition } = getPrizeGalleryImageLayout(
+                              image.src,
+                              { isLandingImage: image.isLandingImage, thumb: true }
+                            );
+                            return (
+                              <button
+                                key={`thumb-${image.src}-${flatIndex}`}
+                                type="button"
+                                onClick={() => mainApi?.scrollTo(flatIndex)}
+                                aria-label={`View prize image ${flatIndex + 1}`}
+                                aria-current={activeGalleryIndex === flatIndex ? "true" : "false"}
+                                className={`relative w-full flex-1 min-h-0 rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer touch-manipulation ${
+                                  activeGalleryIndex === flatIndex
+                                    ? "border-gray-500 dark:border-neutral-500 opacity-100"
+                                    : "border-gray-200/90 dark:border-neutral-600 opacity-[0.82]"
+                                }`}
+                                style={{
+                                  backgroundColor: "#EEEEEC",
+                                }}
+                              >
+                                <PrizeShowcaseResponsiveImage
+                                  image={image}
+                                  index={flatIndex}
+                                  scaleClass={scaleClass}
+                                  translateClass={translateClass}
+                                  objectPosition={objectPosition}
+                                  priority={false}
+                                  sizes="(max-width: 640px) 25vw, (max-width: 1024px) 20vw, 16vw"
+                                  alt={image.alt || `Prize thumbnail ${flatIndex + 1}`}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                {thumbCanSlidePrev && (
-                  <button
-                    type="button"
-                    onClick={() => thumbsSwiper?.slidePrev()}
-                    aria-label="Show previous thumbnails"
-                    className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
-                    style={{
-                      borderColor: activeBrandBorderColor,
-                      color: activeBrandBorderColor,
-                      boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
-                    }}
-                  >
-                    <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                )}
-
-                {thumbCanSlideNext && (
-                  <button
-                    type="button"
-                    onClick={() => thumbsSwiper?.slideNext()}
-                    aria-label="Show next thumbnails"
-                    className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85"
-                    style={{
-                      borderColor: activeBrandBorderColor,
-                      color: activeBrandBorderColor,
-                      boxShadow: `0 0 14px ${activeBrandGlowColor}, 0 4px 14px rgba(0,0,0,0.45)`,
-                    }}
-                  >
-                    <svg className="h-5 w-5 sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
               </div>
             )}
 
@@ -1375,6 +1357,7 @@ export default function PrizeShowcase({
                 width={600}
                 height={160}
                 className="w-full h-auto"
+                sizes="(max-width: 1024px) 100vw, 600px"
               />
             </div>
           </div>
@@ -1401,6 +1384,7 @@ export default function PrizeShowcase({
                 width={600}
                 height={160}
                 className="w-full h-auto"
+                sizes="(max-width: 1024px) 100vw, 600px"
               />
             </div>
           </div>

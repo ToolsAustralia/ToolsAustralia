@@ -31,6 +31,22 @@ If you create a new file in a path that no manifest entry covers, the hook will 
 
 Both Claude and the hooks read the same `Domain Manifest` JSON block (below). When adding a new domain or new path glob, edit that block — do not maintain a separate list elsewhere.
 
+### 4. Don't overengineer
+
+Default to the leanest solution that solves the problem the user actually described. Do **not** add infrastructure that anticipates problems they haven't raised.
+
+Concrete defaults this rule overrides:
+- **No feature flags by default.** Commits are the rollback unit. Add flags only when the user names production-rollout risk.
+- **No custom telemetry plumbing** when Vercel Speed Insights / Sentry / equivalent is already mounted and gives the same signal.
+- **No capability detection beyond OS-level signals.** Use `prefers-reduced-motion`, `prefers-reduced-transparency`, `Save-Data` / `prefers-reduced-data`. Don't reach for `navigator.deviceMemory`, `hardwareConcurrency`, `connection.effectiveType` unless the user names a concrete device class to support.
+- **No speculative tiers/abstractions.** "Scalable" means *handles the cases listed*, not *handles cases nobody asked about*. Three tiers, not five. Two phases, not seven, when two cover the work.
+- **Justify every new file.** Every new file is a maintenance cost. If a single existing file would do, use the existing file.
+- **Spec-writing in particular:** prefer 4–5 phases over 7+. Each phase ships a user-visible win, not just plumbing. When tempted to add "while we're here" infrastructure, ask the user instead of adding it.
+
+This rule overrides skills like `brainstorming`, `writing-plans`, and `writing-skills` whose defaults push toward thoroughness — thorough means "covers the real cases," not "speculatively scales."
+
+This rule is not hook-enforced. You're expected to apply it on your own.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
@@ -126,7 +142,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-08",
+  "lastModified": "2026-05-10",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -223,7 +239,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawTrigger.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-09"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -268,7 +284,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePromoPageTracking.ts",
         "src/hooks/usePromoWelcomeModal.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-10"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -369,7 +385,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/oauth-redirect/**",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-09"
     },
     "email": {
       "docs": "docs/email/",
@@ -415,7 +431,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-05-08"
+      "lastVerified": "2026-05-09"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -488,6 +504,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/features/**",
         "src/components/filters/**",
         "src/components/index.ts",
+        "src/lib/device/**",
         "src/utils/dom/**",
         "src/utils/motion/**",
         "src/utils/url/**",
@@ -496,9 +513,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/brand-utils.ts",
         "src/utils/images/**",
         "src/utils/package-colors/**",
-        "src/utils/prize-brand-colors.ts"
+        "src/utils/prize-brand-colors.ts",
+        "src/hooks/useDeviceProfile.ts",
+        "src/hooks/useInViewportAnimation.ts",
+        "src/hooks/useLeafTimer.ts",
+        "src/app/globals.css",
+        "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-08"
+      "lastVerified": "2026-05-10"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -521,7 +543,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-05-06"
+      "lastVerified": "2026-05-09"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -547,7 +569,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-09"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -575,6 +597,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/infrastructure/",
       "paths": [
         "package.json",
+        "package-lock.json",
         "vercel.json",
         ".gitignore",
         "src/app/api/health/**",
@@ -598,7 +621,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/find-*.ts",
         "scripts/stripe-*.ts"
       ],
-      "lastVerified": "2026-05-08"
+      "lastVerified": "2026-05-09"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

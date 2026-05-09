@@ -70,3 +70,11 @@ Vercel scales CPU with memory, so 512MB is roughly half the CPU of 1024MB — fi
 ## Migrated from `src/docs/ENVIRONMENT_SETUP.md`
 
 > _TODO: read root file and merge._
+
+## Site-wide interaction smoothness — Phase 1 dependencies (2026-05-09)
+
+[`package.json`](../../package.json) adds `embla-carousel-fade@^8.6.0` and `embla-carousel-class-names@^8.6.0` alongside the existing `embla-carousel-react`. Both are consumed exclusively by the [shared-ui Embla wrappers](../shared-ui/architecture.md#embla-carousel-wrappers) — features import the wrappers, not the raw plugins.
+
+[`src/app/globals.css`](../../src/app/globals.css) has a device-tier CSS token block at the bottom (`--ta-blur`, `--ta-shadow-card[-hover]`, `--ta-card-hover-y`, `--ta-transition-dur`, `--ta-marquee-state`) keyed off `html[data-tier="…"]`, plus `@media (prefers-reduced-motion)` / `(prefers-reduced-transparency)` overrides, an iOS Safari `-webkit-backdrop-filter` mirror for any `[class*="backdrop-blur"]`, and a `@media print` block hiding `[data-tracking-pixel]` / `[data-floating-widget]` / sticky headers. Behaviour and consumption rules live in [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09).
+
+[`src/app/providers.tsx`](../../src/app/providers.tsx) mounts `<MotionConfig reducedMotion="user">` and `<DeviceTierProvider />` once at the root so per-page consumers don't have to. Provider composition order is documented in [client-state/frontend.md](../client-state/frontend.md#root-providers-2026-05-09).

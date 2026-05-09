@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import Image from "next/image";
 import { type BrandLogo } from "@/data/brandLogos";
+import { addThrottledResize } from "@/utils/dom/listenerHelpers";
 
 interface BrandLogoCardProps {
   brand: BrandLogo;
@@ -36,7 +37,7 @@ type Breakpoint = "base" | "sm" | "md" | "lg" | "xl";
 
 const subscribers = new Set<(width: number) => void>();
 let sharedWidth = typeof window === "undefined" ? 1024 : window.innerWidth;
-let listenerAttached = false;
+let detachResizeListener: (() => void) | null = null;
 
 const handleResize = () => {
   sharedWidth = window.innerWidth;
@@ -44,11 +45,10 @@ const handleResize = () => {
 };
 
 const ensureResizeListener = () => {
-  if (listenerAttached || typeof window === "undefined") {
+  if (detachResizeListener || typeof window === "undefined") {
     return;
   }
-  listenerAttached = true;
-  window.addEventListener("resize", handleResize);
+  detachResizeListener = addThrottledResize(handleResize);
 };
 
 const getBreakpoint = (width: number): Breakpoint => {
@@ -108,9 +108,9 @@ const useViewportWidth = (): { width: number; isMounted: boolean } => {
 
     return () => {
       subscribers.delete(listener);
-      if (subscribers.size === 0 && listenerAttached) {
-        window.removeEventListener("resize", handleResize);
-        listenerAttached = false;
+      if (subscribers.size === 0 && detachResizeListener) {
+        detachResizeListener();
+        detachResizeListener = null;
       }
     };
   }, [mounted]); // Only depend on mounted - listener doesn't need width
