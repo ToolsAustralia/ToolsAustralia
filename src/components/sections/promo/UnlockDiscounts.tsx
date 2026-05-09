@@ -13,6 +13,7 @@ import {
   getPartnerCatalogVisibleSliceLength,
   resolvePartnerCatalogPlanId,
 } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { cn } from "@/utils/cn";
 
 /**
  * Highlights key parts of discount messages (codes and amounts) with gradient text
@@ -250,7 +251,7 @@ export default function UnlockDiscounts({
                   </div>
                   {/* Discount Message - Flexible middle section */}
                   <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
-                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
+                    <p className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
                       {highlightDiscountMessage(partner.discountMessage, {
                         backgroundImage: theme.gradientSolid,
                         WebkitBackgroundClip: "text",
@@ -272,7 +273,7 @@ export default function UnlockDiscounts({
 
                 {/* Hover Glow Effect */}
                 <div
-                  className={`absolute inset-0 bg-gradient-to-r ${partner.gradient} opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none`}
+                  className={cn("absolute inset-0 bg-gradient-to-r", partner.gradient, "opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none")}
                 ></div>
               </a>
             ))}
@@ -288,7 +289,7 @@ export default function UnlockDiscounts({
                 openEntryFlow({ openLocalModal: false });
               }}
               suppressHydrationWarning
-              className={`relative ${preferDark ? "text-black" : "text-white"} px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group`}
+              className={cn("relative", preferDark ? "text-black" : "text-white", "px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group")}
               style={{
                 background: theme.gradientSolid,
                 boxShadow: `0 8px 32px ${theme.shadowRgba}`,

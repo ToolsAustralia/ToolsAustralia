@@ -4,7 +4,7 @@ export default function MiniDrawDetailLoading() {
   return (
     <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950">
       {/* Hero Banner Skeleton */}
-      <div className="pt-[86px] sm:pt-[106px] pb-8 sm:pb-12 bg-gradient-to-b from-black via-slate-900 to-slate-900">
+      <div className="pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-8 sm:pb-12 bg-gradient-to-b from-black via-slate-900 to-slate-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Breadcrumbs */}
           <div className="flex items-center gap-1 pt-4 pb-5 sm:pb-8">
@@ -49,7 +49,7 @@ export default function MiniDrawDetailLoading() {
           <div className="flex flex-col gap-5">
             {/* Purchase section — red accent bar + package grid */}
             <div className="order-first lg:order-2 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-lg overflow-hidden">
-              <div className="h-1 bg-gradient-to-r from-[#ee0000] via-[#ff4444] to-[#ee0000]" />
+              <div className="h-1 bg-gradient-to-r from-red-600 via-red-400 to-red-600" />
               <div className="p-3 sm:p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-5 w-32" />

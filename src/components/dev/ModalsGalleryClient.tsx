@@ -257,7 +257,7 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "gate-closed": "src/components/modals/GateClosedModal.tsx",
   partner: "src/components/modals/PartnerModal.tsx",
   "pixel-consent": "src/components/modals/PixelConsentModal.tsx",
-  "refer-friend": "src/components/modals/ReferFriendModal.tsx",
+  "refer-friend": "src/components/modals/ReferFriendModal/index.tsx",
   membership: "src/components/modals/MembershipModal.tsx",
   "special-packages": "src/components/modals/SpecialPackagesModal.tsx",
   "package-selection": "src/components/modals/PackageSelectionModal.tsx",
@@ -265,6 +265,17 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   upsell: "src/components/modals/UpsellModal.tsx",
   "success-screen": "src/components/loading/SuccessScreen.tsx",
   "cancellation-upsell": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-foreman": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-boss": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-savelabel": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-downgrade": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-past-due": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-past-due-no-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-days": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-no-label": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-long-entries": "src/components/modals/CancellationUpsellModal.tsx",
+  "cancellation-upsell-processing": "src/components/modals/CancellationUpsellModal.tsx",
   "downgrade-confirm": "src/components/modals/DowngradeConfirmModal.tsx",
   "mini-draw-package": "src/components/modals/MiniDrawPackageModal.tsx",
   "subscription-explainer": "src/components/modals/SubscriptionExplainerModal.tsx",
@@ -338,6 +349,17 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
     note: "Transaction complete overlay (LoadingContext)",
   },
   { id: "cancellation-upsell", label: "CancellationUpsellModal", category: "Commerce" },
+  { id: "cancellation-upsell-foreman", label: "CancellationUpsell — Foreman tier", category: "Commerce" },
+  { id: "cancellation-upsell-boss", label: "CancellationUpsell — Boss tier", category: "Commerce" },
+  { id: "cancellation-upsell-no-savelabel", label: "CancellationUpsell — Tradie no saveLabel", category: "Commerce" },
+  { id: "cancellation-upsell-no-downgrade", label: "CancellationUpsell — no downgrade option", category: "Commerce" },
+  { id: "cancellation-upsell-no-entries", label: "CancellationUpsell — 0 accumulated entries", category: "Commerce" },
+  { id: "cancellation-upsell-past-due", label: "CancellationUpsell — past due (60 entries)", category: "Commerce" },
+  { id: "cancellation-upsell-past-due-no-entries", label: "CancellationUpsell — past due (0 entries)", category: "Commerce" },
+  { id: "cancellation-upsell-no-days", label: "CancellationUpsell — no daysUntilDraw", category: "Commerce" },
+  { id: "cancellation-upsell-no-label", label: "CancellationUpsell — no drawCloseLabel", category: "Commerce" },
+  { id: "cancellation-upsell-long-entries", label: "CancellationUpsell — 12,500 entries", category: "Commerce" },
+  { id: "cancellation-upsell-processing", label: "CancellationUpsell — processing state", category: "Commerce" },
   { id: "downgrade-confirm", label: "DowngradeConfirmModal", category: "Commerce" },
   { id: "mini-draw-package", label: "MiniDrawPackageModal", category: "Commerce" },
   {
@@ -462,21 +484,21 @@ function UnifiedModalGalleryTriggers() {
   return (
     <div className="fixed bottom-4 right-4 z-[10001] max-w-sm rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm dark:border-neutral-600 dark:bg-neutral-900/95">
       <p className="mb-2 text-xs font-semibold text-neutral-800 dark:text-neutral-200">Modal priority triggers</p>
-      <p className="mb-2 text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
+      <p className="mb-2 text-2xs leading-snug text-neutral-500 dark:text-neutral-400">
         Opens the same modals as production via <code className="rounded bg-neutral-100 px-0.5 dark:bg-neutral-800">requestModal</code>.
         Pixel consent is wired with <code className="rounded bg-neutral-100 px-0.5 dark:bg-neutral-800">isOpen=&#123;false&#125;</code> in the manager — use the dedicated gallery item for that UI.
       </p>
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("user-setup", true)}
         >
           User setup
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("upsell", true, {
               offer: SAMPLE_UPSELL_OFFERS[0],
@@ -489,14 +511,14 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("special-packages", true)}
         >
           Special packages
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("gate-closed", true, {
               nextActivationDate: new Date(Date.now() + 7 * 86400000).toISOString(),
@@ -508,7 +530,7 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() =>
             requestModal("subscription-explainer", true, {
               entriesPerMonth: 100,
@@ -523,14 +545,14 @@ function UnifiedModalGalleryTriggers() {
         </button>
         <button
           type="button"
-          className="rounded-md bg-neutral-100 px-2 py-1 text-[10px] font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="rounded-md bg-neutral-100 px-2 py-1 text-2xs font-medium hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={() => requestModal("renewal-failed", true)}
         >
           Renewal failed
         </button>
         <button
           type="button"
-          className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+          className="rounded-md border border-red-200 px-2 py-1 text-2xs font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
           onClick={() => closeAll()}
         >
           Close active
@@ -740,7 +762,7 @@ export default function ModalsGalleryClient() {
                         {e.sourcePath ? (
                           reachablePathSet.has(e.sourcePath) ? (
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${
                                 isEntryActive(e)
                                   ? "bg-white/20 text-white"
                                   : "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-200"
@@ -751,7 +773,7 @@ export default function ModalsGalleryClient() {
                             </span>
                           ) : (
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${
                                 isEntryActive(e)
                                   ? "bg-white/20 text-white"
                                   : "bg-amber-100 text-amber-950 dark:bg-amber-900/45 dark:text-amber-200"
@@ -763,7 +785,7 @@ export default function ModalsGalleryClient() {
                           )
                         ) : (
                           <span
-                            className={`shrink-0 text-[10px] font-medium ${
+                            className={`shrink-0 text-2xs font-medium ${
                               isEntryActive(e) ? "text-white/70" : "text-neutral-400 dark:text-neutral-500"
                             }`}
                             title="Gallery-only shell or not mapped to a single tracked file."
@@ -987,6 +1009,160 @@ export default function ModalsGalleryClient() {
       />
       <CancellationUpsellModal
         isOpen={isOpen("cancellation-upsell")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-foreman")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Foreman",
+          saveLabel: "Save $9/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-boss")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Boss",
+          saveLabel: "Save $5/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-savelabel")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-downgrade")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={0}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-past-due")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        isPastDue
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-past-due-no-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        isPastDue
+        accumulatedEntries={0}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-days")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-no-label")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={60}
+        daysUntilDraw={5}
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-long-entries")}
+        onClose={close}
+        onRedeem={close}
+        onDecline={close}
+        onResolvePayment={close}
+        accumulatedEntries={12500}
+        daysUntilDraw={5}
+        drawCloseLabel="Fri 26 Dec"
+        downgrade={{
+          packageName: "Tradie",
+          saveLabel: "Save $19/mo",
+          onConfirm: close,
+        }}
+      />
+      <CancellationUpsellModal
+        isOpen={isOpen("cancellation-upsell-processing")}
         onClose={close}
         onRedeem={close}
         onDecline={close}

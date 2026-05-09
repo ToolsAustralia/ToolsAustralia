@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface PromoBadgeProps {
   multiplier: PromoMultiplier;
@@ -21,14 +22,14 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
   // Size configurations - matching BestValueBadge text sizes
   const sizeConfig = {
     small: {
-      container: "px-2 py-1 text-[8px]",
-      text: "text-[8px]",
+      container: "px-2 py-1 text-3xs",
+      text: "text-3xs",
       icon: "w-2.5 h-2.5",
-      customTextSize: "text-[10px] sm:text-xs", // Larger text for custom text
+      customTextSize: "text-2xs sm:text-xs", // Larger text for custom text
     },
     medium: {
-      container: "px-2.5 py-1 text-[10px]",
-      text: "text-[10px]",
+      container: "px-2.5 py-1 text-2xs",
+      text: "text-2xs",
       icon: "w-3 h-3",
       customTextSize: "text-xs sm:text-sm", // Larger text for custom text
     },
@@ -119,7 +120,7 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
 
         {/* Multiplier text with metallic gradient */}
         <span
-          className={`font-black ${customText ? "text-[11px] sm:text-[13px]" : ""}`}
+          className={cn("font-black", customText ? "text-2xs sm:text-[13px]" : "")}
           style={{
             background: `linear-gradient(135deg, #1f2937 0%, #374151 50%, #1f2937 100%)`,
             WebkitBackgroundClip: "text",
@@ -133,7 +134,7 @@ const PromoBadge: React.FC<PromoBadgeProps> = ({
         {/* "PROMO" or custom text with metallic effect - conditionally rendered */}
         {showPromoText && (
           <span
-            className={`font-semibold ${customText ? "text-[10px] sm:text-[12px]" : ""}`}
+            className={cn("font-semibold", customText ? "text-2xs sm:text-[12px]" : "")}
             style={{
               background: `linear-gradient(135deg, #1f2937 0%, #374151 50%, #1f2937 100%)`,
               WebkitBackgroundClip: "text",

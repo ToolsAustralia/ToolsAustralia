@@ -22,7 +22,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
               onClick={() => setActiveTab("specifications")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
                 activeTab === "specifications"
-                  ? "border-[#ee0000] text-[#ee0000]"
+                  ? "border-red-600 text-red-600"
                   : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
@@ -32,7 +32,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
               onClick={() => setActiveTab("reviews")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
                 activeTab === "reviews"
-                  ? "border-[#ee0000] text-[#ee0000]"
+                  ? "border-red-600 text-red-600"
                   : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
@@ -42,7 +42,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
               onClick={() => setActiveTab("shipping")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
                 activeTab === "shipping"
-                  ? "border-[#ee0000] text-[#ee0000]"
+                  ? "border-red-600 text-red-600"
                   : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
@@ -129,7 +129,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4">Customer Reviews</h3>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="text-4xl font-bold text-[#ee0000]">{product.rating}</div>
+                      <div className="text-4xl font-bold text-red-600">{product.rating}</div>
                       <div>
                         <div className="flex items-center gap-1 mb-1">
                           {[...Array(5)].map((_, i) => (
@@ -153,7 +153,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                           <Star className="w-3 h-3 text-yellow-400 fill-current" />
                           <div className="flex-1 bg-gray-200 dark:bg-neutral-800 rounded-full h-2">
                             <div
-                              className="bg-[#ee0000] h-2 rounded-full"
+                              className="bg-red-600 h-2 rounded-full"
                               style={{
                                 width: `${
                                   rating === 5 ? 60 : rating === 4 ? 25 : rating === 3 ? 10 : rating === 2 ? 3 : 2
@@ -262,7 +262,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
               <div className="space-y-6">
                 <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-[#ee0000]" />
+                    <Truck className="w-5 h-5 text-red-600" />
                     Shipping Information
                   </h3>
                   <div className="space-y-4">
@@ -292,7 +292,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
 
                 <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5 text-[#ee0000]" />
+                    <RotateCcw className="w-5 h-5 text-red-600" />
                     Returns & Exchanges
                   </h3>
                   <div className="space-y-4">
@@ -324,7 +324,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
               <div className="space-y-6">
                 <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-[#ee0000]" />
+                    <Shield className="w-5 h-5 text-red-600" />
                     Warranty & Support
                   </h3>
                   <div className="space-y-4">
@@ -352,7 +352,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-r from-[#ee0000]/10 to-red-100 rounded-xl p-6 border border-[#ee0000]/20">
+                <div className="bg-gradient-to-r from-red-600/10 to-red-100 rounded-xl p-6 border border-red-600/20">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-3">Need Help?</h3>
                   <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
                     Our customer service team is here to help with any questions about shipping, returns, or product

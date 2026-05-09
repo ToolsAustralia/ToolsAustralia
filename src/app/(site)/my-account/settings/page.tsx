@@ -152,7 +152,7 @@ export default function SettingsPage() {
                     onClick={() => setActiveSection(item.id)}
                     className="w-full flex items-center gap-3 py-4 sm:py-5 text-left hover:opacity-80 transition-opacity"
                   >
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-[#ee0000] dark:text-red-500 flex-shrink-0" />
+                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-500 flex-shrink-0" />
                     <span className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                       {item.label}
                     </span>
@@ -172,7 +172,7 @@ export default function SettingsPage() {
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-3 py-4 sm:py-5 text-left hover:opacity-80 transition-opacity"
               >
-                <LogOut className="w-5 h-5 sm:w-6 sm:h-6 text-[#ee0000] dark:text-red-500 flex-shrink-0" />
+                <LogOut className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 dark:text-red-500 flex-shrink-0" />
                 <span className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                   Sign Out
                 </span>

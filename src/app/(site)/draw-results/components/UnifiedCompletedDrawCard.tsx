@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ExternalLink } from "lucide-react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import CompletedDrawRibbon from "@/components/ui/CompletedDrawRibbon";
+import { cn } from "@/utils/cn";
 
 function getContrastText(hex: string) {
   const clean = hex.replace("#", "");
@@ -75,7 +76,7 @@ export default function UnifiedCompletedDrawCard({
         </div>
 
         <div
-          className={`order-2 flex flex-col justify-center gap-5 px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-8 ${surfaceClass}`}
+          className={cn("order-2 flex flex-col justify-center gap-5 px-5 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-8", surfaceClass)}
         >
           <div>
             <h3

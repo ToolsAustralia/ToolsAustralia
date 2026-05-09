@@ -35,6 +35,7 @@ import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 /** Per-package Enter Now — same building blocks as Schedule Downgrade in subscription management (gradient panel + border glow + shimmer). */
 function packageEnterNowButtonStyle(colorScheme: PackageColorScheme): React.CSSProperties {
@@ -467,7 +468,7 @@ export default function MembershipSection({
     hasMultiplierBanner(effectivePromoMultiplier);
 
   return (
-    <section id="membership" className={`${padding} w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10`}>
+    <section id="membership" className={cn(padding, "w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10")}>
   
         {/* Section Header - Promo-based: show banner image when active promo */}
         {effectivePromoMultiplier !== null && effectivePromoMultiplier > 1 && (
@@ -486,7 +487,7 @@ export default function MembershipSection({
               </div>
             ) : (
               <h2
-                className={`font-sans font-extrabold font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white`}
+                className={cn("font-sans font-extrabold font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight", titleColor, "dark:text-white")}
               >
                 <span style={{ color: theme.primary }}>{effectivePromoMultiplier}X PROMO</span> ACTIVATED
               </h2>
@@ -618,7 +619,7 @@ export default function MembershipSection({
 
                         {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                         <div
-                          className={`h-full ${isVip ? "rounded-2xl" : "rounded-3xl"} p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
+                          className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 pt-8 sm:pt-10 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
                           style={
                             {
                               background: colorScheme.bgGradient,
@@ -661,7 +662,7 @@ export default function MembershipSection({
                             </div>
                           )}
 
-                          <div className={`h-full flex flex-col pt-6 px-4 py-1.5 uppercase ${isVip ? "relative z-10" : ""}`}>
+                          <div className={cn("h-full flex flex-col pt-6 px-4 py-1.5 uppercase", isVip ? "relative z-10" : "")}>
                             {/* Plan Header - Centered */}
                             <div className="text-center mb-0.5">
                               {(() => {
@@ -673,7 +674,7 @@ export default function MembershipSection({
 
                                 return (
                                   <h3
-                                    className={`font-sans font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]"}`}
+                                    className={cn("font-sans font-bold mb-0", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]")}
                                     style={colorScheme.textGradientStyle}
                                   >
                                     {isAdditionalPackage ? (
@@ -689,7 +690,7 @@ export default function MembershipSection({
                               })()}
                               {plan.subtitle && (
                                 <p
-                                  className={`font-sans text-[14px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                  className={cn("font-sans text-[14px] sm:text-[16px] font-medium mb-0.5", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                                   style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                 >
                                   {plan.subtitle}
@@ -711,20 +712,20 @@ export default function MembershipSection({
                                   const displayEntries = hasMultiplier ? plan.metadata?.entriesCount || parseInt(entriesNumber) : parseInt(entriesNumber);
 
                                   return (
-                                    <div className={`font-sans ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
+                                    <div className={cn("font-sans", colorScheme.textGradientStyle ? "" : colorScheme.text, "text-center")}>
                                       {hasMultiplier ? (
                                         <div className="flex items-center justify-center gap-1.5">
-                                          <span className={`text-[22px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
+                                          <span className={cn("text-[22px] sm:text-[24px] font-bold line-through opacity-40", colorScheme.textMuted)}>
                                             {originalEntries}
                                           </span>
                                           <span
-                                            className={`text-[19px] sm:text-[18px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            className={cn("text-[19px] sm:text-[18px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                             style={colorScheme.textGradientStyle}
                                           >
                                             →
                                           </span>
                                           <span
-                                            className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                            className={cn("text-[34px] sm:text-[36px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                             style={colorScheme.textGradientStyle}
                                           >
                                             {displayEntries}
@@ -732,14 +733,14 @@ export default function MembershipSection({
                                         </div>
                                       ) : (
                                         <span
-                                          className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                          className={cn("text-[34px] sm:text-[36px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                           style={colorScheme.textGradientStyle}
                                         >
                                           {entriesNumber}
                                         </span>
                                       )}
                                       <div
-                                        className={`text-[17px] sm:text-[18px] font-semibold mt-0 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                        className={cn("text-[17px] sm:text-[18px] font-semibold mt-0", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                                         style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                       >
                                         Free Entries
@@ -773,12 +774,12 @@ export default function MembershipSection({
                                   disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
                                   aria-label={`Select ${plan.name} for $${plan.price}`}
                                 >
-                                  <div className={`flex items-baseline gap-1 justify-center ${colorScheme.buttonText}`}>
+                                  <div className={cn("flex items-baseline gap-1 justify-center", colorScheme.buttonText)}>
                                     <span className="font-bold text-[20px] sm:text-lg">${plan.price}</span>
                                     {plan.period !== "one-time" ? (
-                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">Per Giveaway</span>
+                                      <span className="font-semibold text-[14px] sm:text-2xs opacity-90">Per Giveaway</span>
                                     ) : (
-                                      <span className="font-semibold text-[14px] sm:text-[10px] opacity-90">One Time Payment</span>
+                                      <span className="font-semibold text-[14px] sm:text-2xs opacity-90">One Time Payment</span>
                                     )}
                                   </div>
                                 </button>
@@ -874,7 +875,7 @@ export default function MembershipSection({
               return (
                 <div
                   key={plan.id}
-                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} ${isVip ? "rounded-2xl" : "rounded-3xl"} transition-all duration-300 overflow-visible w-full min-w-0 ${highlighted ? "scale-105" : ""} ${isVip ? "vip-premium-shell-glow" : ""}`}
+                  className={cn("relative", isAdditionalPackage ? "h-[350px]" : "h-[320px]", isVip ? "rounded-2xl" : "rounded-3xl", "transition-all duration-300 overflow-visible w-full min-w-0", highlighted ? "scale-105" : "", isVip ? "vip-premium-shell-glow" : "")}
                   style={(() => {
                     const base: React.CSSProperties = highlighted
                       ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
@@ -926,7 +927,7 @@ export default function MembershipSection({
                         <Image
                           src={getPackageIcon(plan.id)!}
                           alt={`${plan.name} icon`}
-                          className={`w-full h-full object-contain ${isVip ? "animate-vip-icon-halo" : colorScheme.glow} opacity-90`}
+                          className={cn("w-full h-full object-contain", isVip ? "animate-vip-icon-halo" : colorScheme.glow, "opacity-90")}
                         />
                         {/* Promo Badge positioned on top of the image icon */}
                         {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}
@@ -936,7 +937,7 @@ export default function MembershipSection({
 
                   {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                   <div
-                    className={`h-full ${isVip ? "rounded-2xl" : "rounded-3xl"} p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative isolate`}
+                    className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 sm:p-2 sm:pt-8 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
                     style={
                       {
                         background: colorScheme.bgGradient,
@@ -951,7 +952,7 @@ export default function MembershipSection({
                         aria-hidden
                       />
                     )}
-                    <div className={`h-full flex flex-col pt-10 relative px-4 py-2 uppercase ${isVip ? "z-10" : ""}`}>
+                    <div className={cn("h-full flex flex-col pt-10 relative px-4 py-2 uppercase", isVip ? "z-10" : "")}>
                       {/* Inside Glow - Whole Card with Margin */}
                       <div
                         className={`absolute inset-0.5 ${getMembershipSectionInnerSheenClassNames(
@@ -971,7 +972,7 @@ export default function MembershipSection({
 
                           return (
                             <h3
-                              className={`font-sans font-bold mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight ${activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]"}`}
+                              className={cn("font-sans font-bold mb-2", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]")}
                               style={colorScheme.textGradientStyle}
                             >
                               {isAdditionalPackage ? (
@@ -987,7 +988,7 @@ export default function MembershipSection({
                         })()}
                         {plan.subtitle && (
                           <p
-                            className={`font-sans text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                            className={cn("font-sans text-[12px] sm:text-[14px] font-medium mb-4", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                             style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                           >
                             {plan.subtitle}
@@ -1017,20 +1018,20 @@ export default function MembershipSection({
                                 : parseInt(entriesNumber);
 
                               return (
-                                <div className={`font-sans ${colorScheme.textGradientStyle ? "" : colorScheme.text}`}>
+                                <div className={cn("font-sans", colorScheme.textGradientStyle ? "" : colorScheme.text)}>
                                   {hasMultiplier ? (
                                     <div className="flex items-center justify-center gap-2">
-                                      <span className={`text-[16px] sm:text-[18px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
+                                      <span className={cn("text-[16px] sm:text-[18px] font-bold line-through opacity-40", colorScheme.textMuted)}>
                                         {originalEntries}
                                       </span>
                                       <span
-                                        className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                        className={cn("text-[14px] sm:text-[16px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                         style={colorScheme.textGradientStyle}
                                       >
                                         →
                                       </span>
                                       <span
-                                        className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                        className={cn("text-[28px] sm:text-[34px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                         style={colorScheme.textGradientStyle}
                                       >
                                         {displayEntries}
@@ -1038,14 +1039,14 @@ export default function MembershipSection({
                                     </div>
                                   ) : (
                                     <span
-                                      className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
+                                      className={cn("text-[28px] sm:text-[34px] font-bold", colorScheme.textGradientStyle ? "" : colorScheme.entriesText)}
                                       style={colorScheme.textGradientStyle}
                                     >
                                       {entriesNumber}
                                     </span>
                                   )}
                                   <div
-                                    className={`text-[17px] sm:text-[18px] font-semibold mt-1 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
+                                    className={cn("text-[17px] sm:text-[18px] font-semibold mt-1", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                   >
                                     Free Entries
@@ -1081,7 +1082,7 @@ export default function MembershipSection({
                             disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
                             aria-label={`Select ${plan.name} for $${plan.price}`}
                           >
-                            <div className={`flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0 ${colorScheme.buttonText}`}>
+                            <div className={cn("flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0", colorScheme.buttonText)}>
                               <span className="text-base sm:text-lg lg:text-xl font-bold">${plan.price}</span>
                               {plan.period !== "one-time" ? (
                                 <span className="text-xs lg:text-sm font-semibold opacity-90">Per Giveaway</span>

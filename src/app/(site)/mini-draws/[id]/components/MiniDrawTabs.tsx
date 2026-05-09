@@ -118,20 +118,20 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative flex-1 py-3.5 sm:py-4 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium transition-colors ${
                   isActive
-                    ? "text-[#ee0000] dark:text-red-400"
+                    ? "text-red-600 dark:text-red-400"
                     : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white"
                 }`}
                 suppressHydrationWarning
               >
                 <Icon
                   className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
-                    isActive ? "text-[#ee0000] dark:text-red-400" : "text-gray-400 dark:text-neutral-500"
+                    isActive ? "text-red-600 dark:text-red-400" : "text-gray-400 dark:text-neutral-500"
                   }`}
                 />
                 <span>{tab.label}</span>
                 {isActive && (
                   <motion.div
-                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-[#ee0000] to-[#cc0000]"
+                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-red-600 to-red-675"
                     layoutId="tab-indicator"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
@@ -207,14 +207,14 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
 
                               {/* Latest winner badge */}
                               {isLatest && (
-                                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white text-[10px] sm:text-xs font-semibold px-2.5 py-1 rounded-full shadow-lg">
+                                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-675 text-white text-2xs sm:text-xs font-semibold px-2.5 py-1 rounded-full shadow-lg">
                                   <Crown className="w-3 h-3" />
                                   Latest Winner
                                 </div>
                               )}
 
                               {!winner.imageUrl && (
-                                <span className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white/90 text-[10px] sm:text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
+                                <span className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm text-white/90 text-2xs sm:text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1">
                                   <Sparkles className="w-3 h-3" />
                                   Photo coming soon
                                 </span>
@@ -235,8 +235,8 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                   </div>
                 ) : (
                   <div className="text-center py-12 sm:py-16">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#ee0000]/10 to-[#cc0000]/5 dark:from-red-950/50 dark:to-red-950/20 flex items-center justify-center">
-                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-[#ee0000] dark:text-red-400" />
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-red-600/10 to-red-675/5 dark:from-red-950/50 dark:to-red-950/20 flex items-center justify-center">
+                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 dark:text-red-400" />
                     </div>
                     <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
                       Are You Our Next Lucky Winner?
@@ -245,7 +245,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       Secure your entries now and you could be the next name on
                       our winners board.
                     </p>
-                    <div className="mt-6 inline-flex items-center gap-1.5 text-[#ee0000] dark:text-red-400 text-sm font-semibold">
+                    <div className="mt-6 inline-flex items-center gap-1.5 text-red-600 dark:text-red-400 text-sm font-semibold">
                       <span>Get your entries</span>
                       <ChevronRight className="w-4 h-4" />
                     </div>
@@ -270,7 +270,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                         transition={{ delay: i * 0.08, duration: 0.3 }}
                       >
                         <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white dark:bg-neutral-900 border border-gray-100 dark:border-neutral-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <RuleIcon className="w-4 h-4 text-[#ee0000] dark:text-red-400" />
+                          <RuleIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
@@ -288,7 +288,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                 {/* Draw Flow */}
                 <div className="bg-gradient-to-br from-gray-50 to-gray-50/50 dark:from-neutral-800/80 dark:to-neutral-900/80 rounded-xl p-4 sm:p-6 border border-gray-100 dark:border-neutral-700">
                   <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#ee0000] dark:text-red-400" />
+                    <FileText className="w-4 h-4 text-red-600 dark:text-red-400" />
                     How the Draw Works
                   </h3>
                   <div className="space-y-0">
@@ -296,13 +296,13 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       <div key={i} className="flex gap-3 sm:gap-4">
                         {/* Timeline */}
                         <div className="flex flex-col items-center">
-                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border-2 border-[#ee0000]/20 flex items-center justify-center flex-shrink-0">
-                            <span className="text-[10px] sm:text-xs font-bold text-[#ee0000]">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border-2 border-red-600/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-2xs sm:text-xs font-bold text-red-600">
                               {i + 1}
                             </span>
                           </div>
                           {i < flowSteps.length - 1 && (
-                            <div className="w-px h-full bg-gradient-to-b from-[#ee0000]/20 to-transparent min-h-[24px]" />
+                            <div className="w-px h-full bg-gradient-to-b from-red-600/20 to-transparent min-h-[24px]" />
                           )}
                         </div>
                         <div className="pb-4 sm:pb-5 min-w-0">
@@ -319,7 +319,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
 
                   {latestWinner && (
                     <div className="mt-2 pt-4 border-t border-gray-200/60 dark:border-neutral-700 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ee0000] to-[#cc0000] flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center flex-shrink-0">
                         <Crown className="w-4 h-4 text-white" />
                       </div>
                       <div className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
@@ -353,7 +353,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       />
                     </div>
                     <div>
-                      <div className="text-[10px] sm:text-xs font-semibold text-[#ee0000] dark:text-red-400 uppercase tracking-wider mb-1">
+                      <div className="text-2xs sm:text-xs font-semibold text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">
                         Winner Spotlight
                       </div>
                       <p className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">

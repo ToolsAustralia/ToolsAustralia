@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Input from "./Input";
+import { cn } from "@/utils/cn";
 
 export interface DropdownOption {
   value: string;
@@ -197,7 +198,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   };
 
   return (
-    <div className={`relative ${isOpen ? "z-[100]" : ""} ${className}`} ref={dropdownRef}>
+    <div className={cn("relative", isOpen ? "z-[100]" : "", className)} ref={dropdownRef}>
       {/* Label */}
       {label && (
         <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
@@ -263,7 +264,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className={`absolute z-50 w-full min-w-[220px] isolate ${openUpward ? "bottom-full mb-1" : "top-full mt-1"} bg-[#ffffff] dark:!bg-neutral-950 border border-gray-200 dark:border-neutral-600 rounded-xl shadow-lg dark:shadow-2xl dark:shadow-black/50 overflow-y-auto overflow-x-hidden`}
+          className={cn("absolute z-50 w-full min-w-[220px] isolate", openUpward ? "bottom-full mb-1" : "top-full mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-200 dark:border-neutral-600 rounded-xl shadow-lg dark:shadow-2xl dark:shadow-black/50 overflow-y-auto overflow-x-hidden")}
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",

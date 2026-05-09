@@ -14,6 +14,7 @@ import {
 } from "./ui";
 import { convertUTCToAEST, createAESTDateAsUTC, calculateActivationDate } from "@/utils/common/timezone";
 import RichTextEditor from "@/components/ui/RichTextEditor";
+import { cn } from "@/utils/cn";
 
 interface AdminMajorDrawModalProps {
   isOpen: boolean;
@@ -664,12 +665,12 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
                       }`}
                     >
                       <div className="flex items-center space-x-2">
-                        <AlertTriangle className={`w-4 h-4 ${warning.isError ? "text-red-600" : "text-yellow-600"}`} />
-                        <span className={`text-sm font-medium ${warning.isError ? "text-red-800" : "text-yellow-800"}`}>
+                        <AlertTriangle className={cn("w-4 h-4", warning.isError ? "text-red-600" : "text-yellow-600")} />
+                        <span className={cn("text-sm font-medium", warning.isError ? "text-red-800" : "text-yellow-800")}>
                           {warning.isError ? "Time Gap Issue" : "Time Gap Warning"}
                         </span>
                       </div>
-                      <p className={`text-xs mt-1 ${warning.isError ? "text-red-700" : "text-yellow-700"}`}>
+                      <p className={cn("text-xs mt-1", warning.isError ? "text-red-700" : "text-yellow-700")}>
                         {warning.message}
                       </p>
                     </div>

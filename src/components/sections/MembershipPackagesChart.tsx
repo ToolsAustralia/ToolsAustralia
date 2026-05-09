@@ -18,6 +18,7 @@ import {
 } from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
 type StaticImageData = PackageIconData;
 
@@ -253,7 +254,7 @@ export default function MembershipPackagesChart() {
                   <button
                     key={p}
                     onClick={() => setTimePeriod(p)}
-                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all font-poppins ${
+                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-2xs sm:text-xs font-bold transition-all font-poppins ${
                       timePeriod === p
                         ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-sm"
                         : "text-gray-400 hover:text-white"
@@ -266,7 +267,7 @@ export default function MembershipPackagesChart() {
             )}
             {activeTab === "one-time" && (
               <div className="bg-slate-800/60 rounded-xl px-3 py-2 border border-slate-700/40 flex items-center gap-2">
-                <span className="text-[10px] sm:text-xs text-gray-400 font-poppins font-medium">
+                <span className="text-2xs sm:text-xs text-gray-400 font-poppins font-medium">
                   {showMemberExclusive ? "Member Packs" : "Standard"}
                 </span>
                 <button
@@ -277,7 +278,7 @@ export default function MembershipPackagesChart() {
                       : "bg-slate-700"
                   }`}
                 >
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-300 ${showMemberExclusive ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                  <span className={cn("inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-300", showMemberExclusive ? "translate-x-[18px]" : "translate-x-0.5")} />
                 </button>
               </div>
             )}
@@ -331,7 +332,7 @@ export default function MembershipPackagesChart() {
                       >
                         {pkg.name}
                       </h4>
-                      <div className="text-[10px] sm:text-xs font-poppins">
+                      <div className="text-2xs sm:text-xs font-poppins">
                         <span className="text-white font-semibold">${pkg.price}</span>
                         {pkg.entriesUnit && <span className="text-gray-500">/{pkg.entriesUnit}</span>}
                       </div>
@@ -366,7 +367,7 @@ export default function MembershipPackagesChart() {
                           <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         </div>
                         {/* Value label - always visible outside bar so it never clips */}
-                        <span className="text-[11px] sm:text-[13px] font-bold text-white font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                        <span className="text-2xs sm:text-[13px] font-bold text-white font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
                           {isSubscription
                             ? `${displayEntries.toLocaleString()} active`
                             : displayEntries.toLocaleString()}
@@ -383,7 +384,7 @@ export default function MembershipPackagesChart() {
                               background: `${colorScheme.accentHex}33`,
                             }}
                           />
-                          <span className="text-[10px] sm:text-[12px] font-semibold text-gray-300 font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                          <span className="text-2xs sm:text-[12px] font-semibold text-gray-300 font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
                             {totalAccumulated.toLocaleString()} total
                           </span>
                         </div>
@@ -412,7 +413,7 @@ export default function MembershipPackagesChart() {
                     }
 
                     return (
-                      <span key={i} className="flex items-center gap-1 text-[10px] sm:text-[11px] text-gray-400 font-poppins">
+                      <span key={i} className="flex items-center gap-1 text-2xs sm:text-2xs text-gray-400 font-poppins">
                         <Check className="w-3 h-3 flex-shrink-0" style={{ color: colorScheme.accentHex }} />
                         {showPromo ? (
                           <span className="text-amber-400 font-semibold">{promoText}</span>
@@ -422,7 +423,7 @@ export default function MembershipPackagesChart() {
                       </span>
                     );
                   })}
-                  <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-gray-400 font-poppins">
+                  <span className="flex items-center gap-1 text-2xs sm:text-2xs text-gray-400 font-poppins">
                     <Check className="w-3 h-3 flex-shrink-0" style={{ color: colorScheme.accentHex }} />
                     {pkg.partnerDiscounts} discounts
                   </span>
@@ -433,7 +434,7 @@ export default function MembershipPackagesChart() {
 
           {/* Legend */}
           {activeTab === "membership" && (
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-3 sm:pt-4 text-[10px] sm:text-xs text-gray-500 font-poppins">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-3 sm:pt-4 text-2xs sm:text-xs text-gray-500 font-poppins">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-2 rounded-sm bg-amber-500 inline-block" /> Active entries in month {timePeriod}
               </span>

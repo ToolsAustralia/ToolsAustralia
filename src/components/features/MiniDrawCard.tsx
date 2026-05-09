@@ -10,6 +10,7 @@ import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import EntryProgressBar from "@/components/ui/EntryProgressBar";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
+import { cn } from "@/utils/cn";
 
 export interface MiniDrawCardData {
   _id: string;
@@ -39,7 +40,7 @@ function getUrgencyBadge(percentage: number, status: string) {
       label: "Almost Full",
       icon: Flame,
       className:
-        "bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white shadow-lg shadow-[#ee0000]/30",
+        "bg-gradient-to-r from-red-600 to-red-675 text-white shadow-lg shadow-red-600/30",
     };
   if (percentage >= 70)
     return {
@@ -165,18 +166,18 @@ export default function MiniDrawCard({
                           : "bg-green-500"
                       }`}
                     />
-                    <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    <span className="text-2xs sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                       {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
                     </span>
                     {urgencyBadge && (
                       <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${urgencyBadge.className}`}
+                        className={cn("text-3xs px-1.5 py-0.5 rounded-full font-bold", urgencyBadge.className)}
                       >
                         {urgencyBadge.label}
                       </span>
                     )}
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-[#ee0000] dark:group-hover:text-red-500 transition-colors">
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-500 transition-colors">
                     {miniDraw.name}
                   </h3>
                   <EntryProgressBar
@@ -187,12 +188,12 @@ export default function MiniDrawCard({
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   {userEntries > 0 && (
-                    <span className="text-[10px] sm:text-xs font-medium text-green-600 dark:text-green-500 flex items-center gap-0.5">
+                    <span className="text-2xs sm:text-xs font-medium text-green-600 dark:text-green-500 flex items-center gap-0.5">
                       <Ticket className="w-3 h-3" /> {userEntries}{" "}
                       {userEntries === 1 ? "entry" : "entries"}
                     </span>
                   )}
-                  <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold bg-black text-white group-hover:bg-[#ee0000] transition-colors">
+                  <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 sm:py-1.5 rounded-full text-2xs sm:text-xs font-bold bg-black text-white group-hover:bg-red-600 transition-colors">
                     <span>$1</span>
                     <Ticket className="w-3 h-3" />
                     {isCancelled ? "Cancelled" : isClosed ? "View" : "Enter"}
@@ -249,7 +250,7 @@ export default function MiniDrawCard({
             {/* User Entry Badge */}
             {userEntries > 0 && (
               <div className="absolute top-2 left-2 z-10">
-                <div className="bg-green-500 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-bold shadow-md flex items-center gap-1">
+                <div className="bg-green-500 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold shadow-md flex items-center gap-1">
                   <Ticket className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   {userEntries} {userEntries === 1 ? "entry" : "entries"}
                 </div>
@@ -259,10 +260,10 @@ export default function MiniDrawCard({
             {/* Urgency Badge */}
             {urgencyBadge && (
               <div
-                className={`absolute ${userEntries > 0 ? "top-2 right-2" : "top-2 left-2"} z-10`}
+                className={cn("absolute", userEntries > 0 ? "top-2 right-2" : "top-2 left-2", "z-10")}
               >
                 <span
-                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[11px] font-bold ${urgencyBadge.className}`}
+                  className={cn("inline-flex items-center gap-0.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold", urgencyBadge.className)}
                 >
                   <urgencyBadge.icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   {urgencyBadge.label}
@@ -271,7 +272,7 @@ export default function MiniDrawCard({
             )}
 
             {/* Bottom overlay strip */}
-            <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 flex items-center justify-center gap-1 text-[9px] sm:text-[11px] text-white/90 font-medium bg-black/60 backdrop-blur-[2px]">
+            <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 flex items-center justify-center gap-1 text-3xs sm:text-2xs text-white/90 font-medium bg-black/60 backdrop-blur-[2px]">
               <Ticket className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-70" />
               {entriesRemaining > 0
                 ? `${entriesRemaining.toLocaleString()} entries remaining`
@@ -293,13 +294,13 @@ export default function MiniDrawCard({
                       : "bg-green-500"
                   }`}
                 />
-                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
+                <span className="text-2xs sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
                   {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
                 </span>
               </div>
 
               {/* Draw name */}
-              <h3 className="text-[13px] sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] group-hover:text-[#ee0000] dark:group-hover:text-red-500 transition-colors duration-200">
+              <h3 className="text-[13px] sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] group-hover:text-red-600 dark:group-hover:text-red-500 transition-colors duration-200">
                 {miniDraw.name}
               </h3>
 
@@ -313,8 +314,8 @@ export default function MiniDrawCard({
 
             {/* CTA Button */}
             <div className="mt-3 sm:mt-4">
-              <span className="w-full flex items-center justify-center gap-1.5 py-2 sm:py-2.5 px-3 rounded-full text-[11px] sm:text-xs font-bold text-white bg-gradient-to-r from-gray-900 to-black group-hover:from-[#ee0000] group-hover:to-[#cc0000] group-hover:shadow-md group-hover:shadow-[#ee0000]/20 transition-all duration-300">
-                <span className="text-[10px] sm:text-[11px] font-semibold opacity-70">
+              <span className="w-full flex items-center justify-center gap-1.5 py-2 sm:py-2.5 px-3 rounded-full text-2xs sm:text-xs font-bold text-white bg-gradient-to-r from-gray-900 to-black group-hover:from-red-600 group-hover:to-red-675 group-hover:shadow-md group-hover:shadow-red-600/20 transition-all duration-300">
+                <span className="text-2xs sm:text-2xs font-semibold opacity-70">
                   $1
                 </span>
                 <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />

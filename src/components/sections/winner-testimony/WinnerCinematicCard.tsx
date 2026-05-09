@@ -2,6 +2,7 @@
 
 import type { WinnerSummary } from "@/types/winner";
 import WinnerCinematicHero from "./WinnerCinematicHero";
+import { cn } from "@/utils/cn";
 
 interface WinnerCinematicCardProps {
   winner: WinnerSummary;
@@ -16,7 +17,7 @@ export default function WinnerCinematicCard({
 }: WinnerCinematicCardProps) {
   return (
     <article
-      className={`relative overflow-hidden rounded-[24px] shadow-[0_20px_55px_rgba(15,23,42,0.30)] ${className}`}
+      className={cn("relative overflow-hidden rounded-[24px] shadow-[0_20px_55px_rgba(15,23,42,0.30)]", className)}
     >
       <WinnerCinematicHero
         winner={winner}

@@ -77,7 +77,7 @@ export default function RenewalsDashboardSection({
           id="renewals-tab-upcoming"
           aria-controls="renewals-panel-upcoming"
           onClick={() => setTab("upcoming")}
-          className={`flex-1 min-w-0 px-2 py-2 sm:px-3 sm:py-1.5 rounded-lg text-center text-[10px] sm:text-xs font-semibold transition-all ${
+          className={`flex-1 min-w-0 px-2 py-2 sm:px-3 sm:py-1.5 rounded-lg text-center text-2xs sm:text-xs font-semibold transition-all ${
             tab === "upcoming"
               ? "bg-emerald-600 text-white shadow-sm"
               : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
@@ -92,7 +92,7 @@ export default function RenewalsDashboardSection({
           id="renewals-tab-period"
           aria-controls="renewals-panel-period"
           onClick={() => setTab("period")}
-          className={`flex-1 min-w-0 px-2 py-2 sm:px-3 sm:py-1.5 rounded-lg text-center text-[10px] sm:text-xs font-semibold transition-all ${
+          className={`flex-1 min-w-0 px-2 py-2 sm:px-3 sm:py-1.5 rounded-lg text-center text-2xs sm:text-xs font-semibold transition-all ${
             tab === "period"
               ? "bg-emerald-600 text-white shadow-sm"
               : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"

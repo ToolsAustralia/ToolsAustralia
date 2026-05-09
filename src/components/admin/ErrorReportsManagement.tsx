@@ -38,6 +38,7 @@ import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatDisplayName } from "@/utils/display-name";
 import { ErrorReportStatus, ErrorReportsAnalyticsSummary, IErrorReport } from "@/types/error-reporting";
+import { cn } from "@/utils/cn";
 
 type SortField = "createdAt" | "status" | "errorMessage" | "category" | "severity";
 type SortOrder = "asc" | "desc";
@@ -139,7 +140,7 @@ function Badge({ value, type }: { value?: string; type: "status" | "severity" | 
       : categoryColors[value];
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold capitalize ${classes || "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200"}`}>
+    <span className={cn("inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold capitalize", classes || "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200")}>
       {value}
     </span>
   );
@@ -816,7 +817,7 @@ export default function ErrorReportsManagement() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">{card.label}</p>
                     <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{card.value}</p>
                   </div>
-                  <div className={`rounded-xl p-3 ${card.iconClassName}`}>
+                  <div className={cn("rounded-xl p-3", card.iconClassName)}>
                     <Icon className="h-5 w-5" />
                   </div>
                 </div>
@@ -855,7 +856,7 @@ export default function ErrorReportsManagement() {
           </button>
         </div>
 
-        <div className={`mt-4 border-t border-gray-200 pt-4 dark:border-neutral-700 ${isFiltersOpen ? "block" : "hidden sm:block"}`}>
+        <div className={cn("mt-4 border-t border-gray-200 pt-4 dark:border-neutral-700", isFiltersOpen ? "block" : "hidden sm:block")}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
             <Dropdown
               options={statusOptions}
@@ -1039,7 +1040,7 @@ export default function ErrorReportsManagement() {
                     const selected = selectedReports.has(report._id);
                     const user = getUserDisplay(report);
                     return (
-                      <tr key={report._id} className={`transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70 ${selected ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                      <tr key={report._id} className={cn("transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800/70", selected ? "bg-red-50 dark:bg-red-950/20" : "")}>
                         <td className="px-4 py-3">
                           <button type="button" onClick={() => handleToggleSelect(report._id)} aria-label={`Select report ${report._id}`} className="rounded focus:outline-none focus:ring-2 focus:ring-red-500">
                             {selected ? <CheckSquare className="h-5 w-5 text-red-600" /> : <Square className="h-5 w-5 text-gray-400" />}
@@ -1076,7 +1077,7 @@ export default function ErrorReportsManagement() {
                 const selected = selectedReports.has(report._id);
                 const user = getUserDisplay(report);
                 return (
-                  <div key={report._id} className={`p-4 ${selected ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
+                  <div key={report._id} className={cn("p-4", selected ? "bg-red-50 dark:bg-red-950/20" : "")}>
                     <div className="mb-3 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white">{report.errorMessage}</p>

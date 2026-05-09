@@ -75,7 +75,7 @@ export default function DrawResultCard({ winner }: DrawResultCardProps) {
             <div className="flex gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-800/50">
               <Calendar className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.primary }} />
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                <p className="text-2xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                   Drawn
                 </p>
                 <p className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">
@@ -86,7 +86,7 @@ export default function DrawResultCard({ winner }: DrawResultCardProps) {
             <div className="flex gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-800/50">
               <UserRound className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.primary }} />
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                <p className="text-2xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
                   Winner
                 </p>
                 <p className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100 break-words">

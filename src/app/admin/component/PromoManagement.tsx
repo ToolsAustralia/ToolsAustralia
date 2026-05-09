@@ -21,6 +21,7 @@ import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import type { ScheduledPromo } from "@/types/admin";
 import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal } from "lucide-react";
 import { formatDisplayName } from "@/utils/display-name";
+import { cn } from "@/utils/cn";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
@@ -138,7 +139,7 @@ export default function PromoManagement() {
                         disabled={activeLoading}
                         className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
                       >
-                        <RefreshCw className={`w-4 h-4 ${activeLoading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={cn("w-4 h-4", activeLoading ? "animate-spin" : "")} />
                       </button>
                       <button
                         onClick={() => setIsToggleModalOpen(true)}

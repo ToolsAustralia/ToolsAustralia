@@ -16,7 +16,7 @@ export default function ProductNotFound() {
         <div className="flex gap-4">
           <Link
             href="/shop"
-            className="bg-[#ee0000] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#cc0000] transition-colors"
+            className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-675 transition-colors"
           >
             Browse All Products
           </Link>

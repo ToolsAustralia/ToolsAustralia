@@ -328,8 +328,8 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200/50">
         <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-100">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-[#ee0000]/10 rounded-lg">
-              <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#ee0000]" />
+            <div className="p-1.5 sm:p-2 bg-red-600/10 rounded-lg">
+              <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
             </div>
             <div>
               <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
@@ -353,8 +353,8 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
     <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200/50">
       <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-100">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-[#ee0000]/10 rounded-lg">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#ee0000]" />
+          <div className="p-1.5 sm:p-2 bg-red-600/10 rounded-lg">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
           </div>
           <div>
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
@@ -391,7 +391,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 key={option.id}
                 className={`relative overflow-hidden border-2 rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-colors duration-200 flex flex-col h-[240px] sm:h-[320px] ${
                   option.isAvailable
-                    ? "border-gray-200 hover:border-[#ee0000]/40 cursor-pointer bg-white"
+                    ? "border-gray-200 hover:border-red-600/40 cursor-pointer bg-white"
                     : "border-gray-100 bg-gray-50/50"
                 }`}
               >
@@ -401,7 +401,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                     className={`absolute top-2 right-2 sm:top-3 sm:right-3 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-semibold ${
                       option.isMemberOnly
                         ? "bg-gradient-to-r from-amber-500 to-yellow-600 text-white"
-                        : "bg-gradient-to-r from-[#ee0000] to-red-600 text-white"
+                        : "bg-gradient-to-r from-red-600 to-red-600 text-white"
                     }`}
                   >
                     {option.isMemberOnly ? "MEMBER" : "PACKAGE"}
@@ -411,7 +411,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 {/* Header Section */}
                 <div className="mb-3 sm:mb-4 min-h-[60px] sm:min-h-[80px]">
                   <div className="flex items-start gap-2 mb-2">
-                    <div className="p-1 sm:p-1.5 bg-[#ee0000]/10 rounded-lg flex-shrink-0">{getIcon(option.type)}</div>
+                    <div className="p-1 sm:p-1.5 bg-red-600/10 rounded-lg flex-shrink-0">{getIcon(option.type)}</div>
                     <div className="flex-1 min-h-0">
                       <div className="flex items-center gap-2 mb-1 sm:mb-2">
                         <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 font-['Poppins'] line-clamp-2">
@@ -449,7 +449,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                     <button
                       onClick={() => handleRedeem(option)}
                       disabled={isRedeeming === option.id}
-                      className="w-full bg-gradient-to-r from-[#ee0000] to-red-600 text-white px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold flex items-center justify-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl group-hover:scale-105 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-red-600 to-red-600 text-white px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold flex items-center justify-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl group-hover:scale-105 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isRedeeming === option.id ? (
                         <>

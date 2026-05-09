@@ -21,6 +21,7 @@ import { getPackageColorSchemeForPromo, getCardBorderStyle } from "@/utils/packa
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 // Helper function to convert hex color to rgba for box-shadow
 const hexToRgba = (hex: string, alpha: number) => {
@@ -622,13 +623,13 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                 {/* Price - Absolute top-left, no background */}
                 <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
                   <div
-                    className={`font-bold text-base sm:text-lg leading-tight ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
+                    className={cn("font-bold text-base sm:text-lg leading-tight", colorScheme.textGradientStyle ? "" : colorScheme.priceText)}
                     style={colorScheme.textGradientStyle ?? { color: accentHex }}
                   >
                     ${plan.price}
                   </div>
                   <div
-                    className="text-[9px] sm:text-[10px] font-semibold"
+                    className="text-3xs sm:text-2xs font-semibold"
                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.9)" }}
                   >
                     {plan.period === "one-time" ? "One Time" : "Per Giveaway"}
@@ -672,7 +673,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
                         alt={`${plan.name} icon`}
                         fill
                         sizes="(max-width: 640px) 32px, 48px"
-                        className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
+                        className={cn("w-full h-full object-contain", colorScheme.glow, "opacity-90")}
                       />
                     </div>
                   </div>

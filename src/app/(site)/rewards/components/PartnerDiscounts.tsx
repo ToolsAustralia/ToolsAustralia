@@ -15,6 +15,7 @@ import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucid
 import { usePartnerDiscountQueue } from "@/hooks/queries/usePartnerDiscountQueue";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import { cn } from "@/utils/cn";
 
 // Export the component and optimistic update function for external use
 export const usePartnerDiscountQueueOptimistic = () => {
@@ -381,11 +382,11 @@ export default function PartnerDiscounts() {
 
                 return (
                   <p className="text-sm text-gray-600 dark:text-neutral-400">
-                    <span className={`font-bold ${textColor}`}>
+                    <span className={cn("font-bold", textColor)}>
                       {summary.subscriptionBenefits.shopDiscountPercent}% off
                     </span>{" "}
                     shop discounts
-                    <span className={`ml-2 ${textColor} font-semibold`}>• Active Subscription</span>
+                    <span className={cn("ml-2", textColor, "font-semibold")}>• Active Subscription</span>
                   </p>
                 );
               })()
@@ -406,10 +407,10 @@ export default function PartnerDiscounts() {
               const colors = getSubscriptionBadgeColors(summary.subscriptionBenefits.packageName);
               return (
                 <div
-                  className={`bg-gradient-to-br ${colors.background} rounded-lg px-2.5 py-1.5 border-2 ${colors.border} shadow-sm`}
+                  className={cn("bg-gradient-to-br", colors.background, "rounded-lg px-2.5 py-1.5 border-2", colors.border, "shadow-sm")}
                 >
                   <p
-                    className={`text-lg font-bold bg-gradient-to-r ${colors.text} bg-clip-text text-transparent leading-none`}
+                    className={cn("text-lg font-bold bg-gradient-to-r", colors.text, "bg-clip-text text-transparent leading-none")}
                   >
                     {summary.subscriptionBenefits.shopDiscountPercent}%
                   </p>

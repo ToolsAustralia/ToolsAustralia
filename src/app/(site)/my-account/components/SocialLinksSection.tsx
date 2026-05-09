@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { Facebook, Instagram } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface SocialLinksProps {
   className?: string;
@@ -29,7 +30,7 @@ export default function SocialLinksSection({ className = "" }: SocialLinksProps)
   ];
 
   return (
-    <div className={`px-4 sm:px-6 ${className}`}>
+    <div className={cn("px-4 sm:px-6", className)}>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h3 className="text-base xs:text-lg sm:text-xl font-bold text-gray-900 dark:text-white">

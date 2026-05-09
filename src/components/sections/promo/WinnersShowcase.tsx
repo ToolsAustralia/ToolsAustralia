@@ -6,6 +6,7 @@ import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
+import { cn } from "@/utils/cn";
 
 interface WinnersShowcaseProps {
   className?: string;
@@ -29,7 +30,7 @@ export default function WinnersShowcase({
   return (
     <section
       ref={winnersRef}
-      className={`py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative ${className}`}
+      className={cn("py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative", className)}
       style={{ ["--winner-card-hover-shadow" as string]: `0 16px 48px ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.3)")}` }}
     >
       {/* Background Pattern Overlay */}

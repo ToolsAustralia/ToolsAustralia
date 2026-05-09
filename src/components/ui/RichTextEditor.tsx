@@ -98,7 +98,7 @@ export default function RichTextEditor({
   const showPlaceholder = !valueHasText && !editorHasText;
 
   return (
-    <div className="overflow-hidden rounded-lg border-2 border-gray-200 bg-white transition-all duration-200 focus-within:border-[#ee0000] focus-within:ring-2 focus-within:ring-[#ee0000]/20 dark:border-neutral-600 dark:bg-neutral-900">
+    <div className="overflow-hidden rounded-lg border-2 border-gray-200 bg-white transition-all duration-200 focus-within:border-red-600 focus-within:ring-2 focus-within:ring-red-600/20 dark:border-neutral-600 dark:bg-neutral-900">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-2 dark:border-neutral-700 dark:bg-neutral-800">
         {/* Text Formatting */}

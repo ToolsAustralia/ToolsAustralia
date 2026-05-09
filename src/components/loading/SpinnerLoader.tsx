@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 /**
  * Spinner Loader Components
@@ -33,7 +34,7 @@ export const Spinner: React.FC<SpinnerProps> = ({ size = "md", color = "red", cl
   };
 
   return (
-    <div className={`animate-spin ${sizeClasses[size]} ${colorClasses[color]} ${className}`}>
+    <div className={cn("animate-spin", sizeClasses[size], colorClasses[color], className)}>
       <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path

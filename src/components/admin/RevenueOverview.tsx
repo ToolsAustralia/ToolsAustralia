@@ -6,6 +6,7 @@ import { ChartData, useRevenueBreakdown } from "@/hooks/queries/useAdminQueries"
 import { formatInTimeZone } from "date-fns-tz";
 import { subMonths, addMonths } from "date-fns";
 import { createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 // Component now manages its own data fetching
 // No props needed
@@ -329,7 +330,7 @@ export default function RevenueOverview() {
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none font-['Poppins'] ${
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-none text-2xs sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none font-['Poppins'] ${
                       selectedPeriod === period
                         ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
                         : "text-slate-300 hover:text-white hover:bg-slate-700/50"
@@ -446,7 +447,7 @@ export default function RevenueOverview() {
           }}
         >
           {/* Y-Axis Labels */}
-          <div className="absolute left-0 top-0 bottom-16 flex flex-col justify-between text-[8px] sm:text-[10px] text-slate-400 font-['Poppins'] pr-2 z-10 w-8 sm:w-10">
+          <div className="absolute left-0 top-0 bottom-16 flex flex-col justify-between text-3xs sm:text-2xs text-slate-400 font-['Poppins'] pr-2 z-10 w-8 sm:w-10">
             <span>{formatCurrency(maxValue)}</span>
             <span>{formatCurrency(maxValue * 0.75)}</span>
             <span>{formatCurrency(maxValue * 0.5)}</span>
@@ -671,7 +672,7 @@ export default function RevenueOverview() {
           {/* Tooltip - Positioned outside overflow container */}
           {tooltipPosition && tooltipData && (
             <div
-              className={`${isMobile ? "absolute" : "fixed"} z-50 pointer-events-none`}
+              className={cn(isMobile ? "absolute" : "fixed", "z-50 pointer-events-none")}
               style={
                 isMobile
                   ? {
@@ -714,33 +715,33 @@ export default function RevenueOverview() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5">
                       <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600"></div>
-                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">One-Time:</span>
+                      <span className="text-2xs sm:text-xs text-slate-300 font-['Poppins']">One-Time:</span>
                     </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                    <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins']">
                       {formatCurrency(tooltipData.oneTime)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5">
                       <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-orange-500 via-amber-500 to-yellow-500"></div>
-                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">Memberships:</span>
+                      <span className="text-2xs sm:text-xs text-slate-300 font-['Poppins']">Memberships:</span>
                     </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                    <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins']">
                       {formatCurrency(tooltipData.memberships)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5">
                       <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded bg-gradient-to-t from-green-500 via-emerald-500 to-green-600"></div>
-                      <span className="text-[10px] sm:text-xs text-slate-300 font-['Poppins']">Mini-Draw:</span>
+                      <span className="text-2xs sm:text-xs text-slate-300 font-['Poppins']">Mini-Draw:</span>
                     </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins']">
+                    <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins']">
                       {formatCurrency(tooltipData.miniDraw)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-1 mt-1 border-t border-slate-700">
-                    <span className="text-[10px] sm:text-xs font-semibold text-slate-200 font-['Poppins']">Total:</span>
-                    <span className="text-[10px] sm:text-xs font-bold text-yellow-400 font-['Poppins']">
+                    <span className="text-2xs sm:text-xs font-semibold text-slate-200 font-['Poppins']">Total:</span>
+                    <span className="text-2xs sm:text-xs font-bold text-yellow-400 font-['Poppins']">
                       {formatCurrency(tooltipData.total)}
                     </span>
                   </div>
@@ -760,20 +761,20 @@ export default function RevenueOverview() {
           <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-gradient-to-t from-blue-600 via-blue-500 to-cyan-600"></div>
-              <span className="text-[10px] sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
+              <span className="text-2xs sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
                 <span className="sm:hidden">One-Time</span>
                 <span className="hidden sm:inline">One-Time Packages</span>
               </span>
                       </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-gradient-to-t from-orange-500 via-amber-500 to-yellow-500"></div>
-              <span className="text-[10px] sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
+              <span className="text-2xs sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
                 Memberships
               </span>
                       </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-gradient-to-t from-green-500 via-emerald-500 to-green-600"></div>
-              <span className="text-[10px] sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
+              <span className="text-2xs sm:text-[12px] font-semibold text-slate-300 font-['Poppins']">
                 <span className="sm:hidden">Mini-Draw</span>
                 <span className="hidden sm:inline">Mini-Draw Packages</span>
               </span>

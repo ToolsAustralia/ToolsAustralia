@@ -141,15 +141,16 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
         {sparkles.map((sparkle) => (
           <div
             key={sparkle.id}
-            className="absolute rounded-full"
+            className="absolute rounded-full animate-sparkle"
             style={{
               width: sparkle.size,
               height: sparkle.size,
               left: `${sparkle.left}%`,
               top: `${sparkle.top}%`,
               background: `hsl(${sparkle.hue}, 92%, 74%)`,
-              animation: `sparkle ${sparkle.duration}s ease-in-out ${sparkle.delay}s infinite`,
               ["--drift" as string]: `${sparkle.drift}px`,
+              animationDuration: `${sparkle.duration}s`,
+              animationDelay: `${sparkle.delay}s`,
               opacity: 0,
               boxShadow: "0 0 14px rgba(52, 211, 153, 0.5)",
             }}
@@ -175,7 +176,7 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
                 className="h-9 w-0.5 shrink-0 rounded-full bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500 shadow-[0_0_12px_rgba(52,211,153,0.35)] dark:shadow-[0_0_14px_rgba(52,211,153,0.2)] sm:h-10"
                 aria-hidden
               />
-              <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-800 dark:text-emerald-300/95 sm:text-[11px]">
+              <p className="min-w-0 text-2xs font-semibold uppercase tracking-[0.2em] text-emerald-800 dark:text-emerald-300/95 sm:text-2xs">
                 Transaction complete
               </p>
             </div>
@@ -189,9 +190,9 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
                   strokeWidth={1.75}
                   aria-hidden
                 />
-                <span className="text-[10px] font-medium tracking-wide sm:text-xs">Secure</span>
+                <span className="text-2xs font-medium tracking-wide sm:text-xs">Secure</span>
               </div>
-              <span className="text-[9px] font-normal tracking-wide text-gray-400 dark:text-neutral-600 sm:text-[10px]">
+              <span className="text-3xs font-normal tracking-wide text-gray-400 dark:text-neutral-600 sm:text-2xs">
                 Encrypted
               </span>
             </div>
@@ -257,7 +258,7 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
 
           {/* Dismiss hint */}
           <div
-            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-center text-[10px] text-gray-500 animate-in fade-in duration-500 delay-1000 dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-400 sm:text-xs"
+            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-center text-2xs text-gray-500 animate-in fade-in duration-500 delay-1000 dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-400 sm:text-xs"
             style={{ animationFillMode: "both" }}
           >
             Tap anywhere to dismiss
@@ -275,20 +276,6 @@ const SuccessScreen: React.FC<SuccessScreenProps> = ({
         )}
       </div>
 
-      {/* Sparkle keyframe */}
-      <style jsx>{`
-        @keyframes sparkle {
-          0%,
-          100% {
-            opacity: 0;
-            transform: scale(0) translateY(0);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1) translateY(calc(var(--drift, 20px) * -1));
-          }
-        }
-      `}</style>
     </div>
   );
 };

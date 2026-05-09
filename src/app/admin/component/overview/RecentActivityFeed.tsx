@@ -130,10 +130,10 @@ export default function RecentActivityFeed() {
                     <ClickableUserDisplay
                       displayText={activity.user}
                       userId={activity.userId ?? null}
-                      className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400"
+                      className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400"
                     />
-                    <span className="text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
-                    <span className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400">{activity.time}</span>
+                    <span className="text-2xs sm:text-xs text-gray-400 dark:text-neutral-500">•</span>
+                    <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">{activity.time}</span>
                   </div>
                 </div>
               </div>
@@ -152,7 +152,7 @@ export default function RecentActivityFeed() {
 
             {/* End of list indicator */}
             {!hasNextPage && allActivities.length > 15 && (
-              <div className="text-center py-3 sm:py-4 text-[10px] sm:text-xs text-gray-400 dark:text-neutral-500 border-t border-gray-100 dark:border-neutral-800 mt-2">
+              <div className="text-center py-3 sm:py-4 text-2xs sm:text-xs text-gray-400 dark:text-neutral-500 border-t border-gray-100 dark:border-neutral-800 mt-2">
                 No more activities to load
               </div>
             )}

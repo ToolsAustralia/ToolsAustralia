@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Info } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 const MESSAGE =
   "You are not eligible to win but you can still enjoy the member benefits. You cannot participate in our giveaways.";
@@ -21,7 +22,7 @@ export default function GiveawayEligibilityNotice({ show, className = "" }: Give
   return (
     <div
       role="status"
-      className={`flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-200 ${className}`}
+      className={cn("flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-200", className)}
     >
       <Info className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden />
       <p className="leading-snug">{MESSAGE}</p>

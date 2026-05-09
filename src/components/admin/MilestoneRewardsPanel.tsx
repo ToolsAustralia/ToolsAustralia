@@ -180,14 +180,14 @@ export default function MilestoneRewardsPanel() {
                       <p className="text-xs text-gray-600 dark:text-neutral-400 mt-1">
                         {reward.milestoneType} · Threshold {reward.threshold.toLocaleString()} · {reward.entriesAmount.toLocaleString()} entries
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-gray-500 dark:text-neutral-400">
+                      <div className="mt-1 flex flex-wrap gap-2 text-2xs text-gray-500 dark:text-neutral-400">
                         <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono dark:bg-neutral-800 dark:text-neutral-200">
                           {reward.code}
                         </span>
                         <span>{reward.neverExpires ? "Never Expires" : `End ${formatDateTime(reward.endsAt)}`}</span>
                         <span>{reward.isRecurring ? "Recurring" : "One-time"}</span>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-2xs sm:grid-cols-4">
                         <div className="rounded-md bg-gray-50 px-2 py-1.5 dark:bg-neutral-800/80">
                           <span className="text-gray-500 dark:text-neutral-400">Issued</span>
                           <p className="mt-0.5 font-semibold text-gray-900 dark:text-neutral-100">
@@ -213,12 +213,12 @@ export default function MilestoneRewardsPanel() {
                           </p>
                         </div>
                       </div>
-                      <p className="mt-1 text-[11px] text-gray-500 dark:text-neutral-400">
+                      <p className="mt-1 text-2xs text-gray-500 dark:text-neutral-400">
                         Entries issued total: {reward.performance?.totalEntriesGranted?.toLocaleString() ?? 0}
                       </p>
                     </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold ${
                         reward.isActive
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
                           : "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200"

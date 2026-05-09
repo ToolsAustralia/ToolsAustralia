@@ -24,13 +24,17 @@
 - `sync-*.ts` → sync:*
 - `stripe-*.ts` → stripe:*
 - `find-*.ts` → find:*
+- `scripts/codemods/sweep-*.ts` → sweep:* npm script (UI codemod sweeps)
 
 Plus:
 - `scripts/migrations/` — date-prefixed migrations
 - `scripts/seed-admin-data.ts` — dev seed
 - `scripts/fix-*.{ts,mjs,js}` — one-off operational fixes
+- `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 
 **Destructive script convention:** Scripts that delete or mutate production data should default to dry-run and require an explicit `--live` flag to actually execute. The `:dry` npm variant is the bare invocation; the live variant passes `--live`. See `scripts/cleanup-membership-backfill-rows.ts` for a current example, or `scripts/backfill-subscription-end-dates.ts` for the equivalent pre-existing pattern.
+
+**Codemod sweep convention:** Codemod scripts under `scripts/codemods/` default to dry-run (no args = preview only); pass `--apply` to write. The `:dry` npm variant is the preview; the bare sweep:* variant applies. Always run dry first, verify the plan, then apply.
 
 ## Vercel cron schedules
 

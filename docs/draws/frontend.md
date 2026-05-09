@@ -47,3 +47,7 @@
 The cinematic Hear From Our Winners section + Read Full Story modal live under [src/components/sections/winner-testimony/](../../src/components/sections/winner-testimony/) — owned by the **shared-ui** domain (see [docs/shared-ui/frontend.md](../shared-ui/frontend.md#sectionswinner-testimony--hear-from-our-winners)). Draws-domain code (the `Winner` model, `WinnerSummary` type, [src/utils/winners.ts](../../src/utils/winners.ts) helpers) feeds it; the visual layout is owned by shared-ui.
 
 Refactored 2026-05-04: the photo is now used as a full-bleed cinematic background (not a centered display image) and the modal uses a magazine-article layout. No data-shape, API, or business-logic changes.
+
+## className conventions (2026-05-08)
+
+Draw components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.

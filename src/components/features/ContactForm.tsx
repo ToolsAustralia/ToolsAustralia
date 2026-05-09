@@ -288,7 +288,7 @@ export default function ContactForm() {
                       ? "border-red-500"
                       : isFieldValid("firstName")
                       ? "border-green-500"
-                      : "border-gray-400 dark:border-neutral-500 hover:border-[#ee0000] dark:hover:border-[#ee0000]"
+                      : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                   }`}
                   placeholder="Enter your first name"
                 />
@@ -326,7 +326,7 @@ export default function ContactForm() {
                       ? "border-red-500"
                       : isFieldValid("lastName")
                       ? "border-green-500"
-                      : "border-gray-400 dark:border-neutral-500 hover:border-[#ee0000] dark:hover:border-[#ee0000]"
+                      : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                   }`}
                   placeholder="Enter your last name"
                 />
@@ -363,7 +363,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("email")
                     ? "border-green-500"
-                    : "border-gray-400 dark:border-neutral-500 hover:border-[#ee0000] dark:hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Enter your email address"
               />
@@ -399,7 +399,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("phone")
                     ? "border-green-500"
-                    : "border-gray-400 dark:border-neutral-500 hover:border-[#ee0000] dark:hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Enter your phone number"
               />
@@ -436,7 +436,7 @@ export default function ContactForm() {
                     value={subject}
                     checked={formData.subject === subject}
                     onChange={handleInputChange}
-                    className="w-[16px] h-[16px] text-[#ee0000] border-gray-400 dark:border-neutral-500 focus:ring-0 focus:ring-offset-0 rounded-full transition-all duration-300"
+                    className="w-[16px] h-[16px] text-red-600 border-gray-400 dark:border-neutral-500 focus:ring-0 focus:ring-offset-0 rounded-full transition-all duration-300"
                   />
                   <span className="text-[12px] text-black dark:text-white font-['Poppins'] select-none">{subject}</span>
                 </label>
@@ -449,7 +449,7 @@ export default function ContactForm() {
             <div className="flex justify-between items-center mb-2">
               <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 font-['Poppins']">Message</label>
               <span
-                className={`text-[10px] font-['Poppins'] ${
+                className={`text-2xs font-['Poppins'] ${
                   formData.message.length < 10
                     ? "text-red-500"
                     : formData.message.length > 500
@@ -472,7 +472,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("message")
                     ? "border-green-500"
-                    : "border-gray-400 dark:border-neutral-500 hover:border-[#ee0000] dark:hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Write your message (minimum 10 characters)..."
               />

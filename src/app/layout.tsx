@@ -14,6 +14,7 @@ import Script from "next/script";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
 import { getNonce } from "@/utils/security/getNonce";
+import { cn } from "@/utils/cn";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -82,7 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const nonce = await getNonce();
 
   return (
-    <html lang="en-AU" className={`${inter.variable} ${poppins.variable}`} suppressHydrationWarning>
+    <html lang="en-AU" className={cn(inter.variable, poppins.variable)} suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         {/* Single theme-color updated client-side by ThemeMetaSync; avoids duplicate meta tags */}
@@ -116,7 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body
-        className={`${inter.className} antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 transition-colors duration-200 ease-out`}
+        className={cn(inter.className, "antialiased bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 transition-colors duration-200 ease-out")}
       >
         <GoogleTagManager
           gtmId={process.env.NEXT_PUBLIC_GTM_ID}

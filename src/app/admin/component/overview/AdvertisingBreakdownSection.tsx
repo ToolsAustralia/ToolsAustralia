@@ -11,6 +11,7 @@ import type { DateRange } from "@/components/admin/DateRangeToggle";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 /** Same calendar-day semantics as Facebook Ads → Spend by URL (Australia/Sydney) */
 const AEST_TIMEZONE = "Australia/Sydney";
@@ -228,7 +229,7 @@ export default function AdvertisingBreakdownSection({
       headerTrailing={
         <div className="flex items-center gap-1.5 sm:gap-2">
           {isFetching && !isLoading && (
-            <span className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400 max-w-[5rem] sm:max-w-none truncate sm:whitespace-nowrap">
+            <span className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 max-w-[5rem] sm:max-w-none truncate sm:whitespace-nowrap">
               Refreshing…
             </span>
           )}
@@ -239,9 +240,9 @@ export default function AdvertisingBreakdownSection({
               syncMutation.mutate();
             }}
             disabled={!dateReady || syncMutation.isPending}
-            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg bg-slate-900 text-white text-[11px] sm:text-sm font-medium hover:bg-slate-800 dark:bg-neutral-200 dark:text-neutral-900 dark:hover:bg-white disabled:opacity-50 shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg bg-slate-900 text-white text-2xs sm:text-sm font-medium hover:bg-slate-800 dark:bg-neutral-200 dark:text-neutral-900 dark:hover:bg-white disabled:opacity-50 shrink-0"
           >
-            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("w-3.5 h-3.5 sm:w-4 sm:h-4", syncMutation.isPending ? "animate-spin" : "")} />
             <span className="sm:hidden">{syncMutation.isPending ? "…" : "Sync"}</span>
             <span className="hidden sm:inline">{syncMutation.isPending ? "Syncing…" : "Sync from Meta"}</span>
           </button>
@@ -285,7 +286,7 @@ export default function AdvertisingBreakdownSection({
         <div className="overflow-x-auto -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-5 lg:px-5 [scrollbar-gutter:stable] brand-scrollbar">
           {/* min-width + horizontal scroll on narrow viewports; equal column share avoids huge gaps */}
           <div className="bg-white dark:bg-neutral-900 rounded-md sm:rounded-lg border border-gray-200 dark:border-neutral-700 overflow-hidden min-w-[540px] sm:min-w-0 sm:w-full">
-            <table className="w-full table-fixed text-[10px] sm:text-xs md:text-sm border-collapse">
+            <table className="w-full table-fixed text-2xs sm:text-xs md:text-sm border-collapse">
               <colgroup>
                 <col className="w-[20%]" />
                 <col className="w-[20%]" />
@@ -342,7 +343,7 @@ export default function AdvertisingBreakdownSection({
                             alt={metric.brand}
                             width={96}
                             height={48}
-                            className={`object-contain max-h-7 sm:max-h-10 md:max-h-12 ${metric.logoScale || ""}`}
+                            className={cn("object-contain max-h-7 sm:max-h-10 md:max-h-12", metric.logoScale || "")}
                           />
                         </div>
                       </div>

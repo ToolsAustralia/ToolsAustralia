@@ -229,7 +229,7 @@ export default function MiniDrawsContent({
                     placeholder="Search mini draws or prize names..."
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
                   />
                 </div>
 
@@ -241,7 +241,7 @@ export default function MiniDrawsContent({
                   <Filter className="h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
-                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
                       {activeFilterCount}
                     </span>
                   )}
@@ -285,7 +285,7 @@ export default function MiniDrawsContent({
                     value={sortBy}
                     onChange={handleSortChange}
                     placeholder="Sort by"
-                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-[#ee0000]/10"
+                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-red-600/10"
                   />
                 </div>
               </div>
@@ -299,7 +299,7 @@ export default function MiniDrawsContent({
                   placeholder="Search mini draws or prize names..."
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-[#ee0000]/40 focus:ring-2 focus:ring-[#ee0000]/10"
+                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
                 />
               </div>
 
@@ -312,7 +312,7 @@ export default function MiniDrawsContent({
                   <Filter className="h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
-                    <span className="rounded-full bg-[#ee0000]/10 px-1.5 py-0.5 text-xs font-semibold text-[#ee0000]">
+                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
                       {activeFilterCount}
                     </span>
                   )}
@@ -355,7 +355,7 @@ export default function MiniDrawsContent({
                   value={sortBy}
                   onChange={handleSortChange}
                   placeholder="Sort by"
-                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-[#ee0000]/10"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-red-600/10"
                 />
               </div>
             </div>
@@ -377,7 +377,7 @@ export default function MiniDrawsContent({
                           brands: filters.brands.filter((id) => id !== brandId),
                         })
                       }
-                      className="inline-flex items-center gap-1.5 rounded-full border border-[#ee0000]/25 dark:border-red-900/40 bg-[#ee0000]/5 dark:bg-red-950/30 px-3 py-1 text-xs font-semibold text-[#c70000] dark:text-red-400 transition-colors hover:bg-[#ee0000]/10 dark:hover:bg-red-950/50"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-red-600/25 dark:border-red-900/40 bg-red-600/5 dark:bg-red-950/30 px-3 py-1 text-xs font-semibold text-[#c70000] dark:text-red-400 transition-colors hover:bg-red-600/10 dark:hover:bg-red-950/50"
                     >
                       {brandName}
                       <X className="h-3.5 w-3.5" />
@@ -403,7 +403,7 @@ export default function MiniDrawsContent({
                   )}
                 </p>
                 {isLoading && (
-                  <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-[#ee0000] dark:border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-red-600 dark:border-t-white rounded-full animate-spin" />
                 )}
               </div>
             </div>

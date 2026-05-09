@@ -8,6 +8,7 @@ import {
   convertLocalToUTC,
   formatDateInLocal,
 } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface DateTimePickerProps {
   id?: string;
@@ -421,7 +422,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const localSelectedDate = selectedUtcDate ? convertUTCToLocal(selectedUtcDate, localTimeZone) : null;
 
   return (
-    <div className={`space-y-2 ${className}`} ref={containerRef}>
+    <div className={cn("space-y-2", className)} ref={containerRef}>
       {/* Label */}
       {label && (
         <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
@@ -429,7 +430,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
         </label>
       )}
 
-      <div className={`relative ${isOpen ? "z-[100]" : ""}`}>
+      <div className={cn("relative", isOpen ? "z-[100]" : "")}>
         {/* Icon */}
         <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-neutral-500 pointer-events-none z-10" />
 
@@ -471,7 +472,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
         {/* Custom Picker Dropdown */}
         {isOpen && !disabled && (
           <div
-            className={`absolute z-50 w-full ${openUpward ? "bottom-full mb-1" : "mt-1"} bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg dark:shadow-black/50 overflow-hidden dark:[color-scheme:dark]`}
+            className={cn("absolute z-50 w-full", openUpward ? "bottom-full mb-1" : "mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg dark:shadow-black/50 overflow-hidden dark:[color-scheme:dark]")}
           >
             {/* Calendar Section */}
             {(type === "date" || type === "datetime-local") && (

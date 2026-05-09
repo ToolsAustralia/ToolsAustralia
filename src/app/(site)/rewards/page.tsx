@@ -32,7 +32,7 @@ export default function RewardsPage() {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ee0000]" />
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-red-600" />
           <p className="text-gray-600 dark:text-neutral-400">Loading your rewards...</p>
         </div>
       </div>

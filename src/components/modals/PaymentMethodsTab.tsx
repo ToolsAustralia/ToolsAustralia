@@ -154,7 +154,7 @@ const AddPaymentMethodForm: React.FC<{
         <Button
           type="submit"
           disabled={isSubmitting || !stripe}
-          className="w-full sm:w-auto bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto bg-gradient-to-r from-red-600 to-red-400 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold hover:from-red-675 hover:to-red-650 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isSubmitting ? (
             <>
@@ -407,10 +407,10 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
         <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           Manage your saved payment methods and update your subscription payment method.
         </p>
-        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-neutral-500 mt-2 leading-relaxed">
+        <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-500 mt-2 leading-relaxed">
           Card details are stored securely by Stripe; we only keep payment method references. Removing a card detaches it
           from your account. See our{" "}
-          <Link href="/privacy" className="text-[#ee0000] dark:text-red-400 underline hover:opacity-90">
+          <Link href="/privacy" className="text-red-600 dark:text-red-400 underline hover:opacity-90">
             Privacy Policy
           </Link>{" "}
           for more.
@@ -438,7 +438,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
       {loading && (
         <div className="text-center py-6 sm:py-8">
-          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 border-b-2 border-[#ee0000] mx-auto mb-2 animate-spin" />
+          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 border-b-2 border-red-600 mx-auto mb-2 animate-spin" />
           <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Loading payment methods...</p>
         </div>
       )}
@@ -453,7 +453,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
           <Button
             onClick={handleAddNewPaymentMethod}
             disabled={isCreatingSetupIntent}
-            className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 shadow-md hover:shadow-lg transition-all"
+            className="bg-gradient-to-r from-red-600 to-red-400 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold hover:from-red-675 hover:to-red-650 disabled:opacity-60 shadow-md hover:shadow-lg transition-all"
           >
             {isCreatingSetupIntent ? (
               <>
@@ -558,19 +558,19 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                           {paymentMethod.card?.brand?.toUpperCase() || "CARD"} •••• {paymentMethod.card?.last4}
                         </h3>
                         {paymentMethod.isDefault && (
-                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 shadow-sm">
+                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-full text-2xs sm:text-xs font-semibold flex-shrink-0 shadow-sm">
                             <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current" />
                             DEFAULT
                           </span>
                         )}
                         {isSubscriptionBillingCard && (
-                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 shadow-sm">
+                          <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 rounded-full text-2xs sm:text-xs font-semibold flex-shrink-0 shadow-sm">
                             <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                             RENEWALS
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
+                      <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
                         Expires {formatExpiryDate(paymentMethod.card?.expMonth || 0, paymentMethod.card?.expYear || 0)}
                       </p>
                     </div>
@@ -581,7 +581,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                       <Button
                         onClick={() => handleSetDefault(paymentMethod.paymentMethodId)}
                         disabled={settingDefaultId !== null}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-1.5 sm:px-3 py-0.5 sm:py-1.5 rounded text-[9px] sm:text-xs font-medium disabled:opacity-50 flex-shrink-0 h-6 sm:h-8"
+                        className="bg-gray-600 hover:bg-gray-700 text-white px-1.5 sm:px-3 py-0.5 sm:py-1.5 rounded text-3xs sm:text-xs font-medium disabled:opacity-50 flex-shrink-0 h-6 sm:h-8"
                       >
                         {settingDefaultId === paymentMethod.paymentMethodId ? (
                           <Loader2 className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-spin" />
@@ -604,7 +604,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
                       <Button
                         onClick={() => handleDeleteClick(paymentMethod.paymentMethodId)}
                         disabled={deletingId === paymentMethod.paymentMethodId}
-                        className="bg-red-600 hover:bg-red-700 text-white p-0 sm:p-2 rounded text-[9px] sm:text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 h-6 sm:h-8 w-6 sm:w-8 flex items-center justify-center"
+                        className="bg-red-600 hover:bg-red-700 text-white p-0 sm:p-2 rounded text-3xs sm:text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 h-6 sm:h-8 w-6 sm:w-8 flex items-center justify-center"
                       >
                         {deletingId === paymentMethod.paymentMethodId ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
@@ -624,7 +624,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
             <Button
               onClick={handleAddNewPaymentMethod}
               disabled={isCreatingSetupIntent || showAddForm}
-              className="w-full bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-60 flex items-center justify-center gap-1.5 sm:gap-2 shadow-md hover:shadow-lg transition-all"
+              className="w-full bg-gradient-to-r from-red-600 to-red-400 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold hover:from-red-675 hover:to-red-650 disabled:opacity-60 flex items-center justify-center gap-1.5 sm:gap-2 shadow-md hover:shadow-lg transition-all"
             >
               {isCreatingSetupIntent ? (
                 <>

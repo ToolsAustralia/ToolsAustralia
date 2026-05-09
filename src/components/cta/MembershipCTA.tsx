@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Crown, Target } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface MembershipCTAProps {
   title?: string;
@@ -28,7 +29,7 @@ export default function MembershipCTA({
 }: MembershipCTAProps) {
   return (
     <section
-      className={`bg-gradient-to-r from-red-600 via-red-700 to-red-800 rounded-2xl p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl ${className}`}
+      className={cn("bg-gradient-to-r from-red-600 via-red-700 to-red-800 rounded-2xl p-8 sm:p-12 text-center text-white relative overflow-hidden shadow-2xl", className)}
     >
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10 pattern-rings-soft"></div>

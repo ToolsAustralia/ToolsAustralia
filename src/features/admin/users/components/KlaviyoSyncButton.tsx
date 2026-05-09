@@ -225,7 +225,7 @@ export default function KlaviyoSyncButton() {
     <>
       <button
         onClick={handleOpen}
-        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all text-xs sm:text-sm font-medium shadow-sm"
+        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all text-xs sm:text-sm font-medium shadow-sm"
         title="Sync Klaviyo Profiles"
       >
         <RefreshCw className="w-4 h-4" />
@@ -261,7 +261,7 @@ export default function KlaviyoSyncButton() {
               <div className="space-y-4">
                 {isLoadingPreview ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 text-[#ee0000] animate-spin mb-4" />
+                    <Loader2 className="w-8 h-8 text-red-600 animate-spin mb-4" />
                     <p className="text-gray-600 dark:text-neutral-400">Loading preview...</p>
                   </div>
                 ) : previewError ? (
@@ -361,7 +361,7 @@ export default function KlaviyoSyncButton() {
                       <button
                         onClick={handleExecute}
                         disabled={isExecuting}
-                        className="flex-1 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Continue to Sync
                       </button>
@@ -374,7 +374,7 @@ export default function KlaviyoSyncButton() {
             {/* Executing Step */}
             {step === "executing" && (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <Loader2 className="w-12 h-12 text-[#ee0000] animate-spin mb-4" />
+                <Loader2 className="w-12 h-12 text-red-600 animate-spin mb-4" />
                 <p className="text-lg font-semibold text-gray-900 mb-2">Syncing profiles to Klaviyo...</p>
                 
                 {progress && (
@@ -382,7 +382,7 @@ export default function KlaviyoSyncButton() {
                     {/* Progress Bar */}
                     <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                       <div
-                        className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] h-3 rounded-full transition-all duration-300"
+                        className="bg-gradient-to-r from-red-600 to-red-400 h-3 rounded-full transition-all duration-300"
                         style={{
                           width: `${progress.total > 0 ? (progress.processed / progress.total) * 100 : 0}%`,
                         }}
@@ -487,7 +487,7 @@ export default function KlaviyoSyncButton() {
                 <div className="pt-4">
                   <button
                     onClick={handleClose}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all font-medium"
+                    className="w-full px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all font-medium"
                   >
                     Close
                   </button>

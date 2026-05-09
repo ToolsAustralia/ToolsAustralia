@@ -37,7 +37,7 @@ type SettingsModalProps = {
 const tabButtonClass = (active: boolean) =>
   `flex-1 rounded-lg border px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-colors ${
     active
-      ? "bg-[#ee0000] text-white border-[#ee0000]"
+      ? "bg-red-600 text-white border-red-600"
       : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:border-neutral-500"
   }`;
 
@@ -281,7 +281,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={handleSaveMobile}
                     disabled={isSavingMobile}
-                    className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSavingMobile ? "Saving..." : "Save phone"}
                   </button>
@@ -321,7 +321,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={handleSaveProfile}
                 disabled={isSavingProfile}
-                className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSavingProfile ? "Saving..." : "Save profile"}
               </button>
@@ -362,7 +362,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     <div className="space-y-3 sm:space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900/85">
         <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-neutral-100">Change Password</h3>
-        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-neutral-400">Minimum of 6 characters</p>
+        <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">Minimum of 6 characters</p>
         <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200">Current password</label>
@@ -429,7 +429,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               type="button"
               onClick={handleChangePassword}
               disabled={isUpdatingPassword}
-              className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isUpdatingPassword ? "Updating..." : "Update password"}
             </button>

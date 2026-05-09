@@ -30,6 +30,7 @@ import {
   getDefaultFields,
   type FieldGroup,
 } from "@/services/admin/userExportFields";
+import { cn } from "@/utils/cn";
 
 interface UserExportModalProps {
   isOpen: boolean;
@@ -374,7 +375,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                 } ${isExporting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`${selectedFormat === format.value ? "text-red-600" : "text-gray-400"}`}>
+                  <div className={cn(selectedFormat === format.value ? "text-red-600" : "text-gray-400")}>
                     {format.icon}
                   </div>
                   <div className="flex-1 text-left">
@@ -442,7 +443,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                         toggleGroupExpansion(group);
                       }
                     }}
-                    className={`w-full flex items-center justify-between p-3 transition-colors cursor-pointer ${isExporting ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50"}`}
+                    className={cn("w-full flex items-center justify-between p-3 transition-colors cursor-pointer", isExporting ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50")}
                   >
                     <div className="flex items-center gap-2">
                       <button

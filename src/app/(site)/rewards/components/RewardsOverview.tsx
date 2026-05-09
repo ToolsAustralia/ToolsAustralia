@@ -18,8 +18,8 @@ export default function RewardsOverview({ user }: RewardsOverviewProps) {
     <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200/50">
       <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-100">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-[#ee0000]/10 rounded-lg">
-            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#ee0000]" />
+          <div className="p-1.5 sm:p-2 bg-red-600/10 rounded-lg">
+            <Trophy className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
           </div>
           <div>
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
@@ -36,7 +36,7 @@ export default function RewardsOverview({ user }: RewardsOverviewProps) {
         <div className="flex justify-center">
           <div className="text-center group">
             <div className="relative">
-              <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 lg:w-10 lg:h-10 bg-[#ee0000] rounded-full flex items-center justify-center">
+              <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 lg:w-10 lg:h-10 bg-red-600 rounded-full flex items-center justify-center">
                 <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 lg:w-5 lg:h-5 text-white fill-current" />
               </div>
             </div>

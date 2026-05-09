@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import ProductCard from "../ui/ProductCard";
+import { cn } from "@/utils/cn";
 
 // Use the same types as ProductCard to avoid conflicts
 interface ProductItem {
@@ -53,7 +54,7 @@ export default function ProductSection({
   className = "",
 }: ProductSectionProps) {
   return (
-    <section className={`py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden ${className}`}>
+    <section className={cn("py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden", className)}>
       <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
         {/* Section Header - Mobile/Tablet: Title only */}
         <div className="lg:hidden text-center mb-6 sm:mb-8">

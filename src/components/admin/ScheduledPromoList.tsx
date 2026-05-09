@@ -7,6 +7,7 @@ import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import { Calendar, Edit2, Trash2, Loader2, RefreshCw, CheckCircle } from "lucide-react";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface ScheduledPromoListProps {
   filters?: {
@@ -102,7 +103,7 @@ export default function ScheduledPromoList({ filters, onEditRequested }: Schedul
               title="Refresh"
               type="button"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("w-4 h-4", isLoading ? "animate-spin" : "")} />
             </button>
           </div>
         </div>

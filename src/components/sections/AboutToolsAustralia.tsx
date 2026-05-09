@@ -6,13 +6,13 @@ export default function AboutToolsAustralia() {
       <div className="w-full px-4 sm:px-6 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1 text-sm font-medium mb-3">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1 text-sm font-medium mb-3">
             About Tools Australia
           </div>
 
           <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
             Australia&apos;s Premier
-            <span className="block text-[#ee0000]">Tool Marketplace</span>
+            <span className="block text-red-600">Tool Marketplace</span>
           </h2>
 
           <p className="text-[16px] sm:text-[18px] lg:text-[20px] text-[rgba(0,0,0,0.7)] font-normal leading-relaxed max-w-3xl mx-auto font-['Inter']">
@@ -77,23 +77,23 @@ export default function AboutToolsAustralia() {
           <div className="lg:hidden overflow-x-auto pb-4 brand-scrollbar">
             <div className="flex gap-6 min-w-max">
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center flex-shrink-0 w-48">
-                {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">30,000+</div> */}
-                <div className="font-bold text-[#ee0000] text-sm font-['Inter']">All Trades</div>
+                {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">30,000+</div> */}
+                <div className="font-bold text-red-600 text-sm font-['Inter']">All Trades</div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center flex-shrink-0 w-48">
-                {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">2,000+</div> */}
-                <div className="font-bold text-[#ee0000] text-sm font-['Inter']">Quality Products</div>
+                {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">2,000+</div> */}
+                <div className="font-bold text-red-600 text-sm font-['Inter']">Quality Products</div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center flex-shrink-0 w-48">
-                {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">200+</div> */}
-                <div className="font-bold text-[#ee0000] text-sm font-['Inter']">Partner Discounts</div>
+                {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">200+</div> */}
+                <div className="font-bold text-red-600 text-sm font-['Inter']">Partner Discounts</div>
               </div>
 
               <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center flex-shrink-0 w-48">
-                {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">$2M+</div> */}
-                <div className="font-bold text-[#ee0000] text-sm font-['Inter']">Major Giveaways</div>
+                {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">$2M+</div> */}
+                <div className="font-bold text-red-600 text-sm font-['Inter']">Major Giveaways</div>
               </div>
             </div>
           </div>
@@ -102,26 +102,26 @@ export default function AboutToolsAustralia() {
           <div className="hidden lg:grid grid-cols-2 gap-6">
             {/* Stat Card 1 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
-              {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">30,000+</div> */}
-              <div className="font-bold text-[#ee0000] text-lg font-['Inter']">All Trades</div>
+              {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">30,000+</div> */}
+              <div className="font-bold text-red-600 text-lg font-['Inter']">All Trades</div>
             </div>
 
             {/* Stat Card 2 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
-              {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">2,000+</div> */}
-              <div className="font-bold text-[#ee0000] text-lg font-['Inter']">Quality Products</div>
+              {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">2,000+</div> */}
+              <div className="font-bold text-red-600 text-lg font-['Inter']">Quality Products</div>
             </div>
 
             {/* Stat Card 3 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
-              {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">200+</div> */}
-              <div className="font-bold text-[#ee0000] text-lg font-['Inter']">Partner Discounts</div>
+              {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">200+</div> */}
+              <div className="font-bold text-red-600 text-lg font-['Inter']">Partner Discounts</div>
             </div>
 
             {/* Stat Card 4 */}
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 text-center">
-              {/* <div className="text-2xl font-bold text-[#ee0000] mb-2 font-['Inter']">$2M+</div> */}
-              <div className="font-bold text-[#ee0000] text-lg font-['Inter']">Major Giveaways</div>
+              {/* <div className="text-2xl font-bold text-red-600 mb-2 font-['Inter']">$2M+</div> */}
+              <div className="font-bold text-red-600 text-lg font-['Inter']">Major Giveaways</div>
             </div>
           </div>
         </div>

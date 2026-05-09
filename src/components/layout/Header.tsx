@@ -50,6 +50,7 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 /** Full wordmark: light UI uses default PNG; dark UI uses high-contrast white artwork */
 const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
@@ -451,7 +452,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           className={`w-full flex items-center justify-center relative z-[1] animate-slideDown shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${
             isAuthenticated && isSetupRequired
               ? "bg-blue-600 h-[24px] sm:h-[28px]" // Blue for setup reminder
-              : "bg-[#ee0000] h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
+              : "bg-red-600 h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
           }`}
         >
           <div
@@ -460,7 +461,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             }`}
           >
             {isAuthenticated && isSetupRequired ? (
-              <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
+              <p className="text-white text-3xs sm:text-2xs font-normal leading-tight text-center flex-1 animate-topbar-reappear">
                 <span className="font-normal">Complete your profile to set up email/password login. </span>
                 <button
                   onClick={forceShowSetupModal}
@@ -474,7 +475,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 {topBarPromoSlide === 0 ? (
                   <p
                     key="topbar-membership"
-                    className="text-white text-[8px] sm:text-[10px] font-normal leading-tight animate-topbar-reappear-once"
+                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
                   >
                     <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
                     <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
@@ -484,7 +485,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 ) : (
                   <p
                     key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
-                    className="text-white text-[8px] sm:text-[10px] font-normal leading-tight animate-topbar-reappear-once"
+                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
                   >
                     {topBarActivePromoMultiplier != null ? (
                       <>
@@ -573,7 +574,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/") ? "page" : undefined}
@@ -584,7 +585,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/shop"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/shop")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/shop") ? "page" : undefined}
@@ -595,7 +596,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/mini-draws"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/mini-draws")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/mini-draws") ? "page" : undefined}
@@ -606,7 +607,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/membership"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/membership")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/membership") ? "page" : undefined}
@@ -618,7 +619,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 href="/rewards"
                 className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isActiveLink("/rewards")
-                    ? "text-white bg-[#ee0000]"
+                    ? "text-white bg-red-600"
                     : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                 }`}
                 aria-current={isActiveLink("/rewards") ? "page" : undefined}
@@ -633,13 +634,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 suppressHydrationWarning
                 className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isResultsActive()
-                    ? "text-white bg-[#ee0000]"
+                    ? "text-white bg-red-600"
                     : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                 }`}
               >
                 Results
                 <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${isResultsMenuOpen ? "rotate-180" : ""}`}
+                  className={cn("w-4 h-4 transition-transform duration-200", isResultsMenuOpen ? "rotate-180" : "")}
                 />
               </button>
 
@@ -668,7 +669,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/partner"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/partner")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/partner") ? "page" : undefined}
@@ -679,7 +680,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/faq"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/faq")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/faq") ? "page" : undefined}
@@ -690,7 +691,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/contact"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/contact")
-                  ? "text-white bg-[#ee0000]"
+                  ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/contact") ? "page" : undefined}
@@ -708,7 +709,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/affiliate"
                   className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                     pathname.startsWith("/affiliate")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                   }`}
                 >
@@ -1291,7 +1292,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 <Link
                   href="/"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
-                    isActiveLink("/") ? "text-white bg-[#ee0000]" : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                    isActiveLink("/") ? "text-white bg-red-600" : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1303,7 +1304,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/shop"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/shop")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1316,7 +1317,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/mini-draws"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/mini-draws")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1330,7 +1331,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/membership"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/membership")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1345,7 +1346,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     href="/rewards"
                     className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                       isActiveLink("/rewards")
-                        ? "text-white bg-[#ee0000]"
+                        ? "text-white bg-red-600"
                         : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     }`}
                     onClick={handleCloseMobileMenu}
@@ -1361,7 +1362,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     onClick={() => setIsMobileResultsOpen(!isMobileResultsOpen)}
                     className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium w-full ${
                       isResultsActive()
-                        ? "text-white bg-[#ee0000]"
+                        ? "text-white bg-red-600"
                         : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     }`}
                   >
@@ -1380,7 +1381,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         href="/draw-results"
                         className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
                           isActiveLink("/draw-results")
-                            ? "text-white bg-[#ee0000]"
+                            ? "text-white bg-red-600"
                             : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
                         }`}
                         onClick={handleCloseMobileMenu}
@@ -1392,7 +1393,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         href="/winners"
                         className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
                           isActiveLink("/winners")
-                            ? "text-white bg-[#ee0000]"
+                            ? "text-white bg-red-600"
                             : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
                         }`}
                         onClick={handleCloseMobileMenu}
@@ -1408,7 +1409,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/partner"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/partner")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1421,7 +1422,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/faq"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/faq")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1434,7 +1435,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/contact"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
                     isActiveLink("/contact")
-                      ? "text-white bg-[#ee0000]"
+                      ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}

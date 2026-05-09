@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import type { TrendData } from "@/types/admin/trend-types";
+import { cn } from "@/utils/cn";
 
 interface DashboardStats {
   revenue: {
@@ -197,7 +198,7 @@ export default function KPIMetricsGrid({
               }
               icon={TrendingUp}
               subtitle={
-                <span className="text-[10px] sm:text-[11px] leading-tight text-gray-500">
+                <span className="text-2xs sm:text-2xs leading-tight text-gray-500">
                   {(membershipSummary?.totalActiveCount ?? 0).toLocaleString()} active
                   {(membershipSummary?.totalPastDueCount ?? 0) > 0 && (
                     <> · {(membershipSummary?.totalPastDueCount ?? 0).toLocaleString()} past due</>
@@ -353,7 +354,7 @@ export default function KPIMetricsGrid({
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
           {/* Total Users — hidden on small screens when Users & Performance row is collapsed */}
-          <div className={`${!isUsersPerformanceExpanded ? "hidden lg:block" : ""}`}>
+          <div className={cn(!isUsersPerformanceExpanded ? "hidden lg:block" : "")}>
             <MetricCard
               title="Total Users"
               value={loading ? "..." : dashboardStats?.users.total.toLocaleString() ?? "0"}
@@ -404,7 +405,7 @@ export default function KPIMetricsGrid({
           />
 
           {/* Cancellations — hidden on small screens when Users & Performance row is collapsed */}
-          <div className={`${!isUsersPerformanceExpanded ? "hidden lg:block" : ""}`}>
+          <div className={cn(!isUsersPerformanceExpanded ? "hidden lg:block" : "")}>
             <MetricCard
               title="Cancellations"
               value={
@@ -414,7 +415,7 @@ export default function KPIMetricsGrid({
               }
               icon={UserX}
               subtitle={
-                <span className="text-[10px] sm:text-[11px] leading-tight text-gray-500">
+                <span className="text-2xs sm:text-2xs leading-tight text-gray-500">
                   Est. membership revenue at risk:{" "}
                   <span className="font-semibold text-gray-700 dark:text-neutral-300">
                     $

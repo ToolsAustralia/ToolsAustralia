@@ -17,3 +17,7 @@
 ## Display
 
 - Upsell hero images from `src/generated/upsellImageManifest.ts` — DO NOT manually edit; regenerate via `npm run build:upsell-manifest`
+
+## className conventions (2026-05-08)
+
+Upsell components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.

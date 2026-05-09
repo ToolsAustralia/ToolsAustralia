@@ -177,7 +177,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
         </div>
         <div className="p-6 flex items-center justify-center h-64">
           <div className="flex items-center gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-[#ee0000]" />
+            <Loader2 className="w-6 h-6 animate-spin text-red-600" />
             <span className="text-gray-600 dark:text-neutral-400">Loading your rewards history...</span>
           </div>
         </div>
@@ -201,7 +201,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
             <p className="text-gray-600 dark:text-neutral-400 text-sm mb-4">{error}</p>
             <button
               onClick={fetchRewardsHistory}
-              className="px-4 py-2 bg-[#ee0000] text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
             >
               Try Again
             </button>
@@ -222,7 +222,7 @@ export default function RewardsHistory({ user }: RewardsHistoryProps) {
           {summary && (
             <div className="text-right">
               <div className="text-sm text-gray-500">Current Balance</div>
-              <div className="text-2xl font-bold text-[#ee0000]">{summary.currentPoints.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-red-600">{summary.currentPoints.toLocaleString()}</div>
             </div>
           )}
         </div>

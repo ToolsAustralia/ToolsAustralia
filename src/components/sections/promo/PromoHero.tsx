@@ -15,6 +15,7 @@ import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { getImageForMode, getFallbackImagePath } from "@/utils/promo/landing-image-resolver";
+import { cn } from "@/utils/cn";
 
 /**
  * Ellipse clip-path on `.main-banner-image` creates the arched / rounded bottom hero look.
@@ -103,7 +104,7 @@ export default function PromoHero({
     return (
       <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0">
         <div
-          className={`main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse ${!PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : ""}`}
+          className={cn("main-banner-image absolute inset-0 z-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
         />
         {/* In-flow reserve: same height as loaded CTA band so layout below doesn’t jump */}
         <div className="relative z-0 mt-auto w-full shrink-0 max-sm:h-14 sm:h-16" aria-hidden />
@@ -120,7 +121,7 @@ export default function PromoHero({
       className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-auto lg:h-[83vh] lg:min-h-0"
     >
       <div
-        className={`main-banner-image absolute inset-0 z-0 ${!PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : ""}`}
+        className={cn("main-banner-image absolute inset-0 z-0", !PROMO_HERO_ELLIPSE_CLIP_ENABLED ? "promo-hero-banner--flat" : "")}
       >
         <div className="lg:hidden absolute inset-0 bg-white dark:bg-neutral-950">
           <Image
@@ -164,7 +165,7 @@ export default function PromoHero({
         <button
           type="button"
           onClick={handleEnterNow}
-          className={`promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl ${shouldUseBlackText ? "text-black" : "text-white"}`}
+          className={cn("promo-hero-cta-button pointer-events-auto inline-flex items-center justify-center rounded-full px-6 py-3 font-sans text-base font-extrabold tracking-wide backdrop-blur-lg sm:px-10 sm:py-4 sm:text-2xl", shouldUseBlackText ? "text-black" : "text-white")}
           style={{
             background: ctaStyle?.backgroundColor ?? theme.gradient,
             ...(isDewaltTheme ? { color: "#000000" } : ctaStyle?.textColor ? { color: ctaStyle.textColor } : {}),

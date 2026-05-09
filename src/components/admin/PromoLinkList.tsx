@@ -7,6 +7,7 @@ import type { PromoLink } from "@/types/admin";
 import { Link2, Edit2, Trash2, Calendar, Loader2, RefreshCw, Copy, Check, CheckCircle } from "lucide-react";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { formatDateReadable } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface PromoLinkListProps {
   filters?: {
@@ -107,7 +108,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
               title="Refresh"
               type="button"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("w-4 h-4", isLoading ? "animate-spin" : "")} />
             </button>
           </div>
         </div>
@@ -196,7 +197,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                       </div>
                       <div className="flex items-center gap-2 flex-wrap pt-1">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-2xs font-medium ${
                             promoLink.campaignType === "cancelled-membership-comeback"
                               ? "bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-200"
                               : "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200"
@@ -204,7 +205,7 @@ export default function PromoLinkList({ filters }: PromoLinkListProps) {
                         >
                           {promoLink.campaignType === "cancelled-membership-comeback" ? "Comeback" : "General"}
                         </span>
-                        <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-neutral-800 dark:text-neutral-200">
+                        <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-700 dark:bg-neutral-800 dark:text-neutral-200">
                           {promoLink.eligibilityAudience === "cancelled-members"
                             ? "Cancelled Members"
                             : "All Users"}

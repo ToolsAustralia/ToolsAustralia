@@ -15,7 +15,13 @@
       "Bash(timeout 45 bash -c \"npm run lint 2>&1\")",
       "Bash(grep -E \"\\(event-source-url|create-subscription|create-one-time-purchase|mini-draw\\\\\\\\\\\\\\\\purchase|upsell\\\\\\\\\\\\\\\\purchase|tracking\\\\\\\\\\\\\\\\gotchas|billing-stripe\\\\\\\\\\\\\\\\gotchas\\)\" \"C:\\\\Users\\\\Genesis\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Codes-ToolsAustralia\\\\6481f0ec-7981-42df-bea1-a247b70bfeac\\\\tasks\\\\b7pwqvw7q.output\")",
       "Bash(git worktree *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(grep -roh -E \"\\(bg|text|border|ring|fill|stroke|shadow|from|to|via\\)-\\\\[#[0-9a-fA-F]{3,8}\\\\]\" src/components src/app)",
+      "Bash(grep -rlE 'className=\"[^\"]{300,}\"' src/components src/app --include=\"*.tsx\")",
+      "Bash(grep -rlE 'className=\"[^\"]{500,}\"' src/components src/app --include=\"*.tsx\")",
+      "Bash(grep -roEc 'className=\"[^\"]{150,}\"' src/components src/app --include=\"*.tsx\")",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(grep -rE 'className=\\\\{`[^`]+\\\\$\\\\{' src/components --include=\"*.tsx\")"
     ]
   }
 }

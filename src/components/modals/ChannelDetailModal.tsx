@@ -188,7 +188,7 @@ export default function ChannelDetailModal({
                       <td className="p-1.5 sm:p-2 md:p-3 font-medium text-gray-900 dark:text-neutral-100 break-words">
                         <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                           <span
-                            className={`inline-flex px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium whitespace-nowrap ${
+                            className={`inline-flex px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap ${
                               row.pageType === "toolset"
                                 ? "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200"
                                 : "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200"
