@@ -126,6 +126,42 @@ Layout is an infographic-style three-band frame: dark hero → white lose grid �
 
 **Updated 2026-05-08**: `BenefitsBody.tsx` sub-component created; extracted from original monolith lines 127-160 + 360-434. Stat order: Partner offers % → Days access → Free entries / cycle (matches MembershipSection). Stat num color kept at `#0a0a0a` (matches original CSS, NOT tier-colored). Icon backgrounds use `var(--tier-icon-bg-light)`; icon foreground uses `var(--tier-color-deep)`. Checks list icon color applied via inline style on wrapping `<span>` (replaces original `:global(svg)` CSS selector).
 
+## Modal architecture sweep — 2026-05-09
+
+Twelve flat-file modals were decomposed into the canonical orchestrator-folder pattern in a single sweep. See:
+- Spec: [docs/superpowers/specs/2026-05-09-modal-architecture-sweep-design.md](../superpowers/specs/2026-05-09-modal-architecture-sweep-design.md)
+- Plan: [docs/superpowers/plans/2026-05-09-modal-architecture-sweep.md](../superpowers/plans/2026-05-09-modal-architecture-sweep.md)
+
+| Modal | Pre-LOC | Sub-components | Smoke test |
+|---|---|---|---|
+| [WinnerSelectionModal/](../../src/components/modals/WinnerSelectionModal/) | 452 | 6 | `npm run test:winner-selection` (6 combos) |
+| [AdminMajorDrawModal/](../../src/components/modals/AdminMajorDrawModal/) | 731 | 6 | `npm run test:admin-major-draw` (4 combos) |
+| [CampaignTargetingModal/](../../src/components/modals/CampaignTargetingModal/) | 603 | 8 (incl. CVA tier chips) | `npm run test:campaign-targeting` (6 combos) |
+| [SettingsModal/](../../src/components/modals/SettingsModal/) | 526 | 3 (delegates to Subscription/Payment siblings) | `npm run test:settings-modal` (5 combos) |
+| [PackageSelectionModal/](../../src/components/modals/PackageSelectionModal/) | 780 | 4 | `npm run test:package-selection` (5 combos) |
+| [RevenueDetailModal/](../../src/components/modals/RevenueDetailModal/) | 731 | 5 + `utils/exporters.ts` | `npm run test:revenue-detail` (5 combos) |
+| [UpsellModal/](../../src/components/modals/UpsellModal/) | 1,139 | 5 (Stripe Elements in PaymentSection) | `npm run test:upsell-modal` (4 combos) |
+| [SpecialPackagesModal/](../../src/components/modals/SpecialPackagesModal/) | 1,218 | 5 + `utils.ts` (Stripe Elements in PaymentSection) | `npm run test:special-packages` (4 combos) |
+| [SubscriptionManagementModal/](../../src/components/modals/SubscriptionManagementModal/) | 1,487 | 7 (embeds 3 child modals) | `npm run test:subscription-management` (5 combos) |
+| [PaymentMethodsTab/](../../src/components/modals/PaymentMethodsTab/) | 666 | 3 (Stripe Elements in orchestrator) | `npm run test:payment-methods-tab` (4 combos) |
+| [PaymentMethodSelector/](../../src/components/modals/PaymentMethodSelector/) | 1,052 | 4 (forwardRef + imperative `confirmStripeIntent`) | `npm run test:payment-method-selector` (5 combos) |
+| [MembershipModal/](../../src/components/modals/MembershipModal/) | 5,891 | 6 (orchestrator still ~3,700 LOC due to wizard breadth) | `npm run test:membership-modal` (5 combos) |
+
+**Hard guarantees of the sweep:**
+- Visual output byte-equivalent (no DOM/className/animation/copy changes).
+- Public prop interfaces preserved byte-identically — callsites are unchanged.
+- `getStripePromise()` resolves at module scope in every Stripe-using orchestrator (UpsellModal, SpecialPackagesModal, PaymentMethodsTab, PaymentMethodSelector, MembershipModal).
+- `PaymentMethodSelector`'s `cardFormRef.confirmStripeIntent()` ref API preserved verbatim via `forwardRef` + `useImperativeHandle`.
+- 58 new smoke-test combos added (passing); 33 existing-modal regression tests still pass.
+
+**Conventions reaffirmed by this sweep:**
+- Orchestrator (`index.tsx`) owns ALL hooks, effects, callbacks. Sub-components are pure-ish presentation taking flat props.
+- Folder/`index.tsx` resolution is automatic — folders replace monoliths at the same import path with zero callsite churn.
+- `ModalContainer` wrapping is preserved for modals that already used it; bespoke shells stay bespoke.
+- Smoke tests run via `tsx --require ./<folder>/__tests__/asset-stubs.cjs <test-file>` and exercise ≥4 prop combos per modal.
+
+**Skip list** (modals NOT decomposed — see spec §Inventory): `AdminProductModal`, `AdminPromoLinkModal`, `AdminMonthlyRedeemablesModal`, `AdminBonusEntryPromoModal`, `AdminPromoBannerTextModal`, `MiniDrawEditModal`, `UserSearchModal`, `ParticipantsModal`, `MajorDrawEditModal`, `UpsellManager`, `AdminScheduledPromoCalendarModal`, `PartnerModal`, `AdminScheduledPromoModal`, `AdminMiniDrawModal`, `AdminAlternatingMultiplierModal`, `SubscriptionExplainerModal`, `ConfirmationModal`, plus modals <300 LOC. All anti-signal protected per [component-decomposition-criteria.md](./component-decomposition-criteria.md).
+
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.
