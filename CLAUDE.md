@@ -31,6 +31,22 @@ If you create a new file in a path that no manifest entry covers, the hook will 
 
 Both Claude and the hooks read the same `Domain Manifest` JSON block (below). When adding a new domain or new path glob, edit that block — do not maintain a separate list elsewhere.
 
+### 4. Don't overengineer
+
+Default to the leanest solution that solves the problem the user actually described. Do **not** add infrastructure that anticipates problems they haven't raised.
+
+Concrete defaults this rule overrides:
+- **No feature flags by default.** Commits are the rollback unit. Add flags only when the user names production-rollout risk.
+- **No custom telemetry plumbing** when Vercel Speed Insights / Sentry / equivalent is already mounted and gives the same signal.
+- **No capability detection beyond OS-level signals.** Use `prefers-reduced-motion`, `prefers-reduced-transparency`, `Save-Data` / `prefers-reduced-data`. Don't reach for `navigator.deviceMemory`, `hardwareConcurrency`, `connection.effectiveType` unless the user names a concrete device class to support.
+- **No speculative tiers/abstractions.** "Scalable" means *handles the cases listed*, not *handles cases nobody asked about*. Three tiers, not five. Two phases, not seven, when two cover the work.
+- **Justify every new file.** Every new file is a maintenance cost. If a single existing file would do, use the existing file.
+- **Spec-writing in particular:** prefer 4–5 phases over 7+. Each phase ships a user-visible win, not just plumbing. When tempted to add "while we're here" infrastructure, ask the user instead of adding it.
+
+This rule overrides skills like `brainstorming`, `writing-plans`, and `writing-skills` whose defaults push toward thoroughness — thorough means "covers the real cases," not "speculatively scales."
+
+This rule is not hook-enforced. You're expected to apply it on your own.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
