@@ -1,5 +1,14 @@
 # Payment — Patterns
 
+## P0. Lazy-load payment-bearing UI surfaces (2026-05-10)
+
+`PaymentMethodsTab`, `PaymentMethodSelector`, and `SavedPaymentMethodsModal` bundle `@stripe/react-stripe-js`, the project's saved-card UI, and the Setup Intent flow. The convention from Phase 5A onwards is to import these via `next/dynamic({ ssr: false })` at non-modal callsites — see [billing-stripe/patterns.md#p0-lazy-load-stripe-bearing-modals-at-every-callsite-2026-05-10](../billing-stripe/patterns.md#p0-lazy-load-stripe-bearing-modals-at-every-callsite-2026-05-10) for the full pattern, the modal-in-modal exemption, and the type-extraction caveat.
+
+In this domain specifically:
+- `PaymentMethodSelector` is imported by `MembershipModal` and `StripePaymentModal/PaymentForm.tsx` — both modal-in-modal, so the inner imports stay static.
+- `PaymentMethodsTab` is imported by `SettingsModal` (modal-in-modal, static) and `my-account/components/settings/PaymentTab.tsx` (non-modal, lazy in Phase 5A).
+- `SavedPaymentMethodsModal` is imported by `PaymentMethodSelector` (modal-in-modal, static).
+
 ## P1. Reverser modules per grant type
 
 Every grant type gets a focused module under `src/utils/payment/reversers/`. Each implements the same contract:

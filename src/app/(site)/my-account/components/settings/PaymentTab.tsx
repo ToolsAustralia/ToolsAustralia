@@ -1,8 +1,13 @@
 "use client";
 
 import React from "react";
-import PaymentMethodsTab from "@/components/modals/PaymentMethodsTab";
+import dynamic from "next/dynamic";
 import type { MyAccountData } from "@/hooks/queries";
+
+// Lazy-loaded: bundles Stripe payment-method UI.
+const PaymentMethodsTab = dynamic(() => import("@/components/modals/PaymentMethodsTab"), {
+  ssr: false,
+});
 
 interface PaymentTabProps {
   user: MyAccountData["user"];

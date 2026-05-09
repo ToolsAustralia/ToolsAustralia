@@ -26,6 +26,7 @@ export default function FlowChartSection() {
               width={600}
               height={600}
               className="object-contain w-full h-auto"
+              sizes="(max-width: 768px) 100vw, 672px"
               priority
             />
           </div>

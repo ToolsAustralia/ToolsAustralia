@@ -12,10 +12,15 @@ import {
   AlertTriangle,
   LogOut,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useMyAccountData } from "@/hooks/queries";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { queryKeys } from "@/lib/queryKeys";
-import MembershipModal from "@/components/modals/MembershipModal";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import DashboardHeader from "../components/DashboardHeader";
 import ProfileTab from "../components/settings/ProfileTab";
 import PasswordTab from "../components/settings/PasswordTab";

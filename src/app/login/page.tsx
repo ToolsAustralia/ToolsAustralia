@@ -454,6 +454,7 @@ function LoginPageContent() {
                 alt="Tools Australia Logo"
                 fill
                 className="object-contain"
+                sizes="(max-width: 640px) 40px, 50px"
                 priority
               />
             </div>
@@ -644,7 +645,7 @@ function LoginPageContent() {
         {/* Background Image */}
 
         <div className="absolute inset-0 z-0">
-          <Image src="/images/loginBg.jpg" alt="Tools background" fill className="object-cover" priority />
+          <Image src="/images/loginBg.jpg" alt="Tools background" fill className="object-cover" sizes="(max-width: 1024px) 100vw, calc(100vw - 591px)" priority />
         </div>
         <div className="absolute inset-0 z-[1] bg-black/25 dark:bg-black/55 pointer-events-none" aria-hidden />
 
@@ -667,6 +668,7 @@ function LoginPageContent() {
                   alt="Tools collection"
                   fill
                   className="object-contain"
+                  sizes="(max-width: 640px) 150px, (max-width: 1024px) 200px, 276px"
                   priority
                 />
               </div>

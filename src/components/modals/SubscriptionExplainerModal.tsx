@@ -243,6 +243,7 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
                       width={56}
                       height={56}
                       style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      sizes="56px"
                     />
                   </div>
                 )}

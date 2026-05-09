@@ -3,7 +3,13 @@
 import { Check, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import SubscriptionManagementModal from "@/components/modals/SubscriptionManagementModal";
+import dynamic from "next/dynamic";
+
+// Lazy-loaded: bundles Stripe + payment forms; only opens on user action.
+const SubscriptionManagementModal = dynamic(
+  () => import("@/components/modals/SubscriptionManagementModal"),
+  { ssr: false },
+);
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 
 interface User {

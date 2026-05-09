@@ -1,19 +1,24 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 // Individual modal stores removed - using unified modal priority system
 import { useUserContext } from "@/contexts/UserContext";
 
-// Import modal components
-import UserSetupModal from "./UserSetupModal";
-import UpsellModal from "./UpsellModal";
-import SpecialPackagesModal from "./SpecialPackagesModal";
-import PixelConsentModal from "./PixelConsentModal";
-import GateClosedModal from "./GateClosedModal";
-import SubscriptionExplainerModal from "./SubscriptionExplainerModal";
-import RenewalFailedModal from "./RenewalFailedModal";
+// Modal components are lazy-loaded — they are large (Stripe/forms) and only
+// one is rendered at a time, so we avoid shipping their JS until the priority
+// store actually flips `activeModal` to that branch.
+const UserSetupModal = dynamic(() => import("./UserSetupModal"), { ssr: false });
+const UpsellModal = dynamic(() => import("./UpsellModal"), { ssr: false });
+const SpecialPackagesModal = dynamic(() => import("./SpecialPackagesModal"), { ssr: false });
+const PixelConsentModal = dynamic(() => import("./PixelConsentModal"), { ssr: false });
+const GateClosedModal = dynamic(() => import("./GateClosedModal"), { ssr: false });
+const SubscriptionExplainerModal = dynamic(() => import("./SubscriptionExplainerModal"), {
+  ssr: false,
+});
+const RenewalFailedModal = dynamic(() => import("./RenewalFailedModal"), { ssr: false });
 import { markExplainerSeen } from "@/utils/subscription-explainer-storage";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";

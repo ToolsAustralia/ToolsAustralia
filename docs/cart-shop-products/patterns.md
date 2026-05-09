@@ -1,5 +1,13 @@
 # Cart-Shop-Products — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+Two product-related `<Image>` callsites were missing `sizes` hints and were filled in:
+- `shop/[slug]/page.tsx` main product image now ships `sizes="(max-width: 1024px) 100vw, 50vw"` (the page renders a single full-width product image on mobile and a 1/2 grid on desktop).
+- `checkout/success/.../CheckoutSuccessClient.tsx` line-item thumbnails ship `sizes="64px"` (fixed `w-16 h-16` cell).
+
+No behavioural changes; markup only.
+
 ## P1. Cart in Context, products in TanStack Query
 
 Server-state (products) goes through TanStack Query. Client-state (cart) goes through React Context with localStorage backing. Don't mix.

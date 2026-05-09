@@ -569,6 +569,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   width={160}
                   height={52}
                   className="h-full w-full object-contain dark:hidden"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
                   priority
                 />
                 <Image
@@ -577,6 +578,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   width={160}
                   height={52}
                   className="hidden h-full w-full object-contain dark:block"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
                   priority
                 />
               </div>
@@ -1206,6 +1208,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     width={40}
                     height={40}
                     className="object-contain rounded-full"
+                    sizes="40px"
                   />
                 </div>
                 <div>
@@ -1603,6 +1606,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             width={64}
                             height={64}
                             className="w-full h-full object-cover"
+                            sizes="64px"
                           />
                         </div>
                         <div className="flex-1 min-w-0">

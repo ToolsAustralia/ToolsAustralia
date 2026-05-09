@@ -271,6 +271,7 @@ export default function ImageUpload({
                 width={128}
                 height={128}
                 className="w-full h-32 object-cover rounded-lg border border-gray-300"
+                sizes="(max-width: 768px) 50vw, 25vw"
               />
 
               {/* Upload Status Overlay */}

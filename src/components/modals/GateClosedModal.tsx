@@ -75,6 +75,7 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
               alt={nextDraw?.name ? `Next draw: ${nextDraw.name}` : "Background"}
               fill
               className="object-cover opacity-20"
+              sizes="(max-width: 768px) 100vw, 768px"
               priority
             />
             {/* Darker Dim Overlay */}
@@ -111,6 +112,7 @@ const GateClosedModal: React.FC<GateClosedModalProps> = ({
                     style={{
                       filter: `drop-shadow(0 0 10px ${config.glowColor})`,
                     }}
+                    sizes="40px"
                   />
                 </div>
               ))}

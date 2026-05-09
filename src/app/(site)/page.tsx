@@ -14,6 +14,7 @@ import FloatingCountdownBanner from "@/components/banners/FloatingCountdownBanne
 import LatestWinnerHero from "@/components/sections/LatestWinnerHero";
 import WinnerTestimoniesClient from "./components/WinnerTestimoniesClient";
 import { SectionContainer } from "@/components/ui";
+import { LazyMount } from "@/components/ui/LazyMount";
 
 export const metadata: Metadata = {
   title: "Tools Australia | Professional Tools, Mini Draws & Partner Deals",
@@ -48,6 +49,74 @@ export const metadata: Metadata = {
   },
 };
 
+// Below-fold sections benefit from `content-visibility: auto` to skip rendering work
+// while offscreen. Pair with a generous `contain-intrinsic-size` to avoid scroll jumps.
+const lazySectionStyle = { contentVisibility: "auto", containIntrinsicSize: "1px 800px" } as const;
+
+const winnerTestimoniesSkeleton = (
+  <section
+    className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950"
+    style={lazySectionStyle}
+  >
+    <SectionContainer>
+      <div className="text-center">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+          Winner Testimonies
+        </div>
+        <div className="text-gray-500 dark:text-neutral-400">Loading testimonies...</div>
+      </div>
+    </SectionContainer>
+  </section>
+);
+
+const miniDrawsSkeleton = (
+  <section
+    className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden"
+    style={lazySectionStyle}
+  >
+    <SectionContainer>
+      <div className="text-center">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+          MINI DRAWS
+        </div>
+        <div className="text-gray-500 dark:text-neutral-400">Loading mini draws...</div>
+      </div>
+    </SectionContainer>
+  </section>
+);
+
+const bestsellersSkeleton = (
+  <section
+    className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden"
+    style={lazySectionStyle}
+  >
+    <SectionContainer>
+      <div className="text-center">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+          BEST SELLERS
+        </div>
+        <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
+      </div>
+    </SectionContainer>
+  </section>
+);
+
+const newArrivalsSkeleton = (
+  <section
+    className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden"
+    style={lazySectionStyle}
+  >
+    <SectionContainer>
+      <div className="text-center">
+        <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
+          NEW ARRIVALS
+        </div>
+        <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
+      </div>
+    </SectionContainer>
+  </section>
+);
+
 export default function HomePage() {
   return (
     <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
@@ -64,43 +133,21 @@ export default function HomePage() {
         </SectionContainer>
 
         {/* Winner Testimonies Section - Client-side fetch */}
-        <Suspense
-          fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
-              <SectionContainer>
-                <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
-                    Winner Testimonies
-                  </div>
-                  <div className="text-gray-500 dark:text-neutral-400">Loading testimonies...</div>
-                </div>
-              </SectionContainer>
-            </section>
-          }
-        >
-          <WinnerTestimoniesClient />
-        </Suspense>
+        <LazyMount fallback={winnerTestimoniesSkeleton}>
+          <Suspense fallback={winnerTestimoniesSkeleton}>
+            <WinnerTestimoniesClient />
+          </Suspense>
+        </LazyMount>
 
         {/* Mini Draws Section - Client-side fetch */}
-        <Suspense
-          fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
-              <SectionContainer>
-                <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
-                    MINI DRAWS
-                  </div>
-                  <div className="text-gray-500 dark:text-neutral-400">Loading mini draws...</div>
-                </div>
-              </SectionContainer>
-            </section>
-          }
-        >
-          <HomeMiniDraws />
-        </Suspense>
+        <LazyMount fallback={miniDrawsSkeleton}>
+          <Suspense fallback={miniDrawsSkeleton}>
+            <HomeMiniDraws />
+          </Suspense>
+        </LazyMount>
 
         {/* Keyword-rich internal linking block to guide crawlers and users toward priority brand pages */}
-        <section className="bg-slate-950 py-12 text-gray-100">
+        <section className="bg-slate-950 py-12 text-gray-100" style={lazySectionStyle}>
           <SectionContainer className="flex flex-col gap-6">
             <h2 className="text-2xl font-semibold text-white md:text-3xl">Trade-Ready Brands in One Place</h2>
             <p className="text-base text-gray-300 md:text-lg">
@@ -143,40 +190,18 @@ export default function HomePage() {
         </section>
 
         {/* Best Sellers Section - Client-side fetch */}
-        <Suspense
-          fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
-              <SectionContainer>
-                <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
-                    BEST SELLERS
-                  </div>
-                  <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
-                </div>
-              </SectionContainer>
-            </section>
-          }
-        >
-          <HomeProducts sectionType="bestsellers" title="BEST SELLERS" />
-        </Suspense>
+        <LazyMount fallback={bestsellersSkeleton}>
+          <Suspense fallback={bestsellersSkeleton}>
+            <HomeProducts sectionType="bestsellers" title="BEST SELLERS" />
+          </Suspense>
+        </LazyMount>
 
         {/* New Arrivals Section - Client-side fetch */}
-        <Suspense
-          fallback={
-            <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
-              <SectionContainer>
-                <div className="text-center">
-                  <div className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins']">
-                    NEW ARRIVALS
-                  </div>
-                  <div className="text-gray-500 dark:text-neutral-400">Loading products...</div>
-                </div>
-              </SectionContainer>
-            </section>
-          }
-        >
-          <HomeProducts sectionType="newarrivals" title="NEW ARRIVALS" />
-        </Suspense>
+        <LazyMount fallback={newArrivalsSkeleton}>
+          <Suspense fallback={newArrivalsSkeleton}>
+            <HomeProducts sectionType="newarrivals" title="NEW ARRIVALS" />
+          </Suspense>
+        </LazyMount>
 
         <SectionContainer>
           <ProductCategories showBackground={false} />

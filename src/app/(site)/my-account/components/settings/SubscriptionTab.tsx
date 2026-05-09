@@ -1,9 +1,18 @@
 "use client";
 
 import React from "react";
-import SubscriptionManagementModal from "@/components/modals/SubscriptionManagementModal";
+import dynamic from "next/dynamic";
+// Type-only import keeps the prop-extraction pattern below working without
+// pulling the SubscriptionManagementModal bundle into this route's chunk.
+import type SubscriptionManagementModalType from "@/components/modals/SubscriptionManagementModal";
 
-type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModal>["user"];
+// Lazy-loaded: bundles Stripe + payment forms.
+const SubscriptionManagementModal = dynamic(
+  () => import("@/components/modals/SubscriptionManagementModal"),
+  { ssr: false },
+);
+
+type SubscriptionUser = React.ComponentProps<typeof SubscriptionManagementModalType>["user"];
 
 interface SubscriptionTabProps {
   user: SubscriptionUser;

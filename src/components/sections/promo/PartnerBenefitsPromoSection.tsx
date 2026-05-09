@@ -76,6 +76,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
               alt="Tools Australia workshop"
               fill
               className="object-cover"
+              sizes="(max-width: 1280px) 100vw, 1152px"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/90 to-black/85 lg:via-black/88 lg:to-black/80" />
             <div

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -11,6 +12,7 @@ import { getToolsetFromSlug } from "./utils";
 import type { PrizeSlug } from "@/config/prizes";
 import { cn } from "@/utils/cn";
 import { useDeviceProfile } from "@/hooks/useDeviceProfile";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 interface PowerToolsetCarouselProps {
   /** All toolset options for the current toolbox type */
@@ -86,7 +88,9 @@ export function PowerToolsetCarousel({
 }: PowerToolsetCarouselProps) {
   const prefersReducedMotion = useReducedMotion();
   const profile = useDeviceProfile();
-  const allowInfiniteAnim = !prefersReducedMotion && profile.tier === "desktop";
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
+  const allowInfiniteAnim = !prefersReducedMotion && profile.tier === "desktop" && inView;
 
   // When activeSlug is null (e.g. cash-prize), nothing is selected — no fallback to first prize
   const activePrize =
@@ -311,7 +315,7 @@ export function PowerToolsetCarousel({
   };
 
   return (
-    <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
+    <div ref={rootRef} className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {/* Carousel label - brand logo for active toolset */}
       {activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
         <AnimatePresence mode="wait">

@@ -83,6 +83,7 @@ export default function WinnerAnnouncement({ latestWinner }: WinnerAnnouncementP
                 width={160}
                 height={160}
                 className="w-full h-full object-contain p-2"
+                sizes="(max-width: 640px) 128px, 160px"
               />
             </div>
             <div className="space-y-3">

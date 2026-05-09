@@ -104,7 +104,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 return (
                   <div key={`${item.productId}-${item.quantity}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
-                      <Image src={img} alt={name} width={64} height={64} className="w-full h-full object-cover" />
+                      <Image src={img} alt={name} width={64} height={64} className="w-full h-full object-cover" sizes="64px" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{name}</h3>

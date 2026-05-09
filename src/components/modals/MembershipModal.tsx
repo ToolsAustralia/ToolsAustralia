@@ -5177,6 +5177,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     width={72}
                     height={72}
                     className="w-10 h-10 sm:w-11 sm:h-11 object-contain drop-shadow-md"
+                    sizes="(max-width: 640px) 40px, 44px"
                   />
                 ) : (
                   <div
@@ -5293,6 +5294,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       width={72}
                       height={72}
                       className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
+                      sizes="(max-width: 640px) 48px, 56px"
                     />
                   ) : (
                     <div
@@ -5776,6 +5778,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       width={600}
                       height={160}
                       className="w-full h-auto"
+                      sizes="(max-width: 768px) 100vw, 600px"
                     />
                   </div>
                 </div>

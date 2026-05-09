@@ -1289,6 +1289,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       className="w-7 h-7 sm:w-9 sm:h-9 lg:w-11 lg:h-11 object-contain"
                       width={44}
                       height={44}
+                      sizes="(max-width: 640px) 28px, (max-width: 1024px) 36px, 44px"
                     />
                   </div>
                 </span>
@@ -1300,6 +1301,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     className="w-full h-full object-cover"
                     width={56}
                     height={56}
+                    sizes="(max-width: 640px) 40px, (max-width: 1024px) 48px, 56px"
                   />
                 </div>
               )}
@@ -2377,6 +2379,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
                                           width={28}
                                           height={28}
+                                          sizes="(max-width: 640px) 20px, 28px"
                                         />
                                       </div>
                                     </span>
@@ -2390,6 +2393,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     className="w-full h-full object-cover"
                                     width={40}
                                     height={40}
+                                    sizes="(max-width: 640px) 32px, 40px"
                                   />
                                 </div>
                               )}
@@ -2967,6 +2971,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
                                           width={28}
                                           height={28}
+                                          sizes="(max-width: 640px) 20px, 28px"
                                         />
                                       </div>
                                     </span>
@@ -2980,6 +2985,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     className="w-full h-full object-cover"
                                     width={40}
                                     height={40}
+                                    sizes="(max-width: 640px) 32px, 40px"
                                   />
                                 </div>
                               )}
@@ -3477,6 +3483,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                         className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
                                         width={28}
                                         height={28}
+                                        sizes="(max-width: 640px) 24px, 28px"
                                       />
                                     </span>
                                   ) : (

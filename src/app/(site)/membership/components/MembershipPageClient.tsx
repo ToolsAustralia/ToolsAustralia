@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import BrandScroller from "@/components/ui/BrandScroller";
@@ -16,7 +17,10 @@ import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { SectionContainer } from "@/components/ui";
-import MembershipModal from "@/components/modals/MembershipModal";
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
