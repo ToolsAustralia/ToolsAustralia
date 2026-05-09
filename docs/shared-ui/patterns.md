@@ -54,6 +54,8 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 **Referential-equality contract:** `useEmblaCarousel` reinitializes when `options` or `plugins` change by reference. Callers MUST memoize both with `useMemo` to avoid plugin reinit storms — the wrappers do not defensively re-memoize because a shallow `useMemo` on a fresh-each-render literal is a no-op.
 
+**Column-grouping pattern (2-row thumb gallery, 2026-05-10):** when migrating a Swiper `Grid` (`rows: 2`, `fill: "column"`) thumb strip to Embla, group thumbs into pairs and treat each Embla slide as a *column* of 2 vertically-stacked thumbs (`flex flex-col gap-2 h-full`). Slide widths: `flex-[0_0_25%] sm:flex-[0_0_20%] lg:flex-[0_0_16.66%]` (4 / 5 / 6 columns visible). This avoids two Swiper-Grid limitations: (1) `slidesPerGroup` + `slideToClickedSlide` snap-back on second-page clicks, and (2) Swiper Grid refusing to advance to a partial final page when remainder < `slidesPerView`. First applied in [`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx) (Phase 1.5 of the smoothness plan); pattern is reusable for future migrations of `MajorDrawSection` and any other 2-row thumb gallery.
+
 ### Print stylesheet
 
 `@media print` in `globals.css` hides `[data-floating-widget]`, `[data-tracking-pixel]`, `header[data-sticky="true"]`, and any `[data-print="hide"]` element, and forces black-on-white. Tag floating UI / pixel scripts with the matching `data-*` attribute when adding new ones (`RewardsFloatingWidget` and the analytics scripts already do).
