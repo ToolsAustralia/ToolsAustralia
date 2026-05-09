@@ -1059,7 +1059,7 @@ export default function PrizeShowcase({
                   onClick={() => {
                     handleToolboxTypeChange("cash");
                   }}
-                  className={`w-full py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-all duration-200 border-2 relative overflow-hidden flex items-center justify-center ${
+                  className={`w-full py-2.5 sm:py-4 rounded-xl sm:rounded-2xl font-acumin font-[950] text-sm sm:text-2xl transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] border-2 relative overflow-hidden flex items-center justify-center ${
                     toolboxType === "cash"
                       ? "border-green-500 shadow-lg shadow-green-500/40 bg-cover bg-center"
                       : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-300 border-gray-300 dark:border-neutral-600 hover:border-green-400 hover:text-green-600 hover:shadow-lg"
@@ -1290,11 +1290,11 @@ export default function PrizeShowcase({
                 return (
                   <div
                     key={`${highlight.title}-${index}`}
-                    className="relative flex items-center gap-2 sm:gap-3 p-2 sm:p-3 min-h-[40px] sm:min-h-[60px] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden"
+                    className="relative flex items-center gap-2 sm:gap-3 p-2 sm:p-3 min-h-[40px] sm:min-h-[60px] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none"></div>
                     <div
-                      className="relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 shadow-lg backdrop-blur-sm sm:h-12 sm:w-12 sm:rounded-xl"
+                      className="relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 shadow-lg backdrop-blur-[var(--ta-blur)] sm:h-12 sm:w-12 sm:rounded-xl"
                       style={{
                         backgroundImage: highlightTheme.gradientSolid,
                         borderColor: activeBrandBorderColor,
@@ -1323,7 +1323,7 @@ export default function PrizeShowcase({
             <button
               onClick={() => setIsSpecsModalOpen(true)}
               suppressHydrationWarning
-              className="w-full relative overflow-hidden rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm transition-all duration-300 hover:border-gray-600 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] group text-left"
+              className="w-full relative overflow-hidden rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)] bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-[var(--ta-blur)] transition-[colors,box-shadow] duration-[var(--ta-transition-dur)] hover:border-gray-600 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] group text-left"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent rounded-xl sm:rounded-2xl pointer-events-none group-hover:from-white/10"></div>
               <div className="relative z-10 flex items-center justify-between gap-3">

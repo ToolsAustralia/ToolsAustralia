@@ -559,7 +559,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 type="button"
                 onClick={() => handleToolboxTypeChange(type)}
                 suppressHydrationWarning
-                className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] border-2 ${
                   isActive && type !== "cash"
                     ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                     : isActive && type === "cash"
@@ -603,7 +603,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                               borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
                             }
                       }
-                      className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                      className={`relative w-full p-5 rounded-2xl border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
                           ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
                           : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
@@ -645,7 +645,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={handlePreviousPrize}
                       suppressHydrationWarning
-                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-all duration-200"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-[colors,transform] duration-[var(--ta-transition-dur)]"
                       aria-label="Previous prize"
                     >
                       <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
@@ -654,7 +654,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={handleNextPrize}
                       suppressHydrationWarning
-                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-all duration-200"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-[colors,transform] duration-[var(--ta-transition-dur)]"
                       aria-label="Next prize"
                     >
                       <ChevronRight className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
@@ -694,7 +694,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                               borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
                             }
                       }
-                      className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                      className={`relative p-5 rounded-2xl border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
                           ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
                           : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
@@ -782,7 +782,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
         return (
           <div
             key={`${highlight.title}-${index}`}
-            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
             <div
               className={`relative w-7 h-7 sm:w-12 sm:h-12 flex-shrink-0 bg-gradient-to-br ${
@@ -883,7 +883,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 <div className="absolute top-3 right-3 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
-                    className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
+                    className="relative overflow-hidden rounded-full transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:scale-105 group"
                   >
                     <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
@@ -966,7 +966,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       onClick={() => handleMobileThumbnailClick(index)}
                     >
                       <div
-                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white dark:bg-neutral-900"
+                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] cursor-pointer bg-white dark:bg-neutral-900"
                         style={{
                           borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
                         }}
@@ -1001,7 +1001,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className="bg-white/20 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/30"
+                      className="bg-white/20 backdrop-blur-[var(--ta-blur)] rounded-2xl p-3 text-center border border-white/30"
                     >
                       <Skeleton height={24} className="w-full mb-2 bg-white/40" />
                       <Skeleton height={12} className="w-12 mx-auto bg-white/40" />
@@ -1023,7 +1023,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 {/* Frozen Draw Notice */}
                 {currentMajorDraw?.status === "frozen" && (
                   <div className="mb-3 text-center">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                    <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-xl p-2 sm:p-3 border border-white/20">
                       <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                         Entry Period Closed
                       </div>
@@ -1041,25 +1041,25 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     targetMs={drawTargetMs}
                     render={(timeLeft) => (
                       <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                           <div className="text-lg sm:text-2xl font-bold text-white">
                             {String(timeLeft.days).padStart(2, "0")}
                           </div>
                           <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                           <div className="text-lg sm:text-2xl font-bold text-white">
                             {String(timeLeft.hours).padStart(2, "0")}
                           </div>
                           <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                           <div className="text-lg sm:text-2xl font-bold text-white">
                             {String(timeLeft.minutes).padStart(2, "0")}
                           </div>
                           <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
                           <div className="text-lg sm:text-2xl font-bold text-white">
                             {String(timeLeft.seconds).padStart(2, "0")}
                           </div>
@@ -1081,13 +1081,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Mobile: Draw Ended Section */}
             {isCompleted && (
               <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border-2 border-white/20">
-                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20 space-y-4">
+                <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 text-center border border-white/20 space-y-4">
                   <div className="text-[24px] font-bold text-white uppercase tracking-wide">Draw Ended</div>
                   <a
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-all duration-200 shadow-lg hover:shadow-xl w-full"
+                    className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-[colors,box-shadow] duration-[var(--ta-transition-dur)] shadow-lg hover:shadow-xl w-full"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -1102,7 +1102,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {user ? (
               userStatsLoading ? (
                 // Skeleton loader for user entries
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
+                <div className="bg-white/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1112,7 +1112,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
               ) : (
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
+                <div className="bg-white/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <button
                     onClick={() => setShowBreakdown(!showBreakdown)}
                     className="w-full text-left hover:bg-gray-50 dark:hover:bg-neutral-800/60 rounded-lg p-2 -m-2 transition-colors"
@@ -1220,7 +1220,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 <div className="absolute top-4 right-4 z-20">
                   <button
                     onClick={() => setIsSpecsModalOpen(true)}
-                    className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
+                    className="relative overflow-hidden rounded-full transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:scale-105 group"
                     suppressHydrationWarning
                   >
                     <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
@@ -1312,7 +1312,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         onClick={() => handleDesktopThumbnailClick(index)}
                       >
                         <div
-                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 bg-white dark:bg-neutral-900 cursor-pointer"
+                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] bg-white dark:bg-neutral-900 cursor-pointer"
                           style={{
                             borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
                           }}
@@ -1339,7 +1339,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     {[1, 2, 3, 4].map((i) => (
                       <div
                         key={i}
-                        className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/30"
+                        className="bg-white/20 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 text-center border border-white/30"
                       >
                         <Skeleton height={36} className="w-full mb-2 bg-white/40" />
                         <Skeleton height={14} className="w-16 mx-auto bg-white/40" />
@@ -1360,7 +1360,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 >
                   {currentMajorDraw?.status === "frozen" && (
                     <div className="mb-3 text-center">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                      <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-xl p-2 sm:p-3 border border-white/20">
                         <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                           Entry Period Closed
                         </div>
@@ -1386,7 +1386,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                           ].map((item) => (
                             <div
                               key={item.label}
-                              className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
+                              className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20"
                             >
                               <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
                                 {String(item.value).padStart(2, "0")}
@@ -1407,13 +1407,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </div>
               ) : (
                 <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/20 space-y-4">
+                  <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 text-center border border-white/20 space-y-4">
                     <div className="text-3xl font-bold text-white uppercase tracking-wide">Draw Ended</div>
                     <a
                       href="https://www.facebook.com/toolsaust"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl w-full"
+                      className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-[colors,box-shadow] duration-[var(--ta-transition-dur)] shadow-lg hover:shadow-xl w-full"
                     >
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -1461,7 +1461,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {user ? (
                 userStatsLoading ? (
                   // Skeleton loader for user entries (desktop)
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
+                  <div className="bg-white/90 backdrop-blur-[var(--ta-blur)] rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1471,7 +1471,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
+                  <div className="bg-white/90 backdrop-blur-[var(--ta-blur)] rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <button
                       onClick={() => setShowBreakdown(!showBreakdown)}
                       className="w-full text-left hover:bg-red-50/40 dark:hover:bg-red-950/25 rounded-lg px-3 py-2 transition-colors"

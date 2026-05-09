@@ -2153,3 +2153,13 @@ html[data-save-data="true"] {
   }
   html, body { background: #fff !important; color: #000 !important; }
 }
+
+@media (max-width: 767.98px), (prefers-reduced-motion: reduce) {
+  .animate-shimmer, .animate-shimmer-horizontal {
+    animation: none !important;
+  }
+}
+html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
+html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
+  animation: none !important;
+}

@@ -228,7 +228,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                   exit={{ opacity: 0, height: 0 }}
                   className="mb-2 sm:mb-3"
                 >
-                  <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-md sm:rounded-xl sm:p-3">
+                  <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-[var(--ta-blur)] sm:rounded-xl sm:p-3">
                     <div className="text-center">
                       <div className={cn("text-2xs font-bold uppercase tracking-wider sm:text-xs", surfaceText)}>
                         Entry period closed
@@ -273,7 +273,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
                       <div
                         className={`relative overflow-hidden rounded-lg border-2 p-1.5 sm:rounded-xl sm:p-2.5 lg:p-3 ${
-                          useLightCountdownInner ? "" : "backdrop-blur-md bg-black/35 shadow-xl dark:bg-black/45"
+                          useLightCountdownInner ? "" : "backdrop-blur-[var(--ta-blur)] bg-black/35 shadow-xl dark:bg-black/45"
                         }`}
                         style={useLightCountdownInner ? lightTileSurfaceStyle : accentBorderStyle}
                       >
@@ -298,7 +298,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                         )}
 
                         <div className="relative z-10">
-                          <AnimatePresence mode="wait">
+                          <AnimatePresence mode="popLayout">
                             <motion.div
                               key={unit.value}
                               initial={{ rotateX: -90, opacity: 0 }}
@@ -328,10 +328,10 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
               transition={{ delay: 0.5, duration: 0.4 }}
               className={`rounded-lg border-2 px-2.5 py-2 sm:rounded-full sm:px-4 sm:py-2 ${
                 isFrozen
-                  ? "bg-black/35 backdrop-blur-md dark:bg-black/45"
+                  ? "bg-black/35 backdrop-blur-[var(--ta-blur)] dark:bg-black/45"
                   : useLightCountdownInner
                     ? ""
-                    : "bg-black/30 backdrop-blur-md dark:bg-black/40"
+                    : "bg-black/30 backdrop-blur-[var(--ta-blur)] dark:bg-black/40"
               }`}
               style={
                 isFrozen

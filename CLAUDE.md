@@ -323,7 +323,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/partner-discount/**",
         "src/app/(site)/partner/**"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-10"
     },
     "upsell": {
       "docs": "docs/upsell/",

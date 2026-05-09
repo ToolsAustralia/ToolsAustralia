@@ -159,7 +159,7 @@ export default function WinnersSection({
                 return (
                   <div
                     key={winner.id}
-                    className="group relative bg-white rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-gray-100/80 hover:shadow-[0_20px_60px_rgba(0,0,0,0.15)] transition-all duration-500 overflow-hidden"
+                    className="group relative bg-white rounded-3xl shadow-[var(--ta-shadow-card)] border border-gray-100/80 hover:shadow-[var(--ta-shadow-card-hover)] hover:translate-y-[var(--ta-card-hover-y)] transition-[transform,opacity,box-shadow] duration-[var(--ta-transition-dur)] overflow-hidden"
                   >
                     {/* Premium Glow Effect on Hover */}
                     <div className="absolute inset-0 bg-gradient-to-br from-red-500/0 via-red-500/0 to-red-500/0 group-hover:from-red-500/5 group-hover:via-red-500/3 group-hover:to-red-500/5 transition-all duration-500 rounded-3xl pointer-events-none z-0"></div>
@@ -195,7 +195,7 @@ export default function WinnersSection({
                       {/* Selected Prize Badge - Overlayed on Image (Top Right) - Only for major draws */}
                       {winner.drawType === "major" && winner.selectedPrize && (
                         <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-20">
-                          <div className="bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                          <div className="bg-black/80 backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                             <div className="flex items-center gap-1.5 sm:gap-2">
                               <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
                               <span className="text-2xs sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
@@ -208,20 +208,11 @@ export default function WinnersSection({
 
                       {/* Winner Name Overlay - Bottom */}
                       <div className="absolute bottom-0 left-0 right-0 z-20 p-3 sm:p-6">
-                        <div className="bg-black/75 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
-                          {/* Animated shimmer effect */}
-                          <div className="absolute inset-0 sm:-translate-x-full sm:group-hover:translate-x-full animate-shimmer-horizontal sm:animate-none transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-                          
+                        <div className="bg-black/75 backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
                           {/* Winner Name and Location - Same Row */}
                           <div className="relative flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1">
                             <p className="text-base sm:text-2xl font-bold font-['Poppins'] tracking-tight relative inline-block">
-                              <span 
-                                className="absolute inset-0 bg-gradient-to-r from-yellow-400/30 via-white/40 to-yellow-400/30 bg-clip-text text-transparent blur-md opacity-60 animate-pulse"
-                                aria-hidden="true"
-                              >
-                                {formattedName}
-                              </span>
-                              <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] sm:drop-shadow-[0_0_10px_rgba(255,255,255,0.6)] sm:group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] transition-all duration-300">
+                              <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] sm:drop-shadow-[0_0_10px_rgba(255,255,255,0.6)] sm:group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] transition-[filter,color] duration-[var(--ta-transition-dur)]">
                                 {formattedName}
                               </span>
                             </p>
