@@ -180,7 +180,7 @@ const FloatingCountdownBanner: React.FC<FloatingCountdownBannerProps> = ({ class
             }}
             className={`relative pointer-events-auto bg-gradient-to-r from-gray-900 via-gray-800 to-black rounded-xl shadow-2xl border ${
               gatesClosed ? "border-yellow-500/50" : "border-red-500/50"
-            } backdrop-blur-sm overflow-visible w-full mx-4 ${
+            } backdrop-blur-[var(--ta-blur)] overflow-visible w-full mx-4 ${
               isCollapsedState ? "max-w-md" : "max-w-4xl"
             }`}
           >

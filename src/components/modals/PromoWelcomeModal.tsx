@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import { Check, Copy, Sparkles, Gift, Zap } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useAutoConfetti } from "@/hooks/useConfetti";
 import type { PromoWelcomeData } from "@/hooks/usePromoWelcomeModal";
@@ -16,6 +16,7 @@ export interface PromoWelcomeModalProps {
 
 const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
   const [copied, setCopied] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const handleCopy = useCallback(async () => {
     try {
@@ -37,15 +38,23 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
       {/* Animated glow effect */}
       <motion.div
         className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-orange-500/30 to-red-500/30 rounded-xl blur-xl"
-        animate={{
-          opacity: [0.5, 0.8, 0.5],
-          scale: [1, 1.05, 1],
-        }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
+        animate={
+          prefersReducedMotion
+            ? { opacity: 0.65, scale: 1 }
+            : {
+                opacity: [0.5, 0.8, 0.5],
+                scale: [1, 1.05, 1],
+              }
+        }
+        transition={
+          prefersReducedMotion
+            ? {}
+            : {
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }
+        }
       />
       
       <div className="relative bg-gradient-to-br from-white via-gray-50 to-white dark:from-neutral-900 dark:via-neutral-800 dark:to-neutral-900 rounded-xl p-4 shadow-2xl border border-red-500/20">
@@ -112,6 +121,7 @@ const PromoCodeBadge: React.FC<{ code: string }> = ({ code }) => {
 
 const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, campaignData }) => {
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const prefersReducedMotion = useReducedMotion();
 
   const isComeback = campaignData.campaignType === "cancelled-membership-comeback";
 
@@ -125,8 +135,8 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
   const bodyComeback = campaignData.description?.trim() ||
     "We've missed you. Here's your exclusive comeback code—use it at checkout, then continue to enter the draw.";
 
-  // Confetti effect from sides when modal opens
-  useAutoConfetti(isOpen, {
+  // Confetti effect from sides when modal opens (suppressed when reduced motion is preferred)
+  useAutoConfetti(isOpen && !prefersReducedMotion, {
     duration: 2000,
     origin: "sides",
     colors: ["#ee0000", "#ff3333", "#ff6b6b", "#ffa500", "#ffcc00"],
@@ -150,28 +160,44 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
         <div className="absolute inset-0 pointer-events-none">
           <motion.div
             className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-red-500/10 via-orange-500/5 to-transparent rounded-full blur-3xl"
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
+            animate={
+              prefersReducedMotion
+                ? { scale: 1, opacity: 0.4 }
+                : {
+                    scale: [1, 1.2, 1],
+                    opacity: [0.3, 0.5, 0.3],
+                  }
+            }
+            transition={
+              prefersReducedMotion
+                ? {}
+                : {
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }
+            }
           />
           <motion.div
             className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-orange-500/10 via-red-500/5 to-transparent rounded-full blur-3xl"
-            animate={{
-              scale: [1.2, 1, 1.2],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 2,
-            }}
+            animate={
+              prefersReducedMotion
+                ? { scale: 1, opacity: 0.4 }
+                : {
+                    scale: [1.2, 1, 1.2],
+                    opacity: [0.3, 0.5, 0.3],
+                  }
+            }
+            transition={
+              prefersReducedMotion
+                ? {}
+                : {
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 2,
+                  }
+            }
           />
         </div>
 
@@ -202,15 +228,23 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
               <div className="relative bg-gradient-to-r from-red-50 via-orange-50 to-red-50 dark:from-red-950/30 dark:via-orange-950/30 dark:to-red-950/30 rounded-xl p-3 border border-red-200/50 dark:border-red-800/50 shadow-lg">
                 <div className="flex items-center justify-center gap-2 text-center">
                   <motion.div
-                    animate={{
-                      scale: [1, 1.2, 1],
-                      rotate: [0, 5, -5, 0],
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                    }}
+                    animate={
+                      prefersReducedMotion
+                        ? { scale: 1, rotate: 0 }
+                        : {
+                            scale: [1, 1.2, 1],
+                            rotate: [0, 5, -5, 0],
+                          }
+                    }
+                    transition={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                          }
+                    }
                   >
                     <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
                   </motion.div>
@@ -223,16 +257,24 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                     </div>
                   </div>
                   <motion.div
-                    animate={{
-                      scale: [1, 1.2, 1],
-                      rotate: [0, -5, 5, 0],
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                      delay: 0.5,
-                    }}
+                    animate={
+                      prefersReducedMotion
+                        ? { scale: 1, rotate: 0 }
+                        : {
+                            scale: [1, 1.2, 1],
+                            rotate: [0, -5, 5, 0],
+                          }
+                    }
+                    transition={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                            delay: 0.5,
+                          }
+                    }
                   >
                     <Zap className="w-5 h-5 text-orange-500 fill-orange-500" />
                   </motion.div>
@@ -256,26 +298,36 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
             >
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                animate={{
-                  x: ["-100%", "100%"],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
+                animate={
+                  prefersReducedMotion
+                    ? { x: "0%" }
+                    : { x: ["-100%", "100%"] }
+                }
+                transition={
+                  prefersReducedMotion
+                    ? {}
+                    : {
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }
+                }
               />
               <span className="relative z-10 flex items-center justify-center gap-2">
                 {isComeback ? "Enter the Draw" : "Enter Now"}
                 <motion.span
-                  animate={{
-                    x: [0, 4, 0],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+                  animate={
+                    prefersReducedMotion ? { x: 0 } : { x: [0, 4, 0] }
+                  }
+                  transition={
+                    prefersReducedMotion
+                      ? {}
+                      : {
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        }
+                  }
                 >
                   →
                 </motion.span>

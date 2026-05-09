@@ -17,6 +17,7 @@ import { MODAL_DURATION_ENTER_S } from "@/utils/motion/modalPresets";
 import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
 import { addThrottledResize } from "@/utils/dom/listenerHelpers";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 import { cn } from "@/utils/cn";
 
 const claimableCountFormat = (n: number) => {
@@ -133,6 +134,7 @@ export default function RewardsFloatingWidget({
   const isReady = claimableQuery.isSuccess;
 
   const fabRef = useRef<HTMLButtonElement>(null);
+  const fabInView = useInViewportAnimation(fabRef);
   const [fabRect, setFabRect] = useState<{ x: number; y: number } | null>(null);
   const showSpotlight =
     hasUnclaimed &&
@@ -256,7 +258,7 @@ export default function RewardsFloatingWidget({
         {showSpotlightActive && fabRect && (
           <motion.div
             key="rewards-spotlight"
-            className="fixed inset-0 z-[68] bg-black/80 backdrop-blur-md cursor-pointer"
+            className="fixed inset-0 z-[68] bg-black/80 backdrop-blur-[var(--ta-blur)] cursor-pointer"
             style={{
               maskImage: `radial-gradient(circle 72px at ${fabRect.x}px ${fabRect.y}px, transparent 0%, transparent 72px, black 72px)`,
               WebkitMaskImage: `radial-gradient(circle 72px at ${fabRect.x}px ${fabRect.y}px, transparent 0%, transparent 72px, black 72px)`,
@@ -276,7 +278,7 @@ export default function RewardsFloatingWidget({
         {showSpotlightActive && fabRect && (
           <motion.div
             key="rewards-spotlight-tooltip"
-            className="fixed z-[69] max-w-[280px] px-4 py-3 rounded-2xl bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 shadow-2xl"
+            className="fixed z-[69] max-w-[280px] px-4 py-3 rounded-2xl bg-gray-900/95 backdrop-blur-[var(--ta-blur)] border border-gray-700/50 shadow-2xl"
             style={{
               left: Math.max(16, Math.min(fabRect.x - 140, typeof window !== "undefined" ? window.innerWidth - 296 : 0)),
               bottom: typeof window !== "undefined" ? window.innerHeight - fabRect.y + 56 + 16 : 80,
@@ -318,7 +320,7 @@ export default function RewardsFloatingWidget({
             key="rewards-fab"
             onClick={handleFabClick}
             data-floating-widget="true"
-            className={cn("fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95", positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6", buttonShadowClass, showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : "")}
+            className={cn("fixed left-4 sm:left-6 z-[70] group w-14 h-14 rounded-2xl border border-white/35 bg-gradient-to-br from-red-600 via-red-600 to-red-800 text-white backdrop-blur-[var(--ta-blur)] transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] hover:scale-105 hover:from-red-500 hover:to-red-700 active:scale-95", positionAboveBottomNav ? "bottom-24 lg:bottom-6" : "bottom-10 sm:bottom-6", buttonShadowClass, showSpotlightActive ? "shadow-[0_0_40px_rgba(238,0,0,0.4)]" : "")}
             aria-label={showSpotlightActive ? "You have claimable rewards. Tap the gift icon to view them." : "Open claimable rewards"}
             initial={{ opacity: 0, scale: 0.92, y: 10 }}
             animate={{
@@ -335,9 +337,9 @@ export default function RewardsFloatingWidget({
         <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-white/22 via-transparent to-transparent" />
         <span className="relative flex items-center justify-center w-full h-full">
           <motion.span
-            animate={hasUnclaimed && !prefersReducedMotion ? { rotate: [0, 4, -4, 0] } : { rotate: 0 }}
+            animate={hasUnclaimed && !prefersReducedMotion && fabInView ? { rotate: [0, 4, -4, 0] } : { rotate: 0 }}
             transition={
-              hasUnclaimed && !prefersReducedMotion
+              hasUnclaimed && !prefersReducedMotion && fabInView
                 ? { duration: 2.5, repeat: Infinity, repeatDelay: 2, ease: [0.25, 0.1, 0.25, 1] }
                 : { duration: 0.2 }
             }
@@ -348,11 +350,11 @@ export default function RewardsFloatingWidget({
           {hasUnclaimed && (
             <motion.span
               className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-amber-300 text-2xs leading-5 font-black text-gray-900 shadow-[0_6px_14px_rgba(0,0,0,0.35)] ring-2 ring-white/75"
-              animate={prefersReducedMotion ? { scale: 1 } : { scale: [1, 1.1, 1] }}
+              animate={!prefersReducedMotion && fabInView ? { scale: [1, 1.1, 1] } : { scale: 1 }}
               transition={
-                prefersReducedMotion
-                  ? { duration: 0.2 }
-                  : { duration: 1.5, repeat: Infinity, repeatDelay: 1.5, ease: [0.25, 0.1, 0.25, 1] }
+                !prefersReducedMotion && fabInView
+                  ? { duration: 1.5, repeat: Infinity, repeatDelay: 1.5, ease: [0.25, 0.1, 0.25, 1] }
+                  : { duration: 0.2 }
               }
             >
               <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
@@ -366,7 +368,7 @@ export default function RewardsFloatingWidget({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="fixed inset-0 z-50 touch-none overscroll-none bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-50 touch-none overscroll-none bg-black/50 backdrop-blur-[var(--ta-blur)]"
             style={{ touchAction: "none" }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -390,7 +392,7 @@ export default function RewardsFloatingWidget({
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-base sm:text-xl font-bold text-white">Claimable Rewards</h3>
                       {claimableCount > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-[var(--ta-blur)] border border-white/30">
                           <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-300" />
                           <span className="text-2xs sm:text-xs font-bold text-white tabular-nums">
                             <AnimatedNumber value={claimableCount} format={claimableCountFormat} />
@@ -402,7 +404,7 @@ export default function RewardsFloatingWidget({
                   </div>
                   <button
                     onClick={() => setIsOpen(false)}
-                    className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-colors"
+                    className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 backdrop-blur-[var(--ta-blur)] border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-colors"
                     aria-label="Close"
                   >
                     <X className="w-5 h-5" />
@@ -573,7 +575,7 @@ export default function RewardsFloatingWidget({
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-between border-t border-gray-200 bg-[#ffffff]/90 px-4 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/95 dark:shadow-[0_-4px_12px_rgba(0,0,0,0.25)]">
+                <div className="flex items-center justify-between border-t border-gray-200 bg-[#ffffff]/90 px-4 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] backdrop-blur-[var(--ta-blur)] dark:border-neutral-800 dark:bg-neutral-950/95 dark:shadow-[0_-4px_12px_rgba(0,0,0,0.25)]">
                   <button
                     onClick={() => (activeTab === "claimable" ? setClaimablePage((p) => p - 1) : setPastPage((p) => p - 1))}
                     disabled={currentPage <= 1 || currentQuery.isLoading}

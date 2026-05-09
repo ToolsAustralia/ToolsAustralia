@@ -1,5 +1,11 @@
 # Shared UI — Patterns
 
+## Site-wide interaction smoothness — Phase 2 (2026-05-10)
+
+Phase 2 retired fixed `backdrop-blur-*`, `transition-all duration-*`, and inline shadow / hover-translate values in favour of the device-tier CSS tokens introduced in Phase 1 (`--ta-blur`, `--ta-shadow-card`, `--ta-shadow-card-hover`, `--ta-card-hover-y`, `--ta-transition-dur`). On desktop the rendered output is identical (token defaults match the previous fixed values); on mobile and tablet the same components now compose with lighter blurs, smaller shadows and shorter durations without a JS branch in render. Components affected include `Header`, `MembershipSection`, `RecentWinnersCarousel`, `MajorDrawSection` (token swap only — Embla migration ships in Phase 4), `RewardsFloatingWidget`, `PromoWelcomeModal`, `PrizeShowcase`, `WinnersShowcase`, `GiveawayCountdownTimer`, and the partner / promo banners.
+
+Where a component drove infinite framer-motion (`repeat: Infinity`), the loop is now gated. `PowerToolsetCarousel` reads `useDeviceProfile()` so its radial pulse + Y-bob only run on `tier === "desktop"`. `RewardsFloatingWidget` wraps its FAB in `useInViewportAnimation` so the rotate / scale-pulse loops pause when offscreen. `PromoWelcomeModal` checks `useReducedMotion()` for both its glow loops and its confetti trigger. `GiveawayCountdownTimer` switched its `<AnimatePresence>` from `mode="wait"` to `mode="popLayout"` so countdown digits enter / exit overlap rather than block on slow devices. `RecentWinnersCarousel` no longer renders the persistent `animate-shimmer-horizontal` overlay or the duplicated blurred ghost name on each card. `globals.css` adds an override that disables `.animate-shimmer*` on mobile and under reduced-motion, plus stops `border-glow-*` keyframes on the mobile tier and Save-Data so brand glows don't pin the GPU on phones.
+
 ## Site-wide interaction smoothness — Phase 1 (2026-05-09)
 
 The codebase exposes a small set of cross-cutting helpers used by feature components to keep interactions cheap on lower-tier devices and avoid the pathological re-render patterns that came up in the Site-wide Interaction Smoothness audit. Reach for these instead of writing ad-hoc `setInterval` / `resize` / `scroll` plumbing.

@@ -52,7 +52,7 @@ function packageEnterNowCtaClassName(
   const base = [
     "font-sans font-extrabold font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5",
     textSize,
-    "transition-all duration-300 transform",
+    "transition-[transform,opacity,box-shadow] duration-[var(--ta-transition-dur)] transform",
     textClass,
     /* Pulsing box-shadow (brand-tuned in globals.css) — same family as Schedule Downgrade */
     colorScheme.borderGlow,
@@ -512,10 +512,10 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-[colors] duration-[var(--ta-transition-dur)]"
                   }`}
                 >
                   One-Time
@@ -542,10 +542,10 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-[colors] duration-[var(--ta-transition-dur)]"
                   }`}
                 >
                   Membership Packs
@@ -577,7 +577,7 @@ export default function MembershipSection({
                     key={plan.id}
                     className={`relative w-full ${
                       isAdditionalPackage ? "h-[300px] sm:h-[370px]" : "h-[275px] sm:h-[355px]"
-                    } ${isVip ? "rounded-2xl" : "rounded-3xl"} transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""} ${isVip ? "vip-premium-shell-glow" : ""}`}
+                    } ${isVip ? "rounded-2xl" : "rounded-3xl"} transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""} ${isVip ? "vip-premium-shell-glow" : ""}`}
                     style={(() => {
                       const base: React.CSSProperties = highlighted
                         ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
@@ -619,7 +619,7 @@ export default function MembershipSection({
 
                         {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                         <div
-                          className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 pt-8 sm:pt-10 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
+                          className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 pt-8 sm:pt-10 transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:", colorScheme.hoverShadow, "relative isolate")}
                           style={
                             {
                               background: colorScheme.bgGradient,
@@ -766,7 +766,7 @@ export default function MembershipSection({
                               <div className="pb-0.5 w-full flex justify-center">
                                 <button
                                   type="button"
-                                  className={`font-sans w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                                  className={`font-sans w-fit px-2.5 py-1 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-[opacity,transform,box-shadow] duration-[var(--ta-transition-dur)] ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                                   onClick={() => {
                                     if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                                     handlePlanSelect(plan);
@@ -875,7 +875,7 @@ export default function MembershipSection({
               return (
                 <div
                   key={plan.id}
-                  className={cn("relative", isAdditionalPackage ? "h-[350px]" : "h-[320px]", isVip ? "rounded-2xl" : "rounded-3xl", "transition-all duration-300 overflow-visible w-full min-w-0", highlighted ? "scale-105" : "", isVip ? "vip-premium-shell-glow" : "")}
+                  className={cn("relative", isAdditionalPackage ? "h-[350px]" : "h-[320px]", isVip ? "rounded-2xl" : "rounded-3xl", "transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] overflow-visible w-full min-w-0", highlighted ? "scale-105" : "", isVip ? "vip-premium-shell-glow" : "")}
                   style={(() => {
                     const base: React.CSSProperties = highlighted
                       ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
@@ -937,7 +937,7 @@ export default function MembershipSection({
 
                   {/* Card Background - Brand gradient (isolate prevents dark parent bg from bleeding through) */}
                   <div
-                    className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 sm:p-2 sm:pt-8 transition-all duration-300 hover:", colorScheme.hoverShadow, "relative isolate")}
+                    className={cn("h-full", isVip ? "rounded-2xl" : "rounded-3xl", "p-4 sm:p-2 sm:pt-8 transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:", colorScheme.hoverShadow, "relative isolate")}
                     style={
                       {
                         background: colorScheme.bgGradient,
@@ -1074,7 +1074,7 @@ export default function MembershipSection({
                         <div className="pb-2 flex justify-center">
                           <button
                             type="button"
-                            className={`font-sans w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-all duration-300 ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
+                            className={`font-sans w-fit px-3 py-2 rounded-2xl overflow-hidden uppercase bg-gradient-to-r ${colorScheme.gradient} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${isVip ? "animate-vip-premium-price-halo" : colorScheme.borderGlow} hover:opacity-90 transition-[opacity,transform,box-shadow] duration-[var(--ta-transition-dur)] ${(isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) ? "cursor-not-allowed opacity-90 hover:opacity-90" : "cursor-pointer"}`}
                             onClick={() => {
                               if (isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)) return;
                               handlePlanSelect(plan);
@@ -1181,7 +1181,7 @@ export default function MembershipSection({
             <button
               suppressHydrationWarning
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
-              className={`font-sans w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
+              className={`font-sans w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] hover:scale-[1.02] border flex items-center justify-center ${
                 isInclusionsExpanded
                   ? "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-600 border-slate-500 hover:shadow-xl"
                   : "bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-slate-700 hover:shadow-xl"

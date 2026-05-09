@@ -87,7 +87,7 @@ export default function WinnersShowcase({
               return (
                 <div
                   key={winner.id}
-                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:[box-shadow:var(--winner-card-hover-shadow)] transition-all duration-300 hover:-translate-y-1"
+                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-[var(--ta-blur)] rounded-2xl overflow-hidden border border-slate-500/40 shadow-[var(--ta-shadow-card)] hover:shadow-[var(--ta-shadow-card-hover)] transition-[transform,opacity,box-shadow] duration-[var(--ta-transition-dur)] hover:translate-y-[var(--ta-card-hover-y)]"
                 >
                   {/* Shine Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10"></div>
@@ -115,7 +115,7 @@ export default function WinnersShowcase({
 
                     {/* Winner Badge - Name and Location Same Row */}
                     <div className="absolute bottom-3 left-3 right-3 z-20">
-                      <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <div className="bg-black/60 backdrop-blur-[var(--ta-blur)] rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="text-white font-bold text-sm font-sans">{formattedName}</p>
                         {winner.winnerState && (
                           <div className="flex items-center gap-1">
@@ -167,7 +167,7 @@ export default function WinnersShowcase({
         {/* Empty State */}
         {!loading && !hasWinners && (
           <div className="flex justify-center items-center py-12">
-            <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)] max-w-md w-full">
+            <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl overflow-hidden border border-slate-500/30 shadow-[var(--ta-shadow-card)] max-w-md w-full">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
 
               <div className="p-8 sm:p-10 relative z-10 text-center">
