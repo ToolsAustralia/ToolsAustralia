@@ -23,3 +23,18 @@ Email / phone in CAPI events use SHA-256 hashing. Use the helper in `lib/faceboo
 ## Cursor agent
 
 `.cursor/agents/growth-integrations.md` covers this domain.
+
+## Adding a new conversion provider
+
+Three steps:
+
+1. Implement `ConversionProvider` in `src/lib/tracking/providers/<platform>.ts`. The required surface:
+   - `enabled()`: read env, return `{ pixel: !!process.env.NEXT_PUBLIC_<X>_PIXEL_ID, capi: !!process.env.<X>_ACCESS_TOKEN }`
+   - `productionHostnames()`: return `["toolsaustralia.com.au", "www.toolsaustralia.com.au"]` unless you have a reason to differ.
+   - `loadPixel({ nonce })`: inject the platform's inline init script with the nonce. Idempotent.
+   - `pixelTrack(event)`: call the platform's `track` SDK with `event.eventId` mapped to the provider's dedup field.
+   - `capiSend(event, ctx)`: POST to the platform's Conversions API. Return `false` on any failure — never throw.
+2. Export it from [`src/lib/tracking/providers/index.ts`](../../src/lib/tracking/providers/index.ts).
+3. Add it to the `ALL_PROVIDERS` array in [`src/lib/tracking/registry.ts`](../../src/lib/tracking/registry.ts), and extend the `ProviderId` union in [`src/lib/tracking/types.ts`](../../src/lib/tracking/types.ts).
+
+Tests in [`src/lib/tracking/__tests__/dispatch.test.ts`](../../src/lib/tracking/__tests__/dispatch.test.ts) use fakes — no provider-specific changes needed.

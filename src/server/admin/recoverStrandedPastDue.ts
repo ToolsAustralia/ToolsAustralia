@@ -72,6 +72,12 @@ export type RecoveryEligibilityResult =
 export async function checkRecoveryEligibility(params: {
   userId: string;
   originalInvoiceId: string;
+  /**
+   * When true, skip the 6h `hasRecentRecoveryAttempt` lock. Admin-initiated
+   * routes (per-user manual recover, bulk recover from history page) set this
+   * so an explicit admin click isn't gated by the bulk cron job's prior attempt.
+   */
+  bypassRecentRecoveryLock?: boolean;
 }): Promise<RecoveryEligibilityResult> {
   const { userId, originalInvoiceId } = params;
 
@@ -165,20 +171,22 @@ export async function checkRecoveryEligibility(params: {
     };
   }
 
-  // ─── 3. 24h lock check ───
-  const recentRows = await InvoiceChargeLog.find({
-    userId: new mongoose.Types.ObjectId(userId),
-    attemptedAt: { $gte: cutoffForRecentAttempt() },
-  })
-    .select({ attemptedAt: 1, result: 1 })
-    .lean();
+  // ─── 3. 6h lock check (bypassed for admin-initiated paths) ───
+  if (!params.bypassRecentRecoveryLock) {
+    const recentRows = await InvoiceChargeLog.find({
+      userId: new mongoose.Types.ObjectId(userId),
+      attemptedAt: { $gte: cutoffForRecentAttempt() },
+    })
+      .select({ attemptedAt: 1, result: 1 })
+      .lean();
 
-  if (hasRecentRecoveryAttempt(recentRows, originalInvoiceId)) {
-    return {
-      eligible: false,
-      reason: "recent_recovery_attempt",
-      message: `A recovery attempt for this invoice happened within the last ${RECENT_ATTEMPT_WINDOW_HOURS}h`,
-    };
+    if (hasRecentRecoveryAttempt(recentRows, originalInvoiceId)) {
+      return {
+        eligible: false,
+        reason: "recent_recovery_attempt",
+        message: `A recovery attempt for this invoice happened within the last ${RECENT_ATTEMPT_WINDOW_HOURS}h`,
+      };
+    }
   }
 
   return { eligible: true, expectedAmountCents };
@@ -188,11 +196,22 @@ export async function recoverStrandedPastDueInvoice(params: {
   userId: string;
   originalInvoiceId: string;
   adminId: string;
+  /**
+   * When true, skip the 6h recovery-lock check AND pass
+   * `bypassRecentAttemptLock: true` to the final `payOpenInvoiceAsPastDueAdmin`
+   * call so the recovered pay isn't gated by the very write that void/finalize
+   * steps just made.
+   */
+  bypassRecentRecoveryLock?: boolean;
 }): Promise<RecoverStrandedResult> {
   const { userId, originalInvoiceId, adminId } = params;
 
   // ─── 1–3. Eligibility check (delegates to shared read-only function) ───
-  const eligibilityResult = await checkRecoveryEligibility({ userId, originalInvoiceId });
+  const eligibilityResult = await checkRecoveryEligibility({
+    userId,
+    originalInvoiceId,
+    bypassRecentRecoveryLock: params.bypassRecentRecoveryLock,
+  });
   if (!eligibilityResult.eligible) {
     // Map RecoveryEligibilityResult reason to RecoverStrandedResult reason (identical union subset)
     return { ok: false, reason: eligibilityResult.reason, message: eligibilityResult.message };
@@ -380,6 +399,7 @@ export async function recoverStrandedPastDueInvoice(params: {
     customerId: user.stripeCustomerId,
     user: { _id: user._id, email: user.email },
     adminId,
+    bypassRecentAttemptLock: params.bypassRecentRecoveryLock,
   });
 
   return { ok: true, row, newInvoiceId };

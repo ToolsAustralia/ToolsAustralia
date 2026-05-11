@@ -168,6 +168,13 @@ function testRecentLockIgnoresRowsWithoutRecoveryTag() {
   assert.equal(hasRecentRecoveryAttempt(rows, "in_orig", now), false);
 }
 
+function testHasRecentRecoveryAttemptReturnsFalseForEmptyRows() {
+  // Empty input must always return false — regression guard for the bypass
+  // path which short-circuits before querying InvoiceChargeLog at all.
+  const result = hasRecentRecoveryAttempt([], "in_anything");
+  assert.equal(result, false);
+}
+
 function run() {
   testIdempotencyKeysAreStableAndDistinct();
   testEligibleWhenUncollectible();
@@ -185,6 +192,7 @@ function run() {
   testRecentLockAllowsAfterWindow();
   testRecentLockIgnoresDifferentInvoice();
   testRecentLockIgnoresRowsWithoutRecoveryTag();
+  testHasRecentRecoveryAttemptReturnsFalseForEmptyRows();
   console.log("recoverStrandedPastDuePolicy tests passed");
 }
 

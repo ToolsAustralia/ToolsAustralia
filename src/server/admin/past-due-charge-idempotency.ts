@@ -123,3 +123,26 @@ export function isDebouncedTooSoon(
   const cutoff = cutoffForDebounce(now);
   return rows.some((row) => row.attemptedAt >= cutoff);
 }
+
+type ChargeLogRowForRecentCheck = {
+  attemptedAt: Date;
+  status?: "success" | "failed" | "skipped";
+};
+
+/**
+ * Whether the default 1-per-window budget should skip this attempt.
+ *
+ * Returns false (proceed) when bypass=true — used by admin-initiated paths
+ * (per-user charge button, manual recover endpoints) so explicit admin clicks
+ * aren't gated by prior automated attempts. The 30s debounce check still fires
+ * separately before this — bypass does NOT defeat double-click protection.
+ *
+ * Returns true (skip) when any prior row exists within the 6h window.
+ */
+export function shouldSkipForRecentAttempt(
+  recentRows: ChargeLogRowForRecentCheck[],
+  bypass: boolean
+): boolean {
+  if (bypass) return false;
+  return recentRows.length > 0;
+}

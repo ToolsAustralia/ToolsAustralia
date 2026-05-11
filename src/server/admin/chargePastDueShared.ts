@@ -12,6 +12,7 @@ import {
   cutoffForDebounce,
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
+  shouldSkipForRecentAttempt,
 } from "./past-due-charge-idempotency";
 import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
 import {
@@ -287,6 +288,16 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   attemptBudgetCheck?: () => Promise<
     { allowed: true } | { allowed: false; reason: string; message: string }
   >;
+  /**
+   * When true, skip the default 1-per-window (6h) lock check. Admin-initiated
+   * routes (per-user charge button, manual recover endpoints) set this so a
+   * deliberate admin click isn't gated by the bulk cron job's prior attempt.
+   * The 30s spam debounce immediately above this branch still fires.
+   *
+   * Mutually exclusive with `attemptBudgetCheck` (Force Charge supplies its own
+   * per-path 3-per-window budget; do not pass both).
+   */
+  bypassRecentAttemptLock?: boolean;
 }): Promise<PastDueChargeResultRow> {
   const {
     invoice,
@@ -314,9 +325,13 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
   const amount = invoice.amount_remaining || 0;
 
   // 30s spam-click debounce — fires before any other lock check.
+  // Excludes rows tagged `result.recovery.step` because those are the recovery
+  // flow's own void/create/finalize audit rows written milliseconds before this
+  // pay call. They are not user-driven attempts and must not gate the pay step.
   const recentRowsForDebounce = await InvoiceChargeLog.find({
     invoiceId,
     attemptedAt: { $gte: cutoffForDebounce() },
+    "result.recovery.step": { $exists: false },
   })
     .select({ attemptedAt: 1 })
     .lean();
@@ -380,7 +395,11 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       .select({ _id: 1, status: 1, attemptedAt: 1 })
       .lean();
 
-    if (recentAttempt) {
+    const recentRowsForCheck = recentAttempt
+      ? [{ attemptedAt: recentAttempt.attemptedAt, status: recentAttempt.status as "success" | "failed" | "skipped" }]
+      : [];
+
+    if (shouldSkipForRecentAttempt(recentRowsForCheck, params.bypassRecentAttemptLock ?? false)) {
       await InvoiceChargeLog.create({
         invoiceId,
         customerId,
@@ -389,7 +408,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         status: "skipped",
         amount,
         attemptedAt: new Date(),
-        errorMessage: `Skipped: prior attempt at ${recentAttempt.attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
+        errorMessage: `Skipped: prior attempt at ${recentRowsForCheck[0].attemptedAt.toISOString()} within ${RECENT_ATTEMPT_WINDOW_HOURS}h window`,
         chargeRunId,
       });
 

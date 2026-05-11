@@ -85,9 +85,19 @@ Aggregates failed `InvoiceChargeLog` rows in the given AEST date range, grouped 
 
 Empty range → `{ "totalFailed": 0, "topCodes": [] }`.
 
+### `POST /api/admin/users/[id]/charge-past-due`
+
+Per-user manual past-due retry. Delegates to the `chargeOrRecover` wrapper ([src/server/admin/chargeOrRecover.ts](../../src/server/admin/chargeOrRecover.ts)), which picks between `payOpenInvoiceAsPastDueAdmin` and `recoverStrandedPastDueInvoice` via the pure `chooseChargeAction` decision function. See [backend.md → Auto-recovery wrapper](./backend.md#auto-recovery-wrapper-chargeorrecover).
+
+**Auto-recovery:** When the user's open invoice is in Stripe's "open-but-dead" state (`attempt_count >= 1 && next_payment_attempt == null`), the route automatically voids it and re-bills via a held draft. The result row carries `recovered: true` and `newInvoiceId`. The admin modal renders an amber "Recovered" badge alongside the success badge.
+
+**Lock semantics:** Manual admin paths bypass the 6h recent-attempt budget (`bypassRecentAttemptLock: true` is forwarded to the pay primitive; the recovery branch additionally bypasses the 6h recovery lock). The 30s spam debounce still applies — back-to-back clicks within 30s are skipped.
+
+---
+
 ### `GET /api/admin/users/[userId]/recover-past-due-invoice`
 
-Pre-flight eligibility check — read-only (no Stripe writes, no DB writes). Used by [`RecoverInvoiceModal`](../../src/components/admin/RecoverInvoiceModal.tsx) on open to gate the confirmation UI before the admin has a chance to submit.
+Pre-flight eligibility check — read-only (no Stripe writes, no DB writes). Used by [`RecoverInvoiceModal`](../../src/components/admin/RecoverInvoiceModal.tsx) on open to gate the confirmation UI before the admin has a chance to submit. Calls `checkRecoveryEligibility` with `bypassRecentRecoveryLock: true` so the preview is not gated by the 6h recovery lock.
 
 **Auth:** admin only.
 
@@ -157,6 +167,8 @@ Recover a stranded past-due invoice (status `uncollectible` or `void` — the "T
 
 **Audit:** Each step writes one `InvoiceChargeLog` row. The void/create/finalize rows are tagged with `result.recovery.{step,originalInvoiceId,newInvoiceId?}`. The pay step writes its own row via the standard past-due primitive (no `recovery` tag). To trace a recovery, query by `result.recovery.originalInvoiceId`, then by `newInvoiceId` for the pay row.
 
+**Lock semantics:** Manual admin paths bypass the 6h recent-recovery budget (`bypassRecentRecoveryLock: true`, which also forwards as `bypassRecentAttemptLock: true` into the inner pay call). The 30s spam debounce still applies — back-to-back clicks within 30s are skipped.
+
 ---
 
 ### `POST /api/admin/invoices/recover-past-due`
@@ -213,6 +225,10 @@ Bulk-recover up to 10 stranded past-due invoices in one request. Processes them 
 - `500` — unexpected server error
 
 Each item is processed with `recoverStrandedPastDueInvoice`, which has its own 24h per-user idempotency lock and writes `InvoiceChargeLog` rows for every step (void / create / finalize / pay). A 300ms delay is inserted between rows to reduce Stripe rate-limit pressure. Per-item failures do **not** abort the batch — all items run and results include both successes and failures.
+
+**Lock semantics:** Manual admin paths bypass the 6h recent-recovery budget (each item's inner call passes `bypassRecentRecoveryLock: true`). The 30s spam debounce still applies.
+
+**Callers:** Manual-retries table on `PastDueChargeHistory` page AND the per-invoice attempts table inside `PastDueChargeHistoryDrawer` (added Phase 3 of the auto-recovery work).
 
 ## Force Charge endpoints
 
