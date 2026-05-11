@@ -16,7 +16,7 @@ import {
 import { useChargePastDueRuns } from "@/hooks/queries/admin/useChargePastDueRuns";
 import { useChargePastDueManualRetries } from "@/hooks/queries/admin/useChargePastDueManualRetries";
 import { useChargePastDueDeclineSummary } from "@/hooks/queries/admin/useChargePastDueDeclineSummary";
-import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
+import { formatDurationMs, isStrandedError } from "@/utils/admin/chargePastDueFormat";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import DateRangeToggle, { type DateRange } from "@/components/admin/DateRangeToggle";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
@@ -58,13 +58,6 @@ function formatDateTime(d: string | Date): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function isStrandedError(errorMessage?: string | null, errorCode?: string | null): boolean {
-  const msg = (errorMessage || "").toLowerCase();
-  if (msg.includes("no longer be paid") || msg.includes("no longer payable")) return true;
-  // Stripe surfaces this under various codes; the message check above is the reliable signal.
-  return errorCode === "invoice_not_payable";
 }
 
 function defaultLast30Days() {

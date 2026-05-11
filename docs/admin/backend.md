@@ -13,6 +13,21 @@
 
   **Single-invoice scoping via `selectCurrentSubscriptionChargeable`:** both the per-user and bulk routes call this helper (also in `chargePastDueShared.ts`) after the standard eligibility filter. It uses `pickOpenInvoiceForFailedRenewal` (from `src/utils/payment/failed-invoice-selection.ts`) to pick the one open invoice attached to `user.stripeSubscriptionId`, returning it as `target` and all others as `skipped`. Callers push `skipped` invoices into `results` with `skipReason: "duplicate_or_stale_cycle_invoice"` so the audit log stays honest about what was seen vs charged. This prevents "This invoice can no longer be paid" Stripe errors that occur when `pause_collection` did not fire in time and a customer has accumulated multiple open cycle invoices — only the newest one on the current subscription is chargeable. If `stripeSubscriptionId` is null/empty, `target` is `null` and all invoices are returned as skipped. The GET (preview) handlers apply the same scoping and surface a `duplicateOrStaleCycle` counter in `filterStats`. **Stripe API 2025-04-01+ compatibility:** the subscription ID is read from `invoice.parent.subscription_details.subscription` first (new API shape), falling back to `invoice.subscription` (legacy shape). The canonical implementation lives in `chargePastDueSelectionPolicy.ts` (`resolveInvoiceSubId`). The same pattern is applied in `recoverStrandedPastDue.ts` (ownership check) and in `payOpenInvoiceAsPastDueAdmin` (resume-collection after successful payment).
 
+### Auto-recovery wrapper (`chargeOrRecover`)
+
+The per-user admin "Charge past due" route ([src/app/api/admin/users/[id]/charge-past-due/route.ts](../../src/app/api/admin/users/[id]/charge-past-due/route.ts)) wraps the pay primitive in `chargeOrRecover` ([src/server/admin/chargeOrRecover.ts](../../src/server/admin/chargeOrRecover.ts)), which picks the branch via the pure `chooseChargeAction` decision function ([src/server/admin/chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts)):
+
+- **`'pay'`** — live `open` invoice with a scheduled retry; route to `payOpenInvoiceAsPastDueAdmin`.
+- **`'recover'`** — invoice is `uncollectible`, `void`, or `open`-but-dead (`attempt_count >= 1 && next_payment_attempt == null`). Route to `recoverStrandedPastDueInvoice`.
+
+When the recovery branch is taken the returned row carries `recovered: true` and `newInvoiceId: <in_…>`. The admin modal renders an amber "Recovered" badge.
+
+Bulk cron job, Force Charge, and the per-invoice recover endpoint do NOT use `chargeOrRecover` — each keeps its existing primitive path.
+
+### Manual-action lock bypass
+
+`payOpenInvoiceAsPastDueAdmin` accepts `bypassRecentAttemptLock?: boolean`. When true, the default 1-per-window (6h) budget check is skipped via the pure `shouldSkipForRecentAttempt(rows, bypass)` predicate in [`past-due-charge-idempotency.ts`](../../src/server/admin/past-due-charge-idempotency.ts); the 30s spam debounce still fires. `recoverStrandedPastDueInvoice` and `checkRecoveryEligibility` accept the analogous `bypassRecentRecoveryLock?: boolean` (which skips the `hasRecentRecoveryAttempt` check and forwards as `bypassRecentAttemptLock: true` into the final inner pay call). All three admin-initiated routes (per-user charge-past-due POST, per-user recover-past-due-invoice POST/GET, bulk invoices/recover-past-due POST) pass `true`. Bulk cron job and Force Charge pass nothing (existing locks apply).
+
 - `chargePastDuePostPayPolicy.ts` — **pure** helpers for deciding what to do after `stripe.invoices.pay()` returns. Extracted so the logic is unit-testable without `STRIPE_SECRET_KEY`. Exports:
   - `decidePostPayAction(invoice, paymentIntent)` — inspects the invoice's final `status` and the PI's `status` and returns a tagged-union `PostPayDecision`: `success`, `needs_confirm` (PI in `requires_confirmation`), `requires_authentication` (3DS), or `failed` with an `errorCode`/`errorMessage` pair plus an **optional `declineCode`** (Stripe's specific reason). The `requires_payment_method` branch surfaces `paymentIntent.last_payment_error?.decline_code` as `declineCode`. Other failure branches leave it `undefined`.
   - `extractPaymentIntentId(invoice)` — resolves the PI id from `invoice.payment_intent` regardless of whether it is a string id or an expanded `PaymentIntent` object.

@@ -32,7 +32,11 @@ export async function GET(
     );
   }
 
-  const result = await checkRecoveryEligibility({ userId, originalInvoiceId });
+  const result = await checkRecoveryEligibility({
+    userId,
+    originalInvoiceId,
+    bypassRecentRecoveryLock: true,
+  });
   return NextResponse.json(result, { status: 200 });
 }
 
@@ -67,6 +71,7 @@ export async function POST(
       userId,
       originalInvoiceId: parsed.data.originalInvoiceId,
       adminId: session.user.id,
+      bypassRecentRecoveryLock: true,
     });
 
     if (!result.ok) {

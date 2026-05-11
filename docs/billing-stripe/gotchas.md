@@ -68,6 +68,18 @@ Mark as `status: "skipped"`, `skipReason: "already_paid"`. **Don't** treat as fa
 
 Indexes: compound unique on `(invoiceId, attemptedAt-day)`; lookups by customer / admin / status / canRetryAt; sparse compound `(chargeRunId, attemptedAt-desc)` for run drill-in.
 
+## Stranded past-due invoices — "this invoice can no longer be paid"
+
+When Stripe's smart retries on a past-due invoice exhaust, the invoice transitions into one of three "open-but-dead" terminal states from the renewal pipeline's perspective:
+
+- `status: "uncollectible"` (Stripe explicitly gave up), or
+- `status: "void"` (manually voided, e.g. by a prior failed recovery), or
+- `status: "open"` with `attempt_count >= 1 && next_payment_attempt == null` (no scheduled retry left).
+
+In any of these states `stripe.invoices.pay()` rejects with "This invoice can no longer be paid." The only way forward is to void the dead invoice and finalize a fresh held draft on the same subscription (one is generated per missed cycle while `pause_collection: keep_as_draft` is in effect), then pay that.
+
+The admin per-user "Charge past due" button auto-detects this state and routes through the void + re-bill flow. See [docs/admin/backend.md](../admin/backend.md#auto-recovery-wrapper-chargeorrecover) for the `chargeOrRecover` wrapper. The bulk cron job does NOT auto-recover (kept conservative to limit blast radius); admins drain the backlog from the Past-Due Charge History page's run-detail drawer (multi-select stranded rows → Recover Selected) after Phase 3 ships.
+
 ## Payment Element migration / confirmation method
 
 (Migrated stub — _TODO: read `docs/PAYMENT_ELEMENT_CONFIRMATION_METHOD_FIX.md` and `docs/SUBSCRIPTION_PAYMENT_ELEMENT_MIGRATION.md` and merge their content here in a refresh pass._)
