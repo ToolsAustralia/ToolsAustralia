@@ -22,6 +22,31 @@
 
 > _TODO: enumerate full component list._
 
+## Error Reports view (Admin > Error Reports) — 2026-05-11
+
+[src/components/admin/ErrorReportsManagement.tsx](../../src/components/admin/ErrorReportsManagement.tsx) is the unified triage UI. Reports come from `GET /api/admin/error-reports` (see [error-reporting/api.md](../error-reporting/api.md) for query-param contract).
+
+**Header** — page title + subtitle only. Action buttons (Show Analytics / CSV Page / JSON Page / Refresh) were removed 2026-05-11 — analytics view, CSV/JSON export, and manual refresh are intentionally unsupported here. The query refetches automatically on filter change and after bulk mutations.
+
+**Triage cards (top row)** — Needs Attention / Critical Unresolved / New Last 24h / Repeated Errors / Affected Users. The first three are buttons that apply a triage filter (status/severity/dateRange) and show an `aria-pressed` active state with red ring when their linked filter is currently applied. Repeated Errors / Affected Users are non-interactive stat displays (they previously toggled the now-removed analytics view). Grid is `grid-cols-2 lg:grid-cols-3 xl:grid-cols-5` — pairs cleanly on mobile, three-up on tablet, five-up on wide.
+
+**Filter bar (grouped 2026-05-11)** — full-width search input + mobile Filters toggle on top, then three labelled sections inside the collapsible:
+- **Categorise** — `Status / Category / Severity / Source` dropdowns.
+- **Where & who** — `User email / API endpoint / Page URL` text inputs (all debounced 350ms).
+- **When** — `Start date / End date`.
+
+The **API endpoint** input filters on `apiEndpoint` (the route that failed). The **Page URL** input filters on `route` OR `currentUrl` (the page the user was on). These are intentionally separate — see [error-reporting/gotchas.md#page-url-vs-api-endpoint](../error-reporting/gotchas.md#page-url-vs-api-endpoint). The "Clear All Filters" button appears below when any filter is active.
+
+**Desktop table columns** — checkbox / Error (with secondary "Auto-logged · {pageUrl}" line) / Category / Severity / Status / User / API / Date / Actions (right-aligned). The API column shows `{httpMethod}` in a small chip + `apiEndpoint`; an em-dash placeholder renders when no API was involved. Page URL is rendered inline under the error message instead of in its own column to keep the table from growing too wide.
+
+**Mobile cards (sm:hidden)** — error message + auto-logged/timestamp metadata at top, badges row (severity / category / status), then a `<dl>` with explicit `User / API / Page` rows. Full-width red "View Investigation" CTA at the bottom with adequate touch target.
+
+**Detail modal (ErrorReportDetailModal)** — slide-up bottom-sheet on mobile (`items-end` + `rounded-t-2xl`), centred dialog on `sm+`. The info section is a 4-up grid (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`) of User / API / Page / Environment panels — split from the previous combined Route+API panel. Diagnostic "Copy Context" string includes both API and Page on separate lines.
+
+**Long-content panels in the modal (Stack Trace + Console Logs / Notes)** must use `min-w-0` on the grid item, `overflow-x-hidden` (or `overflow: auto`) on the scroll container, and `whitespace-pre-wrap break-all` on the inner text. Without these, long JSON / URL payloads in `consoleErrors[].message` blow out the grid column and burst the modal on small screens.
+
+**Note: `ErrorReportsAnalytics` component was deleted 2026-05-11.** The server still returns `analytics` in the response payload (the API contract is unchanged), but the client no longer consumes or renders it. If you reintroduce an analytics view, the data is already on the response — restore an `analytics` field on the `ErrorReportsResponse` type and render it.
+
 ## User Metrics view (Admin > Users) — refactored 2026-05-04
 
 [src/components/admin/metrics/UserMetricsView.tsx](../../src/components/admin/metrics/UserMetricsView.tsx) is now **all-time only**. It calls `useUserMetrics()` with no arguments — there is no date filter, month selector, custom-date modal, comparison-mode toggle, or major-draw selector inside this view. The Chart vs Table view-mode toggle is preserved (persisted in `?metricsViewMode=`).

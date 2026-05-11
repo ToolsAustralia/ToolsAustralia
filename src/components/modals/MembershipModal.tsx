@@ -64,11 +64,13 @@ import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingServ
 import { extractSubscriptionData, validateSubscriptionResponse } from "@/utils/payment/subscription-response-handler";
 import { createSubscriptionStateUpdate } from "@/utils/payment/subscription-state-manager";
 import { handleSubscriptionError, handlePaymentIntentNotReadyError, handleInvalidResponseError } from "@/utils/payment/subscription-error-handler";
-import { 
-  detectPaymentError, 
-  type RecoveryStrategy 
+import {
+  detectPaymentError,
+  type RecoveryStrategy
 } from "@/utils/payment/stripe/payment-error-detection";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
+import { isStripeNoiseError } from "@/utils/payment/stripe/is-stripe-noise-error";
+import { markErrorHandled, isErrorHandled } from "@/utils/payment/stripe/error-handled-marker";
 import { recoverSetupIntent } from "@/utils/payment/stripe/setup-intent-recovery";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 // Member package mapping utilities imported but using inline mapping for simplicity
@@ -2200,45 +2202,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Do NOT reset form data
     }
 
-    // ✅ ENHANCED: Auto-log ALL payment errors (not just recoverable ones)
+    // Skip auto-log for Stripe.js client-side noise (incomplete / invalid
+    // card fields, wallet sheet cancellation). These are user-input issues —
+    // logging them buries real failures under "Anonymous" rows. The user-
+    // facing toast still renders below.
+    const isNoise = isStripeNoiseError(error);
+
+    // Auto-log ALL real payment errors (not just recoverable ones).
     const amountInCents = activePlan?.price ? Math.round(activePlan.price * 100) : undefined;
-    
-    // ✅ FIXED: Capture user email from form data if not authenticated
-    // This ensures we log the user's email even if they haven't completed registration yet
-    const capturedUserEmail = isAuthenticated 
-      ? userData?.email 
+
+    // Capture user email from form data if not authenticated — ensures we
+    // log the user's email even if they haven't completed registration yet.
+    const capturedUserEmail = isAuthenticated
+      ? userData?.email
       : (guestUserData?.email || formData.email || undefined);
-    
-    ErrorLoggingService.logError(error, {
-      component: "MembershipModal",
-      flow: context.packageId ? "subscription-purchase" : "one-time-purchase",
-      paymentIntentId: paymentIntentId || undefined,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      customerId: (userData as any)?.stripeCustomerId || undefined,
-      amount: amountInCents,
-      packageId: context.packageId || undefined,
-      packageName: context.packageName || activePlan?.name,
-      userEmail: isAuthenticated ? capturedUserEmail : undefined,
-      guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
-    }).catch((logError) => {
-      console.warn("Failed to auto-log error:", logError);
-      // Fallback to old method if ErrorLoggingService fails
-      // ✅ FIXED: Use same email capture logic for fallback
-      const paymentErrorDetails: PaymentErrorDetails = {
+
+    if (!isNoise) {
+      ErrorLoggingService.logError(error, {
+        component: "MembershipModal",
+        flow: context.packageId ? "subscription-purchase" : "one-time-purchase",
         paymentIntentId: paymentIntentId || undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         customerId: (userData as any)?.stripeCustomerId || undefined,
         amount: amountInCents,
         packageId: context.packageId || undefined,
         packageName: context.packageName || activePlan?.name,
-        errorMessage: formattedError.message,
         userEmail: isAuthenticated ? capturedUserEmail : undefined,
         guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
-      };
-      autoLogPaymentError(error, paymentErrorDetails).catch(() => {
-        // Silently fail if both methods fail
+      }).catch((logError) => {
+        console.warn("Failed to auto-log error:", logError);
+        // Fallback to old method if ErrorLoggingService fails
+        const paymentErrorDetails: PaymentErrorDetails = {
+          paymentIntentId: paymentIntentId || undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          customerId: (userData as any)?.stripeCustomerId || undefined,
+          amount: amountInCents,
+          packageId: context.packageId || undefined,
+          packageName: context.packageName || activePlan?.name,
+          errorMessage: formattedError.message,
+          userEmail: isAuthenticated ? capturedUserEmail : undefined,
+          guestEmail: !isAuthenticated ? capturedUserEmail : undefined,
+        };
+        autoLogPaymentError(error, paymentErrorDetails).catch(() => {
+          // Silently fail if both methods fail
+        });
       });
-    });
+    }
 
     // ✅ FIXED: Only attempt automatic recovery if:
     // 1. Not a manual retry (user changed card manually)
@@ -3138,7 +3147,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             packageId: packageId || "",
             packageName: activePlan.name,
           });
-          throw new Error(result.error);
+          throw markErrorHandled(new Error(result.error));
         }
         if (result.paymentIntentId) {
           // Succeeded – use original purchase success flow (in-modal success, auto-login, showSuccess, onClose)
@@ -3243,7 +3252,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         packageId,
                         packageName: activePlan.name,
                       });
-                      throw new Error(retryResult.error);
+                      throw markErrorHandled(new Error(retryResult.error));
                     }
                     if (retryResult.paymentMethodId) {
                       paymentMethodId = retryResult.paymentMethodId;
@@ -3259,12 +3268,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 }
               } catch (recoveryError) {
                 console.error("❌ Failed to create new SetupIntent:", recoveryError);
-                await handlePaymentError(recoveryError instanceof Error ? recoveryError.message : "Failed to create new SetupIntent", {
-                  preserveState: true,
-                  packageId,
-                  packageName: activePlan.name,
-                });
-                throw recoveryError;
+                if (!isErrorHandled(recoveryError)) {
+                  await handlePaymentError(recoveryError instanceof Error ? recoveryError.message : "Failed to create new SetupIntent", {
+                    preserveState: true,
+                    packageId,
+                    packageName: activePlan.name,
+                  });
+                }
+                throw recoveryError instanceof Error ? markErrorHandled(recoveryError) : recoveryError;
               } finally {
                 isCreatingSetupIntentRef.current = false;
               }
@@ -3298,7 +3309,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     packageId,
                     packageName: activePlan.name,
                   });
-                  throw new Error(retryResult.error);
+                  throw markErrorHandled(new Error(retryResult.error));
                 }
                 if (retryResult.paymentMethodId) {
                   paymentMethodId = retryResult.paymentMethodId;
@@ -3316,7 +3327,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 packageId,
                 packageName: activePlan.name,
               });
-              throw new Error(result.error || "SetupIntent recovery failed");
+              throw markErrorHandled(new Error(result.error || "SetupIntent recovery failed"));
             }
           } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent
@@ -3470,7 +3481,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     packageId,
                     packageName: activePlan.name,
                   });
-                  throw new Error(retryResult.error);
+                  throw markErrorHandled(new Error(retryResult.error));
                 }
                 if (retryResult.paymentMethodId) {
                   paymentMethodId = retryResult.paymentMethodId;
@@ -3488,7 +3499,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 packageId,
                 packageName: activePlan.name,
               });
-              throw new Error(result.error || "SetupIntent recovery failed");
+              throw markErrorHandled(new Error(result.error || "SetupIntent recovery failed"));
             }
           } else if (result.error) {
             // ✅ CRITICAL FIX: Automatic recovery for canceled PaymentIntent (second occurrence)
@@ -4712,6 +4723,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         }
       }
     } catch (error: unknown) {
+      // Short-circuit: an inner block already invoked handlePaymentError on
+      // this error (toast + log already happened). Calling it again here
+      // would produce duplicate toasts and (for non-noise errors) duplicate
+      // auto-log attempts that collide on the dedup hash.
+      if (isErrorHandled(error)) {
+        hideLoading();
+        checkoutSubmitLockRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
+
       // ✅ Clean separation: Error handling using utility function
       const subscriptionError = handleSubscriptionError(error);
       console.error(`❌ Purchase failed: ${subscriptionError.message}`, subscriptionError.originalError);
