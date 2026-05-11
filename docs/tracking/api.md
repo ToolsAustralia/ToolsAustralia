@@ -1,5 +1,11 @@
 # Tracking — API
 
+## Endpoints
+
+- **`POST /api/tracking/conversion`** — provider-agnostic conversion event. Body is a `CanonicalEvent`. Response: `{ ok, results: { facebook, tiktok, snapchat } }`. See [`src/app/api/tracking/conversion/route.ts`](../../src/app/api/tracking/conversion/route.ts).
+- **`POST /api/facebook/track`** — deprecated; thin shim that translates the legacy FB-shaped body and forwards to the canonical endpoint. See [`src/app/api/facebook/track/route.ts`](../../src/app/api/facebook/track/route.ts).
+- `POST /api/tracking/promo-page-visit` — unchanged.
+
 | Method | Path | Purpose |
 |---|---|---|
 | _TODO_ | `/api/facebook/**` | Meta-specific endpoints |

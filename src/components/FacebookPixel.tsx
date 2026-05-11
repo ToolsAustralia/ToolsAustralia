@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 
 /** Production-only hostnames for the browser pixel (must match server CAPI prod routing). */
 export function isProductionBrowserHostname(hostname: string): boolean {
@@ -462,64 +464,36 @@ export const trackPurchase = (value: number, currency: string = "AUD", orderId?:
 };
 
 /**
- * Track Purchase event with eventID for Pixel + CAPI deduplication.
- * Uses Meta's recommended 4-param format: fbq('track', 'Purchase', customData, {eventID}).
- * MUST use same event_id as CAPI (paymentIntentId or orderId) for deduplication.
+ * Track Purchase event with eventID for browser↔CAPI deduplication.
+ *
+ * After the provider-registry refactor, this fans out to every enabled pixel
+ * (FB + TikTok + Snap) via the dispatcher. Each provider maps eventId to its
+ * own dedup field name (FB: eventID, TikTok: event_id, Snap: client_dedup_id).
  *
  * @param value - Purchase value in dollars (not cents)
  * @param currency - Currency code (e.g. "AUD")
- * @param eventId - Unique event ID - MUST match CAPI event_id (use paymentIntentId or orderId)
+ * @param eventId - Unique event ID; MUST match server-side CAPI event_id for dedup
  * @param orderId - Optional order_id for custom_data
  */
 export const trackPurchaseWithEventId = (
   value: number,
   currency: string,
   eventId: string,
-  orderId?: string
+  orderId?: string,
 ) => {
   if (typeof window === "undefined") return;
-
-  if (!isProductionBrowserHostname(window.location.hostname)) {
-    return;
-  }
-
-  if (!window.fbq) {
-    setTimeout(() => trackPurchaseWithEventId(value, currency, eventId, orderId), 500);
-    return;
-  }
-
-  const fbqLoaded = (window.fbq as { loaded?: boolean }).loaded === true;
-  if (!fbqLoaded) {
-    setTimeout(() => trackPurchaseWithEventId(value, currency, eventId, orderId), 500);
-    return;
-  }
-
   if (!Number.isFinite(value) || value <= 0) return;
-  const safeCurrency = (currency || "AUD").trim().toUpperCase();
+  if (!eventId || !eventId.trim()) return;
 
-  // Prevent duplicate fire for same eventId (e.g. re-renders)
-  const eventKey = `Purchase_${eventId}`;
-  const now = Date.now();
-  const lastSent = recentEvents.get(eventKey);
-  if (lastSent != null && now - lastSent < 5000) return;
-  recentEvents.set(eventKey, now);
-
-  try {
-    const customData: Record<string, unknown> = {
+  trackConversion(
+    buildPurchaseEvent({
       value,
-      currency: safeCurrency,
-      content_type: "product",
-      ...(orderId && { order_id: orderId }),
-    };
-    const eventData = { eventID: eventId };
-
-    // Meta deduplication: 4th param must be {eventID} - matches CAPI event_id
-    window.fbq("track", "Purchase", customData, eventData);
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("❌ Facebook Pixel: Error sending Purchase with eventID:", error);
-    }
-  }
+      currency: currency || "AUD",
+      eventId,
+      customData: { orderId, contentType: "product" },
+      eventSourceUrl: window.location.href,
+    }),
+  );
 };
 
 export const trackAddToCart = (value: number, currency: string = "AUD", productId?: string) => {

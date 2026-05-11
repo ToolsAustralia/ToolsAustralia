@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
 
-// Facebook Pixel and Conversions API integration
+/**
+ * Facebook Pixel + Conversions API integration.
+ *
+ * NOTE: This file is the canonical implementation of Meta CAPI sending — the new
+ * provider registry at `src/lib/tracking/providers/facebook.ts` wraps `sendFacebookEvent`
+ * rather than reimplementing it. Direct callers of `sendFacebookEvent` continue to work,
+ * but new code SHOULD build a `CanonicalEvent` and call `sendConversion(...)` instead.
+ */
 export interface FacebookEvent {
   event_name: string;
   event_time: number;

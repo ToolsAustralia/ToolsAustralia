@@ -142,7 +142,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-10",
+  "lastModified": "2026-05-11",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -410,11 +410,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/PixelTracker.tsx",
         "src/components/TikTokPixel.tsx",
         "src/components/tracking/**",
+        "src/components/admin/TikTokAdsManagement.tsx",
+        "src/components/admin/SnapchatAdsManagement.tsx",
         "src/lib/facebook.ts",
         "src/lib/facebook-env.ts",
         "src/lib/facebook-marketing.ts",
         "src/lib/gtm.ts",
         "src/lib/klaviyo.ts",
+        "src/lib/tracking/**",
         "src/lib/utm/**",
         "src/utils/tracking/**",
         "src/utils/integrations/**",
@@ -423,6 +426,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/meta/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
+        "src/models/TikTokAdInsightsDaily.ts",
+        "src/models/SnapchatAdInsightsDaily.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
@@ -431,7 +436,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-05-09"
+      "lastVerified": "2026-05-11"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
