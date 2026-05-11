@@ -64,3 +64,19 @@ If you grep for `eventID` and find no hits in a provider's code, you're looking 
 Historically, only `PaymentSuccessHandler.tsx` fired the browser Purchase pixel — and only on the 3DS-redirect code path. Most purchases skipped that path, so Meta Events Manager saw Purchase as Conversions API only. The success-page clients (`PurchaseSuccessClient`, `UpsellSuccessClient`, `MiniDrawSuccessClient`, `CheckoutSuccessClient`) now each fire `trackConversion` on mount with `eventId === paymentIntentId` so the browser-side fires for every purchase path.
 
 If a new success page is added, it MUST do the same — see `PurchaseSuccessClient.tsx` for the pattern.
+
+## Debug logs are invisible on staging unless you use `console.error`
+
+`next.config.ts` `compiler.removeConsole` strips `console.log` / `info` / `debug` / `warn` from production builds. **Vercel preview / staging deploys are production builds**, so any `console.log("[DEBUG] ...")` you add to diagnose a live tracking issue (like "is my dispatcher being called?", "what does fbq receive?") is stripped from the bundle and never appears in the browser console.
+
+If you've ever stared at a clean staging console wondering why your debug logs aren't appearing, this is why.
+
+**Always use `console.error` for ad-hoc debug logging on staging.** `console.error` is preserved (it's listed in `removeConsole.exclude`). Once you've finished diagnosing, remove the debug logs — they shouldn't ship.
+
+```ts
+// ❌ silent on staging (stripped at build time)
+console.log("[DEBUG] fb.pixelTrack entered", { eventName, hostname });
+
+// ✅ visible on staging
+console.error("[DEBUG] fb.pixelTrack entered", { eventName, hostname });
+```
