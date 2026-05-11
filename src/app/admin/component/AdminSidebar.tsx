@@ -75,6 +75,8 @@ const adminTabGroups: Array<{
     groupIcon: LineChart,
     tabs: [
       { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
+      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp },
+      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp },
       { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
       { id: "ab-testing", label: "A/B Testing", icon: FlaskConical },
     ],

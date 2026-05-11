@@ -4,12 +4,16 @@
 
 | File | Role |
 |---|---|
-| [src/lib/facebook.ts](../../src/lib/facebook.ts) | Meta CAPI server-side event sender |
-| [src/lib/facebook-env.ts](../../src/lib/facebook-env.ts) | Env / config split |
-| [src/lib/facebook-marketing.ts](../../src/lib/facebook-marketing.ts) | Meta Marketing API (read ad insights) |
-| [src/lib/gtm.ts](../../src/lib/gtm.ts) | GTM helpers |
-| [src/lib/klaviyo.ts](../../src/lib/klaviyo.ts) | Klaviyo server client (events, profile) |
-| [src/lib/utm/](../../src/lib/utm/) | UTM parsing/persistence helpers |
+| [src/lib/tracking/dispatch.ts](../../src/lib/tracking/dispatch.ts) | `sendConversion(event, ctx)` — server fan-out (CANONICAL) |
+| [src/lib/tracking/dispatch-client.ts](../../src/lib/tracking/dispatch-client.ts) | `trackConversion(event)` — browser fan-out |
+| [src/lib/tracking/canonical-event.ts](../../src/lib/tracking/canonical-event.ts) | `buildPurchaseEvent`, `hashPII`, `assertValidEvent` |
+| [src/lib/tracking/registry.ts](../../src/lib/tracking/registry.ts) | `getAllProviders()` |
+| [src/lib/tracking/providers/facebook.ts](../../src/lib/tracking/providers/facebook.ts) | Facebook provider — wraps `sendFacebookEvent` and `fbq` |
+| [src/lib/tracking/providers/tiktok.ts](../../src/lib/tracking/providers/tiktok.ts) | TikTok provider — pixel works; CAPI stub |
+| [src/lib/tracking/providers/snapchat.ts](../../src/lib/tracking/providers/snapchat.ts) | Snapchat provider — pixel works; CAPI stub |
+| [src/lib/facebook.ts](../../src/lib/facebook.ts) | Underlying Meta CAPI implementation (wrapped by facebookProvider) |
+| [src/lib/facebook-env.ts](../../src/lib/facebook-env.ts) | Env / config |
+| [src/lib/klaviyo.ts](../../src/lib/klaviyo.ts) | Klaviyo server client (NOT a CAPI provider) |
 
 ## Utils
 
