@@ -40,6 +40,7 @@ function buildErrorReportQuery(searchParams: URLSearchParams): ErrorReportQuery 
   const userEmail = searchParams.get("userEmail") || undefined;
   const autoLogged = searchParams.get("autoLogged");
   const apiEndpoint = searchParams.get("apiEndpoint") || undefined;
+  const pageUrl = searchParams.get("pageUrl") || undefined;
   const includeArchived = searchParams.get("includeArchived") === "true";
 
   const query: ErrorReportQuery = {};
@@ -97,6 +98,15 @@ function buildErrorReportQuery(searchParams: URLSearchParams): ErrorReportQuery 
 
   if (apiEndpoint) {
     query.apiEndpoint = { $regex: apiEndpoint, $options: "i" };
+  }
+
+  if (pageUrl) {
+    andClauses.push({
+      $or: [
+        { route: { $regex: pageUrl, $options: "i" } },
+        { currentUrl: { $regex: pageUrl, $options: "i" } },
+      ],
+    });
   }
 
   if (search) {

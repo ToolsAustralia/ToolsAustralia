@@ -126,6 +126,17 @@ Layout is an infographic-style three-band frame: dark hero → white lose grid �
 
 **Updated 2026-05-08**: `BenefitsBody.tsx` sub-component created; extracted from original monolith lines 127-160 + 360-434. Stat order: Partner offers % → Days access → Free entries / cycle (matches MembershipSection). Stat num color kept at `#0a0a0a` (matches original CSS, NOT tier-colored). Icon backgrounds use `var(--tier-icon-bg-light)`; icon foreground uses `var(--tier-color-deep)`. Checks list icon color applied via inline style on wrapping `<span>` (replaces original `:global(svg)` CSS selector).
 
+### PaymentMethodSelector
+
+[`src/components/modals/PaymentMethodSelector.tsx`](../../src/components/modals/PaymentMethodSelector.tsx) wraps Stripe's Payment Element with saved-payment-method selection, wallet support (Apple Pay / Google Pay via Express Checkout), and a hidden-form mount for subscription-invoice confirmation when a saved method is selected. Exposes `confirmStripeIntent()` via `useImperativeHandle` so the parent (`MembershipModal`) can drive confirmation from its own Purchase button.
+
+**Logging is delegated to the parent (2026-05-11).** This component intentionally does **not** call `ErrorLoggingService.logPaymentError` at its `confirmPayment` / `confirmSetup` error branches. Two reasons:
+
+1. The error is always returned via `{ error: string }` and re-handled by the parent (`MembershipModal.handlePaymentError`), which has access to `formData.email` / `guestUserData.email` / authenticated `userData.email` — so the parent's log is always attributed to the right user.
+2. Logging at this layer too produces **duplicate "Anonymous" rows** because props don't carry identity down. That defeats the whole point of the admin error reports page.
+
+If you add a new `confirmPayment` / `confirmSetup` call site here, do **not** wire it to `logPaymentError` directly — return the error up and let the parent log it. The noise filter lives at the parent now: see [MembershipModal.handlePaymentError](#paymentmethodselector) → [`isStripeNoiseError`](../../src/utils/payment/stripe/is-stripe-noise-error.ts) → [error-reporting gotchas](../error-reporting/gotchas.md#stripejs-client-side-validation-noise).
+
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.
