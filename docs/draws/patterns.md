@@ -1,5 +1,9 @@
 # Draws — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+`draw-results/components/WinnerAnnouncement.tsx` had its prize hero `<Image>` without a `sizes` hint; Phase 5B added `sizes="(max-width: 640px) 128px, 160px"` matching the responsive `w-32 sm:w-40` cell. Markup only.
+
 ## P1. Single transition authority + debounced multi-call-site
 
 Pattern: one service that does the work; multiple call sites that invoke it; the service deduplicates / debounces internally.

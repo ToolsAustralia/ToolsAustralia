@@ -7,8 +7,13 @@ import { useMyAccountData } from "@/hooks/queries";
 import DashboardHeader from "../components/DashboardHeader";
 import PartnerBenefitsPromoSectionClient from "@/components/sections/promo/PartnerBenefitsPromoSectionClient";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
+import dynamic from "next/dynamic";
 import MembershipSection from "@/components/sections/MembershipSection";
-import MembershipModal from "@/components/modals/MembershipModal";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";

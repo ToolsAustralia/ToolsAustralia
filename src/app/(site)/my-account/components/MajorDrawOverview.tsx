@@ -7,6 +7,7 @@ import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
 import type { PackageDetailModalPackageData, SubscriptionAccumulationData } from "@/components/modals/PackageDetailModal";
 import { formatRenewalDate } from "@/utils/dates/month-helpers";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { cn } from "@/utils/cn";
 
 interface MajorDrawOverviewProps {
@@ -48,31 +49,20 @@ interface MajorDrawOverviewProps {
 }
 
 function CountdownDisplay({ targetDate }: { targetDate: string }) {
-  const [timeLeft, setTimeLeft] = React.useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  React.useEffect(() => {
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const target = new Date(targetDate).getTime();
-      const difference = target - now;
-
-      if (difference > 0) {
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-        setTimeLeft({ days, hours, minutes, seconds });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetDate]);
+  // Leaf component: owns its own 1s tick via useLeafTimer so the parent
+  // (MajorDrawOverview) does not re-render on every tick.
+  const now = useLeafTimer(1000);
+  const target = new Date(targetDate).getTime();
+  const difference = target - now;
+  const timeLeft =
+    difference > 0
+      ? {
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((difference % (1000 * 60)) / 1000),
+        }
+      : { days: 0, hours: 0, minutes: 0, seconds: 0 };
 
   const TimeSegment = ({ value, label }: { value: number; label: string }) => (
     <div className="flex flex-col items-center">

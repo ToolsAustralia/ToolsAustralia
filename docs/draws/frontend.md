@@ -16,7 +16,12 @@
 |---|---|
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx` | Countdown timer to mini-draw end |
 | `src/app/(site)/mini-draws/[id]/components/ShareButton.tsx` | Social-share for mini-draw |
+| `src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx` | Prize-image carousel: main slide + thumbnail strip + pagination dots + nav chevrons + image counter, with click-to-fullscreen via `FullscreenImageViewer`. |
 | _other major-draw components_ | _TODO: enumerate from src/components/ that map to draws (per the manifest, draws-domain components are not pulled out separately — they live near pages)._ |
+
+### MiniDrawImageGallery
+
+[src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx](../../src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx) is the prize-image gallery on the mini-draw detail page. As of Phase 3 of the [Site-wide Interaction Smoothness plan](../superpowers/plans/2026-05-09-site-smoothness.md) (2026-05-10) it uses two inline `useEmblaCarousel` instances (replacing the previous Swiper `[Navigation, Pagination, Thumbs]` + `[FreeMode, Thumbs]` pair) so the rounded main card can carry absolutely-positioned overlay UI — see [shared-ui/patterns.md `Inline two-Embla pattern`](../shared-ui/patterns.md#embla-wrappers) for the rationale. Behaviour: the main viewport drives `activeIndex`; clicking a thumbnail calls `mainApi.scrollTo(i)`; the thumbs strip scrolls into the active slide via `thumbsApi.scrollTo(i)` whenever `mainApi` selects. Tap-vs-drag detection uses `pointerStartRef` with an 8px deadzone — taps open `FullscreenImageViewer` at the clicked index, drags scroll the carousel without opening fullscreen.
 
 ## Hooks
 
@@ -51,3 +56,7 @@ Refactored 2026-05-04: the photo is now used as a full-bleed cinematic backgroun
 ## className conventions (2026-05-08)
 
 Draw components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.
+
+## Interaction smoothness (Phase 1, 2026-05-09)
+
+[`MiniDrawCountdown`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx) is now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the mini-draw detail page does not re-render on every tick of the countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.

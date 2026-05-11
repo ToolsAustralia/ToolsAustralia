@@ -83,6 +83,7 @@ export default function ExistingPartners() {
                     width={120}
                     height={64}
                     className="max-h-16 w-auto object-contain filter brightness-0 invert transition-all duration-300"
+                    sizes="120px"
                   />
                 </div>
                 <div className="text-center mt-3">
@@ -107,6 +108,7 @@ export default function ExistingPartners() {
                       width={120}
                       height={48}
                       className="max-h-12 w-auto object-contain filter brightness-0 invert"
+                      sizes="120px"
                     />
                   </div>
                   <div className="text-center mt-2">
@@ -141,6 +143,7 @@ export default function ExistingPartners() {
                     width={120}
                     height={48}
                     className="max-h-12 w-auto object-contain"
+                    sizes="120px"
                   />
                 </div>
 

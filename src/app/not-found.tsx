@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function NotFound() {
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <div className="relative min-h-svh w-full overflow-hidden">
       {/* Background Image with Dark Overlay */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -22,7 +22,7 @@ export default function NotFound() {
       </div>
 
       {/* Content Container */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="relative z-10 min-h-svh flex items-center justify-center px-4 py-12">
         <div className="max-w-2xl w-full text-center">
           {/* Glass-morphism Content Card */}
           <div
@@ -40,6 +40,7 @@ export default function NotFound() {
                   width={180}
                   height={60}
                   className="h-12 w-auto object-contain drop-shadow-[0_0_10px_rgba(238,0,0,0.3)]"
+                  sizes="180px"
                   priority
                 />
               </div>

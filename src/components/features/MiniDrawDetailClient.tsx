@@ -87,7 +87,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <div className="min-h-svh bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <SectionContainer className="py-8">
         {/* Header */}
         <div className="mb-8">
@@ -207,6 +207,7 @@ export default function MiniDrawDetailClient({ miniDraw }: MiniDrawDetailClientP
                       width={160}
                       height={160}
                       className="w-40 h-40 object-cover rounded-xl border border-yellow-200"
+                      sizes="160px"
                     />
                   </div>
                 )}

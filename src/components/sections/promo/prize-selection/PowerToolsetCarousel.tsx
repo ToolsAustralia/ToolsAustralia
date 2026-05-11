@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,6 +11,8 @@ import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constan
 import { getToolsetFromSlug } from "./utils";
 import type { PrizeSlug } from "@/config/prizes";
 import { cn } from "@/utils/cn";
+import { useDeviceProfile } from "@/hooks/useDeviceProfile";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 interface PowerToolsetCarouselProps {
   /** All toolset options for the current toolbox type */
@@ -84,6 +87,10 @@ export function PowerToolsetCarousel({
   className = "",
 }: PowerToolsetCarouselProps) {
   const prefersReducedMotion = useReducedMotion();
+  const profile = useDeviceProfile();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
+  const allowInfiniteAnim = !prefersReducedMotion && profile.tier === "desktop" && inView;
 
   // When activeSlug is null (e.g. cash-prize), nothing is selected — no fallback to first prize
   const activePrize =
@@ -135,21 +142,21 @@ export function PowerToolsetCarousel({
       <motion.div
         className="absolute inset-0 -m-8 rounded-3xl blur-3xl pointer-events-none"
         animate={
-          prefersReducedMotion
-            ? { opacity: 0.5, scale: 1 }
-            : {
+          allowInfiniteAnim
+            ? {
                 opacity: [0.4, 0.6, 0.4],
                 scale: [1, 1.02, 1],
               }
+            : { opacity: 0.5, scale: 1 }
         }
         transition={
-          prefersReducedMotion
-            ? {}
-            : {
+          allowInfiniteAnim
+            ? {
                 duration: 4,
                 repeat: Infinity,
                 ease: "easeInOut",
               }
+            : {}
         }
         style={{
           background: `radial-gradient(ellipse 80% 70% at 50% 50%, ${glowColor}, transparent 70%)`,
@@ -172,17 +179,17 @@ export function PowerToolsetCarousel({
               className="relative w-full h-full"
             >
               <motion.div
-                animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
+                animate={allowInfiniteAnim ? { y: [0, -6, 0] } : { y: 0 }}
                 transition={
-                  prefersReducedMotion
-                    ? {}
-                    : {
+                  allowInfiniteAnim
+                    ? {
                         y: {
                           duration: 4,
                           repeat: Infinity,
                           ease: "easeInOut",
                         },
                       }
+                    : {}
                 }
                 className="relative w-full h-full"
               >
@@ -308,7 +315,7 @@ export function PowerToolsetCarousel({
   };
 
   return (
-    <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
+    <div ref={rootRef} className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {/* Carousel label - brand logo for active toolset */}
       {activeToolset && POWERSET_BRAND_TEXT[activeToolset] && (
         <AnimatePresence mode="wait">

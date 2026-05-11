@@ -161,7 +161,7 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-svh flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-width-[420px] max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
         {/* Brand Header */}
         <div className="mb-4 flex items-center gap-3">
@@ -171,6 +171,7 @@ function ResetPasswordContent() {
               alt="Tools Australia Logo"
               fill
               className="object-contain"
+              sizes="(max-width: 640px) 40px, 50px"
               priority
             />
           </div>

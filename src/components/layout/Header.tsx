@@ -56,6 +56,58 @@ import { cn } from "@/utils/cn";
 const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
 const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.webp";
 
+/**
+ * Leaf component owning the 3s alternation between the membership CTA and the
+ * promotional/giveaway CTA in the top bar. Only this small component re-renders
+ * on the toggle — the entire Header used to re-render every 3 seconds.
+ */
+function TopBarPromoLeaf({
+  topBarActivePromoMultiplier,
+}: {
+  topBarActivePromoMultiplier: number | null | undefined;
+}) {
+  const [slide, setSlide] = useState<0 | 1>(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSlide((s) => (s === 0 ? 1 : 0));
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
+      {slide === 0 ? (
+        <p
+          key="topbar-membership"
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
+          <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
+            Join Now
+          </Link>
+        </p>
+      ) : (
+        <p
+          key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          {topBarActivePromoMultiplier != null ? (
+            <>
+              <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
+              <span className="font-normal"> are live now — monthly tool giveaway. </span>
+            </>
+          ) : (
+            <span className="font-normal">Monthly tool giveaway. </span>
+          )}
+          <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
+            View giveaway
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+}
+
 type HeaderProps = {
   /**
    * Controls whether the header stays fixed to the top of the viewport.
@@ -86,8 +138,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false);
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
-  /** 0 = membership CTA, 1 = promotion/giveaway CTA — swapped each animation cycle */
-  const [topBarPromoSlide, setTopBarPromoSlide] = useState(0);
   const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -240,15 +290,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
     };
   }, [isMobileMenuOpen, isCartOpen, handleCloseMobileMenu, handleCloseCart]);
 
-  // Rotate promotional top-bar message every 3s (matches `.animate-topbar-reappear-once` duration in globals.css)
-  useEffect(() => {
-    if (isTopBarHidden || !authStateResolved || shouldHideTopBar) return;
-    if (isAuthenticated && isSetupRequired) return;
-    const id = window.setInterval(() => {
-      setTopBarPromoSlide((s) => (s === 0 ? 1 : 0));
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, [isTopBarHidden, authStateResolved, shouldHideTopBar, isAuthenticated, isSetupRequired]);
+  // Note: the 3s top-bar promo alternation is now owned by <TopBarPromoLeaf>
+  // so the entire Header no longer re-renders every 3 seconds.
 
   // Initialize localStorage values on mount for better UX
   useEffect(() => {
@@ -439,6 +482,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   return (
     <header
+      data-sticky="true"
       className={`bg-white dark:bg-neutral-900 ${
         isFixed ? "fixed top-0 left-0 right-0 z-40" : "relative"
       } shadow-sm dark:shadow-none dark:border-b dark:border-neutral-800 w-full overflow-visible`}
@@ -471,36 +515,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
               </p>
             ) : (
-              <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
-                {topBarPromoSlide === 0 ? (
-                  <p
-                    key="topbar-membership"
-                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
-                  >
-                    <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
-                    <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
-                      Join Now
-                    </Link>
-                  </p>
-                ) : (
-                  <p
-                    key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
-                    className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
-                  >
-                    {topBarActivePromoMultiplier != null ? (
-                      <>
-                        <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
-                        <span className="font-normal"> are live now — monthly tool giveaway. </span>
-                      </>
-                    ) : (
-                      <span className="font-normal">Monthly tool giveaway. </span>
-                    )}
-                    <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
-                      View giveaway
-                    </Link>
-                  </p>
-                )}
-              </div>
+              <TopBarPromoLeaf topBarActivePromoMultiplier={topBarActivePromoMultiplier} />
             )}
           </div>
           <button
@@ -521,7 +536,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           <div className="flex items-center">
             {/* Mobile Menu Button - Left Side with Animation */}
             <button
-              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 dark:text-white hover:text-white transition-all duration-300 rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
+              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 dark:text-white hover:text-white transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
               onClick={() => (isMobileMenuOpen ? handleCloseMobileMenu() : setIsMobileMenuOpen(true))}
               aria-label="Toggle mobile menu"
               suppressHydrationWarning
@@ -529,14 +544,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="relative w-5 h-5 sm:w-6 sm:h-6">
                 {/* Animated Hamburger/X Icon */}
                 <div
-                  className={`absolute inset-0 transition-all duration-300 ${
+                  className={`absolute inset-0 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] ${
                     isMobileMenuOpen ? "rotate-180 opacity-0" : "rotate-0 opacity-100"
                   }`}
                 >
                   <Menu className="h-full w-full group-hover:scale-110 transition-transform duration-200" />
                 </div>
                 <div
-                  className={`absolute inset-0 transition-all duration-300 ${
+                  className={`absolute inset-0 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] ${
                     isMobileMenuOpen ? "rotate-0 opacity-100" : "rotate-180 opacity-0"
                   }`}
                 >
@@ -554,6 +569,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   width={160}
                   height={52}
                   className="h-full w-full object-contain dark:hidden"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
                   priority
                 />
                 <Image
@@ -562,6 +578,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   width={160}
                   height={52}
                   className="hidden h-full w-full object-contain dark:block"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
                   priority
                 />
               </div>
@@ -742,7 +759,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen);
                       }
                     }}
-                    className="flex items-center gap-3 text-right rounded-full border border-gray-200 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-black/90"
+                    className="flex items-center gap-3 text-right rounded-full border border-gray-200 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-105 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-black/90"
                   >
                     <div>
                       <div className="flex flex-col gap-1">
@@ -984,14 +1001,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {/* Theme (replaces cart until shop is live) */}
             <div className="relative z-10 flex items-center justify-center">
               <ThemeToggleButton
-                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
+                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
               />
             </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
-                className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_8px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_12px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_8px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_12px_rgba(238,0,0,0.5)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                 aria-label="Login to your account"
               >
                 <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1007,7 +1024,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     // console.log("🖱️ Setting isMobileUserMenuOpen to:", !isMobileUserMenuOpen);
                     setIsMobileUserMenuOpen(!isMobileUserMenuOpen);
                   }}
-                  className="relative z-50 flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 text-gray-700 dark:text-neutral-200 hover:text-red-600"
+                  className="relative z-50 flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-105 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 text-gray-700 dark:text-neutral-200 hover:text-red-600"
                   aria-label="User menu"
                   type="button"
                 >
@@ -1107,7 +1124,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
-                className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_12px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_16px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_12px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_16px_rgba(238,0,0,0.5)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                 aria-label="Login to your account"
               >
                 <LogIn className="w-4 h-4" />
@@ -1191,6 +1208,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     width={40}
                     height={40}
                     className="object-contain rounded-full"
+                    sizes="40px"
                   />
                 </div>
                 <div>
@@ -1291,7 +1309,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <nav className="p-4 space-y-2">
                 <Link
                   href="/"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/") ? "text-white bg-red-600" : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
@@ -1302,7 +1320,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/shop"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/shop")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1315,7 +1333,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/mini-draws"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/mini-draws")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1329,7 +1347,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/membership"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/membership")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1344,7 +1362,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 {isAuthenticated && isRewardsFeatureEnabled && (
                   <Link
                     href="/rewards"
-                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                       isActiveLink("/rewards")
                         ? "text-white bg-red-600"
                         : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1360,7 +1378,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 <div>
                   <button
                     onClick={() => setIsMobileResultsOpen(!isMobileResultsOpen)}
-                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium w-full ${
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium w-full ${
                       isResultsActive()
                         ? "text-white bg-red-600"
                         : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1379,7 +1397,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="ml-8 mt-2 space-y-1">
                       <Link
                         href="/draw-results"
-                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
                           isActiveLink("/draw-results")
                             ? "text-white bg-red-600"
                             : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
@@ -1391,7 +1409,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       </Link>
                       <Link
                         href="/winners"
-                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
                           isActiveLink("/winners")
                             ? "text-white bg-red-600"
                             : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
@@ -1407,7 +1425,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/partner"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/partner")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1420,7 +1438,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/faq"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/faq")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1433,7 +1451,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/contact"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/contact")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -1450,7 +1468,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="border-t border-gray-200 my-4"></div>
                     <Link
                       href="/affiliate"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                      className="flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                       onClick={handleCloseMobileMenu}
                     >
                       <UserCircle className="w-5 h-5" />
@@ -1464,7 +1482,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="border-t border-gray-200 my-4"></div>
                     <Link
                       href="/my-account"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                      className="flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                       onClick={handleCloseMobileMenu}
                     >
                       <UserCircle className="w-5 h-5" />
@@ -1588,6 +1606,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             width={64}
                             height={64}
                             className="w-full h-full object-cover"
+                            sizes="64px"
                           />
                         </div>
                         <div className="flex-1 min-w-0">

@@ -1,5 +1,9 @@
 # Upsell — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+`src/components/upload/ImageUpload.tsx` preview thumbnails now ship `sizes="(max-width: 768px) 50vw, 25vw"` matching the responsive grid (`grid-cols-2 md:grid-cols-4`). Markup only — no upload-flow changes.
+
 ## P1. Build-time manifest for static assets
 
 Image manifest is generated at build (`prebuild` script). Code reads `src/generated/upsellImageManifest.ts` as a static import. Avoids runtime fs scans.

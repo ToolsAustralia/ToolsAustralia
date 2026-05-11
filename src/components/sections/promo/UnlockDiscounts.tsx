@@ -238,6 +238,7 @@ export default function UnlockDiscounts({
                         ? { transform: "scale(1.5)" }
                         : undefined
                     }
+                    sizes="(max-width: 640px) 80px, 120px"
                   />
                 </div>
 
@@ -267,6 +268,7 @@ export default function UnlockDiscounts({
                       width={48}
                       height={48}
                       className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
+                      sizes="48px"
                     />
                   </div>
                 </div>

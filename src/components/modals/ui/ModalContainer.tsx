@@ -97,6 +97,28 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     return () => window.clearTimeout(id);
   }, [isOpen, isLocked]);
 
+  // Mobile keyboard avoidance: while a modal is open, expose the visualViewport height as a CSS
+  // custom property `--ta-vv-height` on <html>. Modal content that needs to keep its bottom
+  // controls visible above the soft keyboard can opt in via:
+  //   style={{ maxHeight: "var(--ta-vv-height, 100vh)" }}
+  // We don't force this on existing modals — only set the var; opt-in keeps current layouts intact.
+  useEffect(() => {
+    if (!isOpen) return;
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      document.documentElement.style.setProperty("--ta-vv-height", `${vv.height}px`);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      document.documentElement.style.removeProperty("--ta-vv-height");
+    };
+  }, [isOpen]);
+
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
   const backButtonPressed = useRef(false);
@@ -235,6 +257,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     };
 
+    // NOTE: wheel and touchmove are intentionally non-passive — they call e.preventDefault() to
+    // implement modal scroll-lock at the boundaries (so wheel/touch overscroll does not propagate
+    // to the body behind the modal). touchstart is passive (read-only). Do not flip these to
+    // passive without rethinking the boundary-stop behaviour.
     scrollableElement.addEventListener("wheel", handleWheel, { passive: false });
     scrollableElement.addEventListener("touchstart", handleTouchStart, { passive: true });
     scrollableElement.addEventListener("touchmove", handleTouchMove, { passive: false });

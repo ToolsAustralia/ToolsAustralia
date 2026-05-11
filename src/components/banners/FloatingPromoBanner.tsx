@@ -199,6 +199,7 @@ const FloatingPromoBanner: React.FC = () => {
           aria-label="Scroll to membership and packages"
           onClick={handleBannerClick}
           onKeyDown={handleBannerKeyDown}
+          data-floating-widget="true"
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}

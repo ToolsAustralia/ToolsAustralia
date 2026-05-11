@@ -1,5 +1,33 @@
 # Billing-Stripe — Patterns
 
+## P0. Lazy-load Stripe-bearing modals at every callsite (2026-05-10)
+
+Stripe-bearing modals (`MembershipModal`, `StripePaymentModal`, `SubscriptionManagementModal`, `RenewalFailedModal`, `SpecialPackagesModal`, `UpsellModal`, `SavedPaymentMethodsModal`, `PaymentMethodSelector`, `PaymentMethodsTab`) bundle `@stripe/react-stripe-js`, `@stripe/stripe-js`, and the project's payment forms. Statically importing them into a route inflates the route's first-load JS by hundreds of kilobytes that the user only needs once they actually open the modal.
+
+The convention from Phase 5A onwards is: **at every non-modal callsite, import these via `next/dynamic` with `{ ssr: false }`**. Example:
+
+```tsx
+import dynamic from "next/dynamic";
+
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
+```
+
+Caveats:
+- **Modal-in-modal stays static.** When a modal imports another modal (e.g. `SubscriptionManagementModal` imports `RenewalFailedModal`, `MembershipModal` imports `PaymentMethodSelector`), keep the inner one as a static import. The outer modal is already lazy-loaded, so the inner module still ships in a separate chunk that loads only when the outer opens.
+- **Type-only imports for prop extraction.** If a route uses `React.ComponentProps<typeof TheModal>` to extract a prop type, add a sibling `import type TheModalType from "..."` next to the lazy import — `dynamic()` returns a `LoadableComponent` whose props are not directly inspectable. See [src/app/(site)/my-account/components/settings/SubscriptionTab.tsx](../../src/app/(site)/my-account/components/settings/SubscriptionTab.tsx) for the pattern.
+- **`UnifiedModalManager` itself.** The manager renders one of seven modals based on the priority store. Phase 5A converted all seven internal imports to `dynamic` so a hydrated landing page does not pay the cost of any of them until the store flips `activeModal`.
+- **Page config name collision.** A handful of pages export `export const dynamic = "force-dynamic"` (Next.js segment config). When such a page also needs `import dynamic from "next/dynamic"`, alias the import — `import nextDynamic from "next/dynamic"` — to avoid shadowing the export. Pattern in [src/app/(site)/my-account/benefits/page.tsx](../../src/app/(site)/my-account/benefits/page.tsx).
+
+Affected callsites converted in Phase 5A:
+- `MembershipModal`: 7 production callsites (`MajorDrawSection`, `MembershipSection`, `MembershipPageClient`, `my-account/page.tsx`, `my-account/settings/page.tsx`, `my-account/membership/page.tsx`, `my-account/draws/page.tsx`, `my-account/benefits/page.tsx`).
+- `SubscriptionManagementModal`: `MembershipStatus`, `SubscriptionTab`.
+- `PaymentMethodsTab`: `PaymentTab`.
+- All seven `UnifiedModalManager` branches.
+
+The dev modal-gallery (`src/components/dev/ModalsGalleryClient.tsx`) intentionally retains static imports — its purpose is to render every modal for visual review.
+
 ## P1. Webhook switch-on-type with named handlers
 
 The webhook's top-level `switch (event.type)` dispatches to a named function per event type — never inline logic. Keeps the router readable; lets each handler have its own test surface.

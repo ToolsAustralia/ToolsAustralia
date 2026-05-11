@@ -1,5 +1,9 @@
 # Admin — Patterns
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+Admin imagery (package icons in `UserDetailModal`, `UsersManagement`, `UserRow`, `MembershipBreakdownSection`, `AdvertisingBreakdownSection`, `TopProducts`, `AdminSidebar`) shipped `<Image>` tags without `sizes` hints. Phase 5B added accurate hints based on each callsite's responsive container (`sizes="(max-width: 640px) 20px, (max-width: 1024px) 28px, 36px"` for tier-icon avatars; `sizes="40px"` / `sizes="48px"` for fixed-size logos and thumbnails). Markup only — no admin behavioural changes.
+
 ## P1. Tab-based panel
 
 `/admin/[tab]/` dynamic route hosts the entire panel. Each tab is a feature view. Sidebar links navigate between tabs.

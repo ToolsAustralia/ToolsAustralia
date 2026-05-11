@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { getPrizeBrandColors } from "@/utils/prize-brand-colors";
 import { getLandingPageThemeFromSlug } from "@/utils/package-colors/packageColorScheme";
 import { formatMajorDrawLiveDateLineUtc } from "@/utils/common/timezone";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 import type { PrizeSlug } from "@/config/prizes";
 import { cn } from "@/utils/cn";
 
@@ -22,10 +24,36 @@ interface TimeLeft {
   seconds: number;
 }
 
+// Leaf component owning the 1s tick — keeps the parent shell (motion wrappers,
+// brand styles, AnimatePresence frozen-banner, etc.) from re-rendering on tick.
+function GiveawayCountdownLeaf({
+  targetMs,
+  render,
+}: {
+  targetMs: number | null;
+  render: (timeLeft: TimeLeft) => ReactNode;
+}) {
+  const now = useLeafTimer(1000);
+  let timeLeft: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  if (targetMs !== null && !Number.isNaN(targetMs)) {
+    const difference = targetMs - now;
+    if (difference > 0) {
+      timeLeft = {
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+        seconds: Math.floor((difference % (1000 * 60)) / 1000),
+      };
+    }
+  }
+  return <>{render(timeLeft)}</>;
+}
+
 export default function GiveawayCountdownTimer({ activeSlug, className = "" }: GiveawayCountdownTimerProps) {
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [drawDateLabel, setDrawDateLabel] = useState("Draw date TBA");
   const [isMounted, setIsMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   const { openEntryFlow } = useMajorDrawEntryCta();
 
@@ -45,34 +73,11 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
     }
   }, [currentMajorDraw]);
 
-  useEffect(() => {
-    const drawDate = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate).getTime() : null;
-
-    if (!drawDate || Number.isNaN(drawDate)) {
-      setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      return;
-    }
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const difference = drawDate - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
-  }, [currentMajorDraw?.drawDate]);
+  // Countdown target — the 1s tick happens inside <GiveawayCountdownLeaf>
+  // so this parent doesn't re-render every second.
+  const drawTargetMs = currentMajorDraw?.drawDate
+    ? new Date(currentMajorDraw.drawDate).getTime()
+    : null;
 
   const isCompleted = currentMajorDraw?.status === "completed";
   const isQueued = currentMajorDraw?.status === "queued";
@@ -169,6 +174,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
   return (
     <motion.div
+      ref={rootRef}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
@@ -204,8 +210,8 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent dark:via-white/5"
-            animate={{ x: ["-200%", "200%"] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: "easeInOut" }}
+            animate={inView ? { x: ["-200%", "200%"] } : { x: "-200%" }}
+            transition={inView ? { duration: 3, repeat: Infinity, repeatDelay: 2, ease: "easeInOut" } : { duration: 0 }}
           />
 
           <div
@@ -226,7 +232,7 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
                   exit={{ opacity: 0, height: 0 }}
                   className="mb-2 sm:mb-3"
                 >
-                  <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-md sm:rounded-xl sm:p-3">
+                  <div className="rounded-lg border border-white/20 bg-black/35 p-2 backdrop-blur-[var(--ta-blur)] sm:rounded-xl sm:p-3">
                     <div className="text-center">
                       <div className={cn("text-2xs font-bold uppercase tracking-wider sm:text-xs", surfaceText)}>
                         Entry period closed
@@ -245,75 +251,80 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
               </h3>
             </div>
 
-            <div className="mb-2 grid grid-cols-4 gap-1.5 sm:mb-3 sm:gap-2 lg:gap-2.5">
-              {(
-                [
-                  { label: "Days", value: timeLeft.days },
-                  { label: "Hours", value: timeLeft.hours },
-                  { label: "Mins", value: timeLeft.minutes },
-                  { label: "Secs", value: timeLeft.seconds },
-                ] as const
-              ).map((unit, index) => (
-                <motion.div
-                  key={unit.label}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.1, duration: 0.4 }}
-                  className="relative group"
-                >
-                  <div
-                    className={cn("absolute -inset-0.5 rounded-xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100 sm:rounded-2xl", useLightCountdownInner ? "bg-black/10" : "")}
-                    style={useLightCountdownInner ? undefined : { backgroundColor: lpTheme.borderRgba }}
-                  />
-
-                  <div
-                    className={`relative overflow-hidden rounded-lg border-2 p-1.5 sm:rounded-xl sm:p-2.5 lg:p-3 ${
-                      useLightCountdownInner ? "" : "backdrop-blur-md bg-black/35 shadow-xl dark:bg-black/45"
-                    }`}
-                    style={useLightCountdownInner ? lightTileSurfaceStyle : accentBorderStyle}
-                  >
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br to-transparent ${
-                        useLightCountdownInner
-                          ? isRyobi
-                            ? "from-white/45 via-transparent to-lime-400/10"
-                            : isDewalt
-                              ? "from-white/55 via-transparent to-amber-200/15"
-                              : "from-white/80 via-white/25 dark:from-white/70 dark:via-white/15"
-                          : "from-white/10 via-transparent dark:from-white/5"
-                      }`}
-                    />
-
-                    {unit.label === "Secs" && (
-                      <motion.div
-                        className={cn("absolute inset-0", useLightCountdownInner ? "bg-black/[0.06]" : "bg-white/5")}
-                        animate={{ opacity: [0, useLightCountdownInner ? 0.35 : 0.25, 0] }}
-                        transition={{ duration: 1, repeat: Infinity }}
+            <GiveawayCountdownLeaf
+              targetMs={drawTargetMs}
+              render={(timeLeft) => (
+                <div className="mb-2 grid grid-cols-4 gap-1.5 sm:mb-3 sm:gap-2 lg:gap-2.5">
+                  {(
+                    [
+                      { label: "Days", value: timeLeft.days },
+                      { label: "Hours", value: timeLeft.hours },
+                      { label: "Mins", value: timeLeft.minutes },
+                      { label: "Secs", value: timeLeft.seconds },
+                    ] as const
+                  ).map((unit, index) => (
+                    <motion.div
+                      key={unit.label}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1, duration: 0.4 }}
+                      className="relative group"
+                    >
+                      <div
+                        className={cn("absolute -inset-0.5 rounded-xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100 sm:rounded-2xl", useLightCountdownInner ? "bg-black/10" : "")}
+                        style={useLightCountdownInner ? undefined : { backgroundColor: lpTheme.borderRgba }}
                       />
-                    )}
 
-                    <div className="relative z-10">
-                      <AnimatePresence mode="wait">
-                        <motion.div
-                          key={unit.value}
-                          initial={{ rotateX: -90, opacity: 0 }}
-                          animate={{ rotateX: 0, opacity: 1 }}
-                          exit={{ rotateX: 90, opacity: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className={cn("mb-0.5 font-sans text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl", surfaceText)}
-                        >
-                          {String(unit.value).padStart(2, "0")}
-                        </motion.div>
-                      </AnimatePresence>
+                      <div
+                        className={`relative overflow-hidden rounded-lg border-2 p-1.5 sm:rounded-xl sm:p-2.5 lg:p-3 ${
+                          useLightCountdownInner ? "" : "backdrop-blur-[var(--ta-blur)] bg-black/35 shadow-xl dark:bg-black/45"
+                        }`}
+                        style={useLightCountdownInner ? lightTileSurfaceStyle : accentBorderStyle}
+                      >
+                        <div
+                          className={`absolute inset-0 bg-gradient-to-br to-transparent ${
+                            useLightCountdownInner
+                              ? isRyobi
+                                ? "from-white/45 via-transparent to-lime-400/10"
+                                : isDewalt
+                                  ? "from-white/55 via-transparent to-amber-200/15"
+                                  : "from-white/80 via-white/25 dark:from-white/70 dark:via-white/15"
+                              : "from-white/10 via-transparent dark:from-white/5"
+                          }`}
+                        />
 
-                      <div className={cn("text-3xs font-bold uppercase tracking-wider sm:text-2xs lg:text-xs", surfaceMuted)}>
-                        {unit.label}
+                        {unit.label === "Secs" && (
+                          <motion.div
+                            className={cn("absolute inset-0", useLightCountdownInner ? "bg-black/[0.06]" : "bg-white/5")}
+                            animate={inView ? { opacity: [0, useLightCountdownInner ? 0.35 : 0.25, 0] } : { opacity: 0 }}
+                            transition={inView ? { duration: 1, repeat: Infinity } : { duration: 0 }}
+                          />
+                        )}
+
+                        <div className="relative z-10">
+                          <AnimatePresence mode="popLayout">
+                            <motion.div
+                              key={unit.value}
+                              initial={{ rotateX: -90, opacity: 0 }}
+                              animate={{ rotateX: 0, opacity: 1 }}
+                              exit={{ rotateX: 90, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className={cn("mb-0.5 font-sans text-xl font-bold tabular-nums sm:text-2xl lg:text-4xl", surfaceText)}
+                            >
+                              {String(unit.value).padStart(2, "0")}
+                            </motion.div>
+                          </AnimatePresence>
+
+                          <div className={cn("text-3xs font-bold uppercase tracking-wider sm:text-2xs lg:text-xs", surfaceMuted)}>
+                            {unit.label}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            />
 
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -321,10 +332,10 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
               transition={{ delay: 0.5, duration: 0.4 }}
               className={`rounded-lg border-2 px-2.5 py-2 sm:rounded-full sm:px-4 sm:py-2 ${
                 isFrozen
-                  ? "bg-black/35 backdrop-blur-md dark:bg-black/45"
+                  ? "bg-black/35 backdrop-blur-[var(--ta-blur)] dark:bg-black/45"
                   : useLightCountdownInner
                     ? ""
-                    : "bg-black/30 backdrop-blur-md dark:bg-black/40"
+                    : "bg-black/30 backdrop-blur-[var(--ta-blur)] dark:bg-black/40"
               }`}
               style={
                 isFrozen
@@ -377,8 +388,8 @@ export default function GiveawayCountdownTimer({ activeSlug, className = "" }: G
 
           <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-black/[0.03] to-transparent dark:via-white/[0.04]"
-            animate={{ x: ["-100%", "100%"] }}
-            transition={{ duration: 4, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
+            animate={inView ? { x: ["-100%", "100%"] } : { x: "-100%" }}
+            transition={inView ? { duration: 4, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" } : { duration: 0 }}
           />
 
           <div className="relative z-10 px-3 py-3 text-center sm:px-5 sm:py-4">

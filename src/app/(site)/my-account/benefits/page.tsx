@@ -12,8 +12,13 @@ import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import nextDynamic from "next/dynamic";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
-import MembershipModal from "@/components/modals/MembershipModal";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = nextDynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 
 // Mark page as dynamic to prevent static generation issues
 export const dynamic = "force-dynamic";

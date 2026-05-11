@@ -574,7 +574,7 @@ _(none)_
 - [src/components/ui/EntryProgressBar.tsx](../../src/components/ui/EntryProgressBar.tsx) — **score 1** — 95 LOC
   - signals: ternary-explosion (5 JSX ternaries)
 
-- [src/components/ui/FullscreenImageViewer.tsx](../../src/components/ui/FullscreenImageViewer.tsx) — **score 1** — 370 LOC
+- [src/components/ui/FullscreenImageViewer.tsx](../../src/components/ui/FullscreenImageViewer.tsx) — **score 1** — 396 LOC
   - signals: ternary-explosion (8 JSX ternaries)
 
 - [src/components/ui/ThemeToggle.tsx](../../src/components/ui/ThemeToggle.tsx) — **score 1** — 71 LOC

@@ -76,6 +76,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
               alt="Tools Australia workshop"
               fill
               className="object-cover"
+              sizes="(max-width: 1280px) 100vw, 1152px"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/90 to-black/85 lg:via-black/88 lg:to-black/80" />
             <div
@@ -192,7 +193,7 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
                     return (
                       <div
                         key={tier.name}
-                        className={`relative flex items-center gap-4 rounded-xl p-3 backdrop-blur-sm transition-transform duration-300 hover:scale-[1.03] cursor-pointer ${
+                        className={`relative flex items-center gap-4 rounded-xl p-3 backdrop-blur-[var(--ta-blur)] transition-transform duration-[var(--ta-transition-dur)] hover:scale-[1.03] cursor-pointer ${
                           isBoss ? "bg-white/[0.08]" : "bg-white/[0.04] ring-1 ring-white/[0.06]"
                         }`}
                         style={isBoss ? { boxShadow: `inset 0 0 0 1px ${theme.primary}40` } : undefined}

@@ -34,6 +34,7 @@ export default function KlaviyoScriptLoader({ companyId, disabled = false, nonce
       id="klaviyo-onsite-loader"
       strategy="afterInteractive"
       nonce={nonce}
+      data-tracking-pixel="true"
       // NOTE: This snippet is adapted from Klaviyo's official onsite JavaScript.
       // It sets up a proxy/queue on window.klaviyo and then loads the main script.
       // We interpolate companyId into the URL so different environments can use

@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
@@ -26,6 +27,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import Image from "next/image";
 import { hasBundledMultiplierAssets, isPromoMultiplier } from "@/types/promo-multiplier";
 import { cn } from "@/utils/cn";
+import { addThrottledResize } from "@/utils/dom/listenerHelpers";
 
 /**
  * X2 / X10 multiplier badge — only used here. Anchored to the countdown cluster’s
@@ -121,6 +123,21 @@ function PromoBannerUnifiedCountdown({
   );
 }
 
+/**
+ * Leaf component owning the 1s tick for the right-side countdown surfaces.
+ * Lives in PromoBanner so the parent does not re-render every second; only this
+ * leaf does. The render prop receives `now` (ms) and returns the JSX (typically
+ * a <PromoBannerUnifiedCountdown>).
+ */
+function PromoBannerCountdownTickLeaf({
+  render,
+}: {
+  render: (now: number) => ReactNode;
+}) {
+  const now = useLeafTimer(1000);
+  return <>{render(now)}</>;
+}
+
 /** Easing for bar ↔ floating pill morph (scroll state). */
 const SCROLL_STATE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
 
@@ -192,33 +209,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Get variant config from context (wait for variant to resolve so we know countdown mode etc.)
   const { variantConfig, isLoading: isVariantLoading } = useVariantContext();
 
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  const [freezeTimeLeft, setFreezeTimeLeft] = useState({
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  const [scheduledEndTimeLeft, setScheduledEndTimeLeft] = useState<{
-    days?: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
-  }>({ hours: 0, minutes: 0, seconds: 0 });
-
-  const [gapPeriodTimeLeft, setGapPeriodTimeLeft] = useState({
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  /** Kept in sync with the freeze countdown tick so static left art can switch at the 48h boundary. */
+  /** Kept in sync via a low-frequency tick so static left art can switch at the 48h boundary. */
   const [within48HoursOfFreeze, setWithin48HoursOfFreeze] = useState(false);
 
   const [isScrolled, setIsScrolled] = useState(false);
@@ -456,8 +447,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
       floatLayoutAnimRef.current = [c1, c2, c3];
     };
 
-    window.addEventListener("resize", syncFloatLayout);
-    return () => window.removeEventListener("resize", syncFloatLayout);
+    return addThrottledResize(syncFloatLayout);
   }, [isScrolled, prefersReducedMotion, floatTop, floatLeft, floatWidth]);
 
   // Resolve multiplier: Variant config > Effective-for-banner for current tab
@@ -584,86 +574,21 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     effectiveEntryForCountdown?.durationMs,
   ]);
 
-  // Single 1s ticker for all countdown surfaces (React 18 batches updates from one tick).
+  // Low-frequency parent tick — only updates the 48h-boundary boolean used by
+  // `leftVisual` (the per-second countdown surfaces are rendered by leaf
+  // components below so they don't re-render this parent on tick).
   useEffect(() => {
     const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
-    const tick = () => {
+    const recompute = () => {
       const now = Date.now();
-
       const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
-      const nextWithin48 =
-        !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
-      setWithin48HoursOfFreeze((prev) => (prev === nextWithin48 ? prev : nextWithin48));
-
-      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
-        const nextMidnight = getNextMidnightAEST();
-        const diffMs = Math.max(0, nextMidnight.getTime() - now);
-        const totalSeconds = Math.floor(diffMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        setTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s
-            ? prev
-            : { days: 0, hours: h, minutes: m, seconds: s }
-        );
-      } else {
-        const totalSeconds = Math.floor(freezeMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        setTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s
-            ? prev
-            : { days: 0, hours: h, minutes: m, seconds: s }
-        );
-      }
-
-      if (nextDraw?.activationDate) {
-        const activationMs = new Date(nextDraw.activationDate).getTime();
-        const remainingMs = Math.max(0, activationMs - now);
-        const totalSeconds = Math.floor(remainingMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        setGapPeriodTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s ? prev : { hours: h, minutes: m, seconds: s }
-        );
-      }
-
-      if (currentDraw?.freezeEntriesAt) {
-        const freezeDate = new Date(currentDraw.freezeEntriesAt).getTime();
-        const untilFreezeMs = Math.max(0, freezeDate - now);
-        const totalSeconds = Math.floor(untilFreezeMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        setFreezeTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s
-            ? prev
-            : { hours: h, minutes: m, seconds: s }
-        );
-      }
-
-      if (countdownDisplay.type === "scheduled_end" && countdownDisplay.endMs != null) {
-        const remainingMs = Math.max(0, countdownDisplay.endMs - now);
-        const useDays = countdownDisplay.useDays ?? false;
-        setScheduledEndTimeLeft(formatTimeLeft(remainingMs, useDays));
-      }
+      const next = !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
+      setWithin48HoursOfFreeze((prev) => (prev === next ? prev : next));
     };
-
-    tick();
-    const timer = setInterval(tick, 1000);
+    recompute();
+    const timer = setInterval(recompute, 30 * 1000);
     return () => clearInterval(timer);
-  }, [
-    targetDateMs,
-    nextDraw?.activationDate,
-    currentDraw?.freezeEntriesAt,
-    countdownDisplay.type,
-    countdownDisplay.endMs,
-    countdownDisplay.useDays,
-  ]);
+  }, [targetDateMs]);
 
   useEffect(() => {
     if (isDrawLoading) {
@@ -686,8 +611,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
 
     measureInFlowOnly();
-    window.addEventListener("resize", measureInFlowOnly);
-    return () => window.removeEventListener("resize", measureInFlowOnly);
+    return addThrottledResize(measureInFlowOnly);
   }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily, isHolidayLeftArt]);
 
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
@@ -919,6 +843,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               // Gap period: "NEXT DRAW IN" label + countdown timer (compact padding to align with left height)
               if (isGapPeriod) {
                 const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
+                const activationMs = nextDraw?.activationDate
+                  ? new Date(nextDraw.activationDate).getTime()
+                  : null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -935,16 +862,27 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     >
                       NEXT DRAW IN
                     </div>
-                    <PromoBannerUnifiedCountdown
-                      segments={[
-                        { value: gapPeriodTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
-                        { value: gapPeriodTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
-                        { value: gapPeriodTimeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
-                      ]}
-                      textClassName={rightSectionTextClass}
-                      labelClassName={labelClass}
-                      surfaceStyle={rightSectionTileStyle}
-                      size="compact"
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = activationMs ? Math.max(0, activationMs - now) : 0;
+                        const totalSeconds = Math.floor(remainingMs / 1000);
+                        const h = Math.floor(totalSeconds / 3600);
+                        const m = Math.floor((totalSeconds % 3600) / 60);
+                        const s = totalSeconds % 60;
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={[
+                              { value: h.toString().padStart(2, "0"), label: "HRS" },
+                              { value: m.toString().padStart(2, "0"), label: "MINS" },
+                              { value: s.toString().padStart(2, "0"), label: "SECS" },
+                            ]}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={labelClass}
+                            surfaceStyle={rightSectionTileStyle}
+                            size="compact"
+                          />
+                        );
+                      }}
                     />
                   </motion.div>
                 );
@@ -990,23 +928,7 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
                 const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
-                const scheduledSegments: PromoBannerCountdownSegment[] = [];
-                if (useDays && scheduledEndTimeLeft.days != null) {
-                  scheduledSegments.push({
-                    value: scheduledEndTimeLeft.days.toString().padStart(2, "0"),
-                    label: "DAYS",
-                  });
-                }
-                scheduledSegments.push(
-                  { value: scheduledEndTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
-                  { value: scheduledEndTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" }
-                );
-                if (!useDays) {
-                  scheduledSegments.push({
-                    value: scheduledEndTimeLeft.seconds.toString().padStart(2, "0"),
-                    label: "SECS",
-                  });
-                }
+                const endMs = countdownDisplay.endMs ?? null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -1014,11 +936,36 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <PromoBannerUnifiedCountdown
-                      segments={scheduledSegments}
-                      textClassName={rightSectionTextClass}
-                      labelClassName={labelClass}
-                      surfaceStyle={rightSectionTileStyle}
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = endMs != null ? Math.max(0, endMs - now) : 0;
+                        const tl = formatTimeLeft(remainingMs, useDays);
+                        const scheduledSegments: PromoBannerCountdownSegment[] = [];
+                        if (useDays && tl.days != null) {
+                          scheduledSegments.push({
+                            value: tl.days.toString().padStart(2, "0"),
+                            label: "DAYS",
+                          });
+                        }
+                        scheduledSegments.push(
+                          { value: tl.hours.toString().padStart(2, "0"), label: "HRS" },
+                          { value: tl.minutes.toString().padStart(2, "0"), label: "MINS" }
+                        );
+                        if (!useDays) {
+                          scheduledSegments.push({
+                            value: tl.seconds.toString().padStart(2, "0"),
+                            label: "SECS",
+                          });
+                        }
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={scheduledSegments}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={labelClass}
+                            surfaceStyle={rightSectionTileStyle}
+                          />
+                        );
+                      }}
                     />
                   </motion.div>
                 );
@@ -1044,6 +991,9 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   );
                 }
 
+                const freezeMs = currentDraw?.freezeEntriesAt
+                  ? new Date(currentDraw.freezeEntriesAt).getTime()
+                  : null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -1051,15 +1001,26 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <PromoBannerUnifiedCountdown
-                      segments={[
-                        { value: freezeTimeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
-                        { value: freezeTimeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
-                        { value: freezeTimeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
-                      ]}
-                      textClassName={rightSectionTextClass}
-                      labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
-                      surfaceStyle={rightSectionTileStyle}
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = freezeMs ? Math.max(0, freezeMs - now) : 0;
+                        const totalSeconds = Math.floor(remainingMs / 1000);
+                        const h = Math.floor(totalSeconds / 3600);
+                        const m = Math.floor((totalSeconds % 3600) / 60);
+                        const s = totalSeconds % 60;
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={[
+                              { value: h.toString().padStart(2, "0"), label: "HRS" },
+                              { value: m.toString().padStart(2, "0"), label: "MINS" },
+                              { value: s.toString().padStart(2, "0"), label: "SECS" },
+                            ]}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                            surfaceStyle={rightSectionTileStyle}
+                          />
+                        );
+                      }}
                     />
                   </motion.div>
                 );
@@ -1090,15 +1051,39 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                   className="flex flex-col items-center justify-center gap-1"
                 >
-                  <PromoBannerUnifiedCountdown
-                    segments={[
-                      { value: timeLeft.hours.toString().padStart(2, "0"), label: "HRS" },
-                      { value: timeLeft.minutes.toString().padStart(2, "0"), label: "MINS" },
-                      { value: timeLeft.seconds.toString().padStart(2, "0"), label: "SECS" },
-                    ]}
-                    textClassName={rightSectionTextClass}
-                    labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
-                    surfaceStyle={rightSectionTileStyle}
+                  <PromoBannerCountdownTickLeaf
+                    render={(now) => {
+                      const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+                      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
+                      let h = 0;
+                      let m = 0;
+                      let s = 0;
+                      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
+                        const nextMidnight = getNextMidnightAEST();
+                        const diffMs = Math.max(0, nextMidnight.getTime() - now);
+                        const totalSeconds = Math.floor(diffMs / 1000);
+                        h = Math.floor(totalSeconds / 3600);
+                        m = Math.floor((totalSeconds % 3600) / 60);
+                        s = totalSeconds % 60;
+                      } else {
+                        const totalSeconds = Math.floor(freezeMs / 1000);
+                        h = Math.floor(totalSeconds / 3600);
+                        m = Math.floor((totalSeconds % 3600) / 60);
+                        s = totalSeconds % 60;
+                      }
+                      return (
+                        <PromoBannerUnifiedCountdown
+                          segments={[
+                            { value: h.toString().padStart(2, "0"), label: "HRS" },
+                            { value: m.toString().padStart(2, "0"), label: "MINS" },
+                            { value: s.toString().padStart(2, "0"), label: "SECS" },
+                          ]}
+                          textClassName={rightSectionTextClass}
+                          labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                          surfaceStyle={rightSectionTileStyle}
+                        />
+                      );
+                    }}
                   />
                 </motion.div>
               );

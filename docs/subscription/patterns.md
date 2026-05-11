@@ -2,6 +2,10 @@
 
 Recurring conventions you'll see throughout subscription code.
 
+## Site-wide interaction smoothness — Phase 5B (2026-05-10)
+
+`CancellationUpsellModal/DowngradeCard.tsx` and `DowngradeConfirmModal/Hero.tsx` had their package-icon `<Image>` elements without `sizes` hints; Phase 5B added `sizes="48px"` / `sizes="44px"` matching their fixed cells. Markup only — no policy or transition logic touched.
+
 ## P1. Pure-policy split for testability
 
 Stripe-touching logic and pure-decision logic are separated so the latter can be unit-tested without mocking Stripe.

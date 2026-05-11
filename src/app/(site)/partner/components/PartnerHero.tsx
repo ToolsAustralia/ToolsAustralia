@@ -5,8 +5,6 @@ import Image from "next/image";
 import MetallicButton from "@/components/ui/MetallicButton";
 // No icons needed for this component
 
-// Import Swiper styles
-import "swiper/css";
 import BrandScroller from "@/components/ui/BrandScroller";
 
 interface PartnerHeroProps {
@@ -113,7 +111,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                   <div className="overflow-x-auto pb-4 brand-scrollbar">
                     <div className="flex gap-4 min-w-max">
                       {/* Feature Card 1 */}
-                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
+                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                         <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
                           Increased Sales
@@ -124,7 +122,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       </div>
 
                       {/* Feature Card 2 */}
-                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
+                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                         <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
                           Brand Exposure
@@ -135,7 +133,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       </div>
 
                       {/* Feature Card 3 */}
-                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
+                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                         <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
                           Premium Placement
@@ -146,7 +144,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
                       </div>
 
                       {/* Feature Card 4 */}
-                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
+                      <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30 flex-shrink-0 w-64">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                         <h4 className="text-base font-bold text-white mb-2 font-['Poppins'] relative z-20">
                           Easy Integration
@@ -203,7 +201,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
             {/* Right Content - Features Grid */}
             <div className="grid grid-cols-2 gap-6">
               {/* Feature Card 1 */}
-              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
+              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                 <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Increased Sales</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
@@ -212,7 +210,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               </div>
 
               {/* Feature Card 2 */}
-              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
+              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                 <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Brand Exposure</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
@@ -221,7 +219,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               </div>
 
               {/* Feature Card 3 */}
-              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
+              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                 <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Premium Placement</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">
@@ -230,7 +228,7 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
               </div>
 
               {/* Feature Card 4 */}
-              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
+              <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-slate-500/30">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
                 <h3 className="text-lg font-bold text-white mb-2 font-['Poppins'] relative z-20">Easy Integration</h3>
                 <p className="text-sm text-slate-200 font-['Inter'] relative z-20">

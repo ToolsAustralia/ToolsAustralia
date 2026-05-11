@@ -1,7 +1,9 @@
 "use client";
 
+import { useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/utils/cn";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 const SIZE_MAP = {
   sm: "w-4 h-4",
@@ -23,12 +25,15 @@ export default function UrgencyClockIcon({
   ariaLabel = "Limited time offer",
 }: UrgencyClockIconProps) {
   const prefersReducedMotion = useReducedMotion();
-  const shouldAnimate = animated && !prefersReducedMotion;
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInViewportAnimation(ref);
+  const shouldAnimate = animated && !prefersReducedMotion && inView;
 
   const sizeClass = SIZE_MAP[size];
 
   return (
     <motion.span
+      ref={ref}
       role="img"
       aria-label={ariaLabel}
       className={cn("relative inline-flex items-center justify-center text-red-500", sizeClass, className)}
