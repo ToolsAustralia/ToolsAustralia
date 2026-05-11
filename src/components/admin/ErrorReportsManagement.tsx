@@ -19,9 +19,7 @@ import {
   Clock,
   Copy,
   Eye,
-  FileText,
   Filter,
-  RefreshCw,
   Search,
   ShieldAlert,
   Square,
@@ -34,10 +32,9 @@ import { apiGet, apiPatch } from "@/lib/queries";
 import { useToast } from "@/components/ui/Toast";
 import Dropdown from "@/components/modals/ui/Dropdown";
 import ClickableUserDisplay from "./ClickableUserDisplay";
-import ErrorReportsAnalytics from "./ErrorReportsAnalytics";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatDisplayName } from "@/utils/display-name";
-import { ErrorReportStatus, ErrorReportsAnalyticsSummary, IErrorReport } from "@/types/error-reporting";
+import { ErrorReportStatus, IErrorReport } from "@/types/error-reporting";
 import { cn } from "@/utils/cn";
 
 type SortField = "createdAt" | "status" | "errorMessage" | "category" | "severity";
@@ -61,7 +58,6 @@ interface ErrorReportsResponse {
     repeatedErrors?: number;
     affectedUsers?: number;
   };
-  analytics: ErrorReportsAnalyticsSummary;
 }
 
 interface ErrorReportDetailModalProps {
@@ -243,12 +239,14 @@ function ErrorReportDetailModal({ report, isOpen, onClose, onUpdate }: ErrorRepo
   if (!isOpen || !report) return null;
 
   const userDisplay = getUserDisplay(report);
+  const pageDisplay = report.route || report.currentUrl || "";
+  const apiDisplay = report.apiEndpoint ? `${report.httpMethod || ""} ${report.apiEndpoint}`.trim() : "";
   const diagnosticContext = [
     `Message: ${report.errorMessage}`,
     report.errorName ? `Name: ${report.errorName}` : null,
-    report.apiEndpoint ? `Endpoint: ${report.httpMethod || ""} ${report.apiEndpoint}` : null,
+    apiDisplay ? `API: ${apiDisplay}` : null,
     report.httpStatus ? `HTTP Status: ${report.httpStatus}` : null,
-    report.route || report.currentUrl ? `Page: ${report.route || report.currentUrl}` : null,
+    pageDisplay ? `Page: ${pageDisplay}` : null,
     `User: ${userDisplay.text}`,
     report.deduplicationHash ? `Deduplication Hash: ${report.deduplicationHash}` : null,
   ]
@@ -256,7 +254,7 @@ function ErrorReportDetailModal({ report, isOpen, onClose, onUpdate }: ErrorRepo
     .join("\n");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={onClose}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -264,26 +262,26 @@ function ErrorReportDetailModal({ report, isOpen, onClose, onUpdate }: ErrorRepo
         aria-labelledby="error-report-dialog-title"
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none"
+        className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl border border-gray-200 bg-white shadow-2xl outline-none sm:max-h-[92vh] sm:rounded-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none"
       >
-        <div className="flex items-start justify-between gap-4 bg-gradient-to-r from-red-600 to-red-700 p-5 text-white sm:p-6">
+        <div className="flex items-start justify-between gap-3 bg-gradient-to-r from-red-600 to-red-700 px-4 py-3.5 text-white sm:px-6 sm:py-5">
           <div className="min-w-0">
-            <h2 id="error-report-dialog-title" className="text-xl font-bold sm:text-2xl">
+            <h2 id="error-report-dialog-title" className="text-base font-bold sm:text-2xl">
               Investigation Workspace
             </h2>
-            <p className="mt-1 text-sm text-red-100">Reported {formatMaybeDate(report.createdAt)}</p>
+            <p className="mt-0.5 text-xs text-red-100 sm:mt-1 sm:text-sm">Reported {formatMaybeDate(report.createdAt)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close error report details"
-            className="rounded-lg p-1 text-white transition-colors hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white"
+            className="-mr-1 rounded-lg p-1.5 text-white transition-colors hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white"
           >
-            <XCircle className="h-6 w-6" />
+            <XCircle className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:space-y-5 sm:p-6">
           <section className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
@@ -310,45 +308,57 @@ function ErrorReportDetailModal({ report, isOpen, onClose, onUpdate }: ErrorRepo
             </div>
           </section>
 
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="rounded-lg border border-gray-200 p-4 dark:border-neutral-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">User / Customer</h3>
-              <div className="mt-3 text-sm text-gray-700 dark:text-neutral-300">
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+            <div className="rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-neutral-700">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">User</h3>
+              <div className="mt-2 break-words text-sm font-medium text-gray-900 dark:text-white">
                 {userDisplay.userId ? (
                   <ClickableUserDisplay displayText={userDisplay.text} userId={userDisplay.userId} />
                 ) : (
                   <span>{userDisplay.text}</span>
                 )}
               </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400">
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-neutral-400">
                 {report.isAuthenticated ? "Authenticated user" : "Guest or anonymous session"}
               </p>
             </div>
 
-            <div className="rounded-lg border border-gray-200 p-4 dark:border-neutral-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Route / API</h3>
-              <p className="mt-3 truncate font-mono text-sm text-gray-700 dark:text-neutral-300">
-                {report.apiEndpoint ? `${report.httpMethod || ""} ${report.apiEndpoint}` : report.route || "Unknown"}
+            <div className="rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-neutral-700">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">API</h3>
+              <p className="mt-2 break-all font-mono text-sm text-gray-900 dark:text-white">
+                {apiDisplay || <span className="font-sans text-gray-400 dark:text-neutral-600">No API call recorded</span>}
               </p>
-              <p className="mt-2 text-xs text-gray-500 dark:text-neutral-400">
-                {report.httpStatus ? `HTTP ${report.httpStatus}` : report.currentUrl || report.requestUrl || "No request details"}
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-neutral-400">
+                {report.httpStatus ? `HTTP ${report.httpStatus}` : "Status not captured"}
               </p>
             </div>
 
-            <div className="rounded-lg border border-gray-200 p-4 dark:border-neutral-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Environment</h3>
-              <p className="mt-3 text-sm text-gray-700 dark:text-neutral-300">
+            <div className="rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-neutral-700">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">Page</h3>
+              <p className="mt-2 break-all font-mono text-sm text-gray-900 dark:text-white">
+                {pageDisplay || <span className="font-sans text-gray-400 dark:text-neutral-600">No page recorded</span>}
+              </p>
+              <p className="mt-1.5 truncate text-xs text-gray-500 dark:text-neutral-400" title={report.referrer || undefined}>
+                {report.referrer ? `via ${report.referrer}` : "No referrer captured"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-gray-200 p-3 sm:p-4 dark:border-neutral-700">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">Environment</h3>
+              <p className="mt-2 text-sm text-gray-900 dark:text-white">
                 {report.browserInfo
-                  ? `${report.browserInfo.name || "Unknown"} ${report.browserInfo.version || ""} on ${report.browserInfo.os || "Unknown"}`
+                  ? `${report.browserInfo.name || "Unknown"} ${report.browserInfo.version || ""}`
                   : "Unknown browser"}
               </p>
-              <p className="mt-2 truncate text-xs text-gray-500 dark:text-neutral-400">{report.referrer || "No referrer captured"}</p>
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-neutral-400">
+                {report.browserInfo?.os || "OS unknown"}
+              </p>
             </div>
           </section>
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {report.errorStack && (
-              <div>
+              <div className="min-w-0">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Stack Trace</h3>
                   <button
@@ -360,20 +370,20 @@ function ErrorReportDetailModal({ report, isOpen, onClose, onUpdate }: ErrorRepo
                     Copy
                   </button>
                 </div>
-                <pre className="max-h-72 overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">
                   {report.errorStack}
                 </pre>
               </div>
             )}
 
-            <div>
+            <div className="min-w-0">
               <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Console Logs / Notes</h3>
-              <div className="max-h-72 space-y-2 overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-700 dark:bg-neutral-950">
+              <div className="max-h-72 space-y-2 overflow-y-auto overflow-x-hidden rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-neutral-700 dark:bg-neutral-950">
                 {report.consoleErrors?.length ? (
                   report.consoleErrors.map((consoleError, index) => (
-                    <div key={`${consoleError.timestamp}-${index}`} className="rounded-md bg-white p-2 text-xs text-gray-700 dark:bg-neutral-900 dark:text-neutral-300">
-                      <p className="font-medium">{consoleError.message}</p>
-                      <p className="mt-1 text-gray-500 dark:text-neutral-500">
+                    <div key={`${consoleError.timestamp}-${index}`} className="min-w-0 overflow-hidden rounded-md bg-white p-2 text-xs text-gray-700 dark:bg-neutral-900 dark:text-neutral-300">
+                      <p className="whitespace-pre-wrap break-all font-medium">{consoleError.message}</p>
+                      <p className="mt-1 break-all text-gray-500 dark:text-neutral-500">
                         {consoleError.source || "Unknown source"}
                         {consoleError.line ? `:${consoleError.line}` : ""}
                       </p>
@@ -472,11 +482,11 @@ export default function ErrorReportsManagement() {
   const [userEmailFilter, setUserEmailFilter] = useState(searchParams.get("userEmail") || "");
   const [autoLoggedFilter, setAutoLoggedFilter] = useState(searchParams.get("autoLogged") || "all");
   const [apiEndpointFilter, setApiEndpointFilter] = useState(searchParams.get("apiEndpoint") || "");
+  const [pageUrlFilter, setPageUrlFilter] = useState(searchParams.get("pageUrl") || "");
   const [startDate, setStartDate] = useState(searchParams.get("startDate") || "");
   const [endDate, setEndDate] = useState(searchParams.get("endDate") || "");
   const [sortBy, setSortBy] = useState<SortField>((searchParams.get("sortBy") as SortField | null) || "createdAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>((searchParams.get("sortOrder") as SortOrder | null) || "desc");
-  const [showAnalytics, setShowAnalytics] = useState(searchParams.get("view") === "analytics");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<IErrorReport | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -485,6 +495,7 @@ export default function ErrorReportsManagement() {
   const debouncedSearch = useDebounce(search.trim(), 350);
   const debouncedUserEmail = useDebounce(userEmailFilter.trim(), 350);
   const debouncedApiEndpoint = useDebounce(apiEndpointFilter.trim(), 350);
+  const debouncedPageUrl = useDebounce(pageUrlFilter.trim(), 350);
 
   const queryParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -499,9 +510,9 @@ export default function ErrorReportsManagement() {
     if (debouncedUserEmail) params.set("userEmail", debouncedUserEmail);
     if (autoLoggedFilter !== "all") params.set("autoLogged", autoLoggedFilter);
     if (debouncedApiEndpoint) params.set("apiEndpoint", debouncedApiEndpoint);
+    if (debouncedPageUrl) params.set("pageUrl", debouncedPageUrl);
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
-    if (showAnalytics) params.set("view", "analytics");
     return params;
   }, [
     page,
@@ -515,9 +526,9 @@ export default function ErrorReportsManagement() {
     debouncedUserEmail,
     autoLoggedFilter,
     debouncedApiEndpoint,
+    debouncedPageUrl,
     startDate,
     endDate,
-    showAnalytics,
   ]);
 
   useEffect(() => {
@@ -589,6 +600,7 @@ export default function ErrorReportsManagement() {
     !!debouncedUserEmail ||
     autoLoggedFilter !== "all" ||
     !!debouncedApiEndpoint ||
+    !!debouncedPageUrl ||
     !!startDate ||
     !!endDate;
 
@@ -615,6 +627,7 @@ export default function ErrorReportsManagement() {
     setUserEmailFilter("");
     setAutoLoggedFilter("all");
     setApiEndpointFilter("");
+    setPageUrlFilter("");
     setStartDate("");
     setEndDate("");
     setPage(1);
@@ -633,7 +646,6 @@ export default function ErrorReportsManagement() {
       setStartDate(yesterday.toISOString().slice(0, 10));
     }
     setPage(1);
-    setShowAnalytics(false);
   };
 
   const handleToggleSelect = (reportId: string) => {
@@ -678,53 +690,6 @@ export default function ErrorReportsManagement() {
     refetch();
   };
 
-  const exportReports = (formatType: "csv" | "json") => {
-    if (!data?.reports) return;
-
-    const filename = `error-reports-current-page-${format(new Date(), "yyyy-MM-dd")}.${formatType}`;
-    if (formatType === "json") {
-      const blob = new Blob([JSON.stringify(data.reports, null, 2)], { type: "application/json;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
-      showToast({ type: "success", title: "Exported Current Page", message: "Current page exported to JSON." });
-      return;
-    }
-
-    const headers = ["ID", "Error Message", "Category", "Severity", "Status", "User Email", "Guest Email", "API Endpoint", "HTTP Method", "HTTP Status", "Auto-Logged", "Created At", "User Notes", "Admin Notes"];
-    const rows = data.reports.map((report) => [
-      report._id,
-      report.errorMessage,
-      report.category || "",
-      report.severity || "",
-      report.status,
-      report.userEmail || "",
-      report.guestEmail || "",
-      report.apiEndpoint || "",
-      report.httpMethod || "",
-      report.httpStatus || "",
-      report.autoLogged ? "Yes" : "No",
-      formatMaybeDate(report.createdAt),
-      report.userNotes || "",
-      report.adminNotes || "",
-    ]);
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
-    ].join("\r\n");
-    const blob = new Blob([`\uFEFF${csvContent}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast({ type: "success", title: "Exported Current Page", message: "Current page exported to CSV." });
-  };
-
   const reports = data?.reports || [];
   const pagination = data?.pagination;
   const startResult = pagination && pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
@@ -749,85 +714,99 @@ export default function ErrorReportsManagement() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white lg:text-xl">Error Reports</h2>
-          <p className="text-sm text-gray-600 dark:text-neutral-400">Triage user and system errors by urgency, impact, and workflow status.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAnalytics((current) => !current)}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-              showAnalytics
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-white dark:hover:bg-neutral-800"
-            }`}
-          >
-            {showAnalytics ? "Hide Analytics" : "Show Analytics"}
-          </button>
-          <button
-            type="button"
-            onClick={() => exportReports("csv")}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
-            title="Export current page to CSV"
-          >
-            <FileText className="h-4 w-4" />
-            CSV Page
-          </button>
-          <button
-            type="button"
-            onClick={() => exportReports("json")}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
-            title="Export current page to JSON"
-          >
-            <FileText className="h-4 w-4" />
-            JSON Page
-          </button>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-        </div>
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white lg:text-xl">Error Reports</h2>
+        <p className="text-sm text-gray-600 dark:text-neutral-400">Triage user and system errors by urgency, impact, and workflow status.</p>
       </div>
 
       {data?.statistics && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
           {[
-            { label: "Needs Attention", value: data.statistics.needsAttention || 0, icon: ShieldAlert, iconClassName: "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300", onClick: () => applyTriageFilter("attention") },
-            { label: "Critical Unresolved", value: data.statistics.criticalUnresolved || 0, icon: AlertCircle, iconClassName: "bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300", onClick: () => applyTriageFilter("critical") },
-            { label: "New Last 24h", value: data.statistics.recentCount, icon: Clock, iconClassName: "bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300", onClick: () => applyTriageFilter("recent") },
-            { label: "Repeated Errors", value: data.statistics.repeatedErrors || 0, icon: Bug, iconClassName: "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300", onClick: () => setShowAnalytics(true) },
-            { label: "Affected Users", value: data.statistics.affectedUsers || 0, icon: Users, iconClassName: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300", onClick: () => setShowAnalytics(true) },
+            {
+              key: "attention",
+              label: "Needs Attention",
+              value: data.statistics.needsAttention || 0,
+              icon: ShieldAlert,
+              iconClassName: "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300",
+              active: statusFilter === "new" && severityFilter === "all",
+              onClick: () => applyTriageFilter("attention"),
+            },
+            {
+              key: "critical",
+              label: "Critical Unresolved",
+              value: data.statistics.criticalUnresolved || 0,
+              icon: AlertCircle,
+              iconClassName: "bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-300",
+              active: severityFilter === "critical" && statusFilter === "new",
+              onClick: () => applyTriageFilter("critical"),
+            },
+            {
+              key: "recent",
+              label: "New Last 24h",
+              value: data.statistics.recentCount,
+              icon: Clock,
+              iconClassName: "bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300",
+              active: !!startDate,
+              onClick: () => applyTriageFilter("recent"),
+            },
+            {
+              key: "repeated",
+              label: "Repeated Errors",
+              value: data.statistics.repeatedErrors || 0,
+              icon: Bug,
+              iconClassName: "bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-300",
+              active: false,
+              onClick: null,
+            },
+            {
+              key: "users",
+              label: "Affected Users",
+              value: data.statistics.affectedUsers || 0,
+              icon: Users,
+              iconClassName: "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300",
+              active: false,
+              onClick: null,
+            },
           ].map((card) => {
             const Icon = card.icon;
-            return (
-              <button
-                key={card.label}
-                type="button"
-                onClick={card.onClick}
-                className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">{card.label}</p>
-                    <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{card.value}</p>
-                  </div>
-                  <div className={cn("rounded-xl p-3", card.iconClassName)}>
-                    <Icon className="h-5 w-5" />
-                  </div>
+            const baseClass = cn(
+              "rounded-xl border bg-white p-3 text-left shadow-sm sm:p-4 dark:bg-neutral-900 dark:shadow-none",
+              card.active
+                ? "border-red-400 ring-1 ring-red-400/40 dark:border-red-500"
+                : "border-gray-200 dark:border-neutral-700"
+            );
+            const cardBody = (
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-gray-500 sm:text-xs dark:text-neutral-400">{card.label}</p>
+                  <p className="mt-1.5 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">{card.value}</p>
                 </div>
-              </button>
+                <div className={cn("shrink-0 rounded-lg p-2 sm:rounded-xl sm:p-3", card.iconClassName)}>
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+              </div>
+            );
+            if (card.onClick) {
+              return (
+                <button
+                  key={card.key}
+                  type="button"
+                  onClick={card.onClick}
+                  aria-pressed={card.active}
+                  className={cn(baseClass, "transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500")}
+                >
+                  {cardBody}
+                </button>
+              );
+            }
+            return (
+              <div key={card.key} className={baseClass}>
+                {cardBody}
+              </div>
             );
           })}
         </div>
       )}
-
-      {showAnalytics && data?.analytics && <ErrorReportsAnalytics analytics={data.analytics} />}
 
       <div className="rounded-xl border border-gray-200 bg-gradient-to-br from-white via-gray-50 to-white p-3 shadow-sm dark:border-neutral-700 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 dark:shadow-none sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -856,92 +835,118 @@ export default function ErrorReportsManagement() {
           </button>
         </div>
 
-        <div className={cn("mt-4 border-t border-gray-200 pt-4 dark:border-neutral-700", isFiltersOpen ? "block" : "hidden sm:block")}>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <Dropdown
-              options={statusOptions}
-              value={statusFilter}
-              onChange={(value) => {
-                setStatusFilter(value as ErrorReportStatus | "all");
-                setPage(1);
-              }}
-            />
-            <Dropdown
-              options={[
-                { value: "all", label: "All Categories" },
-                { value: "payment", label: "Payment" },
-                { value: "network", label: "Network" },
-                { value: "api", label: "API" },
-                { value: "system", label: "System" },
-                { value: "recovery", label: "Recovery" },
-                { value: "missing", label: "Missing Category" },
-              ]}
-              value={categoryFilter}
-              onChange={(value) => handleFilterChange(setCategoryFilter, value)}
-            />
-            <Dropdown
-              options={[
-                { value: "all", label: "All Severities" },
-                { value: "critical", label: "Critical" },
-                { value: "high", label: "High" },
-                { value: "medium", label: "Medium" },
-                { value: "missing", label: "Missing Severity" },
-              ]}
-              value={severityFilter}
-              onChange={(value) => handleFilterChange(setSeverityFilter, value)}
-            />
-            <Dropdown
-              options={[
-                { value: "all", label: "All Sources" },
-                { value: "true", label: "Auto-Logged Only" },
-                { value: "false", label: "User-Reported Only" },
-              ]}
-              value={autoLoggedFilter}
-              onChange={(value) => handleFilterChange(setAutoLoggedFilter, value)}
-            />
-            <input
-              type="text"
-              placeholder="Filter by user email..."
-              value={userEmailFilter}
-              onChange={(event) => {
-                setUserEmailFilter(event.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-            />
-            <input
-              type="text"
-              placeholder="Filter by endpoint..."
-              value={apiEndpointFilter}
-              onChange={(event) => {
-                setApiEndpointFilter(event.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-            />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => handleFilterChange(setStartDate, event.target.value)}
-              className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-              aria-label="Start date"
-            />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(event) => handleFilterChange(setEndDate, event.target.value)}
-              className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-              aria-label="End date"
-            />
+        <div className={cn("mt-4 space-y-4 border-t border-gray-200 pt-4 dark:border-neutral-700", isFiltersOpen ? "block" : "hidden sm:block")}>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">Categorise</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Dropdown
+                options={statusOptions}
+                value={statusFilter}
+                onChange={(value) => {
+                  setStatusFilter(value as ErrorReportStatus | "all");
+                  setPage(1);
+                }}
+              />
+              <Dropdown
+                options={[
+                  { value: "all", label: "All Categories" },
+                  { value: "payment", label: "Payment" },
+                  { value: "network", label: "Network" },
+                  { value: "api", label: "API" },
+                  { value: "system", label: "System" },
+                  { value: "recovery", label: "Recovery" },
+                  { value: "missing", label: "Missing Category" },
+                ]}
+                value={categoryFilter}
+                onChange={(value) => handleFilterChange(setCategoryFilter, value)}
+              />
+              <Dropdown
+                options={[
+                  { value: "all", label: "All Severities" },
+                  { value: "critical", label: "Critical" },
+                  { value: "high", label: "High" },
+                  { value: "medium", label: "Medium" },
+                  { value: "missing", label: "Missing Severity" },
+                ]}
+                value={severityFilter}
+                onChange={(value) => handleFilterChange(setSeverityFilter, value)}
+              />
+              <Dropdown
+                options={[
+                  { value: "all", label: "All Sources" },
+                  { value: "true", label: "Auto-Logged Only" },
+                  { value: "false", label: "User-Reported Only" },
+                ]}
+                value={autoLoggedFilter}
+                onChange={(value) => handleFilterChange(setAutoLoggedFilter, value)}
+              />
+            </div>
           </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">Where & who</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <input
+                type="text"
+                placeholder="User email..."
+                value={userEmailFilter}
+                onChange={(event) => {
+                  setUserEmailFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
+              />
+              <input
+                type="text"
+                placeholder="API endpoint (e.g. /api/stripe/create-subscription)"
+                value={apiEndpointFilter}
+                onChange={(event) => {
+                  setApiEndpointFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
+              />
+              <input
+                type="text"
+                placeholder="Page URL (e.g. /promotions/milwaukee)"
+                value={pageUrlFilter}
+                onChange={(event) => {
+                  setPageUrlFilter(event.target.value);
+                  setPage(1);
+                }}
+                className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-400">When</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => handleFilterChange(setStartDate, event.target.value)}
+                className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
+                aria-label="Start date"
+              />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => handleFilterChange(setEndDate, event.target.value)}
+                className="rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
+                aria-label="End date"
+              />
+            </div>
+          </div>
+
           {hasActiveFilters && (
             <button
               type="button"
               onClick={clearAllFilters}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
             >
               <X className="h-4 w-4" />
-              Clear Filters
+              Clear All Filters
             </button>
           )}
         </div>
@@ -1026,13 +1031,13 @@ export default function ErrorReportsManagement() {
                       </th>
                     ))}
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">User</th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Endpoint</th>
+                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">API</th>
                     <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">
                       <SortButton field="createdAt" activeField={sortBy} sortOrder={sortOrder} onSort={handleSort}>
                         Date
                       </SortButton>
                     </th>
-                    <th className="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Actions</th>
+                    <th className="bg-gray-50 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-neutral-800 dark:text-neutral-400">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -1047,8 +1052,18 @@ export default function ErrorReportsManagement() {
                           </button>
                         </td>
                         <td className="max-w-md px-4 py-3">
-                          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{report.errorMessage}</p>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">{report.autoLogged ? "Auto-logged" : "User-reported"}</p>
+                          <p className="truncate text-sm font-semibold text-gray-900 dark:text-white" title={report.errorMessage}>{report.errorMessage}</p>
+                          <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-neutral-400">
+                            <span>{report.autoLogged ? "Auto-logged" : "User-reported"}</span>
+                            {(report.route || report.currentUrl) && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span className="truncate font-mono" title={report.route || report.currentUrl}>
+                                  {report.route || report.currentUrl}
+                                </span>
+                              </>
+                            )}
+                          </p>
                         </td>
                         <td className="px-4 py-3"><Badge value={report.category} type="category" /></td>
                         <td className="px-4 py-3"><Badge value={report.severity} type="severity" /></td>
@@ -1057,11 +1072,18 @@ export default function ErrorReportsManagement() {
                           {user.userId ? <ClickableUserDisplay displayText={user.text} userId={user.userId} /> : user.text}
                         </td>
                         <td className="max-w-xs px-4 py-3 font-mono text-xs text-gray-600 dark:text-neutral-400">
-                          <span className="block truncate">{report.apiEndpoint ? `${report.httpMethod || ""} ${report.apiEndpoint}` : report.route || "—"}</span>
+                          {report.apiEndpoint ? (
+                            <span className="block truncate" title={`${report.httpMethod || ""} ${report.apiEndpoint}`}>
+                              {report.httpMethod && <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gray-700 dark:bg-neutral-800 dark:text-neutral-300">{report.httpMethod}</span>}
+                              {report.apiEndpoint}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-neutral-600">—</span>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{formatMaybeDate(report.createdAt)}</td>
-                        <td className="px-4 py-3">
-                          <button type="button" onClick={() => handleViewReport(report)} aria-label="View report details" className="rounded-lg p-2 text-red-600 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/30">
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 whitespace-nowrap">{formatMaybeDate(report.createdAt)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button type="button" onClick={() => handleViewReport(report)} aria-label="View report details" className="inline-flex items-center justify-center rounded-lg p-2 text-red-600 hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-950/30">
                             <Eye className="h-5 w-5" />
                           </button>
                         </td>
@@ -1076,27 +1098,45 @@ export default function ErrorReportsManagement() {
               {reports.map((report) => {
                 const selected = selectedReports.has(report._id);
                 const user = getUserDisplay(report);
+                const pageDisplay = report.route || report.currentUrl;
                 return (
                   <div key={report._id} className={cn("p-4", selected ? "bg-red-50 dark:bg-red-950/20" : "")}>
                     <div className="mb-3 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="line-clamp-2 text-sm font-semibold text-gray-900 dark:text-white">{report.errorMessage}</p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">{formatMaybeDate(report.createdAt)}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold leading-snug text-gray-900 dark:text-white">{report.errorMessage}</p>
+                        <p className="mt-1 text-[11px] uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                          {report.autoLogged ? "Auto-logged" : "User-reported"} · {formatMaybeDate(report.createdAt)}
+                        </p>
                       </div>
-                      <button type="button" onClick={() => handleToggleSelect(report._id)} aria-label={`Select report ${report._id}`} className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-red-500">
+                      <button type="button" onClick={() => handleToggleSelect(report._id)} aria-label={`Select report ${report._id}`} className="shrink-0 rounded p-1 -m-1 focus:outline-none focus:ring-2 focus:ring-red-500">
                         {selected ? <CheckSquare className="h-5 w-5 text-red-600" /> : <Square className="h-5 w-5 text-gray-400" />}
                       </button>
                     </div>
-                    <div className="mb-3 flex flex-wrap gap-2">
+                    <div className="mb-3 flex flex-wrap gap-1.5">
                       <Badge value={report.severity} type="severity" />
                       <Badge value={report.category} type="category" />
                       <Badge value={report.status} type="status" />
                     </div>
-                    <p className="truncate text-xs text-gray-600 dark:text-neutral-400">{user.text}</p>
-                    <p className="mt-1 truncate font-mono text-xs text-gray-500 dark:text-neutral-500">
-                      {report.apiEndpoint ? `${report.httpMethod || ""} ${report.apiEndpoint}` : report.route || "No endpoint"}
-                    </p>
-                    <button type="button" onClick={() => handleViewReport(report)} className="mt-3 w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                    <dl className="space-y-1.5 text-xs">
+                      <div className="flex items-baseline gap-2">
+                        <dt className="w-12 shrink-0 font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">User</dt>
+                        <dd className="min-w-0 flex-1 truncate text-gray-700 dark:text-neutral-300">{user.text}</dd>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <dt className="w-12 shrink-0 font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">API</dt>
+                        <dd className="min-w-0 flex-1 truncate font-mono text-gray-700 dark:text-neutral-300">
+                          {report.apiEndpoint ? `${report.httpMethod || ""} ${report.apiEndpoint}`.trim() : <span className="text-gray-400 dark:text-neutral-600">—</span>}
+                        </dd>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <dt className="w-12 shrink-0 font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">Page</dt>
+                        <dd className="min-w-0 flex-1 truncate font-mono text-gray-700 dark:text-neutral-300">
+                          {pageDisplay || <span className="text-gray-400 dark:text-neutral-600">—</span>}
+                        </dd>
+                      </div>
+                    </dl>
+                    <button type="button" onClick={() => handleViewReport(report)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                      <Eye className="h-4 w-4" />
                       View Investigation
                     </button>
                   </div>
