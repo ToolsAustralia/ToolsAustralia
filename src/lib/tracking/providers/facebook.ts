@@ -69,8 +69,10 @@ function loadPixel(opts: { nonce?: string }): void {
 }
 
 function pixelTrack(event: CanonicalEvent): void {
-  // DEBUG TEMPORARY — remove after diagnosing missing Purchase pixel on staging
-  console.log("[DEBUG fb.pixelTrack] entered", {
+  // DEBUG TEMPORARY — remove after diagnosing missing Purchase pixel on staging.
+  // NOTE: must use console.error (NOT console.log/warn) because next.config.ts strips
+  // console.log/info/debug/warn in production builds — staging is a production build.
+  console.error("[DEBUG fb.pixelTrack] entered", {
     eventName: event.eventName,
     eventId: event.eventId,
     hostname: typeof window !== "undefined" ? window.location.hostname : "no-window",
@@ -80,11 +82,11 @@ function pixelTrack(event: CanonicalEvent): void {
   });
 
   if (typeof window === "undefined" || !window.fbq) {
-    console.warn("[DEBUG fb.pixelTrack] BLOCKED: no window or no fbq");
+    console.error("[DEBUG fb.pixelTrack] BLOCKED: no window or no fbq");
     return;
   }
   if (!getAllowedHostnames().includes(window.location.hostname)) {
-    console.warn("[DEBUG fb.pixelTrack] BLOCKED: hostname not in allowlist", {
+    console.error("[DEBUG fb.pixelTrack] BLOCKED: hostname not in allowlist", {
       hostname: window.location.hostname,
       allowed: getAllowedHostnames(),
     });
@@ -103,7 +105,7 @@ function pixelTrack(event: CanonicalEvent): void {
   if (event.customData?.searchString) customData.search_string = event.customData.searchString;
   if (event.providerData?.facebook) Object.assign(customData, event.providerData.facebook);
 
-  console.log("[DEBUG fb.pixelTrack] about to call fbq", {
+  console.error("[DEBUG fb.pixelTrack] about to call fbq", {
     eventName: event.eventName,
     customData,
     eventID: event.eventId,
@@ -112,7 +114,7 @@ function pixelTrack(event: CanonicalEvent): void {
   // Meta 4-arg form: { eventID } in last param enables Pixel↔CAPI dedup.
   try {
     window.fbq("track", event.eventName, customData, { eventID: event.eventId });
-    console.log("[DEBUG fb.pixelTrack] fbq call returned without throwing");
+    console.error("[DEBUG fb.pixelTrack] fbq call returned without throwing");
   } catch (err) {
     console.error("[DEBUG fb.pixelTrack] fbq threw", err);
   }
