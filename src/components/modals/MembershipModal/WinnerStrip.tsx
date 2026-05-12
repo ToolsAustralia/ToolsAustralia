@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * WinnerStrip — "Recent Winners" marquee. A continuously-drifting horizontal
- * row of winner cards that pauses on hover. Each card is tappable and opens
- * the parent's FullscreenImageViewer at the matching index.
- *
- * Reuses the global `.marquee-track` keyframe (defined in globals.css) which
- * translates from 0 to -50% — so the children list MUST be duplicated exactly
- * twice for a seamless loop.
+ * WinnerStrip — "Recent Winners" auto-scroll carousel that the user can also
+ * drag/swipe through. Mirrors the pattern in `components/ui/BrandScroller.tsx`:
+ * Embla + AutoScroll plugin with `stopOnInteraction: false` so motion resumes
+ * after the user lets go. Each card opens the parent's FullscreenImageViewer.
  */
 
-import React from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
+import useEmblaCarousel from "embla-carousel-react";
+import AutoScroll from "embla-carousel-auto-scroll";
 import type { MajorDrawWinner } from "@/hooks/queries/useWinnersQueries";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
 
 interface WinnerStripProps {
   majorDrawWinners: MajorDrawWinner[];
@@ -55,8 +55,9 @@ function WinnerCard({
         src={displayImage}
         alt={displayName}
         fill
-        className="object-cover object-center transition-transform duration-500 group-hover/card:scale-105"
+        className="object-cover object-center transition-transform duration-500 group-hover/card:scale-105 pointer-events-none"
         sizes="(max-width: 640px) 200px, 240px"
+        draggable={false}
       />
       <div
         className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent"
@@ -80,19 +81,44 @@ const WinnerStrip: React.FC<WinnerStripProps> = ({
   majorDrawWinnersLoading,
   onTileClick,
 }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
+
+  const options = useMemo(
+    () => ({ loop: true, align: "start" as const, dragFree: true, skipSnaps: true }),
+    []
+  );
+  const plugins = useMemo(
+    () => [
+      AutoScroll({
+        speed: 0.9,
+        startDelay: 50,
+        stopOnInteraction: false,
+        stopOnMouseEnter: false,
+        stopOnFocusIn: false,
+      }),
+    ],
+    []
+  );
+  const [emblaRef, emblaApi] = useEmblaCarousel(options, plugins);
+
+  // Pause auto-scroll when off-screen / when modal is hidden behind another viewport.
+  useEffect(() => {
+    if (!emblaApi) return;
+    const auto = emblaApi.plugins().autoScroll;
+    if (!auto) return;
+    if (inView) (auto as unknown as { play?: () => void }).play?.();
+    else (auto as unknown as { stop?: () => void }).stop?.();
+  }, [emblaApi, inView]);
+
   if (!majorDrawWinnersLoading && majorDrawWinners.length === 0) return null;
 
-  // Each "set" must be wide enough to span the viewport; otherwise short lists
-  // visibly hit "the end" of the marquee. Repeat the winners list inside one
-  // set until it has at least 4 cards, then duplicate the set exactly twice
-  // (required for the .marquee-track 0→-50% keyframe to loop seamlessly).
-  const repeatsPerSet = Math.max(1, Math.ceil(4 / majorDrawWinners.length));
-  const oneSet = Array.from({ length: repeatsPerSet }, () => majorDrawWinners).flat();
-  const trackContent = [...oneSet, ...oneSet];
-  const durationSeconds = Math.max(28, oneSet.length * 7);
+  // Render the list twice so Embla's loop has enough content to wrap seamlessly
+  // even with very short winner lists (mirrors BrandScroller).
+  const slides = [...majorDrawWinners, ...majorDrawWinners];
 
   return (
-    <section className="mt-4 sm:mt-5" aria-label="Recent major-draw winners">
+    <section ref={rootRef} className="mt-4 sm:mt-5" aria-label="Recent major-draw winners">
       <header className="mb-2 flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2" aria-hidden>
@@ -112,21 +138,17 @@ const WinnerStrip: React.FC<WinnerStripProps> = ({
           <div className="h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-neutral-900" />
         </div>
       ) : (
-        <div className="overflow-hidden">
-          <div
-            className="marquee-track gap-2 sm:gap-3"
-            style={{
-              animationDuration: `${durationSeconds}s`,
-              width: "max-content",
-            }}
-          >
-            {trackContent.map((winner, i) => (
-              <WinnerCard
-                key={`${winner.id}-${i}`}
-                winner={winner}
-                onClick={() => onTileClick(i % majorDrawWinners.length)}
-              />
-            ))}
+        <div className="overflow-hidden" data-carousel="true">
+          <div ref={emblaRef} style={{ touchAction: "pan-y pinch-zoom" }}>
+            <div className="flex gap-2 sm:gap-3">
+              {slides.map((winner, i) => (
+                <WinnerCard
+                  key={`${winner.id}-${i}`}
+                  winner={winner}
+                  onClick={() => onTileClick(i % majorDrawWinners.length)}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}

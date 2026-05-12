@@ -145,7 +145,7 @@ function modalThemeFallback(isDark: boolean): PrizeSpecificationsModalTheme {
     return {
       contentRootClass: "text-neutral-100",
       canvasStyle: {
-        background: "linear-gradient(180deg, rgb(38 38 38 / 0.95) 0%, rgb(10 10 10) 45%, rgb(23 23 23) 100%)",
+        background: "#0a0a0a",
       },
       titleClass: "text-neutral-50",
       bodyClass: "text-neutral-200",
@@ -169,7 +169,7 @@ function modalThemeFallback(isDark: boolean): PrizeSpecificationsModalTheme {
   return {
     contentRootClass: "text-neutral-900",
     canvasStyle: {
-      background: "linear-gradient(180deg, #ffffff 0%, #f4f4f5 100%)",
+      background: "#ffffff",
     },
     titleClass: "text-neutral-900",
     bodyClass: "text-neutral-800",
@@ -351,7 +351,7 @@ export function getPrizeSpecificationsModalTheme(
       return {
         contentRootClass: "text-neutral-100",
         canvasStyle: {
-          background: `linear-gradient(180deg, ${hexToRgbaString(primary, 0.14)} 0%, #0a0a0a 42%, #141414 100%)`,
+          background: "#0a0a0a",
         },
         titleClass: "text-neutral-50",
         bodyClass: "text-neutral-200",
@@ -375,7 +375,7 @@ export function getPrizeSpecificationsModalTheme(
     return {
       contentRootClass: "text-neutral-900",
       canvasStyle: {
-        background: `linear-gradient(180deg, ${hexToRgbaString(primary, 0.08)} 0%, #ffffff 38%, #f0fdf4 100%)`,
+        background: "#ffffff",
       },
       titleClass: scheme.textOnLight ?? "text-neutral-900",
       bodyClass: scheme.featureOnLight ?? "text-neutral-800",
@@ -408,12 +408,7 @@ export function getPrizeSpecificationsModalTheme(
     return {
       contentRootClass: "text-neutral-100",
       canvasStyle: {
-        background: c
-          ? `linear-gradient(180deg, ${hexToRgbaString(primary, c.canvasTopAlpha)} 0%, ${hexToRgbaString(
-              primaryDark,
-              c.canvasMidAlpha
-            )} 34%, #020202 56%, #0c0c0c 100%)`
-          : `linear-gradient(180deg, ${hexToRgbaString(primary, 0.16)} 0%, #0a0a0a 40%, #141414 100%)`,
+        background: "#0a0a0a",
       },
       titleClass: "text-neutral-50",
       bodyClass: "text-neutral-200",
@@ -439,12 +434,7 @@ export function getPrizeSpecificationsModalTheme(
   return {
     contentRootClass: "text-neutral-900",
     canvasStyle: {
-      background: c
-        ? `linear-gradient(180deg, ${hexToRgbaString(primary, 0.13)} 0%, #ffffff 28%, ${hexToRgbaString(
-            primary,
-            0.07
-          )} 58%, ${c.canvasFootHex} 100%)`
-        : `linear-gradient(180deg, ${hexToRgbaString(primary, 0.1)} 0%, #ffffff 36%, #fafafa 100%)`,
+      background: "#ffffff",
     },
     titleClass: scheme.textOnLight ?? "text-neutral-900",
     bodyClass: scheme.featureOnLight ?? "text-neutral-800",

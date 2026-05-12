@@ -56,7 +56,6 @@ import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-varian
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
 import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
-import { getMajorDrawHeroUrgencyFromMajorDraw } from "@/utils/promo/promo-hero-images";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -134,8 +133,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
   // Preload: brand folder heroes per prize slug (`landing/{brand}/…`); cash-prize uses all-prizes collage
-  const landingUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
-  const landingForPrize = getLandingHeroImagePaths(prize.slug, landingUrgency);
+  const landingForPrize = getLandingHeroImagePaths(prize.slug);
   const fallbackAllPrizes = resolveEvergreenHeroImages();
   const heroImagePaths: PromoImagePaths = landingForPrize
     ? { desktop: landingForPrize.desktop, mobile: landingForPrize.mobile }
