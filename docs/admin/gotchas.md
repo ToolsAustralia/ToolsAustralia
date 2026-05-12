@@ -68,6 +68,21 @@ The past-due charge history endpoints (`/api/admin/charge-past-due/runs`, `/api/
 
 **The pitfall:** anyone copying this filter pattern into a new endpoint must also use `$lt` (not `$lte`) and the next-day-AEST instant — using `$lte` against `parseAestDayStartUtc(endDate)` silently excludes everything that happened *on* the end day. The Mongo filter builders in `chargePastDueHistory.ts` (`buildRunsFilter`, `buildManualRetriesFilter`) get this right; new admin date-range queries should reuse those helpers rather than reinvent date parsing.
 
+## DrawSelect caps at 100 records
+
+`useAdminMajorDrawsList` and `useAdminMiniDrawsList` request `limit=100`
+from the admin history/list endpoints. If a user's draw participation
+references an older draw that falls outside the most recent 100 records,
+the `DrawSelect` trigger renders an amber warning with the last 4 chars
+of the ObjectId ("Unknown draw …a3f2") rather than the draw name.
+
+The card header falls back to `Major Draw {N}` / `Mini Draw {N}` in this
+case. The form still saves correctly because the stored `drawId` is
+untouched — only the visible label is degraded.
+
+If this starts happening in normal admin flows (not just historical
+archaeology), raise the cap or add server-side search to both endpoints.
+
 ## `errorCode` vs `declineCode` — prefer the specific one
 
 Stripe surfaces two related fields on a card decline:
