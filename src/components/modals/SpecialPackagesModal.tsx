@@ -21,6 +21,8 @@ import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-p
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { usePurchaseMembership } from "@/hooks/queries/useMembershipQueries";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
@@ -531,9 +533,27 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     // console.log("🔍 handlePaymentSuccess called - about to trigger upsell");
     setShowPaymentProcessing(false);
 
-    // ✅ REMOVED: Client-side Facebook Pixel tracking
-    // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
-    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+    // Fire browser-side Purchase pixel via the provider registry, deduped against
+    // the server-side CAPI event (which the webhook fires with the same paymentIntentId
+    // as event_id). Meta's eventID dedup mechanism is DESIGNED for both sides to fire —
+    // skipping the browser side loses _fbc/_fbp cookies and tanks Event Match Quality.
+    const specialPaymentIntentId = status.data?.paymentIntentId;
+    const specialPrice = status.data?.price;
+    if (specialPaymentIntentId && typeof specialPrice === "number" && specialPrice > 0) {
+      trackConversion(
+        buildPurchaseEvent({
+          value: specialPrice,
+          currency: status.data?.currency ?? "AUD",
+          eventId: specialPaymentIntentId,
+          customData: {
+            orderId: specialPaymentIntentId,
+            contentType: "product",
+            packageType: status.data?.packageType ?? "one-time",
+          },
+          eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      );
+    }
 
     // ✅ CRITICAL FIX: Create local variable to avoid React state closure issue (same as MembershipModal)
     // Store original purchase context for invoice finalization

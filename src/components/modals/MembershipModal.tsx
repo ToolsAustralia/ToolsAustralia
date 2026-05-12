@@ -34,6 +34,8 @@ import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useToast } from "@/components/ui/Toast";
 import { trackCompleteRegistration, trackFacebookEvent } from "@/components/FacebookPixel";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
@@ -2379,9 +2381,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // console.log("🎉 Payment processing completed:", status);
     setShowPaymentProcessing(false);
 
-    // ✅ REMOVED: Client-side Facebook Pixel tracking
-    // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
-    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+    // Fire browser-side Purchase pixel via the provider registry, deduped against
+    // the server-side CAPI event (which the webhook fires with the same paymentIntentId
+    // as event_id). Meta's eventID dedup mechanism is DESIGNED for both sides to fire —
+    // skipping the browser side loses _fbc/_fbp cookies and tanks Event Match Quality.
+    const membershipPaymentIntentId = status.data?.paymentIntentId;
+    const membershipPrice = status.data?.price;
+    if (membershipPaymentIntentId && typeof membershipPrice === "number" && membershipPrice > 0) {
+      trackConversion(
+        buildPurchaseEvent({
+          value: membershipPrice,
+          currency: status.data?.currency ?? "AUD",
+          eventId: membershipPaymentIntentId,
+          customData: {
+            orderId: membershipPaymentIntentId,
+            contentType: "product",
+            packageType: status.data?.packageType ?? "membership",
+          },
+          eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      );
+    }
 
     // Build benefits array with entry information
     const benefits = [];
@@ -2627,6 +2647,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       ...(data?.cardBrand ? { cardBrand: data.cardBrand } : {}),
     };
     const effectivePaymentIntentId = data?.paymentIntentId ?? paymentIntentId;
+
+    // Fire browser-side Purchase pixel via the provider registry. This handler covers
+    // the new-user-with-autologin flow AND the existing-user-without-PaymentProcessingScreen
+    // flow, which together account for first-time membership and first-time one-time
+    // purchases. eventId === paymentIntentId matches the server-side CAPI event for dedup.
+    // If handlePaymentProcessingSuccess also fires for the same paymentIntent, Meta's
+    // eventID dedup mechanism merges them — duplicate browser fires are safe.
+    if (effectivePaymentIntentId && typeof activePlan?.price === "number" && activePlan.price > 0) {
+      trackConversion(
+        buildPurchaseEvent({
+          value: activePlan.price,
+          currency: "AUD",
+          eventId: effectivePaymentIntentId,
+          customData: {
+            orderId: effectivePaymentIntentId,
+            contentType: "product",
+            packageType: activePlan.period === "mo" ? "membership" : "one-time",
+          },
+          eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      );
+    }
 
     // Check if this is a new user registration
     if (data?.user) {

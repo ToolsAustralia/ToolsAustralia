@@ -123,7 +123,7 @@ This repo has nine specialist Cursor subagents (frontend, backend-api, mongo-dat
 - **No new patterns without need.** `.cursorrules` explicitly forbids large refactors or introducing new architectural patterns alongside existing ones — extend what's there. Keep handlers thin; if you're tempted to put logic in `route.ts`, that logic belongs in `src/services/`.
 - **Unused vars** — see `docs/UNUSED-VARS-CONVENTIONS.md` (the repo prefers genuine deletion over `_` prefixing in most cases).
 - **Mongo connections** — see `docs/MONGODB_CONNECTION_BEST_PRACTICES.md`. Use `src/lib/mongodb.ts`; do not open ad hoc connections in scripts (the `scripts/*.ts` already follow this).
-- **Console output** — production builds strip `console.log`/`info`/`debug`/`warn` (`next.config.ts` `compiler.removeConsole`). Use `console.error` for genuine errors that must survive, or route through `ErrorReport`.
+- **Console output** — production builds strip `console.log`/`info`/`debug`/`warn` (`next.config.ts` `compiler.removeConsole`). Use `console.error` for genuine errors that must survive, or route through `ErrorReport`. **This also applies when debugging staging / Vercel preview deploys** — those are production builds, so any temporary `console.log` you add to diagnose a live issue will be invisible. Use `console.error` for ad-hoc debug logging on staging too.
 - **`mongoose` is `serverExternalPackages`** — don't try to bundle it into client code.
 
 ## Domain Manifest
@@ -142,7 +142,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-10",
+  "lastModified": "2026-05-11",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -410,11 +410,14 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/PixelTracker.tsx",
         "src/components/TikTokPixel.tsx",
         "src/components/tracking/**",
+        "src/components/admin/TikTokAdsManagement.tsx",
+        "src/components/admin/SnapchatAdsManagement.tsx",
         "src/lib/facebook.ts",
         "src/lib/facebook-env.ts",
         "src/lib/facebook-marketing.ts",
         "src/lib/gtm.ts",
         "src/lib/klaviyo.ts",
+        "src/lib/tracking/**",
         "src/lib/utm/**",
         "src/utils/tracking/**",
         "src/utils/integrations/**",
@@ -423,6 +426,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/meta/**",
         "src/models/MetaAdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
+        "src/models/TikTokAdInsightsDaily.ts",
+        "src/models/SnapchatAdInsightsDaily.ts",
         "src/app/layout.tsx",
         "src/app/api/facebook/**",
         "src/app/api/tracking/**",
@@ -431,7 +436,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-05-09"
+      "lastVerified": "2026-05-11"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",

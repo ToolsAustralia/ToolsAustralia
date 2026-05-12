@@ -6,6 +6,7 @@ import {
   cutoffForRecentAttempt,
   shouldSkipForNotPastDue,
 } from "../past-due-charge-idempotency";
+import { shouldSkipForRecentAttempt } from "../past-due-charge-idempotency";
 
 function testWindowConstant() {
   assert.equal(RECENT_ATTEMPT_WINDOW_HOURS, 6);
@@ -59,6 +60,20 @@ function testShouldNotSkipWhenStatusPastDueWithUppercase() {
   assert.equal(shouldSkipForNotPastDue("Past_Due"), false);
 }
 
+function testRecentAttemptSkipBlocksByDefault() {
+  const rows = [{ attemptedAt: new Date(), status: "failed" as const }];
+  assert.equal(shouldSkipForRecentAttempt(rows, false), true);
+}
+
+function testRecentAttemptSkipAllowsWhenBypassed() {
+  const rows = [{ attemptedAt: new Date(), status: "failed" as const }];
+  assert.equal(shouldSkipForRecentAttempt(rows, true), false);
+}
+
+function testRecentAttemptSkipAllowsWhenNoRows() {
+  assert.equal(shouldSkipForRecentAttempt([], false), false);
+}
+
 function run() {
   testWindowConstant();
   testCutoffIs6hBeforeNow();
@@ -70,6 +85,9 @@ function run() {
   testShouldSkipWhenStatusUndefined();
   testShouldNotSkipWhenStatusPastDue();
   testShouldNotSkipWhenStatusPastDueWithUppercase();
+  testRecentAttemptSkipBlocksByDefault();
+  testRecentAttemptSkipAllowsWhenBypassed();
+  testRecentAttemptSkipAllowsWhenNoRows();
   console.log("chargePastDueShared helpers tests passed");
 }
 

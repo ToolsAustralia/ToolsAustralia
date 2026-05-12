@@ -27,6 +27,10 @@ interface ChargeResult {
   error?: string;
   amount?: number;
   skipReason?: string;
+  /** Set when the row took the stranded-recovery branch (void + re-bill). */
+  recovered?: boolean;
+  /** Set when `recovered`; points at the new finalized invoice that was paid. */
+  newInvoiceId?: string;
 }
 
 interface ChargeResponse {
@@ -51,6 +55,7 @@ interface PreviewUser {
   userName: string;
   amount: number;
   currency: string;
+  willRecover: boolean;
 }
 
 interface PreviewResponse {
@@ -341,6 +346,25 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
                 </div>
               )}
 
+              {preview.preview.users.some((u) => u.willRecover) && (
+                <div role="alert" className="bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-300 dark:border-orange-800/50 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-orange-800 dark:text-orange-200 mb-1">
+                        This will void &amp; re-bill via a held draft
+                      </h4>
+                      <p className="text-sm text-orange-700 dark:text-orange-300">
+                        Stripe has given up on this invoice. Confirming will
+                        cancel it and create a fresh invoice on the same
+                        subscription, then charge the card. The old invoice
+                        number will no longer be payable.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-red-50 dark:bg-red-950/25 rounded-lg p-4 border border-red-200 dark:border-red-900/45">
                 <label className="block text-sm font-medium text-red-800 dark:text-red-200 mb-2">
                   Type <strong>CHARGE</strong> to confirm:
@@ -549,14 +573,32 @@ const ChargePastDueUserModal: React.FC<ChargePastDueUserModalProps> = ({
                                   {result.invoiceId ? `${result.invoiceId.slice(0, 12)}…` : "—"}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <ChargeJobResultStatusBadge status={result.status} />
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <ChargeJobResultStatusBadge status={result.status} />
+                                    {result.recovered ? (
+                                      <span
+                                        className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                                        title={
+                                          result.newInvoiceId
+                                            ? `Recovered: void + re-bill via ${result.newInvoiceId}`
+                                            : "Recovered: void + re-bill"
+                                        }
+                                      >
+                                        Recovered
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2 text-right text-gray-900 dark:text-neutral-100">
                                   {result.amount ? formatCurrency(result.amount) : "-"}
                                 </td>
                                 <td className="px-3 py-2 text-gray-600 dark:text-neutral-400 text-xs">
                                   <div className="flex items-center justify-between gap-2">
-                                    <span>{result.error || result.skipReason || "-"}</span>
+                                    <span>
+                                      {result.recovered && result.newInvoiceId
+                                        ? `Recovered via ${result.newInvoiceId.slice(0, 12)}…`
+                                        : result.error || result.skipReason || "-"}
+                                    </span>
                                     {result.status === "failed" && rowIsStrandedError(result) && targetUserId && (
                                       <button
                                         type="button"

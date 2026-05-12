@@ -3,13 +3,15 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 import { useChargePastDueRunDetail } from "@/hooks/queries/admin/useChargePastDueRunDetail";
-import { formatDurationMs } from "@/utils/admin/chargePastDueFormat";
+import { formatDurationMs, isStrandedError } from "@/utils/admin/chargePastDueFormat";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import {
   groupChargeAttemptsByUser,
   type UserAttemptGroup,
 } from "@/utils/admin/groupChargeAttemptsByUser";
 import AttemptsBreakdown from "@/components/admin/AttemptsBreakdown";
+import BulkRecoverInvoicesModal, { type BulkRecoverItem } from "@/components/admin/BulkRecoverInvoicesModal";
+import { useQueryClient } from "@tanstack/react-query";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -76,6 +78,9 @@ export default function PastDueChargeHistoryDrawer({
 
   const [search, setSearch] = useState("");
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   // The drawer's per-row DTO has no `adminName` (one admin per run). Augment with the run's
   // admin so each row satisfies ChargeAttemptInput before grouping.
@@ -89,6 +94,40 @@ export default function PastDueChargeHistoryDrawer({
       : augmented;
     return groupChargeAttemptsByUser(filtered);
   }, [detailQuery.data, search]);
+
+  const selectableItems = useMemo<BulkRecoverItem[]>(() => {
+    const items: BulkRecoverItem[] = [];
+    for (const group of groupedAttempts) {
+      if (!group.userId) continue;
+      for (const attempt of group.attempts) {
+        if (attempt.status !== "failed") continue;
+        if (!isStrandedError(attempt.errorMessage, attempt.errorCode)) continue;
+        items.push({
+          userId: group.userId,
+          userEmail: group.userEmail || "",
+          originalInvoiceId: attempt.invoiceId,
+          amount: attempt.amount,
+        });
+      }
+    }
+    return items;
+  }, [groupedAttempts]);
+
+  const selectedItems = useMemo<BulkRecoverItem[]>(() => {
+    return selectableItems.filter((item) =>
+      selectedKeys.has(`${item.userId}__${item.originalInvoiceId}`)
+    );
+  }, [selectableItems, selectedKeys]);
+
+  const toggleRow = (userId: string, invoiceId: string) => {
+    const key = `${userId}__${invoiceId}`;
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const groupKey = (g: UserAttemptGroup): string => g.userId ?? `email:${g.userEmail}`;
   const toggleGroup = (key: string) => {
@@ -228,6 +267,21 @@ export default function PastDueChargeHistoryDrawer({
                   <span className="text-xs text-gray-500 dark:text-neutral-400">
                     {groupedAttempts.length} users
                   </span>
+                  {selectableItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBulkModalOpen(true)}
+                      disabled={selectedItems.length === 0}
+                      className="rounded-md bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 disabled:cursor-not-allowed text-white px-3 py-1 text-xs font-semibold dark:bg-amber-600 dark:hover:bg-amber-700"
+                      title={
+                        selectedItems.length === 0
+                          ? "Select one or more stranded rows below"
+                          : `Void + re-bill ${selectedItems.length} stranded invoice(s)`
+                      }
+                    >
+                      Recover selected ({selectedItems.length})
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -283,6 +337,7 @@ export default function PastDueChargeHistoryDrawer({
                                 <table className="w-full">
                                   <thead>
                                     <tr>
+                                      <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500 w-8"></th>
                                       <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">Invoice</th>
                                       <th className="px-2 py-2 text-left text-2xs uppercase text-gray-500">Status</th>
                                       <th className="px-2 py-2 text-right text-2xs uppercase text-gray-500">Amount</th>
@@ -290,22 +345,51 @@ export default function PastDueChargeHistoryDrawer({
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {g.attempts.map((r) => (
-                                      <tr key={`${r.invoiceId}-${r.attemptedAt}`}>
-                                        <td className="px-2 py-2 font-mono text-xs text-gray-700 dark:text-neutral-300">
-                                          {r.invoiceId}
-                                        </td>
-                                        <td className="px-2 py-2 text-xs">
-                                          <RetryStatusBadge status={r.status} />
-                                        </td>
-                                        <td className="px-2 py-2 text-right text-xs font-semibold text-gray-900 dark:text-white">
-                                          {formatCents(r.amount)}
-                                        </td>
-                                        <td className="px-2 py-2 text-xs text-red-700 dark:text-red-400">
-                                          {r.declineCode ?? r.errorCode ?? r.errorMessage ?? ""}
-                                        </td>
-                                      </tr>
-                                    ))}
+                                    {g.attempts.map((r) => {
+                                      const isStranded =
+                                        r.status === "failed" &&
+                                        isStrandedError(r.errorMessage, r.errorCode);
+                                      const isSelectable = isStranded && !!g.userId;
+                                      const key = g.userId ? `${g.userId}__${r.invoiceId}` : "";
+                                      const checked = key ? selectedKeys.has(key) : false;
+                                      return (
+                                        <tr key={`${r.invoiceId}-${r.attemptedAt}`}>
+                                          <td className="px-2 py-2 align-middle">
+                                            <input
+                                              type="checkbox"
+                                              disabled={!isSelectable}
+                                              checked={checked}
+                                              onChange={() => {
+                                                if (isSelectable && g.userId) {
+                                                  toggleRow(g.userId, r.invoiceId);
+                                                }
+                                              }}
+                                              aria-label={`Select invoice ${r.invoiceId} for bulk recover`}
+                                              title={
+                                                !g.userId
+                                                  ? "Cannot recover — row has no userId"
+                                                  : !isStranded
+                                                    ? "Only stranded failures are recoverable"
+                                                    : "Select for bulk recover"
+                                              }
+                                              className="h-3.5 w-3.5 disabled:opacity-30"
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 font-mono text-xs text-gray-700 dark:text-neutral-300">
+                                            {r.invoiceId}
+                                          </td>
+                                          <td className="px-2 py-2 text-xs">
+                                            <RetryStatusBadge status={r.status} />
+                                          </td>
+                                          <td className="px-2 py-2 text-right text-xs font-semibold text-gray-900 dark:text-white">
+                                            {formatCents(r.amount)}
+                                          </td>
+                                          <td className="px-2 py-2 text-xs text-red-700 dark:text-red-400">
+                                            {r.declineCode ?? r.errorCode ?? r.errorMessage ?? ""}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </td>
@@ -319,6 +403,19 @@ export default function PastDueChargeHistoryDrawer({
               </div>
             </section>
           </div>
+        )}
+        {bulkModalOpen && selectedItems.length > 0 && (
+          <BulkRecoverInvoicesModal
+            isOpen={true}
+            onClose={() => setBulkModalOpen(false)}
+            items={selectedItems}
+            onCompleted={() => {
+              setSelectedKeys(new Set());
+              queryClient.invalidateQueries({
+                queryKey: ["admin", "charge-past-due", "run", runId],
+              });
+            }}
+          />
         )}
       </aside>
     </>

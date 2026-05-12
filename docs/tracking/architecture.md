@@ -1,14 +1,34 @@
 # Tracking — Architecture
 
-## Provider stack
+## Provider registry
 
-| Provider | Purpose | Client | Server |
+All conversion-tracking flows through a single provider registry at [`src/lib/tracking/`](../../src/lib/tracking/). Each platform implements one `ConversionProvider` module under `src/lib/tracking/providers/<platform>.ts`:
+
+| Provider | Pixel id env | Access token env | CAPI status |
 |---|---|---|---|
-| **Facebook Pixel** | Browser events | Yes | — |
-| **Meta CAPI** (Conversions API) | Server-side conversion events | — | Yes (canonical for purchases) |
-| **GTM** | Tag manager wrapping multiple pixels | Yes | — |
-| **Klaviyo** | Marketing automation, profile sync | Yes (web tracking) | Yes (events / profile) |
-| **TikTok Pixel** | TikTok ads tracking | Yes | — |
+| **Facebook** | `NEXT_PUBLIC_FACEBOOK_PIXEL_ID` | `FACEBOOK_ACCESS_TOKEN` | Live |
+| **TikTok** | `NEXT_PUBLIC_TIKTOK_PIXEL_ID` | `TIKTOK_ACCESS_TOKEN` | Pixel only — Events API stub returns `false` |
+| **Snapchat** | `NEXT_PUBLIC_SNAPCHAT_PIXEL_ID` | `SNAPCHAT_ACCESS_TOKEN` | Pixel only — CAPI stub returns `false` |
+
+## Dispatchers
+
+Two entry points fan out to every enabled provider:
+
+- **Server**: `sendConversion(event, ctx)` in [`src/lib/tracking/dispatch.ts`](../../src/lib/tracking/dispatch.ts) — calls every provider's `capiSend` where `enabled().capi` is true.
+- **Browser**: `trackConversion(event)` in [`src/lib/tracking/dispatch-client.ts`](../../src/lib/tracking/dispatch-client.ts) — calls every provider's `pixelTrack` where `enabled().pixel` is true AND `window.location.hostname` matches the provider's `productionHostnames()`.
+
+## Dual-fire + dedup contract
+
+Every conversion event MUST be dual-fired (browser pixel + server CAPI) with a shared `eventId`. Each provider maps it:
+- Facebook: `event_id` on CAPI; 4th arg `{ eventID }` on `fbq('track', ...)`.
+- TikTok: `event_id` on Events API; 3rd-arg `{ event_id }` on `ttq.track(...)`.
+- Snapchat: `client_dedup_id` on both sides.
+
+The Provider interface does not allow opting out — if `enabled()` reports a surface live, both sides fire.
+
+## Missing-credentials safety
+
+When pixel id or access token is absent, the matching surface is a silent no-op: no script tag injection, no `fetch` call, no console-spam, no thrown errors. See [`docs/superpowers/specs/2026-05-11-tracking-provider-registry-design.md`](../superpowers/specs/2026-05-11-tracking-provider-registry-design.md) §8a for the full behavior matrix.
 
 ## Files
 

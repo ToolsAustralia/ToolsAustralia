@@ -1,10 +1,18 @@
+// src/app/api/facebook/track/route.ts
+/**
+ * @deprecated Use `POST /api/tracking/conversion` (provider-agnostic).
+ * This handler remains as a forwarding shim so existing client calls (e.g. legacy
+ * `useFacebookTracking` hooks or direct fetches to /api/facebook/track) keep working.
+ * Translates the legacy FB-shaped body into a CanonicalEvent and delegates to sendConversion.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { sendFacebookEvent, FacebookEvent } from "@/lib/facebook";
+import { sendConversion } from "@/lib/tracking/dispatch";
+import type { CanonicalEvent } from "@/lib/tracking/types";
+import { eventTimeNow } from "@/lib/tracking/canonical-event";
 import { generateEventID } from "@/utils/tracking/facebook-helpers";
 
-// Validation schema for Facebook tracking events
-const trackEventSchema = z.object({
+const legacyBodySchema = z.object({
   event_name: z.enum([
     "PageView",
     "ViewContent",
@@ -16,21 +24,21 @@ const trackEventSchema = z.object({
     "Lead",
     "Subscribe",
   ]),
-  event_id: z.string().optional(), // Event ID for deduplication
+  event_id: z.string().optional(),
   user_data: z
     .object({
-      em: z.string().optional(), // email hash
-      ph: z.string().optional(), // phone hash
-      fn: z.string().optional(), // first name hash
-      ln: z.string().optional(), // last name hash
-      ct: z.string().optional(), // city hash
-      st: z.string().optional(), // state hash
-      zp: z.string().optional(), // zip code hash
+      em: z.string().optional(),
+      ph: z.string().optional(),
+      fn: z.string().optional(),
+      ln: z.string().optional(),
+      ct: z.string().optional(),
+      st: z.string().optional(),
+      zp: z.string().optional(),
       country: z.string().optional(),
       client_ip_address: z.string().optional(),
       client_user_agent: z.string().optional(),
-      fbc: z.string().optional(), // Facebook click ID
-      fbp: z.string().optional(), // Facebook browser ID
+      fbc: z.string().optional(),
+      fbp: z.string().optional(),
     })
     .optional(),
   custom_data: z
@@ -52,88 +60,78 @@ const trackEventSchema = z.object({
     .default("website"),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    // Validate the request body
-    const validatedData = trackEventSchema.parse(body);
-
-    // Generate EventID if not provided (critical for deduplication)
-    let eventId = validatedData.event_id;
-    if (!eventId) {
-      // Generate EventID using order_id, or fallback to timestamp
-      const identifier =
-        validatedData.custom_data?.order_id ||
-        validatedData.user_data?.em?.substring(0, 8) || // Use first 8 chars of email hash as identifier
-        Date.now().toString();
-      eventId = generateEventID(validatedData.event_name.toLowerCase(), identifier);
-    }
-
-    // Handle IP address (take first IP if comma-separated)
-    let clientIp = validatedData.user_data?.client_ip_address;
-    if (!clientIp) {
-      const forwardedFor = request.headers.get("x-forwarded-for");
-      if (forwardedFor) {
-        clientIp = forwardedFor.split(",")[0].trim();
-      } else {
-        clientIp = request.headers.get("x-real-ip") || "127.0.0.1";
-      }
-    }
-
-    // Create Facebook event object
-    const facebookEvent: FacebookEvent = {
-      event_name: validatedData.event_name,
-      event_time: Math.floor(Date.now() / 1000),
-      event_id: eventId, // Include EventID for deduplication
-      user_data: {
-        ...validatedData.user_data,
-        client_ip_address: clientIp,
-        client_user_agent:
-          validatedData.user_data?.client_user_agent || request.headers.get("user-agent") || undefined,
-      },
-      custom_data: validatedData.custom_data,
-      event_source_url: validatedData.event_source_url || request.headers.get("referer") || undefined,
-      action_source: validatedData.action_source,
-    };
-
-    const { getFacebookTestEventCode } = await import("@/lib/facebook");
-    const success = await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
-
-    if (success) {
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Event tracked successfully",
-          event_id: eventId,
-        },
-        { status: 200 }
-      );
-    } else {
-      return NextResponse.json({ success: false, message: "Failed to track event" }, { status: 500 });
-    }
-  } catch (error) {
-    console.error("Facebook tracking error:", error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid request data",
-          errors: error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
-  }
+function ipFromHeaders(req: NextRequest): string | undefined {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim();
+  return req.headers.get("x-real-ip") ?? undefined;
 }
 
-// Handle GET requests for testing
+export async function POST(request: NextRequest) {
+  let parsed: z.infer<typeof legacyBodySchema>;
+  try {
+    parsed = legacyBodySchema.parse(await request.json());
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, message: "Invalid request data", errors: err.issues },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ success: false, message: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Note: legacy body contains pre-hashed user_data (em, ph, etc.). The new provider re-hashes from raw,
+  // so we pass these as providerData.facebook to bypass re-hashing.
+  const eventId =
+    parsed.event_id ?? generateEventID(parsed.event_name.toLowerCase(), parsed.custom_data?.order_id ?? Date.now().toString());
+
+  const event: CanonicalEvent = {
+    eventName: parsed.event_name,
+    eventId,
+    eventTime: eventTimeNow(),
+    value: parsed.custom_data?.value,
+    currency: parsed.custom_data?.currency,
+    eventSourceUrl: parsed.event_source_url ?? request.headers.get("referer") ?? undefined,
+    customData: {
+      orderId: parsed.custom_data?.order_id,
+      contentIds: parsed.custom_data?.content_ids,
+      contentType: parsed.custom_data?.content_type,
+      contentName: parsed.custom_data?.content_name,
+      contentCategory: parsed.custom_data?.content_category,
+      numItems: parsed.custom_data?.num_items,
+      searchString: parsed.custom_data?.search_string,
+    },
+    providerData: {
+      facebook: {
+        // Pre-hashed user_data passthrough — facebookProvider.capiSend recognises the
+        // `_legacyUserData` reserved key and merges it into FacebookEvent.user_data
+        // (not custom_data), so Event Match Quality and fbc/fbp dedup are preserved.
+        // Callers using the canonical /api/tracking/conversion endpoint should send raw
+        // PII via `userData` instead — the provider hashes it there.
+        _legacyUserData: parsed.user_data ?? {},
+      },
+    },
+  };
+
+  const ctx = {
+    clientIpAddress: parsed.user_data?.client_ip_address ?? ipFromHeaders(request),
+    clientUserAgent: parsed.user_data?.client_user_agent ?? request.headers.get("user-agent") ?? undefined,
+    eventSourceUrl: event.eventSourceUrl,
+  };
+
+  const results = await sendConversion(event, ctx);
+  const success = results.facebook;
+  return NextResponse.json(
+    success
+      ? { success: true, message: "Event tracked successfully", event_id: eventId }
+      : { success: false, message: "Failed to track event" },
+    { status: success ? 200 : 500 },
+  );
+}
+
 export async function GET() {
   return NextResponse.json({
-    message: "Facebook tracking endpoint is active",
+    message: "Facebook tracking endpoint (deprecated — use /api/tracking/conversion)",
     supported_events: [
       "PageView",
       "ViewContent",
@@ -145,6 +143,5 @@ export async function GET() {
       "Lead",
       "Subscribe",
     ],
-    usage: "Send POST request with event data to track Facebook events",
   });
 }

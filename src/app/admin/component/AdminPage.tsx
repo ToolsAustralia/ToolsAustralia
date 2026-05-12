@@ -18,6 +18,8 @@ import { AdminDashboardProps } from "@/types/admin";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
+import TikTokAdsManagement from "@/components/admin/TikTokAdsManagement";
+import SnapchatAdsManagement from "@/components/admin/SnapchatAdsManagement";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
@@ -239,6 +241,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}
+
+          {/* TIKTOK ADS TAB */}
+          {selectedTab === "tiktok-ads" && <TikTokAdsManagement />}
+
+          {/* SNAPCHAT ADS TAB */}
+          {selectedTab === "snapchat-ads" && <SnapchatAdsManagement />}
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}

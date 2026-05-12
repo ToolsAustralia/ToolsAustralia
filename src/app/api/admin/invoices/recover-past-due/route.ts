@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         userId: item.userId,
         originalInvoiceId: item.originalInvoiceId,
         adminId,
+        bypassRecentRecoveryLock: true,
       });
 
       if (result.ok) {
