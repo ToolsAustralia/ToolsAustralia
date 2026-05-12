@@ -3760,6 +3760,17 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const previousLastMonthAccumulated = user.subscription?.lastMonthAccumulatedEntries ?? 0;
     const lastMonthDeltaForLedger = newLastMonthAccumulatedEntries - previousLastMonthAccumulated;
 
+    // Resolve the real PaymentIntent id from the invoice so the Facebook Purchase event_id
+    // matches what the browser pixel fires with (`pi_…`). Storage key (`invoicePaymentId`)
+    // remains `invoice_${invoice.id}` for idempotency; only Meta's event_id is overridden.
+    const invoiceWithPI = expandedInvoice as Stripe.Invoice & {
+      payment_intent?: string | Stripe.PaymentIntent | null;
+    };
+    const facebookTrackingPaymentIntentId: string | undefined =
+      typeof invoiceWithPI.payment_intent === "string"
+        ? invoiceWithPI.payment_intent
+        : invoiceWithPI.payment_intent?.id;
+
     const result = await processPaymentBenefits(
       invoicePaymentId,
       user._id.toString(),
@@ -3784,6 +3795,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
           experimentId,
           variantId,
         }),
+        // Bug fix 2026-05-12: align Facebook Purchase event_id with browser pixel (real PI id).
+        ...(facebookTrackingPaymentIntentId && { trackingOrderId: facebookTrackingPaymentIntentId }),
       },
       requestContext, // Pass request context if available (may be undefined for renewals)
       expandedInvoice.billing_reason || undefined, // ✅ Pass billing_reason for accurate renewal tracking (e.g., "subscription_create", "subscription_cycle")

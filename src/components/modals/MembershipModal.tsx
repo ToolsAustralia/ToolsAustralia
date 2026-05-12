@@ -2687,6 +2687,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // If handlePaymentProcessingSuccess also fires for the same paymentIntent, Meta's
     // eventID dedup mechanism merges them — duplicate browser fires are safe.
     if (effectivePaymentIntentId && typeof activePlan?.price === "number" && activePlan.price > 0) {
+      // Prefer the canonical static package id (e.g. "tradie-subscription") that the
+      // payment API was actually charged with — this is what the server CAPI sends.
+      // activePlan.id is only a tier slug ("tradie") and would mismatch the server's
+      // content_ids, breaking Meta's "deduplication best practices" check.
+      const trackingContentId = lastChargedStaticPackageIdRef.current ?? activePlan.id ?? null;
       trackConversion(
         buildPurchaseEvent({
           value: activePlan.price,
@@ -2695,7 +2700,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           customData: {
             orderId: effectivePaymentIntentId,
             contentType: "product",
-            contentIds: activePlan.id ? [activePlan.id] : undefined,
+            contentIds: trackingContentId ? [trackingContentId] : undefined,
             numItems: 1,
             packageType: activePlan.id.startsWith("mini-pack-")
               ? "mini-draw"
