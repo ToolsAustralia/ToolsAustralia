@@ -2648,6 +2648,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     };
     const effectivePaymentIntentId = data?.paymentIntentId ?? paymentIntentId;
 
+    // Fire browser-side Purchase pixel via the provider registry. This handler covers
+    // the new-user-with-autologin flow AND the existing-user-without-PaymentProcessingScreen
+    // flow, which together account for first-time membership and first-time one-time
+    // purchases. eventId === paymentIntentId matches the server-side CAPI event for dedup.
+    // If handlePaymentProcessingSuccess also fires for the same paymentIntent, Meta's
+    // eventID dedup mechanism merges them — duplicate browser fires are safe.
+    if (effectivePaymentIntentId && typeof activePlan?.price === "number" && activePlan.price > 0) {
+      trackConversion(
+        buildPurchaseEvent({
+          value: activePlan.price,
+          currency: "AUD",
+          eventId: effectivePaymentIntentId,
+          customData: {
+            orderId: effectivePaymentIntentId,
+            contentType: "product",
+            packageType: activePlan.period === "mo" ? "membership" : "one-time",
+          },
+          eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      );
+    }
+
     // Check if this is a new user registration
     if (data?.user) {
       // console.log("🔄 New user registration completed:", data.user);
