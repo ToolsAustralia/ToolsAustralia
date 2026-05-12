@@ -74,7 +74,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
   const landingUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
-  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug, landingUrgency);
+  const landingHero = getLandingHeroImagePaths(defaultPrizeSlug);
   const standardHero = getPromoImagePaths({
     multiplier: membershipPromo?.multiplier ?? null,
     majorDrawUrgency: landingUrgency,

@@ -52,8 +52,6 @@ import FullscreenImageViewer, {
 } from "@/components/ui/FullscreenImageViewer";
 import GiveawayCountdownTimer from "./GiveawayCountdownTimer";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
-import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { getMajorDrawHeroUrgencyFromMajorDraw } from "@/utils/promo/promo-hero-images";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
 import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
 
@@ -281,17 +279,21 @@ const getFirstPrizeImagePath = (slug: string): string => {
   switch (slug) {
     case "dewalt-sidchrome":
     case "dewalt-milwaukee":
+    case "dewalt-kincrome":
       return "/images/promotion/FirstPrizeText/1stprice-dewalt.webp";
     case "makita-sidchrome":
     case "makita-milwaukee":
+    case "makita-kincrome":
       return "/images/promotion/FirstPrizeText/1stprice-makita.webp";
     case "ryobi-sidchrome":
     case "ryobi-milwaukee":
+    case "ryobi-kincrome":
       return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp"; // Fallback until 1stprice-ryobi.webp exists
     case "cash-prize":
       return "/images/promotion/FirstPrizeText/1stprice-cash.webp";
     case "milwaukee-sidchrome":
     case "milwaukee-milwaukee":
+    case "milwaukee-kincrome":
     default:
       return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp";
   }
@@ -440,8 +442,6 @@ export default function PrizeShowcase({
   const prizeRef = useScrollAnimation();
   const theme = usePromoTheme();
   const themeMode = useThemeStore((s) => s.theme);
-  const { data: majorDrawForLanding } = useCurrentMajorDraw();
-  const landingHeroUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDrawForLanding ?? null);
   const setStoreSlug = usePromoThemeStore((s) => s.setSlug);
   const [mainCanSlidePrev, setMainCanSlidePrev] = useState(false);
   const [mainCanSlideNext, setMainCanSlideNext] = useState(false);
@@ -838,7 +838,7 @@ export default function PrizeShowcase({
   const highlights = activePrize.highlights ?? [];
 
   // Insert landing image as first gallery item if available
-  const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug, landingHeroUrgency) : null;
+  const landingImagePaths = activeSlug ? getLandingHeroImagePaths(activeSlug) : null;
   const enhancedGallery = ((): EnhancedGalleryItem[] => {
     if (!landingImagePaths) return activePrize.gallery;
 
