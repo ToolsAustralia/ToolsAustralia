@@ -75,6 +75,7 @@ export interface PaymentStatusResponse {
     paymentIntentId: string;
     eventType?: string;
     packageType?: string;
+    packageId?: string;
     packageName?: string;
     entries?: number;
     points?: number;

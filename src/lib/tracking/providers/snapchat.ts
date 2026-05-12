@@ -24,7 +24,7 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string }): void {
+function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
   if (typeof window === "undefined") return;
   if (window._snaptrInit) return;
   const pixelId = process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID;

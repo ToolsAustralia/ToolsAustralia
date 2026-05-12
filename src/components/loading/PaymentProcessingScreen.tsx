@@ -6,7 +6,6 @@ import { Check, Gift, Star, Zap, AlertCircle, Tag, X } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries";
 import { rewardsEnabled } from "@/config/featureFlags";
-import { trackPurchaseWithEventId } from "@/components/FacebookPixel";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { getPackageById } from "@/data/membershipPackages";
 
@@ -74,7 +73,6 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [stillWaitingLong, setStillWaitingLong] = useState(false);
   const onSuccessCalledRef = useRef(false);
-  const pixelPurchaseFiredRef = useRef(false);
 
   const shouldPoll = isVisible && !!paymentIntentId && paymentIntentId.startsWith("pi_");
 
@@ -167,15 +165,6 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   if (!isVisible) return null;
 
   if (status?.processed && status.data) {
-    if (!pixelPurchaseFiredRef.current && paymentIntentId && shouldPoll) {
-      const value = status.data.price;
-      if (typeof value === "number" && value > 0) {
-        pixelPurchaseFiredRef.current = true;
-        const currency = status.data.currency ?? "AUD";
-        trackPurchaseWithEventId(value, currency, paymentIntentId, paymentIntentId);
-      }
-    }
-
     type BenefitIcon = "gift" | "star" | "zap" | "tag";
     const benefits: { text: string; icon: BenefitIcon }[] = [];
 

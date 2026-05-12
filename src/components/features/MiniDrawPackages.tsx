@@ -413,6 +413,8 @@ export default function MiniDrawPackages({
             customData: {
               orderId: miniDrawPaymentIntentId,
               contentType: "product",
+              contentIds: selectedPackageId ? [selectedPackageId] : undefined,
+              numItems: 1,
               packageType: status.data?.packageType ?? "mini-draw",
             },
             eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,

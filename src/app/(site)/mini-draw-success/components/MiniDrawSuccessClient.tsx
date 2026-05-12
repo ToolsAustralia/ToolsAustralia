@@ -36,6 +36,8 @@ export default function MiniDrawSuccessClient({ searchParams }: MiniDrawSuccessC
         customData: {
           orderId: paymentIntentId,
           contentType: "product",
+          contentIds: status.data.packageId ? [status.data.packageId] : undefined,
+          numItems: 1,
           packageType: status.data.packageType ?? "mini-draw",
         },
         eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,

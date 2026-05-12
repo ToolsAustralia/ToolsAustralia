@@ -39,12 +39,19 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string }): void {
+function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
   if (typeof window === "undefined") return;
   if (window._fbPixelInit) return;
   const pixelId = process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID;
   if (!pixelId) return;
   if (!getAllowedHostnames().includes(window.location.hostname)) return;
+
+  // Render the init call. When advancedMatching is provided, fbq accepts it as
+  // the second arg: fbq('init', pixelId, { em, ph, ... }). Mid-session login
+  // re-init is handled separately by ConversionPixelsAdvancedMatching.
+  const initCall = opts.advancedMatching
+    ? `window.fbq('init', '${pixelId}', ${JSON.stringify(opts.advancedMatching)});`
+    : `window.fbq('init', '${pixelId}');`;
 
   const script = document.createElement("script");
   script.id = "facebook-pixel-script";
@@ -61,7 +68,7 @@ function loadPixel(opts: { nonce?: string }): void {
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    window.fbq('init', '${pixelId}');
+    ${initCall}
     window.fbq('track', 'PageView');
     window._fbPixelInit = true;
   `;
@@ -81,6 +88,7 @@ function pixelTrack(event: CanonicalEvent): void {
   if (event.customData?.contentName) customData.content_name = event.customData.contentName;
   if (event.customData?.contentCategory) customData.content_category = event.customData.contentCategory;
   if (event.customData?.numItems !== undefined) customData.num_items = event.customData.numItems;
+  if (event.customData?.packageType) customData.package_type = event.customData.packageType;
   if (event.customData?.searchString) customData.search_string = event.customData.searchString;
   if (event.providerData?.facebook) Object.assign(customData, event.providerData.facebook);
 
@@ -92,16 +100,7 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
   if (!envEnabled().capi) return false;
 
   const u = event.userData ?? {};
-  // Extract _legacyUserData escape hatch — pre-hashed Meta-format user_data from the
-  // legacy /api/facebook/track shim. These fields take precedence over `event.userData`
-  // (which the legacy shim doesn't populate) and must land on `user_data`, NOT `custom_data`,
-  // so fbc/fbp/em-based Pixel↔CAPI dedup and Event Match Quality keep working.
-  const fbProviderData = event.providerData?.facebook ?? {};
-  const legacyUserData =
-    (fbProviderData._legacyUserData as Record<string, string> | undefined) ?? {};
-  const fbCustomFields = Object.fromEntries(
-    Object.entries(fbProviderData).filter(([k]) => k !== "_legacyUserData"),
-  );
+  const fbCustomFields = event.providerData?.facebook ?? {};
 
   const userData: FacebookEvent["user_data"] = {
     ...(u.email && { em: hashPII(u.email) }),
@@ -121,8 +120,6 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     ...((u.clientUserAgent ?? ctx.clientUserAgent) && {
       client_user_agent: u.clientUserAgent ?? ctx.clientUserAgent,
     }),
-    // Legacy pre-hashed user_data wins (legacy callers don't populate event.userData).
-    ...legacyUserData,
   };
 
   const fbEvent: FacebookEvent = {
@@ -153,16 +150,11 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
 /**
  * Facebook provider — Pixel + Conversions API.
  *
- * Provider-specific escape hatch: `event.providerData.facebook` is spread into
- * `custom_data` on the CAPI payload, EXCEPT for the reserved `_legacyUserData`
- * key. `_legacyUserData` is treated as pre-hashed Meta-format `user_data`
- * (em/ph/fn/ln/ct/st/zp/country/external_id/fbc/fbp/...) and merged into
- * `user_data` with legacy values winning over anything hashed from
- * `event.userData`. This is how the legacy `/api/facebook/track` shim passes
- * already-hashed PII through the canonical pipeline without re-hashing or
- * leaking PII into `custom_data` (which would tank Event Match Quality and
- * break fbc/fbp-based Pixel↔CAPI dedup). New callers should send raw PII via
- * `event.userData` through `/api/tracking/conversion` instead.
+ * `event.providerData.facebook` is spread into `custom_data` on the CAPI
+ * payload for Facebook-specific fields that don't have a canonical slot.
+ * Raw PII should always be sent via `event.userData` so it's hashed and
+ * placed on `user_data` (preserving Event Match Quality and fbc/fbp-based
+ * Pixel↔CAPI dedup).
  */
 export const facebookProvider: ConversionProvider = {
   id: "facebook",

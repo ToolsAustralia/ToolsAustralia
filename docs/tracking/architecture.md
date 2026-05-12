@@ -46,6 +46,7 @@ When pixel id or access token is absent, the matching surface is a silent no-op:
 | [src/lib/facebook-marketing.ts](../../src/lib/facebook-marketing.ts) | Marketing API (read insights) |
 | [src/lib/gtm.ts](../../src/lib/gtm.ts) | GTM helpers |
 | [src/lib/klaviyo.ts](../../src/lib/klaviyo.ts) | Klaviyo client |
+| [src/lib/tracking/advanced-matching.ts](../../src/lib/tracking/advanced-matching.ts) | `buildAdvancedMatching` — hashes user PII for Meta Advanced Matching using the same `hashPII` helper as server CAPI, guaranteeing identical browser ↔ server hashes |
 
 ## Server-side vs client-side events
 
