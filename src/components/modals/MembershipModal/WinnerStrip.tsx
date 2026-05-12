@@ -82,10 +82,14 @@ const WinnerStrip: React.FC<WinnerStripProps> = ({
 }) => {
   if (!majorDrawWinnersLoading && majorDrawWinners.length === 0) return null;
 
-  // Duplicate exactly twice so the .marquee-track 0→-50% keyframe loops seamlessly.
-  // Speed: ~6s per card, with a sane floor for short lists.
-  const trackContent = [...majorDrawWinners, ...majorDrawWinners];
-  const durationSeconds = Math.max(24, majorDrawWinners.length * 6);
+  // Each "set" must be wide enough to span the viewport; otherwise short lists
+  // visibly hit "the end" of the marquee. Repeat the winners list inside one
+  // set until it has at least 4 cards, then duplicate the set exactly twice
+  // (required for the .marquee-track 0→-50% keyframe to loop seamlessly).
+  const repeatsPerSet = Math.max(1, Math.ceil(4 / majorDrawWinners.length));
+  const oneSet = Array.from({ length: repeatsPerSet }, () => majorDrawWinners).flat();
+  const trackContent = [...oneSet, ...oneSet];
+  const durationSeconds = Math.max(28, oneSet.length * 7);
 
   return (
     <section className="mt-4 sm:mt-5" aria-label="Recent major-draw winners">
@@ -108,7 +112,7 @@ const WinnerStrip: React.FC<WinnerStripProps> = ({
           <div className="h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-neutral-900" />
         </div>
       ) : (
-        <div className="relative overflow-hidden">
+        <div className="overflow-hidden">
           <div
             className="marquee-track gap-2 sm:gap-3"
             style={{
@@ -116,26 +120,14 @@ const WinnerStrip: React.FC<WinnerStripProps> = ({
               width: "max-content",
             }}
           >
-            {trackContent.map((winner, i) => {
-              const realIndex = i % majorDrawWinners.length;
-              return (
-                <WinnerCard
-                  key={`${winner.id}-${i < majorDrawWinners.length ? "a" : "b"}`}
-                  winner={winner}
-                  onClick={() => onTileClick(realIndex)}
-                />
-              );
-            })}
+            {trackContent.map((winner, i) => (
+              <WinnerCard
+                key={`${winner.id}-${i}`}
+                winner={winner}
+                onClick={() => onTileClick(i % majorDrawWinners.length)}
+              />
+            ))}
           </div>
-          {/* Edge fades — soften the cards bleeding off either side */}
-          <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-neutral-950"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-neutral-950"
-            aria-hidden
-          />
         </div>
       )}
     </section>
