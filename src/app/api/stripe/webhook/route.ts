@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
@@ -7,21 +8,28 @@ import { headers } from "next/headers";
 import Stripe from "stripe";
 import { ensureIndexesOnce } from "@/utils/database/ensure-indexes";
 import {
-  dispatchStripeEvent,
   ackProcessedStripeEventOnce,
   isEventProcessed,
-  markEventProcessed,
   webhookLog,
 } from "@/services/stripe-webhook-handlers";
+import { enqueueStripeEvent } from "@/services/stripe-webhook-queue/enqueue";
 
 /**
  * POST /api/stripe/webhook
  * Receives Stripe webhook events, verifies the signature, deduplicates, then
- * dispatches to the appropriate handler via dispatchStripeEvent.
+ * enqueues for async processing via the worker route (/api/stripe/process-event).
  *
- * All handler logic lives in src/services/stripe-webhook-handlers/index.ts.
- * This file owns only the request flow: signature verification, dedup checks,
- * and response shapes. (Task 7 of the Stripe Webhook Async Queue plan.)
+ * Flow (Task 10 — ack-fast + queued):
+ *   1. Verify Stripe signature
+ *   2. Dedup via ProcessedStripeEvent (already-processed events → 200 skipped)
+ *   3. Dedup via user.processedPayments (payment-event specific)
+ *   4. enqueueStripeEvent(event) — idempotent Mongo upsert
+ *   5. after() fan-out POST to /api/stripe/process-event
+ *   6. Return 200 IMMEDIATELY — all handler work runs asynchronously in the worker
+ *
+ * The worker owns: dispatchStripeEvent, ackProcessedStripeEventOnce (happy path),
+ * markEventProcessed. The sweeper cron (/api/cron/process-stripe-webhook-queue)
+ * covers any fan-out that Vercel kills before it fires.
  */
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -30,22 +38,18 @@ export async function POST(request: NextRequest) {
 
     // ✅ CRITICAL: Ensure PaymentEvent indexes are created BEFORE processing any webhooks
     // This is blocking and must complete before any payment processing happens
-    // console.log("🔒 WEBHOOK (Old Handler): Ensuring indexes before processing...");
     await ensureIndexesOnce();
-    // console.log("✅ WEBHOOK (Old Handler): Indexes ensured, proceeding with webhook processing");
 
     const body = await request.text();
     const signature = (await headers()).get("stripe-signature");
 
     if (!signature) {
-      // console.error("❌ Missing stripe-signature header");
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
 
     // ✅ CRITICAL: Validate webhook secret before using it
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
-      // console.error("❌ CRITICAL: STRIPE_WEBHOOK_SECRET is not set - webhook processing disabled");
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
     }
 
@@ -168,31 +172,50 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Dispatch to the appropriate handler and get shouldMarkAsProcessed back.
-    // The switch that used to live here has moved to dispatchStripeEvent in
-    // src/services/stripe-webhook-handlers/index.ts (Task 7). Behaviour is
-    // identical — the route still calls handlers synchronously.
-    const { shouldMarkAsProcessed } = await dispatchStripeEvent(event);
+    // Enqueue the event for async processing.
+    // enqueueStripeEvent is idempotent — the unique index on eventId guarantees
+    // at-most-one queue row per Stripe event ID.
+    const { created } = await enqueueStripeEvent(event);
 
-    await ackProcessedStripeEventOnce(event);
-
-    // ✅ WEBHOOK-FIRST: Mark this payment as processed ONLY if we actually processed it
-    if (paymentIntentId && shouldMarkAsProcessed) {
-      await markEventProcessed(paymentIntentId);
-    }
-
-    // ✅ PERFORMANCE MONITORING: Track webhook processing time
-    const processingTime = Date.now() - startTime;
-    if (processingTime > 3000) {
-      webhookLog("warn", `⚠️ Webhook processing exceeded 3 seconds: ${processingTime}ms for event ${event.type}`);
+    if (!created) {
+      webhookLog("info", `Event ${event.id} already queued; skipping enqueue + fan-out`);
     } else {
-      webhookLog("info", `✅ Webhook processed in ${processingTime}ms for event ${event.type}`);
+      // Schedule fan-out POST after the response is sent. The sweeper cron
+      // (/api/cron/process-stripe-webhook-queue) is the safety net for any
+      // case where Vercel kills the lambda before fan-out fires.
+      const workerSecret = process.env.STRIPE_WORKER_INTERNAL_SECRET;
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+      after(async () => {
+        try {
+          await fetch(`${baseUrl}/api/stripe/process-event`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-internal-secret": workerSecret ?? "",
+            },
+            body: JSON.stringify({ eventId: event.id }),
+          });
+        } catch (err) {
+          console.error("[webhook-receiver] fan-out POST failed:", err);
+        }
+      });
     }
 
-    return NextResponse.json({ received: true });
+    // ✅ PERFORMANCE MONITORING: Track receiver turnaround (enqueue only, not handler)
+    const enqueuedIn = Date.now() - startTime;
+    if (enqueuedIn > 1000) {
+      webhookLog("warn", `⚠️ Webhook receiver took ${enqueuedIn}ms to enqueue event ${event.type}`);
+    } else {
+      webhookLog("info", `✅ Webhook enqueued in ${enqueuedIn}ms for event ${event.type}`);
+    }
+
+    return NextResponse.json({ received: true, queued: created });
   } catch (error) {
-    const processingTime = Date.now() - startTime;
-    webhookLog("error", `Error processing webhook: ${error} (processed in ${processingTime}ms)`);
+    const enqueuedIn = Date.now() - startTime;
+    webhookLog("error", `Error in webhook receiver: ${error} (after ${enqueuedIn}ms)`);
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }

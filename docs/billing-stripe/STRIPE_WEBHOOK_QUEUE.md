@@ -66,3 +66,16 @@ The sweeper route runs on a scheduled cron job (typically every minute or 5 minu
 - Optional: `VERCEL_URL` for production, or falls back to `NEXT_PUBLIC_SITE_URL` / `http://localhost:3000`
 - Batch size: 20 rows per sweep (configurable via `SWEEP_BATCH_SIZE` constant)
 - Orphan threshold: 5 minutes (configurable via `ORPHAN_THRESHOLD_MS` constant)
+
+## Receiver (Task 10 — ack-fast cutover)
+
+**As of Task 10, the receiver is ack-fast.** It no longer awaits handler completion.
+
+`POST /api/stripe/webhook` flow:
+1. Verifies Stripe signature
+2. Deduplicates via `ProcessedStripeEvent` and `user.processedPayments` (unchanged — runs before enqueue)
+3. Calls `enqueueStripeEvent(event)` — idempotent Mongo upsert
+4. Schedules `after(() => fetch('/api/stripe/process-event', ...))` — fires after the response is sent
+5. Returns `{ received: true, queued: boolean }` **immediately** (target: <1s)
+
+The receiver no longer calls `dispatchStripeEvent`, `ackProcessedStripeEventOnce` (for the happy path), or `markEventProcessed` — those are now owned entirely by the worker route. The dedup short-circuit paths (skipped events) still call `ackProcessedStripeEventOnce` to keep `ProcessedStripeEvent` consistent.
