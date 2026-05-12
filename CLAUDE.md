@@ -282,9 +282,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/banners/**",
         "src/hooks/usePromoLink.ts",
         "src/hooks/usePromoPageTracking.ts",
-        "src/hooks/usePromoWelcomeModal.ts"
+        "src/hooks/usePromoWelcomeModal.ts",
+        "src/generated/landingImageManifest.ts",
+        "scripts/build-landing-image-manifest.ts",
+        "scripts/check-landing-hero-assets.mjs"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-12"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
