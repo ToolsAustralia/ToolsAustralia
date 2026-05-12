@@ -95,3 +95,17 @@ TypeError: r.enabled is not a function
 The bug doesn't surface in dev because Next's RSC boundary is loose in dev mode; it only manifests on Vercel preview / production. We hit this on 2026-05-12 and lost every server-side Purchase event for the staging branch until the directive was removed.
 
 **Rule:** No `"use client"` on `src/lib/tracking/providers/*.ts`. The browser-only branches inside `loadPixel` / `pixelTrack` already guard with `typeof window === "undefined"`, so the modules are safely bundled into both runtimes without the directive.
+
+## Subscription Purchase event_id must override `invoicePaymentId`
+
+The subscription webhook path ([handleInvoicePaymentSucceeded](../../src/app/api/stripe/webhook/route.ts)) keys storage on `invoicePaymentId = "invoice_" + invoice.id` for PaymentEvent idempotency, ledger dedup, and A/B tracking. But the browser-side Purchase pixel fires from [MembershipModal.tsx](../../src/components/modals/MembershipModal.tsx) with the real PaymentIntent id (`pi_…`) as its `event_id`. If the server CAPI sent `invoice_in_…` as `event_id`, Meta would see two distinct Purchase events with the same parameters — its dedup mechanism would not collapse the pair, EMQ would suffer, and the Diagnostics panel would flag "Event deduplication: Not meeting best practices."
+
+Fix: the webhook extracts `expandedInvoice.payment_intent` (string or expanded id) and passes it as `paymentMetadata.trackingOrderId`. [processPaymentBenefitsInternal](../../src/utils/payment/payment-processing.ts) reads that field as a one-off override for the Facebook `orderId` parameter only — every other use of `paymentIntentId` (PaymentEvent storage, ledger writes, retry locks) still sees `invoice_${invoice.id}` and stays idempotent.
+
+**If you add a new subscription-billing webhook path** (e.g., a recovery cron, a backfill script), and you call `processPaymentBenefits` with `invoice_…` as the first arg, you MUST also resolve the underlying PaymentIntent and set `trackingOrderId` on the metadata. Otherwise browser↔server dedup silently breaks for that flow.
+
+## MembershipModal browser Purchase pixel uses `lastChargedStaticPackageIdRef`, not `activePlan.id`
+
+`activePlan.id` is the tier slug ("tradie", "boss", "foreman"). The server CAPI sends `packageId` from the MembershipPackage document ("tradie-subscription", "boss-subscription", …) — these are NOT the same string. Browser-side `content_ids` must use [`lastChargedStaticPackageIdRef.current`](../../src/components/modals/MembershipModal.tsx) (the canonical static package id assigned during `handlePurchaseClick`) for the values to match the server, with `activePlan.id` only as a last-resort fallback.
+
+Both `handlePaymentProcessingSuccess` (existing-user flow) and `handlePaymentSuccess` (new-user autologin flow) must read the same ref. We shipped a Phase 3 regression on 2026-05-12 where `handlePaymentSuccess` used `activePlan.id` directly — browser sent `["tradie"]`, server sent `["tradie-subscription"]`, Meta flagged the dedup mismatch.
