@@ -13,6 +13,7 @@ type PaymentStatusPayload =
         paymentIntentId: string;
         eventType: string;
         packageType: string;
+        packageId?: string;
         packageName?: string;
         entries?: number;
         points?: number;
@@ -36,7 +37,7 @@ type PaymentStatusPayload =
 
 type PaymentEventLean = Pick<
   IPaymentEvent,
-  "paymentIntentId" | "eventType" | "packageType" | "packageName" | "data" | "processedBy" | "timestamp"
+  "paymentIntentId" | "eventType" | "packageType" | "packageId" | "packageName" | "data" | "processedBy" | "timestamp"
 >;
 
 const PAYMENT_STATUS_CACHE_TTL_MS = 4000;
@@ -74,6 +75,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           paymentIntentId,
           eventType: paymentEvent.eventType,
           packageType: paymentEvent.packageType,
+          packageId: paymentEvent.packageId,
           packageName: paymentEvent.packageName,
           entries: paymentEvent.data?.entries,
           points: paymentEvent.data?.points,
@@ -142,7 +144,7 @@ async function getStripeProcessingHint(
 async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<PaymentEventLean | null> {
   const directId = `BenefitsGranted-${paymentIntentId}`;
   const direct = await PaymentEvent.findById(directId)
-    .select("_id paymentIntentId eventType packageType packageName data processedBy timestamp")
+    .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp")
     .lean<PaymentEventLean | null>();
   if (direct) {
     return direct;
@@ -163,7 +165,7 @@ async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<Paymen
     }
     const invoiceEventId = `BenefitsGranted-invoice_${invoiceId}`;
     return PaymentEvent.findById(invoiceEventId)
-      .select("_id paymentIntentId eventType packageType packageName data processedBy timestamp")
+      .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp")
       .lean<PaymentEventLean | null>();
   } catch (err) {
     console.warn("[payment-status] Could not map PaymentIntent to invoice BenefitsGranted event:", paymentIntentId, err);

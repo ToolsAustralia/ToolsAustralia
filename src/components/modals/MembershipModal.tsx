@@ -218,6 +218,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isCreatingSetupIntentRef = useRef<boolean>(false);
   /** Synchronous guard so two rapid submits cannot both pass before React re-renders isSubmitting. */
   const checkoutSubmitLockRef = useRef(false);
+  /** Fires-once guard for Meta InitiateCheckout per active plan lifetime; prevents double-fire on rapid clicks. Reset when activePlan changes or modal closes. */
+  const initiateCheckoutFiredRef = useRef(false);
   const isCreatingSubscriptionRef = useRef<boolean>(false);
   const SUBSCRIPTION_CHECKOUT_STORAGE_KEY = "membership_subscription_checkout";
   const SUBSCRIPTION_CHECKOUT_STALE_MS = 60 * 60 * 1000; // 60 minutes
@@ -622,6 +624,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       subscriptionCreatedRef.current = null;
       subscriptionPackageIdRef.current = null;
       previousSubscriptionToCancelRef.current = null;
+      // Reset Meta InitiateCheckout fires-once guard so a fresh modal session can fire again
+      initiateCheckoutFiredRef.current = false;
       setIsCreatingSubscription(false);
       setPaymentMethodTypeFromElement(null);
       userIdRef.current = null; // ✅ Reset userId tracking for clean state
@@ -636,6 +640,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     }
   }, [isOpen]);
+
+  // Reset Meta InitiateCheckout fires-once guard when the user changes their selected package.
+  // Switching packages is a meaningful re-intent — let the next click fire again with the new value.
+  useEffect(() => {
+    initiateCheckoutFiredRef.current = false;
+  }, [activePlan?.id]);
 
   const [currentStep, setCurrentStep] = useState(1); // Start neutral, will be updated by useEffect based on auth
 
@@ -1545,6 +1555,24 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setIsRegistering(true);
     setRegistrationErrors({}); // Clear previous errors
 
+    // Track Meta InitiateCheckout for the new-user signup path BEFORE the network request.
+    // This mirrors the existing fire in handleSubmit (~line 3067) for logged-in users — new-user
+    // signups previously bypassed it. Browser-only (no CAPI counterpart): InitiateCheckout is a
+    // high-intent signal for Meta optimization, not a conversion event.
+    try {
+      if (!initiateCheckoutFiredRef.current && activePlan) {
+        initiateCheckoutFiredRef.current = true;
+        const packagePrice = activePlan?.price || 0;
+        trackInitiateCheckout({
+          value: packagePrice,
+          currency: "AUD",
+          numItems: 1, // Single membership package
+        });
+      }
+    } catch {
+      // Non-blocking — never fail registration on tracking error
+    }
+
     // Extract promotion slug from current URL if on promotions page
     // Format: /promotions/[slug] -> extract slug
     let promotionSlug: string | undefined;
@@ -2396,6 +2424,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           customData: {
             orderId: membershipPaymentIntentId,
             contentType: "product",
+            contentIds: lastChargedStaticPackageIdRef.current
+              ? [lastChargedStaticPackageIdRef.current]
+              : undefined,
+            numItems: 1,
             packageType: status.data?.packageType ?? "membership",
           },
           eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
@@ -2663,7 +2695,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           customData: {
             orderId: effectivePaymentIntentId,
             contentType: "product",
-            packageType: activePlan.period === "mo" ? "membership" : "one-time",
+            contentIds: activePlan.id ? [activePlan.id] : undefined,
+            numItems: 1,
+            packageType: activePlan.id.startsWith("mini-pack-")
+              ? "mini-draw"
+              : activePlan.period === "mo"
+                ? "membership"
+                : "one-time",
           },
           eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
         }),
@@ -3052,13 +3090,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Track InitiateCheckout event (standard Meta Pixel event)
       // This replaces the non-standard ButtonClick event with the official InitiateCheckout event
       // InitiateCheckout fires when a user starts the checkout process
-      const packagePrice = activePlan?.price || 0;
+      // Guarded by initiateCheckoutFiredRef so rapid double-clicks (and new-user signup pre-fire) don't double-count
+      if (!initiateCheckoutFiredRef.current) {
+        initiateCheckoutFiredRef.current = true;
+        const packagePrice = activePlan?.price || 0;
 
-      trackInitiateCheckout({
-        value: packagePrice,
-        currency: "AUD",
-        numItems: 1, // Single membership package
-      });
+        trackInitiateCheckout({
+          value: packagePrice,
+          currency: "AUD",
+          numItems: 1, // Single membership package
+        });
+      }
     } catch {
       // Non-blocking - continue with purchase even if tracking fails
       if (process.env.NODE_ENV === "development") {

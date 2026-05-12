@@ -1,5 +1,5 @@
 // src/lib/tracking/providers/snapchat.ts
-"use client";
+// Isomorphic — see the matching comment in ./facebook.ts. NO "use client".
 
 import type { CanonicalEvent, ConversionProvider } from "../types";
 import { hashPII } from "../canonical-event";
@@ -24,7 +24,7 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string }): void {
+function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
   if (typeof window === "undefined") return;
   if (window._snaptrInit) return;
   const pixelId = process.env.NEXT_PUBLIC_SNAPCHAT_PIXEL_ID;
