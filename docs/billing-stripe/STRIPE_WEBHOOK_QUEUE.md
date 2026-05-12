@@ -1,14 +1,89 @@
 # Stripe Webhook Async Queue
 
-> **Status:** In progress — full documentation lands in Task 16 of the implementation plan. See [docs/superpowers/specs/2026-05-12-stripe-webhook-async-queue-design.md](../superpowers/specs/2026-05-12-stripe-webhook-async-queue-design.md) for design.
-
 ## Overview
 
-Stripe webhook events are received by a thin receiver that returns 200 in <1s, then processed asynchronously by a worker route with a 300s budget. A Mongo-backed queue (`stripewebhookqueue` collection) buffers events between receiver and worker. A cron sweeper retries failed events with exponential backoff and recovers orphaned in-flight rows.
+Stripe webhook events are received by a thin receiver at `/api/stripe/webhook` that returns 200 in <1s, then processed asynchronously by a worker route at `/api/stripe/process-event` (300s budget). Events buffer in the `stripewebhookqueue` Mongo collection. A 1-minute cron sweeper retries failed events with exponential backoff and recovers in-flight rows whose worker crashed before completing.
+
+This matches Stripe's documented webhook best practice: respond quickly, queue for async processing, retry idempotently, dead-letter permanent failures.
+
+## Architecture
+
+```
+Stripe → POST /api/stripe/webhook  (receiver, maxDuration: 60s)
+            │
+            ├─ verify signature
+            ├─ ProcessedStripeEvent dedup
+            ├─ enqueueStripeEvent(event)       ← upsert by eventId, no-op on dup
+            ├─ after(() => fetch('/api/stripe/process-event', { eventId }))
+            └─ return 200
+
+         /api/stripe/process-event  (worker, maxDuration: 300s, x-internal-secret auth)
+            │
+            ├─ claimNextAttempt(eventId)       ← atomic queued → processing
+            ├─ dispatchStripeEvent(payload)    ← runs the lifted handler
+            ├─ markSucceeded on success
+            └─ markFailed on error  → attempts++, backoff or dead
+
+         /api/cron/process-stripe-webhook-queue  (sweeper, * * * * *, 300s)
+            │
+            ├─ Recover orphans: status="processing" AND claimedAt < now-5min
+            └─ Dispatch due queued rows: status="queued" AND nextAttemptAt <= now
+```
+
+## Backoff schedule
+
+| Attempts | Wait before retry |
+|---|---|
+| 0 → 1 | 1 minute |
+| 1 → 2 | 5 minutes |
+| 2 → 3 | 15 minutes |
+| 3 → 4 | 1 hour |
+| 4 → 5 | 6 hours |
+| 5 → dead | — (status: dead) |
+
+Total retry window ~7.5h. Dead rows stay in the collection indefinitely (no TTL); succeeded rows are TTL'd after 30 days.
+
+## Four-layer dedup (no double-grant guarantee)
+
+| # | Layer | Where |
+|---|---|---|
+| 1 | `stripewebhookqueue.eventId` unique index | At enqueue |
+| 2 | `ProcessedStripeEvent` dedup | At receiver, before enqueue |
+| 3 | `claimNextAttempt` atomic findOneAndUpdate | At worker start |
+| 4 | `PaymentEvent` unique key `BenefitsGranted-invoice_<id>` | Inside handler |
+
+Layer 4 is load-bearing. The replay-safety regression test (`npm run test:webhook-queue-replay-safe`) proves dispatching the same event twice produces at most one `PaymentEvent` row.
+
+## The sweeper does not charge or grant
+
+The sweeper is purely a "kick the worker" trigger. It queries Mongo and POSTs to the worker. It never calls Stripe and never grants benefits itself.
+
+## Required environment variables
+
+| Var | Purpose |
+|---|---|
+| `STRIPE_WEBHOOK_SECRET` | Existing — signature verification |
+| `STRIPE_WORKER_INTERNAL_SECRET` | **New** — gates the worker route (`x-internal-secret` header) and is sent by the receiver fan-out + the sweeper. Generate a 32+ char random string. |
+| `CRON_SECRET` | Existing — Vercel cron auth |
+
+## Receiver
+
+### `POST /api/stripe/webhook` (receiver, maxDuration: 60s)
+
+**As of Task 10, the receiver is ack-fast.** It no longer awaits handler completion.
+
+Flow:
+1. Verifies Stripe signature
+2. Deduplicates via `ProcessedStripeEvent` and `user.processedPayments` (unchanged — runs before enqueue)
+3. Calls `enqueueStripeEvent(event)` — idempotent Mongo upsert by eventId
+4. Schedules `after(() => fetch('/api/stripe/process-event', ...))` — fires after the response is sent
+5. Returns `{ received: true, queued: boolean }` **immediately** (target: <1s)
+
+The receiver no longer calls `dispatchStripeEvent`, `ackProcessedStripeEventOnce` (for the happy path), or `markEventProcessed` — those are now owned entirely by the worker route. The dedup short-circuit paths (skipped events) still call `ackProcessedStripeEventOnce` to keep `ProcessedStripeEvent` consistent.
 
 ## Worker Route
 
-### `/api/stripe/process-event` (POST)
+### `/api/stripe/process-event` (POST, maxDuration: 300s)
 
 The worker route processes queued Stripe events.
 
@@ -38,9 +113,9 @@ The worker route processes queued Stripe events.
 
 ## Sweeper Route
 
-### `/api/cron/process-stripe-webhook-queue` (GET)
+### `/api/cron/process-stripe-webhook-queue` (GET, maxDuration: 300s)
 
-The sweeper route runs on a scheduled cron job (typically every minute or 5 minutes) to:
+The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 1. **Recover orphaned rows** — Rows stuck in `processing` state for more than 5 minutes are rolled back to `queued` with an incremented attempt count
 2. **Dispatch due rows** — Rows in `queued` state with `nextAttemptAt ≤ now` are fan-out posted to the worker route in fire-and-forget mode
 
@@ -67,15 +142,38 @@ The sweeper route runs on a scheduled cron job (typically every minute or 5 minu
 - Batch size: 20 rows per sweep (configurable via `SWEEP_BATCH_SIZE` constant)
 - Orphan threshold: 5 minutes (configurable via `ORPHAN_THRESHOLD_MS` constant)
 
-## Receiver (Task 10 — ack-fast cutover)
+## Admin UI
 
-**As of Task 10, the receiver is ack-fast.** It no longer awaits handler completion.
+`/admin/stripe-webhook-queue` lists rows by status with a Replay button per row. Replay:
+1. Resets `status: "queued"`, `nextAttemptAt: now`, `claimedAt: null`, `lastError: null`.
+2. Does NOT reset `attempts` — preserves the audit trail.
+3. Immediately fires a fan-out POST to the worker (skips the 60s sweeper wait).
 
-`POST /api/stripe/webhook` flow:
-1. Verifies Stripe signature
-2. Deduplicates via `ProcessedStripeEvent` and `user.processedPayments` (unchanged — runs before enqueue)
-3. Calls `enqueueStripeEvent(event)` — idempotent Mongo upsert
-4. Schedules `after(() => fetch('/api/stripe/process-event', ...))` — fires after the response is sent
-5. Returns `{ received: true, queued: boolean }` **immediately** (target: <1s)
+## Testing
 
-The receiver no longer calls `dispatchStripeEvent`, `ackProcessedStripeEventOnce` (for the happy path), or `markEventProcessed` — those are now owned entirely by the worker route. The dedup short-circuit paths (skipped events) still call `ackProcessedStripeEventOnce` to keep `ProcessedStripeEvent` consistent.
+| Script | Covers |
+|---|---|
+| `npm run test:webhook-queue-backoff` | Pure backoff function |
+| `npm run test:webhook-queue-enqueue` | Idempotent enqueue |
+| `npm run test:webhook-queue-claim` | Atomic claim, parallel race |
+| `npm run test:webhook-queue-mark-result` | Success / fail / dead transitions |
+| `npm run test:webhook-queue-replay-safe` | No double-grant on replay |
+| `npm run test:webhook-queue-orphan-recovery` | Orphan rows are recovered |
+
+## Operational playbook
+
+**A user reports missing benefits after a successful Stripe charge:**
+1. Open `/admin/stripe-webhook-queue`, filter by `dead`.
+2. Find the event for that invoice (eventId matches Stripe Dashboard).
+3. Click Replay. Wait ~30s.
+4. If still failing, check `lastError` and investigate. Use Stripe Dashboard "Resend" as a last resort (safe — layer 4 still blocks double-grants).
+
+**Vercel deployment shows high `stripewebhookqueue` row count in `queued`:**
+- Normal during a burst (e.g., admin bulk charge). Should drain within minutes.
+- If persistent (>10 min with rows older than 5 min), the worker route may be erroring — check Vercel logs for `/api/stripe/process-event`.
+
+## Related
+
+- Spec: [../superpowers/specs/2026-05-12-stripe-webhook-async-queue-design.md](../superpowers/specs/2026-05-12-stripe-webhook-async-queue-design.md)
+- Plan: [../superpowers/plans/2026-05-12-stripe-webhook-async-queue.md](../superpowers/plans/2026-05-12-stripe-webhook-async-queue.md)
+- Adjacent: [CHARGE_PAST_DUE_CUSTOMERS.md](CHARGE_PAST_DUE_CUSTOMERS.md), [PAYMENT_ATTRIBUTION.md](PAYMENT_ATTRIBUTION.md)
