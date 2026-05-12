@@ -202,7 +202,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-05-12"
+      "lastVerified": "2026-05-13"
     },
     "payment": {
       "docs": "docs/payment/",
