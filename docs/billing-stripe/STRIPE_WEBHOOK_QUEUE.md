@@ -35,3 +35,34 @@ The worker route processes queued Stripe events.
 **Configuration:**
 - Requires `STRIPE_WORKER_INTERNAL_SECRET` env var set to a random 32+ character string
 - Must be called with the correct secret to prevent unauthorized event processing
+
+## Sweeper Route
+
+### `/api/cron/process-stripe-webhook-queue` (GET)
+
+The sweeper route runs on a scheduled cron job (typically every minute or 5 minutes) to:
+1. **Recover orphaned rows** — Rows stuck in `processing` state for more than 5 minutes are rolled back to `queued` with an incremented attempt count
+2. **Dispatch due rows** — Rows in `queued` state with `nextAttemptAt ≤ now` are fan-out posted to the worker route in fire-and-forget mode
+
+**Request:**
+- Headers: `Authorization: Bearer ${CRON_SECRET}` — validated against `process.env.CRON_SECRET`
+- Method: GET
+
+**Processing flow:**
+1. Authenticates via the `CRON_SECRET` Bearer token (same as other cron routes)
+2. Fetches up to 20 rows stuck in `processing` with `claimedAt` older than 5 minutes
+   - For each orphan, increments `attempts` and computes the next retry time via `computeNextAttempt()`
+   - If retry budget is exhausted, marks as `dead` with error message
+   - Otherwise, rolls back to `queued` with the new retry time
+3. Fetches up to 20 rows in `queued` state with `nextAttemptAt ≤ now`
+   - For each due row, fire-and-forget POSTs to `/api/stripe/process-event` with the `eventId`
+   - Uses the `STRIPE_WORKER_INTERNAL_SECRET` header for authentication
+   - Catches and logs any network errors; does not retry failed POSTs (the sweeper will try again next cycle)
+4. Returns JSON with counts: `{ orphansRecovered: number, dispatched: number }`
+
+**Configuration:**
+- Requires `CRON_SECRET` env var (same as other cron routes)
+- Requires `STRIPE_WORKER_INTERNAL_SECRET` env var (passed to worker route)
+- Optional: `VERCEL_URL` for production, or falls back to `NEXT_PUBLIC_SITE_URL` / `http://localhost:3000`
+- Batch size: 20 rows per sweep (configurable via `SWEEP_BATCH_SIZE` constant)
+- Orphan threshold: 5 minutes (configurable via `ORPHAN_THRESHOLD_MS` constant)
