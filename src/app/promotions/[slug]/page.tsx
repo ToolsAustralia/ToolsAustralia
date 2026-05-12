@@ -189,7 +189,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
               />
             </div>
 
-            <PromoTrustBar />
+            <PromoTrustBar initialMajorDraw={majorDraw} />
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />

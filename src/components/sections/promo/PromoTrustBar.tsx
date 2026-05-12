@@ -6,6 +6,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { cn } from "@/utils/cn";
 
 const linkClass =
@@ -52,21 +53,28 @@ const URGENCY_ALT: Record<UrgencyTier, string> = {
 };
 
 /**
- * Resolve which urgency tier (if any) the bar should render based on freeze/draw/activation.
+ * Resolve which urgency tier (if any) the bar should render.
  * - <72h to freeze → "finalHours"
  * - <48h to freeze → "drawnTomorrow"
  * - <24h to freeze → "drawnTonight"
- * - now ≥ freeze and now < activation → "frozen"
+ * - now ≥ freeze but draw is still upcoming (or within 12h-after window) → "frozen"
  * Returns null when normal trust bar should render.
+ *
+ * Note: `currentMajorDraw.activationDate` is when *this* draw became active (always in the
+ * past for an active draw), NOT when entries lock out. Don't use it as a stop condition.
  */
 function getUrgencyTier(
   nowMs: number,
   freezeMs: number | null,
-  activationMs: number | null
+  drawMs: number | null
 ): UrgencyTier | null {
   if (freezeMs == null) return null;
-  if (activationMs != null && nowMs >= activationMs) return null;
-  if (nowMs >= freezeMs) return "frozen";
+  if (nowMs >= freezeMs) {
+    // Show "frozen" through the 30-min freeze window + a short buffer after the live draw.
+    // After ~12h past drawDate we assume the draw cycle has flipped and fall back to normal.
+    if (drawMs == null || nowMs < drawMs + 12 * HOUR_MS) return "frozen";
+    return null;
+  }
   const msUntilFreeze = freezeMs - nowMs;
   if (msUntilFreeze < 24 * HOUR_MS) return "drawnTonight";
   if (msUntilFreeze < 48 * HOUR_MS) return "drawnTomorrow";
@@ -90,39 +98,34 @@ function formatDeadlineLabel(deadline: Date, now: Date): string {
   return `${formatInTimeZone(deadline, tz, "EEE d MMM")} · ${time} ${tzAbbr}`;
 }
 
-/** "2d 14h" / "6h 42m" / "5m" — minute precision (matches the 60s tick). */
-function formatCountdownShort(msUntil: number): string {
-  if (msUntil <= 0) return "0m";
-  const totalMinutes = Math.floor(msUntil / 60000);
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const minutes = totalMinutes % 60;
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+interface PromoTrustBarProps {
+  /**
+   * Server-fetched current major draw. Used for first paint so the urgency variant
+   * doesn't flicker through a stale client-cached value from a previous draw state.
+   * The client hook (`useCurrentMajorDraw`) is consulted only when this is absent.
+   */
+  initialMajorDraw?: ServerMajorDraw | null;
 }
 
-export default function PromoTrustBar() {
+export default function PromoTrustBar({ initialMajorDraw }: PromoTrustBarProps = {}) {
   const theme = usePromoTheme();
   const { data: currentMajorDraw } = useCurrentMajorDraw();
   // 60s tick is enough — the bar shows down to minutes, not seconds.
   const nowMs = useLeafTimer(60_000);
 
-  const freezeMs = currentMajorDraw?.freezeEntriesAt
-    ? new Date(currentMajorDraw.freezeEntriesAt).getTime()
-    : null;
-  const drawMs = currentMajorDraw?.drawDate ? new Date(currentMajorDraw.drawDate).getTime() : null;
-  const activationMs = currentMajorDraw?.activationDate
-    ? new Date(currentMajorDraw.activationDate).getTime()
-    : null;
+  // Prefer the server-fetched prop on first paint. The client hook may return
+  // stale cached data from a previous draw state; the page just re-rendered
+  // server-side so the prop is authoritative.
+  const draw = initialMajorDraw ?? currentMajorDraw;
+  const freezeMs = draw?.freezeEntriesAt ? new Date(draw.freezeEntriesAt).getTime() : null;
+  const drawMs = draw?.drawDate ? new Date(draw.drawDate).getTime() : null;
 
-  const tier = getUrgencyTier(nowMs, freezeMs, activationMs);
+  const tier = getUrgencyTier(nowMs, freezeMs, drawMs);
 
   if (tier !== null && freezeMs != null) {
     const isFrozen = tier === "frozen";
     const referenceDate = isFrozen && drawMs != null ? new Date(drawMs) : new Date(freezeMs);
     const dateLabel = formatDeadlineLabel(referenceDate, new Date(nowMs));
-    const countdownText = isFrozen ? null : formatCountdownShort(freezeMs - nowMs);
     const TimerIcon = isFrozen ? Lock : Clock;
     const accentColor = isFrozen ? "#dc2626" : theme.primary;
 
@@ -157,14 +160,6 @@ export default function PromoTrustBar() {
                 >
                   {isFrozen ? `Draw live · ${dateLabel.replace(/^Tonight · |^Tomorrow · /, "")}` : dateLabel}
                 </div>
-                {countdownText && (
-                  <div
-                    className="text-gray-500 dark:text-neutral-400 leading-tight"
-                    style={{ fontSize: "clamp(8px, 1.3vw, 11px)" }}
-                  >
-                    in {countdownText}
-                  </div>
-                )}
               </div>
             </div>
             <div className="flex items-center justify-end flex-shrink-0">
