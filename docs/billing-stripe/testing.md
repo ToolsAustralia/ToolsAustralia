@@ -11,6 +11,7 @@
 | `npm run test:webhook-queue-backoff` | Exponential backoff calculator for webhook retry scheduling. |
 | `npm run test:webhook-queue-enqueue` | Idempotent Stripe event enqueueing and duplicate handling. |
 | `npm run test:webhook-queue-claim` | Atomic claim guarantees one-winner among parallel workers. |
+| `npm run test:webhook-queue-mark-result` | Success / fail / dead-letter state transitions for queue rows. |
 
 ## Test conventions
 
