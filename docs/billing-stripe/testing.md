@@ -12,6 +12,7 @@
 | `npm run test:webhook-queue-enqueue` | Idempotent Stripe event enqueueing and duplicate handling. |
 | `npm run test:webhook-queue-claim` | Atomic claim guarantees one-winner among parallel workers. |
 | `npm run test:webhook-queue-mark-result` | Success / fail / dead-letter state transitions for queue rows. |
+| `npm run test:webhook-queue-orphan-recovery` | Sweeper recovers in-flight rows stuck in `processing`. |
 | `npm run test:webhook-queue-replay-safe` | No-double-grant on replay (4-layer dedup load-bearing test). |
 
 ## Test conventions
