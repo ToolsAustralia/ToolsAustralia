@@ -1,5 +1,19 @@
 # Admin — Gotchas
 
+## "Edit Entries" never writes `entriesBySource.membership = totalEntries`
+
+The admin major-draw participation form ([`src/components/admin/UserDetailModal.tsx`](../../src/components/admin/UserDetailModal.tsx) "Edit Entries" tab) sends only `{ drawId, totalEntries }` per row to [`syncMajorDrawParticipation`](../../src/features/admin/users/server/mutations.ts). The mutation **must not** force-set `entriesBySource.membership` to `participation.totalEntries` — the previous implementation did, and on every save it silently wiped the source breakdown.
+
+Concrete failure (the Cody case): a refund left a user with `{ total: 800, membership: 0, upsell: 800 }`; an admin opened the user, pressed Save without changing anything, and the row became `{ total: 800, membership: 800, upsell: 800 }` (sum 1600 ≠ total 800).
+
+Current behavior:
+- **Existing entry**: only `totalEntries` and `lastUpdatedDate` are updated. The existing `entriesBySource` is preserved exactly.
+- **New entry** (no previous row): initialized with `{ membership: totalEntries }` because that's the only signal the form gives us.
+
+If a future workflow needs to adjust a per-source count, extend `majorDrawParticipationSchema` to accept a per-source payload before changing this code.
+
+
+
 ## Middleware vs handler gating
 
 Common mistake: assuming `/api/admin/**` is gated by middleware. NOT TRUE. Middleware excludes `/api`. Each handler must `requireAdmin(session)` itself.
@@ -53,6 +67,21 @@ The past-due charge history endpoints (`/api/admin/charge-past-due/runs`, `/api/
 - `parseAestDayEndExclusiveUtc("2026-05-06")` → UTC instant of `2026-05-07T00:00:00` AEST. Used as **`$lt`** (exclusive upper bound), so the entire AEST `May 6` day is included regardless of DST transitions.
 
 **The pitfall:** anyone copying this filter pattern into a new endpoint must also use `$lt` (not `$lte`) and the next-day-AEST instant — using `$lte` against `parseAestDayStartUtc(endDate)` silently excludes everything that happened *on* the end day. The Mongo filter builders in `chargePastDueHistory.ts` (`buildRunsFilter`, `buildManualRetriesFilter`) get this right; new admin date-range queries should reuse those helpers rather than reinvent date parsing.
+
+## DrawSelect caps at 100 records
+
+`useAdminMajorDrawsList` and `useAdminMiniDrawsList` request `limit=100`
+from the admin history/list endpoints. If a user's draw participation
+references an older draw that falls outside the most recent 100 records,
+the `DrawSelect` trigger renders an amber warning with the last 4 chars
+of the ObjectId ("Unknown draw …a3f2") rather than the draw name.
+
+The card header falls back to `Major Draw {N}` / `Mini Draw {N}` in this
+case. The form still saves correctly because the stored `drawId` is
+untouched — only the visible label is degraded.
+
+If this starts happening in normal admin flows (not just historical
+archaeology), raise the cap or add server-side search to both endpoints.
 
 ## `errorCode` vs `declineCode` — prefer the specific one
 

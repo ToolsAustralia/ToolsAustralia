@@ -87,9 +87,18 @@ function buildLedgerReversalSteps(
       stepId: "drawEntries",
       reverse: async () => {
         if (grants?.drawGrants?.length) {
+          console.log(`[refund-reversal] drawGrants ledger present — using scoped removal`, {
+            userId,
+            paymentIntentId,
+            grantCount: grants.drawGrants.length,
+          });
           for (const row of grants.drawGrants) {
             try {
               if (row.kind === "major") {
+                // Pass the ledger's drawId so removal is scoped to THIS draw only.
+                // Without it, the function falls back to walking every draw the
+                // user has entries in, which over-removed entries from prior
+                // months' draws and silently corrupted historical totals.
                 await removeMajorDrawEntries(
                   userId,
                   row.entries,
@@ -99,7 +108,8 @@ function buildLedgerReversalSteps(
                     | "upsell"
                     | "mini-draw"
                     | "bonus-entry-promo"
-                    | "promo-link"
+                    | "promo-link",
+                  row.drawId
                 );
               } else {
                 await removeMiniDrawEntries(
@@ -122,6 +132,12 @@ function buildLedgerReversalSteps(
             }
           }
         } else {
+          console.log(`[refund-reversal] no drawGrants ledger — falling back to legacy walk`, {
+            userId,
+            paymentIntentId,
+            packageType,
+            entries: originalEvent.data.entries,
+          });
           const entries = originalEvent.data.entries || 0;
           if (entries > 0) {
             const source =

@@ -53,6 +53,9 @@ import ModalContent from "@/components/modals/ui/ModalContent";
 import Input from "@/components/modals/ui/Input";
 import Select from "@/components/modals/ui/Select";
 import Checkbox from "@/components/modals/ui/Checkbox";
+import DrawSelect, { type DrawSelectOption } from "@/components/admin/DrawSelect";
+import { useAdminMajorDrawsList } from "@/hooks/queries/admin/useAdminMajorDrawsList";
+import { useAdminMiniDrawsList } from "@/hooks/queries/admin/useAdminMiniDrawsList";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
 import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
@@ -690,6 +693,45 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const removedMajorDrawRef = useRef<MajorDrawParticipationFormValue[]>([]);
   const removedMiniDrawRef = useRef<MiniDrawParticipationFormValue[]>([]);
 
+  const activityEditing = activeEditTab === "activity";
+  const majorDrawsQ = useAdminMajorDrawsList(activityEditing);
+  const miniDrawsQ = useAdminMiniDrawsList(activityEditing);
+
+  const majorDrawOptions = useMemo<DrawSelectOption[]>(
+    () =>
+      (majorDrawsQ.data ?? []).map((d) => ({
+        id: d._id,
+        name: d.name,
+        imageUrl: d.prize?.images?.[0],
+        status: d.status,
+      })),
+    [majorDrawsQ.data]
+  );
+
+  const miniDrawOptions = useMemo<DrawSelectOption[]>(
+    () =>
+      (miniDrawsQ.data ?? []).map((d) => ({
+        id: d._id,
+        name: d.name,
+        imageUrl: d.prize?.images?.[0],
+        status: d.status,
+      })),
+    [miniDrawsQ.data]
+  );
+
+  const watchedMajorDraws = activityForm.watch("majorDrawParticipation");
+  const watchedMiniDraws = activityForm.watch("miniDrawParticipation");
+
+  const getOtherSelectedMajorIds = (currentIndex: number): string[] =>
+    (watchedMajorDraws ?? [])
+      .map((row, i) => (i !== currentIndex ? row?.drawId : ""))
+      .filter((id): id is string => !!id);
+
+  const getOtherSelectedMiniIds = (currentIndex: number): string[] =>
+    (watchedMiniDraws ?? [])
+      .map((row, i) => (i !== currentIndex ? row?.miniDrawId : ""))
+      .filter((id): id is string => !!id);
+
   const tabs = [
     { id: "overview" as TabType, label: "Overview", icon: User },
     { id: "subscription" as TabType, label: "Subscription", icon: CreditCard },
@@ -1154,10 +1196,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             drawId: draw.drawId.trim(),
             totalEntries: draw.totalEntries,
           })),
-        ...removedMajorDrawRef.current.map((draw) => ({
-          drawId: draw.drawId.trim(),
-          totalEntries: 0,
-        })),
+        ...removedMajorDrawRef.current
+          .filter((draw) => draw.drawId.trim().length > 0)
+          .map((draw) => ({
+            drawId: draw.drawId.trim(),
+            totalEntries: 0,
+          })),
       ],
       miniDrawParticipation: [
         ...values.miniDrawParticipation
@@ -1167,11 +1211,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             totalEntries: entry.totalEntries,
             isActive: entry.isActive,
           })),
-        ...removedMiniDrawRef.current.map((entry) => ({
-          miniDrawId: entry.miniDrawId.trim(),
-          totalEntries: 0,
-          isActive: false,
-        })),
+        ...removedMiniDrawRef.current
+          .filter((entry) => entry.miniDrawId.trim().length > 0)
+          .map((entry) => ({
+            miniDrawId: entry.miniDrawId.trim(),
+            totalEntries: 0,
+            isActive: false,
+          })),
       ],
     };
 
@@ -1479,6 +1525,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         )}
                         {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
                           <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Campaign/Promo: {entriesBySource["bonus-entry-promo"]}</span>
+                        )}
+                        {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Retention: {entriesBySource["cancellation-upsell"]}</span>
                         )}
                       </div>
                     </div>
@@ -3137,7 +3186,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-xs font-semibold text-gray-900">Major Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">
+                                      {majorDrawOptions.find((o) => o.id === watchedMajorDraws?.[index]?.drawId)?.name ??
+                                        `Major Draw ${index + 1}`}
+                                    </h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMajorDraw(index)}
@@ -3146,16 +3198,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <Controller
                                       control={activityForm.control}
                                       name={`majorDrawParticipation.${index}.drawId` as const}
                                       render={({ field, fieldState }) => (
-                                        <Input
-                                          label="Draw ID"
+                                        <DrawSelect
+                                          label="Draw"
+                                          placeholder="Select major draw…"
+                                          options={majorDrawOptions}
                                           value={field.value || ""}
                                           onChange={field.onChange}
-                                          placeholder="Major draw ObjectId"
+                                          disabledIds={getOtherSelectedMajorIds(index)}
+                                          loading={majorDrawsQ.isLoading}
                                           error={fieldState.error?.message}
                                         />
                                       )}
@@ -3209,7 +3264,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-xs font-semibold text-gray-900">Mini Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">
+                                      {miniDrawOptions.find((o) => o.id === watchedMiniDraws?.[index]?.miniDrawId)?.name ??
+                                        `Mini Draw ${index + 1}`}
+                                    </h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniDraw(index)}
@@ -3218,16 +3276,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <Controller
                                       control={activityForm.control}
                                       name={`miniDrawParticipation.${index}.miniDrawId` as const}
                                       render={({ field, fieldState }) => (
-                                        <Input
-                                          label="Mini Draw ID"
+                                        <DrawSelect
+                                          label="Mini draw"
+                                          placeholder="Select mini draw…"
+                                          options={miniDrawOptions}
                                           value={field.value || ""}
                                           onChange={field.onChange}
-                                          placeholder="Mini draw ObjectId"
+                                          disabledIds={getOtherSelectedMiniIds(index)}
+                                          loading={miniDrawsQ.isLoading}
                                           error={fieldState.error?.message}
                                         />
                                       )}
@@ -3360,6 +3421,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
                                     <EntrySourceBadge sourceKey="bonus-entry-promo">
                                       Campaign/Promo: {entriesBySource["bonus-entry-promo"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                                    <EntrySourceBadge sourceKey="cancellation-upsell">
+                                      Retention: {entriesBySource["cancellation-upsell"]}
                                     </EntrySourceBadge>
                                   )}
                                 </div>

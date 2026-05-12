@@ -27,3 +27,19 @@ Per [auth rules R1-R2](../auth/rules.md): middleware gates `/admin/**` PAGES; pe
 - Promo / campaign management
 - Affiliate management
 - Draw management
+
+## User Detail Modal
+
+### Draw entry picker (Activity tab → Edit Entries)
+
+The "Manage Draw Entries" form (admin edit mode in the Activity tab) uses
+`src/components/admin/DrawSelect.tsx` to pick draws by name and image
+instead of pasting ObjectIds. Two hooks back it:
+
+- `useAdminMajorDrawsList` → `GET /api/admin/major-draw/history?limit=100`
+- `useAdminMiniDrawsList`  → `GET /api/admin/mini-draw/list?limit=100`
+
+Both are lazy (`enabled` bound to `activeEditTab === "activity"`) and cached
+for 5 minutes. The payload sent to the existing
+`/api/admin/users/[id]` route is unchanged — `drawId` / `miniDrawId` are
+still ObjectId strings.

@@ -50,6 +50,7 @@ export interface IMajorDraw extends Document {
       "mini-draw"?: number;
       referral?: number;
       "bonus-entry-promo"?: number;
+      "cancellation-upsell"?: number;
     };
     firstAddedDate: Date; // When user first got entries
     lastUpdatedDate: Date; // When entries were last updated
@@ -220,6 +221,16 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
             type: Number,
             default: 0,
             min: [0, "Bonus entry promo entries cannot be negative"],
+          },
+          // Retention offer entries from /api/cancellation-upsell/redeem.
+          // Before this key existed, those entries were silently dropped by
+          // Mongoose strict mode and only survived on user.accumulatedEntries
+          // (creating a discrepancy between major-draw totals and the user's
+          // lifetime entry count).
+          "cancellation-upsell": {
+            type: Number,
+            default: 0,
+            min: [0, "Cancellation upsell entries cannot be negative"],
           },
         },
         firstAddedDate: {

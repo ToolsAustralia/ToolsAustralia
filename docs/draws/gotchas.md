@@ -1,5 +1,27 @@
 # Draws — Gotchas
 
+## Refund reversal must pass `drawId` to `removeMajorDrawEntries`
+
+[`removeMajorDrawEntries`](../../src/utils/draws/remove-draw-entries.ts) accepts an **optional** `drawId` parameter. **Always pass it** when the caller knows which draw the entries originally went to — the refund ledger does (every `BenefitsGranted` event with `data.grants.drawGrants[].drawId`). Omitting `drawId` falls back to the legacy multi-draw walk: the function will query *every* major draw containing this user and consume `sourceType` entries from the oldest forward until the refund amount is satisfied.
+
+That fallback caused silent historical corruption: a refund of one month's renewal would over-remove `membership` entries from a *previous* month's draw if the user's current-draw row didn't hold enough membership entries to cover the refund (e.g. because the current row's entries were partly from a `bonus-entry-promo` or `cancellation-upsell` source).
+
+**Concrete failure pattern** — user with entries in April Draw `{mem: 400, upsell: 800}` and May Draw `{mem: 440}`; refund of the May renewal called `removeMajorDrawEntries(userId, 440, "membership")` without a drawId; April was iterated first; 400 of the 440 came out of April's membership counter (now 0), leaving April's `totalEntries` 400 less than its `entriesBySource` sum. See `docs/payment/gotchas.md` for the refund-side detail.
+
+**Legacy callers without drawId** (intentional, still walk-based):
+- [`RedemptionService.reverseBonusEntries`](../../src/services/redeemables/RedemptionService.ts) — bonus-entry redemptions don't store the originating draw.
+- [`refund-ledger-reversal.ts` legacy fallback](../../src/utils/payment/refund-ledger-reversal.ts) — used only for `BenefitsGranted` events that predate the `drawGrants` ledger.
+
+Both log a `[refund-reversal] WARNING: legacy multi-draw walk active` line so they can be audited.
+
+## `entriesBySource` must include every source key the schema lists
+
+The MajorDraw schema's `entries.entriesBySource` is a fixed enum. Mongoose strict mode silently drops `$inc` and `$push` writes that reference keys not in the enum. If you add a new entry source (e.g. a new redemption type or retention offer), **add the key to [`src/models/MajorDraw.ts`](../../src/models/MajorDraw.ts) first**, otherwise the entries grant to `user.accumulatedEntries` but vanish from the major-draw breakdown.
+
+The `cancellation-upsell` key was added to fix exactly this — entries from `/api/cancellation-upsell/redeem` had been silently dropped from the breakdown for any prior redemption.
+
+
+
 ## Major-draw transitions
 
 (Migrated content from `docs/MAJOR_DRAW_TRANSITIONS.md`.)
