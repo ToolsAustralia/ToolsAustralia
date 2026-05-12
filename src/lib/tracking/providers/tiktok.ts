@@ -40,7 +40,7 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
   };
 }
 
-function loadPixel(opts: { nonce?: string }): void {
+function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, string> }): void {
   if (typeof window === "undefined") return;
   if (window._ttqInit) return;
   const pixelId = process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID;

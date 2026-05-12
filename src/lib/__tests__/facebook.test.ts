@@ -95,7 +95,7 @@ async function testFacebookProviderCanonicalTranslation() {
       value: 49.99,
       currency: "AUD",
       userData: { email: "buyer@example.com", country: "AU" },
-      customData: { orderId: "order-123", contentType: "product" },
+      customData: { orderId: "order-123", contentType: "product", packageType: "membership" },
       eventSourceUrl: "https://toolsaustralia.com.au/purchase-success",
     },
     {},
@@ -115,6 +115,11 @@ async function testFacebookProviderCanonicalTranslation() {
   assert.equal(event.custom_data?.value, 49.99);
   assert.equal(event.custom_data?.currency, "AUD");
   assert.equal(event.custom_data?.order_id, "order-123");
+  assert.equal(
+    (event.custom_data as { package_type?: string })?.package_type,
+    "membership",
+    "package_type must round-trip through capiSend custom_data",
+  );
   assert.ok(event.user_data?.em && event.user_data.em.length === 64, "email should be sha256-hashed (64 hex chars)");
   assert.ok(event.user_data?.country && event.user_data.country.length === 64, "country should be sha256-hashed");
 

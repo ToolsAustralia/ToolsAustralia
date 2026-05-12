@@ -720,6 +720,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           customData: {
             orderId: upsellPaymentIntentId,
             contentType: "product",
+            contentIds: offer?.id ? [offer.id] : undefined,
+            numItems: 1,
             packageType: status.data?.packageType ?? "upsell",
           },
           eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,

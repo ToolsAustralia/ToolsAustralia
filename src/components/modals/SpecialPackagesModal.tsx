@@ -548,6 +548,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           customData: {
             orderId: specialPaymentIntentId,
             contentType: "product",
+            contentIds: selectedPackage?._id ? [selectedPackage._id] : undefined,
+            numItems: 1,
             packageType: status.data?.packageType ?? "one-time",
           },
           eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,

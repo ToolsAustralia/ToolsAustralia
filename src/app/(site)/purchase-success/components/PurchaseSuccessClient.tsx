@@ -41,6 +41,8 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
         customData: {
           orderId: paymentIntentId,
           contentType: "product",
+          contentIds: status.data.packageId ? [status.data.packageId] : undefined,
+          numItems: 1,
           packageType: status.data.packageType,
         },
         eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,

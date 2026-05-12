@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { CreditCard, Plus, ChevronRight, Cog } from "lucide-react";
 import { useSavedPaymentMethods, type SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import SavedPaymentMethodsModal from "./SavedPaymentMethodsModal";
@@ -15,6 +15,8 @@ import { formatPaymentError } from "@/utils/payment/stripe/payment-error-message
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
 import { getReturnUrlForPaymentTypeClient } from "@/utils/payment/stripe/payment-intent-config";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { eventTimeNow } from "@/lib/tracking/canonical-event";
 import { cn } from "@/utils/cn";
 
 const stripePromise = getStripePromise();
@@ -109,6 +111,9 @@ const StripeCardForm = React.forwardRef<
     const elements = useElements();
     const [isStripeLoading, setIsStripeLoading] = useState(true);
     const { showToast } = useToast();
+    // Tracks whether AddPaymentInfo has fired for this PaymentElement mount.
+    // Re-mounts (new clientSecret / amount / packageName key) reset this naturally.
+    const addPaymentInfoFiredRef = useRef(false);
 
     // Handle Stripe loading state and validate StripeElements
     useEffect(() => {
@@ -644,6 +649,34 @@ const StripeCardForm = React.forwardRef<
               const type =
                 pm == null ? null : typeof pm === "string" ? pm : (pm as { type?: string }).type ?? null;
               onPaymentMethodTypeChange?.(type ?? null);
+
+              // When the user has entered valid card details, fire AddPaymentInfo once.
+              // Meta uses this event as a high-intent signal for ad optimization.
+              // Synthetic eventId — AddPaymentInfo has no CAPI counterpart so cross-channel
+              // dedup isn't relevant. Use packageName + timestamp so React Strict Mode
+              // double-mounts don't double-count. PaymentMethodSelector receives `amount`
+              // (cents) and `packageName` but no packageId; we derive packageType from
+              // intentType + amount (matches the outer component's derivation).
+              if (event.complete && !addPaymentInfoFiredRef.current) {
+                addPaymentInfoFiredRef.current = true;
+                const derivedPackageType =
+                  intentType === "payment" && typeof amount === "number" && amount > 0
+                    ? "one-time"
+                    : "membership";
+                trackConversion({
+                  eventName: "AddPaymentInfo",
+                  eventId: `addpaymentinfo-${packageName ?? "unknown"}-${Date.now()}`,
+                  eventTime: eventTimeNow(),
+                  value: typeof amount === "number" ? amount / 100 : undefined,
+                  currency: typeof amount === "number" ? "AUD" : undefined,
+                  customData: {
+                    contentType: "product",
+                    numItems: 1,
+                    packageType: derivedPackageType,
+                  },
+                  eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+                });
+              }
             }}
           />
         </div>

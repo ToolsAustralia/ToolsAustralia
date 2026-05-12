@@ -26,6 +26,7 @@ import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
+import ConversionPixelsAdvancedMatching from "@/components/tracking/ConversionPixelsAdvancedMatching";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeMetaSync from "@/components/system/ThemeMetaSync";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
@@ -101,6 +102,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                           <ReferralTracker />
                           <PromoLinkTracker />
                           <KlaviyoUserIdentifier />
+                          <ConversionPixelsAdvancedMatching />
                           <UpgradeSuccessToast />
                           {children}
                           <FloatingPromoBannerHost />

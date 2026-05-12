@@ -5,6 +5,8 @@
 | Script | Covers |
 |---|---|
 | `npm run test:facebook-capi` | Meta CAPI event sender (lives in [src/lib/__tests__/](../../src/lib/__tests__/)) |
+| `npm run test:tracking-dispatch` | Provider-registry dispatch fan-out + hostname gating ([src/lib/tracking/__tests__/dispatch.test.ts](../../src/lib/tracking/__tests__/dispatch.test.ts)) |
+| `npm run test:advanced-matching` | `buildAdvancedMatching` PII hashing + normalization parity with server `hashPII` ([src/lib/tracking/__tests__/advanced-matching.test.ts](../../src/lib/tracking/__tests__/advanced-matching.test.ts)) |
 
 ## Pixel testing guide
 

@@ -526,10 +526,7 @@ export async function trackPixelSubscriptionUpgrade(params: {
       event_time: Math.floor(Date.now() / 1000),
       event_id: capiEventId,
       action_source: "website",
-      user_data: {
-        ...hashed,
-        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
-      },
+      user_data: hashed,
       custom_data: {
         currency,
         value: Math.abs(newValue - oldValue),
@@ -619,10 +616,7 @@ export async function trackPixelSubscriptionDowngrade(params: {
       event_time: Math.floor(Date.now() / 1000),
       event_id: capiEventId,
       action_source: "website",
-      user_data: {
-        ...hashedDown,
-        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
-      },
+      user_data: hashedDown,
       custom_data: {
         currency,
         value: Math.abs(newValue - oldValue),
@@ -687,10 +681,7 @@ export async function trackPixelCancellation(params: {
       event_time: Math.floor(Date.now() / 1000),
       event_id: cancelEventId,
       action_source: "website",
-      user_data: {
-        ...hashedCancel,
-        client_user_agent: "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
-      },
+      user_data: hashedCancel,
       custom_data: {
         currency,
         value,
