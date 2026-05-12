@@ -257,6 +257,7 @@ const ENTRY_SOURCE_VARIANT: Record<string, AdminBadgeVariant> = {
   "mini-draw": "tagOrange",
   referral: "tagPink",
   "bonus-entry-promo": "tagAmber",
+  "cancellation-upsell": "tagAmber",
 };
 
 export function EntrySourceBadge({ sourceKey, children }: { sourceKey: string; children: React.ReactNode }) {

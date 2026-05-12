@@ -1480,6 +1480,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
                           <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Campaign/Promo: {entriesBySource["bonus-entry-promo"]}</span>
                         )}
+                        {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Retention: {entriesBySource["cancellation-upsell"]}</span>
+                        )}
                       </div>
                     </div>
                   ) : null;
@@ -3360,6 +3363,11 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
                                     <EntrySourceBadge sourceKey="bonus-entry-promo">
                                       Campaign/Promo: {entriesBySource["bonus-entry-promo"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                                    <EntrySourceBadge sourceKey="cancellation-upsell">
+                                      Retention: {entriesBySource["cancellation-upsell"]}
                                     </EntrySourceBadge>
                                   )}
                                 </div>

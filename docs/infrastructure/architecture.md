@@ -29,8 +29,15 @@
 Plus:
 - `scripts/migrations/` — date-prefixed migrations
 - `scripts/seed-admin-data.ts` — dev seed
-- `scripts/fix-*.{ts,mjs,js}` — one-off operational fixes
+- `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
+
+### Refund entry-corruption audit + repair
+
+Two scripts ship for finding and fixing the major-draw entry-row corruption documented in [draws/gotchas.md](../draws/gotchas.md) and [payment/gotchas.md](../payment/gotchas.md):
+
+- [`scripts/find-refund-entry-corruption.ts`](../../scripts/find-refund-entry-corruption.ts) — read-only audit. Replays each user's `BenefitsGranted` + `RefundProcessed` ledger to derive the expected per-draw state, then diffs against live MajorDraw rows. CSV out, progress to stderr. Run as `npm run find:refund-entry-corruption -- [--since=YYYY-MM-DD] [--userId=X | --email=X] [--verbose]`.
+- [`scripts/fix-refund-entry-corruption.ts`](../../scripts/fix-refund-entry-corruption.ts) — repair. Same replay, but writes the expected state back. **Defaults to dry-run** (printout only) unless `--apply` is passed. The `:dry` npm variant force-disables `--apply` regardless. Optional `--restore-cancellation-upsell` re-adds the 100-entry retention bonus to the draw that was active when the user redeemed (looked up by `cancellationUpsellRedeemedAt`).
 
 **Destructive script convention:** Scripts that delete or mutate production data should default to dry-run and require an explicit `--live` flag to actually execute. The `:dry` npm variant is the bare invocation; the live variant passes `--live`. See `scripts/cleanup-membership-backfill-rows.ts` for a current example, or `scripts/backfill-subscription-end-dates.ts` for the equivalent pre-existing pattern.
 

@@ -1,5 +1,19 @@
 # Admin — Gotchas
 
+## "Edit Entries" never writes `entriesBySource.membership = totalEntries`
+
+The admin major-draw participation form ([`src/components/admin/UserDetailModal.tsx`](../../src/components/admin/UserDetailModal.tsx) "Edit Entries" tab) sends only `{ drawId, totalEntries }` per row to [`syncMajorDrawParticipation`](../../src/features/admin/users/server/mutations.ts). The mutation **must not** force-set `entriesBySource.membership` to `participation.totalEntries` — the previous implementation did, and on every save it silently wiped the source breakdown.
+
+Concrete failure (the Cody case): a refund left a user with `{ total: 800, membership: 0, upsell: 800 }`; an admin opened the user, pressed Save without changing anything, and the row became `{ total: 800, membership: 800, upsell: 800 }` (sum 1600 ≠ total 800).
+
+Current behavior:
+- **Existing entry**: only `totalEntries` and `lastUpdatedDate` are updated. The existing `entriesBySource` is preserved exactly.
+- **New entry** (no previous row): initialized with `{ membership: totalEntries }` because that's the only signal the form gives us.
+
+If a future workflow needs to adjust a per-source count, extend `majorDrawParticipationSchema` to accept a per-source payload before changing this code.
+
+
+
 ## Middleware vs handler gating
 
 Common mistake: assuming `/api/admin/**` is gated by middleware. NOT TRUE. Middleware excludes `/api`. Each handler must `requireAdmin(session)` itself.
