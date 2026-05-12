@@ -71,13 +71,14 @@ Normalization pipeline:
 [src/types/metrics/UserMetrics.ts](../../src/types/metrics/UserMetrics.ts) gained these fields:
 
 - `ageGroup: Record<AgeGroupLabel, number>` — per-bucket counts keyed by `AgeGroupLabel`.
-- `ageGroupPurchased: Record<AgeGroupLabel, number>` — per-bucket count of users in the range whose `processedPayments` array is non-empty (i.e. have made at least one purchase). Drives the per-age-group "purchased" / conversion column in the admin metrics UI.
+- `state: Record<string, number>` — counts keyed by AU state/territory code (the eight valid codes accepted by `User.state`), plus an `Unknown` bucket for users with no recorded state. All valid codes are pre-seeded to `0` so empty cells still render.
 - `membershipByPackage: MembershipPackageBreakdown[]` where `MembershipPackageBreakdown = { packageId, packageName, total, active, pastDue, cancelled }` — one row per `MembershipPackage` of `type === "subscription"`.
 
 ### Aggregation pipeline (in `UserMetricsService.getUserMetrics`)
 
-- User documents are projected with `birthdate` and `processedPayments` selected so age and purchase-status can be computed at read time.
-- An `ageGroup` accumulator is initialised from `AGE_GROUP_ORDER` (every label starts at `0`, including `Unknown`); a parallel `ageGroupPurchased` accumulator is incremented for the same bucket whenever the user has a non-empty `processedPayments` array.
+- User documents are projected with `birthdate` and `state` selected so age and state-of-residence can be computed at read time.
+- An `ageGroup` accumulator is initialised from `AGE_GROUP_ORDER` (every label starts at `0`, including `Unknown`).
+- A `state` accumulator is initialised with all eight valid AU state codes set to `0` plus an `Unknown` bucket. Each user's `state` is uppercased and trimmed; any value not in the validator's allowlist (including `null`/empty) routes to `Unknown`.
 - Each user's profession is routed through `normalizeProfession` before counting; the final `profession` map is then passed through `bucketUnmatched(profession, 5)` so the chart caps at canonical + top-5 unmatched + `"Other (custom)"`.
 - A per-subscription-package counter is initialised from the `MembershipPackage` collection (filtered to `type === "subscription"`). Each user's subscription is then classified using the **same ladder** the flat `membershipStatus` aggregation uses, and the result is mirrored into the matching package's `{ active, pastDue, cancelled }` counts. This keeps `membershipByPackage` totals consistent with the standing `membershipStatus` rollup.
 
