@@ -8,6 +8,8 @@
 | `npm run test:stripe-collection-pause` | Pause-collection policy + invoice-selection helpers. |
 | `npm run test:facebook-capi` | Lives in [tracking](../tracking/) but exercises Stripe-driven event firing. |
 | `npm run test:redeemables` | Lives in [rewards-redeemables](../rewards-redeemables/) but covers the reverser-step pattern. |
+| `npm run test:webhook-queue-backoff` | Exponential backoff calculator for webhook retry scheduling. |
+| `npm run test:webhook-queue-enqueue` | Idempotent Stripe event enqueueing and duplicate handling. |
 
 ## Test conventions
 
