@@ -36,7 +36,7 @@ export class UserMetricsService {
         $lte: endDate,
       },
     })
-      .select("_id affiliateReferral referral profession subscription createdAt birthdate processedPayments")
+      .select("_id affiliateReferral referral profession subscription createdAt birthdate state")
       .lean()
       .exec();
 
@@ -74,17 +74,19 @@ export class UserMetricsService {
     // Aggregate professions
     const profession: Record<string, number> = {};
 
-    // Aggregate age groups — initialize every bucket so empty buckets render as 0
-    const ageGroup: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
-      (acc, label) => {
-        acc[label] = 0;
+    // Aggregate states — initialize every valid AU state/territory so empty buckets render as 0.
+    // Users without a state value fall into "Unknown".
+    const VALID_STATES = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"] as const;
+    const state: Record<string, number> = VALID_STATES.reduce(
+      (acc, code) => {
+        acc[code] = 0;
         return acc;
       },
-      {} as Record<AgeGroupLabel, number>
+      { Unknown: 0 } as Record<string, number>
     );
 
-    // Per-age-group count of users who have made at least one purchase (processedPayments non-empty).
-    const ageGroupPurchased: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
+    // Aggregate age groups — initialize every bucket so empty buckets render as 0
+    const ageGroup: Record<AgeGroupLabel, number> = AGE_GROUP_ORDER.reduce(
       (acc, label) => {
         acc[label] = 0;
         return acc;
@@ -144,12 +146,15 @@ export class UserMetricsService {
         profession[normalizedProfession] = (profession[normalizedProfession] || 0) + 1;
       }
 
+      // Aggregate state — schema stores AU state codes uppercased, but coerce defensively
+      // for legacy rows. Anything unrecognized (incl. missing) lands in "Unknown".
+      const rawState = typeof user.state === "string" ? user.state.trim().toUpperCase() : "";
+      const stateKey = (VALID_STATES as readonly string[]).includes(rawState) ? rawState : "Unknown";
+      state[stateKey]++;
+
       // Aggregate age group from birthdate
       const ageGroupLabel = getAgeGroup(user.birthdate as Date | undefined);
       ageGroup[ageGroupLabel]++;
-      if (Array.isArray(user.processedPayments) && user.processedPayments.length > 0) {
-        ageGroupPurchased[ageGroupLabel]++;
-      }
 
       // Check membership status (flat totals + per-package breakdown)
       if (user.subscription) {
@@ -276,8 +281,8 @@ export class UserMetricsService {
     return {
       signupSource,
       profession: bucketedProfession,
+      state,
       ageGroup,
-      ageGroupPurchased,
       membershipStatus,
       membershipByPackage,
       purchaseHistory,

@@ -5,8 +5,10 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useUserMetrics } from "@/hooks/useUserMetrics";
 import { AgeBreakdown } from "./users/AgeBreakdown";
 import { ProfessionBreakdown } from "./users/ProfessionBreakdown";
+import { StateBreakdown } from "./users/StateBreakdown";
 import { AgeBreakdownTable } from "./users/AgeBreakdownTable";
 import { ProfessionBreakdownTable } from "./users/ProfessionBreakdownTable";
+import { StateBreakdownTable } from "./users/StateBreakdownTable";
 import { MembershipPackageBreakdown } from "./users/MembershipPackageBreakdown";
 import { MembershipPackageBreakdownTable } from "./users/MembershipPackageBreakdownTable";
 import { ViewSwitcher } from "./shared/ViewSwitcher";
@@ -136,19 +138,15 @@ export function UserMetricsView() {
           {viewMode === "chart" ? (
             <div className="space-y-6">
               <MembershipPackageBreakdown data={aggregateData.membershipByPackage} />
-              <AgeBreakdown
-                data={aggregateData.ageGroup}
-                purchasedData={aggregateData.ageGroupPurchased}
-              />
+              <AgeBreakdown data={aggregateData.ageGroup} />
+              <StateBreakdown data={aggregateData.state} />
               <ProfessionBreakdown data={aggregateData.profession} />
             </div>
           ) : (
             <div className="space-y-6">
               <MembershipPackageBreakdownTable data={aggregateData.membershipByPackage} />
-              <AgeBreakdownTable
-                data={aggregateData.ageGroup}
-                purchasedData={aggregateData.ageGroupPurchased}
-              />
+              <AgeBreakdownTable data={aggregateData.ageGroup} />
+              <StateBreakdownTable data={aggregateData.state} />
               <ProfessionBreakdownTable data={aggregateData.profession} />
             </div>
           )}

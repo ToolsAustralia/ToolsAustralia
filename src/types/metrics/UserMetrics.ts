@@ -24,8 +24,8 @@ export interface UserMetrics {
     social: number;
   };
   profession: Record<string, number>;
+  state: Record<string, number>;
   ageGroup: Record<AgeGroupLabel, number>;
-  ageGroupPurchased: Record<AgeGroupLabel, number>;
   membershipStatus: {
     active: number;
     cancelled: number;
