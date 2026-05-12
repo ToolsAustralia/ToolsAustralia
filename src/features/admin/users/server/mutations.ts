@@ -293,13 +293,28 @@ async function syncMajorDrawParticipation(
     }
 
     const previousEntry = existingIndex !== -1 ? entries[existingIndex] : undefined;
+
+    // The admin "Edit Entries" form only sends `totalEntries`. The previous
+    // implementation re-wrote `entriesBySource.membership = totalEntries` on
+    // every save, which silently destroyed the source breakdown (e.g. wiped an
+    // `upsell: 800` count by overwriting `membership: 0 → 800` whenever an
+    // admin re-saved a refunded user). The correct behavior is:
+    //
+    //  - Existing entry: keep the entriesBySource exactly as-is, only adjust
+    //    totalEntries. If the admin's new total differs from the sum of
+    //    sources, the resulting row is intentionally "admin-overridden" — the
+    //    breakdown reflects what we know per source, the total reflects the
+    //    override. Callers that care about a per-source breakdown should not
+    //    use this form.
+    //  - New entry (no previous): initialize the breakdown with the total
+    //    under `membership`, since that's the only signal the form gives us.
+    const nextEntriesBySource =
+      previousEntry?.entriesBySource ?? { membership: participation.totalEntries };
+
     const payload = {
       userId: new mongoose.Types.ObjectId(userId),
       totalEntries: participation.totalEntries,
-      entriesBySource: {
-        ...(previousEntry?.entriesBySource ?? {}),
-        membership: participation.totalEntries,
-      },
+      entriesBySource: nextEntriesBySource,
       firstAddedDate: previousEntry?.firstAddedDate ?? now,
       lastUpdatedDate: now,
     };

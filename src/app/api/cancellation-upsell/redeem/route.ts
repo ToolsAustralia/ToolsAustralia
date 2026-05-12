@@ -103,7 +103,10 @@ async function addToMajorDraw(
     // Find the active major draw
     const activeMajorDraw = await MajorDraw.findOne({ isActive: true });
     if (!activeMajorDraw) {
-      // console.log("No active major draw found - skipping major draw entry addition");
+      console.log(`[cancellation-upsell] no active major draw — skipping major-draw entry add`, {
+        userId,
+        entries: packageData.entries,
+      });
       return;
     }
 
@@ -115,6 +118,14 @@ async function addToMajorDraw(
       | "upsell"
       | "mini-draw"
       | "cancellation-upsell";
+
+    console.log(`[cancellation-upsell] adding entries to major draw`, {
+      userId,
+      drawId: activeMajorDraw._id.toString(),
+      drawName: activeMajorDraw.name,
+      sourceType,
+      entries: packageData.entries,
+    });
 
     // Create entries by source object
     const entriesBySource: {
