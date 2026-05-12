@@ -16,6 +16,8 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useLoading } from "@/contexts/LoadingContext";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse, type SavedPaymentMethod } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { usePurchaseUpsell } from "@/hooks/queries/useUpsellQueries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useToast } from "@/components/ui/Toast";
@@ -703,9 +705,27 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     // console.log("Upsell payment processed successfully:", status);
     setShowPaymentProcessing(false);
 
-    // ✅ REMOVED: Client-side Facebook Pixel tracking
-    // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
-    // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+    // Fire browser-side Purchase pixel via the provider registry, deduped against
+    // the server-side CAPI event (which the webhook fires with the same paymentIntentId
+    // as event_id). Meta's eventID dedup mechanism is DESIGNED for both sides to fire —
+    // skipping the browser side loses _fbc/_fbp cookies and tanks Event Match Quality.
+    const upsellPaymentIntentId = status.data?.paymentIntentId;
+    const upsellPrice = status.data?.price;
+    if (upsellPaymentIntentId && typeof upsellPrice === "number" && upsellPrice > 0) {
+      trackConversion(
+        buildPurchaseEvent({
+          value: upsellPrice,
+          currency: status.data?.currency ?? "AUD",
+          eventId: upsellPaymentIntentId,
+          customData: {
+            orderId: upsellPaymentIntentId,
+            contentType: "product",
+            packageType: status.data?.packageType ?? "upsell",
+          },
+          eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+        }),
+      );
+    }
 
     // Invalidate user caches to update UI immediately
     if (userData?._id) {
