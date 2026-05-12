@@ -1,4 +1,10 @@
 import assert from "node:assert/strict";
+import dotenv from "dotenv";
+import path from "node:path";
+
+// Load .env.local for tsx test execution
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueDoc } from "@/models/StripeWebhookQueue";
 import { enqueueStripeEvent } from "../enqueue";
