@@ -10,6 +10,7 @@
 | `npm run test:redeemables` | Lives in [rewards-redeemables](../rewards-redeemables/) but covers the reverser-step pattern. |
 | `npm run test:webhook-queue-backoff` | Exponential backoff calculator for webhook retry scheduling. |
 | `npm run test:webhook-queue-enqueue` | Idempotent Stripe event enqueueing and duplicate handling. |
+| `npm run test:webhook-queue-claim` | Atomic claim guarantees one-winner among parallel workers. |
 
 ## Test conventions
 
