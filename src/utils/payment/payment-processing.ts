@@ -63,6 +63,14 @@ type PaymentMetadata = {
   variantId?: string;
   /** Original purchase PaymentIntent id that triggered this upsell (one purchase per appearance) */
   triggeringPaymentIntentId?: string;
+  /**
+   * Override for the Facebook Purchase event_id (and order_id). Subscription invoices
+   * key storage by `invoice_${invoice.id}`, but the browser-side Purchase pixel fires
+   * with the real PaymentIntent id (`pi_…`). Setting this to that PI id makes browser
+   * and server CAPI share an event_id so Meta deduplicates the pair. Other code paths
+   * (PaymentEvent storage, ledger idempotency, A/B tracking) keep using paymentIntentId.
+   */
+  trackingOrderId?: string;
 };
 interface UserDocument {
   _id: { toString: () => string };
@@ -1398,7 +1406,10 @@ async function grantBenefits(
       const pixelTracked = await trackPixelPurchase({
         value: packageData.price,
         currency: "AUD",
-        orderId: paymentIntentId.trim(),
+        // Subscription path uses `invoice_${invoice.id}` for storage but the browser pixel fires
+        // with the real PaymentIntent id. `trackingOrderId` lets the webhook hand the real PI down
+        // so Meta dedups browser↔server. Falls back to paymentIntentId for one-time/upsell flows.
+        orderId: paymentMetadata?.trackingOrderId?.trim() || paymentIntentId.trim(),
         packageType: packageData.packageType,
         packageId: packageData.packageId,
         packageName: packageData.packageName,
