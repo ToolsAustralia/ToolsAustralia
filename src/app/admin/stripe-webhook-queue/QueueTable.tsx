@@ -40,6 +40,7 @@ export default function QueueTable() {
 
   useEffect(() => {
     void fetchRows();
+    // status is the only dep — fetchRows is defined inline and closes over status.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 

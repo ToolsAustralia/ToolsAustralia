@@ -1,14 +1,35 @@
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useEffect } from "react";
 import QueueTable from "./QueueTable";
 
-export const dynamic = "force-dynamic";
+export default function StripeWebhookQueuePage() {
+  const router = useRouter();
+  const { data: session, status } = useSession();
 
-export default async function StripeWebhookQueuePage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    redirect("/login");
+  // Redirect if not authenticated or not admin
+  useEffect(() => {
+    if (status === "loading") return; // Still loading
+
+    if (!session || session.user?.role !== "admin") {
+      router.push("/");
+    }
+  }, [session, status, router]);
+
+  // Show loading while checking authentication
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen-svh flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated or not admin
+  if (!session || session.user?.role !== "admin") {
+    return null;
   }
 
   return (
