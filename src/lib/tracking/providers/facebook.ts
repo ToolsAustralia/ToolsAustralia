@@ -1,6 +1,9 @@
-"use client";
-// ^ "use client" is OK here — the module is consumed by both server and browser code;
-// loadPixel/pixelTrack are no-ops on the server because they check `typeof window`.
+// Isomorphic: imported by both server (dispatch.ts → Stripe webhook) and browser
+// (ConversionPixels.tsx). Do NOT add "use client" — that turns this module into a
+// client-reference proxy when bundled into server code, and the proxy's `.enabled`
+// becomes a Reference object instead of a function, blowing up dispatch.ts with
+// "r.enabled is not a function" at request time. loadPixel/pixelTrack already
+// guard with `typeof window` so they're safe to ship in the server bundle.
 
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { hashPII } from "../canonical-event";

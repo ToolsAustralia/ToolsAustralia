@@ -1,5 +1,5 @@
 // src/lib/tracking/providers/tiktok.ts
-"use client";
+// Isomorphic — see the matching comment in ./facebook.ts. NO "use client".
 
 import type { CanonicalEvent, ConversionProvider } from "../types";
 import { getAllowedHostnames } from "../hostname-gate";

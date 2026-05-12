@@ -80,3 +80,18 @@ console.log("[DEBUG] fb.pixelTrack entered", { eventName, hostname });
 // ✅ visible on staging
 console.error("[DEBUG] fb.pixelTrack entered", { eventName, hostname });
 ```
+
+## Provider modules must NOT have `"use client"`
+
+The three provider files — [facebook.ts](../../src/lib/tracking/providers/facebook.ts), [tiktok.ts](../../src/lib/tracking/providers/tiktok.ts), [snapchat.ts](../../src/lib/tracking/providers/snapchat.ts) — are **isomorphic**: server code (Stripe webhook → `trackPixelPurchase` → `sendConversion` → `dispatch.ts`) imports them to call `capiSend()`, and browser code (`ConversionPixels.tsx`) imports them to call `loadPixel()` / `pixelTrack()`.
+
+Tagging these files with `"use client"` **breaks the server-side path silently in production builds.** Next.js's bundler treats `"use client"` modules as client-references when imported from server code — it replaces the actual exports with proxy objects. `provider.enabled` becomes a Reference token instead of a function, and `dispatch.ts:38`'s `provider.enabled()` call throws:
+
+```
+TypeError: r.enabled is not a function
+  at Array.map (dispatch.ts:36)
+```
+
+The bug doesn't surface in dev because Next's RSC boundary is loose in dev mode; it only manifests on Vercel preview / production. We hit this on 2026-05-12 and lost every server-side Purchase event for the staging branch until the directive was removed.
+
+**Rule:** No `"use client"` on `src/lib/tracking/providers/*.ts`. The browser-only branches inside `loadPixel` / `pixelTrack` already guard with `typeof window === "undefined"`, so the modules are safely bundled into both runtimes without the directive.
