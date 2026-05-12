@@ -133,10 +133,8 @@ export type PrizeSpecificationsModalTheme = {
   tabInactiveTextClass: string;
   tabInactiveHoverClass: string;
   tabBadgeInactiveClass: string;
-  summaryTextClass: string;
   specBarStyle: CSSProperties;
   dotClass: string;
-  summaryBannerStyle: CSSProperties;
   includesInnerStyle: CSSProperties;
   /** Hex for spec card left accent (valid in CSS) */
   cardAccentBorder: string;
@@ -162,13 +160,8 @@ function modalThemeFallback(isDark: boolean): PrizeSpecificationsModalTheme {
       tabInactiveTextClass: "text-neutral-100",
       tabInactiveHoverClass: "hover:brightness-110",
       tabBadgeInactiveClass: "bg-neutral-800 text-neutral-200",
-      summaryTextClass: "text-neutral-100",
       specBarStyle: { background: "linear-gradient(to bottom, #737373, #525252)" },
       dotClass: "bg-neutral-500",
-      summaryBannerStyle: {
-        borderLeftColor: "rgb(115, 115, 115)",
-        backgroundColor: "rgba(64, 64, 64, 0.45)",
-      },
       includesInnerStyle: { backgroundColor: "rgba(64, 64, 64, 0.4)" },
       cardAccentBorder: "#a3a3a3",
     };
@@ -191,13 +184,8 @@ function modalThemeFallback(isDark: boolean): PrizeSpecificationsModalTheme {
     tabInactiveTextClass: "text-neutral-900",
     tabInactiveHoverClass: "hover:brightness-[0.98]",
     tabBadgeInactiveClass: "bg-neutral-200 text-neutral-800",
-    summaryTextClass: "text-neutral-900",
     specBarStyle: { background: "linear-gradient(to bottom, #a3a3a3, #737373)" },
     dotClass: "bg-neutral-400",
-    summaryBannerStyle: {
-      borderLeftColor: "rgb(82, 82, 91)",
-      backgroundColor: "rgba(244, 244, 245, 0.95)",
-    },
     includesInnerStyle: { backgroundColor: "rgba(244, 244, 245, 0.98)" },
     cardAccentBorder: "#52525b",
   };
@@ -378,13 +366,8 @@ export function getPrizeSpecificationsModalTheme(
         tabInactiveTextClass: "text-neutral-100",
         tabInactiveHoverClass: "hover:brightness-110",
         tabBadgeInactiveClass: "bg-neutral-800 text-emerald-100/90",
-        summaryTextClass: "text-neutral-100",
         specBarStyle: { background: scheme.barGradientCss ?? `linear-gradient(to bottom, ${primary}, ${primaryDark})` },
         dotClass: "bg-emerald-600/70",
-        summaryBannerStyle: {
-          borderLeftColor: hexToRgbString(primaryDark),
-          backgroundColor: hexToRgbaString(primary, 0.14),
-        },
         includesInnerStyle: { backgroundColor: hexToRgbaString(primaryLight, 0.12) },
         cardAccentBorder: primaryDark,
       };
@@ -407,13 +390,8 @@ export function getPrizeSpecificationsModalTheme(
       tabInactiveTextClass: "text-neutral-900",
       tabInactiveHoverClass: "hover:brightness-[0.97]",
       tabBadgeInactiveClass: "bg-emerald-100 text-emerald-900",
-      summaryTextClass: "text-neutral-900",
       specBarStyle: { background: scheme.barGradientCss ?? `linear-gradient(to bottom, ${primary}, ${primaryDark})` },
       dotClass: "bg-emerald-600/60",
-      summaryBannerStyle: {
-        borderLeftColor: hexToRgbString(primaryDark),
-        backgroundColor: hexToRgbaString(primary, 0.1),
-      },
       includesInnerStyle: { backgroundColor: hexToRgbaString(primaryDark, 0.08) },
       cardAccentBorder: primaryDark,
     };
@@ -450,16 +428,8 @@ export function getPrizeSpecificationsModalTheme(
       tabInactiveTextClass: "text-neutral-100",
       tabInactiveHoverClass: "hover:brightness-110",
       tabBadgeInactiveClass: c?.tabBadgeInactiveClass ?? "bg-neutral-800 text-neutral-200",
-      summaryTextClass: "text-neutral-100",
       specBarStyle: { background: barCss },
       dotClass: c?.dotClass ?? "bg-neutral-500",
-      summaryBannerStyle: {
-        borderLeftColor: hexToRgbString(primaryDark),
-        backgroundColor: hexToRgbaString(primary, c?.summaryAlpha ?? 0.14),
-        borderTop: `1px solid ${hexToRgbaString(primaryLight, 0.12)}`,
-        borderRight: `1px solid ${hexToRgbaString(primaryLight, 0.08)}`,
-        borderBottom: `1px solid ${hexToRgbaString(primaryLight, 0.08)}`,
-      },
       includesInnerStyle: { backgroundColor: hexToRgbaString(primaryLight, 0.14) },
       cardAccentBorder: primaryDark,
     };
@@ -489,16 +459,8 @@ export function getPrizeSpecificationsModalTheme(
     tabInactiveTextClass: "text-neutral-900",
     tabInactiveHoverClass: "hover:brightness-[0.97]",
     tabBadgeInactiveClass: c?.tabBadgeInactiveClass ?? "bg-neutral-200/90 text-neutral-800",
-    summaryTextClass: "text-neutral-900",
     specBarStyle: { background: barCss },
     dotClass: c?.dotClass ?? "bg-neutral-400",
-    summaryBannerStyle: {
-      borderLeftColor: hexToRgbString(primaryDark),
-      backgroundColor: hexToRgbaString(primary, c?.summaryAlpha ?? 0.08),
-      borderTop: `1px solid ${hexToRgbaString(primaryDark, 0.12)}`,
-      borderRight: `1px solid ${hexToRgbaString(primaryDark, 0.08)}`,
-      borderBottom: `1px solid ${hexToRgbaString(primaryDark, 0.08)}`,
-    },
     includesInnerStyle: { backgroundColor: hexToRgbaString(primaryDark, 0.09) },
     cardAccentBorder: primaryDark,
   };

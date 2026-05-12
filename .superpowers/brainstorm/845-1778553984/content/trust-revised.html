@@ -1,0 +1,164 @@
+<h2>Trust bar — revised copy. Pick the third cell.</h2>
+<p class="subtitle">Cell 1 locked: Secure Stripe payment. Cell 2 locked: NTP/16264. Three options for the third cell — click to choose.</p>
+
+<style>
+  .panel {
+    border-radius: 14px; overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.1);
+    margin-bottom: 1.25rem;
+    cursor: pointer;
+    transition: transform 150ms, box-shadow 150ms;
+  }
+  .panel:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+  .panel.selected { outline: 2px solid #d4af37; outline-offset: 3px; }
+  .panel-label {
+    padding: 0.55rem 0.85rem;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 800; color: #444;
+    background: linear-gradient(180deg, #fafafa, #f3f3f3);
+    border-bottom: 1px solid #eee;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .panel-label .letter {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(180deg, #c8102e, #8a0a20);
+    color: white; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+  .panel-label .vibe {
+    margin-left: auto; padding: 2px 7px; border-radius: 4px;
+    font-size: 9px; background: rgba(0,0,0,0.06); color: #666; letter-spacing: 0.08em;
+  }
+
+  .trust {
+    padding: 0.85rem 1rem;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+  .trust .cell { text-align: center; }
+  .trust .cell svg { color: #c8102e; margin-bottom: 0.4rem; }
+  .trust .cell .s {
+    font-weight: 800; color: #1a1a1a; font-size: 12px; line-height: 1.2;
+  }
+  .trust .cell .sub {
+    color: #888; font-size: 10.5px; margin-top: 0.2rem;
+  }
+</style>
+
+<!-- ====== OPTION A — Cancel anytime ====== -->
+<div class="panel" data-choice="cancel-anytime" onclick="toggleSelect(this)">
+  <div class="panel-label">
+    <span class="letter">A</span>
+    Secure payment · NTP · Cancel anytime
+    <span class="vibe">recommended · matches CancellationUpsell</span>
+  </div>
+  <div class="trust">
+    <div class="cell">
+      <!-- ShieldCheck -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      <div class="s">Secure payment</div>
+      <div class="sub">Powered by Stripe</div>
+    </div>
+    <div class="cell">
+      <!-- Award -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/>
+        <circle cx="12" cy="8" r="6"/>
+      </svg>
+      <div class="s">NTP/16264</div>
+      <div class="sub">Govt-certified draw</div>
+    </div>
+    <div class="cell">
+      <!-- Lock -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <div class="s">Cancel anytime</div>
+      <div class="sub">No commitment</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTION B — Real prize shipped ====== -->
+<div class="panel" data-choice="real-prizes" onclick="toggleSelect(this)">
+  <div class="panel-label">
+    <span class="letter" style="background: linear-gradient(180deg,#d4af37,#a8881e);">B</span>
+    Secure payment · NTP · Real prizes shipped
+    <span class="vibe">prize-focused</span>
+  </div>
+  <div class="trust">
+    <div class="cell">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      <div class="s">Secure payment</div>
+      <div class="sub">Powered by Stripe</div>
+    </div>
+    <div class="cell">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/>
+        <circle cx="12" cy="8" r="6"/>
+      </svg>
+      <div class="s">NTP/16264</div>
+      <div class="sub">Govt-certified draw</div>
+    </div>
+    <div class="cell">
+      <!-- Truck -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+        <path d="M15 18H9"/>
+        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+        <circle cx="17" cy="18" r="2"/>
+        <circle cx="7" cy="18" r="2"/>
+      </svg>
+      <div class="s">Real prizes shipped</div>
+      <div class="sub">To every winner</div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTION C — Trusted by tradies ====== -->
+<div class="panel" data-choice="trusted-by" onclick="toggleSelect(this)">
+  <div class="panel-label">
+    <span class="letter" style="background: linear-gradient(180deg,#4ade80,#16a34a);">C</span>
+    Secure payment · NTP · Trusted by tradies
+    <span class="vibe">social proof</span>
+  </div>
+  <div class="trust">
+    <div class="cell">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+        <path d="m9 12 2 2 4-4"/>
+      </svg>
+      <div class="s">Secure payment</div>
+      <div class="sub">Powered by Stripe</div>
+    </div>
+    <div class="cell">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/>
+        <circle cx="12" cy="8" r="6"/>
+      </svg>
+      <div class="s">NTP/16264</div>
+      <div class="sub">Govt-certified draw</div>
+    </div>
+    <div class="cell">
+      <!-- Users -->
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <div class="s">Trusted by tradies</div>
+      <div class="sub">50,000+ members</div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 1.5rem;">Recommendation: <strong style="color:#d4af37;">A</strong>. "Cancel anytime" matches the message users care about most when committing to a paid entry, and it's the same third cell as CancellationUpsell's trust bar — visual consistency across both modals. Tell me which one (or to swap copy/icon on any cell).</p>

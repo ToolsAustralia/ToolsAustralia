@@ -359,8 +359,7 @@ _(none)_
 - [src/components/modals/PixelConsentModal.tsx](../../src/components/modals/PixelConsentModal.tsx) — **score 1.5** — 217 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=307 chars)
 
-- [src/components/modals/PrizeSpecificationsModal.tsx](../../src/components/modals/PrizeSpecificationsModal.tsx) — **score 1.5** — 280 LOC
-  - signals: ternary-explosion (10 JSX ternaries); long-className (longest className=302 chars)
+- ~~src/components/modals/PrizeSpecificationsModal.tsx~~ — **DECOMPOSED 2026-05-12** → folder at [src/components/modals/PrizeSpecificationsModal/](../../src/components/modals/PrizeSpecificationsModal/) (index/Hero/TabBar/TrustBar/SpecCard). SpecCard adopts an icon-badge header, brand-coloured dot bullets (replacing `Check` icons), and removes the left-rule accent + content indent; summary banner softened to a neutral fill with a thinner brand-tinted left rule. Public API preserved.
 
 - [src/components/modals/SavedPaymentMethodsModal.tsx](../../src/components/modals/SavedPaymentMethodsModal.tsx) — **score 1.5** — 254 LOC
   - signals: ternary-explosion (4 JSX ternaries); long-className (longest className=374 chars)

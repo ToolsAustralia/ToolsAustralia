@@ -9,8 +9,23 @@
 
 import type { BrandKey } from "@/config/brand-theme";
 import type { PromoImagePaths, ExtendedPromoImagePaths, LandingHeroUrgency } from "./promo-hero-types";
+import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
 
 const LANDING_IMAGE_BASE = "/images/background/promo/landing";
+
+/** Build the deterministic URL for a brand variant — no existence check. */
+function buildLandingUrl(
+  brand: BrandKey,
+  mode: "light" | "dark",
+  viewport: "desktop" | "mobile",
+  toolboxSuffix: LandingHeroToolboxSuffix,
+  urgency: LandingHeroUrgency | null
+): string {
+  const darkSuffix = mode === "dark" ? "-dark" : "";
+  const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
+  const urgencySuffix = urgency ? `-${urgency}` : "";
+  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
+}
 
 /** Filename segment: Sidchrome, Kincrome, or Milwaukee stack toolbox under `landing/{brand}/`. */
 export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB";
@@ -30,11 +45,17 @@ export type LandingHeroToolboxSuffix = "milTB" | "sidTB" | "kinTB";
  */
 
 /**
- * Resolve landing hero image path for a specific brand, mode, and viewport
+ * Resolve landing hero image path for a specific brand, mode, and viewport.
+ *
+ * If the requested file is not in the on-disk manifest, falls back to the
+ * opposite-mode variant (light↔dark) before giving up. This handles cases
+ * where the art team has shipped only one mode for a given brand/toolbox
+ * (e.g. sidTB light bases were never produced).
+ *
  * @param brand - Brand identifier
  * @param mode - Theme mode (light or dark)
  * @param viewport - Viewport size (desktop or mobile)
- * @returns Image path
+ * @returns Image path (manifest-verified when possible)
  */
 export function resolveLandingHeroImage(
   brand: BrandKey,
@@ -48,11 +69,15 @@ export function resolveLandingHeroImage(
     return resolveLandingHeroImage(brand, mode, viewport, "kinTB", null);
   }
 
-  const darkSuffix = mode === "dark" ? "-dark" : "";
-  const mobileSuffix = viewport === "mobile" ? "-mobile" : "";
-  const urgencySuffix = urgency ? `-${urgency}` : "";
+  const desired = buildLandingUrl(brand, mode, viewport, toolboxSuffix, urgency);
+  if (LANDING_IMAGE_MANIFEST.has(desired)) return desired;
 
-  return `${LANDING_IMAGE_BASE}/${brand}/${brand}-${toolboxSuffix}${darkSuffix}${mobileSuffix}${urgencySuffix}.webp`;
+  const oppositeMode = mode === "dark" ? "light" : "dark";
+  const opposite = buildLandingUrl(brand, oppositeMode, viewport, toolboxSuffix, urgency);
+  if (LANDING_IMAGE_MANIFEST.has(opposite)) return opposite;
+
+  /** Neither mode shipped — return the desired URL anyway so the failure is visible. */
+  return desired;
 }
 
 /**
