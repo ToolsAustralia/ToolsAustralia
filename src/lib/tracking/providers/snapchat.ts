@@ -1,5 +1,5 @@
 // src/lib/tracking/providers/snapchat.ts
-"use client";
+// Isomorphic — see the matching comment in ./facebook.ts. NO "use client".
 
 import type { CanonicalEvent, ConversionProvider } from "../types";
 import { hashPII } from "../canonical-event";
