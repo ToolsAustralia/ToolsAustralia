@@ -9,10 +9,11 @@ import Stripe from "stripe";
 import mongoose from "mongoose";
 import {
   batchFetchCustomers,
-  payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
   selectCurrentSubscriptionChargeable,
 } from "@/server/admin/chargePastDueShared";
+import { chargeOrRecover } from "@/server/admin/chargeOrRecover";
+import { chooseChargeAction } from "@/server/admin/chargeOrRecoverPolicy";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -129,6 +130,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       userName: string;
       amount: number;
       currency: string;
+      willRecover: boolean;
     }> = [];
 
     const userIdStr =
@@ -168,6 +170,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       }
 
       filterStats.eligible++;
+      const decision = chooseChargeAction(invoice);
       preview.push({
         invoiceId: invoice.id,
         customerId,
@@ -176,6 +179,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         userName,
         amount: invoice.amount_remaining || 0,
         currency: invoice.currency || "aud",
+        willRecover: decision.kind === "recover",
       });
     }
 
@@ -299,7 +303,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
     const invoicesToCharge = target ? [target] : [];
 
-    const results: Awaited<ReturnType<typeof payOpenInvoiceAsPastDueAdmin>>[] = [];
+    const results: Awaited<ReturnType<typeof chargeOrRecover>>[] = [];
     let processed = 0;
     let succeeded = 0;
     let failed = 0;
@@ -327,7 +331,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         continue;
       }
 
-      const row = await payOpenInvoiceAsPastDueAdmin({
+      const row = await chargeOrRecover({
         invoice,
         paymentMethodId,
         customerId: invCustomerId,

@@ -1,5 +1,13 @@
 # Tracking — Frontend
 
+## Conversion pixels
+
+[`<ConversionPixels />`](../../src/components/tracking/ConversionPixels.tsx) is the canonical browser-side pixel loader, mounted once in [`src/app/layout.tsx`](../../src/app/layout.tsx). It iterates the provider registry and calls each provider's `loadPixel({ nonce })` for those whose `enabled().pixel` is true.
+
+`<FacebookPixel />` and `<TikTokPixel />` remain in the codebase as backwards-compat re-exports of their helper functions, but should not be mounted directly.
+
+To fire a conversion from a client component, use `trackConversion(buildPurchaseEvent(...))` from [`src/lib/tracking/dispatch-client.ts`](../../src/lib/tracking/dispatch-client.ts).
+
 ## Pixel components (top-level)
 
 [src/components/](../../src/components/) directly:

@@ -3,7 +3,7 @@ import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredData";
-import PixelTracker from "@/components/PixelTracker";
+import ConversionPixels from "@/components/tracking/ConversionPixels";
 import KlaviyoScriptLoader from "@/components/KlaviyoScriptLoader";
 import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
 import GoogleTagManager from "@/components/GoogleTagManager";
@@ -134,9 +134,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
         />
         <TopLoadingBar />
-        <PixelTracker
-          facebookPixelId={process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID}
-          tiktokPixelId={process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID}
+        <ConversionPixels
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
           nonce={nonce}
         />

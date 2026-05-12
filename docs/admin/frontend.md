@@ -57,17 +57,21 @@ The view header has been reduced to just the right-aligned `ViewSwitcher`; the p
 
 ### Chart mode
 
-Renders three charts stacked vertically:
+Renders four charts stacked vertically:
 - [`MembershipPackageBreakdown.tsx`](../../src/components/admin/metrics/users/MembershipPackageBreakdown.tsx) — Recharts stacked bar chart (active / pastDue / cancelled per package), sorted by total descending. Counterpart to `MembershipPackageBreakdownTable` used in table mode.
-- [`AgeBreakdown.tsx`](../../src/components/admin/metrics/users/AgeBreakdown.tsx) — Recharts grouped bar chart, chronological order. Two bars per group: **Users** (red) and **Purchased** (emerald). Receives both `data={aggregateData.ageGroup}` and `purchasedData={aggregateData.ageGroupPurchased}`. Tooltip shows users + percentage of total, purchased + conversion percentage.
-- [`ProfessionBreakdown.tsx`](../../src/components/admin/metrics/users/ProfessionBreakdown.tsx) — bar cap is now **20** (lifted from 10). Safe because the service pre-buckets via `bucketUnmatched`, capping the dataset around 17 entries.
+- [`AgeBreakdown.tsx`](../../src/components/admin/metrics/users/AgeBreakdown.tsx) — Recharts bar chart, chronological order. Single **Users** series (red). The **"Unknown"** age bucket is split out and rendered as a small header note (count + % of all) instead of a bar, so the dominant unknown segment does not flatten the visible age cohorts.
+- [`StateBreakdown.tsx`](../../src/components/admin/metrics/users/StateBreakdown.tsx) — Recharts single-series bar chart for AU state/territory codes, sorted descending by user count. The synthetic `"Unknown"` bucket (users with no `state` value) is excluded from the bars and surfaced as a header note. Data comes from `aggregateData.state` (see `UserMetrics["state"]`).
+- [`ProfessionBreakdown.tsx`](../../src/components/admin/metrics/users/ProfessionBreakdown.tsx) — bar cap is **20** (the service pre-buckets via `bucketUnmatched`, capping the dataset around 17). The aggregated `"Other"` bucket is excluded from the bars and shown as a header note for the same anti-domination reason as `Unknown` above.
 
 ### Table mode
 
-Renders three tables:
+Renders four tables:
 - [`MembershipPackageBreakdownTable.tsx`](../../src/components/admin/metrics/users/MembershipPackageBreakdownTable.tsx) — see column meanings below.
-- [`AgeBreakdownTable.tsx`](../../src/components/admin/metrics/users/AgeBreakdownTable.tsx) — chronological row order with a totals row. Columns: `Age Group`, `Users`, **`Purchased`** (raw count), **`Conversion`** (purchased / users %), `% of Total`. Receives the same `purchasedData` prop as the chart.
-- [`ProfessionBreakdownTable.tsx`](../../src/components/admin/metrics/users/ProfessionBreakdownTable.tsx) — sorted descending by count, includes a rank column.
+- [`AgeBreakdownTable.tsx`](../../src/components/admin/metrics/users/AgeBreakdownTable.tsx) — chronological row order with a totals row. Columns: `Age`, `Users`, `%`. The **`Unknown`** row is omitted from the body and shown as a header note (`Unknown excluded: N (X% of all)`); the totals row reflects only the visible rows so percentages sum to 100%.
+- [`StateBreakdownTable.tsx`](../../src/components/admin/metrics/users/StateBreakdownTable.tsx) — sorted descending by user count, with rank column and friendly long-form state names alongside the code. Same `Unknown` exclusion/header-note pattern as the age table.
+- [`ProfessionBreakdownTable.tsx`](../../src/components/admin/metrics/users/ProfessionBreakdownTable.tsx) — sorted descending by count, includes a rank column. The aggregated `"Other"` bucket is excluded from the body and surfaced as a header note.
+
+All four breakdown components accept an optional `bare` prop (defaults `false`). When `bare={true}` the outer card wrapper (rounded-xl + shadow + border + padding) is dropped so the table can sit flush inside an already-card-shaped container. `UserMetricsView` leaves it false (each table keeps its own card per the toggle design); `UsersBreakdownSection` (dashboard overview) passes `bare` so the inner cards don't double up inside its `DashboardSection` shell — rows are separated by `divide-y` instead.
 
 ### `MembershipPackageBreakdownTable` columns
 
@@ -102,9 +106,9 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 [src/app/admin/component/overview/DashboardOverview.tsx](../../src/app/admin/component/overview/DashboardOverview.tsx) renders a new collapsible `UsersBreakdownSection` immediately after `KPIMetricsGrid` (i.e. underneath the "Users & Performance" group inside the grid) and before `RevenueOverview`.
 
 - State: `isUsersBreakdownExpanded` — local `useState(false)`, toggled via the section's own chevron.
-- Component: [src/app/admin/component/overview/UsersBreakdownSection.tsx](../../src/app/admin/component/overview/UsersBreakdownSection.tsx) — wraps a `DashboardSection` (`title="Users Breakdown"`, `subtitle="Age groups and professions across all users"`, `collapsible`).
+- Component: [src/app/admin/component/overview/UsersBreakdownSection.tsx](../../src/app/admin/component/overview/UsersBreakdownSection.tsx) — wraps a `DashboardSection` (`title="Users Breakdown"`, `subtitle="Age groups, professions and state across all users"`, `collapsible`).
 - Data: calls `useUserMetrics({ enabled: isExpanded })` so the all-time aggregation only fetches when the section is opened.
-- Body when loaded: `<AgeBreakdownTable data={data.ageGroup} purchasedData={data.ageGroupPurchased} />` followed by `<ProfessionBreakdownTable data={data.profession} />` — the same components used in the metrics tab's table mode.
+- Body when loaded: a `divide-y` stack rendering `<AgeBreakdownTable bare … />`, `<StateBreakdownTable bare … />`, `<ProfessionBreakdownTable bare … />` — the same components used in the metrics tab's table mode, with `bare` passed so the inner card chrome is suppressed inside the parent `DashboardSection`. Rows separated by horizontal dividers instead of nested cards.
 - Loading shows a spinner row; when `data` is null after load, a "No breakdown data available." placeholder renders.
 
 ## Past-due charge history tab (`/admin/past-due-history`)
@@ -127,7 +131,9 @@ The following components are **no longer referenced** by `UserMetricsView` but w
 
   **Dropped "When" column.** All attempts in a single run share approximately the same time, so the per-attempt table inside the expanded row no longer renders a When column — only Invoice / Status / Amount / Error. The Error cell uses the same `declineCode ?? errorCode ?? errorMessage` precedence as the parent page.
 
-Both components import `formatDurationMs` from [src/utils/admin/chargePastDueFormat.ts](../../src/utils/admin/chargePastDueFormat.ts) — a Mongoose-free pure formatter. Importing it from `services/admin/chargePastDueHistory.ts` would transitively pull `mongoose` into the client bundle and crash hydration on `mongoose.models[...]`.
+  **Multi-select bulk recovery (Phase 3).** The "Per-invoice attempts" section supports multi-select on stranded `failed` rows (matched via `isStrandedError`). The header's "Recover selected (N)" button opens `BulkRecoverInvoicesModal`, which POSTs to `/api/admin/invoices/recover-past-due` in batches of 10 — same path the manual-retries section uses. On completion the drawer's run-detail query is invalidated so row statuses refresh in place. Per-row checkboxes are enabled only when the row's `status === "failed"`, the error matches `isStrandedError(errorMessage, errorCode)`, AND the group has a `userId`; otherwise they're disabled with a `title` tooltip explaining why. Each checkbox carries `aria-label="Select invoice <id> for bulk recover"`.
+
+Both components import `formatDurationMs` and `isStrandedError` from [src/utils/admin/chargePastDueFormat.ts](../../src/utils/admin/chargePastDueFormat.ts) — Mongoose-free pure helpers. Importing them from `services/admin/chargePastDueHistory.ts` would transitively pull `mongoose` into the client bundle and crash hydration on `mongoose.models[...]`. `isStrandedError` was hoisted out of a local copy in `PastDueChargeHistory.tsx` (Phase 3) so the drawer and the manual-retries table share one matcher.
 
 ### Hooks
 

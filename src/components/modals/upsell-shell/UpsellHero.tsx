@@ -37,8 +37,10 @@ interface UpsellHeroProps extends VariantProps<typeof heroBg> {
   /** Eyebrow content — typically the small uppercase label above the headline.
    * Pass JSX so callers can include icons + dividers (e.g. trophies + lines). */
   eyebrow: ReactNode;
-  /** Anton-font dramatic headline. Inline tone-accented spans use color="var(--upsell-accent)". */
-  title: ReactNode;
+  /** Anton-font dramatic headline. Inline tone-accented spans use color="var(--upsell-accent)".
+   *  Optional — pass undefined / null to skip the headline entirely (some heroes lead with the
+   *  eyebrow + sub-copy + image and don't want a dramatic title above). */
+  title?: ReactNode;
   /** Sub-copy below headline. */
   sub?: ReactNode;
   /** Optional infographic slot — image, chart, progress bar, etc. */
@@ -89,13 +91,15 @@ const UpsellHero: React.FC<UpsellHeroProps> = ({
           {eyebrow}
         </div>
 
-        {/* Headline — Anton font, dramatic */}
-        <h2
-          id={titleId}
-          className="font-acumin font-normal text-[28px] leading-none tracking-[0.005em] text-center uppercase mb-1.5 max-xs:text-[22px]"
-        >
-          {title}
-        </h2>
+        {/* Headline — Anton font, dramatic. Skipped when no title is provided. */}
+        {title ? (
+          <h2
+            id={titleId}
+            className="font-acumin font-normal text-[28px] leading-none tracking-[0.005em] text-center uppercase mb-1.5 max-xs:text-[22px]"
+          >
+            {title}
+          </h2>
+        ) : null}
 
         {/* Sub-copy */}
         {sub ? (

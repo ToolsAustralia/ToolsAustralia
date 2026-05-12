@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import { getPixelEnv, isProductionPixelEnv } from "./facebook-env";
 
-// Facebook Pixel and Conversions API integration
+/**
+ * Facebook Pixel + Conversions API integration.
+ *
+ * NOTE: This file is the canonical implementation of Meta CAPI sending — the new
+ * provider registry at `src/lib/tracking/providers/facebook.ts` wraps `sendFacebookEvent`
+ * rather than reimplementing it. Direct callers of `sendFacebookEvent` continue to work,
+ * but new code SHOULD build a `CanonicalEvent` and call `sendConversion(...)` instead.
+ */
 export interface FacebookEvent {
   event_name: string;
   event_time: number;
@@ -187,8 +194,10 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
     ...(userData.fbp && { fbp: userData.fbp }),
     ...(userData.external_id && { external_id: userData.external_id }),
   };
-  if (Object.keys(u).length === 0) {
-    u.client_user_agent = userData.client_user_agent || "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
+  // No synthetic UA — if the real UA isn't available, leave the field out.
+  // Meta will accept the event with reduced EMQ rather than rejecting it.
+  if (Object.keys(u).length === 0 && userData.client_user_agent) {
+    u.client_user_agent = userData.client_user_agent;
   }
 
   return {
@@ -303,9 +312,6 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
   }
 }
 
-/** Fallback client_user_agent - Meta requires it for website events to avoid _missing_event */
-const CAPI_USER_AGENT_FALLBACK = "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
-
 /**
  * Ensure website events have required user_data and event_source_url (Meta rejects with _missing_event otherwise)
  */
@@ -314,9 +320,12 @@ function ensureWebsiteEventValid(event: FacebookEvent): FacebookEvent {
 
   const userData = { ...event.user_data };
 
-  // Meta requires client_user_agent for website events - empty user_data causes _missing_event
-  if (!userData.client_user_agent || userData.client_user_agent.trim() === "") {
-    userData.client_user_agent = CAPI_USER_AGENT_FALLBACK;
+  // Meta accepts website events without client_user_agent — match quality is lower
+  // but at least the EMQ score reflects reality. Sending a synthetic UA Meta detects
+  // ("Server-Side-CAPI/1.0") downgrades the score further. So if the real UA is empty,
+  // drop the field entirely.
+  if (userData.client_user_agent !== undefined && userData.client_user_agent.trim() === "") {
+    delete userData.client_user_agent;
   }
 
   // Meta requires event_source_url for website events

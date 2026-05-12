@@ -1,10 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 import { CheckCircle } from "lucide-react";
 import { SectionContainer } from "@/components/ui";
+import { usePaymentStatus } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 
 interface UpsellSuccessClientProps {
   searchParams: {
@@ -13,11 +16,39 @@ interface UpsellSuccessClientProps {
   };
 }
 
-export default function UpsellSuccessClient({ searchParams: _searchParams }: UpsellSuccessClientProps) {
+export default function UpsellSuccessClient({ searchParams }: UpsellSuccessClientProps) {
+  const paymentIntentId = searchParams.payment_intent;
+  const { data: status } = usePaymentStatus(paymentIntentId, { enabled: !!paymentIntentId });
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!paymentIntentId) return;
+    if (status?.processed !== true) return;
+    const value = status.data.price;
+    const currency = status.data.currency;
+    if (typeof value !== "number" || value <= 0) return;
+    firedRef.current = true;
+    trackConversion(
+      buildPurchaseEvent({
+        value,
+        currency: (currency ?? "AUD").toUpperCase(),
+        eventId: paymentIntentId,
+        customData: {
+          orderId: paymentIntentId,
+          contentType: "product",
+          contentIds: status.data.packageId ? [status.data.packageId] : undefined,
+          numItems: 1,
+          packageType: status.data.packageType ?? "upsell",
+        },
+        eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+      }),
+    );
+  }, [paymentIntentId, status]);
+
   return (
     <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
       <SectionContainer variant="narrow" className="py-8">
-        {/* Success Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-12 h-12 text-green-600" />
@@ -29,8 +60,6 @@ export default function UpsellSuccessClient({ searchParams: _searchParams }: Ups
             Thank you for your purchase. Your additional entries have been added to your account.
           </p>
         </div>
-
-        {/* Payment Status Handler */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
           <PaymentSuccessHandler paymentType="upsell" successMessage="Your upsell purchase was successful!">
             <div className="mt-4 space-y-4">
@@ -40,39 +69,18 @@ export default function UpsellSuccessClient({ searchParams: _searchParams }: Ups
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  href="/my-account"
-                  className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  View My Account
-                </Link>
-                <Link
-                  href="/"
-                  className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Continue Shopping
-                </Link>
+                <Link href="/my-account" className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors">View My Account</Link>
+                <Link href="/" className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors">Continue Shopping</Link>
               </div>
             </div>
           </PaymentSuccessHandler>
         </div>
-
-        {/* Additional Information */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">What&apos;s Next?</h2>
           <ul className="space-y-3 text-gray-600 dark:text-neutral-400">
-            <li className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>Your additional entries have been added to your account</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>You will receive a confirmation email with your purchase details</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <span>You can view your entry balance in the My Account section</span>
-            </li>
+            <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" /><span>Your additional entries have been added to your account</span></li>
+            <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" /><span>You will receive a confirmation email with your purchase details</span></li>
+            <li className="flex items-start gap-3"><CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" /><span>You can view your entry balance in the My Account section</span></li>
           </ul>
         </div>
       </SectionContainer>

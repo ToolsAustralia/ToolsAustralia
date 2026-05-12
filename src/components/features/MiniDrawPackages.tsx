@@ -9,6 +9,8 @@ import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import type { PaymentStatusResponse } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
@@ -396,9 +398,29 @@ export default function MiniDrawPackages({
       // Mark toast as shown to prevent duplicates
       setSuccessToastShown(true);
 
-      // ✅ REMOVED: Client-side Facebook Pixel tracking
-      // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
-      // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+      // Fire browser-side Purchase pixel via the provider registry, deduped against
+      // the server-side CAPI event (which the webhook fires with the same paymentIntentId
+      // as event_id). Meta's eventID dedup mechanism is DESIGNED for both sides to fire —
+      // skipping the browser side loses _fbc/_fbp cookies and tanks Event Match Quality.
+      const miniDrawPaymentIntentId = status.data?.paymentIntentId;
+      const miniDrawPrice = status.data?.price;
+      if (miniDrawPaymentIntentId && typeof miniDrawPrice === "number" && miniDrawPrice > 0) {
+        trackConversion(
+          buildPurchaseEvent({
+            value: miniDrawPrice,
+            currency: status.data?.currency ?? "AUD",
+            eventId: miniDrawPaymentIntentId,
+            customData: {
+              orderId: miniDrawPaymentIntentId,
+              contentType: "product",
+              contentIds: selectedPackageId ? [selectedPackageId] : undefined,
+              numItems: 1,
+              packageType: status.data?.packageType ?? "mini-draw",
+            },
+            eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+          }),
+        );
+      }
 
       // Clear processing flags
       queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {

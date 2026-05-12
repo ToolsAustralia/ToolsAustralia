@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -19,6 +19,8 @@ import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandle
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { useOrder } from "@/hooks/queries/useOrderQueries";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 
 interface CheckoutSuccessClientProps {
   orderId: string;
@@ -28,6 +30,29 @@ const PLACEHOLDER_IMG = "/images/SampleProducts/dewalt1.jpg";
 
 export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClientProps) {
   const { data: order, isLoading, isError, error } = useOrder(orderId);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!order) return;
+    if (order.paymentStatus !== "paid") return;
+    if (!order.totalAmount || order.totalAmount <= 0) return;
+    firedRef.current = true;
+    trackConversion(
+      buildPurchaseEvent({
+        value: order.totalAmount,
+        currency: "AUD",
+        eventId: order.orderNumber ?? orderId,
+        customData: {
+          orderId: order.orderNumber ?? orderId,
+          contentType: "product",
+          numItems: order.items?.length,
+        },
+        eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+      }),
+    );
+  }, [order, orderId]);
+
   const contactEmail = getContactEmail();
 
   if (isLoading) {

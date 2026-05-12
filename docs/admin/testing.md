@@ -8,8 +8,9 @@
 | `npm run test:past-due-history` | `src/server/admin/__tests__/charge-past-due-totals.test.ts` | `aggregateRunTotals`, `isOrphanRun`, `ORPHAN_RUN_THRESHOLD_MS` |
 | `npm run test:recover-stranded-past-due-policy` | `src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts` | pure helpers for stranded invoice recovery: idempotency keys, eligibility, draft-picking, 24h lock |
 | `npm run test:force-charge-policy` | `src/server/admin/__tests__/forceChargePastDuePolicy.test.ts` | pure helpers for force-charge past-due flow: idempotency key, target picker, period-paid guard, 24h success lock |
+| `npm run test:charge-or-recover-policy` | `src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts` | Pure decision function — open-but-dead invoices route to recover; live opens route to pay. |
 
-`charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, and `forceChargePastDuePolicy.ts` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
+`charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, and `chargeOrRecoverPolicy.ts` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
 
 ## CLI diagnostic and test scripts
 
@@ -18,6 +19,8 @@
 | `npm run find:stuck-paused-users` | `scripts/find-stuck-paused-users.ts` | CSV export of `past_due` users whose current Stripe sub has no chargeable invoice; accepts `--limit=N` and `--include-orphans` |
 | `npm run test:force-charge:dry` | `scripts/test-force-charge.ts` | dry-run force-charge against a single user; accepts `--email=<addr>` or `--customer=<cus_id>` |
 | `npm run test:force-charge:live` | `scripts/test-force-charge.ts --live` | live force-charge execution; requires `--email=` or `--customer=` plus `--admin-email=<admin's email>` |
+| `npm run test:recover-stranded:dry` | `scripts/test-recover-stranded-past-due.ts` | Resolves a user by email/customer, scans open invoices for a stranded candidate, prints eligibility. No writes. |
+| `npm run test:recover-stranded:live` | `scripts/test-recover-stranded-past-due.ts --live` | Runs the full void → finalize draft → pay flow against a real user. Requires `--admin-email=`. Bypasses the 6h recovery lock so devs can re-run quickly during testing. |
 
 Both scripts load `.env.local` via dotenv and exit with an error if `MONGODB_URI` or `STRIPE_SECRET_KEY` are missing.
 
