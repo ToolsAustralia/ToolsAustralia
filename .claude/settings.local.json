@@ -21,7 +21,11 @@
       "Bash(grep -rlE 'className=\"[^\"]{500,}\"' src/components src/app --include=\"*.tsx\")",
       "Bash(grep -roEc 'className=\"[^\"]{150,}\"' src/components src/app --include=\"*.tsx\")",
       "Bash(sort -t: -k2 -rn)",
-      "Bash(grep -rE 'className=\\\\{`[^`]+\\\\$\\\\{' src/components --include=\"*.tsx\")"
+      "Bash(grep -rE 'className=\\\\{`[^`]+\\\\$\\\\{' src/components --include=\"*.tsx\")",
+      "Bash(ls -la C:/Codes/ToolsAustralia/.claude/ 2>/dev/null && echo \"---\" && ls -la C:/Users/Genesis/.claude/skills/ 2>/dev/null | head -40)",
+      "Read(//c/Users/Genesis/.claude/**)",
+      "Bash(cd /c/Codes/ToolsAustralia/.worktrees/architectural-fix && find docs -type f -name \"*.md\" | head -40 && echo \"---\" && find docs/superpowers 2>/dev/null && find docs -name \"*ui-cleanup*\" -o -name \"*plan*\" 2>/dev/null | head -20)",
+      "Read(//c/c/Codes/ToolsAustralia/.worktrees/architectural-fix/**)"
     ]
   }
 }

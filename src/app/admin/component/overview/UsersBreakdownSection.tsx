@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 import DashboardSection from "./DashboardSection";
 import { AgeBreakdownTable } from "@/components/admin/metrics/users/AgeBreakdownTable";
 import { ProfessionBreakdownTable } from "@/components/admin/metrics/users/ProfessionBreakdownTable";
+import { StateBreakdownTable } from "@/components/admin/metrics/users/StateBreakdownTable";
 import { useUserMetrics } from "@/hooks/useUserMetrics";
 
 interface UsersBreakdownSectionProps {
@@ -21,7 +22,7 @@ export default function UsersBreakdownSection({
   return (
     <DashboardSection
       title="Users Breakdown"
-      subtitle="Age groups and professions across all users"
+      subtitle="Age groups, professions and state across all users"
       collapsible
       isExpanded={isExpanded}
       onToggleExpand={onToggleExpand}
@@ -35,9 +36,16 @@ export default function UsersBreakdownSection({
       )}
 
       {!isLoading && data && (
-        <div className="space-y-4 sm:space-y-6">
-          <AgeBreakdownTable data={data.ageGroup} purchasedData={data.ageGroupPurchased} />
-          <ProfessionBreakdownTable data={data.profession} />
+        <div className="divide-y divide-gray-200 dark:divide-neutral-800">
+          <div className="pb-4">
+            <AgeBreakdownTable data={data.ageGroup} bare />
+          </div>
+          <div className="py-4">
+            <StateBreakdownTable data={data.state} bare />
+          </div>
+          <div className="pt-4">
+            <ProfessionBreakdownTable data={data.profession} bare />
+          </div>
         </div>
       )}
 

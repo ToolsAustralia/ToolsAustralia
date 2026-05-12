@@ -66,7 +66,7 @@ export default function PromoHero({
   const majorDrawUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
 
   const landingHeroPaths = effectiveSlug
-    ? getLandingHeroImagePaths(effectiveSlug, majorDrawUrgency)
+    ? getLandingHeroImagePaths(effectiveSlug)
     : null;
 
   const standardHeroPaths = getPromoImagePaths({
