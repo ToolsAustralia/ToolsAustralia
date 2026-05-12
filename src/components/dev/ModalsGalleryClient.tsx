@@ -283,7 +283,7 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "renewal-failed": "src/components/modals/RenewalFailedModal.tsx",
   "report-problem": "src/components/modals/ReportProblemModal.tsx",
   confirmation: "src/components/modals/ConfirmationModal.tsx",
-  "prize-specs": "src/components/modals/PrizeSpecificationsModal.tsx",
+  "prize-specs": "src/components/modals/PrizeSpecificationsModal/index.tsx",
   export: "src/components/modals/ExportModal.tsx",
   "icon-picker": "src/components/modals/ui/IconPickerModal.tsx",
   "admin-mini-draw-create": "src/components/modals/AdminMiniDrawModal.tsx",

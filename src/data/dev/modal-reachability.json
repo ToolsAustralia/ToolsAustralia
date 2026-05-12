@@ -184,7 +184,7 @@
       "reachable": true
     },
     {
-      "path": "src/components/modals/PrizeSpecificationsModal.tsx",
+      "path": "src/components/modals/PrizeSpecificationsModal/index.tsx",
       "reachable": true
     },
     {
