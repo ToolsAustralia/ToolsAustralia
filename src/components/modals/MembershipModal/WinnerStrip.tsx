@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * WinnerStrip — major-draw winner carousel (two winners per slide). Tappable
- * to open FullscreenImageViewer. The carousel ref + auto-advance interval are
- * owned by the parent orchestrator; this component only handles render +
- * pointer event callbacks.
+ * WinnerStrip — "Recent Winners" marquee. A continuously-drifting horizontal
+ * row of winner cards that pauses on hover. Each card is tappable and opens
+ * the parent's FullscreenImageViewer at the matching index.
  *
- * Visual output (className strings, structure, gradient overlay) is preserved
- * byte-for-byte from the original MembershipModal.tsx
- * (lines 309-346 for tile, 5786-5835 for carousel container).
+ * Reuses the global `.marquee-track` keyframe (defined in globals.css) which
+ * translates from 0 to -50% — so the children list MUST be duplicated exactly
+ * twice for a seamless loop.
  */
 
 import React from "react";
@@ -19,18 +18,22 @@ import { formatWinnerName } from "@/utils/winner-name-formatter";
 interface WinnerStripProps {
   majorDrawWinners: MajorDrawWinner[];
   majorDrawWinnersLoading: boolean;
-  majorDrawWinnerPairs: [MajorDrawWinner, MajorDrawWinner | null][];
-  carouselRef: React.RefObject<HTMLDivElement | null>;
-  onPointerDown: (e: React.PointerEvent) => void;
-  onPointerMove: (e: React.PointerEvent) => void;
-  onPointerEnd: () => void;
-  onClick: () => void;
+  onTileClick: (index: number) => void;
 }
 
-function renderTile(winner: MajorDrawWinner) {
+const CARD_CLASS =
+  "group/card relative h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-neutral-950 shadow-sm dark:shadow-black/30";
+
+function WinnerCard({
+  winner,
+  onClick,
+}: {
+  winner: MajorDrawWinner;
+  onClick: () => void;
+}) {
   const displayImage =
     winner.imageUrl ||
-    (winner.prize?.images?.[0]) ||
+    winner.prize?.images?.[0] ||
     "/images/promotion/PrizeHeader/PrizeHeader.webp";
   const displayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
   const displayDate = (
@@ -41,90 +44,101 @@ function renderTile(winner: MajorDrawWinner) {
     year: "numeric",
   });
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden bg-neutral-950">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${CARD_CLASS} transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-500 dark:focus-visible:ring-offset-neutral-950`}
+      aria-label={`View ${displayName} winner photo full screen`}
+      title="View full screen"
+    >
       <Image
         src={displayImage}
         alt={displayName}
         fill
-        className="object-contain object-center"
-        sizes="(max-width: 640px) 45vw, 260px"
+        className="object-cover object-center transition-transform duration-500 group-hover/card:scale-105"
+        sizes="(max-width: 640px) 200px, 240px"
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent"
         aria-hidden
       />
-      <div className="absolute bottom-0 left-0 right-0 z-10 space-y-0.5 p-1.5 sm:space-y-1 sm:p-2">
-        <p className="line-clamp-2 text-[7px] font-bold uppercase leading-tight tracking-wide text-white drop-shadow-sm sm:text-3xs">
+      <div className="absolute bottom-0 left-0 right-0 z-10 space-y-0.5 p-2 text-left">
+        <p className="line-clamp-1 text-[10px] font-bold uppercase leading-tight tracking-wider text-white/90 drop-shadow-sm">
           {winner.drawName?.trim() || "Major draw"}
         </p>
-        <p className="text-[7px] tabular-nums text-white/90 drop-shadow-sm sm:text-3xs">{displayDate}</p>
-        <p className="truncate font-['Poppins'] text-3xs font-bold text-white drop-shadow-sm sm:text-3xs">
+        <p className="text-[10px] tabular-nums text-white/70 drop-shadow-sm">{displayDate}</p>
+        <p className="truncate font-['Poppins'] text-sm font-bold text-white drop-shadow-sm">
           {displayName}
         </p>
       </div>
-    </div>
+    </button>
   );
 }
 
 const WinnerStrip: React.FC<WinnerStripProps> = ({
   majorDrawWinners,
   majorDrawWinnersLoading,
-  majorDrawWinnerPairs,
-  carouselRef,
-  onPointerDown,
-  onPointerMove,
-  onPointerEnd,
-  onClick,
+  onTileClick,
 }) => {
   if (!majorDrawWinnersLoading && majorDrawWinners.length === 0) return null;
 
+  // Duplicate exactly twice so the .marquee-track 0→-50% keyframe loops seamlessly.
+  // Speed: ~6s per card, with a sane floor for short lists.
+  const trackContent = [...majorDrawWinners, ...majorDrawWinners];
+  const durationSeconds = Math.max(24, majorDrawWinners.length * 6);
+
   return (
-    <div className="mt-3 sm:mt-4">
+    <section className="mt-4 sm:mt-5" aria-label="Recent major-draw winners">
+      <header className="mb-2 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600" />
+          </span>
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-700 dark:text-gray-200 sm:text-xs">
+            Recent Winners
+          </h3>
+        </div>
+      </header>
+
       {majorDrawWinnersLoading ? (
-        <div className="grid h-[92px] sm:h-[104px] w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-200 dark:bg-neutral-800">
-          <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
-          <div className="animate-pulse bg-gray-100 dark:bg-neutral-900" />
+        <div className="flex gap-2 overflow-hidden sm:gap-3">
+          <div className="h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-neutral-900" />
+          <div className="h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-neutral-900" />
+          <div className="h-[140px] w-[200px] sm:h-[160px] sm:w-[240px] flex-shrink-0 animate-pulse rounded-xl bg-gray-100 dark:bg-neutral-900" />
         </div>
       ) : (
-        <div
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onClick();
-            }
-          }}
-          className="group block cursor-pointer rounded-xl outline-none transition-opacity hover:opacity-[0.98] focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-red-500 dark:focus-visible:ring-offset-neutral-950"
-          aria-label="View winner photos full screen"
-          title="View full screen"
-        >
+        <div className="relative overflow-hidden">
           <div
-            ref={carouselRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerEnd}
-            onPointerCancel={onPointerEnd}
-            onClick={onClick}
-            className="flex w-full overflow-x-auto snap-x snap-mandatory rounded-xl border border-gray-200 dark:border-neutral-700 shadow-sm dark:shadow-black/20 [scrollbar-width:thin] scroll-smooth group-hover:border-gray-300 dark:group-hover:border-neutral-600"
+            className="marquee-track gap-2 sm:gap-3"
+            style={{
+              animationDuration: `${durationSeconds}s`,
+              width: "max-content",
+            }}
           >
-            {majorDrawWinnerPairs.map(([left, right]) => (
-              <div
-                key={`${left.id}-${right?.id ?? "single"}`}
-                className="grid h-[92px] sm:h-[104px] w-full min-w-full flex-shrink-0 snap-center grid-cols-2 gap-px overflow-hidden bg-neutral-800 dark:bg-neutral-900"
-              >
-                {renderTile(left)}
-                {right ? (
-                  renderTile(right)
-                ) : (
-                  <div className="h-full min-h-0 bg-neutral-900/80 dark:bg-neutral-950" aria-hidden />
-                )}
-              </div>
-            ))}
+            {trackContent.map((winner, i) => {
+              const realIndex = i % majorDrawWinners.length;
+              return (
+                <WinnerCard
+                  key={`${winner.id}-${i < majorDrawWinners.length ? "a" : "b"}`}
+                  winner={winner}
+                  onClick={() => onTileClick(realIndex)}
+                />
+              );
+            })}
           </div>
+          {/* Edge fades — soften the cards bleeding off either side */}
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent dark:from-neutral-950"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent dark:from-neutral-950"
+            aria-hidden
+          />
         </div>
       )}
-    </div>
+    </section>
   );
 };
 
