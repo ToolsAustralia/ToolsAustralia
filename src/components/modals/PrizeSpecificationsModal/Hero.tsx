@@ -37,7 +37,7 @@ const Hero: React.FC<HeroProps> = ({ prize }) => {
     <UpsellHero
       tone="neutral"
       titleId="prize-specs-headline"
-      className="shrink-0 px-6 pt-6 pb-5 max-xs:px-5 max-xs:pt-5 max-xs:pb-4"
+      className="shrink-0 bg-none bg-[#0a0a0a] px-6 pt-6 pb-5 max-xs:px-5 max-xs:pt-5 max-xs:pb-4"
       eyebrow={
         <>
           <span className="basis-7 grow-0 shrink-0 h-px bg-[linear-gradient(90deg,transparent,rgba(212,175,55,0.6))] max-xs:basis-[18px]" />

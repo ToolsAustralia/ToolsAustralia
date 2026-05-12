@@ -19,6 +19,29 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 
 ## Sections
 
+### PromoTrustBar — final-hours urgency variant
+
+[`src/components/sections/promo/PromoTrustBar.tsx`](../../src/components/sections/promo/PromoTrustBar.tsx) is the thin strip that sits between [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) and [`PromoPackages`](../../src/components/sections/promo/PromoPackages.tsx) on `/promotions/[slug]` and `ToolsetLandingPage`. Default render: three icon+text trust items (Drawn live · randomdraws.com.au · Drawn every 27th).
+
+**Urgency variant** swaps the bar to a 2-column layout (timer left · rusted plate image right) when the current major draw is within 72h of `freezeEntriesAt`:
+
+| Tier | Window (relative to `freezeEntriesAt`) | Image | Header copy |
+|---|---|---|---|
+| `finalHours`    | `freeze − 72h` to `freeze − 48h` | `/images/background/promo/finalHours/finalHours.webp`    | `Entries close · Wed 27 May · 8:00pm AEST` |
+| `drawnTomorrow` | `freeze − 48h` to `freeze − 24h` | `/images/background/promo/finalHours/drawnTomorrow.webp` | `Entries close · Tomorrow · 8:00pm AEST` |
+| `drawnTonight`  | `freeze − 24h` to `freezeEntriesAt` | `/images/background/promo/finalHours/drawnTonight.webp`  | `Entries close · Tonight · 8:00pm AEST` |
+| `frozen`        | `freezeEntriesAt` to `drawDate + 12h` | `/images/background/promo/finalHours/drawnTonight.webp`  | `Entries closed · Draw live · 8:30pm AEST` (Lock icon, red) |
+
+Outside that 72h window, or once `now ≥ drawDate + 12h` (cycle has flipped to the next draw), the standard 3-item trust bar renders. If `currentMajorDraw` is missing or has no `freezeEntriesAt`, the standard bar is the safe fallback.
+
+> **Gotcha:** `currentMajorDraw.activationDate` is when *this* draw became active (always in the past for an active draw), NOT when entries lock out. An earlier version used it as a "stop showing urgency" guard, which made the variant never render. Don't reach for that field unless you mean "the start instant of the current draw."
+
+- **Server-fresh first paint.** Both [`/promotions/[slug]/page.tsx`](../../src/app/promotions/[slug]/page.tsx) and [`ToolsetLandingPage`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) pass `initialMajorDraw={majorDraw}` (from `getCurrentMajorDrawServer()`) so the urgency state is computed against the same server data the hero uses. The client hook (`useCurrentMajorDraw`) would otherwise briefly return stale cached data from a previous draw state — dev-toggling between scenarios exposed this.
+- **Tick:** [`useLeafTimer(60_000)`](../../src/hooks/useLeafTimer.ts) — 1-minute interval. The bar shows only the absolute deadline (no live remaining-time readout), so this just drives the tier boundary recalc (Tonight ↔ Tomorrow ↔ Wed 27 May) without per-second re-renders.
+- **No ENTER NOW button in the bar.** [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) already renders the ENTER NOW pill above; duplicating it here was rejected during brainstorming as visual clutter.
+- **Image dims:** native `450×150`, rendered with `next/image` and `style={{ height: "clamp(40px, 8vw, 72px)" }}` so it scales with viewport while preserving aspect ratio. `priority` so it doesn't pop in.
+- **Theme:** the timer icon picks up `usePromoTheme().primary`, so per-slug brand themes (RYOBI green, DEWALT yellow, etc.) tint it automatically. The frozen state forces red (`#dc2626`) regardless of theme.
+
 ### `sections/winner-testimony/` — Hear From Our Winners
 
 [src/components/sections/winner-testimony/](../../src/components/sections/winner-testimony/) is a cinematic editorial section showcasing winner testimonies. It is composed of:

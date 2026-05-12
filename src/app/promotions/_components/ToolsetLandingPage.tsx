@@ -127,7 +127,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               />
             </div>
 
-            <PromoTrustBar />
+            <PromoTrustBar initialMajorDraw={majorDraw} />
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />

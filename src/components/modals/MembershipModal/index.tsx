@@ -73,7 +73,7 @@ import { getStoredUTMParams } from "@/utils/tracking/utm-storage";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
-import { useMajorDrawWinners, type MajorDrawWinner } from "@/hooks/queries/useWinnersQueries";
+import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPackageById } from "@/data/membershipPackages";
@@ -279,18 +279,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const [existingAccountEmail, setExistingAccountEmail] = useState<string | undefined>(undefined);
 
   const { data: majorDrawWinners = [], isLoading: majorDrawWinnersLoading } = useMajorDrawWinners();
-  const winnerCarouselRef = useRef<HTMLDivElement | null>(null);
   const [winnerViewerOpen, setWinnerViewerOpen] = useState(false);
   const [winnerViewerInitialIndex, setWinnerViewerInitialIndex] = useState(0);
-  const winnerStripPointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const winnerStripDidDragRef = useRef(false);
-  const majorDrawWinnerPairs = React.useMemo(() => {
-    const pairs: [MajorDrawWinner, MajorDrawWinner | null][] = [];
-    for (let i = 0; i < majorDrawWinners.length; i += 2) {
-      pairs.push([majorDrawWinners[i], majorDrawWinners[i + 1] ?? null]);
-    }
-    return pairs;
-  }, [majorDrawWinners]);
 
   const winnerFullscreenImages = React.useMemo((): FullscreenImageItem[] => {
     return majorDrawWinners.map((winner) => {
@@ -642,31 +632,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     validatePromoLink();
   }, [promoLinkCode, isOpen, activePlan]); // eslint-disable-line react-hooks/exhaustive-deps -- isPlaceholderPlan derived from activePlan
-
-  useEffect(() => {
-    if (!isOpen || majorDrawWinnerPairs.length <= 1 || majorDrawWinnersLoading) return;
-    const el = winnerCarouselRef.current;
-    if (!el) return;
-
-    const tick = () => {
-      const node = winnerCarouselRef.current;
-      if (!node) return;
-      const page = node.clientWidth;
-      if (page <= 0) return;
-      const maxLeft = Math.max(0, node.scrollWidth - page);
-      const next = node.scrollLeft + page >= maxLeft - 2 ? 0 : node.scrollLeft + page;
-      node.scrollTo({ left: next, behavior: "smooth" });
-    };
-
-    const interval = setInterval(tick, 5000);
-    return () => clearInterval(interval);
-  }, [isOpen, majorDrawWinnerPairs.length, majorDrawWinnersLoading]);
-
-  useEffect(() => {
-    if (isOpen && winnerCarouselRef.current) {
-      winnerCarouselRef.current.scrollLeft = 0;
-    }
-  }, [isOpen, majorDrawWinners]);
 
   const resolvedBillingDetails = React.useMemo(() => {
     const safeTrim = (value: string | null | undefined) => {
@@ -4377,35 +4342,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       ? `/images/badge/X${promoMultiplier}.webp`
       : null;
 
-  const onWinnerStripPointerDown = (e: React.PointerEvent) => {
-    winnerStripPointerStartRef.current = { x: e.clientX, y: e.clientY };
-    winnerStripDidDragRef.current = false;
-  };
-  const onWinnerStripPointerMove = (e: React.PointerEvent) => {
-    const s = winnerStripPointerStartRef.current;
-    if (!s) return;
-    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 12) {
-      winnerStripDidDragRef.current = true;
-    }
-  };
-  const onWinnerStripPointerEnd = () => {
-    winnerStripPointerStartRef.current = null;
-  };
-  const onWinnerStripClick = () => {
-    if (winnerStripDidDragRef.current) {
-      winnerStripDidDragRef.current = false;
-      return;
-    }
-    const el = winnerCarouselRef.current;
-    let initial = 0;
-    if (el && majorDrawWinners.length > 0) {
-      const w = el.clientWidth;
-      if (w > 0) {
-        const page = Math.round(el.scrollLeft / w);
-        initial = Math.min(page * 2, majorDrawWinners.length - 1);
-      }
-    }
-    setWinnerViewerInitialIndex(initial);
+  const handleWinnerTileClick = (index: number) => {
+    setWinnerViewerInitialIndex(Math.max(0, Math.min(index, majorDrawWinners.length - 1)));
     setWinnerViewerOpen(true);
   };
 
@@ -4597,12 +4535,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               <WinnerStrip
                 majorDrawWinners={majorDrawWinners}
                 majorDrawWinnersLoading={majorDrawWinnersLoading}
-                majorDrawWinnerPairs={majorDrawWinnerPairs}
-                carouselRef={winnerCarouselRef}
-                onPointerDown={onWinnerStripPointerDown}
-                onPointerMove={onWinnerStripPointerMove}
-                onPointerEnd={onWinnerStripPointerEnd}
-                onClick={onWinnerStripClick}
+                onTileClick={handleWinnerTileClick}
               />
             )}
           </div>
