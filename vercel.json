@@ -31,10 +31,17 @@
     {
       "path": "/api/cron/reconcile-blocked-transactions",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/process-stripe-webhook-queue",
+      "schedule": "* * * * *"
     }
   ],
   "functions": {
-    "src/app/api/stripe/webhook/route.ts": { "memory": 1024, "maxDuration": 30 },
+    "src/app/api/stripe/webhook/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/stripe/process-event/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/process-stripe-webhook-queue/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/admin/stripe-webhook-queue/route.ts": { "memory": 1024, "maxDuration": 60 },
     "src/app/api/upload/cloudinary/route.ts": { "memory": 1024, "maxDuration": 30 },
     "src/app/api/upload/route.ts": { "memory": 1024, "maxDuration": 30 },
     "src/app/api/admin/users/export/route.ts": { "memory": 1024, "maxDuration": 60 },
@@ -53,6 +60,11 @@
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/admin/klaviyo/**/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/stripe/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/payment-intent/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/subscription/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/invoice/**/route.ts": { "memory": 512, "maxDuration": 60 },
+    "src/app/api/orders/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/**/route.ts": { "memory": 512, "maxDuration": 10 }
   }
 }

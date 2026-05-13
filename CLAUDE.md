@@ -8,7 +8,7 @@ These rules override any superpowers skill, sub-agent instruction, or default be
 
 ### 1. No auto-commit
 
-**Never** run `git commit`, `git add`, `git push`, `gh pr create`, `gh pr merge`, or any other command that creates a commit, push, PR, or merge — unless the user **explicitly** authorizes the action in their **most recent** message using one of these keywords: `commit`, `push`, `merge`, `make a PR`, `create a PR`, `open a PR`, `ship it`.
+**Never** run `git commit`, `git add`, `git push`, `gh pr create`, `gh pr merge`, or any other command that creates a commit, push, PR, or merge — unless the user has **explicitly** authorized commits during the current session using one of these keywords: `commit`, `push`, `merge`, `make a PR`, `create a PR`, `open a PR`, `ship it`. The hook scans recent typed user messages (not just the most recent one), so once the user says one of these keywords, subsequent commits within the session stay authorized without re-asking. If the user has not authorized commits at all this session, ask before committing.
 
 This applies even when:
 - You are in the middle of an `executing-plans` or `subagent-driven-development` flow that suggests committing between tasks.
@@ -142,7 +142,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-11",
+  "lastModified": "2026-05-12",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -178,24 +178,31 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/stripe.ts",
         "src/lib/stripe-client.ts",
         "src/services/allowlist/**",
+        "src/services/stripe-webhook-queue/**",
+        "src/services/stripe-webhook-handlers/**",
         "src/models/PaymentEvent.ts",
         "src/models/ProcessedStripeEvent.ts",
         "src/models/InvoiceChargeLog.ts",
         "src/models/AllowlistAction.ts",
         "src/models/BlockedTransaction.ts",
+        "src/models/StripeWebhookQueue.ts",
         "scripts/backfill-blocked-transactions.ts",
         "scripts/sync-allowlist-from-blocked-transactions.ts",
         "scripts/investigate-blocked-transactions.ts",
         "src/app/api/stripe/**",
         "src/app/api/invoice/**",
         "src/app/api/admin/allowlist/**",
+        "src/app/api/admin/stripe-webhook-queue/**",
         "src/app/api/cron/reconcile-blocked-transactions/**",
+        "src/app/api/cron/process-stripe-webhook-queue/**",
+        "src/app/api/stripe/process-event/**",
+        "src/app/admin/stripe-webhook-queue/**",
         "src/hooks/queries/admin/useBlockedCards.ts",
         "src/hooks/queries/admin/useAllowlistActions.ts",
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-13"
     },
     "payment": {
       "docs": "docs/payment/",

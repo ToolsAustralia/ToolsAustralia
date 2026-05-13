@@ -8,6 +8,12 @@
 | `npm run test:stripe-collection-pause` | Pause-collection policy + invoice-selection helpers. |
 | `npm run test:facebook-capi` | Lives in [tracking](../tracking/) but exercises Stripe-driven event firing. |
 | `npm run test:redeemables` | Lives in [rewards-redeemables](../rewards-redeemables/) but covers the reverser-step pattern. |
+| `npm run test:webhook-queue-backoff` | Exponential backoff calculator for webhook retry scheduling. |
+| `npm run test:webhook-queue-enqueue` | Idempotent Stripe event enqueueing and duplicate handling. |
+| `npm run test:webhook-queue-claim` | Atomic claim guarantees one-winner among parallel workers. |
+| `npm run test:webhook-queue-mark-result` | Success / fail / dead-letter state transitions for queue rows. |
+| `npm run test:webhook-queue-orphan-recovery` | Sweeper recovers in-flight rows stuck in `processing`. |
+| `npm run test:webhook-queue-replay-safe` | No-double-grant on replay (4-layer dedup load-bearing test). |
 
 ## Test conventions
 
