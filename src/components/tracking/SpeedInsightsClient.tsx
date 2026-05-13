@@ -19,7 +19,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 export function SpeedInsightsClient() {
   return (
     <SpeedInsights
-      sampleRate={0.1}
+      sampleRate={1}
       beforeSend={(data) => {
         try {
           const pathname = new URL(data.url).pathname;
