@@ -572,7 +572,9 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/server/admin/**",
         "src/services/admin/chargePastDueHistory.ts",
         "src/utils/admin/**",
-        "src/hooks/useAdminMobileDateToolbarSlot.ts"
+        "src/hooks/useAdminMobileDateToolbarSlot.ts",
+        "src/models/DashboardStatsDailySnapshot.ts",
+        "src/services/admin/dashboard-stats/**"
       ],
       "lastVerified": "2026-05-12"
     },

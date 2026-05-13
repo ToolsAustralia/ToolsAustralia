@@ -12,6 +12,16 @@
 
 `charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, and `chargeOrRecoverPolicy.ts` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
 
+## Dashboard stats snapshot tests
+
+| npm script | file | covers |
+|---|---|---|
+| `npm run test:dashboard-stats-aggregator` | `src/services/admin/dashboard-stats/__tests__/revenueAggregator.test.ts` | revenue aggregation logic |
+| `npm run test:dashboard-stats-dst` | `src/services/admin/dashboard-stats/__tests__/dstBoundary.test.ts` | `aestDayBounds` and `expandDateKeyRange` across Sydney DST transitions (April fallback = 25h day, October spring-forward = 23h day) |
+| `npm run test:dashboard-stats-schema` | `src/services/admin/dashboard-stats/__tests__/snapshotSchema.test.ts` | snapshot Zod schema validation |
+
+All three are pure (no Mongo, no env vars) — run with just `tsx`.
+
 ## CLI diagnostic and test scripts
 
 | npm script | file | covers |
