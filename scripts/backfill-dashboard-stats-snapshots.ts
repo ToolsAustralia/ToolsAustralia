@@ -44,46 +44,88 @@ function yesterdayKey(): string {
   return formatInTimeZone(minusOne, TZ, "yyyy-MM-dd");
 }
 
+function ts(): string {
+  return new Date().toISOString().slice(11, 19); // HH:MM:SS
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem === 0 ? `${m}m` : `${m}m${rem}s`;
+}
+
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
   const startKey = argValue("--start-date") ?? LAUNCH_DATE_KEY;
   const endKey = argValue("--end-date") ?? yesterdayKey();
 
-  console.log(`${dryRun ? "DRY RUN" : "LIVE"} — backfill ${startKey} → ${endKey}`);
+  console.log(`[${ts()}] ${dryRun ? "DRY RUN" : "LIVE"} — backfill ${startKey} → ${endKey}`);
 
+  console.log(`[${ts()}] connecting to MongoDB…`);
+  const t0Connect = Date.now();
   await connectDB();
+  console.log(`[${ts()}] MongoDB connected (${formatDuration(Date.now() - t0Connect)})`);
 
   const keys = expandDateKeyRange(startKey, endKey);
-  console.log(`Will process ${keys.length} day(s)`);
+  console.log(`[${ts()}] expanded date range: ${keys.length} day(s)`);
 
   if (dryRun) {
-    console.log("Sample keys:", keys.slice(0, 5), "...", keys.slice(-5));
+    console.log(`[${ts()}] sample keys: ${keys.slice(0, 5).join(", ")} … ${keys.slice(-5).join(", ")}`);
+    const t0Count = Date.now();
     const existing = await DashboardStatsDailySnapshot.countDocuments({ date: { $in: keys } });
-    console.log(`Existing snapshots in range: ${existing} (would be upserted)`);
+    console.log(
+      `[${ts()}] existing snapshots in range: ${existing} (would be upserted) — query ${formatDuration(Date.now() - t0Count)}`
+    );
     await mongoose.disconnect();
     return;
   }
 
+  console.log(`[${ts()}] loading refunded payment intent set…`);
+  const t0Refund = Date.now();
   const refunded = await loadRefundedPaymentIntentIds();
-  console.log(`Loaded ${refunded.size} refunded payment intent ids`);
+  console.log(
+    `[${ts()}] loaded ${refunded.size} refunded payment intent ids (${formatDuration(Date.now() - t0Refund)})`
+  );
 
+  console.log(`[${ts()}] processing ${keys.length} day(s)…`);
+  const t0Run = Date.now();
+  const PROGRESS_EVERY = Math.max(1, Math.min(10, Math.floor(keys.length / 20))); // ~20 progress lines total, min every-1
   let okCount = 0;
   let failCount = 0;
   for (let i = 0; i < keys.length; i += 1) {
     const k = keys[i];
+    const t0Day = Date.now();
     const result = await writeSnapshotForDate(k, refunded);
+    const dayMs = Date.now() - t0Day;
+
     if (result.ok) {
       okCount += 1;
+      console.log(`[${ts()}]   ${k}  ok  (${formatDuration(dayMs)})`);
     } else {
       failCount += 1;
-      console.error(`  ✗ ${k}: ${result.error}`);
+      console.error(`[${ts()}]   ${k}  FAIL  (${formatDuration(dayMs)})  ${result.error}`);
     }
-    if ((i + 1) % 25 === 0) {
-      console.log(`  progress: ${i + 1}/${keys.length} (ok=${okCount}, fail=${failCount})`);
+
+    const done = i + 1;
+    if (done % PROGRESS_EVERY === 0 || done === keys.length) {
+      const elapsed = Date.now() - t0Run;
+      const avgMs = elapsed / done;
+      const remaining = keys.length - done;
+      const etaMs = avgMs * remaining;
+      const pct = Math.round((done / keys.length) * 100);
+      console.log(
+        `[${ts()}]   ── progress: ${done}/${keys.length} (${pct}%) │ ok=${okCount} fail=${failCount} │ avg ${formatDuration(avgMs)}/day │ elapsed ${formatDuration(elapsed)} │ ETA ${formatDuration(etaMs)}`
+      );
     }
   }
 
-  console.log(`\nDone. ok=${okCount}, fail=${failCount}`);
+  const totalMs = Date.now() - t0Run;
+  console.log(
+    `\n[${ts()}] Done. ok=${okCount}, fail=${failCount}, total ${formatDuration(totalMs)} (${formatDuration(totalMs / Math.max(keys.length, 1))}/day avg)`
+  );
   await mongoose.disconnect();
   process.exit(failCount === 0 ? 0 : 1);
 }
