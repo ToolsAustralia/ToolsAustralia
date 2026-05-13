@@ -35,6 +35,16 @@ npm run test:ui-primitives          # Button, Badge, Card primitives
 npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
 ```
 
+## Dashboard stats snapshot scripts
+
+| npm script | purpose |
+|---|---|
+| `npm run backfill:dashboard-stats-snapshots:dry` | Dry-run backfill — prints dates that would be written |
+| `npm run backfill:dashboard-stats-snapshots -- --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD` | Live backfill for a specific range |
+| `npm run verify:dashboard-stats-drift -- --samples=30` | Samples N snapshot dates, re-aggregates live, exits non-zero on drift |
+
+Both scripts load `.env.local` and require `MONGODB_URI`.
+
 ## Diagnostic find scripts
 
 | npm script | file | covers |

@@ -139,7 +139,8 @@
     "test:existing-account": "tsx --require ./src/components/modals/ExistingAccountModal/__tests__/asset-stubs.cjs src/components/modals/ExistingAccountModal/__tests__/ExistingAccountModal.test.ts",
     "test:login": "tsx --require ./src/components/modals/LoginModal/__tests__/asset-stubs.cjs src/components/modals/LoginModal/__tests__/LoginModal.test.ts",
     "test:past-draws": "tsx --require ./src/components/modals/PastDrawsModal/__tests__/asset-stubs.cjs src/components/modals/PastDrawsModal/__tests__/PastDrawsModal.test.ts",
-    "audit:decomposition": "tsx scripts/codemods/audit-component-decomposition.ts"
+    "audit:decomposition": "tsx scripts/codemods/audit-component-decomposition.ts",
+    "verify:dashboard-stats-drift": "tsx scripts/verify-dashboard-stats-snapshot-drift.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

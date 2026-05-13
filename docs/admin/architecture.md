@@ -27,6 +27,7 @@ Per [auth rules R1-R2](../auth/rules.md): middleware gates `/admin/**` PAGES; pe
 - Promo / campaign management
 - Affiliate management
 - Draw management
+- Dashboard stats daily snapshot — `src/services/admin/dashboard-stats/` subsystem. See [backend.md](./backend.md#services) and [models.md](./models.md#dashboardstatsdailysnapshot).
 
 ## User Detail Modal
 

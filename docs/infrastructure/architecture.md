@@ -24,6 +24,7 @@
 - `sync-*.ts` → sync:*
 - `stripe-*.ts` → stripe:*
 - `find-*.ts` → find:*
+- `verify-*.ts` → verify:* npm script (read-only drift/consistency checks; exit non-zero on detected drift)
 - `scripts/codemods/sweep-*.ts` → sweep:* npm script (UI codemod sweeps)
 
 Plus:
@@ -31,6 +32,12 @@ Plus:
 - `scripts/seed-admin-data.ts` — dev seed
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
+
+### Dashboard stats snapshot backfill + drift check
+
+- [`scripts/backfill-dashboard-stats-snapshots.ts`](../../scripts/backfill-dashboard-stats-snapshots.ts) — idempotent backfill. Upserts `DashboardStatsDailySnapshot` rows for a date range. Supports `--dry-run`, `--start-date=YYYY-MM-DD`, `--end-date=YYYY-MM-DD`. Defaults: site launch (2025-11-27) → yesterday-AEST. npm scripts: `backfill:dashboard-stats-snapshots` (live), `backfill:dashboard-stats-snapshots:dry`.
+
+- [`scripts/verify-dashboard-stats-snapshot-drift.ts`](../../scripts/verify-dashboard-stats-snapshot-drift.ts) — read-only drift check. Samples N random snapshot dates, re-aggregates revenue live, reports per-bucket delta. Exits non-zero on any drift. npm script: `verify:dashboard-stats-drift`. Accepts `--samples=N`.
 
 ### Refund entry-corruption audit + repair
 
@@ -55,6 +62,7 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 | `/api/cron/ab-testing-aggregate-metrics` | `0 3 * * *` | Daily — A/B test metrics roll-up |
 | `/api/cron/sync-meta-spend-by-url` | `30 2 * * *` | Daily — Meta ad spend sync |
 | `/api/cron/membership-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — writes yesterday's `MembershipDailySnapshot` per package. Idempotent upsert; the second fire is a no-op for redundancy. |
+| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | Daily ×2 — re-upserts a 90-day sliding window of `DashboardStatsDailySnapshot` rows. The second fire heals first-run failures. Idempotent. `maxDuration: 300s`, `memory: 1024MB`. |
 
 `Australia/Sydney`-anchored crons fire at 14:00 UTC = 00:00 AEST / 01:00 AEDT, and 15:00 UTC = 01:00 AEST / 02:00 AEDT — both are after Sydney midnight in either DST regime, so they reliably write "yesterday" in local time. See [`docs/subscription/architecture.md`](../subscription/architecture.md) for the full membership-snapshot flow and `scripts/test-membership-snapshot-dst.ts` for the DST verification test.
 
