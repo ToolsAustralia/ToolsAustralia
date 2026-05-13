@@ -255,7 +255,9 @@ export const usePurchaseUpsell = () => {
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
       await queryClient.cancelQueries({ queryKey: queryKeys.users.account(actualUserId) });
 
-      freezeRefetchIntervals(queryClient, actualUserId, 5000);
+      // 10s rather than 5s: the async webhook worker writes accumulatedEntries
+      // ~5–15s after Stripe delivery. See useMembershipQueries for full rationale.
+      freezeRefetchIntervals(queryClient, actualUserId, 10000);
 
       const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
       const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
@@ -299,7 +301,9 @@ export const usePurchaseUpsell = () => {
         };
       });
 
-      setTimeout(async () => {
+      // Two-pass refetch (3s + 8s) — see useMembershipQueries for rationale.
+      // Catches both fast worker completions and the slower P99 tail.
+      const syncFromServer = async (label: string) => {
         try {
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
             fetch("/api/major-draw").then((res) => res.json()),
@@ -314,9 +318,11 @@ export const usePurchaseUpsell = () => {
             queryClient.setQueryData(queryKeys.users.account(actualUserId), userStatsResponse.data);
           }
         } catch (error) {
-          console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);
+          console.error(`❌ HYBRID VALIDATION (${label}): Failed to sync with server:`, error);
         }
-      }, 3000);
+      };
+      setTimeout(() => void syncFromServer("3s"), 3000);
+      setTimeout(() => void syncFromServer("8s"), 8000);
 
       invalidatePurchaseCaches(actualUserId);
     },

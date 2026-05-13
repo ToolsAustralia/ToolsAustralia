@@ -193,7 +193,11 @@ export const usePurchaseMembership = () => {
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
       await queryClient.cancelQueries({ queryKey: queryKeys.users.account(actualUserId) });
 
-      freezeRefetchIntervals(queryClient, actualUserId, 5000);
+      // 10s rather than 5s: the async webhook worker writes accumulatedEntries
+      // ~5–15s after Stripe delivery. A 5s freeze releases background polls
+      // before benefits land, letting a stale fetch overwrite the optimistic
+      // cache. 10s bridges the typical worker window.
+      freezeRefetchIntervals(queryClient, actualUserId, 10000);
 
       const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
       const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
@@ -237,7 +241,12 @@ export const usePurchaseMembership = () => {
         };
       });
 
-      setTimeout(async () => {
+      // Two-pass refetch: 3s catches fast worker completions (typical ~5s),
+      // 8s catches the slower tail (P99 ~12–15s). If the immediate
+      // invalidatePurchaseCaches below races the worker and writes stale data
+      // into the cache, the 8s pass overwrites it with the correct
+      // webhook-written state.
+      const syncFromServer = async (label: string) => {
         try {
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
             fetch("/api/major-draw").then((res) => res.json()),
@@ -252,9 +261,11 @@ export const usePurchaseMembership = () => {
             queryClient.setQueryData(queryKeys.users.account(actualUserId), userStatsResponse.data);
           }
         } catch (error) {
-          console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);
+          console.error(`❌ HYBRID VALIDATION (${label}): Failed to sync with server:`, error);
         }
-      }, 3000);
+      };
+      setTimeout(() => void syncFromServer("3s"), 3000);
+      setTimeout(() => void syncFromServer("8s"), 8000);
 
       invalidatePurchaseCaches(actualUserId);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
