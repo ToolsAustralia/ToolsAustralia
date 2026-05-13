@@ -213,9 +213,21 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
       if (response.success) {
         setIsSuccess(true);
+        // The webhook now grants benefits asynchronously (~5–15s after Stripe
+        // delivers the event). One invalidate + 2s close was racy against the
+        // worker pre-cutover too, but the old sync handler usually beat the
+        // refetch. Schedule two refresh passes (at 3s + 7s) before closing at
+        // 8s so the My Account view picks up the worker's writes.
         queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
         queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
-        setTimeout(() => onClose(), 2000);
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account("current") });
+        }, 3000);
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.detail("current") });
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account("current") });
+          onClose();
+        }, 8000);
       } else if (response.requiresPaymentConfirmation && response.data?.paymentIntent?.clientSecret) {
         setRequiresDifferentPaymentMethod(false);
         setPaymentState({
@@ -327,15 +339,27 @@ const RenewalFailedModal: React.FC<RenewalFailedModalProps> = ({ isOpen, onClose
 
   const handlePaymentSuccess = async (_paymentMethodId?: string) => {
     setIsSuccess(true);
+    // Same async-webhook race as handleResolvePayment above — schedule two
+    // refetch passes (3s + 7s) so the dashboard reflects worker-granted
+    // benefits before we close. Toast wording is intentionally softened from
+    // "now active" to "reactivating" because the active state is technically
+    // a few seconds out from this code path.
     queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
     showToast({
       type: "success",
       title: "Payment Successful",
-      message: "Your subscription has been reactivated. Your benefits are now active.",
-      duration: 5000,
+      message: "Your subscription is reactivating. Your benefits will appear shortly.",
+      duration: 6000,
     });
-    setTimeout(() => onClose(), 2000);
+    setTimeout(() => {
+      queryClient.refetchQueries({ queryKey: queryKeys.users.account("current") });
+    }, 3000);
+    setTimeout(() => {
+      queryClient.refetchQueries({ queryKey: queryKeys.users.detail("current") });
+      queryClient.refetchQueries({ queryKey: queryKeys.users.account("current") });
+      onClose();
+    }, 8000);
   };
 
   const handlePaymentError = (

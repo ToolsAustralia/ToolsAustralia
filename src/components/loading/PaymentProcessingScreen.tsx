@@ -156,9 +156,14 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   useEffect(() => {
     if (!isVisible || !shouldPoll || status?.processed || error) return;
 
+    // 45s rather than 30s: the async webhook worker now writes BenefitsGranted
+    // ~5–15s after Stripe delivery (vs ~10s synchronously pre-cutover). 30s was
+    // tight enough to flash the "still processing" warning on normal renewals
+    // under load. 45s preserves the warning's purpose (catch truly stuck
+    // payments) without firing on the happy path.
     const t = setTimeout(() => {
       setStillWaitingLong(true);
-    }, 30000);
+    }, 45000);
     return () => clearTimeout(t);
   }, [isVisible, shouldPoll, paymentIntentId, status?.processed, error]);
 

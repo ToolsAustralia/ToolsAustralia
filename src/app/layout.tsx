@@ -9,7 +9,7 @@ import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
 import GoogleTagManager from "@/components/GoogleTagManager";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
+import { SpeedInsightsClient } from "@/components/tracking/SpeedInsightsClient";
 import Script from "next/script";
 // Import console log silencer for production - must be imported early
 import "@/utils/common/silence-logs";
@@ -146,7 +146,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <KlaviyoPageTracker />
         <Providers>{children}</Providers>
         <Analytics />
-        <SpeedInsights sampleRate={0.1} />
+        <SpeedInsightsClient />
       </body>
     </html>
   );
