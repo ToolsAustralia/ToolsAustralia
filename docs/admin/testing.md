@@ -12,6 +12,17 @@
 
 `charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, and `chargeOrRecoverPolicy.ts` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
 
+## Dashboard stats snapshot tests
+
+| npm script | file | covers |
+|---|---|---|
+| `npm run test:dashboard-stats-aggregator` | `src/services/admin/dashboard-stats/__tests__/revenueAggregator.test.ts` | revenue aggregation logic |
+| `npm run test:dashboard-stats-dst` | `src/services/admin/dashboard-stats/__tests__/dstBoundary.test.ts` | `aestDayBounds` and `expandDateKeyRange` across Sydney DST transitions (April fallback = 25h day, October spring-forward = 23h day) |
+| `npm run test:dashboard-stats-schema` | `src/services/admin/dashboard-stats/__tests__/snapshotSchema.test.ts` | snapshot Zod schema validation |
+| `npm run test:dashboard-stats-reader` | `src/services/admin/dashboard-stats/__tests__/snapshotReader.test.ts` | `readStatsForRange`: seeds three snapshot rows, reads range, asserts revenue summation, user counts, ad-channel ROAS recompute, and `meta.snapshotDaysUsed` (10/10 pass) |
+
+The first three are pure (no Mongo, no env vars) — run with just `tsx`. `test:dashboard-stats-reader` requires a live MongoDB connection (`.env.local`).
+
 ## CLI diagnostic and test scripts
 
 | npm script | file | covers |

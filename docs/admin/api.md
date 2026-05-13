@@ -297,6 +297,32 @@ User self-serve version of the force-charge above. Same orchestrator, no admin a
 
 ---
 
+## Dashboard stats snapshot health
+
+### `GET /api/admin/health/dashboard-stats-snapshot`
+
+Admin-only. Returns expected vs present snapshot counts from the site launch date (2025-11-27) through yesterday-AEST. Today is excluded because the cron hasn't snapshotted it yet.
+
+**Response:**
+
+```json
+{
+  "expectedCount": 167,
+  "presentCount": 167,
+  "missingCount": 0,
+  "missingDates": [],
+  "latestPresent": ["2026-05-10", "2026-05-11", "2026-05-12"]
+}
+```
+
+**Ops runbook:**
+
+1. Check health: `GET /api/admin/health/dashboard-stats-snapshot` (admin session required). `missingCount > 0` means the cron missed one or more days.
+2. If snapshots are missing, backfill: `npm run backfill:dashboard-stats-snapshots -- --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD`. Defaults: launch date → yesterday-AEST. Idempotent — safe to re-run.
+3. Periodic drift check: `npm run verify:dashboard-stats-drift -- --samples=30` — samples N random dates, re-aggregates live, reports per-bucket delta, exits non-zero on any drift.
+4. Cron is idempotent — re-running heals partial failures.
+5. **Refund correction window:** 90 days (the cron's sliding window). Refunds older than 90 days that need to be reflected in dashboard revenue require a manual backfill of the affected date range via `backfill:dashboard-stats-snapshots`.
+
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.
