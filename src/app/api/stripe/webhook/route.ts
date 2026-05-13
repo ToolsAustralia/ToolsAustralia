@@ -13,6 +13,7 @@ import {
   webhookLog,
 } from "@/services/stripe-webhook-handlers";
 import { enqueueStripeEvent } from "@/services/stripe-webhook-queue/enqueue";
+import { dispatchToWorker } from "@/services/stripe-webhook-queue/dispatchWorker";
 
 /**
  * POST /api/stripe/webhook
@@ -183,24 +184,8 @@ export async function POST(request: NextRequest) {
       // Schedule fan-out POST after the response is sent. The sweeper cron
       // (/api/cron/process-stripe-webhook-queue) is the safety net for any
       // case where Vercel kills the lambda before fan-out fires.
-      const workerSecret = process.env.STRIPE_WORKER_INTERNAL_SECRET;
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
       after(async () => {
-        try {
-          await fetch(`${baseUrl}/api/stripe/process-event`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "x-internal-secret": workerSecret ?? "",
-            },
-            body: JSON.stringify({ eventId: event.id }),
-          });
-        } catch (err) {
-          console.error("[webhook-receiver] fan-out POST failed:", err);
-        }
+        await dispatchToWorker(event.id, "webhook-receiver");
       });
     }
 

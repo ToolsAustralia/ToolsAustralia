@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
+import { dispatchToWorker } from "@/services/stripe-webhook-queue/dispatchWorker";
 
 const ALLOWED_STATUSES: ReadonlyArray<StripeWebhookQueueStatus> = [
   "queued",
@@ -73,18 +74,7 @@ export async function POST(request: NextRequest) {
   await row.save();
 
   // Immediate fan-out so the engineer doesn't wait up to 60s for the sweeper.
-  const workerSecret = process.env.STRIPE_WORKER_INTERNAL_SECRET;
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  void fetch(`${baseUrl}/api/stripe/process-event`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal-secret": workerSecret ?? "",
-    },
-    body: JSON.stringify({ eventId: row.eventId }),
-  }).catch((err) => console.error("[webhook-replay] fan-out POST failed:", err));
+  void dispatchToWorker(row.eventId, "webhook-replay");
 
   return NextResponse.json({ replayed: true, eventId: row.eventId });
 }

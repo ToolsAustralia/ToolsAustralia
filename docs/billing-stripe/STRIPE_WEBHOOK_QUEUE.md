@@ -64,7 +64,9 @@ The sweeper is purely a "kick the worker" trigger. It queries Mongo and POSTs to
 |---|---|
 | `STRIPE_WEBHOOK_SECRET` | Existing — signature verification |
 | `STRIPE_WORKER_INTERNAL_SECRET` | **New** — gates the worker route (`x-internal-secret` header) and is sent by the receiver fan-out + the sweeper. Generate a 32+ char random string. |
+| `NEXT_PUBLIC_SITE_URL` | **Critical for async webhook to work on Vercel.** Must be set to your customer-facing custom domain (e.g. `https://staging.toolsaustralia.com.au` for preview, `https://toolsaustralia.com.au` for production). The internal fan-out from receiver → worker uses this URL. **If unset, the receiver falls back to `VERCEL_URL` (the `*.vercel.app` per-deployment alias), which is gated by Vercel's bot-mitigation challenge — non-browser POSTs get a 429 response with `x-vercel-mitigated: challenge` and the worker never runs. Symptom: receiver returns 200 but benefits never get granted, and there are zero Vercel logs for `/api/stripe/process-event`.** See `gotchas.md` for the full incident write-up. |
 | `CRON_SECRET` | Existing — Vercel cron auth |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Optional — only needed if you've also enabled Vercel Deployment Protection. The `dispatchToWorker` helper attaches this as the `x-vercel-protection-bypass` header when set. Generate via Vercel Dashboard → Settings → Deployment Protection → Protection Bypass for Automation. |
 
 ## Receiver
 
