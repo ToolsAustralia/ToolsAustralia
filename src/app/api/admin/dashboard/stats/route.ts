@@ -3,12 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-net-queries";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
-import { subDays } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
-import { fetchFacebookInsights } from "@/lib/facebook-marketing";
+import { readStatsForRange } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotReader";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
 import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
 import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
@@ -59,8 +55,6 @@ export async function GET(request: NextRequest) {
     }
 
     const { startDate, endDate, dateRange, membershipAsOfMode, asOfDate } = parsedRange.value;
-    const startOfToday = getStartOfTodayInAEST();
-    const AEST_TIMEZONE = "Australia/Sydney";
 
     console.log("📊 Fetching admin dashboard stats...", { dateRange });
 
@@ -156,85 +150,44 @@ export async function GET(request: NextRequest) {
     const profileCompletionRate = totalUsers > 0 ? Math.round((usersWithCompletedProfiles / totalUsers) * 100) : 0;
 
     // ========================================
-    // REVENUE STATISTICS (net: exclude BenefitsGranted with RefundProcessed — Option B)
+    // REVENUE + AD CHANNELS (from snapshot reader)
     // ========================================
-    const revenueEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
-      userId: 1,
-      packageType: 1,
-      packageId: 1,
-      data: 1,
-      timestamp: 1,
+    const snapshotRead = await readStatsForRange({
+      rangeStartUTC: startDate,
+      rangeEndUTC: endDate,
     });
 
-    // Initialize detailed revenue breakdown with counts
-    let totalRevenue = 0;
-    
-    // Revenue and count tracking for each category
-    const membershipPurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const membershipRenewalData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const oneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const additionalOneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const miniDrawData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const upsellData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-
-    // Categorize revenue by package type and context
-    // Sort events by timestamp to process them chronologically
-    const sortedEvents = [...revenueEvents].sort((a, b) => {
-      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return ta - tb;
-    });
-
-    for (const event of sortedEvents) {
-      const price = event.data?.price || 0;
-      totalRevenue += price;
-      const userId = event.userId?.toString() || "";
-
-      if (event.packageType === "membership") {
-        const billingReason = event.data?.billingReason as string | undefined;
-        if (billingReason === "subscription_cycle") {
-          membershipRenewalData.revenue += price;
-          membershipRenewalData.purchaseCount += 1;
-          if (userId) membershipRenewalData.userIds.add(userId);
-        } else {
-          // subscription_create or undefined (treat as new purchase)
-          membershipPurchaseData.revenue += price;
-          membershipPurchaseData.purchaseCount += 1;
-          if (userId) membershipPurchaseData.userIds.add(userId);
-        }
-      } else if (event.packageType === "mini-draw") {
-        miniDrawData.revenue += price;
-        miniDrawData.purchaseCount += 1;
-        if (userId) miniDrawData.userIds.add(userId);
-      } else if (event.packageType === "upsell") {
-        upsellData.revenue += price;
-        upsellData.purchaseCount += 1;
-        if (userId) upsellData.userIds.add(userId);
-      } else if (event.packageType === "one-time") {
-        // Categorize based on packageId:
-        // - "One-Time Additional" = packages that start with "additional-" (e.g., "additional-apprentice-pack")
-        // - "One-Time First" = packages that end with "-pack" but NOT "additional-*-pack" (e.g., "apprentice-pack", "tradie-pack")
-        const packageId = event.packageId || "";
-        
-        if (packageId.startsWith("additional-")) {
-          // This is an additional package (member-only packages)
-          additionalOneTimePurchaseData.revenue += price;
-          additionalOneTimePurchaseData.purchaseCount += 1;
-          if (userId) additionalOneTimePurchaseData.userIds.add(userId);
-        } else if (packageId.endsWith("-pack")) {
-          // This is a first-time package (regular one-time packages)
-          oneTimePurchaseData.revenue += price;
-          oneTimePurchaseData.purchaseCount += 1;
-          if (userId) oneTimePurchaseData.userIds.add(userId);
-        } else {
-          // Fallback: If packageId doesn't match expected pattern, treat as first-time
-          // This handles edge cases where packageId might be missing or in unexpected format
-          oneTimePurchaseData.revenue += price;
-          oneTimePurchaseData.purchaseCount += 1;
-          if (userId) oneTimePurchaseData.userIds.add(userId);
-        }
-      }
-    }
+    const totalRevenue = snapshotRead.revenue.total;
+    const membershipPurchaseData = {
+      revenue: snapshotRead.revenue.buckets.membershipPurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.membershipPurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.membershipPurchase.userCount,
+    };
+    const membershipRenewalData = {
+      revenue: snapshotRead.revenue.buckets.membershipRenewal.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.membershipRenewal.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.membershipRenewal.userCount,
+    };
+    const oneTimePurchaseData = {
+      revenue: snapshotRead.revenue.buckets.oneTimePurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.oneTimePurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.oneTimePurchase.userCount,
+    };
+    const additionalOneTimePurchaseData = {
+      revenue: snapshotRead.revenue.buckets.additionalOneTimePurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.additionalOneTimePurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.additionalOneTimePurchase.userCount,
+    };
+    const miniDrawData = {
+      revenue: snapshotRead.revenue.buckets.miniDraw.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.miniDraw.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.miniDraw.userCount,
+    };
+    const upsellData = {
+      revenue: snapshotRead.revenue.buckets.upsell.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.upsell.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.upsell.userCount,
+    };
 
     // ========================================
     // MAJOR DRAW STATISTICS
@@ -276,133 +229,10 @@ export async function GET(request: NextRequest) {
     }
 
     // ========================================
-    // FACEBOOK ADS STATISTICS
+    // FACEBOOK ADS (from snapshot reader)
     // ========================================
-    let facebookAdsSpend = 0;
-    let facebookAdsRoas = 0;
-
-    try {
-      // Get environment variables
-      const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-      const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
-
-      if (accessToken && adAccountId) {
-        // Map dashboard date range to Facebook Ads date range
-        let fbDateRange: { since: string; until: string };
-        let fbStartDate: Date;
-        let fbEndDate: Date;
-
-        const AEST_TIMEZONE = "Australia/Sydney";
-
-        if (dateRange === "today") {
-          // Get today's date in AEST timezone for Facebook API
-          const now = new Date();
-          const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-          const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-          const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-          const todayDateStr = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          fbDateRange = {
-            since: todayDateStr,
-            until: todayDateStr,
-          };
-          fbStartDate = startOfToday;
-          const tomorrowStart = new Date(startOfToday);
-          tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
-          fbEndDate = new Date(tomorrowStart.getTime() - 1);
-        } else if (dateRange === "yesterday") {
-          const yesterdayStart = subDays(startOfToday, 1);
-          fbStartDate = yesterdayStart;
-          fbEndDate = new Date(startOfToday.getTime() - 1);
-
-          const yesterdayYear = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "yyyy"), 10);
-          const yesterdayMonth = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "M"), 10);
-          const yesterdayDay = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "d"), 10);
-          const yesterdayDateStr = `${yesterdayYear}-${String(yesterdayMonth).padStart(2, "0")}-${String(
-            yesterdayDay
-          ).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: yesterdayDateStr,
-            until: yesterdayDateStr,
-          };
-        } else if (dateRange === "all-time") {
-          // For all-time, use website launch date: November 27, 2025 at 8pm AEDT/AEST
-          fbStartDate = getWebsiteLaunchDateUTC();
-          fbEndDate = new Date();
-
-          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
-          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
-          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
-          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
-          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
-          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: startDateStr,
-            until: endDateStr,
-          };
-        } else {
-          // Custom range
-          fbStartDate = startDate;
-          fbEndDate = endDate;
-
-          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
-          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
-          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
-          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
-          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
-          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: startDateStr,
-            until: endDateStr,
-          };
-        }
-
-        // Fetch directly from Facebook API
-        let metrics: { spend: number; revenue: number; roas: number } | null = null;
-
-        try {
-          const insightsData = await fetchFacebookInsights(adAccountId, accessToken, fbDateRange, "account");
-
-          if (insightsData && insightsData.length > 0) {
-            const firstInsight = insightsData[0];
-            metrics = {
-              spend: firstInsight.metrics.spend / 100, // Convert cents to dollars
-              revenue: firstInsight.metrics.revenue / 100, // Convert cents to dollars
-              roas: firstInsight.metrics.roas,
-            };
-          }
-        } catch (error) {
-          console.error("⚠️ Error fetching Facebook Ads insights:", error);
-          // Return null if API fails - no fallback to stale data
-        }
-
-        if (metrics) {
-          facebookAdsSpend = metrics.spend;
-          facebookAdsRoas = metrics.roas;
-        }
-      }
-    } catch (error) {
-      console.error("⚠️ Error fetching Facebook Ads stats:", error);
-      // Gracefully degrade - return 0 values
-    }
+    const facebookAdsSpend = snapshotRead.adChannels.facebook?.spend ?? 0;
+    const facebookAdsRoas = snapshotRead.adChannels.facebook?.roas ?? 0;
 
     // ========================================
     // COMPARISON PERIOD METRICS (for trends)
@@ -439,7 +269,7 @@ export async function GET(request: NextRequest) {
         previousNewSignupsInRange,
         previousCancelledMemberships,
         previousTotalScheduledCancellation,
-        previousRevenueEvents,
+        previousSnapshotRead,
       ] = await Promise.all([
         User.countDocuments({ isActive: true, createdAt: { $lte: comparisonEndDate } }),
         User.countDocuments({
@@ -448,47 +278,31 @@ export async function GET(request: NextRequest) {
         }),
         User.countDocuments(cancelledMembershipsComparisonQuery),
         User.countDocuments(previousTotalScheduledCancellationQuery),
-        fetchNetBenefitsGrantedInRange(comparisonStartDate, comparisonEndDate, {
-          userId: 1,
-          packageType: 1,
-          packageId: 1,
-          data: 1,
-          timestamp: 1,
+        readStatsForRange({
+          rangeStartUTC: comparisonStartDate,
+          rangeEndUTC: comparisonEndDate,
         }),
       ]);
 
-      let previousTotalRevenue = 0;
-      const previousMembershipPurchaseData = { revenue: 0 };
-      const previousMembershipRenewalData = { revenue: 0 };
-      const previousOneTimePurchaseData = { revenue: 0 };
-      const previousAdditionalOneTimePurchaseData = { revenue: 0 };
-      const previousMiniDrawData = { revenue: 0 };
-      const previousUpsellData = { revenue: 0 };
-
-      for (const event of previousRevenueEvents) {
-        const price = event.data?.price || 0;
-        previousTotalRevenue += price;
-
-        if (event.packageType === "membership") {
-          const billingReason = event.data?.billingReason as string | undefined;
-          if (billingReason === "subscription_cycle") {
-            previousMembershipRenewalData.revenue += price;
-          } else {
-            previousMembershipPurchaseData.revenue += price;
-          }
-        } else if (event.packageType === "mini-draw") {
-          previousMiniDrawData.revenue += price;
-        } else if (event.packageType === "upsell") {
-          previousUpsellData.revenue += price;
-        } else if (event.packageType === "one-time") {
-          const packageId = event.packageId || "";
-          if (packageId.startsWith("additional-")) {
-            previousAdditionalOneTimePurchaseData.revenue += price;
-          } else {
-            previousOneTimePurchaseData.revenue += price;
-          }
-        }
-      }
+      const previousTotalRevenue = previousSnapshotRead.revenue.total;
+      const previousMembershipPurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.membershipPurchase.revenue,
+      };
+      const previousMembershipRenewalData = {
+        revenue: previousSnapshotRead.revenue.buckets.membershipRenewal.revenue,
+      };
+      const previousOneTimePurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.oneTimePurchase.revenue,
+      };
+      const previousAdditionalOneTimePurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.additionalOneTimePurchase.revenue,
+      };
+      const previousMiniDrawData = {
+        revenue: previousSnapshotRead.revenue.buckets.miniDraw.revenue,
+      };
+      const previousUpsellData = {
+        revenue: previousSnapshotRead.revenue.buckets.upsell.revenue,
+      };
 
       let previousConversionRate = 0;
       const previousConvertedUsersInRange = await User.countDocuments({
@@ -501,44 +315,8 @@ export async function GET(request: NextRequest) {
           ? Math.round((previousConvertedUsersInRange / previousNewSignupsInRange) * 100)
           : 0;
 
-      let previousFacebookAdsSpend = 0;
-      let previousFacebookAdsRoas = 0;
-      try {
-        const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-        const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
-        if (accessToken && adAccountId) {
-          const compStartYear = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "yyyy"),
-            10
-          );
-          const compStartMonth = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "M"),
-            10
-          );
-          const compStartDay = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "d"),
-            10
-          );
-          const compEndYear = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const compEndMonth = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "M"), 10);
-          const compEndDay = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "d"), 10);
-          const compDateStr = `${compStartYear}-${String(compStartMonth).padStart(2, "0")}-${String(compStartDay).padStart(2, "0")}`;
-          const compEndDateStr = `${compEndYear}-${String(compEndMonth).padStart(2, "0")}-${String(compEndDay).padStart(2, "0")}`;
-
-          const compInsightsData = await fetchFacebookInsights(
-            adAccountId,
-            accessToken,
-            { since: compDateStr, until: compEndDateStr },
-            "account"
-          );
-          if (compInsightsData && compInsightsData.length > 0) {
-            previousFacebookAdsSpend = compInsightsData[0].metrics.spend / 100;
-            previousFacebookAdsRoas = compInsightsData[0].metrics.roas;
-          }
-        }
-      } catch {
-        // Ignore - use 0 for comparison
-      }
+      const previousFacebookAdsSpend = previousSnapshotRead.adChannels.facebook?.spend ?? 0;
+      const previousFacebookAdsRoas = previousSnapshotRead.adChannels.facebook?.roas ?? 0;
 
       totalUsersTrend = trendCalculationService.calculateTrend(totalUsers, previousTotalUsers);
       newInRangeTrend = trendCalculationService.calculateTrend(newSignupsInRange, previousNewSignupsInRange);
@@ -662,7 +440,7 @@ export async function GET(request: NextRequest) {
           membershipPurchase: {
             revenue: membershipPurchaseData.revenue,
             purchaseCount: membershipPurchaseData.purchaseCount,
-            userCount: membershipPurchaseData.userIds.size,
+            userCount: membershipPurchaseData.userCount,
             ...(revenueBreakdownTrends.membershipPurchase && {
               trend: revenueBreakdownTrends.membershipPurchase,
             }),
@@ -670,7 +448,7 @@ export async function GET(request: NextRequest) {
           membershipRenewal: {
             revenue: membershipRenewalData.revenue,
             purchaseCount: membershipRenewalData.purchaseCount,
-            userCount: membershipRenewalData.userIds.size,
+            userCount: membershipRenewalData.userCount,
             ...(revenueBreakdownTrends.membershipRenewal && {
               trend: revenueBreakdownTrends.membershipRenewal,
             }),
@@ -678,7 +456,7 @@ export async function GET(request: NextRequest) {
           oneTimePurchase: {
             revenue: oneTimePurchaseData.revenue,
             purchaseCount: oneTimePurchaseData.purchaseCount,
-            userCount: oneTimePurchaseData.userIds.size,
+            userCount: oneTimePurchaseData.userCount,
             ...(revenueBreakdownTrends.oneTimePurchase && {
               trend: revenueBreakdownTrends.oneTimePurchase,
             }),
@@ -686,7 +464,7 @@ export async function GET(request: NextRequest) {
           additionalOneTimePurchase: {
             revenue: additionalOneTimePurchaseData.revenue,
             purchaseCount: additionalOneTimePurchaseData.purchaseCount,
-            userCount: additionalOneTimePurchaseData.userIds.size,
+            userCount: additionalOneTimePurchaseData.userCount,
             ...(revenueBreakdownTrends.additionalOneTimePurchase && {
               trend: revenueBreakdownTrends.additionalOneTimePurchase,
             }),
@@ -694,13 +472,13 @@ export async function GET(request: NextRequest) {
           miniDraw: {
             revenue: miniDrawData.revenue,
             purchaseCount: miniDrawData.purchaseCount,
-            userCount: miniDrawData.userIds.size,
+            userCount: miniDrawData.userCount,
             ...(revenueBreakdownTrends.miniDraw && { trend: revenueBreakdownTrends.miniDraw }),
           },
           upsell: {
             revenue: upsellData.revenue,
             purchaseCount: upsellData.purchaseCount,
-            userCount: upsellData.userIds.size,
+            userCount: upsellData.userCount,
             ...(revenueBreakdownTrends.upsell && { trend: revenueBreakdownTrends.upsell }),
           },
         },
