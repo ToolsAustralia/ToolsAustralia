@@ -60,6 +60,8 @@
     "backfill:blocked-transactions:dry": "tsx scripts/backfill-blocked-transactions.ts --dry-run",
     "backfill:dashboard-stats-snapshots": "tsx scripts/backfill-dashboard-stats-snapshots.ts",
     "backfill:dashboard-stats-snapshots:dry": "tsx scripts/backfill-dashboard-stats-snapshots.ts --dry-run",
+    "backfill:webhook-queue-processed-at": "tsx scripts/backfill-stripe-webhook-queue-processed-at.ts",
+    "backfill:webhook-queue-processed-at:dry": "tsx scripts/backfill-stripe-webhook-queue-processed-at.ts --dry-run",
     "sync:allowlist-from-blocked": "tsx scripts/sync-allowlist-from-blocked-transactions.ts",
     "sync:allowlist-from-blocked:dry": "tsx scripts/sync-allowlist-from-blocked-transactions.ts --dry-run",
     "investigate:blocked": "tsx scripts/investigate-blocked-transactions.ts",
