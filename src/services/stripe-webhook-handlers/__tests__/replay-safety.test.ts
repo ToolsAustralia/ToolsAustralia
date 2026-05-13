@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import dotenv from "dotenv";
 import path from "node:path";
+import type Stripe from "stripe";
 
 // Load .env.local before any imports that depend on env vars
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -18,11 +19,10 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 const FIXTURE_INVOICE_ID = "in_replay_safe_test_001";
 const FIXTURE_EVENT_ID = "evt_replay_safe_test_001";
 
-function buildFixtureEvent(): any {
-  // Replace this with the smallest viable invoice fixture that your
-  // existing handler accepts. The key fields are: id, type, data.object
-  // (with id + customer + subscription + amount_paid + status: "paid"
-  // + billing_reason: "subscription_cycle" + lines.data).
+function buildFixtureEvent(): Stripe.Event {
+  // Smallest viable invoice fixture for the replay-safety check. The cast
+  // through `unknown` is intentional — a real Stripe.Event has dozens of
+  // required fields, but the dedup path only reads the ones below.
   return {
     id: FIXTURE_EVENT_ID,
     type: "invoice.payment_succeeded",
@@ -45,7 +45,7 @@ function buildFixtureEvent(): any {
     request: { id: null, idempotency_key: null },
     api_version: "2024-06-20",
     object: "event",
-  };
+  } as unknown as Stripe.Event;
 }
 
 async function run() {
