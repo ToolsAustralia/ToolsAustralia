@@ -7,6 +7,29 @@ _N/A — admin reads/writes models from other domains. Audit-style writes go thr
 - `PaymentEvent` (RefundProcessed type) ([billing-stripe](../billing-stripe/))
 - `ErrorReport` ([error-reporting](../error-reporting/))
 
+## DashboardStatsDailySnapshot
+
+[src/models/DashboardStatsDailySnapshot.ts](../../src/models/DashboardStatsDailySnapshot.ts)
+
+One document per AEST calendar day. Written (upserted) by the dashboard-stats cron and by `writeSnapshotForDate`. Collection name: `dashboardstatsdailysnapshots`. Indexed on `date` (unique).
+
+**Shape:**
+
+| Field | Type | Notes |
+|---|---|---|
+| `date` | `string` (YYYY-MM-DD) | AEST calendar day — the unique key |
+| `tz` | `"Australia/Sydney"` | Always Sydney |
+| `revenue.total` | `number` | Sum of all bucket revenue for the day |
+| `revenue.buckets` | `Map<RevenueBucketKey, { revenue, purchaseCount }>` | Per-bucket totals. Keys: `membershipPurchase`, `membershipRenewal`, `oneTimePurchase`, `additionalOneTimePurchase`, `miniDraw`, `upsell` |
+| `users.newSignups` | `number` | Users created that AEST day with `isActive: true` |
+| `users.cancellationsInDay` | `number` | Users whose `subscription.cancelledAt` falls in that AEST day |
+| `adChannels` | `Map<string, { spend, revenue, roas, impressions?, clicks? }>` | Keyed by channel name (e.g. `"facebook"`). Provider registry in `adChannelProviders.ts` |
+| `confidence` | `"live"` | Always `"live"` (future field for partial / projected values) |
+| `computedAt` | `Date` | UTC timestamp when snapshot was last written |
+| `sourceVersion` | `number` | Schema version (`DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 1`) |
+
+**Distinct user counts** are NOT stored — they are computed live at read time via `computeDistinctUserCounts` because they are not additive across days (the same user buying on two days counts once in a multi-day range). The `revenue.buckets[k].userCount` field in `SnapshotReadResult` is always a live query.
+
 ## ChargeJobRun
 
 [src/models/ChargeJobRun.ts](../../src/models/ChargeJobRun.ts)

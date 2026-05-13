@@ -71,6 +71,9 @@ async function testMarkFailedAtCapTransitionsToDead() {
     assert.equal(row?.status, "dead");
     assert.equal(row?.attempts, MAX_ATTEMPTS);
     assert.equal(row?.lastError, "final");
+    // processedAt anchors the 30-day dead-row TTL — must be set on transition.
+    assert.ok(row?.processedAt instanceof Date);
+    assert.equal(row?.claimedAt, null);
   });
 }
 

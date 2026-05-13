@@ -41,7 +41,16 @@ Stripe → POST /api/stripe/webhook  (receiver, maxDuration: 60s)
 | 4 → 5 | 6 hours |
 | 5 → dead | — (status: dead) |
 
-Total retry window ~7.5h. Dead rows stay in the collection indefinitely (no TTL); succeeded rows are TTL'd after 30 days.
+Total retry window ~7.5h.
+
+**Retention.** Both terminal states use partial TTL indexes on `processedAt`:
+
+| Status | TTL | Rationale |
+|---|---|---|
+| `succeeded` | 24 hours | Successful webhooks have no replay value — drop them quickly to keep the collection lean. |
+| `dead` | 30 days | Matches Stripe's own event-payload retention. Anything not investigated/replayed within 30d is unreplayable from Stripe's side anyway; an alert on new dead rows should fire within hours, not weeks. |
+
+`markSucceeded` and the dead-transition branch of `markFailed` both set `processedAt = new Date()` so the TTL anchor is populated.
 
 ## Four-layer dedup (no double-grant guarantee)
 
