@@ -39,6 +39,10 @@ Plus:
 
 - [`scripts/verify-dashboard-stats-snapshot-drift.ts`](../../scripts/verify-dashboard-stats-snapshot-drift.ts) — read-only drift check. Samples N random snapshot dates, re-aggregates revenue live, reports per-bucket delta. Exits non-zero on any drift. npm script: `verify:dashboard-stats-drift`. Accepts `--samples=N`.
 
+### Stripe webhook queue `processedAt` backfill
+
+- [`scripts/backfill-stripe-webhook-queue-processed-at.ts`](../../scripts/backfill-stripe-webhook-queue-processed-at.ts) — one-shot backfill for dead-row TTL anchoring. Matches `{ status: "dead", processedAt: null }` and sets `processedAt = updatedAt` so the 30-day `dead_processedAt_ttl` index can actually expire them. Idempotent (re-runs after completion are no-ops). npm scripts: `backfill:webhook-queue-processed-at` (live), `backfill:webhook-queue-processed-at:dry`. See [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md#backfilling-processedat-on-dead-rows) for context.
+
 ### Refund entry-corruption audit + repair
 
 Two scripts ship for finding and fixing the major-draw entry-row corruption documented in [draws/gotchas.md](../draws/gotchas.md) and [payment/gotchas.md](../payment/gotchas.md):
@@ -71,7 +75,7 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 [`vercel.json`](../../vercel.json) `functions` block right-sizes memory per route:
 
 - **Default** (`src/app/api/**/route.ts`): `memory: 512MB, maxDuration: 10s` — covers light read-heavy GETs (the majority of the 289 routes).
-- **Heavy I/O** (Stripe webhook, Cloudinary upload, admin exports/participants/sync, dashboard recent-activities, activity log): `memory: 1024MB, maxDuration: 30–60s`.
+- **Heavy I/O** (Stripe webhook, Cloudinary upload, admin exports/participants/sync, dashboard recent-activities, dashboard stats, activity log): `memory: 1024MB, maxDuration: 30–60s`. `/api/admin/dashboard/stats` is listed here because the all-time read fans out across `paymentevents` (snapshot reader + live distinct-user counts), `users` (~10 countDocuments), `majordraws`, plus the membership analytics bundle — the 10s default cap was insufficient.
 - **Crons** (every `/api/cron/*` plus `/api/admin/klaviyo/**`): `memory: 1024MB, maxDuration: 300s`.
 
 Vercel scales CPU with memory, so 512MB is roughly half the CPU of 1024MB — fine for read-heavy GETs but watch Vercel logs for `FUNCTION_INVOCATION_FAILED` / `Allocation failed` after deploy. Bump individual routes to 1024MB if needed.

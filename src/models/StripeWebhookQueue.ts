@@ -32,13 +32,27 @@ stripeWebhookQueueSchema.index({ status: 1, claimedAt: 1 });
 // replay value and don't need to linger. Dead rows are kept 30 days, matching
 // Stripe's own event-payload retention window; anything not replayed within
 // that window is unreplayable from Stripe's side anyway.
+//
+// Explicit names are mandatory: both indexes share the same key pattern
+// `{ processedAt: 1 }`, so without distinct names Mongoose's auto-derived name
+// (`processedAt_1`) would collide and only one TTL would install. MongoDB also
+// treats `expireAfterSeconds` as immutable per index — if either of these TTLs
+// is later retuned, the rollout step is to drop the old index by name first.
 stripeWebhookQueueSchema.index(
   { processedAt: 1 },
-  { expireAfterSeconds: 60 * 60 * 24, partialFilterExpression: { status: "succeeded" } }
+  {
+    name: "succeeded_processedAt_ttl",
+    expireAfterSeconds: 60 * 60 * 24,
+    partialFilterExpression: { status: "succeeded" },
+  }
 );
 stripeWebhookQueueSchema.index(
   { processedAt: 1 },
-  { expireAfterSeconds: 60 * 60 * 24 * 30, partialFilterExpression: { status: "dead" } }
+  {
+    name: "dead_processedAt_ttl",
+    expireAfterSeconds: 60 * 60 * 24 * 30,
+    partialFilterExpression: { status: "dead" },
+  }
 );
 
 export type StripeWebhookQueueDoc = InferSchemaType<typeof stripeWebhookQueueSchema> & {

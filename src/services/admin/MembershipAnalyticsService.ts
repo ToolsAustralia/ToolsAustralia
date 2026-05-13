@@ -49,11 +49,21 @@ export class MembershipAnalyticsService {
     startDate: Date,
     endDate: Date,
     dateRange: AdminDashboardDateRangeKey,
-    // Options are accepted for call-site compatibility but are no longer used:
-    // revenue/count for cancellations always come from cancellationRows so the
-    // two values always describe the same cohort.
-    _options?: { membershipAsOfMode?: MembershipAsOfMode; asOfDate?: Date | null }
+    options?: {
+      membershipAsOfMode?: MembershipAsOfMode;
+      asOfDate?: Date | null;
+      // When provided, skips the all-range BenefitsGranted scan and uses the
+      // membershipRenewal bucket already computed by DashboardStatsSnapshotReader.
+      // purchaseCount → successfulRenewalsInRange (additive across snapshot days).
+      // userCount     → successfulRenewalUserCount (distinct users, refund-aware,
+      //                 always computed live by the reader).
+      precomputedRenewals?: { purchaseCount: number; userCount: number };
+    }
   ): Promise<MembershipAnalyticsBundle> {
+    void options?.membershipAsOfMode;
+    void options?.asOfDate;
+    const precomputedRenewals = options?.precomputedRenewals;
+
     const [expectedRenewalsInRange, failedRenewalInvoicesInRange, becamePastDueIds] = await Promise.all([
       MembershipRenewalCycle.countDocuments({
         billingReason: "subscription_cycle",
@@ -91,20 +101,26 @@ export class MembershipAnalyticsService {
           .select("subscription.packageId")
           .lean();
 
-    const successfulEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
-      userId: 1,
-      packageType: 1,
-      data: 1,
-    });
-
     let successfulRenewalsInRange = 0;
-    const renewalUserIds = new Set<string>();
-    for (const ev of successfulEvents) {
-      if (ev.packageType === "membership" && ev.data?.billingReason === "subscription_cycle") {
-        successfulRenewalsInRange += 1;
-        const uid = ev.userId?.toString();
-        if (uid) renewalUserIds.add(uid);
+    let successfulRenewalUserCount = 0;
+    if (precomputedRenewals) {
+      successfulRenewalsInRange = precomputedRenewals.purchaseCount;
+      successfulRenewalUserCount = precomputedRenewals.userCount;
+    } else {
+      const successfulEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
+        userId: 1,
+        packageType: 1,
+        data: 1,
+      });
+      const renewalUserIds = new Set<string>();
+      for (const ev of successfulEvents) {
+        if (ev.packageType === "membership" && ev.data?.billingReason === "subscription_cycle") {
+          successfulRenewalsInRange += 1;
+          const uid = ev.userId?.toString();
+          if (uid) renewalUserIds.add(uid);
+        }
       }
+      successfulRenewalUserCount = renewalUserIds.size;
     }
 
     // Revenue impact is derived from cancellationRows so it always matches the
@@ -126,7 +142,7 @@ export class MembershipAnalyticsService {
     return {
       expectedRenewalsInRange,
       successfulRenewalsInRange,
-      successfulRenewalUserCount: renewalUserIds.size,
+      successfulRenewalUserCount,
       failedRenewalInvoicesInRange,
       becamePastDueInRange: becamePastDueIds.length,
       cancellationsInRange: cancellationRows.length,

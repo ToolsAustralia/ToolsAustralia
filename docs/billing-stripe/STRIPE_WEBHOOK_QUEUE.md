@@ -45,12 +45,33 @@ Total retry window ~7.5h.
 
 **Retention.** Both terminal states use partial TTL indexes on `processedAt`:
 
-| Status | TTL | Rationale |
-|---|---|---|
-| `succeeded` | 24 hours | Successful webhooks have no replay value — drop them quickly to keep the collection lean. |
-| `dead` | 30 days | Matches Stripe's own event-payload retention. Anything not investigated/replayed within 30d is unreplayable from Stripe's side anyway; an alert on new dead rows should fire within hours, not weeks. |
+| Status | TTL | Index name | Rationale |
+|---|---|---|---|
+| `succeeded` | 24 hours | `succeeded_processedAt_ttl` | Successful webhooks have no replay value — drop them quickly to keep the collection lean. |
+| `dead` | 30 days | `dead_processedAt_ttl` | Matches Stripe's own event-payload retention. Anything not investigated/replayed within 30d is unreplayable from Stripe's side anyway; an alert on new dead rows should fire within hours, not weeks. |
 
 `markSucceeded` and the dead-transition branch of `markFailed` both set `processedAt = new Date()` so the TTL anchor is populated.
+
+Both TTL indexes share the key pattern `{ processedAt: 1 }` and rely on partial filters to separate them, so they **must** have distinct explicit names. Without names, Mongoose's auto-derived `processedAt_1` would collide and only one TTL would install.
+
+### Rollout for TTL tuning
+
+MongoDB treats `expireAfterSeconds` as **immutable per index**. `Mongoose.syncIndexes()` will not change the TTL of an existing index — it only creates new ones and drops orphans by name. If either TTL is later retuned:
+
+1. Add the new desired value in [src/models/StripeWebhookQueue.ts](src/models/StripeWebhookQueue.ts) **and rename the index** (e.g. bump a version suffix). Renaming forces Mongoose to create a fresh index with the new TTL.
+2. Drop the old index by name in each environment that already has it deployed: `db.stripewebhookqueue.dropIndex("succeeded_processedAt_ttl")` (or the dead variant). Without this, the old index lingers with the old TTL.
+3. Post-deploy, verify with `db.stripewebhookqueue.getIndexes()` that the new index has the expected `expireAfterSeconds`.
+
+### Backfilling `processedAt` on dead rows
+
+Before commit `b28795a6`, `markFailed`'s dead transition did not set `processedAt`, so any dead rows that already exist in production have `processedAt: null`. MongoDB TTL skips null/missing values, so those rows would never expire. To anchor them so the 30-day TTL applies:
+
+```bash
+npm run backfill:webhook-queue-processed-at:dry   # count + sample
+npm run backfill:webhook-queue-processed-at       # live: sets processedAt = updatedAt
+```
+
+The script is idempotent (filter is `{ status: "dead", processedAt: null }`); re-running once complete is a no-op.
 
 ## Four-layer dedup (no double-grant guarantee)
 
