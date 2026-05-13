@@ -196,7 +196,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/cron/reconcile-blocked-transactions/**",
         "src/app/api/cron/process-stripe-webhook-queue/**",
         "src/app/api/stripe/process-event/**",
-        "src/app/admin/stripe-webhook-queue/**",
+        "src/components/admin/StripeWebhookQueueManagement.tsx",
         "src/hooks/queries/admin/useBlockedCards.ts",
         "src/hooks/queries/admin/useAllowlistActions.ts",
         "src/hooks/queries/admin/useAllowlistStats.ts",

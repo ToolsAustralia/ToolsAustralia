@@ -2,17 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue from "@/models/StripeWebhookQueue";
 import { computeNextAttempt } from "@/services/stripe-webhook-queue/backoff";
+import { dispatchToWorker } from "@/services/stripe-webhook-queue/dispatchWorker";
 
 const SWEEP_BATCH_SIZE = 20;
 const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function getBaseUrl(): string {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-}
 
 function isAuthorized(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
@@ -78,20 +74,8 @@ export async function GET(request: NextRequest) {
     .limit(SWEEP_BATCH_SIZE)
     .lean();
 
-  const workerSecret = process.env.STRIPE_WORKER_INTERNAL_SECRET;
-  const workerUrl = `${getBaseUrl()}/api/stripe/process-event`;
-
   for (const row of dueRows) {
-    void fetch(workerUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-internal-secret": workerSecret ?? "",
-      },
-      body: JSON.stringify({ eventId: row.eventId }),
-    }).catch((err) => {
-      console.error("[webhook-sweeper] fan-out POST failed:", err);
-    });
+    void dispatchToWorker(row.eventId, "webhook-sweeper");
   }
 
   return NextResponse.json({
