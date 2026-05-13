@@ -226,6 +226,21 @@ export const useUpgradeSubscription = () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
+
+        // The upgrade-payment route writes `isActive: true` synchronously,
+        // but the new entries grant happens via the `invoice.payment_succeeded`
+        // webhook — now async, landing 5–15s after the API returns. Without
+        // these deferred passes the immediate invalidations above refetch
+        // stale data (pre-grant entry count) and the user sees the correct
+        // entries only on the next manual refresh.
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account(userId) });
+          queryClient.refetchQueries({ queryKey: queryKeys.users.detail(userId) });
+        }, 3000);
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account(userId) });
+          queryClient.refetchQueries({ queryKey: queryKeys.users.detail(userId) });
+        }, 8000);
       }
 
     },

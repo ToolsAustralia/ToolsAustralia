@@ -24,6 +24,7 @@ import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManageme
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
+import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
@@ -183,6 +184,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
+                  {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
                   {selectedTab === "activity-log" && "Complete activity history with filters and search"}
                 </p>
               </div>
@@ -238,6 +240,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* PAST-DUE CHARGE HISTORY TAB */}
           {selectedTab === "past-due-history" && <PastDueChargeHistory />}
+
+          {/* STRIPE WEBHOOK QUEUE TAB */}
+          {selectedTab === "stripe-webhook-queue" && <StripeWebhookQueueManagement />}
 
           {/* FACEBOOK ADS TAB */}
           {selectedTab === "facebook-ads" && <FacebookAdsManagement />}

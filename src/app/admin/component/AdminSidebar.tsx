@@ -116,6 +116,7 @@ const adminTabGroups: Array<{
     tabs: [
       { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
       { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText },
+      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity },
     ],
   },
 ];

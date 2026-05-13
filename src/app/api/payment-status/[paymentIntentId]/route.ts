@@ -40,7 +40,12 @@ type PaymentEventLean = Pick<
   "paymentIntentId" | "eventType" | "packageType" | "packageId" | "packageName" | "data" | "processedBy" | "timestamp"
 >;
 
-const PAYMENT_STATUS_CACHE_TTL_MS = 4000;
+// Lowered from 4000ms to 1000ms after the async webhook cutover: BenefitsGranted
+// PaymentEvents are now written ~5–15s after the Stripe webhook arrives (worker
+// route latency), so a 4s `processed: false` cache compounds with worker delay
+// and makes the PaymentProcessingScreen feel sluggish. 1s still de-duplicates
+// the burst of polls usePaymentStatus fires while keeping freshness usable.
+const PAYMENT_STATUS_CACHE_TTL_MS = 1000;
 const paymentStatusCache = new Map<string, { expiresAt: number; payload: PaymentStatusPayload }>();
 
 /**
