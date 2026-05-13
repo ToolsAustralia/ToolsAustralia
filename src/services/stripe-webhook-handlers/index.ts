@@ -4992,12 +4992,15 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
       await handleSubscriptionScheduleReleased(event.data.object);
       break;
     case "invoice.payment_succeeded":
-      try {
-        await handleInvoicePaymentSucceeded(event.data.object);
-        shouldMarkAsProcessed = true; // Only mark if successfully processed
-      } catch (error) {
-        webhookLog("error", `Error in handleInvoicePaymentSucceeded: ${error}`);
-      }
+      // Let errors bubble to the worker's catch — it calls markFailed(),
+      // which puts the queue row back in `queued` with exponential backoff,
+      // then dead-letters at the cap. Pre-cutover this swallowed quietly;
+      // post-cutover that would leave the row permanently `succeeded` with
+      // no benefits granted and no retry, so the silence is no longer safe.
+      // Layer-4 PaymentEvent (`BenefitsGranted-invoice_<id>`) makes retries
+      // idempotent — re-throwing here is correct.
+      await handleInvoicePaymentSucceeded(event.data.object);
+      shouldMarkAsProcessed = true;
       break;
 
     case "invoice.finalized":
@@ -5049,14 +5052,10 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
       break;
     case "payment_intent.canceled": {
       webhookLog("info", `📥 Received payment_intent.canceled event for: ${event.data.object.id}`);
-      const canceledPaymentIntent = event.data.object as Stripe.PaymentIntent;
-
-      // ✅ FIX: Clean up orphaned accounts/payment methods for cancelled payments
-      try {
-        await handlePaymentCancellation(canceledPaymentIntent);
-      } catch (error) {
-        webhookLog("error", `Error handling payment cancellation: ${error}`);
-      }
+      // Let errors bubble to the worker for retry + dead-letter. Cleanup is
+      // not catastrophic to miss, but a permanent silent failure leaves
+      // orphaned state with no operator visibility.
+      await handlePaymentCancellation(event.data.object as Stripe.PaymentIntent);
       break;
     }
     default:
