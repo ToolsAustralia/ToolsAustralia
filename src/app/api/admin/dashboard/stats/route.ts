@@ -387,7 +387,14 @@ export async function GET(request: NextRequest) {
     const membershipAnalyticsService = new MembershipAnalyticsService();
     let membershipAnalytics;
     try {
-      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange, { membershipAsOfMode, asOfDate });
+      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange, {
+        membershipAsOfMode,
+        asOfDate,
+        precomputedRenewals: {
+          purchaseCount: membershipRenewalData.purchaseCount,
+          userCount: membershipRenewalData.userCount,
+        },
+      });
     } catch (maErr) {
       console.error("⚠️ Error fetching membership analytics bundle:", maErr);
       membershipAnalytics = {

@@ -59,6 +59,7 @@
     "src/app/api/admin/invoices/charge-past-due/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/admin/invoices/recover-past-due/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/admin/dashboard/recent-activities/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "src/app/api/admin/dashboard/stats/route.ts": { "memory": 1024, "maxDuration": 60 },
     "src/app/api/admin/activity-log/route.ts": { "memory": 1024, "maxDuration": 60 },
     "src/app/api/cron/major-draw-transition/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/process-partner-discount-queues/route.ts": { "memory": 1024, "maxDuration": 300 },
