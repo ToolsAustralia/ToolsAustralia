@@ -36,6 +36,8 @@ export async function markFailed(eventId: string, error: string): Promise<void> 
           attempts: nextAttempts,
           lastError: error,
           claimedAt: null,
+          // Anchor for the 30-day TTL — dead rows expire 30d after this timestamp.
+          processedAt: new Date(),
         },
       }
     );

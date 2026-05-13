@@ -28,11 +28,17 @@ const stripeWebhookQueueSchema = new Schema(
 stripeWebhookQueueSchema.index({ status: 1, nextAttemptAt: 1 });
 // Orphan detection: in-flight rows whose claim is stale.
 stripeWebhookQueueSchema.index({ status: 1, claimedAt: 1 });
-// TTL: drop succeeded rows 30 days after processedAt. Dead rows are kept
-// (no TTL) so they remain replayable from the admin UI indefinitely.
+// TTL: drop succeeded rows 24h after processedAt — successful webhooks have no
+// replay value and don't need to linger. Dead rows are kept 30 days, matching
+// Stripe's own event-payload retention window; anything not replayed within
+// that window is unreplayable from Stripe's side anyway.
 stripeWebhookQueueSchema.index(
   { processedAt: 1 },
-  { expireAfterSeconds: 60 * 60 * 24 * 30, partialFilterExpression: { status: "succeeded" } }
+  { expireAfterSeconds: 60 * 60 * 24, partialFilterExpression: { status: "succeeded" } }
+);
+stripeWebhookQueueSchema.index(
+  { processedAt: 1 },
+  { expireAfterSeconds: 60 * 60 * 24 * 30, partialFilterExpression: { status: "dead" } }
 );
 
 export type StripeWebhookQueueDoc = InferSchemaType<typeof stripeWebhookQueueSchema> & {
