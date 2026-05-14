@@ -6,7 +6,7 @@
  * with their complete configuration and targeting rules.
  *
  * ⚠️ IMPORTANT: entriesCount is now a FALLBACK value
- * - Upsell entries are dynamically calculated as: 2 × (packageBaseEntries × activePromoMultiplier)
+ * - Upsell entries are dynamically calculated as: upsellCategoryMultiplier × packageBaseEntries
  * - The entriesCount field here is only used as a fallback when:
  *   1. OriginalPurchaseContext is not available
  *   2. Package lookup fails

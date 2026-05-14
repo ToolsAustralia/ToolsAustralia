@@ -42,11 +42,6 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import {
-  calculateUpsellEntries,
-  calculateUpsellEntriesFromContext,
-  getPackageBaseEntries,
-} from "@/utils/payment/upsell-entries-calculator";
-import {
   pickTriggeringPackageIdForUpsell,
   resolveUpsellPromoMultiplierForDisplay,
 } from "@/utils/payment/upsell-promo-multiplier";
@@ -63,7 +58,7 @@ import TrustIndicators from "./TrustIndicators";
 // Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
 const stripePromise = getStripePromise();
 
-/** Swap static catalog entry counts in inclusion lines for promo-adjusted upsell entries (2 × base × multiplier). */
+/** Swap static catalog entry counts in inclusion lines with the dynamically resolved upsell entries. */
 function applyDynamicUpsellEntryCountToLines(lines: string[], calculatedEntries: number): string[] {
   return lines.map((line) => {
     const trimmed = line.trim();
@@ -914,50 +909,18 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
    * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else
    * resolveUpsellPromoMultiplierForDisplay (getEffectivePromoType + current promo hooks).
    */
+  /**
+   * Display entries for the upsell offer. The authoritative runtime count is computed
+   * server-side via calculateUpsellEntriesForOffer (categoryMultiplier × baseEntries).
+   * Client-side we fall back to the offer's static entriesCount, which reflects the
+   * configured multiplier from UpsellMultiplierConfig at build/seed time.
+   */
   const computedUpsellEntries = useMemo(() => {
     const staticPkg = getUpsellPackageById(offer.id);
-    const packageType = upsellPackageType;
-
-    const triggeringPackageId = pickTriggeringPackageIdForUpsell(
-      staticPkg?.triggersOnPackageIds,
-      originalPurchaseContext?.packageId
-    );
-
-    const baseEntries =
-      originalPurchaseContext?.baseEntries ??
-      (triggeringPackageId && packageType
-        ? getPackageBaseEntries({ packageId: triggeringPackageId, packageType })
-        : 0);
-
-    if (!packageType || baseEntries <= 0) {
-      return null;
-    }
-
-    const promoMultiplier = effectiveUpsellPromoMultiplier;
-
-    if (triggeringPackageId) {
-      return calculateUpsellEntriesFromContext(
-        {
-          packageId: triggeringPackageId,
-          packageType,
-          baseEntries: originalPurchaseContext?.baseEntries,
-        },
-        promoMultiplier
-      );
-    }
-
-    return calculateUpsellEntries({
-      baseEntries,
-      packageType,
-      promoMultiplier,
-    });
-  }, [
-    offer.id,
-    upsellPackageType,
-    originalPurchaseContext?.packageId,
-    originalPurchaseContext?.baseEntries,
-    effectiveUpsellPromoMultiplier,
-  ]);
+    // Use static entriesCount as display value; actual entries granted are determined by the API route.
+    const fallback = staticPkg?.entriesCount ?? null;
+    return fallback && fallback > 0 ? fallback : null;
+  }, [offer.id]);
 
   const packageInclusionLines = useMemo(() => {
     const fromOffer = offer.conditions?.filter(Boolean) ?? [];

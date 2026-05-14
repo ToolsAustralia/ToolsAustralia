@@ -353,9 +353,9 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          // Calculate: 2 × (baseEntries × promoMultiplier)
+          // Calculate: categoryMultiplier × baseEntries (promo does not stack)
           if (triggeringPackageId) {
-            calculatedEntriesCount = calculateUpsellEntriesFromContext(
+            calculatedEntriesCount = await calculateUpsellEntriesFromContext(
               {
                 packageId: triggeringPackageId,
                 packageType: inferredPackageType,
@@ -364,20 +364,13 @@ export async function POST(request: NextRequest) {
               promoMultiplier
             );
           } else {
-            // Fallback calculation without packageId
-            const { calculateUpsellEntries } = await import("@/utils/payment/upsell-entries-calculator");
-            calculatedEntriesCount = calculateUpsellEntries({
-              baseEntries,
-              packageType: inferredPackageType,
-              promoMultiplier,
-            });
+            // Fallback: use the offer id directly when no triggering package id is known
+            const { calculateUpsellEntriesForOffer } = await import("@/utils/payment/upsell-entries-calculator");
+            calculatedEntriesCount = await calculateUpsellEntriesForOffer(offer.id);
           }
 
           console.log(
-            `🎯 Calculated upsell entries: ${baseEntries} base × ${promoMultiplier} promo × 2 = ${calculatedEntriesCount} (fallback: ${offer.entriesCount})`
-          );
-          console.log(
-            `📊 Calculation breakdown: baseEntries=${baseEntries}, promoMultiplier=${promoMultiplier}, packageType=${inferredPackageType}, formula=2 × (${baseEntries} × ${promoMultiplier}) = ${calculatedEntriesCount}`
+            `🎯 Calculated upsell entries: ${calculatedEntriesCount} (categoryMultiplier × base, promo not stacked; fallback: ${offer.entriesCount})`
           );
         } else {
           console.warn(
