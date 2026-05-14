@@ -13,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import Link from "next/link";
 
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Shield, Star, Gift, Zap, type LucideIcon } from "lucide-react";
 
 import Image from "next/image";
 
@@ -139,6 +139,14 @@ const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   ryobi: 0.18,
 };
 
+// Animated badge content paired 1:1 with each brand — chip swaps in sync with the toolset.
+const BADGE_CONFIG: Record<ToolsetKey, { icon: LucideIcon; title: string; subtitle: string }> = {
+  milwaukee: { icon: Shield, title: "Secure", subtitle: "Payment" },
+  dewalt: { icon: Star, title: "Premium", subtitle: "Partner Discounts" },
+  makita: { icon: Gift, title: "Exclusive", subtitle: "Offers" },
+  ryobi: { icon: Zap, title: "Drawn", subtitle: "Live" },
+};
+
 const ROTATION_INTERVAL_MS = 3500;
 
 function RotatingToolsetCard() {
@@ -177,136 +185,179 @@ function RotatingToolsetCard() {
   const colorKey = getToolsetColorKey(active);
   const scheme = getPackageColorScheme(colorKey);
   const badgeStyle = getToolsetBadgeStyle(active);
-  const brandPrimary = getLandingPageThemeFromSlug(`${active}-milwaukee`).primary;
+  const brandTheme = getLandingPageThemeFromSlug(`${active}-milwaukee`);
+  const brandPrimary = brandTheme.primary;
+  const brandPrimaryDark = brandTheme.primaryDark; // darker variant — readable on white chip
   const tintLight = hexToRgbaString(brandPrimary, TINT_ALPHA_LIGHT[active]);
   const tintDark = hexToRgbaString(brandPrimary, TINT_ALPHA_DARK[active]);
+  const badge = BADGE_CONFIG[active];
+  const BadgeIcon = badge.icon;
 
   return (
-    <div
-      className="relative overflow-hidden rounded-[10px] border border-transparent dark:border-neutral-700 p-4 sm:p-6 lg:p-11 transition-colors duration-500"
-      style={{
-        backgroundColor: "#f7fafc",
-        backgroundImage: `linear-gradient(0deg, ${tintLight}, ${tintLight})`,
-      }}
-    >
-      {/* Dark-mode surface override — neutral-900 base with the darker tint laid on top. */}
-      <div className="pointer-events-none absolute inset-0 hidden dark:block bg-neutral-900" aria-hidden />
+    <div className="relative">
+      {/* Card body — tinted per active brand, overflow-hidden so tint stays inside rounded shape */}
       <div
-        className="pointer-events-none absolute inset-0 hidden dark:block transition-colors duration-500"
-        style={{ backgroundColor: tintDark }}
-        aria-hidden
-      />
+        className="relative overflow-hidden rounded-[10px] border border-transparent dark:border-neutral-700 p-4 sm:p-5 lg:p-7 transition-colors duration-500"
+        style={{
+          backgroundColor: "#f7fafc",
+          backgroundImage: `linear-gradient(0deg, ${tintLight}, ${tintLight})`,
+        }}
+      >
+        {/* Dark-mode surface override — neutral-900 base with the darker tint laid on top. */}
+        <div className="pointer-events-none absolute inset-0 hidden dark:block bg-neutral-900" aria-hidden />
+        <div
+          className="pointer-events-none absolute inset-0 hidden dark:block transition-colors duration-500"
+          style={{ backgroundColor: tintDark }}
+          aria-hidden
+        />
 
-      <div className="relative z-10 flex flex-col items-center">
-        {/* Wordmark */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`wordmark-${active}`}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.25 }}
-            className={`relative ${
-              active === "makita"
-                ? "h-5 w-24 sm:h-6 sm:w-28 lg:h-7 lg:w-32"
-                : "h-8 w-40 sm:h-10 sm:w-52 lg:h-12 lg:w-60"
-            }`}
-          >
-            <Image
-              src={wordmarkSrc}
-              alt={`${TOOLSET_DISPLAY_NAME[active]} wordmark`}
-              fill
-              className="object-contain"
-              sizes={active === "makita" ? "(max-width: 640px) 96px, (max-width: 1024px) 112px, 128px" : "(max-width: 640px) 160px, (max-width: 1024px) 208px, 240px"}
-            />
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Hero photo (floating) */}
-        <div className="relative mt-3 sm:mt-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`photo-${active}`}
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              className="relative h-[120px] w-[200px] sm:h-[160px] sm:w-[260px] lg:h-[180px] lg:w-[300px]"
-            >
+        {/* Two-column on lg+, stacked on smaller. Image+pill column on the right (lg) / top (small). */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:gap-5">
+          {/* Image column (right on lg, top on mobile/tablet) */}
+          <div className="order-1 lg:order-2 flex flex-col items-center shrink-0 lg:w-[210px]">
+            <AnimatePresence mode="wait">
               <motion.div
-                animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
-                transition={prefersReducedMotion ? {} : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="relative h-full w-full"
+                key={`wordmark-${active}`}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.25 }}
+                className={`relative ${
+                  active === "makita"
+                    ? "h-5 w-24 sm:h-5 sm:w-24 lg:h-6 lg:w-28"
+                    : "h-7 w-32 sm:h-7 sm:w-36 lg:h-8 lg:w-40"
+                }`}
               >
                 <Image
-                  src={photoSrc}
-                  alt={`${TOOLSET_DISPLAY_NAME[active]} toolset`}
+                  src={wordmarkSrc}
+                  alt={`${TOOLSET_DISPLAY_NAME[active]} wordmark`}
                   fill
-                  className="object-contain drop-shadow-2xl"
-                  sizes="(max-width: 640px) 200px, (max-width: 1024px) 260px, 300px"
-                  priority
+                  className="object-contain"
+                  sizes="(max-width: 640px) 128px, 160px"
                 />
               </motion.div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
+            </AnimatePresence>
 
-        {/* Piece-count pill (brand-styled, no brand name) */}
+            <div className="relative mt-2">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`photo-${active}`}
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative h-[90px] w-[150px] sm:h-[105px] sm:w-[180px] lg:h-[120px] lg:w-[200px]"
+                >
+                  <motion.div
+                    animate={prefersReducedMotion ? { y: 0 } : { y: [0, -6, 0] }}
+                    transition={prefersReducedMotion ? {} : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    className="relative h-full w-full"
+                  >
+                    <Image
+                      src={photoSrc}
+                      alt={`${TOOLSET_DISPLAY_NAME[active]} toolset`}
+                      fill
+                      className="object-contain drop-shadow-2xl"
+                      sizes="(max-width: 640px) 150px, (max-width: 1024px) 180px, 200px"
+                      priority={active === "milwaukee"}
+                    />
+                  </motion.div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`pill-${active}`}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.25 }}
+                className="mt-2 w-fit rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-xl backdrop-blur-md"
+                style={{
+                  background: badgeStyle.background,
+                  boxShadow: badgeStyle.boxShadow,
+                  border: badgeStyle.border,
+                }}
+              >
+                <p className={cn("font-sans text-3xs sm:text-2xs font-extrabold leading-tight whitespace-nowrap", scheme.buttonText)}>
+                  {pillLabel}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Text column (left on lg, below image on mobile/tablet) */}
+          <div className="order-2 lg:order-1 mt-4 lg:mt-0 flex flex-col items-center lg:items-start text-center lg:text-left lg:flex-1 lg:min-w-0">
+            <h2 className="text-[20px] sm:text-[22px] lg:text-[26px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.5px] leading-[1.15]">
+              Earn Partner Discounts &amp; Win Tools
+            </h2>
+            <p className="mt-2 text-[12px] sm:text-[13px] lg:text-[14px] text-[#475569] dark:text-neutral-300 leading-[1.5] max-w-[300px] lg:max-w-none">
+              Become a member to enter our major draws for premium toolsets and unlock exclusive discounts across our partner brands.
+            </p>
+
+            {/* Dot indicators — each button is a ≥36×36 hit area with a centered 10×10 dot */}
+            <div className="mt-3 sm:mt-4 flex items-center gap-1" aria-label="Toolset showcase">
+              {TOOLSETS.map((t, i) => {
+                const isActive = i === activeIndex;
+                const dotBrand = getLandingPageThemeFromSlug(`${t}-milwaukee`).primary;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-label={`Show ${TOOLSET_DISPLAY_NAME[t]} toolset`}
+                    aria-current={isActive ? "true" : undefined}
+                    onClick={() => handleDotClick(i)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+                  >
+                    <span
+                      className={cn(
+                        "block h-2.5 w-2.5 rounded-full transition-all duration-300",
+                        !isActive && "bg-neutral-300 dark:bg-neutral-600"
+                      )}
+                      style={isActive ? { backgroundColor: dotBrand } : undefined}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Animated badge chip — synced with toolset rotation, anchored bottom-right outside card */}
+      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 rounded-[10px] bg-white dark:bg-neutral-900 px-2 py-1.5 sm:px-3 sm:py-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700">
         <AnimatePresence mode="wait">
           <motion.div
-            key={`pill-${active}`}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.25 }}
-            className="mt-3 sm:mt-4 w-fit rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 shadow-xl backdrop-blur-md"
-            style={{
-              background: badgeStyle.background,
-              boxShadow: badgeStyle.boxShadow,
-              border: badgeStyle.border,
-            }}
+            key={`badge-${active}`}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center gap-2"
           >
-            <p className={cn("font-sans text-2xs sm:text-xs lg:text-sm font-extrabold leading-tight", scheme.buttonText)}>
-              {pillLabel}
-            </p>
+            <div
+              className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full transition-colors duration-300"
+              style={{ backgroundColor: brandPrimary }}
+            >
+              <BadgeIcon className={cn("h-4 w-4 sm:h-5 sm:w-5", scheme.buttonText)} strokeWidth={2.2} />
+            </div>
+            <div className="leading-tight">
+              <p
+                className="text-2xs sm:text-[11px] font-medium tracking-[-0.2px]"
+                style={{ color: brandPrimaryDark }}
+              >
+                {badge.title} +
+              </p>
+              <p
+                className="text-[13px] sm:text-[15px] font-bold tracking-[-0.3px] whitespace-nowrap"
+                style={{ color: brandPrimaryDark }}
+              >
+                {badge.subtitle}
+              </p>
+            </div>
           </motion.div>
         </AnimatePresence>
-
-        {/* Static headline (neutral, doesn't compete with brand tint) */}
-        <h2 className="mt-5 sm:mt-7 text-[20px] sm:text-[24px] lg:text-[30px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.6px] leading-tight text-center">
-          Earn Partner Discounts &amp; Win Tools
-        </h2>
-
-        {/* Body copy (static) */}
-        <p className="mt-2 sm:mt-3 text-[12px] sm:text-[14px] lg:text-[15px] text-[#475569] dark:text-neutral-300 leading-[1.5] text-center max-w-[360px]">
-          Become a member to enter our major draws for premium toolsets and unlock exclusive discounts across our partner brands.
-        </p>
-
-        {/* Dot indicators — each button is a ≥40×40 hit area with a centered 10×10 dot */}
-        <div className="mt-4 sm:mt-5 flex items-center gap-1" aria-label="Toolset showcase">
-          {TOOLSETS.map((t, i) => {
-            const isActive = i === activeIndex;
-            const dotBrand = getLandingPageThemeFromSlug(`${t}-milwaukee`).primary;
-            return (
-              <button
-                key={t}
-                type="button"
-                aria-label={`Show ${TOOLSET_DISPLAY_NAME[t]} toolset`}
-                aria-current={isActive ? "true" : undefined}
-                onClick={() => handleDotClick(i)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-              >
-                <span
-                  className={cn(
-                    "block h-2.5 w-2.5 rounded-full transition-all duration-300",
-                    !isActive && "bg-neutral-300 dark:bg-neutral-600"
-                  )}
-                  style={isActive ? { backgroundColor: dotBrand } : undefined}
-                />
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
@@ -617,16 +668,18 @@ function LoginPageContent() {
         {/* Content Section */}
 
         <div className="flex-1 flex flex-col justify-center px-4 sm:px-8 lg:px-16">
-          {/* Text Section */}
+          {/* Text Section — inline on mobile/tablet, stacked on lg+ */}
 
           <div className="mb-3 sm:mb-4 lg:mb-6">
-            <h1 className="text-[24px] sm:text-[28px] lg:text-[40px] font-bold text-neutral-900 dark:text-white mb-1 sm:mb-2 tracking-[-1.6px]">
-              Sign in
-            </h1>
+            <div className="flex items-baseline gap-2 flex-wrap lg:block">
+              <h1 className="text-[24px] sm:text-[28px] lg:text-[40px] font-bold text-neutral-900 dark:text-white tracking-[-1.6px] lg:mb-2">
+                Sign in
+              </h1>
 
-            <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-500 dark:text-neutral-400 leading-[1.5]">
-              Please login to continue to your account.
-            </p>
+              <p className="text-[13px] sm:text-[14px] lg:text-[18px] text-neutral-500 dark:text-neutral-400 leading-[1.5]">
+                Please login to continue to your account.
+              </p>
+            </div>
           </div>
 
           {/* Form Section */}
@@ -808,8 +861,8 @@ function LoginPageContent() {
 
         <div className="relative z-10 h-full flex items-center justify-center p-4 sm:p-6 lg:p-8">
           <div className="max-w-[525px] w-full">
-            {/* Rotating Toolset Card */}
-            <div className="mb-4 sm:mb-6 lg:mb-8">
+            {/* Rotating Toolset Card — extra bottom margin clears the overflowing badge chip */}
+            <div className="mb-7 sm:mb-9 lg:mb-12">
               <RotatingToolsetCard />
             </div>
 
