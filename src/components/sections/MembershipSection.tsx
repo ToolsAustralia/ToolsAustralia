@@ -733,7 +733,7 @@ export default function MembershipSection({
                                         className={cn("text-[17px] sm:text-[18px] font-semibold mt-0", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                                         style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                       >
-                                        Free Entries
+                                        free entries
                                       </div>
                                     </div>
                                   );
@@ -1024,7 +1024,7 @@ export default function MembershipSection({
                                     className={cn("text-[17px] sm:text-[18px] font-semibold mt-1", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
                                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
                                   >
-                                    Free Entries
+                                    free entries
                                   </div>
                                 </div>
                               );

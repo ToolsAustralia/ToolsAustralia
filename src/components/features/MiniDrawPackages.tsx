@@ -703,7 +703,7 @@ export default function MiniDrawPackages({
 
                         {/* Free entries */}
                         <span className="text-3xs sm:text-xs font-bold leading-tight text-black/70">
-                          {pkg.entries} {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
+                          {pkg.entries} {pkg.entries === 1 ? "free entry" : "free entries"}
                         </span>
 
                         {/* Capacity warning */}
@@ -744,7 +744,7 @@ export default function MiniDrawPackages({
                     <div className="font-bold text-yellow-400 mb-1">{pkg.displayName ?? pkg.name}</div>
                     <div className="text-gray-300 text-xs">
                       ${pkg.price} &middot; {pkg.entries}{" "}
-                      {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
+                      {pkg.entries === 1 ? "free entry" : "free entries"}
                     </div>
                     <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
                       <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />

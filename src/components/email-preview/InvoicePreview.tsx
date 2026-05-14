@@ -179,10 +179,10 @@ const InvoicePreview: React.FC = () => {
     const entriesBox = event.entries_gained
       ? `
           <div class="entries-box">
-            <div class="entries-label">🎟️ Free Entries Earned</div>
+            <div class="entries-label">🎟️ FREE ENTRIES EARNED</div>
             <div class="entries-value">${event.entries_gained}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
-              Entries have been added to your account
+              Free entries have been added to your account
             </div>
           </div>`
       : "";

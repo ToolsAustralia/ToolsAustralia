@@ -158,10 +158,10 @@ const SubscriptionRenewalPreview: React.FC = () => {
     const entriesBox = data.entries_granted
       ? `
           <div class="entries-box">
-            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
+            <div class="entries-label">🎟️ NEW FREE ENTRIES ADDED THIS RENEWAL</div>
             <div class="entries-value">${data.entries_granted}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
-              Entries have been added to your account
+              Free entries have been added to your account
             </div>
           </div>`
       : "";

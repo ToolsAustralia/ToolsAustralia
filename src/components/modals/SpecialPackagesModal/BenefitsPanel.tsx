@@ -51,7 +51,7 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage, variantC
         </div>
         <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>
           <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={benefitsTextStyle} />
-          <span>{selectedPackage.totalEntries || 0} Free Entries</span>
+          <span>{selectedPackage.totalEntries || 0} free entries</span>
         </div>
       </div>
     </div>

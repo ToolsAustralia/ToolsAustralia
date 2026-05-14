@@ -67,7 +67,7 @@ export default function UpgradeSuccessToast() {
           showToast({
             type: "success",
             title: "Membership Upgraded Successfully!",
-            message: `Welcome to ${packageName} membership! You now have ${displayEntries} Free Accumulated Entries${partnerClause}. Your new benefits are active immediately!`,
+            message: `Welcome to ${packageName} membership! You now have ${displayEntries} free accumulated entries${partnerClause}. Your new benefits are active immediately!`,
             duration: 25000, // Show for 25 seconds for important upgrade info
             action: {
               label: "View Benefits",

@@ -72,7 +72,7 @@ const UpgradeList: React.FC<UpgradeListProps> = ({
                 {upgrade.description}
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
-                <span className="font-medium">{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
+                <span className="font-medium">{totalEntriesAfterUpgrade} free accumulated entries</span>
                 <span>{upgrade.partnerDiscountDays} days partner access</span>
               </div>
             </div>

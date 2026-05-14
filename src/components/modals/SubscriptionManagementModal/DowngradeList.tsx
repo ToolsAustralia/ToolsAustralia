@@ -66,7 +66,7 @@ const DowngradeList: React.FC<DowngradeListProps> = ({
                 {downgrade.description}
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
-                <span className="font-medium">{downgradeEntries} Free Accumulated Entries</span>
+                <span className="font-medium">{downgradeEntries} free accumulated entries</span>
                 <span>{downgrade.partnerDiscountDays} days partner access</span>
               </div>
             </div>
