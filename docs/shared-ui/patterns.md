@@ -91,6 +91,15 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 `@media print` in `globals.css` hides `[data-floating-widget]`, `[data-tracking-pixel]`, `header[data-sticky="true"]`, and any `[data-print="hide"]` element, and forces black-on-white. Tag floating UI / pixel scripts with the matching `data-*` attribute when adding new ones (`RewardsFloatingWidget` and the analytics scripts already do).
 
+## MiniDrawPackages tier-aware catalog (2026-05-14)
+
+[`src/components/features/MiniDrawPackages.tsx`](../../src/components/features/MiniDrawPackages.tsx) is the purchase UI rendered on the `/mini-draws/[id]` page. It now uses `getMiniDrawPackagesForViewer(hasAccess)` instead of the raw `miniDrawPackages` array to show only the tier-appropriate packages:
+
+- Guests / users without current draw entries and no active subscription → Mini Pack 1, 2, 3 (`isMemberOnly` absent / false).
+- Users with an active subscription OR at least one current draw entry → the five `additional-*-pack-mini` records (`isMemberOnly: true`).
+
+`hasAccess` is derived via `useUserMajorDrawStats(userData?._id)` + `hasAdditionalPackageAccess(userData, userMajorDrawStats)`, reusing the same helpers as the major-draw catalog. The `viewerPackages` computed list replaces all three in-component usages of the raw array: the grid render, the selected-package-modal lookup, and the `handlePurchase` package lookup.
+
 ## P1. Composition via children
 
 Most primitives accept `children` and add behaviour. Don't try to prop-drill content — let consumers compose.

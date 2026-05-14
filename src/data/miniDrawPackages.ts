@@ -356,6 +356,20 @@ export const miniDrawPackages: MiniDrawPackage[] = [
 ];
 
 /**
+ * Returns mini-draw packages appropriate for the viewer.
+ * - hasAccess=false → only non-member-only packs (Mini Pack 1–3)
+ * - hasAccess=true  → only member-only packs (additional-*-pack-mini),
+ *   mirroring the major-draw swap rule.
+ */
+export const getMiniDrawPackagesForViewer = (hasAccess: boolean): MiniDrawPackage[] => {
+  return miniDrawPackages.filter((pkg) => {
+    if (!pkg.isActive) return false;
+    const isMemberOnly = pkg.isMemberOnly === true;
+    return hasAccess ? isMemberOnly : !isMemberOnly;
+  });
+};
+
+/**
  * Helper function to get mini draw packages
  */
 export const getMiniDrawPackages = (): MiniDrawPackage[] => {

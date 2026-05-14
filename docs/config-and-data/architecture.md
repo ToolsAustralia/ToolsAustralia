@@ -36,7 +36,7 @@
 | [src/data/faqs.ts](../../src/data/faqs.ts) | FAQ content |
 | [src/data/index.ts](../../src/data/index.ts) | Re-exports |
 | [src/data/membershipPackages.ts](../../src/data/membershipPackages.ts) | **Static** package definitions (subscription packages keyed by string id) |
-| [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) | **Static** mini-draw package definitions |
+| [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) | **Static** mini-draw package definitions. Exports `getMiniDrawPackagesForViewer(hasAccess)` for tier-aware catalog (guests → Mini Pack 1–3; access holders → additional-*-pack-mini). Untiered `getMiniDrawPackages()` kept for admin/lookup callers. |
 | [src/data/partnerBrandOffers.ts](../../src/data/partnerBrandOffers.ts) | Partner offer reference |
 | [src/data/professions.ts](../../src/data/professions.ts) | Profession dropdown options |
 | [src/data/sampleOrders.ts](../../src/data/sampleOrders.ts) | Dev fixture |

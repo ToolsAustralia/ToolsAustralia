@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Package, Info } from "lucide-react";
-import { miniDrawPackages } from "@/data/miniDrawPackages";
+import { getMiniDrawPackagesForViewer } from "@/data/miniDrawPackages";
 import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
@@ -21,6 +21,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { MiniDrawType } from "@/types/mini-draw";
 import { useAttribution } from "@/hooks/useAttribution";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -46,6 +48,11 @@ export default function MiniDrawPackages({
       ? paymentMethodsData
       : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
+
+  // Derive tier-aware package list — mirrors the major-draw swap rule.
+  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
+  const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+  const viewerPackages = getMiniDrawPackagesForViewer(hasAccess);
 
   /**
    * Calculate user's entry count for this specific minidraw
@@ -148,7 +155,7 @@ export default function MiniDrawPackages({
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Get selected package for modal
-  const selectedPackage = selectedPackageId ? miniDrawPackages.find((p) => p._id === selectedPackageId) : null;
+  const selectedPackage = selectedPackageId ? viewerPackages.find((p) => p._id === selectedPackageId) : null;
 
   // Remaining capacity guard for client-side disablement
   const entriesRemaining =
@@ -178,7 +185,7 @@ export default function MiniDrawPackages({
     }
 
     // Get the package details
-    const pkg = miniDrawPackages.find((p) => p._id === packageId);
+    const pkg = viewerPackages.find((p) => p._id === packageId);
     if (!pkg) {
       showToast({
         type: "error",
@@ -648,7 +655,7 @@ export default function MiniDrawPackages({
 
       {/* Package Grid */}
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
-        {miniDrawPackages.map((pkg) => {
+        {viewerPackages.map((pkg) => {
           const disabled =
             purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
           const isProcessing = purchasingPackageId === pkg._id;

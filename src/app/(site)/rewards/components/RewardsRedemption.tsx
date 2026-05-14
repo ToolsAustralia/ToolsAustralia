@@ -3,7 +3,7 @@
 import { Package, Star, Check, Loader2 } from "lucide-react";
 import { UserData } from "@/hooks/queries/useUserQueries";
 import { getOneTimePackages, applyPromoToPackage } from "@/data/membershipPackages";
-import { getMiniDrawPackages, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
+import { getMiniDrawPackagesForViewer, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -64,14 +64,6 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
     });
   }, [resolvedOneTimeMultiplier, resolvedMembershipMultiplier]);
 
-  const miniDrawPackages = useMemo(() => {
-    const packages = getMiniDrawPackages();
-    if (resolvedMiniMultiplier != null && isPromoMultiplier(resolvedMiniMultiplier)) {
-      return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
-    }
-    return packages;
-  }, [resolvedMiniMultiplier]);
-
   const getIcon = (type: string) => {
     switch (type) {
       case "package":
@@ -85,9 +77,17 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
 
   // Get user's major draw stats to check for current draw entries
   const { data: userMajorDrawStats } = useUserMajorDrawStats(user._id);
-  
+
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
+
+  const miniDrawPackages = useMemo(() => {
+    const packages = getMiniDrawPackagesForViewer(hasAccess);
+    if (resolvedMiniMultiplier != null && isPromoMultiplier(resolvedMiniMultiplier)) {
+      return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
+    }
+    return packages;
+  }, [hasAccess, resolvedMiniMultiplier]);
 
   // Create package redemption options (5x multiplier) - memoized for performance
   const redemptionOptions: RedemptionOption[] = useMemo(
