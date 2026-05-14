@@ -84,6 +84,7 @@
     "test:advanced-matching": "tsx src/lib/tracking/__tests__/advanced-matching.test.ts",
     "test:facebook-fbc-extract": "tsx src/utils/tracking/__tests__/extractFBCFromRequest.test.ts",
     "test:stripe-idempotency-retry": "tsx src/utils/payment/stripe/__tests__/createSubscriptionWithIdempotencyRetry.test.ts",
+    "test:upsell-entries-v2": "tsx src/utils/payment/__tests__/upsell-entries-calculator-v2.test.ts",
     "test:upsell-images": "tsx src/utils/upsell/__tests__/upsell-image-selector.test.ts",
     "test:upsell-multiplier-resolver": "tsx src/services/upsell/__tests__/UpsellMultiplierResolver.test.ts",
     "test:user-filter-builder": "tsx src/utils/admin/__tests__/userFilterBuilder.test.ts",
