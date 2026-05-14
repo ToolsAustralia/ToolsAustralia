@@ -817,12 +817,11 @@ function LoginPageContent() {
 
             <div className="hidden sm:block text-center mt-8 sm:mt-12 lg:mt-16 relative z-10">
               <h3 className="text-[20px] sm:text-[28px] lg:text-[40px] font-semibold text-white mb-2 sm:mb-3 lg:mb-4 leading-[1.385]">
-                Unlock New Benefits
+                Premium Tools. Member Perks.
               </h3>
 
               <p className="text-[12px] sm:text-[16px] lg:text-[20px] text-[#cfd9e0] dark:text-neutral-300 leading-[1.385]">
-                Track your purchases, maximize your points, and enjoy smarter shopping with our rewards-driven
-                marketplace.
+                Track your draw entries and discover member-only partner discounts.
               </p>
             </div>
           </div>
