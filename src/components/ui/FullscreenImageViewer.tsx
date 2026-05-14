@@ -62,6 +62,10 @@ export default function FullscreenImageViewer({
   const [canSlideNext, setCanSlideNext] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const zoomRefs = useRef<Array<ReactZoomPanPinchContentRef | null>>([]);
+  const currentIndexRef = useRef(0);
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const hasMultipleImages = images.length > 1;
 
@@ -150,7 +154,7 @@ export default function FullscreenImageViewer({
   }, [mainApi, isZoomed]);
 
   useEffect(() => {
-    // reset zoom on the new active slide and clear isZoomed
+    // when active slide changes, clear zoom on the slides the user navigated away from
     zoomRefs.current.forEach((ref, i) => {
       if (i === currentIndex) return;
       ref?.resetTransform(0);
@@ -261,13 +265,12 @@ export default function FullscreenImageViewer({
                       doubleClick={{ mode: "toggle", step: 1.5 }}
                       pinch={{ step: 5 }}
                       wheel={{ step: 0.2 }}
-                      panning={{ disabled: false }}
                       onZoomStop={(ref) => {
-                        if (index !== currentIndex) return;
+                        if (index !== currentIndexRef.current) return;
                         setIsZoomed(ref.state.scale > 1.01);
                       }}
                       onTransformed={(ref) => {
-                        if (index !== currentIndex) return;
+                        if (index !== currentIndexRef.current) return;
                         setIsZoomed(ref.state.scale > 1.01);
                       }}
                     >
