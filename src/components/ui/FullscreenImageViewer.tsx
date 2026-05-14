@@ -190,7 +190,7 @@ export default function FullscreenImageViewer({
               type="button"
               onClick={onClose}
               autoFocus
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2"
               style={{
                 background: pillBg,
                 border: `1px solid ${pillBorder}`,
@@ -237,7 +237,7 @@ export default function FullscreenImageViewer({
                   <button
                     type="button"
                     onClick={goPrevious}
-                    className="absolute left-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 sm:left-4 sm:h-12 sm:w-12"
+                    className="absolute left-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:left-4 sm:h-12 sm:w-12"
                     style={{
                       background: pillBg,
                       border: `1px solid ${pillBorder}`,
@@ -252,7 +252,7 @@ export default function FullscreenImageViewer({
                   <button
                     type="button"
                     onClick={goNext}
-                    className="absolute right-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 sm:right-4 sm:h-12 sm:w-12"
+                    className="absolute right-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:right-4 sm:h-12 sm:w-12"
                     style={{
                       background: pillBg,
                       border: `1px solid ${pillBorder}`,
@@ -297,7 +297,7 @@ export default function FullscreenImageViewer({
                     type="button"
                     onClick={() => onThumbClick(index)}
                     aria-label={`Open image ${index + 1}`}
-                    aria-current={isActive}
+                    aria-current={isActive ? "true" : undefined}
                     className="relative h-12 w-12 flex-[0_0_auto] overflow-hidden rounded-md border-2 transition-all"
                     style={{
                       borderColor: isActive ? promoTheme.primary : thumbBorder,
