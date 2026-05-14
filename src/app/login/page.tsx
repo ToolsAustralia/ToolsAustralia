@@ -641,7 +641,7 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="h-screen-dvh bg-white dark:bg-neutral-950 flex flex-col lg:flex-row overflow-hidden text-neutral-900 dark:text-neutral-100">
+    <div className="min-h-screen-dvh lg:h-screen-dvh bg-white dark:bg-neutral-950 flex flex-col lg:flex-row lg:overflow-hidden text-neutral-900 dark:text-neutral-100">
       {/* Left Column - Login Form */}
 
       <div className="w-full lg:w-[591px] flex flex-col p-4 sm:p-6 lg:p-8 lg:overflow-y-auto">
