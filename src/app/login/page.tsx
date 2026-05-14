@@ -212,10 +212,10 @@ function RotatingToolsetCard() {
           aria-hidden
         />
 
-        {/* Two-column on lg+, stacked on smaller. Image+pill column on the right (lg) / top (small). */}
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:gap-5">
-          {/* Image column (right on lg, top on mobile/tablet) */}
-          <div className="order-1 lg:order-2 flex flex-col items-center shrink-0 lg:w-[210px]">
+        {/* Two-column at every breakpoint: text left, image+pill right. */}
+        <div className="relative z-10 flex flex-row items-center gap-3 sm:gap-4 lg:gap-5">
+          {/* Image column (always right) */}
+          <div className="order-2 flex flex-col items-center shrink-0 w-[130px] sm:w-[170px] lg:w-[210px]">
             <AnimatePresence mode="wait">
               <motion.div
                 key={`wordmark-${active}`}
@@ -288,47 +288,49 @@ function RotatingToolsetCard() {
             </AnimatePresence>
           </div>
 
-          {/* Text column (left on lg, below image on mobile/tablet) */}
-          <div className="order-2 lg:order-1 mt-4 lg:mt-0 flex w-full min-w-0 flex-col items-center lg:items-start text-center lg:text-left lg:flex-1">
-            <h2 className="w-full text-[17px] sm:text-[20px] lg:text-[26px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.5px] leading-[1.2] break-words">
+          {/* Text column (always left) */}
+          <div className="order-1 flex min-w-0 flex-1 flex-col items-start text-left">
+            <h2 className="w-full text-[15px] sm:text-[18px] lg:text-[26px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.5px] leading-[1.2] break-words">
               Earn Partner Discounts &amp; Win Tools
             </h2>
-            <p className="mt-2 w-full max-w-[300px] lg:max-w-none text-[12px] sm:text-[13px] lg:text-[14px] text-[#475569] dark:text-neutral-300 leading-[1.5]">
+            <p className="mt-1.5 sm:mt-2 w-full text-[11px] sm:text-[12px] lg:text-[14px] text-[#475569] dark:text-neutral-300 leading-[1.5]">
               Become a member to enter our major draws for premium toolsets and unlock exclusive discounts across our partner brands.
             </p>
-
-            {/* Dot indicators — each button is a ≥36×36 hit area with a centered 10×10 dot */}
-            <div className="mt-3 sm:mt-4 flex items-center gap-1" aria-label="Toolset showcase">
-              {TOOLSETS.map((t, i) => {
-                const isActive = i === activeIndex;
-                const dotBrand = getLandingPageThemeFromSlug(`${t}-milwaukee`).primary;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-label={`Show ${TOOLSET_DISPLAY_NAME[t]} toolset`}
-                    aria-current={isActive ? "true" : undefined}
-                    onClick={() => handleDotClick(i)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-                  >
-                    <span
-                      className={cn(
-                        "block h-2.5 w-2.5 rounded-full transition-all duration-300",
-                        !isActive && "bg-neutral-300 dark:bg-neutral-600"
-                      )}
-                      style={isActive ? { backgroundColor: dotBrand } : undefined}
-                    />
-                  </button>
-                );
-              })}
-            </div>
           </div>
+        </div>
+
+        {/* Dot indicators — spans the full card width below the two-column row,
+            right-justified. Swapped with the badge chip per feedback so the chip
+            sits bottom-left and the dots sit bottom-right. */}
+        <div className="relative z-10 mt-3 sm:mt-4 flex items-center justify-end gap-1" aria-label="Toolset showcase">
+          {TOOLSETS.map((t, i) => {
+            const isActive = i === activeIndex;
+            const dotBrand = getLandingPageThemeFromSlug(`${t}-milwaukee`).primary;
+            return (
+              <button
+                key={t}
+                type="button"
+                aria-label={`Show ${TOOLSET_DISPLAY_NAME[t]} toolset`}
+                aria-current={isActive ? "true" : undefined}
+                onClick={() => handleDotClick(i)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
+              >
+                <span
+                  className={cn(
+                    "block h-2.5 w-2.5 rounded-full transition-all duration-300",
+                    !isActive && "bg-neutral-300 dark:bg-neutral-600"
+                  )}
+                  style={isActive ? { backgroundColor: dotBrand } : undefined}
+                />
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Animated badge chip — fixed size; only inner content swaps per brand.
-          Sized to fit the longest subtitle ("Partner Discount Offers"). */}
-      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 w-[220px] sm:w-[250px] h-[56px] sm:h-[68px] rounded-[10px] bg-white dark:bg-neutral-900 px-2.5 sm:px-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+          Anchored bottom-LEFT on every viewport. Swapped with the dots per feedback. */}
+      <div className="absolute bottom-[-10px] left-3 sm:bottom-[-12px] sm:left-5 z-20 w-[170px] sm:w-[200px] lg:w-[250px] h-[52px] sm:h-[60px] lg:h-[68px] rounded-[10px] bg-white dark:bg-neutral-900 px-2.5 sm:px-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={`badge-${active}`}
