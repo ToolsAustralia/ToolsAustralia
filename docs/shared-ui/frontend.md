@@ -58,6 +58,10 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 **Updated 2026-05-04**: removed photo background — section + card + modal hero are now typographic on a dark brand-glow stage (no `<Image>`). The card CTA was moved out of absolute positioning into normal document flow below the hero (full-width on mobile, auto-width on `sm`+) so it can never overlap the winner name. The italic subtitle paragraph (`Tradies, weekend warriors…`) was removed from the populated header.
 
+### `OtherToolsetsCarousel` — Explore other toolsets cards
+
+[`src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx`](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) renders the "Explore other toolsets" strip beneath toolset / evergreen promo pages. Each card has a **brand wordmark on top** (`POWERSET_BRAND_TEXT[slug]` → `/images/brands/name/{brand}Text.webp`) followed by the product image filling the rest of the 3:4 frame. The card keeps a brand-coloured border/shadow from [`getToolsetBadgeStyle`](../../src/utils/package-colors/packageColorScheme.ts); no text label is rendered visually — the SR-only announcement comes from the button's `aria-label` driven by `POWERSET_LABELS` (e.g. `"RYOBI 19PC KIT"`).
+
 ## Modals
 
 ### RenewalFailedModal
