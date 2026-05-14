@@ -636,7 +636,7 @@ async function handleOneClickPurchase(
         paymentMethod: finalPaymentMethodId, // Use the SAFE validated payment method
         confirm: true,
         paymentType: "upsell",
-        description: offer.name,
+        description: offer.stripeDescription,
         setupFutureUsage: "off_session", // Store payment method for future use
         metadata: paymentMetadata,
       });
@@ -802,7 +802,7 @@ async function handlePaymentIntentCreation(
       paymentMethod: paymentMethodId,
       confirm: paymentMethodId ? true : false,
       paymentType: "upsell",
-      description: offer.name,
+      description: offer.stripeDescription,
       metadata: paymentMetadata,
     });
 
