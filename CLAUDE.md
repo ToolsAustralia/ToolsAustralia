@@ -142,7 +142,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-05-12",
+  "lastModified": "2026-05-14",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -294,7 +294,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/build-landing-image-manifest.ts",
         "scripts/check-landing-hero-assets.mjs"
       ],
-      "lastVerified": "2026-05-12"
+      "lastVerified": "2026-05-14"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -535,7 +535,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-14"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -656,7 +656,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-05-08"
+      "lastVerified": "2026-05-14"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",

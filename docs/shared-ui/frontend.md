@@ -58,6 +58,10 @@ The legacy entry path [src/components/sections/WinnerTestimonySection.tsx](../..
 
 **Updated 2026-05-04**: removed photo background — section + card + modal hero are now typographic on a dark brand-glow stage (no `<Image>`). The card CTA was moved out of absolute positioning into normal document flow below the hero (full-width on mobile, auto-width on `sm`+) so it can never overlap the winner name. The italic subtitle paragraph (`Tradies, weekend warriors…`) was removed from the populated header.
 
+### `OtherToolsetsCarousel` — Explore other toolsets cards
+
+[`src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx`](../../src/components/sections/promo/prize-selection/OtherToolsetsCarousel.tsx) renders the "Explore other toolsets" strip beneath toolset / evergreen promo pages. Each card has a **brand wordmark on top** (`POWERSET_BRAND_TEXT[slug]` → `/images/brands/name/{brand}Text.webp`) followed by the product image filling the rest of the 3:4 frame. The card keeps a brand-coloured border/shadow from [`getToolsetBadgeStyle`](../../src/utils/package-colors/packageColorScheme.ts); no text label is rendered visually — the SR-only announcement comes from the button's `aria-label` driven by `POWERSET_LABELS` (e.g. `"RYOBI 19PC KIT"`).
+
 ## Modals
 
 ### RenewalFailedModal
@@ -215,3 +219,36 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 `utils/motion/` — Framer Motion presets and helpers.
 
 **Updated 2026-05-04**: bumped `ToolboxSelector` unselected text to full white for legibility across brand themes; switched `LatestWinnerHero` CTA arrow to inherit `currentColor` so it stays visible in dark mode for light-primary brands.
+
+## Overlays
+
+### FullscreenImageViewer
+
+[src/components/ui/FullscreenImageViewer.tsx](../../src/components/ui/FullscreenImageViewer.tsx)
+
+Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `MembershipModal`, `WinnerStrip`, `MiniDrawImageGallery`, `PrizeShowcase`, and the dev modals gallery.
+
+#### Layout
+
+- **Desktop (≥1024px):** photo column (~62%) + info card column (~38%). Thumbs render as a 3-column auto-fit grid in the info card.
+- **Mobile (<1024px):** photo on top (~50vh), info card slides up below with a grab handle. Pull the handle down to reveal more of the photo (peek snap at ~45% of card height). Thumbs render as a horizontal scroll strip.
+
+#### Theme integration
+
+- **Light/dark:** reads `useTheme()`. Backdrop is `#000`/`#f5f5f4`; photo area is `#0a0a0a`/`#fafaf9`; info card gradient flips accordingly.
+- **Brand color:** reads `usePromoTheme()`. Applied only to the draw-kind badge, the active thumbnail's border/ring, and the faint tint at the top of the info card gradient. No glow on the close button, chevrons, or thumb wrapper.
+
+#### Behavior
+
+- Pinch + double-tap + mousewheel zoom via `react-zoom-pan-pinch` (max 4×). Carousel swipe is disabled when zoomed > 1× and re-enables at 1×.
+- Keyboard: `Esc` closes, `←/→` navigate, `+`/`-` zoom, `0` resets zoom.
+- First-open zoom hint pill appears for 2s (or until first zoom interaction), gated by `sessionStorage["fullscreen-viewer-zoom-hint-seen"]`.
+- Mobile grab handle: drag the info card down to expose more photo. Snaps between resting and peek (~45% of card height).
+
+#### Props
+
+`FullscreenImageViewerProps`: `isOpen`, `images` (`FullscreenImageItem[]`), `initialIndex`, `onClose`, `title?`, `nested?`. Per-image `captionDetail` is optional (`{ drawName, winnerName, wonDate, drawKind? }`).
+
+#### Companion
+
+`FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.

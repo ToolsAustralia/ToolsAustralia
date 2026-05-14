@@ -2,6 +2,8 @@
 
 Status: **Proposed** · Owner: tracking · Created: 2026-05-12
 
+> **2026-05-14 update:** Subscribe-family, CompleteRegistration, and canonical-`db` parity gaps closed under spec [`docs/superpowers/specs/2026-05-14-fb-capi-emq-fixes-design.md`](../superpowers/specs/2026-05-14-fb-capi-emq-fixes-design.md). See plan [`docs/superpowers/plans/2026-05-14-fb-capi-emq-fixes.md`](../superpowers/plans/2026-05-14-fb-capi-emq-fixes.md).
+
 This spec captures what we need to change so that every Purchase event we send to
 Meta is correct on both surfaces (browser Pixel + Conversions API), with consistent
 parameters, deduplicated end-to-end, and high Event Match Quality.

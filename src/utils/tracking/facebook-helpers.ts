@@ -14,38 +14,44 @@
 import { hashData } from "@/lib/facebook";
 
 /**
- * Extract Facebook Click ID (fbc) from URL parameters
- * Format: fbclid=xxxxx or fbc parameter
- * Uses actual click timestamp from fbclid when available (Meta best practice)
+ * Extract Facebook Click ID (fbc) on the browser side.
+ *
+ * Priority order (matches server-side `extractFBCFromRequest`):
+ *   1. The `_fbc` cookie set by the Pixel SDK at click time (this is what
+ *      the Pixel itself reads — using it preserves pixel↔CAPI consistency).
+ *   2. Fallback: build `fb.1.{Date.now()}.{fbclid}` from the URL when no
+ *      cookie is present. The fallback timestamp drifts across calls but
+ *      is acceptable for first-touch cookie-blocked visits.
+ *
  * @returns Facebook Click ID if found, undefined otherwise
  */
 export function getFBCFromURL(): string | undefined {
   if (typeof window === "undefined") return undefined;
 
   try {
-    const urlParams = new URLSearchParams(window.location.search);
-    // Check for fbclid parameter (standard Facebook click ID)
-    const fbclid = urlParams.get("fbclid");
-    if (fbclid) {
-      // Try to extract timestamp from fbclid if it contains timestamp info
-      // fbclid format can sometimes include timestamp, but typically we use current time
-      // However, we can try to parse if it's in a known format
-      // For now, use current time as Meta recommends using the time when the click occurred
-      // In practice, fbclid doesn't contain timestamp, so we use current time
-      // Format: fb.1.{timestamp}.{click_id}
-      const timestamp = Date.now();
-      return `fb.1.${timestamp}.${fbclid}`;
+    // 1. Cookie set by Pixel SDK (canonical fb.1.{ts}.{fbclid} format).
+    const cookies = document.cookie.split(";");
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split("=");
+      if (name === "_fbc" && value) {
+        // SDK does not URL-encode the value; decode defensively only when
+        // there is a percent sign in the raw value.
+        return value.includes("%") ? decodeURIComponent(value) : value;
+      }
     }
 
-    // Check for fbc parameter (already formatted)
-    const fbc = urlParams.get("fbc");
-    if (fbc) {
-      return fbc;
+    // 2. URL fallback when cookie is absent.
+    const urlParams = new URLSearchParams(window.location.search);
+    const fbclid = urlParams.get("fbclid");
+    if (fbclid) {
+      return `fb.1.${Date.now()}.${fbclid}`;
     }
+
+    const fbc = urlParams.get("fbc");
+    if (fbc) return fbc;
 
     return undefined;
   } catch {
-    // console.warn("Error extracting fbc from URL:", error);
     return undefined;
   }
 }
@@ -93,7 +99,7 @@ export function generateEventID(eventType: string, identifier: string, timestamp
  * Normalize birthdate to YYYYMMDD for Meta CAPI (db parameter).
  * Meta requires date of birth hashed as YYYYMMDD (e.g. 19900615).
  */
-function toYYYYMMDD(birthdate: string | Date): string | null {
+export function toYYYYMMDD(birthdate: string | Date): string | null {
   let d: Date;
   if (birthdate instanceof Date) {
     if (Number.isNaN(birthdate.getTime())) return null;

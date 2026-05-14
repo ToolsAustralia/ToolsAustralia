@@ -38,11 +38,13 @@ Anyone wiring a new endpoint that stores a referer / location URL into Stripe me
 
 Read all five and merge content during a refresh pass.
 
-## Server-side fbc reads `_fbc` cookie first; URL fallback uses `Date.now()`
+## Both browser and server fbc read `_fbc` cookie first; URL fallback uses `Date.now()`
 
-[`extractFBCFromRequest`](../../src/utils/tracking/facebook-helpers.ts) reads the Facebook Pixel `_fbc` cookie first. Only when no cookie is present does it fall back to building `fb.1.{Date.now()}.{fbclid}` from a URL `?fbclid=…` parameter.
+[`extractFBCFromRequest`](../../src/utils/tracking/facebook-helpers.ts) (server) and [`getFBCFromURL`](../../src/utils/tracking/facebook-helpers.ts) (browser) both read the Facebook Pixel `_fbc` cookie first. Only when no cookie is present do they fall back to building `fb.1.{Date.now()}.{fbclid}` from a URL `?fbclid=…` parameter.
 
-The fallback's timestamp is **the request time, not the click time** — Meta's spec calls for click time. We prefer it over rejecting fbc entirely so cookie-blocked visitors still contribute partial attribution.
+The fallback's timestamp is **the request time, not the click time** — Meta's spec calls for click time. We prefer it over rejecting fbc entirely so cookie-blocked first-touch visitors still contribute partial attribution.
+
+The browser helper was previously *only* using the URL fallback, even when the SDK had already written a canonical `_fbc` cookie. That produced a different `fbc` on every call and caused pixel↔CAPI mismatches. Fixed 2026-05-14.
 
 Important: the fallback is non-deterministic across calls. Any code path that uses the returned fbc in a Stripe idempotency-keyed request body (subscription create) must wrap the call with the [billing-stripe P10 pattern](../billing-stripe/patterns.md#p10-one-shot-idempotency-retry-on-key-collisions). For other CAPI flows (the standard `/api/facebook/*` event endpoints), the drift is harmless.
 
@@ -109,3 +111,18 @@ Fix: the webhook extracts `expandedInvoice.payment_intent` (string or expanded i
 `activePlan.id` is the tier slug ("tradie", "boss", "foreman"). The server CAPI sends `packageId` from the MembershipPackage document ("tradie-subscription", "boss-subscription", …) — these are NOT the same string. Browser-side `content_ids` must use [`lastChargedStaticPackageIdRef.current`](../../src/components/modals/MembershipModal.tsx) (the canonical static package id assigned during `handlePurchaseClick`) for the values to match the server, with `activePlan.id` only as a last-resort fallback.
 
 Both `handlePaymentProcessingSuccess` (existing-user flow) and `handlePaymentSuccess` (new-user autologin flow) must read the same ref. We shipped a Phase 3 regression on 2026-05-12 where `handlePaymentSuccess` used `activePlan.id` directly — browser sent `["tradie"]`, server sent `["tradie-subscription"]`, Meta flagged the dedup mismatch.
+
+## CAPI user_data: raw vs hashed field matrix
+
+Meta's CAPI accepts some `user_data` fields **raw** and others as SHA-256 hashes. Mixing them up silently degrades Event Match Quality with no error.
+
+| Field | Format | Examples |
+|---|---|---|
+| `em`, `ph`, `fn`, `ln`, `ct`, `st`, `zp`, `country`, `external_id`, `db` | SHA-256 lowercased | `hashPII("nsw")` |
+| `fbp`, `fbc`, `client_ip_address`, `client_user_agent` | Raw | `fb.1.1700000000000.AbC123` |
+
+`hashPII` and `prepareUserData` both lowercase-trim before hashing. Pass `"NSW"` and the helper handles normalization. Do not pre-hash any field — that double-hashes it.
+
+## `db` (birthdate) format is `YYYYMMDD`, not ISO
+
+The `db` parameter must be hashed `YYYYMMDD` digits (e.g. `hashPII("19900615")`), **not** ISO `YYYY-MM-DD`. Use `toYYYYMMDD()` from `facebook-helpers.ts` — it accepts `Date` objects, ISO strings, and pre-formatted 8-digit strings, and returns `null` for unparseable input so the caller can skip the field. Wrong format produces no error but silently drops match quality.

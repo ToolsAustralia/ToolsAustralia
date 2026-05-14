@@ -6,6 +6,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import Stripe from "stripe";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 // Extended Stripe subscription interface to include current_period_end
 interface StripeSubscriptionWithPeriodEnd extends Stripe.Subscription {
@@ -240,6 +241,7 @@ export async function POST(request: NextRequest) {
     // ✅ NEW: Track pixel subscription downgrade event
     try {
       const { trackPixelSubscriptionDowngrade } = await import("@/utils/tracking/pixel-purchase-tracking");
+      const requestContext = extractRequestContext(request);
       await trackPixelSubscriptionDowngrade({
         oldValue: currentPackage.price,
         newValue: newPackage.price,
@@ -251,10 +253,15 @@ export async function POST(request: NextRequest) {
         subscriptionId: user.stripeSubscriptionId,
         userId: user._id.toString(),
         userEmail: user.email,
-        prorationAmount: 0, // No immediate charge for downgrade
+        userPhone: user.mobile,
+        userFirstName: user.firstName,
+        userLastName: user.lastName,
+        userState: user.state,
+        userBirthdate: user.birthdate,
+        prorationAmount: 0,
         entriesRemoved: (currentPackage.entriesPerMonth || 0) - (newPackage.entriesPerMonth || 0),
+        requestContext,
       });
-      // console.log(`📊 Pixel subscription downgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
     } catch (pixelError) {
       console.error("❌ Pixel downgrade tracking failed (non-blocking):", pixelError);
     }
