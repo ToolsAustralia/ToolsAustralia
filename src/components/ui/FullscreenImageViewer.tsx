@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, X, Expand } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import ClassNames from "embla-carousel-class-names";
 import type { EmblaOptionsType } from "embla-carousel";
+import { TransformWrapper, TransformComponent, type ReactZoomPanPinchContentRef } from "react-zoom-pan-pinch";
 
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
@@ -59,6 +60,8 @@ export default function FullscreenImageViewer({
   const [currentIndex, setCurrentIndex] = useState(clampIndex(initialIndex, images.length));
   const [canSlidePrev, setCanSlidePrev] = useState(false);
   const [canSlideNext, setCanSlideNext] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const zoomRefs = useRef<Array<ReactZoomPanPinchContentRef | null>>([]);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const hasMultipleImages = images.length > 1;
 
@@ -118,14 +121,48 @@ export default function FullscreenImageViewer({
         event.preventDefault();
         mainApi?.scrollPrev();
       }
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomRefs.current[currentIndex]?.zoomIn(0.5);
+      }
+      if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        zoomRefs.current[currentIndex]?.zoomOut(0.5);
+      }
+      if (event.key === "0") {
+        event.preventDefault();
+        zoomRefs.current[currentIndex]?.resetTransform(150);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, hasMultipleImages, onClose, mainApi]);
+  }, [isOpen, hasMultipleImages, onClose, mainApi, currentIndex]);
 
   useEffect(() => {
     if (isOpen) return;
     lastFocusedElementRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!mainApi) return;
+    // re-init embla swipe based on zoom state
+    mainApi.reInit({ watchDrag: !isZoomed } as EmblaOptionsType);
+  }, [mainApi, isZoomed]);
+
+  useEffect(() => {
+    // reset zoom on the new active slide and clear isZoomed
+    zoomRefs.current.forEach((ref, i) => {
+      if (i === currentIndex) return;
+      ref?.resetTransform(0);
+    });
+    setIsZoomed(false);
+  }, [currentIndex]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsZoomed(false);
+      zoomRefs.current.forEach((ref) => ref?.resetTransform(0));
+    }
   }, [isOpen]);
 
   const goNext = () => mainApi?.scrollNext();
@@ -216,16 +253,40 @@ export default function FullscreenImageViewer({
                     key={`${image.src}-${index}`}
                     className="embla__slide flex-[0_0_100%] min-w-0 box-border max-w-full overflow-hidden"
                   >
-                    <div className="relative h-full w-full max-w-full overflow-hidden">
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Fullscreen image ${index + 1}`}
-                        fill
-                        sizes="(min-width: 1024px) 62vw, 100vw"
-                        className="box-border object-contain p-3 sm:p-4"
-                        priority={index === currentIndex}
-                      />
-                    </div>
+                    <TransformWrapper
+                      ref={(el) => { zoomRefs.current[index] = el; }}
+                      initialScale={1}
+                      minScale={1}
+                      maxScale={4}
+                      doubleClick={{ mode: "toggle", step: 1.5 }}
+                      pinch={{ step: 5 }}
+                      wheel={{ step: 0.2 }}
+                      panning={{ disabled: false }}
+                      onZoomStop={(ref) => {
+                        if (index !== currentIndex) return;
+                        setIsZoomed(ref.state.scale > 1.01);
+                      }}
+                      onTransformed={(ref) => {
+                        if (index !== currentIndex) return;
+                        setIsZoomed(ref.state.scale > 1.01);
+                      }}
+                    >
+                      <TransformComponent
+                        wrapperClass="!h-full !w-full"
+                        contentClass="!h-full !w-full"
+                      >
+                        <div className="relative h-full w-full max-w-full overflow-hidden">
+                          <Image
+                            src={image.src}
+                            alt={image.alt || `Fullscreen image ${index + 1}`}
+                            fill
+                            sizes="(min-width: 1024px) 62vw, 100vw"
+                            className="box-border object-contain p-3 sm:p-4"
+                            priority={index === currentIndex}
+                          />
+                        </div>
+                      </TransformComponent>
+                    </TransformWrapper>
                   </div>
                 ))}
               </div>
