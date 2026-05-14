@@ -140,11 +140,12 @@ const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
 };
 
 // Animated badge content paired 1:1 with each brand — chip swaps in sync with the toolset.
+// Each badge names a real, live member benefit (no shop/rewards references — both are offline).
 const BADGE_CONFIG: Record<ToolsetKey, { icon: LucideIcon; title: string; subtitle: string }> = {
-  milwaukee: { icon: Shield, title: "Secure", subtitle: "Payment" },
-  dewalt: { icon: Star, title: "Premium", subtitle: "Partner Discounts" },
-  makita: { icon: Gift, title: "Exclusive", subtitle: "Offers" },
-  ryobi: { icon: Zap, title: "Drawn", subtitle: "Live" },
+  milwaukee: { icon: Shield, title: "100% Safe", subtitle: "Secured Payment" },
+  dewalt: { icon: Star, title: "Members", subtitle: "Partner Discount Offers" },
+  makita: { icon: Gift, title: "Membership", subtitle: "Exclusive Offers" },
+  ryobi: { icon: Zap, title: "Major Draw", subtitle: "Live Every 27th" },
 };
 
 const ROTATION_INTERVAL_MS = 3500;
@@ -325,8 +326,9 @@ function RotatingToolsetCard() {
         </div>
       </div>
 
-      {/* Animated badge chip — fixed size; only inner content swaps per brand. */}
-      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 w-[180px] sm:w-[210px] h-[52px] sm:h-[64px] rounded-[10px] bg-white dark:bg-neutral-900 px-2 sm:px-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+      {/* Animated badge chip — fixed size; only inner content swaps per brand.
+          Sized to fit the longest subtitle ("Partner Discount Offers"). */}
+      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 w-[220px] sm:w-[250px] h-[56px] sm:h-[68px] rounded-[10px] bg-white dark:bg-neutral-900 px-2.5 sm:px-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={`badge-${active}`}
@@ -344,13 +346,13 @@ function RotatingToolsetCard() {
             </div>
             <div className="min-w-0 flex-1 leading-tight">
               <p
-                className="truncate text-2xs sm:text-[11px] font-medium tracking-[-0.2px]"
+                className="truncate text-3xs sm:text-2xs font-medium tracking-[-0.2px]"
                 style={{ color: brandPrimaryDark }}
               >
                 {badge.title} +
               </p>
               <p
-                className="truncate text-[13px] sm:text-[15px] font-bold tracking-[-0.3px]"
+                className="truncate text-[12px] sm:text-[14px] font-bold tracking-[-0.3px] leading-[1.15]"
                 style={{ color: brandPrimaryDark }}
               >
                 {badge.subtitle}
