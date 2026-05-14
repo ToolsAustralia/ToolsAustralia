@@ -364,14 +364,15 @@ export default function FullscreenImageViewer({
               <div
                 className="pointer-events-none absolute bottom-3 right-3 z-20 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold backdrop-blur transition-opacity duration-300 sm:text-xs"
                 style={{
-                  background: "rgba(0,0,0,0.55)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  color: "rgba(255,255,255,0.95)",
+                  background: isDark ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.75)",
+                  border: isDark ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(0,0,0,0.08)",
+                  color: isDark ? "rgba(255,255,255,0.95)" : "rgba(0,0,0,0.85)",
                 }}
                 aria-hidden
               >
                 <span
-                  className="inline-block h-2 w-2 rounded-full border border-white"
+                  className="inline-block h-2 w-2 rounded-full border"
+                  style={{ borderColor: isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.65)" }}
                   aria-hidden
                 />
                 Pinch / double-tap to zoom
