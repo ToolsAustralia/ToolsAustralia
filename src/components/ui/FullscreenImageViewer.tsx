@@ -90,14 +90,11 @@ export default function FullscreenImageViewer({
   const onGrabPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (dragStartYRef.current === null) return;
     const delta = e.clientY - dragStartYRef.current;
-    if (delta <= 0) {
-      setCardPeekOffsetPx(0);
-      return;
-    }
-    // cap drag to 0.45 * cardHeight (≈ peek max)
+    // clamp to [0, 0.45 * cardHeight]
     const cardHeight = cardElRef.current?.getBoundingClientRect().height ?? 0;
     const maxOffset = Math.max(0, cardHeight * 0.45);
-    setCardPeekOffsetPx(Math.min(delta + dragStartOffsetRef.current, maxOffset));
+    const next = Math.max(0, Math.min(delta + dragStartOffsetRef.current, maxOffset));
+    setCardPeekOffsetPx(next);
   }, []);
 
   const onGrabPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -421,7 +418,7 @@ export default function FullscreenImageViewer({
         {/* INFO CARD COLUMN (mobile: bottom ~41vh; desktop: right ~38%) */}
         <div
           ref={cardElRef}
-          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 transition-transform duration-200 ease-out lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
+          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
           style={{
             background: cardGradient,
             borderTop: `1px solid ${cardBorder}`,
@@ -437,7 +434,6 @@ export default function FullscreenImageViewer({
             onPointerMove={onGrabPointerMove}
             onPointerUp={onGrabPointerUp}
             onPointerCancel={onGrabPointerUp}
-            role="separator"
             aria-label="Drag down to expand the photo"
           >
             <div
