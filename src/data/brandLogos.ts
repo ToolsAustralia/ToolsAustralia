@@ -20,7 +20,7 @@ export type BrandId = (typeof brandLogos)[number]["id"];
 export const brandLogos: BrandLogo[] = [
   {
     id: "sidchrome",
-    name: "SIDCHROME",
+    name: "Sidchrome",
     logo: "/images/brands/sidchrome.webp",
     gradient: "from-red-800 via-red-700 to-red-900",
     imageScale: 1,
