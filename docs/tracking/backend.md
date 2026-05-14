@@ -39,6 +39,16 @@
 
 Fired server-side from purchase / cancel / signup paths. Parallel to client-side pixel for redundancy.
 
+## Subscribe-family helpers thread `requestContext`
+
+`trackPixelSubscriptionUpgrade` and `trackPixelSubscriptionDowngrade` both accept an optional `requestContext?: { client_ip_address?; client_user_agent?; fbc?; fbp?; event_source_url? }` parameter. Route handlers in `src/app/api/stripe/upgrade-subscription-payment/` and `src/app/api/stripe/downgrade-subscription/` build this via `extractRequestContext(request)` (from `@/utils/tracking/facebook-helpers`) and pass it through. The helpers attach `client_ip_address` and `client_user_agent` raw onto `user_data` so Meta receives the request-time IP and UA.
+
+Both helpers also accept `userPhone`, `userFirstName`, `userLastName`, `userState`, `userBirthdate`, `userZipCode` so the resulting CAPI event carries hashed `ph`/`fn`/`ln`/`st`/`db`/`zp`. Pass them from the in-scope User document fields (`user.mobile`, `user.firstName`, `user.lastName`, `user.state`, `user.birthdate`). Note: the User model has no `postCode`/`zipCode` field today, so `userZipCode` is unused in practice.
+
+## CompleteRegistration helper
+
+The pure helper `userDataForRegistration(u)` at `src/utils/tracking/registration-user-data.ts` builds the input passed to `prepareUserData` for `CompleteRegistration` CAPI events. It includes `state` and `birthdate` from the user document so the resulting `user_data` carries hashed `st` and `db` whenever populated. Used by all four `prepareUserData` call sites in `src/app/api/auth/register/route.ts`.
+
 ## Routes
 
 - `/api/facebook/**` — Meta-specific endpoints (likely conversions API endpoint or pixel proxy)
