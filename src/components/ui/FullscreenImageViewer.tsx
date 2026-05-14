@@ -288,7 +288,6 @@ export default function FullscreenImageViewer({
 
               <h2
                 className="text-xl font-extrabold leading-tight sm:text-2xl lg:text-3xl"
-                style={{ color: cardTextColor }}
               >
                 {activeCaption.drawName}
               </h2>
@@ -297,13 +296,11 @@ export default function FullscreenImageViewer({
                 <div>
                   <p
                     className="text-[10px] font-bold uppercase tracking-wider opacity-60"
-                    style={{ color: cardTextColor }}
                   >
                     Winner
                   </p>
                   <p
                     className="mt-0.5 text-sm font-bold leading-tight sm:text-base"
-                    style={{ color: cardTextColor }}
                   >
                     {activeCaption.winnerName}
                   </p>
@@ -311,13 +308,11 @@ export default function FullscreenImageViewer({
                 <div>
                   <p
                     className="text-[10px] font-bold uppercase tracking-wider opacity-60"
-                    style={{ color: cardTextColor }}
                   >
                     Won date
                   </p>
                   <p
                     className="mt-0.5 text-sm font-bold leading-tight tabular-nums sm:text-base"
-                    style={{ color: cardTextColor }}
                   >
                     {activeCaption.wonDate}
                   </p>
