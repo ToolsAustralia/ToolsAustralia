@@ -31,12 +31,26 @@ npm run build:upsell-manifest
 
 If you add/change files in the upsell image directories, the script must succeed before `dev` or `build` will start.
 
-## Promo multiplier integration
+## Entry calculation formula (Task 3.3)
 
-[src/utils/payment/upsell-promo-multiplier.ts](../../src/utils/payment/upsell-promo-multiplier.ts) (in [payment](../payment/)) applies promo multipliers to upsell entries. Lives in payment but reads upsell-domain config.
+Upsell entries are calculated server-side at purchase time by `calculateUpsellEntriesForOffer` in [src/utils/payment/upsell-entries-calculator.ts](../../src/utils/payment/upsell-entries-calculator.ts):
+
+```
+upsellEntries = upsellCategoryMultiplier × baseEntries(baseTemplatePackageId)
+```
+
+- **Membership / one-time / additional** upsells: multiplier comes from `UpsellMultiplierConfig` (looked up via `getUpsellMultiplier(category)`), base entries from `membershipPackages`.
+- **Mini** upsells: `baseEntries` unchanged (1:1); `getUpsellMultiplier` is never called.
+- **Active promo multipliers do NOT stack** into upsell entries. The promo system governs package purchases; upsells have their own admin-configured multiplier.
+
+The `UpsellMultiplierConfig` admin row stores three values: `membership`, `oneTime`, `additional` (defaults: 10, 2, 2).
+
+## Promo multiplier integration (display only)
+
+[src/utils/payment/upsell-promo-multiplier.ts](../../src/utils/payment/upsell-promo-multiplier.ts) (in [payment](../payment/)) resolves the promo multiplier for hero image selection (e.g. `10x-tradie-package.webp`). It is **not** used in the entry-count calculation.
 
 ## Cross-domain integration
 
 - **[rewards-redeemables](../rewards-redeemables/)** — `cancellation-upsell-eligibility.ts` lives there but governs upsell offer visibility
-- **[promo](../promo/)** — multipliers may apply to upsell entries
-- **[payment](../payment/)** — Payment Intent flow + ledger
+- **[promo](../promo/)** — multipliers apply to hero image selection only, not to entry grants
+- **[payment](../payment/)** — Payment Intent flow + ledger + `upsell-entries-calculator.ts`
