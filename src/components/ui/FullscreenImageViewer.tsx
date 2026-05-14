@@ -277,43 +277,117 @@ export default function FullscreenImageViewer({
             color: cardTextColor,
           }}
         >
-          {/* Info card body — populated in Task 3 */}
           {activeCaption ? (
-            <div className="space-y-3" data-testid="info-card-body">
-              <div className="text-xs opacity-60">(info card content — Task 3)</div>
-              <div className="text-sm font-bold">{activeCaption.drawName}</div>
-              <div className="text-sm">{activeCaption.winnerName} · {activeCaption.wonDate}</div>
+            <div className="mx-auto flex max-w-md flex-col gap-3 lg:max-w-none">
+              <span
+                className="inline-flex w-fit items-center rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white"
+                style={{ background: promoTheme.primary }}
+              >
+                {activeCaption.drawKind === "mini" ? "Mini draw" : "Major draw"}
+              </span>
+
+              <h2
+                className="text-xl font-extrabold leading-tight sm:text-2xl lg:text-3xl"
+                style={{ color: cardTextColor }}
+              >
+                {activeCaption.drawName}
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-wider opacity-60"
+                    style={{ color: cardTextColor }}
+                  >
+                    Winner
+                  </p>
+                  <p
+                    className="mt-0.5 text-sm font-bold leading-tight sm:text-base"
+                    style={{ color: cardTextColor }}
+                  >
+                    {activeCaption.winnerName}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-wider opacity-60"
+                    style={{ color: cardTextColor }}
+                  >
+                    Won date
+                  </p>
+                  <p
+                    className="mt-0.5 text-sm font-bold leading-tight tabular-nums sm:text-base"
+                    style={{ color: cardTextColor }}
+                  >
+                    {activeCaption.wonDate}
+                  </p>
+                </div>
+              </div>
             </div>
           ) : null}
 
-          {/* Thumb strip — populated in Task 3 */}
           {hasMultipleImages ? (
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-              {images.map((image, index) => {
-                const isActive = currentIndex === index;
-                return (
-                  <button
-                    key={`thumb-${image.src}-${index}`}
-                    type="button"
-                    onClick={() => onThumbClick(index)}
-                    aria-label={`Open image ${index + 1}`}
-                    aria-current={isActive ? "true" : undefined}
-                    className="relative h-12 w-12 flex-[0_0_auto] overflow-hidden rounded-md border-2 transition-all"
-                    style={{
-                      borderColor: isActive ? promoTheme.primary : thumbBorder,
-                      boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
-                    }}
-                  >
-                    <Image
-                      src={image.src}
-                      alt={image.alt || `Thumbnail ${index + 1}`}
-                      fill
-                      sizes="64px"
-                      className="object-cover"
-                    />
-                  </button>
-                );
-              })}
+            <div
+              className="mt-4 border-t pt-3"
+              style={{ borderColor: cardBorder }}
+            >
+              {/* Mobile: horizontal scroll strip */}
+              <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
+                {images.map((image, index) => {
+                  const isActive = currentIndex === index;
+                  return (
+                    <button
+                      key={`thumb-m-${image.src}-${index}`}
+                      type="button"
+                      onClick={() => onThumbClick(index)}
+                      aria-label={`Open image ${index + 1}`}
+                      aria-current={isActive ? "true" : undefined}
+                      className="relative h-12 w-12 flex-[0_0_auto] overflow-hidden rounded-md border-2 transition-all"
+                      style={{
+                        borderColor: isActive ? promoTheme.primary : thumbBorder,
+                        boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
+                      }}
+                    >
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Thumbnail ${index + 1}`}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: 3-col auto-fit grid, scrollable vertically when many */}
+              <div className="hidden grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-2 lg:grid">
+                {images.map((image, index) => {
+                  const isActive = currentIndex === index;
+                  return (
+                    <button
+                      key={`thumb-d-${image.src}-${index}`}
+                      type="button"
+                      onClick={() => onThumbClick(index)}
+                      aria-label={`Open image ${index + 1}`}
+                      aria-current={isActive ? "true" : undefined}
+                      className="relative aspect-square overflow-hidden rounded-md border-2 transition-all"
+                      style={{
+                        borderColor: isActive ? promoTheme.primary : thumbBorder,
+                        boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
+                      }}
+                    >
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Thumbnail ${index + 1}`}
+                        fill
+                        sizes="96px"
+                        className="object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
         </div>
