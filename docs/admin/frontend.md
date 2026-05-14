@@ -18,6 +18,7 @@
   - **Email column** is clickable via `ClickableUserDisplay` — opens the same `UserDetailModal` the users + past-due-history tabs use. `BlockedRow.userId` is resolved server-side in `listBlocked` (joins `User` by `stripeCustomerId` then `customerEmail`); guests render as plain text.
   - **Eligibility verdict** is computed by the shared mapper [src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts) so the post-join filter and the in-row badge can never disagree.
   - **MultiSelectFilter** popover component lives at [src/components/admin/MultiSelectFilter.tsx](../../src/components/admin/MultiSelectFilter.tsx) and powers both the eligibility and decline-code multi-selects.
+- `PromoPurchaseEntriesPreview.tsx` — read-only preview table rendered inside `AdminPromoToggle`. Accepts a `PromoMultiplierSnapshot` (`{ membershipPackages, oneTimePackages, miniPackages }`) and renders three collapsible sections (Membership / One-Time + Additional / Mini) showing base → multiplied entry counts per package. The Mini section appends a note that mini upsells are immune to the multiplier. Data is computed purely from static package data via `src/utils/admin/promo-purchase-entries-preview.ts` — no API calls.
 - (other admin-specific components)
 
 > _TODO: enumerate full component list._

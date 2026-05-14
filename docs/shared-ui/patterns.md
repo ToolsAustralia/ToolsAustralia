@@ -1,5 +1,16 @@
 # Shared UI — Patterns
 
+## Admin modal hover-preview pattern — 2026-05-14
+
+`AdminPromoToggle` (`src/components/modals/AdminPromoToggle.tsx`) gained a live per-package entry preview powered by `PromoPurchaseEntriesPreview` (`src/components/admin/PromoPurchaseEntriesPreview.tsx`).
+
+**Hover-preview pattern:** The toggle buttons fire immediately on click (no draft/save step). To let admins preview before committing, three `hoverMultiplier` states (`hoverMembership`, `hoverOneTime`, `hoverMini`) are set via `onMouseEnter`/`onMouseLeave` on each multiplier button. The preview component receives a resolved `snapshot`:
+- `hover value` if a button is hovered
+- `active promo multiplier` if no hover
+- `1` (base entries, no multiplier) if no active promo and no hover
+
+The OFF button hovers as `1` so admins can see what entries look like with the multiplier removed. The `PromoPurchaseEntriesPreview` is a pure read-only component: it accepts a `PromoMultiplierSnapshot` and delegates all row computation to `src/utils/admin/promo-purchase-entries-preview.ts`, which reads exclusively from static package data (`membershipPackages`, `miniDrawPackages`).
+
 ## Site-wide interaction smoothness — Phase 5B (2026-05-10)
 
 Phase 5B is the last-mile cleanup of the smoothness arc: image `sizes` audit, deferred-mount infra, content-visibility on below-fold sections, and modal viewport plumbing.
