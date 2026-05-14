@@ -230,9 +230,9 @@ export default function FullscreenImageViewer({
         className="flex h-full max-h-[100dvh] min-h-0 w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden overscroll-none touch-pan-x lg:flex-row"
         style={{ background: backdropBg, color: cardTextColor }}
       >
-        {/* PHOTO COLUMN (mobile: top ~50vh; desktop: left ~62%) */}
+        {/* PHOTO COLUMN (mobile: top 50vh; desktop: left ~62%) */}
         <div
-          className="relative flex min-h-0 w-full flex-col overflow-hidden lg:h-full lg:flex-[0_0_62%]"
+          className="relative flex h-[50vh] min-h-0 w-full flex-col overflow-hidden lg:h-full lg:flex-[0_0_62%]"
           style={{ background: photoBg }}
         >
           {/* Top bar — unthemed, theme-aware */}
@@ -375,9 +375,9 @@ export default function FullscreenImageViewer({
           </div>
         </div>
 
-        {/* INFO CARD COLUMN (mobile: bottom; desktop: right ~38%) */}
+        {/* INFO CARD COLUMN (mobile: bottom 50vh scrollable; desktop: right ~38%) */}
         <div
-          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
+          className="relative w-full flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
           style={{
             background: cardGradient,
             borderTop: `1px solid ${cardBorder}`,
@@ -395,7 +395,7 @@ export default function FullscreenImageViewer({
               </span>
 
               <h2
-                className="text-xl font-extrabold leading-tight sm:text-2xl lg:text-3xl"
+                className="line-clamp-3 text-base font-bold leading-snug sm:text-lg lg:text-2xl"
               >
                 {activeCaption.drawName}
               </h2>
@@ -435,7 +435,7 @@ export default function FullscreenImageViewer({
               >
                 Prize
               </span>
-              <h2 className="text-xl font-extrabold leading-tight sm:text-2xl lg:text-3xl">
+              <h2 className="line-clamp-3 text-base font-bold leading-snug sm:text-lg lg:text-2xl">
                 {title}
               </h2>
             </div>
@@ -446,8 +446,8 @@ export default function FullscreenImageViewer({
               className="mt-4 border-t pt-3"
               style={{ borderColor: cardBorder }}
             >
-              {/* Stacked rows on both viewports — auto-fit grows columns to fill width */}
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(60px,1fr))] gap-2 lg:grid-cols-[repeat(auto-fit,minmax(72px,1fr))]">
+              {/* Fixed-size thumbs that wrap — never stretch */}
+              <div className="flex flex-wrap gap-2">
                 {images.map((image, index) => {
                   const isActive = currentIndex === index;
                   return (
@@ -457,7 +457,7 @@ export default function FullscreenImageViewer({
                       onClick={() => onThumbClick(index)}
                       aria-label={`Open image ${index + 1}`}
                       aria-current={isActive ? "true" : undefined}
-                      className="relative aspect-square overflow-hidden rounded-md border-2 transition-all"
+                      className="relative h-14 w-14 flex-none overflow-hidden rounded-md border-2 transition-all sm:h-16 sm:w-16"
                       style={{
                         borderColor: isActive ? promoTheme.primary : thumbBorder,
                         boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
@@ -467,7 +467,7 @@ export default function FullscreenImageViewer({
                         src={image.src}
                         alt={image.alt || `Thumbnail ${index + 1}`}
                         fill
-                        sizes="(min-width: 1024px) 96px, 72px"
+                        sizes="64px"
                         className="object-cover"
                       />
                     </button>
