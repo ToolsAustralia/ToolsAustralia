@@ -377,7 +377,7 @@ export default function FullscreenImageViewer({
 
         {/* INFO CARD COLUMN (mobile: bottom 50vh scrollable; desktop: right ~38%) */}
         <div
-          className="relative w-full flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
+          className="relative w-full flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
           style={{
             background: cardGradient,
             borderTop: `1px solid ${cardBorder}`,
