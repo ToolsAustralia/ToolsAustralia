@@ -286,7 +286,6 @@ export default function FullscreenImageViewer({
                   color: pillText,
                 }}
               >
-                {title ? `${title} · ` : ""}
                 {currentIndex + 1} / {images.length}
               </div>
             ) : (
@@ -485,6 +484,18 @@ export default function FullscreenImageViewer({
                 </div>
               </div>
             </div>
+          ) : title ? (
+            <div className="mx-auto flex max-w-md flex-col gap-3 lg:max-w-none">
+              <span
+                className="inline-flex w-fit items-center rounded-full px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white"
+                style={{ background: promoTheme.primary }}
+              >
+                Prize
+              </span>
+              <h2 className="text-xl font-extrabold leading-tight sm:text-2xl lg:text-3xl">
+                {title}
+              </h2>
+            </div>
           ) : null}
 
           {hasMultipleImages ? (
@@ -492,42 +503,13 @@ export default function FullscreenImageViewer({
               className="mt-4 border-t pt-3"
               style={{ borderColor: cardBorder }}
             >
-              {/* Mobile: horizontal scroll strip */}
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden">
+              {/* Stacked rows on both viewports — auto-fit grows columns to fill width */}
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(60px,1fr))] gap-2 lg:grid-cols-[repeat(auto-fit,minmax(72px,1fr))]">
                 {images.map((image, index) => {
                   const isActive = currentIndex === index;
                   return (
                     <button
-                      key={`thumb-m-${image.src}-${index}`}
-                      type="button"
-                      onClick={() => onThumbClick(index)}
-                      aria-label={`Open image ${index + 1}`}
-                      aria-current={isActive ? "true" : undefined}
-                      className="relative h-12 w-12 flex-[0_0_auto] overflow-hidden rounded-md border-2 transition-all"
-                      style={{
-                        borderColor: isActive ? promoTheme.primary : thumbBorder,
-                        boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
-                      }}
-                    >
-                      <Image
-                        src={image.src}
-                        alt={image.alt || `Thumbnail ${index + 1}`}
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Desktop: 3-col auto-fit grid, scrollable vertically when many */}
-              <div className="hidden grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-2 lg:grid">
-                {images.map((image, index) => {
-                  const isActive = currentIndex === index;
-                  return (
-                    <button
-                      key={`thumb-d-${image.src}-${index}`}
+                      key={`thumb-${image.src}-${index}`}
                       type="button"
                       onClick={() => onThumbClick(index)}
                       aria-label={`Open image ${index + 1}`}
@@ -542,7 +524,7 @@ export default function FullscreenImageViewer({
                         src={image.src}
                         alt={image.alt || `Thumbnail ${index + 1}`}
                         fill
-                        sizes="96px"
+                        sizes="(min-width: 1024px) 96px, 72px"
                         className="object-cover"
                       />
                     </button>
