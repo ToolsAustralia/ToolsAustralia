@@ -159,6 +159,9 @@ function RotatingToolsetCard() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    // startInterval only closes over prefersReducedMotion (in deps) and the stable
+    // intervalRef, so omitting it from deps is safe. Including it would re-create
+    // the closure every render and reset the interval on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefersReducedMotion]);
 
@@ -181,13 +184,10 @@ function RotatingToolsetCard() {
   return (
     <div
       className="relative overflow-hidden rounded-[10px] border border-transparent dark:border-neutral-700 p-4 sm:p-6 lg:p-11 transition-colors duration-500"
-      style={
-        {
-          backgroundColor: "#f7fafc",
-          backgroundImage: `linear-gradient(0deg, ${tintLight}, ${tintLight})`,
-          ["--rot-tint-dark" as string]: tintDark,
-        } as React.CSSProperties
-      }
+      style={{
+        backgroundColor: "#f7fafc",
+        backgroundImage: `linear-gradient(0deg, ${tintLight}, ${tintLight})`,
+      }}
     >
       {/* Dark-mode surface override — neutral-900 base with the darker tint laid on top. */}
       <div className="pointer-events-none absolute inset-0 hidden dark:block bg-neutral-900" aria-hidden />
@@ -283,7 +283,7 @@ function RotatingToolsetCard() {
         </p>
 
         {/* Dot indicators — each button is a ≥40×40 hit area with a centered 10×10 dot */}
-        <div className="mt-4 sm:mt-5 flex items-center gap-1" role="tablist" aria-label="Toolset showcase">
+        <div className="mt-4 sm:mt-5 flex items-center gap-1" aria-label="Toolset showcase">
           {TOOLSETS.map((t, i) => {
             const isActive = i === activeIndex;
             const dotBrand = getLandingPageThemeFromSlug(`${t}-milwaukee`).primary;
@@ -291,9 +291,8 @@ function RotatingToolsetCard() {
               <button
                 key={t}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
                 aria-label={`Show ${TOOLSET_DISPLAY_NAME[t]} toolset`}
+                aria-current={isActive ? "true" : undefined}
                 onClick={() => handleDotClick(i)}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
               >
