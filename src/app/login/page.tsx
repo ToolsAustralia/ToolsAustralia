@@ -288,11 +288,11 @@ function RotatingToolsetCard() {
           </div>
 
           {/* Text column (left on lg, below image on mobile/tablet) */}
-          <div className="order-2 lg:order-1 mt-4 lg:mt-0 flex flex-col items-center lg:items-start text-center lg:text-left lg:flex-1 lg:min-w-0">
-            <h2 className="text-[20px] sm:text-[22px] lg:text-[26px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.5px] leading-[1.15]">
+          <div className="order-2 lg:order-1 mt-4 lg:mt-0 flex w-full min-w-0 flex-col items-center lg:items-start text-center lg:text-left lg:flex-1">
+            <h2 className="w-full text-[17px] sm:text-[20px] lg:text-[26px] font-bold text-neutral-900 dark:text-neutral-50 tracking-[-0.5px] leading-[1.2] break-words">
               Earn Partner Discounts &amp; Win Tools
             </h2>
-            <p className="mt-2 text-[12px] sm:text-[13px] lg:text-[14px] text-[#475569] dark:text-neutral-300 leading-[1.5] max-w-[300px] lg:max-w-none">
+            <p className="mt-2 w-full max-w-[300px] lg:max-w-none text-[12px] sm:text-[13px] lg:text-[14px] text-[#475569] dark:text-neutral-300 leading-[1.5]">
               Become a member to enter our major draws for premium toolsets and unlock exclusive discounts across our partner brands.
             </p>
 
@@ -325,8 +325,8 @@ function RotatingToolsetCard() {
         </div>
       </div>
 
-      {/* Animated badge chip — synced with toolset rotation, anchored bottom-right outside card */}
-      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 rounded-[10px] bg-white dark:bg-neutral-900 px-2 py-1.5 sm:px-3 sm:py-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700">
+      {/* Animated badge chip — fixed size; only inner content swaps per brand. */}
+      <div className="absolute bottom-[-10px] right-3 sm:bottom-[-12px] sm:right-5 z-20 w-[180px] sm:w-[210px] h-[52px] sm:h-[64px] rounded-[10px] bg-white dark:bg-neutral-900 px-2 sm:px-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={`badge-${active}`}
@@ -334,7 +334,7 @@ function RotatingToolsetCard() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -8 }}
             transition={{ duration: 0.3 }}
-            className="flex items-center gap-2"
+            className="flex h-full items-center gap-2"
           >
             <div
               className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full transition-colors duration-300"
@@ -342,15 +342,15 @@ function RotatingToolsetCard() {
             >
               <BadgeIcon className={cn("h-4 w-4 sm:h-5 sm:w-5", scheme.buttonText)} strokeWidth={2.2} />
             </div>
-            <div className="leading-tight">
+            <div className="min-w-0 flex-1 leading-tight">
               <p
-                className="text-2xs sm:text-[11px] font-medium tracking-[-0.2px]"
+                className="truncate text-2xs sm:text-[11px] font-medium tracking-[-0.2px]"
                 style={{ color: brandPrimaryDark }}
               >
                 {badge.title} +
               </p>
               <p
-                className="text-[13px] sm:text-[15px] font-bold tracking-[-0.3px] whitespace-nowrap"
+                className="truncate text-[13px] sm:text-[15px] font-bold tracking-[-0.3px]"
                 style={{ color: brandPrimaryDark }}
               >
                 {badge.subtitle}
