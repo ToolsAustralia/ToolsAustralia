@@ -9,6 +9,7 @@ import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/
 import { getCardBorderStyle, type getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
 import { cn } from "@/utils/cn";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import FeaturesPreview from "./FeaturesPreview";
 
 type ColorScheme = ReturnType<typeof getPackageColorSchemeForPromo>;
@@ -157,7 +158,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
             className="text-base sm:text-lg font-bold tracking-wide"
             style={colorScheme.textGradientStyle ?? { color: accentHex }}
           >
-            {plan.name}
+            {getPackageDisplayName(plan)}
           </h3>
         </div>
         {plan.subtitle && (

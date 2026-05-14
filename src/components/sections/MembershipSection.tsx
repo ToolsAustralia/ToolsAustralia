@@ -13,6 +13,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
@@ -671,29 +672,12 @@ export default function MembershipSection({
                           <div className={cn("h-full flex flex-col pt-6 px-4 py-1.5 uppercase", isVip ? "relative z-10" : "")}>
                             {/* Plan Header - Centered */}
                             <div className="text-center mb-0.5">
-                              {(() => {
-                                const isAdditionalPackage =
-                                  plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-                                const cleanedPlanName = isAdditionalPackage
-                                  ? plan.name.replace(/Additional\s*/i, "").trim()
-                                  : plan.name;
-
-                                return (
-                                  <h3
-                                    className={cn("font-sans font-bold mb-0", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]")}
-                                    style={colorScheme.textGradientStyle}
-                                  >
-                                    {isAdditionalPackage ? (
-                                      <>
-                                        <span className="block">Additional</span>
-                                        <span className="block">{cleanedPlanName}</span>
-                                      </>
-                                    ) : (
-                                      plan.name
-                                    )}
-                                  </h3>
-                                );
-                              })()}
+                              <h3
+                                className={cn("font-sans font-bold mb-0", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[15px] sm:text-[16px]" : "text-[19px] sm:text-[20px]")}
+                                style={colorScheme.textGradientStyle}
+                              >
+                                {getPackageDisplayName(plan)}
+                              </h3>
                               {plan.subtitle && (
                                 <p
                                   className={cn("font-sans text-[14px] sm:text-[16px] font-medium mb-0.5", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
@@ -778,7 +762,7 @@ export default function MembershipSection({
                                     handlePlanSelect(plan);
                                   }}
                                   disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
-                                  aria-label={`Select ${plan.name} for $${plan.price}`}
+                                  aria-label={`Select ${getPackageDisplayName(plan)} for $${plan.price}`}
                                 >
                                   <div className={cn("flex items-baseline gap-1 justify-center", colorScheme.buttonText)}>
                                     <span className="font-bold text-[20px] sm:text-lg">${plan.price}</span>
@@ -826,8 +810,8 @@ export default function MembershipSection({
                                     buttonText = "Update payment";
                                   } else if (hasActiveSubscription && activeTab === "membership") {
                                     if (hierarchy.isCurrent) buttonText = "Current Plan";
-                                    else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${plan.name}`;
-                                    else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
+                                    else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${getPackageDisplayName(plan)}`;
+                                    else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${getPackageDisplayName(plan)}`;
                                   }
 
                                   const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;
@@ -971,29 +955,12 @@ export default function MembershipSection({
                       ></div>
                       {/* Plan Header - Centered */}
                       <div className="text-center ">
-                        {(() => {
-                          const isAdditionalPackage =
-                            plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-                          const cleanedPlanName = isAdditionalPackage
-                            ? plan.name.replace(/Additional\s*/i, "").trim()
-                            : plan.name;
-
-                          return (
-                            <h3
-                              className={cn("font-sans font-bold mb-2", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]")}
-                              style={colorScheme.textGradientStyle}
-                            >
-                              {isAdditionalPackage ? (
-                                <>
-                                  <span className="block">Additional</span>
-                                  <span className="block">{cleanedPlanName}</span>
-                                </>
-                              ) : (
-                                plan.name
-                              )}
-                            </h3>
-                          );
-                        })()}
+                        <h3
+                          className={cn("font-sans font-bold mb-2", colorScheme.textGradientStyle ? "" : colorScheme.text, "leading-tight", activeTab === "one-time" ? "text-[14px] sm:text-[16px]" : "text-[16px] sm:text-[20px]")}
+                          style={colorScheme.textGradientStyle}
+                        >
+                          {getPackageDisplayName(plan)}
+                        </h3>
                         {plan.subtitle && (
                           <p
                             className={cn("font-sans text-[12px] sm:text-[14px] font-medium mb-4", colorScheme.textGradientStyle ? "" : colorScheme.textMuted)}
@@ -1088,7 +1055,7 @@ export default function MembershipSection({
                               handlePlanSelect(plan);
                             }}
                             disabled={isCurrentSubscription(plan) || (!hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly)}
-                            aria-label={`Select ${plan.name} for $${plan.price}`}
+                            aria-label={`Select ${getPackageDisplayName(plan)} for $${plan.price}`}
                           >
                             <div className={cn("flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0", colorScheme.buttonText)}>
                               <span className="text-base sm:text-lg lg:text-xl font-bold">${plan.price}</span>
@@ -1136,8 +1103,8 @@ export default function MembershipSection({
                               buttonText = "Update payment";
                             } else if (hasActiveSubscription && activeTab === "membership") {
                               if (hierarchy.isCurrent) buttonText = "Current Plan";
-                              else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${plan.name}`;
-                              else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${plan.name}`;
+                              else if (hierarchy.isDowngrade) buttonText = `Downgrade to ${getPackageDisplayName(plan)}`;
+                              else if (hierarchy.isUpgrade) buttonText = `Upgrade to ${getPackageDisplayName(plan)}`;
                             }
 
                             const isCtaDisabled = hasActiveSubscription && hierarchy.isCurrent;

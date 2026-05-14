@@ -4,6 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { CheckCircle, Check } from "lucide-react";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import {
   getPackageColorSchemeForPromo,
@@ -109,18 +110,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                 {/* Package Name - Left, two rows (same row as entries & price) */}
                 <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={cardTextStyle}>
-                  {(() => {
-                    const parts = pkg.name.split(" ");
-                    if (parts[0]?.toLowerCase() === "additional" && parts.length > 1) {
-                      return (
-                        <>
-                          <span className="block">Additional</span>
-                          <span className="block">{parts.slice(1).join(" ")}</span>
-                        </>
-                      );
-                    }
-                    return <span>{pkg.name}</span>;
-                  })()}
+                  <span>{getPackageDisplayName(pkg)}</span>
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}

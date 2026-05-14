@@ -3,6 +3,7 @@
 import React from "react";
 import { CheckCircle, Zap, Gift } from "lucide-react";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import {
   getPackageColorSchemeForPromo,
   getCardBorderStyle,
@@ -37,7 +38,7 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage, variantC
       }}
     >
       <h4 className="text-xs sm:text-sm font-bold mb-2 sm:mb-3" style={benefitsTextStyle}>
-        {selectedPackage.name} Benefits
+        {getPackageDisplayName(selectedPackage)} Benefits
       </h4>
       <div className="space-y-2 sm:space-y-2.5">
         <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={benefitsTextStyle}>

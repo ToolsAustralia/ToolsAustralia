@@ -741,7 +741,7 @@ export default function MiniDrawPackages({
                 {/* Hover tooltip (desktop) */}
                 {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
                   <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-56 bg-gray-900 text-white text-sm rounded-xl p-3 shadow-2xl pointer-events-none">
-                    <div className="font-bold text-yellow-400 mb-1">{pkg.name}</div>
+                    <div className="font-bold text-yellow-400 mb-1">{pkg.displayName ?? pkg.name}</div>
                     <div className="text-gray-300 text-xs">
                       ${pkg.price} &middot; {pkg.entries}{" "}
                       {pkg.entries === 1 ? "Free Entry" : "Free Entries"}

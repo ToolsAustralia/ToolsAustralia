@@ -2,6 +2,12 @@
 
 Recurring conventions you'll see throughout subscription code.
 
+## P0. Package display name helper — 2026-05-14
+
+`src/utils/membership/getDisplayName.ts` exports `getPackageDisplayName(pkg)`. It strips the `"Additional "` prefix used internally on member-only one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`).
+
+**Rule:** All catalog UI that renders a human-visible package name must call `getPackageDisplayName(plan)` instead of reading `plan.name` directly. Internal state, Stripe metadata, order history, receipts, and admin views continue to use `plan.name` unchanged. The helper accepts any object with a `name: string` field (compatible with both `StaticMembershipPackage` and `LocalMembershipPlan`).
+
 ## Site-wide interaction smoothness — Phase 5B (2026-05-10)
 
 `CancellationUpsellModal/DowngradeCard.tsx` and `DowngradeConfirmModal/Hero.tsx` had their package-icon `<Image>` elements without `sizes` hints; Phase 5B added `sizes="48px"` / `sizes="44px"` matching their fixed cells. Markup only — no policy or transition logic touched.

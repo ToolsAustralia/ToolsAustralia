@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
@@ -92,7 +93,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({ i
             className="text-xl sm:text-2xl font-bold"
             style={colorScheme.packageInclusionTextStyle ?? colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
           >
-            {plan.name}
+            {getPackageDisplayName(plan)}
           </h3>
         </div>
 

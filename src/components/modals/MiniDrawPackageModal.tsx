@@ -35,7 +35,7 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
     >
       <div className="flex max-h-[min(85vh,calc(100vh-3rem))] min-h-[280px] flex-col text-sm sm:text-base rounded-xl p-4 sm:p-6 overflow-visible">
         <div className="flex shrink-0 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 font-bold text-base sm:text-lg text-yellow-400 break-words pr-1">{pkg.name}</div>
+          <div className="min-w-0 flex-1 font-bold text-base sm:text-lg text-yellow-400 break-words pr-1">{pkg.displayName ?? pkg.name}</div>
           <button
             type="button"
             onClick={onClose}
