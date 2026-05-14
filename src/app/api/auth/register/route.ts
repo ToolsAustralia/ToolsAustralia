@@ -18,6 +18,7 @@ import {
 } from "@/utils/tracking/facebook-helpers";
 import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
+import { userDataForRegistration } from "@/utils/tracking/registration-user-data";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
@@ -330,13 +331,7 @@ export async function POST(request: NextRequest) {
           try {
             const eventTime = Math.floor(Date.now() / 1000);
 
-            const userData = prepareUserData({
-              email: existingUser.email,
-              phone: existingUser.mobile,
-              firstName: existingUser.firstName,
-              lastName: existingUser.lastName,
-              externalId: existingUser._id.toString(),
-            });
+            const userData = prepareUserData(userDataForRegistration(existingUser));
 
             const ctx = extractRequestContext(request);
             if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
@@ -452,13 +447,7 @@ export async function POST(request: NextRequest) {
 
       try {
         const eventTime = Math.floor(Date.now() / 1000);
-        const userData = prepareUserData({
-          email: existingUser.email,
-          phone: existingUser.mobile,
-          firstName: existingUser.firstName,
-          lastName: existingUser.lastName,
-          externalId: existingUser._id.toString(),
-        });
+        const userData = prepareUserData(userDataForRegistration(existingUser));
         const ctx = extractRequestContext(request);
         if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
         if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
@@ -544,13 +533,7 @@ export async function POST(request: NextRequest) {
 
       try {
         const eventTime = Math.floor(Date.now() / 1000);
-        const userData = prepareUserData({
-          email: existingUser.email,
-          phone: existingUser.mobile,
-          firstName: existingUser.firstName,
-          lastName: existingUser.lastName,
-          externalId: existingUser._id.toString(),
-        });
+        const userData = prepareUserData(userDataForRegistration(existingUser));
         const ctx = extractRequestContext(request);
         if (ctx.client_ip_address) userData.client_ip_address = ctx.client_ip_address;
         if (ctx.client_user_agent) userData.client_user_agent = ctx.client_user_agent;
@@ -707,13 +690,7 @@ export async function POST(request: NextRequest) {
 
       // 2. Track Conversions API (server-side)
       try {
-        const userData = prepareUserData({
-          email: newUser.email,
-          phone: newUser.mobile,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-          externalId: newUser._id.toString(),
-        });
+        const userData = prepareUserData(userDataForRegistration(newUser));
 
         // Extract IP, user agent, click ID (fbc), and fbp from request for better match quality
         const ctx = extractRequestContext(request);

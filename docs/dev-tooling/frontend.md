@@ -3,6 +3,7 @@
 ## Pages
 
 - `src/app/dev/` — dev panel
+- `src/app/dev/modals/` — interactive modal/overlay gallery
 - `src/app/test-pixels/` — pixel testing
 
 ## Components

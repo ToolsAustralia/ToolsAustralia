@@ -80,6 +80,7 @@
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
     "test:facebook-capi": "tsx src/lib/__tests__/facebook.test.ts",
+    "test:facebook-emq": "tsx src/utils/tracking/__tests__/facebook-emq.test.ts",
     "test:tracking-dispatch": "tsx src/lib/tracking/__tests__/dispatch.test.ts",
     "test:advanced-matching": "tsx src/lib/tracking/__tests__/advanced-matching.test.ts",
     "test:facebook-fbc-extract": "tsx src/utils/tracking/__tests__/extractFBCFromRequest.test.ts",

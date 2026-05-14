@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 // Extended Stripe subscription interface with period fields
 interface StripeSubscriptionWithPeriods extends Stripe.Subscription {
@@ -325,6 +326,7 @@ export async function POST(request: NextRequest) {
       // ✅ NEW: Track pixel subscription upgrade event
       try {
         const { trackPixelSubscriptionUpgrade } = await import("@/utils/tracking/pixel-purchase-tracking");
+        const requestContext = extractRequestContext(request);
         await trackPixelSubscriptionUpgrade({
           oldValue: currentPackage.price,
           newValue: newPackage.price,
@@ -336,11 +338,16 @@ export async function POST(request: NextRequest) {
           subscriptionId: updatedSubscription.id,
           userId: user._id.toString(),
           userEmail: user.email,
+          userPhone: user.mobile,
+          userFirstName: user.firstName,
+          userLastName: user.lastName,
+          userState: user.state,
+          userBirthdate: user.birthdate,
           paymentIntentId: paymentIntent?.id,
           prorationAmount: prorationAmount / 100,
           entriesAdded: (newPackage.entriesPerMonth || 0) - (currentPackage.entriesPerMonth || 0),
+          requestContext,
         });
-        // console.log(`📊 Pixel subscription upgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
       } catch (pixelError) {
         console.error("❌ Pixel upgrade tracking failed (non-blocking):", pixelError);
       }
