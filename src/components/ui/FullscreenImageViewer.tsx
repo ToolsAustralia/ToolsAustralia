@@ -69,6 +69,49 @@ export default function FullscreenImageViewer({
 
   const [showZoomHint, setShowZoomHint] = useState(false);
 
+  const [cardPeekOffsetPx, setCardPeekOffsetPx] = useState(0);
+  const dragStartYRef = useRef<number | null>(null);
+  const dragStartOffsetRef = useRef(0);
+  const cardElRef = useRef<HTMLDivElement | null>(null);
+
+  const SNAP_THRESHOLD_RATIO = 0.5;
+
+  useEffect(() => {
+    if (!isOpen) setCardPeekOffsetPx(0);
+  }, [isOpen]);
+
+  const onGrabPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 1024) return; // desktop: handle is hidden, no-op
+    dragStartYRef.current = e.clientY;
+    dragStartOffsetRef.current = cardPeekOffsetPx;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [cardPeekOffsetPx]);
+
+  const onGrabPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current === null) return;
+    const delta = e.clientY - dragStartYRef.current;
+    if (delta <= 0) {
+      setCardPeekOffsetPx(0);
+      return;
+    }
+    // cap drag to 0.45 * cardHeight (≈ peek max)
+    const cardHeight = cardElRef.current?.getBoundingClientRect().height ?? 0;
+    const maxOffset = Math.max(0, cardHeight * 0.45);
+    setCardPeekOffsetPx(Math.min(delta + dragStartOffsetRef.current, maxOffset));
+  }, []);
+
+  const onGrabPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current === null) return;
+    dragStartYRef.current = null;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    // snap to nearest
+    const cardHeight = cardElRef.current?.getBoundingClientRect().height ?? 0;
+    const maxOffset = Math.max(0, cardHeight * 0.45);
+    setCardPeekOffsetPx((current) =>
+      current > maxOffset * SNAP_THRESHOLD_RATIO ? maxOffset : 0
+    );
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       setShowZoomHint(false);
@@ -377,13 +420,32 @@ export default function FullscreenImageViewer({
 
         {/* INFO CARD COLUMN (mobile: bottom ~41vh; desktop: right ~38%) */}
         <div
-          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
+          ref={cardElRef}
+          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 transition-transform duration-200 ease-out lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
           style={{
             background: cardGradient,
             borderTop: `1px solid ${cardBorder}`,
             color: cardTextColor,
+            transform: `translateY(${cardPeekOffsetPx}px)`,
+            transition: dragStartYRef.current === null ? "transform 200ms ease-out" : "none",
           }}
         >
+          {/* Grab handle — mobile only */}
+          <div
+            className="mx-auto mb-3 flex h-6 w-full max-w-[72px] cursor-grab items-center justify-center touch-none lg:hidden"
+            onPointerDown={onGrabPointerDown}
+            onPointerMove={onGrabPointerMove}
+            onPointerUp={onGrabPointerUp}
+            onPointerCancel={onGrabPointerUp}
+            role="separator"
+            aria-label="Drag down to expand the photo"
+          >
+            <div
+              className="h-1 w-12 rounded-full"
+              style={{ background: isDark ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.18)" }}
+            />
+          </div>
+
           {activeCaption ? (
             <div className="mx-auto flex max-w-md flex-col gap-3 lg:max-w-none">
               <span
