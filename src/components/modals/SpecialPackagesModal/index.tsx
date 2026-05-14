@@ -50,6 +50,7 @@ import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-disco
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
@@ -437,7 +438,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       if (resolvedPaymentIntentId) {
         setPaymentIntentId(resolvedPaymentIntentId);
         setPurchasePaymentMethodId(paymentMethodIdToCharge);
-        setProcessingPackageName(pkg.name);
+        setProcessingPackageName(getReceiptLabel(pkg));
         setShowPaymentProcessing(true);
       } else {
         const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [

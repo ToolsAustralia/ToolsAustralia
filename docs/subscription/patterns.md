@@ -2,11 +2,26 @@
 
 Recurring conventions you'll see throughout subscription code.
 
-## P0. Package display name helper — 2026-05-14
+## P0. Package display name helpers — 2026-05-14
 
-`src/utils/membership/getDisplayName.ts` exports `getPackageDisplayName(pkg)`. It strips the `"Additional "` prefix used internally on member-only one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`).
+Two helpers in `src/utils/membership/` control how package names are shown to users:
 
-**Rule:** All catalog UI that renders a human-visible package name must call `getPackageDisplayName(plan)` instead of reading `plan.name` directly. Internal state, Stripe metadata, order history, receipts, and admin views continue to use `plan.name` unchanged. The helper accepts any object with a `name: string` field (compatible with both `StaticMembershipPackage` and `LocalMembershipPlan`).
+### `getPackageDisplayName(pkg)` — catalog surfaces
+`src/utils/membership/getDisplayName.ts`. Strips the `"Additional "` prefix from member-only one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`). Used exclusively in catalog cards, modal headers, and plan selectors — anywhere the page context already implies draw scope.
+
+**Rule:** All catalog UI that renders a human-visible package name must call `getPackageDisplayName(plan)` instead of reading `plan.name` directly.
+
+### `getReceiptLabel(pkg)` / `getReceiptLabelByPackageId(packageId, resolvers)` — receipt surfaces
+`src/utils/membership/getReceiptLabel.ts`. Appends a context suffix so the same display name is distinguishable across SKUs in a purchase history view:
+
+| SKU | Input `name` | `getReceiptLabel` output |
+|---|---|---|
+| `tradie-pack` | "Tradie Pack" | "Tradie Pack" |
+| `additional-tradie-pack` | "Additional Tradie Pack" | "Tradie Pack (Member)" |
+| `additional-tradie-pack-mini` | "Additional Tradie Pack (Mini Draw)" | "Tradie Pack (Mini Draw)" |
+| `mini-pack-1` | "Mini Pack 1" | "Mini Pack 1" |
+
+**Rule:** Post-payment success screens, Klaviyo invoice email line items, and any order-history row that renders a package name must call `getReceiptLabel(pkg)` or `getReceiptLabelByPackageId(id, { membership: getPackageById, mini: getMiniDrawPackageById })`. Stripe metadata, Stripe descriptions, admin views, and internal event payloads (`packageName` on PaymentEvent) continue to use `pkg.name` unchanged.
 
 ## Site-wide interaction smoothness — Phase 5B (2026-05-10)
 

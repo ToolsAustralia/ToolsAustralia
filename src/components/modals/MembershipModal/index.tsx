@@ -77,6 +77,8 @@ import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+import { getReceiptLabelByPackageId } from "@/utils/membership/getReceiptLabel";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
@@ -3169,7 +3171,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
 
             setPaymentIntentId(paymentIntentId);
-            setProcessingPackageName(activePlan.name);
+            setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
             setProcessingPackageType("mini-draw");
             setShowPaymentProcessing(true);
           } else {
@@ -3368,7 +3370,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
 
             setPaymentIntentId(paymentIntentId);
-            setProcessingPackageName(activePlan.name);
+            setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
             setProcessingPackageType("one-time");
             setShowPaymentProcessing(true);
           } else {

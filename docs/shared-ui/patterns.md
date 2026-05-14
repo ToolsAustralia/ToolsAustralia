@@ -1,12 +1,22 @@
 # Shared UI — Patterns
 
-## Package catalog display names — 2026-05-14
+## Package display names — 2026-05-14
 
+Two helpers control how package names are shown to users. See `docs/subscription/patterns.md P0` for the full rule summary.
+
+### Catalog surfaces — `getPackageDisplayName(plan)`
 Catalog-facing components (`MembershipSection`, `PackageSelectionModal/PlanCard`, `SpecialPackagesModal/PackagesGrid`, `SpecialPackagesModal/BenefitsPanel`, `PackageInclusionsSlideUp`) render package names via `getPackageDisplayName(plan)` from `src/utils/membership/getDisplayName.ts` instead of reading `plan.name` directly. This strips the `"Additional "` prefix from member-only one-time packs so users see "Tradie Pack" rather than "Additional Tradie Pack".
 
 Mini-draw package modals (`MiniDrawPackageModal`, `MiniDrawPackages` tooltip) use `pkg.displayName ?? pkg.name` since `MiniDrawPackage` carries its own `displayName` field.
 
-Do NOT apply this transform to order history, receipts, admin pages, cart line items, or internal state — those retain the raw `name`.
+### Receipt surfaces — `getReceiptLabel(pkg)` / `getReceiptLabelByPackageId(id, resolvers)`
+Post-payment success screens and Klaviyo invoice email line items use `getReceiptLabel` from `src/utils/membership/getReceiptLabel.ts` to append a context suffix (`(Member)` or `(Mini Draw)`) so users can distinguish colliding display names in their purchase history.
+
+- `MiniDrawPackages.tsx` — `setProcessingPackageName(getReceiptLabel(pkg))` on purchase success.
+- `SpecialPackagesModal` — `setProcessingPackageName(getReceiptLabel(pkg))` on purchase success.
+- `MembershipModal` — `setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }))` for one-time and mini-draw purchases.
+
+Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, or internal event payloads — those retain the raw `name`.
 
 ## Admin modal hover-preview pattern — 2026-05-14
 

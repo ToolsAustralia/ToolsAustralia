@@ -15,6 +15,7 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -332,7 +333,7 @@ export default function MiniDrawPackages({
         setSuccessToastShown(false);
 
         setPaymentIntentId(extractedPaymentIntentId);
-        setProcessingPackageName(pkg.name);
+        setProcessingPackageName(getReceiptLabel(pkg));
         setShowPaymentProcessing(true);
 
         // Store original purchase context for upsell (only after webhook confirms)
