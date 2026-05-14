@@ -46,3 +46,30 @@ Countdown timers in promo components — `GiveawayCountdownTimer`, `FloatingCoun
 Other migration notes: prev/next buttons rewired from `mainSwiperRef.current.slidePrev/Next()` to `mainApi.scrollPrev/Next()`; `mainCanSlidePrev/Next` and `thumbCanSlidePrev/Next` derived from `canScrollPrev()` / `canScrollNext()` via `select` / `reInit` event handlers; viewport divs keep the `main-swiper` / `thumbs-swiper` className for any pre-migration shared CSS in [`globals.css`](../../src/app/globals.css) (Swiper-internal selectors no longer match anything in this component but still apply to `MajorDrawSection` until Phase 4); `touch-action: pan-y pinch-zoom` set on each viewport for iOS Safari vertical-scroll passthrough; `data-carousel="true"` set so the print stylesheet styles them as static. Three previously-missing `<Image sizes=>` attributes added (first-prize text banner; two Stripe checkout images).
 
 Phase 3's `FullscreenImageViewer` and `MiniDrawImageGallery` Swiper migrations are intentionally still pending — they don't share the click-snapback / unreachable-trailing-items bugs.
+
+## PromoTrustBar — Workshop Caution Plaque redesign (2026-05-14)
+
+[`PromoTrustBar`](../../src/components/sections/promo/PromoTrustBar.tsx) renders the thin strip at the top of promo pages. The countdown lives in [`GiveawayCountdownTimer`](../../src/components/sections/promo/GiveawayCountdownTimer.tsx), so this bar is intentionally **static** — no animation, no countdown numbers. Urgency is signalled by typography, material, and a hazard-stripe channel that escalates per tier.
+
+**Shell** (shared across every state, via the internal `WorkshopShell` helper):
+- Brushed-steel body (`STEEL_BG` + `STEEL_GRAIN` CSS gradients)
+- Brass rivets in the four inset corners (`<Rivet />`)
+- Top + bottom edge bands:
+  - **Default state (no urgency)** — 2 px brass rule gradient. Hazard yellow is *absent* so it retains urgency meaning when it appears.
+  - **Urgency states** — diagonal hazard stripe band whose thickness escalates: `finalHours` 6 px → `drawnTomorrow` 8 px → `drawnTonight` / `frozen` 10 px. Frozen swaps the yellow+black hazard for a red+yellow `HAZARD_STRIPE_FROZEN` variant.
+
+**Default state content**: three trust items (Trophy / Shield-link / Calendar) on the steel substrate. Icons use `theme.primary` from [`usePromoTheme`](../../src/stores/usePromoThemeStore.ts); text is white stencil (Oswald/Bebas Neue family). The cert link host is intentionally **not themed** — kept white at every breakpoint so the attribution link reads cleanly on dark steel regardless of brand colour.
+
+The cert item is **visible at every breakpoint** in the normal state. Mobile + tablet render just the link host (`randomdraws.com.au`); desktop (`≥lg`) prepends the `Govt-certified draws · ` prefix. Text items also swap their compact (`lineMobile`) vs verbose (`lineDesktop`) variants at the same `lg:` breakpoint, so the 640 px tablet width fits all three items without overlap. The urgency state replaces the entire trust-items layout with the brass-plaque deadline strip, so the cert is implicitly hidden during `finalHours` / `drawnTomorrow` / `drawnTonight` / `frozen` without an explicit `hidden` rule.
+
+**Urgency state content**:
+- **Desktop**: brass nameplate on the left containing a `Clock`/`Lock` icon (tinted with `theme.primary`) and an engraved tier label (`FINAL HOURS` / `DRAWN TOMORROW` / `DRAWN TONIGHT` / `ENTRIES CLOSED`), followed by the deadline text (preLine + `formatDeadlineLabel`), followed by the existing urgency image pinned right. The plaque sits on a 3 px theme-coloured "shelf" (a brand-tinted `box-shadow`) so the brand reads underneath the brass surface.
+- **Mobile (<sm)**: the brass nameplate is **dropped** — the urgency image already carries the tier label visually. Layout becomes: standalone timer icon + deadline text on the left, image on the right.
+- **Frozen**: brass plaque swaps to a red gradient (`RED_BG`), engraved text uses the darker `ENGRAVED_TEXT_RED` tone, icon swaps from `Clock` to `Lock`, hazard band swaps to the red variant. The brand-coloured shelf is intentionally **dropped** — the red "STOP, entries closed" signal must not be muddied by brand colour.
+
+**Theme integration** — three surfaces accept `theme.primary` / `theme.primaryLight` from `usePromoTheme()`:
+1. **Default-state brass rule** (`buildBrassRule(themePrimary)`): the 2 px brass edge gradient blends the brand colour into its middle stop, so the chassis itself reads brand-tinted without losing the brass feel.
+2. **Brass plaque underglow** (urgency, non-frozen): a 3 px theme-coloured drop-shadow below the plaque.
+3. **Icons** (default & urgency): trust-item icons, the small icon inside the brass plaque, and the mobile standalone timer icon all use `theme.primary`. The cert link host stays white (readability over brand expression).
+
+Hazard yellow, brushed steel, brass rim, and rivets stay constant across themes — these define the workshop substrate and are not branded. Frozen overrides everything to red.
