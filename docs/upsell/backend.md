@@ -1,5 +1,27 @@
 # Upsell — Backend
 
+## Static catalog ([src/data/upsellPackages.ts](../../src/data/upsellPackages.ts))
+
+22 records covering four `upsellCategory` values:
+
+| `upsellCategory` | Count | id pattern | Triggers on |
+|---|---|---|---|
+| `"membership"` | 3 | `membership-upsell-{tier}` | `triggersOnPackageIds: ["tradie-subscription" / "foreman-subscription" / "boss-subscription"]` |
+| `"one-time"` | 6 | `onetime-upsell-{tier}` | the matching one-time pack id |
+| `"additional"` | 5 | `additional-upsell-{tier}` | the matching additional-* pack id |
+| `"mini"` | 8 | `mini-upsell-{1-3}` / `mini-upsell-additional-{tier}` | the matching mini-pack / additional-*-pack-mini id |
+
+Key fields added in Phase 3 of the upsell-remap refactor:
+
+| Field | Purpose |
+|---|---|
+| `trackingId` | Distinct analytics/tracking id — by convention equals `id` |
+| `upsellCategory` | Replaces old `category`; drives per-category multiplier resolution in Task 3.3 |
+| `baseTemplatePackageId` | Internal id of the base pack whose inclusions this upsell mirrors |
+| `stripeDescription` | Shown in Stripe Dashboard as the product description on payment-intent creation |
+
+The three membership records are declared inline; one-time, additional, and mini records are produced by the `buildOneTimeUpsellRecords()`, `buildAdditionalUpsellRecords()`, and `buildMiniUpsellRecords()` builders from typed tier tables (`ONE_TIME_TIERS`, `ADDITIONAL_TIERS`, `MINI_TIERS`).
+
 ## Helpers
 
 | File | Role |

@@ -112,11 +112,14 @@ async function getMiniDrawIdForUpsell(
     };
   }
 
-  // Fallback: Extract base package ID from upsell ID and lookup from user's purchase history
-  // Example: "mini-pack-1-upgrade" -> "mini-pack-1"
-  const basePackageId = offerId.replace(/-upgrade$/, "");
+  // Fallback: Resolve the triggering package id from the static upsell catalog,
+  // then look up the user's most recent purchase of that package.
+  // Legacy: "mini-pack-1-upgrade" -> "mini-pack-1" (old IDs); new IDs use triggersOnPackageIds.
+  const upsellRecord = getUpsellPackageById(offerId);
+  const basePackageId =
+    upsellRecord?.triggersOnPackageIds?.[0] ?? offerId.replace(/-upgrade$/, "");
 
-  if (!basePackageId.startsWith("mini-pack-")) {
+  if (!basePackageId.startsWith("mini-pack-") && !basePackageId.startsWith("additional-") ) {
     // Not a mini-draw upsell
     return {};
   }
@@ -269,23 +272,28 @@ export async function POST(request: NextRequest) {
     } else {
       // ✅ FIX: Infer package type from upsell category when context is missing
       // This matches the logic used for image selection
-      if (offer.category === "subscription-plus") {
-        // Subscription-plus upsells are triggered by membership purchases
+      if (offer.upsellCategory === "membership") {
+        // Membership upsells are triggered by membership purchases
         inferredPackageType = "membership";
         // Try to get triggering package ID from offer configuration
         triggeringPackageId = offer.triggersOnPackageIds?.[0];
         console.log(
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
         );
-      } else if (offer.category === "one-time-plus" || offer.category === "additional-upgrade") {
-        // Mini-pack upsells use category one-time-plus but must resolve entries from miniDrawPackages.
+      } else if (offer.upsellCategory === "mini") {
+        // Mini upsells resolve entries from miniDrawPackages.
         const triggerCandidate =
           validatedData.originalPurchaseContext?.packageId ?? offer.triggersOnPackageIds?.[0];
-        if (triggerCandidate?.startsWith("mini-pack-")) {
-          inferredPackageType = "mini-draw";
-        } else {
-          inferredPackageType = "one-time";
-        }
+        inferredPackageType = "mini-draw";
+        triggeringPackageId = triggerCandidate ?? offer.triggersOnPackageIds?.[0];
+        console.log(
+          `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
+        );
+      } else if (offer.upsellCategory === "one-time" || offer.upsellCategory === "additional") {
+        // One-time / additional upsells resolve entries from one-time packages.
+        const triggerCandidate =
+          validatedData.originalPurchaseContext?.packageId ?? offer.triggersOnPackageIds?.[0];
+        inferredPackageType = "one-time";
         triggeringPackageId = triggerCandidate ?? offer.triggersOnPackageIds?.[0];
         console.log(
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`

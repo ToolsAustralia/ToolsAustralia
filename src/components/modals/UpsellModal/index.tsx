@@ -90,29 +90,26 @@ function deriveUpsellPackageType(
   originalPurchaseContext: UpsellModalProps["originalPurchaseContext"]
 ): "membership" | "one-time" | "mini-draw" {
   const upsellPackage = getUpsellPackageById(offer.id);
-  const category = upsellPackage?.category;
+  const upsellCategory = upsellPackage?.upsellCategory;
 
   if (originalPurchaseContext?.packageType) {
     return originalPurchaseContext.packageType;
   }
-  if (category === "subscription-plus") {
+  if (upsellCategory === "membership") {
     return "membership";
   }
-  if (category === "one-time-plus" || category === "additional-upgrade") {
+  if (upsellCategory === "mini") {
+    return "mini-draw";
+  }
+  if (upsellCategory === "one-time" || upsellCategory === "additional") {
     const triggerId = pickTriggeringPackageIdForUpsell(
       upsellPackage?.triggersOnPackageIds,
       originalPurchaseContext?.packageId
     );
-    if (triggerId?.startsWith("mini-pack-")) {
+    if (triggerId?.startsWith("mini-pack-") || triggerId?.startsWith("additional-") && triggerId?.endsWith("-mini")) {
       return "mini-draw";
     }
     return "one-time";
-  }
-  if (offer.category === "membership") {
-    return "membership";
-  }
-  if (offer.category === "mini-draw") {
-    return "mini-draw";
   }
   return "one-time";
 }
@@ -878,7 +875,7 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   /** Resolved promo multiplier for hero art (drives which `{n}x-*.webp` exists). */
   const upsellImageSrc = useMemo(() => {
     const upsellPackage = getUpsellPackageById(offer.id);
-    const category = upsellPackage?.category;
+    const upsellCategory = upsellPackage?.upsellCategory;
 
     const resolved = resolveUpsellImage({
       offerId: offer.id,
@@ -890,16 +887,16 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         offerId: offer.id,
         packageType: upsellPackageType,
         promoMultiplier: effectiveUpsellPromoMultiplier,
-        category,
+        upsellCategory,
         resolvedMembershipMultiplier,
         resolvedOneTimeMultiplier,
         resolvedMiniMultiplier,
         originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
-        upsellPackageCategory: upsellPackage?.category,
+        upsellPackageCategory: upsellPackage?.upsellCategory,
         offerCategory: offer.category,
         determinedFrom: originalPurchaseContext?.packageType
           ? "originalPurchaseContext"
-          : category === "subscription-plus"
+          : upsellCategory === "membership"
             ? "upsellCategory"
             : "fallback",
         finalSrc: resolved.src,
