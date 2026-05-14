@@ -9,6 +9,7 @@ import type { EmblaOptionsType } from "embla-carousel";
 
 import ModalContainer from "@/components/modals/ui/ModalContainer";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/utils/cn";
 
 export interface FullscreenImageCaption {
@@ -51,24 +52,21 @@ export default function FullscreenImageViewer({
   title,
   nested = false,
 }: FullscreenImageViewerProps) {
-  const theme = usePromoTheme();
+  const promoTheme = usePromoTheme();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const [currentIndex, setCurrentIndex] = useState(clampIndex(initialIndex, images.length));
   const [canSlidePrev, setCanSlidePrev] = useState(false);
   const [canSlideNext, setCanSlideNext] = useState(false);
   const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const hasMultipleImages = images.length > 1;
-  const chevronColor = theme.primaryDark;
-  const chevronGlow = theme.shadowRgba;
-  const themedPanelBorder = `1px solid ${theme.borderRgba}`;
-  const themedPanelGlow = `0 0 14px ${theme.shadowRgba}, 0 4px 14px rgba(0,0,0,0.45)`;
-  const themedPanelBg = `linear-gradient(135deg, ${theme.primaryDark}66 0%, ${theme.primary}4d 55%, ${theme.primaryDark}66 100%)`;
 
   const computedInitialIndex = useMemo(
     () => clampIndex(initialIndex, images.length),
     [initialIndex, images.length]
   );
 
-  // Main carousel — single slide visible, drag-to-navigate, drives currentIndex.
   const mainOptions = useMemo<EmblaOptionsType>(
     () => ({ loop: false, startIndex: computedInitialIndex, duration: 25 }),
     [computedInitialIndex]
@@ -76,22 +74,13 @@ export default function FullscreenImageViewer({
   const mainPlugins = useMemo(() => [ClassNames()], []);
   const [mainRef, mainApi] = useEmblaCarousel(mainOptions, mainPlugins);
 
-  // Thumbs carousel — free-drag strip; clicking a thumb scrolls the main.
-  const thumbsOptions = useMemo<EmblaOptionsType>(
-    () => ({ containScroll: "keepSnaps", dragFree: true }),
-    []
-  );
-  const thumbsPlugins = useMemo(() => [ClassNames()], []);
-  const [thumbsRef, thumbsApi] = useEmblaCarousel(thumbsOptions, thumbsPlugins);
-
   const onSelect = useCallback(() => {
     if (!mainApi) return;
     const i = mainApi.selectedScrollSnap();
     setCurrentIndex(i);
     setCanSlidePrev(mainApi.canScrollPrev());
     setCanSlideNext(mainApi.canScrollNext());
-    thumbsApi?.scrollTo(i);
-  }, [mainApi, thumbsApi]);
+  }, [mainApi]);
 
   useEffect(() => {
     if (!mainApi) return;
@@ -104,34 +93,23 @@ export default function FullscreenImageViewer({
     };
   }, [mainApi, onSelect]);
 
-  const onThumbClick = useCallback(
-    (i: number) => mainApi?.scrollTo(i),
-    [mainApi]
-  );
-
   useEffect(() => {
     if (!isOpen) return;
-
     lastFocusedElementRef.current = document.activeElement as HTMLElement | null;
     const nextIndex = clampIndex(initialIndex, images.length);
     setCurrentIndex(nextIndex);
-    if (mainApi) {
-      mainApi.scrollTo(nextIndex, true);
-    }
+    if (mainApi) mainApi.scrollTo(nextIndex, true);
   }, [isOpen, initialIndex, images.length, mainApi]);
 
   useEffect(() => {
     if (!isOpen) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
         return;
       }
-
       if (!hasMultipleImages) return;
-
       if (event.key === "ArrowRight") {
         event.preventDefault();
         mainApi?.scrollNext();
@@ -141,10 +119,9 @@ export default function FullscreenImageViewer({
         mainApi?.scrollPrev();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, hasMultipleImages, images.length, onClose, mainApi]);
+  }, [isOpen, hasMultipleImages, onClose, mainApi]);
 
   useEffect(() => {
     if (isOpen) return;
@@ -153,9 +130,25 @@ export default function FullscreenImageViewer({
 
   const goNext = () => mainApi?.scrollNext();
   const goPrevious = () => mainApi?.scrollPrev();
+  const onThumbClick = useCallback((i: number) => mainApi?.scrollTo(i), [mainApi]);
 
   const showCounter = images.length > 0;
   const activeCaption = images[currentIndex]?.captionDetail;
+
+  // Surfaces — light/dark adaptive
+  const backdropBg = isDark ? "#000" : "#f5f5f4";
+  const photoBg = isDark ? "#0a0a0a" : "#fafaf9";
+  const cardTextColor = isDark ? "rgb(255 255 255)" : "rgb(10 10 10)";
+  const pillBg = isDark ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.7)";
+  const pillBorder = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)";
+  const pillText = isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.85)";
+  const cardGradient = isDark
+    ? `linear-gradient(180deg, ${promoTheme.primary}2e 0%, #0a0a0a 60%)`
+    : `linear-gradient(180deg, ${promoTheme.primary}10 0%, #ffffff 60%)`;
+  const cardBorder = isDark
+    ? `rgba(255,255,255,0.08)`
+    : `rgba(0,0,0,0.06)`;
+  const thumbBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
 
   return (
     <ModalContainer
@@ -163,207 +156,167 @@ export default function FullscreenImageViewer({
       onClose={onClose}
       size="full"
       height="screen"
-      className="!max-w-full !h-screen !max-h-[100dvh] !rounded-none !bg-black !overflow-hidden"
+      className="!max-w-full !h-screen !max-h-[100dvh] !rounded-none !overflow-hidden"
       closeOnBackdrop
       nested={nested}
     >
       <div
-        className="flex h-full max-h-[100dvh] min-h-0 w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden overscroll-none text-white touch-pan-x"
-        style={{
-          background: `radial-gradient(circle at top, ${theme.primaryDark}33 0%, rgba(0,0,0,0.96) 52%)`,
-        }}
+        className="flex h-full max-h-[100dvh] min-h-0 w-full max-w-[100vw] flex-col overflow-x-hidden overflow-y-hidden overscroll-none touch-pan-x lg:flex-row"
+        style={{ background: backdropBg, color: cardTextColor }}
       >
-        <div className="absolute left-0 top-0 z-30 flex w-full items-center justify-between p-3 sm:p-4 pointer-events-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto">
-          {showCounter ? (
-            <div
-              className="pointer-events-auto max-w-[80%] text-xs sm:text-sm font-medium px-3 py-1.5 rounded-full backdrop-blur truncate border"
+        {/* PHOTO COLUMN (mobile: top ~50vh; desktop: left ~62%) */}
+        <div
+          className="relative flex min-h-0 w-full flex-col overflow-hidden lg:h-full lg:flex-[0_0_62%]"
+          style={{ background: photoBg }}
+        >
+          {/* Top bar — unthemed, theme-aware */}
+          <div className="pointer-events-none absolute left-0 top-0 z-30 flex w-full items-center justify-between p-3 sm:p-4 [&_button]:pointer-events-auto [&_a]:pointer-events-auto">
+            {showCounter ? (
+              <div
+                className="max-w-[80%] truncate rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur sm:text-sm"
+                style={{
+                  background: pillBg,
+                  border: `1px solid ${pillBorder}`,
+                  color: pillText,
+                }}
+              >
+                {title ? `${title} · ` : ""}
+                {currentIndex + 1} / {images.length}
+              </div>
+            ) : (
+              <div />
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              autoFocus
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full backdrop-blur focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               style={{
-                background: themedPanelBg,
-                border: themedPanelBorder,
-                boxShadow: themedPanelGlow,
+                background: pillBg,
+                border: `1px solid ${pillBorder}`,
+                color: pillText,
               }}
+              aria-label="Close fullscreen image viewer"
             >
-              {title ? `${title} - ` : ""}
-              {currentIndex + 1} / {images.length}
-            </div>
-          ) : (
-            <div />
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            autoFocus
-            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            style={{
-              background: themedPanelBg,
-              border: themedPanelBorder,
-              boxShadow: themedPanelGlow,
-            }}
-            aria-label="Close fullscreen image viewer"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-        {images.length > 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col pt-14 sm:pt-16">
-            {/* Image stage only — caption + thumbs are separate rows so nothing covers the photo */}
-            <div className="relative min-h-0 w-full flex-1 overflow-hidden">
-              <div
-                ref={mainRef}
-                data-carousel="true"
-                style={{ touchAction: "pan-y pinch-zoom" }}
-                className="fullscreen-image-viewer-embla h-full w-full max-w-full overflow-hidden"
-              >
-                <div className="flex h-full">
-                  {images.map((image, index) => (
-                    <div
-                      key={`${image.src}-${index}`}
-                      className="embla__slide flex-[0_0_100%] min-w-0 box-border max-w-full overflow-hidden"
-                    >
-                      <div className="relative h-full w-full max-w-full overflow-hidden">
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Fullscreen image ${index + 1}`}
-                          fill
-                          sizes="100vw"
-                          className="box-border object-contain p-3 sm:p-4"
-                          priority={index === currentIndex}
-                        />
-                      </div>
+          {/* Image stage (zoom integrated in Task 4) */}
+          <div className="relative h-[50vh] min-h-0 w-full overflow-hidden pt-14 sm:pt-16 lg:h-full lg:flex-1">
+            <div
+              ref={mainRef}
+              data-carousel="true"
+              style={{ touchAction: "pan-y pinch-zoom" }}
+              className="h-full w-full max-w-full overflow-hidden"
+            >
+              <div className="flex h-full">
+                {images.map((image, index) => (
+                  <div
+                    key={`${image.src}-${index}`}
+                    className="embla__slide flex-[0_0_100%] min-w-0 box-border max-w-full overflow-hidden"
+                  >
+                    <div className="relative h-full w-full max-w-full overflow-hidden">
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Fullscreen image ${index + 1}`}
+                        fill
+                        sizes="(min-width: 1024px) 62vw, 100vw"
+                        className="box-border object-contain p-3 sm:p-4"
+                        priority={index === currentIndex}
+                      />
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-
-              {hasMultipleImages ? (
-                <>
-                  {canSlidePrev && (
-                    <button
-                      type="button"
-                      onClick={goPrevious}
-                      className="absolute left-2 sm:left-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                      style={{
-                        borderColor: chevronColor,
-                        color: chevronColor,
-                        boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
-                      }}
-                      aria-label="View previous image"
-                    >
-                      <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
-                  )}
-                  {canSlideNext && (
-                    <button
-                      type="button"
-                      onClick={goNext}
-                      className="absolute right-2 sm:right-4 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/70 transition hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                      style={{
-                        borderColor: chevronColor,
-                        color: chevronColor,
-                        boxShadow: `0 0 14px ${chevronGlow}, 0 4px 14px rgba(0,0,0,0.45)`,
-                      }}
-                      aria-label="View next image"
-                    >
-                      <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
-                    </button>
-                  )}
-                </>
-              ) : null}
             </div>
-
-            {activeCaption ? (
-              <div
-                className={`z-20 w-full shrink-0 border-t border-white/15 bg-black/90 px-2 py-2.5 backdrop-blur-md sm:px-4 sm:py-3 ${
-                  hasMultipleImages ? "" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-                }`}
-              >
-                <div className="mx-auto grid max-w-4xl grid-cols-3 gap-2 sm:gap-4">
-                  <div className="min-w-0 text-center">
-                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
-                      {activeCaption.drawKind === "mini" ? "Mini draw" : "Major draw"}
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-2xs font-bold leading-tight text-white sm:text-sm">
-                      {activeCaption.drawName}
-                    </p>
-                  </div>
-                  <div className="min-w-0 text-center">
-                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
-                      Winner
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-2xs font-bold leading-tight text-white sm:text-sm">
-                      {activeCaption.winnerName}
-                    </p>
-                  </div>
-                  <div className="min-w-0 text-center">
-                    <p className="text-3xs font-semibold uppercase tracking-wider text-white/55 sm:text-2xs">
-                      Won date
-                    </p>
-                    <p className="mt-0.5 text-2xs font-bold tabular-nums leading-tight text-white sm:text-sm">
-                      {activeCaption.wonDate}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
             {hasMultipleImages ? (
-              <div className="z-20 w-full max-w-full shrink-0 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 sm:px-4 sm:pb-3">
-                <div
-                  className="rounded-2xl p-2 backdrop-blur-md"
-                  style={{
-                    background: themedPanelBg,
-                    border: themedPanelBorder,
-                    boxShadow: themedPanelGlow,
-                  }}
-                >
-                  <div
-                    ref={thumbsRef}
-                    data-carousel="true"
-                    style={{ touchAction: "pan-y pinch-zoom" }}
-                    className="fullscreen-thumbs-embla overflow-hidden"
+              <>
+                {canSlidePrev && (
+                  <button
+                    type="button"
+                    onClick={goPrevious}
+                    className="absolute left-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 sm:left-4 sm:h-12 sm:w-12"
+                    style={{
+                      background: pillBg,
+                      border: `1px solid ${pillBorder}`,
+                      color: pillText,
+                    }}
+                    aria-label="View previous image"
                   >
-                    <div className="flex gap-2">
-                      {images.map((image, index) => {
-                        const isActive = currentIndex === index;
-                        return (
-                          <button
-                            key={`thumb-${image.src}-${index}`}
-                            type="button"
-                            onClick={() => onThumbClick(index)}
-                            aria-label={`Open image ${index + 1}`}
-                            aria-current={isActive}
-                            className={`embla__thumb flex-[0_0_auto] relative h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-lg border-2 transition-all duration-200 ${
-                              isActive ? "" : "hover:brightness-110"
-                            }`}
-                            style={
-                              isActive
-                                ? {
-                                    borderColor: chevronColor,
-                                    boxShadow: `0 0 0 2px ${theme.borderRgba}, 0 0 14px ${chevronGlow}`,
-                                  }
-                                : {
-                                    borderColor: theme.borderRgba,
-                                  }
-                            }
-                          >
-                            <Image
-                              src={image.src}
-                              alt={image.alt || `Thumbnail ${index + 1}`}
-                              fill
-                              sizes="80px"
-                              className="object-cover"
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                    <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                )}
+                {canSlideNext && (
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="absolute right-2 top-1/2 z-20 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition focus:outline-none focus-visible:ring-2 sm:right-4 sm:h-12 sm:w-12"
+                    style={{
+                      background: pillBg,
+                      border: `1px solid ${pillBorder}`,
+                      color: pillText,
+                    }}
+                    aria-label="View next image"
+                  >
+                    <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+                  </button>
+                )}
+              </>
             ) : null}
           </div>
-        ) : null}
+        </div>
+
+        {/* INFO CARD COLUMN (mobile: bottom ~41vh; desktop: right ~38%) */}
+        <div
+          className="relative w-full overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:h-full lg:flex-[0_0_38%] lg:px-6 lg:pt-12"
+          style={{
+            background: cardGradient,
+            borderTop: `1px solid ${cardBorder}`,
+            color: cardTextColor,
+          }}
+        >
+          {/* Info card body — populated in Task 3 */}
+          {activeCaption ? (
+            <div className="space-y-3" data-testid="info-card-body">
+              <div className="text-xs opacity-60">(info card content — Task 3)</div>
+              <div className="text-sm font-bold">{activeCaption.drawName}</div>
+              <div className="text-sm">{activeCaption.winnerName} · {activeCaption.wonDate}</div>
+            </div>
+          ) : null}
+
+          {/* Thumb strip — populated in Task 3 */}
+          {hasMultipleImages ? (
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+              {images.map((image, index) => {
+                const isActive = currentIndex === index;
+                return (
+                  <button
+                    key={`thumb-${image.src}-${index}`}
+                    type="button"
+                    onClick={() => onThumbClick(index)}
+                    aria-label={`Open image ${index + 1}`}
+                    aria-current={isActive}
+                    className="relative h-12 w-12 flex-[0_0_auto] overflow-hidden rounded-md border-2 transition-all"
+                    style={{
+                      borderColor: isActive ? promoTheme.primary : thumbBorder,
+                      boxShadow: isActive ? `0 0 0 1px ${promoTheme.primary}66` : undefined,
+                    }}
+                  >
+                    <Image
+                      src={image.src}
+                      alt={image.alt || `Thumbnail ${index + 1}`}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
       </div>
     </ModalContainer>
   );
@@ -388,7 +341,10 @@ export function FullscreenTriggerButton({
         onClick();
       }}
       aria-label={label}
-      className={cn("inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white", className)}
+      className={cn(
+        "inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/55 text-white transition hover:bg-black/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-white",
+        className
+      )}
     >
       <Expand className="h-4 w-4" />
     </button>
