@@ -106,6 +106,7 @@
     "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
     "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts",
     "test:membership-snapshot-dst": "tsx scripts/test-membership-snapshot-dst.ts",
+    "test:mini-draw-packages": "tsx src/data/__tests__/miniDrawPackages.test.ts",
     "find:stuck-paused-users": "tsx scripts/find-stuck-paused-users.ts",
     "test:force-charge:dry": "tsx scripts/test-force-charge.ts",
     "test:force-charge:live": "tsx scripts/test-force-charge.ts --live",
