@@ -28,3 +28,12 @@ Auth components use `cn()` from `@/utils/cn` for conditional class composition. 
 ## Viewport units (2026-05-09)
 
 `/reset-password` switched from `min-h-screen` to `min-h-svh` so the iOS / Android URL bar doesn't push the form off-screen. New auth full-bleed pages should use `min-h-svh` (small viewport height — accounts for the dynamic browser chrome).
+
+## Login page presentation (2026-05-14)
+
+`/login` uses a two-column layout (desktop) / form-then-card stack (mobile):
+
+- **Left:** sign-in form, theme toggle, "Forgot password?", Google OAuth, and the "Create one" link to `/membership`. NextAuth wiring is unchanged.
+- **Right:** the all-prizes evergreen collage (`/images/background/promo/landing/all-prizes/all-prizes-mobile.webp`, same asset as `/draw-results`) sits behind a `RotatingToolsetCard` that auto-cycles Milwaukee → DeWalt → Makita → Ryobi every ~3.5s. The card surface tints per active brand so Ryobi's lime brand colour never lands on a white surface. Wordmark, hero photo, and piece-count pill swap in unison; the headline ("Earn Partner Discounts & Win Tools") and body stay static.
+
+`RotatingToolsetCard` is defined inline in `src/app/login/page.tsx` because it has a single consumer. It reuses shared brand assets (`POWERSET_IMAGES`, `POWERSET_BRAND_TEXT` from `src/components/sections/promo/prize-selection/constants.ts`) and brand color helpers (`getToolsetBadgeStyle`, `getPackageColorScheme`, `getLandingPageThemeFromSlug`, `hexToRgbaString` from `src/utils/package-colors/packageColorScheme.ts`) — the same module that powers the prize selection carousel, so Ryobi's lime-on-dark-green pill treatment is identical across the site. Auto-rotation respects `prefers-reduced-motion`.
