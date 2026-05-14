@@ -119,6 +119,28 @@ Error codes (`SUBSCRIPTION_REFERENCE_ERROR_CODES`):
 
 > _TODO: enumerate the exact exports from each helper file and document any non-obvious invariants. The above is a structural overview — refresh when touching these files._
 
+## Membership upsell semantics (upsell-remap — 2026-05-14)
+
+When a membership subscriber completes a purchase, they are offered a post-payment upsell. Under the remap the upsell references the **next tier down** base pack (not a bespoke "Plus" SKU):
+
+| Subscriber tier | Upsell shown | Upsell ID | Default upsell entries |
+|---|---|---|---|
+| Tradie (`tradie-subscription`) | Apprentice Pack | `membership-upsell-tradie` | 30 free (10× × 3 base) |
+| Foreman (`foreman-subscription`) | Tradie Pack | `membership-upsell-foreman` | 150 free (10× × 15 base) |
+| Boss (`boss-subscription`) | Foreman Pack | `membership-upsell-boss` | 300 free (10× × 30 base) |
+
+The category multiplier (default 10×) is admin-configurable via `UpsellMultiplierConfig`. See [upsell/architecture.md](../upsell/architecture.md) for the formula.
+
+## `isMemberOnly` and the mini-draw catalog swap
+
+`MiniDrawPackage.isMemberOnly` controls which mini-draw packs are shown to subscribers vs guests (the catalog-swap rule in [src/utils/membership/has-additional-package-access.ts](../../src/utils/membership/has-additional-package-access.ts)).
+
+The five new `additional-*-pack-mini` records carry `isMemberOnly: true`, so they appear in the subscriber mini-draw catalog while guests still see `mini-pack-1/2/3`. **However**, being in the `isMemberOnly` catalog does NOT route these packs through `getEffectivePromoType`'s subscriber-bonus branch — they stay on the `mini-packages` promo path (typically `1×` multiplier). The flag governs catalog visibility only.
+
+## `getEffectivePromoType` — unchanged
+
+[src/utils/promo/get-effective-promo-type.ts](../../src/utils/promo/get-effective-promo-type.ts) resolves tier-based purchase multipliers (subscriber vs entrant vs guest). This logic is **not** changed by the upsell remap. Upsell entry math uses a separate `UpsellMultiplierConfig` knob; `getEffectivePromoType` affects package purchases only.
+
 ## Jobs / cron / locks
 
 `ChargeJobLock` (model) is a **single-document** distributed lock used to serialise the past-due charge job, ensuring only one instance of the operational charge run executes at a time across deployments. The doc's `_id` is hard-coded to `"charge-job-lock"`. See [models.md](./models.md#chargejoblock).

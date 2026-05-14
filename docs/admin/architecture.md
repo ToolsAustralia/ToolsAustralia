@@ -25,6 +25,7 @@ Per [auth rules R1-R2](../auth/rules.md): middleware gates `/admin/**` PAGES; pe
 - Charge past-due modal (bulk retry failed renewals)
 - Error reports triage
 - Promo / campaign management (see also: `PromoPurchaseEntriesPreview` for live per-package entry preview in Toggle Promos modal)
+- **Upsell Multiplier panel** — `GET/PUT /api/admin/upsell-multipliers`; singleton `UpsellMultiplierConfig` document with three knobs (`membership`, `oneTime`, `additional`). See [frontend.md](./frontend.md#upsell-multiplier-panel-promomanagement--upsell-multipliers-tab--2026-05-14) and [billing-stripe/backend.md](../billing-stripe/backend.md#upsell-stripe-descriptions).
 - Affiliate management
 - Draw management
 - Dashboard stats daily snapshot — `src/services/admin/dashboard-stats/` subsystem. See [backend.md](./backend.md#services) and [models.md](./models.md#dashboardstatsdailysnapshot).

@@ -34,6 +34,10 @@ The three membership records are declared inline; one-time, additional, and mini
 
 [scripts/build-upsell-image-manifest.ts](../../scripts/build-upsell-image-manifest.ts) — scans the upsell image directories and writes the static manifest. Runs in `prebuild` and `predev` per `package.json`. CLAUDE.md mandates this runs before `dev`/`build`.
 
+## Mini Pack 4–8 — no migration
+
+`mini-pack-4` … `mini-pack-8` records in [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) are flagged `isActive: false`. Their Stripe products, historical orders, and existing `TicketEntry` rows are left untouched — old data is still queryable for historical reads. New mini-draw purchases for the equivalent tier use the new `additional-*-pack-mini` IDs declared in the static catalog.
+
 ## Eligibility
 
 `cancellation-upsell-eligibility.ts` lives under [src/utils/redeemables/](../../src/utils/redeemables/) (in [rewards-redeemables](../rewards-redeemables/)) — uses redeemable / subscription history to decide who sees the cancel-upsell offer.

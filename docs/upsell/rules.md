@@ -22,6 +22,8 @@ The cancel-upsell offer must be gated server-side via `cancellation-upsell-eligi
 
 All [payment](../payment/rules.md) PCI rules apply. PM ids only, no card data persisted in upsell-related rows.
 
-## R5. Promo multiplier applied at grant time
+## R5. Upsell entries use the category multiplier, not the promo multiplier
 
-Multipliers from [promo](../promo/) flow through `upsell-promo-multiplier.ts` at the moment of grant — don't try to apply them client-side as a display tweak.
+`upsellEntries = upsellCategoryMultiplier × baseEntries`. The promo multiplier is **not** a factor in upsell entry math. `upsell-promo-multiplier.ts` is read-only context for the hero image selector — never use its output to scale entry grants.
+
+Admin can raise the category multiplier knob (`UpsellMultiplierConfig`) to increase upsell generosity during promo periods.

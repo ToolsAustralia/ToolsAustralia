@@ -59,6 +59,24 @@ Listed in [api.md](./api.md). Each handler must:
 2. Authenticate via session (NextAuth) — admin routes need explicit `role === "admin"` check; middleware does not gate `/api/**`.
 3. Delegate to a helper or service. **No Stripe API calls in `route.ts`** beyond the simplest paths — wrap in a service or `utils/billing|payment/` helper.
 
+## Upsell Stripe descriptions
+
+Each upsell record in [src/data/upsellPackages.ts](../../src/data/upsellPackages.ts) carries a `stripeDescription` field. This is passed as the `description` field when creating a PaymentIntent for an upsell purchase, so Stripe Dashboard, receipts, and webhook payloads show a distinct label per upsell category.
+
+**No new Stripe Products are created in code for upsells.** Descriptions pass through at payment-intent creation time only; the upsell record has no `stripeProductId`. This is the same pattern as all one-time packs and mini packs (only membership *subscriptions* store Stripe Product IDs in code at [src/data/membershipPackages.ts](../../src/data/membershipPackages.ts)).
+
+Suffix convention (from spec §3.4):
+
+| Suffix | Context |
+|---|---|
+| *(none — base name only)* | Regular pack purchase |
+| ` — Membership Bonus` | Membership upsell |
+| ` — Upsell` | One-time / Additional upsell |
+| ` — Mini Draw` | Mini-scoped Additional pack purchase |
+| ` — Mini Draw Upsell` | Mini-scoped Additional pack upsell |
+
+Finance and analytics can use these suffixes to partition upsell revenue from base-pack revenue in Stripe exports without touching product IDs.
+
 ## Idempotency
 
 All Stripe-mutating calls in this domain use **stable idempotency keys** (per route, per resource). Examples:

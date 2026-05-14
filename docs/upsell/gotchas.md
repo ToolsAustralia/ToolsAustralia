@@ -24,8 +24,14 @@ Eligibility is server-side; if a deploy changes eligibility but a user has the o
 
 If the user deletes their original PM between original purchase and upsell offer, `original-purchase-pm.ts` falls back to prompting for a new card. Don't error.
 
-## Promo multiplier conflicts
+## Promo multipliers and upsell multipliers are independent
 
-Multiple multipliers (alternating + code-based) can apply to upsell entries. The resolution rule lives in [src/utils/payment/upsell-promo-multiplier.ts](../../src/utils/payment/upsell-promo-multiplier.ts) — read it before adding new multiplier sources.
+Upsell entry counts use `categoryMultiplier × base` (from `UpsellMultiplierConfig`) — the active promo multiplier does **not** stack into upsell entry math. `upsell-promo-multiplier.ts` is only used for **hero image selection** (e.g., to pick the `10x-tradie-package.webp` image) and has no effect on the entries granted.
 
-> _TODO: document the exact precedence._
+If you see code applying a promo multiplier to upsell entries — that is the old (pre-remap) behavior and should be treated as a bug. The canonical formula is:
+
+```
+upsellEntries = upsellCategoryMultiplier × baseEntries   (no promo factor)
+```
+
+Note: during high-promo periods (e.g., a 10× promo for packages), the admin can choose to raise the `categoryMultiplier` knob for the relevant upsell category to compensate — that's the intended UX.
