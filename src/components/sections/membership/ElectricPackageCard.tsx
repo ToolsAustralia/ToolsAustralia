@@ -105,7 +105,7 @@ export default function ElectricPackageCard({
           background: isPremium
             ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
             : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
-          border: isPremium ? `1.5px solid ${accent}` : `2px solid ${accent}59`,
+          border: isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`,
           boxShadow: isPremium ? `inset 0 0 20px ${accent}2B` : `inset 0 0 26px ${accent}1F`,
         }}
       >
