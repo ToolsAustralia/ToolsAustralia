@@ -59,7 +59,7 @@ export default function ElectricPackageCard({
 
   /** Big number: VIP keeps its gold gradient; others are white with a tier-colored glow. */
   const bigNumberStyle: React.CSSProperties = gradientText
-    ? { ...(gradientText as React.CSSProperties), filter: `drop-shadow(0 0 14px ${accent}) drop-shadow(0 0 30px ${accent}B3)` }
+    ? { ...(gradientText as React.CSSProperties), filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` }
     : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
 
   return (
@@ -71,7 +71,7 @@ export default function ElectricPackageCard({
       )}
       style={{
         boxShadow: isPremium
-          ? `0 0 0 2px ${accent}, 0 0 44px ${accent}, 0 0 96px ${accent}99, 0 0 160px ${accent}4D, 0 18px 56px rgba(0,0,0,0.7)`
+          ? `0 0 0 1px #FFFCEB, 0 0 0 3px ${accent}, 0 0 14px ${accent}B3, 0 10px 30px rgba(0,0,0,0.6)`
           : `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 14px 44px rgba(0,0,0,0.55)`,
       }}
     >
@@ -103,10 +103,10 @@ export default function ElectricPackageCard({
         className="relative isolate h-full rounded-3xl px-4 pb-4 pt-16 sm:pt-[68px]"
         style={{
           background: isPremium
-            ? `radial-gradient(120% 90% at 50% 0%, ${accent}5C 0%, ${accent}24 30%, transparent 60%), linear-gradient(180deg, #0c0a04 0%, #040302 100%)`
+            ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
             : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
-          border: isPremium ? `2px solid ${accent}` : `2px solid ${accent}59`,
-          boxShadow: isPremium ? `inset 0 0 40px ${accent}3D` : `inset 0 0 26px ${accent}1F`,
+          border: isPremium ? `1.5px solid ${accent}` : `2px solid ${accent}59`,
+          boxShadow: isPremium ? `inset 0 0 20px ${accent}2B` : `inset 0 0 26px ${accent}1F`,
         }}
       >
         {/* Static electric inner sheen */}
@@ -114,7 +114,7 @@ export default function ElectricPackageCard({
           className="pointer-events-none absolute inset-0.5 rounded-[22px] z-0"
           style={{
             background: isPremium
-              ? `radial-gradient(140% 95% at 50% 0%, ${accent}42 0%, ${accent}1A 32%, transparent 60%)`
+              ? `linear-gradient(180deg, ${accent}33 0%, transparent 12%), radial-gradient(120% 70% at 50% 0%, ${accent}1A 0%, transparent 52%)`
               : `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`,
           }}
           aria-hidden
@@ -138,10 +138,10 @@ export default function ElectricPackageCard({
         <div className="relative z-10 flex h-full flex-col uppercase">
           {/* Title — tier colour (VIP keeps gold gradient) */}
           <h3
-            className={cn("text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide", isPremium && "sm:!text-[32px] !text-[24px]")}
+            className="text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide"
             style={
               gradientText
-                ? { ...(gradientText as React.CSSProperties), ...(isPremium ? { filter: `drop-shadow(0 0 10px ${accent}) drop-shadow(0 0 22px ${accent}99)` } : {}) }
+                ? { ...(gradientText as React.CSSProperties), ...(isPremium ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
                 : { color: accent, textShadow: `0 0 14px ${accent}80` }
             }
           >
@@ -156,12 +156,12 @@ export default function ElectricPackageCard({
                   {entries.original}
                 </span>
                 <span className="text-[20px] sm:text-[24px] font-bold" style={{ color: accent }}>→</span>
-                <span className={cn("text-[44px] sm:text-[58px] font-extrabold leading-none", isPremium && "!text-[52px] sm:!text-[70px]")} style={bigNumberStyle}>
+                <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className={cn("text-[44px] sm:text-[58px] font-extrabold leading-none", isPremium && "!text-[52px] sm:!text-[70px]")} style={bigNumberStyle}>
+              <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}

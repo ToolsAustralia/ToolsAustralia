@@ -137,7 +137,7 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 `src/utils/package-colors/electricPackageScheme.ts` is a self-contained, dev-only color-scheme module that maps package plan IDs to vivid "electric" `PackageColorScheme` objects. It does NOT extend `COLOR_KEYS` and does NOT edit `packageColorScheme.ts` — zero production impact until a component explicitly imports `getElectricPackageColorScheme`.
 
-Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, black text), `foreman` (#00E5FF cyan), `boss` (#FFD700 gold, black text), `power` (#FF1F1F red), and `vip` (matte black + polished gold with gradient text). VIP uses the `ELECTRIC_BLACK` constant (mirrors the existing `black` scheme with premium-gold Tailwind classes and a `textGradientStyle` CSS object).
+Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, black text), `foreman` (#00E5FF cyan), `boss` (#E0A019 warm amber-gold, black text), `power` (#FF1F1F red), and `vip` (matte black + brilliant champagne white-gold `#FFDF63` with gradient text). VIP is differentiated from Boss by gold tone and a crisp polished finish — a sharp double-rim outer shadow and tight glow — not by larger text or heavier blur. VIP uses the `ELECTRIC_BLACK` constant (matte black with a `textGradientStyle` CSS object using a bright champagne-to-white-gold gradient); Boss uses `ELECTRIC_GOLD` with a warmer amber palette.
 
 `planIdToElectricTier(planId)` normalises any plan id — including `additional-*` prefixes and `*-member` suffixes — to a tier by substring matching. Unknown plan ids fall back to `power` (electric-red).
 

@@ -98,30 +98,30 @@ const ELECTRIC_CYAN: PackageColorScheme = {
   cardBorderOpacity: "CC",
 };
 
-/** Boss — rich gold (#FFD700 / #B8860B), black text. */
+/** Boss — warm amber gold (#E0A019 / #8A5E00), black text. */
 const ELECTRIC_GOLD: PackageColorScheme = {
-  bgGradient: "linear-gradient(135deg, #B8860B 0%, #FFD700 50%, #B8860B 100%)",
-  gradient: "from-[#B8860B] via-[#FFD700] to-[#B8860B]",
+  bgGradient: "linear-gradient(135deg, #8A5E00 0%, #E0A019 50%, #8A5E00 100%)",
+  gradient: "from-[#8A5E00] via-[#E0A019] to-[#8A5E00]",
   text: "text-black",
   textMuted: "text-black/80",
   priceText: "text-black",
   priceBadgeBg: "bg-white/20 backdrop-blur-sm",
-  buttonBg: "bg-[#B8860B] active:scale-[0.98] border border-white/15",
+  buttonBg: "bg-[#8A5E00] active:scale-[0.98] border border-white/15",
   buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
-  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(255,215,0,0.45)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(224,160,25,0.45)]",
   buttonText: "text-black",
-  glow: "drop-shadow-[0_0_20px_rgba(255,215,0,0.45)]",
-  border: "border-[#FFD700]/55",
-  shadow: "shadow-[#FFD700]/40",
-  hoverShadow: "hover:shadow-[#FFD700]/60",
+  glow: "drop-shadow-[0_0_20px_rgba(224,160,25,0.45)]",
+  border: "border-[#E0A019]/55",
+  shadow: "shadow-[#E0A019]/40",
+  hoverShadow: "hover:shadow-[#E0A019]/60",
   borderGlow: "",
   badgeStyle: {
-    background: "#FFD700",
+    background: "#E0A019",
     boxShadow:
-      "0 0 35px rgba(255,215,0,0.45), 0 4px 20px rgba(255,215,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6)",
-    border: "1px solid #FFD700",
+      "0 0 35px rgba(224,160,25,0.45), 0 4px 20px rgba(224,160,25,0.45), inset 0 1px 0 rgba(255,255,255,0.6)",
+    border: "1px solid #E0A019",
   },
-  accentHex: "#FFD700",
+  accentHex: "#E0A019",
   entriesText: "text-black",
   cardBorderOpacity: "CC",
 };
@@ -154,7 +154,7 @@ const ELECTRIC_RED: PackageColorScheme = {
   cardBorderOpacity: "CC",
 };
 
-/** VIP — matte black + polished gold, gradient text (mirrors existing `black`). */
+/** VIP — matte black + brilliant champagne white-gold, gradient text (premium tier). */
 const ELECTRIC_BLACK: PackageColorScheme = {
   bgGradient: "linear-gradient(135deg, #000000 0%, #0A0A0A 50%, #000000 100%)",
   gradient: "from-[#000000] via-[#0d0d0d] to-[#000000]",
@@ -164,32 +164,32 @@ const ELECTRIC_BLACK: PackageColorScheme = {
   priceBadgeBg: "bg-white/10 backdrop-blur-sm",
   buttonBg: "bg-[#0a0a0a] active:scale-[0.98] border border-premium-gold/40",
   buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.4)]",
-  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(255,215,0,0.35)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(255,223,99,0.4)]",
   buttonText: "text-premium-gold",
-  glow: "drop-shadow-[0_0_22px_rgba(255,215,0,0.35)]",
+  glow: "drop-shadow-[0_0_22px_rgba(255,223,99,0.4)]",
   border: "border-premium-gold/40",
-  shadow: "shadow-[#FFD700]/20",
-  hoverShadow: "hover:shadow-[#FFD700]/35",
+  shadow: "shadow-[#FFDF63]/20",
+  hoverShadow: "hover:shadow-[#FFDF63]/35",
   borderGlow: "",
   badgeStyle: {
     background: "#0a0a0a",
     boxShadow:
-      "0 0 35px rgba(255,215,0,0.2), 0 4px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,215,0,0.25)",
-    border: "1px solid rgba(255,215,0,0.45)",
+      "0 0 35px rgba(255,223,99,0.22), 0 4px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,223,99,0.3)",
+    border: "1px solid rgba(255,223,99,0.5)",
   },
-  accentHex: "#FFD700",
+  accentHex: "#FFDF63",
   entriesText: "text-premium-gold",
   cardBorderOpacity: "CC",
   textGradientStyle: {
     backgroundImage:
-      "linear-gradient(135deg, #FFF8E7 0%, #FFE55C 18%, #FFD700 38%, #E5A000 58%, #B8860B 78%, #6B4423 100%)",
+      "linear-gradient(135deg, #FFFDF0 0%, #FFF0A6 20%, #FFDF63 42%, #F2C233 62%, #CDA02A 82%, #8A6B1E 100%)",
     WebkitBackgroundClip: "text",
     backgroundClip: "text",
     WebkitTextFillColor: "transparent",
     color: "transparent",
   },
   cardBorderGradient:
-    "linear-gradient(135deg, #FFF8E7 0%, #FFE55C 18%, #FFD700 38%, #E5A000 58%, #B8860B 78%, #6B4423 100%)",
+    "linear-gradient(135deg, #FFFDF0 0%, #FFF0A6 20%, #FFDF63 42%, #F2C233 62%, #CDA02A 82%, #8A6B1E 100%)",
 };
 
 const SCHEMES: Record<ElectricTier, PackageColorScheme> = {

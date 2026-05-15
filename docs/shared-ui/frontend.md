@@ -29,7 +29,8 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 - Entries strikethrough (`original → display`) renders when `plan.metadata.promoMultiplier > 1` (mirrors MembershipSection logic via a local `readEntries()` helper).
 - The **% OFF badge** and regular-price strikethrough live **only in the price block button** — never in the top-right corner (that space is reserved for the promo multiplier badge in the live section).
 - CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `"Enter Now"`.
-- Uses `getCardBorderStyle` + `PackageColorScheme.badgeStyle` / `enterNowButtonStyle` — no local colour literals.
+- All colour values come from `colorScheme` (`accentHex`, `badgeStyle`, `textGradientStyle`, etc.) — no local colour literals.
+- **Tier differentiation:** VIP is distinguished from Boss by gold tone and a crisp polished finish, not by larger text or heavier blur. VIP uses brilliant champagne/white-gold (`#FFDF63` accent) with a sharp double-rim outer shadow and tight glow; Boss uses warm amber-gold (`#E0A019` accent) with a calmer, standard finish. Both tiers share the same font sizes as all other electric tiers.
 
 The component accepts two optional badge props: `showBestValue` (renders a `BestValueBadge` in the top-left corner) and `ribbon` (renders a `CornerRibbonBadge` with the given label; ignored when `showBestValue` is true). A promo-multiplier lightning badge (`X2`/`X5`/`X10` webp) appears top-right when `entries.multiplied` is active. These badges are caller-driven — no internal tier logic in the card itself.
 

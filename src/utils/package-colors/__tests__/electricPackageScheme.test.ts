@@ -6,11 +6,11 @@ function run() {
     ["apprentice-pack", "#1E90FF"],
     ["tradie-pack", "#CCFF00"],
     ["foreman-pack", "#00E5FF"],
-    ["boss-pack", "#FFD700"],
+    ["boss-pack", "#E0A019"],
     ["power-pack", "#FF1F1F"],
-    ["vip-pack", "#FFD700"],
+    ["vip-pack", "#FFDF63"],
     ["additional-tradie-pack", "#CCFF00"],
-    ["additional-vip-pack-member", "#FFD700"],
+    ["additional-vip-pack-member", "#FFDF63"],
   ];
   for (const [planId, expectedAccent] of cases) {
     const scheme = getElectricPackageColorScheme(planId);
