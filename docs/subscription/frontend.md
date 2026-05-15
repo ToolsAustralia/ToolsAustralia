@@ -85,3 +85,11 @@ interface StripePaymentModalProps {
 ```
 
 Smoke test: `npm run test:stripe-payment`.
+
+## SpecialPackagesModal — PackagesGrid
+
+[`src/components/modals/SpecialPackagesModal/PackagesGrid.tsx`](../../src/components/modals/SpecialPackagesModal/PackagesGrid.tsx) renders the list of one-time packages inside the special packages modal. Each row is a 3-column grid: package name left, entries center, price+select right.
+
+- **Price display:** regular (struck) price stacks on top of the discounted price in a vertical `flex-col items-end` span — struck regular price shown first (small, `text-white/40 line-through`), discounted price below (bold, accent-coloured).
+- **Entries display:** when `pkg.isPromoActive && pkg.originalEntries !== pkg.totalEntries`, a struck `originalEntries` line is shown on top of the boosted `totalEntries` count (mirrors the price stacking pattern).
+- **Best Value badge:** the `BestValueBadge` for one-time best-value plans is rendered at `scale-[0.6] origin-top-left` via the `className` prop, shrinking the corner ribbon ~40% and anchoring it tightly to the top-left corner of the card.

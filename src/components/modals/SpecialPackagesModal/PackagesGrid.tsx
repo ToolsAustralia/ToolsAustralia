@@ -69,7 +69,13 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               onClick={() => onSelectPackage(pkg)}
             >
               {isOneTimeBestValuePlanId(pkg._id || "") && (
-                <BestValueBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+                <BestValueBadge
+                  position="top-left"
+                  size="small"
+                  badgeStyle={colorScheme.badgeStyle}
+                  colorScheme={colorScheme}
+                  className="scale-[0.6] origin-top-left"
+                />
               )}
 
               {/* Promo Badge - Upper right, like PackageSelectionModal/MembershipSection */}
@@ -121,6 +127,11 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
                 <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
+                  {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
+                    <div className="mb-0.5 text-[10px] font-bold leading-none text-white/40 line-through">
+                      {pkg.originalEntries}
+                    </div>
+                  )}
                   <div
                     className="text-base sm:text-lg font-extrabold"
                     style={{ color: "#FFFFFF", textShadow: `0 0 10px ${accentHex}, 0 0 20px ${accentHex}80` }}
@@ -132,13 +143,13 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
 
                 {/* Right Side - Price (struck regular upper-right) + SELECT button */}
                 <div className="flex items-center justify-end gap-2">
-                  <span className="inline-flex items-start gap-1 text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
-                    ${pkg.price}
+                  <span className="inline-flex flex-col items-end leading-none" style={cardTextStyle}>
                     {discount && (
-                      <span className="mt-[1px] text-[10px] font-bold leading-none text-white/40 line-through">
+                      <span className="mb-0.5 text-[10px] font-bold leading-none text-white/40 line-through">
                         ${discount.regularPrice}
                       </span>
                     )}
+                    <span className="text-base sm:text-lg font-extrabold">${pkg.price}</span>
                   </span>
                   <button
                     type="button"

@@ -174,7 +174,7 @@ export default function ElectricPackageCard({
           <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: `${accent}59` }} />
 
           {/* Price block — full-width dark panel; struck price upper-right of price,
-              "one time payment" full-width at the bottom, SAVE shield absolute. */}
+              "one time payment" full-width at the bottom, swing price tag hooked top-right. */}
           <button
             type="button"
             disabled={!interactive}
@@ -202,21 +202,32 @@ export default function ElectricPackageCard({
             </div>
 
             {discount && (
-              <span
-                className="absolute right-0 top-1/2 z-20 inline-flex -translate-y-1/2 translate-x-[28%] flex-col items-center justify-start text-black"
-                style={{
-                  backgroundColor: accent,
-                  width: 56,
-                  height: 64,
-                  clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
-                  boxShadow: `0 0 18px ${accent}A6`,
-                }}
-                aria-label={`Save ${discount.percentOff} percent off`}
+              <div
+                className="absolute -top-5 right-3 z-20 flex flex-col items-center"
+                style={{ transform: "rotate(-7deg)" }}
+                aria-label={`${discount.percentOff} percent off`}
               >
-                <span className="mt-[7px] text-[8px] font-extrabold uppercase leading-none tracking-wide">Save</span>
-                <span className="mt-[2px] text-[19px] font-black leading-none">{discount.percentOff}%</span>
-                <span className="mt-[1px] text-[9px] font-extrabold uppercase leading-none tracking-wide">Off</span>
-              </span>
+                {/* hook ring */}
+                <span
+                  className="h-2.5 w-2.5 rounded-full border-2"
+                  style={{ borderColor: accent, background: "transparent" }}
+                />
+                {/* string */}
+                <span className="h-2 w-px" style={{ background: accent }} />
+                {/* tag body */}
+                <span
+                  className="relative flex items-center py-1 pl-3.5 pr-2.5 text-black"
+                  style={{
+                    backgroundColor: accent,
+                    clipPath: "polygon(13% 0, 100% 0, 100% 100%, 13% 100%, 0 50%)",
+                    boxShadow: `0 0 14px ${accent}80, 0 2px 6px rgba(0,0,0,0.45)`,
+                  }}
+                >
+                  {/* punched hole near the point */}
+                  <span className="absolute left-[6px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-black/65" />
+                  <span className="text-[13px] font-black leading-none tracking-tight">-{discount.percentOff}%</span>
+                </span>
+              </div>
             )}
           </button>
 
