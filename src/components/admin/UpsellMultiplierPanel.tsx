@@ -7,21 +7,18 @@ import {
   useUpsellMultipliersQuery,
 } from "@/hooks/queries/admin/useUpsellMultipliers";
 import { UpsellMultiplierPreviewTables } from "./UpsellMultiplierPanel.preview";
-import { useAdminActivePromos } from "@/hooks/queries/usePromoQueries";
-import type { ActivePromo } from "@/hooks/queries/usePromoQueries";
+import { useEffectiveMultipliers } from "@/hooks/queries/useScheduledPromoQueries";
 
 // ── Active-promo banner ──────────────────────────────────────────────────────
 
-function resolveMultiplierForType(
-  promos: ActivePromo[],
-  type: "membership-packages" | "one-time-packages" | "mini-packages"
-): number {
-  const hit = promos.find((p) => p.isActive && p.type === type);
-  return hit ? hit.multiplier : 1;
-}
-
+/**
+ * Reads from /api/admin/promo/effective so the banner reflects the canonical
+ * Scheduled > Toggle > Alternating chain — same source the checkout payment path uses.
+ * Earlier this only checked toggle promos via useAdminActivePromos, missing scheduled
+ * and alternating phases.
+ */
 function ActivePromoBanner() {
-  const { data: promos = [], isLoading } = useAdminActivePromos();
+  const { data, isLoading } = useEffectiveMultipliers();
 
   if (isLoading) {
     return (
@@ -31,22 +28,25 @@ function ActivePromoBanner() {
     );
   }
 
-  const membershipMult = resolveMultiplierForType(promos, "membership-packages");
-  const oneTimeMult = resolveMultiplierForType(promos, "one-time-packages");
-  const miniMult = resolveMultiplierForType(promos, "mini-packages");
+  const membershipMult = data?.["membership-packages"]?.multiplier ?? null;
+  const oneTimeMult = data?.["one-time-packages"]?.multiplier ?? null;
+  const miniMult = data?.["mini-packages"]?.multiplier ?? null;
 
-  const hasActivePromo = promos.some((p) => p.isActive);
+  const hasAnyActive =
+    membershipMult !== null || oneTimeMult !== null || miniMult !== null;
+
+  const fmt = (m: number | null) => (m === null ? "—" : `${m}×`);
 
   return (
     <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       <strong>Active promo:</strong>{" "}
-      {hasActivePromo ? (
+      {hasAnyActive ? (
         <span className="ml-1">
-          membership&nbsp;{membershipMult}&times;
+          membership&nbsp;{fmt(membershipMult)}
           <span className="mx-2 text-amber-400">·</span>
-          one-time&nbsp;{oneTimeMult}&times;
+          one-time&nbsp;{fmt(oneTimeMult)}
           <span className="mx-2 text-amber-400">·</span>
-          mini&nbsp;{miniMult}&times;
+          mini&nbsp;{fmt(miniMult)}
         </span>
       ) : (
         <span className="ml-1 italic text-amber-700">no active promo</span>
