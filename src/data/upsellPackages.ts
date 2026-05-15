@@ -14,24 +14,10 @@
  * - For new purchases, entries are calculated dynamically based on the triggering package
  */
 
-export type UpsellImageGroup =
-  | "membership-pack"
-  | "one-time-pack"
-  | "additional-one-time-pack"
-  | "mini-pack";
-
-export interface UpsellImageDescriptor {
-  group: UpsellImageGroup;
-  /** Base file stem under group/, no extension and no multiplier prefix (e.g. tradie-package, apprentice-plus, mini-pack-3). */
-  slug: string;
-}
-
 export interface StaticUpsellPackage {
   id: string;
   /** Distinct id used for analytics/tracking. By convention equals `id`. */
   trackingId: string;
-  /** Maps this offer to files under public/images/upsells/{group}/{slug}.webp (and Nx-{slug}.webp promo variants). */
-  image: UpsellImageDescriptor;
   name: string;
   description: string;
   /** Distinct category for analytics + per-category multiplier resolution. */
@@ -84,24 +70,23 @@ type UpsellTier = {
   entries2x: number;
   partnerPercent: number;
   partnerDays: number;
-  imageSlug: string;
 };
 
 const ONE_TIME_TIERS: UpsellTier[] = [
-  { tierSuffix: "apprentice", basePackId: "apprentice-pack", originalPrice: 25,   upsellPrice: 12.5,   entries2x: 6,    partnerPercent: 25,  partnerDays: 1,  imageSlug: "apprentice-plus" },
-  { tierSuffix: "tradie",     basePackId: "tradie-pack",     originalPrice: 50,   upsellPrice: 24.99,  entries2x: 30,   partnerPercent: 40,  partnerDays: 2,  imageSlug: "tradie-plus" },
-  { tierSuffix: "foreman",    basePackId: "foreman-pack",    originalPrice: 100,  upsellPrice: 49.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4,  imageSlug: "foreman-plus" },
-  { tierSuffix: "boss",       basePackId: "boss-pack",       originalPrice: 250,  upsellPrice: 124.99, entries2x: 300,  partnerPercent: 70,  partnerDays: 10, imageSlug: "boss-plus" },
-  { tierSuffix: "power",      basePackId: "power-pack",      originalPrice: 500,  upsellPrice: 249.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20, imageSlug: "power-plus" },
-  { tierSuffix: "vip",        basePackId: "vip-pack",        originalPrice: 1000, upsellPrice: 499.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30, imageSlug: "vip-plus" },
+  { tierSuffix: "apprentice", basePackId: "apprentice-pack", originalPrice: 25,   upsellPrice: 12.5,   entries2x: 6,    partnerPercent: 25,  partnerDays: 1 },
+  { tierSuffix: "tradie",     basePackId: "tradie-pack",     originalPrice: 50,   upsellPrice: 24.99,  entries2x: 30,   partnerPercent: 40,  partnerDays: 2 },
+  { tierSuffix: "foreman",    basePackId: "foreman-pack",    originalPrice: 100,  upsellPrice: 49.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4 },
+  { tierSuffix: "boss",       basePackId: "boss-pack",       originalPrice: 250,  upsellPrice: 124.99, entries2x: 300,  partnerPercent: 70,  partnerDays: 10 },
+  { tierSuffix: "power",      basePackId: "power-pack",      originalPrice: 500,  upsellPrice: 249.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20 },
+  { tierSuffix: "vip",        basePackId: "vip-pack",        originalPrice: 1000, upsellPrice: 499.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30 },
 ];
 
 const ADDITIONAL_TIERS: UpsellTier[] = [
-  { tierSuffix: "tradie",  basePackId: "additional-tradie-pack",  originalPrice: 25,   upsellPrice: 12.5,   entries2x: 30,   partnerPercent: 40,  partnerDays: 2,  imageSlug: "tradie-upgrade" },
-  { tierSuffix: "foreman", basePackId: "additional-foreman-pack", originalPrice: 50,   upsellPrice: 24.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4,  imageSlug: "foreman-upgrade" },
-  { tierSuffix: "boss",    basePackId: "additional-boss-pack",    originalPrice: 125,  upsellPrice: 62.5,   entries2x: 300,  partnerPercent: 70,  partnerDays: 10, imageSlug: "boss-upgrade" },
-  { tierSuffix: "power",   basePackId: "additional-power-pack",   originalPrice: 250,  upsellPrice: 124.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20, imageSlug: "power-upgrade" },
-  { tierSuffix: "vip",     basePackId: "additional-vip-pack",     originalPrice: 500,  upsellPrice: 249.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30, imageSlug: "vip-upgrade" },
+  { tierSuffix: "tradie",  basePackId: "additional-tradie-pack",  originalPrice: 25,   upsellPrice: 12.5,   entries2x: 30,   partnerPercent: 40,  partnerDays: 2 },
+  { tierSuffix: "foreman", basePackId: "additional-foreman-pack", originalPrice: 50,   upsellPrice: 24.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4 },
+  { tierSuffix: "boss",    basePackId: "additional-boss-pack",    originalPrice: 125,  upsellPrice: 62.5,   entries2x: 300,  partnerPercent: 70,  partnerDays: 10 },
+  { tierSuffix: "power",   basePackId: "additional-power-pack",   originalPrice: 250,  upsellPrice: 124.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20 },
+  { tierSuffix: "vip",     basePackId: "additional-vip-pack",     originalPrice: 500,  upsellPrice: 249.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30 },
 ];
 
 function titleCaseTier(t: UpsellTier["tierSuffix"]): string {
@@ -116,7 +101,6 @@ function buildOneTimeUpsellRecords(): StaticUpsellPackage[] {
       trackingId: `onetime-upsell-${t.tierSuffix}`,
       upsellCategory: "one-time" as const,
       baseTemplatePackageId: t.basePackId,
-      image: { group: "one-time-pack" as const, slug: t.imageSlug },
       name: display,
       description: `${display} at 50% off — same benefits, double entries.`,
       stripeDescription: `${display} — Upsell`,
@@ -156,7 +140,6 @@ function buildAdditionalUpsellRecords(): StaticUpsellPackage[] {
       trackingId: `additional-upsell-${t.tierSuffix}`,
       upsellCategory: "additional" as const,
       baseTemplatePackageId: t.basePackId,
-      image: { group: "additional-one-time-pack" as const, slug: t.imageSlug },
       name: display,
       description: `${display} at 50% off — same benefits, double entries.`,
       stripeDescription: `Additional ${display} — Upsell`,
@@ -191,7 +174,6 @@ function buildAdditionalUpsellRecords(): StaticUpsellPackage[] {
 type MiniTier = {
   triggerId: string;
   upsellId: string;
-  imageSlug: string;
   displayName: string;
   stripeDescription: string;
   triggerPrice: number;
@@ -203,14 +185,14 @@ type MiniTier = {
 };
 
 const MINI_TIERS: MiniTier[] = [
-  { triggerId: "mini-pack-1",                  upsellId: "mini-upsell-1",                  imageSlug: "mini-pack-1", displayName: "Mini Pack 1",  stripeDescription: "Mini Pack 1 — Upsell",            triggerPrice: 1,    upsellPrice: 0.5,  entries: 1,   partnerPercent: 25,  partnerHours: 1,   partnerDays: 1/24 },
-  { triggerId: "mini-pack-2",                  upsellId: "mini-upsell-2",                  imageSlug: "mini-pack-2", displayName: "Mini Pack 2",  stripeDescription: "Mini Pack 2 — Upsell",            triggerPrice: 5,    upsellPrice: 2.5,  entries: 5,   partnerPercent: 25,  partnerHours: 6,   partnerDays: 0.25 },
-  { triggerId: "mini-pack-3",                  upsellId: "mini-upsell-3",                  imageSlug: "mini-pack-3", displayName: "Mini Pack 3",  stripeDescription: "Mini Pack 3 — Upsell",            triggerPrice: 10,   upsellPrice: 5,    entries: 10,  partnerPercent: 25,  partnerHours: 12,  partnerDays: 0.5 },
-  { triggerId: "additional-tradie-pack-mini",  upsellId: "mini-upsell-additional-tradie",  imageSlug: "mini-pack-4", displayName: "Tradie Pack",  stripeDescription: "Tradie Pack — Mini Draw Upsell",  triggerPrice: 25,   upsellPrice: 12.5, entries: 25,  partnerPercent: 40,  partnerHours: 48,  partnerDays: 2 },
-  { triggerId: "additional-foreman-pack-mini", upsellId: "mini-upsell-additional-foreman", imageSlug: "mini-pack-5", displayName: "Foreman Pack", stripeDescription: "Foreman Pack — Mini Draw Upsell", triggerPrice: 50,   upsellPrice: 25,   entries: 50,  partnerPercent: 55,  partnerHours: 96,  partnerDays: 4 },
-  { triggerId: "additional-boss-pack-mini",    upsellId: "mini-upsell-additional-boss",    imageSlug: "mini-pack-6", displayName: "Boss Pack",    stripeDescription: "Boss Pack — Mini Draw Upsell",    triggerPrice: 125,  upsellPrice: 62.5, entries: 125, partnerPercent: 70,  partnerHours: 240, partnerDays: 10 },
-  { triggerId: "additional-power-pack-mini",   upsellId: "mini-upsell-additional-power",   imageSlug: "mini-pack-7", displayName: "Power Pack",   stripeDescription: "Power Pack — Mini Draw Upsell",   triggerPrice: 250,  upsellPrice: 125,  entries: 250, partnerPercent: 85,  partnerHours: 480, partnerDays: 20 },
-  { triggerId: "additional-vip-pack-mini",     upsellId: "mini-upsell-additional-vip",     imageSlug: "mini-pack-8", displayName: "VIP Pack",     stripeDescription: "VIP Pack — Mini Draw Upsell",     triggerPrice: 500,  upsellPrice: 250,  entries: 500, partnerPercent: 100, partnerHours: 720, partnerDays: 30 },
+  { triggerId: "mini-pack-1",                  upsellId: "mini-upsell-1",                  displayName: "Mini Pack 1",  stripeDescription: "Mini Pack 1 — Upsell",            triggerPrice: 1,    upsellPrice: 0.5,  entries: 1,   partnerPercent: 25,  partnerHours: 1,   partnerDays: 1/24 },
+  { triggerId: "mini-pack-2",                  upsellId: "mini-upsell-2",                  displayName: "Mini Pack 2",  stripeDescription: "Mini Pack 2 — Upsell",            triggerPrice: 5,    upsellPrice: 2.5,  entries: 5,   partnerPercent: 25,  partnerHours: 6,   partnerDays: 0.25 },
+  { triggerId: "mini-pack-3",                  upsellId: "mini-upsell-3",                  displayName: "Mini Pack 3",  stripeDescription: "Mini Pack 3 — Upsell",            triggerPrice: 10,   upsellPrice: 5,    entries: 10,  partnerPercent: 25,  partnerHours: 12,  partnerDays: 0.5 },
+  { triggerId: "additional-tradie-pack-mini",  upsellId: "mini-upsell-additional-tradie",  displayName: "Tradie Pack",  stripeDescription: "Tradie Pack — Mini Draw Upsell",  triggerPrice: 25,   upsellPrice: 12.5, entries: 25,  partnerPercent: 40,  partnerHours: 48,  partnerDays: 2 },
+  { triggerId: "additional-foreman-pack-mini", upsellId: "mini-upsell-additional-foreman", displayName: "Foreman Pack", stripeDescription: "Foreman Pack — Mini Draw Upsell", triggerPrice: 50,   upsellPrice: 25,   entries: 50,  partnerPercent: 55,  partnerHours: 96,  partnerDays: 4 },
+  { triggerId: "additional-boss-pack-mini",    upsellId: "mini-upsell-additional-boss",    displayName: "Boss Pack",    stripeDescription: "Boss Pack — Mini Draw Upsell",    triggerPrice: 125,  upsellPrice: 62.5, entries: 125, partnerPercent: 70,  partnerHours: 240, partnerDays: 10 },
+  { triggerId: "additional-power-pack-mini",   upsellId: "mini-upsell-additional-power",   displayName: "Power Pack",   stripeDescription: "Power Pack — Mini Draw Upsell",   triggerPrice: 250,  upsellPrice: 125,  entries: 250, partnerPercent: 85,  partnerHours: 480, partnerDays: 20 },
+  { triggerId: "additional-vip-pack-mini",     upsellId: "mini-upsell-additional-vip",     displayName: "VIP Pack",     stripeDescription: "VIP Pack — Mini Draw Upsell",     triggerPrice: 500,  upsellPrice: 250,  entries: 500, partnerPercent: 100, partnerHours: 720, partnerDays: 30 },
 ];
 
 function buildMiniUpsellRecords(): StaticUpsellPackage[] {
@@ -219,7 +201,6 @@ function buildMiniUpsellRecords(): StaticUpsellPackage[] {
     trackingId: t.upsellId,
     upsellCategory: "mini" as const,
     baseTemplatePackageId: t.triggerId,
-    image: { group: "mini-pack" as const, slug: t.imageSlug },
     name: t.displayName,
     description: `${t.displayName} at 50% off — same entries, same partner benefits.`,
     stripeDescription: t.stripeDescription,
@@ -266,7 +247,6 @@ export const upsellPackages: StaticUpsellPackage[] = [
     trackingId: "membership-upsell-tradie",
     upsellCategory: "membership",
     baseTemplatePackageId: "apprentice-pack",
-    image: { group: "membership-pack", slug: "tradie-package" },
     name: "Apprentice Pack",
     description: "Membership bonus — Apprentice Pack at 60% off.",
     stripeDescription: "Apprentice Pack — Membership Bonus",
@@ -300,7 +280,6 @@ export const upsellPackages: StaticUpsellPackage[] = [
     trackingId: "membership-upsell-foreman",
     upsellCategory: "membership",
     baseTemplatePackageId: "tradie-pack",
-    image: { group: "membership-pack", slug: "foreman-package" },
     name: "Tradie Pack",
     description: "Membership bonus — Tradie Pack at 60% off.",
     stripeDescription: "Tradie Pack — Membership Bonus",
@@ -334,7 +313,6 @@ export const upsellPackages: StaticUpsellPackage[] = [
     trackingId: "membership-upsell-boss",
     upsellCategory: "membership",
     baseTemplatePackageId: "foreman-pack",
-    image: { group: "membership-pack", slug: "boss-package" },
     name: "Foreman Pack",
     description: "Membership bonus — Foreman Pack at 60% off.",
     stripeDescription: "Foreman Pack — Membership Bonus",
