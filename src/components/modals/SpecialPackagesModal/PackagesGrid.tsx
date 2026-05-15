@@ -167,7 +167,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                       e.stopPropagation();
                       onSelectPackage(pkg);
                     }}
-                    className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", isSelected ? "shadow-md" : "")}
+                    className={cn("min-w-[38px] sm:min-w-[58px] px-1.5 py-0.5 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-xs font-bold rounded-md sm:rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", isSelected ? "shadow-md" : "")}
                     style={{ backgroundColor: "#000000", border: `1.5px solid ${accentHex}`, color: accentHex, boxShadow: `0 0 12px ${hexToRgba(accentHex, 0.35)}` }}
                   >
                     {isSelected ? "✓" : "SELECT"}

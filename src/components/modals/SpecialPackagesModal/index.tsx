@@ -857,7 +857,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         {/* Congratulations Section - Below Header (hidden when package is selected) */}
         {!selectedPackage && <PromoBanner firstName={userData?.firstName} />}
 
-        <ModalContent scrollbar="metallic" padding="none" className="flex flex-col p-3 sm:p-6">
+        <ModalContent scrollbar="metallic" padding="none" className="flex flex-col overflow-x-hidden p-3 sm:p-6">
           <PackagesGrid
             packagesWithPromo={packagesWithPromo}
             selectedPackage={selectedPackage}
