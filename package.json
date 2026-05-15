@@ -28,6 +28,7 @@
     "test:webhook-queue-enqueue": "tsx src/services/stripe-webhook-queue/__tests__/enqueue.test.ts",
     "test:webhook-queue-claim": "tsx src/services/stripe-webhook-queue/__tests__/claim.test.ts",
     "test:webhook-queue-mark-result": "tsx src/services/stripe-webhook-queue/__tests__/markResult.test.ts",
+    "test:webhook-queue-process": "tsx src/services/stripe-webhook-queue/__tests__/processQueuedEvent.test.ts",
     "test:webhook-queue-orphan-recovery": "tsx src/services/stripe-webhook-queue/__tests__/orphan-recovery.test.ts",
     "test:webhook-queue-replay-safe": "tsx src/services/stripe-webhook-handlers/__tests__/replay-safety.test.ts",
     "test:promo-banner-brand": "tsx src/utils/promo-banner/__tests__/resolve-promo-banner-asset-brand.test.ts",
