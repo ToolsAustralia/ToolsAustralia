@@ -6,10 +6,7 @@ import { CheckCircle, Check } from "lucide-react";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
-import {
-  getCardBorderStyle,
-  type PackageColorsVariantConfig,
-} from "@/utils/package-colors/packageColorScheme";
+import { type PackageColorsVariantConfig } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
@@ -58,16 +55,22 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
           // No selection → every card shows the VIP-style gradient rim at full strength.
           // A selection exists → only the selected card keeps that rim; the rest dim.
           const showStrong = selectedPackage == null || isSelected;
-          const vipStyleBorderStyle = colorScheme.cardBorderGradient
-            ? getCardBorderStyle(colorScheme, cardInnerBg)
-            : {
-                background: `${cardInnerBg}, linear-gradient(135deg, ${accentHex} 0%, ${hexToRgba(accentHex, 0.5)} 50%, ${accentHex} 100%)`,
-                backgroundOrigin: "padding-box, border-box",
-                backgroundClip: "padding-box, border-box",
-                WebkitBackgroundClip: "padding-box, border-box",
-                backgroundRepeat: "no-repeat",
-                border: "2px solid transparent",
-              };
+          // Identical box model in BOTH states (2px transparent border + bg-clip
+          // rim) so selecting a card causes NO layout shift — only the rim
+          // gradient + glow change. Selected uses the same strong rim as the
+          // default (nothing-selected) state.
+          const rimStyle = (gradientCss: string): React.CSSProperties => ({
+            background: `${cardInnerBg}, ${gradientCss}`,
+            backgroundOrigin: "padding-box, border-box",
+            backgroundClip: "padding-box, border-box",
+            WebkitBackgroundClip: "padding-box, border-box",
+            backgroundRepeat: "no-repeat",
+            border: "2px solid transparent",
+          });
+          const strongGradient =
+            colorScheme.cardBorderGradient ??
+            `linear-gradient(135deg, ${accentHex} 0%, ${hexToRgba(accentHex, 0.5)} 50%, ${accentHex} 100%)`;
+          const dimGradient = `linear-gradient(135deg, ${hexToRgba(accentHex, 0.18)} 0%, rgba(255,255,255,0.05) 50%, ${hexToRgba(accentHex, 0.18)} 100%)`;
           return (
             <div
               key={pkg._id}
@@ -75,12 +78,11 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               style={
                 showStrong
                   ? {
-                      ...vipStyleBorderStyle,
+                      ...rimStyle(strongGradient),
                       boxShadow: `0 0 0 1px ${hexToRgba(accentHex, 0.4)}, 0 0 26px ${hexToRgba(accentHex, 0.55)}, 0 10px 34px rgba(0,0,0,0.5)`,
                     }
                   : {
-                      background: cardInnerBg,
-                      border: "1px solid rgba(255,255,255,0.12)",
+                      ...rimStyle(dimGradient),
                       boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
                     }
               }
