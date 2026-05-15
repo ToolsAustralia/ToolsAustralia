@@ -128,7 +128,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
                 <div className="relative flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
                   {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
+                    <span className="absolute left-full top-1/2 ml-1 -translate-y-1/2 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
                       {pkg.originalEntries}
                     </span>
                   )}
