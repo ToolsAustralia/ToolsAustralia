@@ -129,6 +129,18 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 `hasAccess` is derived via `useUserMajorDrawStats(userData?._id)` + `hasAdditionalPackageAccess(userData, userMajorDrawStats)`, reusing the same helpers as the major-draw catalog. The `viewerPackages` computed list replaces all three in-component usages of the raw array: the grid render, the selected-package-modal lookup, and the `handlePurchase` package lookup.
 
+## Electric package color schemes — Phase 1 (2026-05-15)
+
+`src/utils/package-colors/electricPackageScheme.ts` is a self-contained, dev-only color-scheme module that maps package plan IDs to vivid "electric" `PackageColorScheme` objects. It does NOT extend `COLOR_KEYS` and does NOT edit `packageColorScheme.ts` — zero production impact until a component explicitly imports `getElectricPackageColorScheme`.
+
+Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, black text), `foreman` (#00E5FF cyan), `boss` (#FFD700 gold, black text), `power` (#FF1F1F red), and `vip` (matte black + polished gold with gradient text). VIP uses the `ELECTRIC_BLACK` constant (mirrors the existing `black` scheme with premium-gold Tailwind classes and a `textGradientStyle` CSS object).
+
+`planIdToElectricTier(planId)` normalises any plan id — including `additional-*` prefixes and `*-member` suffixes — to a tier by substring matching. Unknown plan ids fall back to `power` (electric-red).
+
+Opt-in: only `ElectricPackageCard` (Phase 2) calls `getElectricPackageColorScheme`. Live `MembershipSection` and all subscription flows are unaffected.
+
+Test: `npm run test:electric-scheme` (standalone tsx script, no DB required).
+
 ## P1. Composition via children
 
 Most primitives accept `children` and add behaviour. Don't try to prop-drill content — let consumers compose.
