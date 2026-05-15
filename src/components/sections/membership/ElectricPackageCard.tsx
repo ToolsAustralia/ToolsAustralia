@@ -71,7 +71,8 @@ export default function ElectricPackageCard({
         .padStart(2, "0");
     return `#${ch(0)}${ch(2)}${ch(4)}`;
   };
-  const accentInk = isLight ? shade(accent, 0.58) : accent; // readable accent for text on light
+  const accentInk = isLight ? shade(accent, 0.45) : accent; // readable accent for text on light
+  const ctaFillLight = shade(accent, 0.34); // deep tier fill for the light-mode CTA (white text)
 
   /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
   const bigNumberStyle: React.CSSProperties = isLight
@@ -205,7 +206,7 @@ export default function ElectricPackageCard({
             </div>
           </div>
 
-          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? `${accentInk}40` : `${accent}59` }} />
+          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? `${accentInk}80` : `${accent}59` }} />
 
           {/* Price block — full-width dark panel; struck price upper-right of price,
               "one time payment" full-width at the bottom, swing price tag hooked top-right. */}
@@ -280,9 +281,9 @@ export default function ElectricPackageCard({
                 interactive ? "hover:brightness-125" : "opacity-50 cursor-not-allowed"
               )}
               style={{
-                backgroundColor: "#000000",
-                border: `1.5px solid ${isLight ? accentInk : accent}`,
-                color: isLight ? accentInk : accent,
+                backgroundColor: isLight ? ctaFillLight : "#000000",
+                border: `1.5px solid ${isLight ? ctaFillLight : accent}`,
+                color: isLight ? "#FFFFFF" : accent,
                 boxShadow: isLight
                   ? `0 6px 16px rgba(15,23,42,0.18)`
                   : `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
