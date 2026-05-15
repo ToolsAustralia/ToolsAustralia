@@ -184,10 +184,22 @@ export default function ElectricPackageCard({
             </span>
             {discount && (
               <span
-                className="rounded-md px-2 py-1 text-[12px] font-black uppercase leading-none text-black"
-                style={{ backgroundColor: accent, boxShadow: `0 0 14px ${accent}99` }}
+                className="relative ml-1 inline-flex flex-col items-center justify-start text-black"
+                style={{
+                  backgroundColor: accent,
+                  width: 54,
+                  height: 62,
+                  clipPath: "polygon(0% 0%, 100% 0%, 100% 62%, 50% 100%, 0% 62%)",
+                  boxShadow: `0 0 16px ${accent}99`,
+                }}
+                aria-label={`Save ${discount.percentOff} percent off`}
               >
-                Save {discount.percentOff}%
+                <span className="mt-[5px] text-[8px] font-extrabold uppercase leading-none tracking-wide">Save</span>
+                <span className="mt-[1px] text-[18px] font-black leading-none">{discount.percentOff}%</span>
+                <span className="text-[8px] font-extrabold uppercase leading-none tracking-wide">Off</span>
+                <span className="mt-[3px] flex h-[13px] w-[13px] items-center justify-center rounded-full border border-black/55 text-[8px] font-black leading-none">
+                  ✓
+                </span>
               </span>
             )}
           </button>
