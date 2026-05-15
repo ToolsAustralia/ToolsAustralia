@@ -22,7 +22,7 @@
 - **Old-vs-new**: shows a reminder label to open the live section in another tab for comparison
 - **Locked-preview**: forces the member-only (additional) packs to render in their locked state regardless of access, so the locked card UI can be previewed from a no-access user state
 
-The harness computes and passes `showBestValue` (boss tier for membership tab; power/vip tiers for one-time tab via `isOneTimeBestValuePlanId`) and `ribbon` ("MOST POPULAR" for foreman tier) to each `ElectricPackageCard`; the multiplier badge renders automatically when a 2x/5x/10x multiplier is selected.
+The harness computes and passes `showBestValue` (boss tier for membership tab; power/vip tiers for one-time tab via `isOneTimeBestValuePlanId`) and `ribbon` ("MOST POPULAR" for foreman tier) to each `ElectricPackageCard`; the multiplier badge renders automatically when a 2x/5x/10x multiplier is selected. The dark/light toggle now also passes `theme={dark ? "dark" : "light"}` to every `ElectricPackageCard` so the light-mode variant is exercised from the preview harness.
 
 No Stripe, no providers, no real purchase. Mock data sourced from `src/data/membershipPackages.ts`.
 

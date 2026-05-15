@@ -26,6 +26,8 @@ export interface ElectricPackageCardProps {
   showBestValue?: boolean;
   /** Optional corner ribbon label (e.g. "MOST POPULAR" / "CURRENT"). Ignored when showBestValue is true. */
   ribbon?: string | null;
+  /** Visual theme. "dark" (default) = the approved electric design, unchanged. */
+  theme?: "light" | "dark";
 }
 
 /** Reads the entries number out of the plan's feature list (mirrors MembershipSection). */
@@ -49,6 +51,7 @@ export default function ElectricPackageCard({
   onSelect,
   showBestValue = false,
   ribbon = null,
+  theme = "dark",
 }: ElectricPackageCardProps) {
   const icon = getPackageIcon(plan.id);
   const entries = readEntries(plan);
@@ -57,11 +60,23 @@ export default function ElectricPackageCard({
   const accent = colorScheme.accentHex;
   const isPremium = !!gradientText; // VIP (electric-black) — the only electric scheme with a gradient text
 
-  /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
-  const bigNumberStyle: React.CSSProperties = {
-    color: "#FFFFFF",
-    textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80`,
+  const isLight = theme === "light";
+  /** Darken a #RRGGBB hex toward black (factor < 1) so light-accent tiers
+   *  (lime/gold/cyan) stay readable on a light surface. */
+  const shade = (hex: string, f: number): string => {
+    const n = hex.replace("#", "");
+    const ch = (i: number) =>
+      Math.max(0, Math.min(255, Math.round(parseInt(n.slice(i, i + 2), 16) * f)))
+        .toString(16)
+        .padStart(2, "0");
+    return `#${ch(0)}${ch(2)}${ch(4)}`;
   };
+  const accentInk = isLight ? shade(accent, 0.58) : accent; // readable accent for text on light
+
+  /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
+  const bigNumberStyle: React.CSSProperties = isLight
+    ? { color: accentInk, textShadow: `0 0 10px ${accent}33` }
+    : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
 
   return (
     <div
@@ -71,9 +86,11 @@ export default function ElectricPackageCard({
         interactive && "hover:scale-[1.02]"
       )}
       style={{
-        boxShadow: isPremium
-          ? `0 0 0 1px #FFFCEB, 0 0 0 3px ${accent}, 0 0 14px ${accent}B3, 0 10px 30px rgba(0,0,0,0.6)`
-          : `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 14px 44px rgba(0,0,0,0.55)`,
+        boxShadow: isLight
+          ? `0 0 0 1px ${accent}40, 0 8px 22px ${accent}26, 0 14px 34px rgba(15,23,42,0.14)`
+          : (isPremium
+              ? `0 0 0 1px #FFFCEB, 0 0 0 3px ${accent}, 0 0 14px ${accent}B3, 0 10px 30px rgba(0,0,0,0.6)`
+              : `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 14px 44px rgba(0,0,0,0.55)`),
       }}
     >
       {/* Best Value (top-left) — takes precedence over the ribbon */}
@@ -103,20 +120,28 @@ export default function ElectricPackageCard({
       <div
         className="relative isolate h-full rounded-3xl px-4 pb-4 pt-12 sm:pt-[52px]"
         style={{
-          background: isPremium
-            ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
-            : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
-          border: isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`,
-          boxShadow: isPremium ? `inset 0 0 20px ${accent}2B` : `inset 0 0 26px ${accent}1F`,
+          background: isLight
+            ? `radial-gradient(120% 85% at 50% 0%, ${accent}1F 0%, transparent 58%), linear-gradient(180deg, #ffffff 0%, #eef0f3 100%)`
+            : (isPremium
+                ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
+                : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`),
+          border: isLight
+            ? `2px solid ${accentInk}`
+            : (isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`),
+          boxShadow: isLight
+            ? `inset 0 0 0 1px rgba(255,255,255,0.6)`
+            : (isPremium ? `inset 0 0 20px ${accent}2B` : `inset 0 0 26px ${accent}1F`),
         }}
       >
         {/* Static electric inner sheen */}
         <div
           className="pointer-events-none absolute inset-0.5 rounded-[22px] z-0"
           style={{
-            background: isPremium
-              ? `linear-gradient(180deg, ${accent}33 0%, transparent 12%), radial-gradient(120% 70% at 50% 0%, ${accent}1A 0%, transparent 52%)`
-              : `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`,
+            background: isLight
+              ? `radial-gradient(135% 90% at 50% 0%, ${accent}14 0%, transparent 55%)`
+              : (isPremium
+                  ? `linear-gradient(180deg, ${accent}33 0%, transparent 12%), radial-gradient(120% 70% at 50% 0%, ${accent}1A 0%, transparent 52%)`
+                  : `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`),
           }}
           aria-hidden
         />
@@ -141,9 +166,11 @@ export default function ElectricPackageCard({
           <h3
             className="text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide"
             style={
-              gradientText
-                ? { ...(gradientText as React.CSSProperties), ...(isPremium ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
-                : { color: accent, textShadow: `0 0 14px ${accent}80` }
+              isLight
+                ? { color: accentInk, textShadow: `0 0 10px ${accent}40` }
+                : (gradientText
+                    ? { ...(gradientText as React.CSSProperties), ...(isPremium ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
+                    : { color: accent, textShadow: `0 0 14px ${accent}80` })
             }
           >
             {getPackageDisplayName(plan)
@@ -160,10 +187,10 @@ export default function ElectricPackageCard({
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className="text-[14px] sm:text-[17px] font-bold line-through text-white/35">
+                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? "text-slate-400" : "text-white/35")}>
                   {entries.original}
                 </span>
-                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: accent }}>→</span>
+                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: isLight ? accentInk : accent }}>→</span>
                 <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
@@ -173,12 +200,12 @@ export default function ElectricPackageCard({
                 {entries.display}
               </span>
             )}
-            <div className="mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em] text-white/65">
+            <div className={cn("mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em]", isLight ? "text-slate-500" : "text-white/65")}>
               FREE ENTRIES
             </div>
           </div>
 
-          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: `${accent}59` }} />
+          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? `${accentInk}40` : `${accent}59` }} />
 
           {/* Price block — full-width dark panel; struck price upper-right of price,
               "one time payment" full-width at the bottom, swing price tag hooked top-right. */}
@@ -191,20 +218,24 @@ export default function ElectricPackageCard({
               "relative mb-3 mx-auto w-fit overflow-visible rounded-2xl px-4 pb-2 pt-3",
               interactive ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-90"
             )}
-            style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}
+            style={
+              isLight
+                ? { backgroundColor: "#f4f5f7", border: `1px solid ${accentInk}59`, boxShadow: `0 0 0 1px ${accent}1F` }
+                : { backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }
+            }
           >
             <div className="flex flex-col items-center leading-none">
               {discount && (
-                <span className="mb-0.5 text-[13px] font-bold leading-none text-white/40 line-through">
+                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? "text-slate-400" : "text-white/40")}>
                   ${discount.regularPrice}
                 </span>
               )}
-              <span className="text-[30px] font-extrabold leading-none" style={{ color: accent }}>
+              <span className="text-[30px] font-extrabold leading-none" style={{ color: isLight ? accentInk : accent }}>
                 ${plan.price}
               </span>
             </div>
 
-            <div className="mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            <div className={cn("mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em]", isLight ? "text-slate-500" : "text-white/55")}>
               {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
             </div>
 
@@ -217,17 +248,17 @@ export default function ElectricPackageCard({
                 {/* hook ring */}
                 <span
                   className="h-2.5 w-2.5 rounded-full border-2"
-                  style={{ borderColor: accent, background: "transparent" }}
+                  style={{ borderColor: isLight ? accentInk : accent, background: "transparent" }}
                 />
                 {/* string */}
-                <span className="h-2 w-px" style={{ background: accent }} />
+                <span className="h-2 w-px" style={{ background: isLight ? accentInk : accent }} />
                 {/* tag body */}
                 <span
                   className="relative flex items-center py-1 pl-3.5 pr-2.5 text-black"
                   style={{
-                    backgroundColor: accent,
+                    backgroundColor: isLight ? accentInk : accent,
                     clipPath: "polygon(13% 0, 100% 0, 100% 100%, 13% 100%, 0 50%)",
-                    boxShadow: `0 0 14px ${accent}80, 0 2px 6px rgba(0,0,0,0.45)`,
+                    boxShadow: `0 0 14px ${isLight ? accentInk : accent}80, 0 2px 6px rgba(0,0,0,0.45)`,
                   }}
                 >
                   {/* punched hole near the point */}
@@ -250,9 +281,11 @@ export default function ElectricPackageCard({
               )}
               style={{
                 backgroundColor: "#000000",
-                border: `1.5px solid ${accent}`,
-                color: accent,
-                boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
+                border: `1.5px solid ${isLight ? accentInk : accent}`,
+                color: isLight ? accentInk : accent,
+                boxShadow: isLight
+                  ? `0 6px 16px rgba(15,23,42,0.18)`
+                  : `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
               }}
             >
               {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
