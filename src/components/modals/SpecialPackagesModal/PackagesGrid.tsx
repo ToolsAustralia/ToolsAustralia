@@ -122,7 +122,17 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                 {/* Package Name - Left, two rows (same row as entries & price) */}
                 <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={cardTextStyle}>
-                  <span>{getPackageDisplayName(pkg)}</span>
+                  <span>
+                    {getPackageDisplayName(pkg)
+                      .split(" ")
+                      .map((word, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 && <br className="sm:hidden" />}
+                          {i > 0 && <span className="hidden sm:inline"> </span>}
+                          {word}
+                        </React.Fragment>
+                      ))}
+                  </span>
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
