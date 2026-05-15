@@ -133,7 +133,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                   >
                     {pkg.totalEntries || 0}
                     {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                      <span className="absolute left-full top-0 ml-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                      <span className="absolute right-full top-0 mr-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
                         {pkg.originalEntries}
                       </span>
                     )}
