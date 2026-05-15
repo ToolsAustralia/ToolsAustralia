@@ -141,6 +141,8 @@ Opt-in: only `ElectricPackageCard` (Phase 2) calls `getElectricPackageColorSchem
 
 Test: `npm run test:electric-scheme` (standalone tsx script, no DB required).
 
+Every Tailwind arbitrary class in this file uses literal hex values (no `${}` interpolation) so Tailwind's JIT content scanner can statically detect and emit them — matching the established pattern in `packageColorScheme.ts`.
+
 ## P1. Composition via children
 
 Most primitives accept `children` and add behaviour. Don't try to prop-drill content — let consumers compose.
