@@ -7,10 +7,11 @@ import { type StaticMembershipPackage } from "@/data/membershipPackages";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import {
-  getPackageColorSchemeForPromo,
   getCardBorderStyle,
   type PackageColorsVariantConfig,
 } from "@/utils/package-colors/packageColorScheme";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
 import { hexToRgba } from "./utils";
 
@@ -33,7 +34,6 @@ interface PackagesGridProps {
 const PackagesGrid: React.FC<PackagesGridProps> = ({
   packagesWithPromo,
   selectedPackage,
-  variantConfig,
   onSelectPackage,
   couponCode,
   couponApplied,
@@ -46,13 +46,13 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
       {/* Package List - Styled to match PackageSelectionModal (uses package color scheme) */}
       <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
         {packagesWithPromo.map((pkg) => {
-          const colorScheme = getPackageColorSchemeForPromo(pkg._id || "", false, variantConfig);
+          const colorScheme = getElectricPackageColorScheme(pkg._id || "");
           const isSelected = selectedPackage?._id === pkg._id;
           const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
           // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
           const cardTextStyle = { color: accentHex };
-          const selectTextClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-          const cardInnerBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
+          const cardInnerBg = `radial-gradient(120% 90% at 50% 0%, ${accentHex}33 0%, ${accentHex}12 30%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
+          const discount = getAdditionalPackDiscount(pkg._id || "");
           return (
             <div
               key={pkg._id}
@@ -61,8 +61,8 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 ...getCardBorderStyle(colorScheme, cardInnerBg),
                 ...(!colorScheme.cardBorderGradient && { background: cardInnerBg }),
                 boxShadow: isSelected
-                  ? `0 0 0 2px rgba(255,255,255,0.5), 0 0 24px ${hexToRgba(accentHex, 0.5)}, 0 8px 32px ${hexToRgba(accentHex, 0.2)}`
-                  : `0 0 15px ${hexToRgba(accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
+                  ? `0 0 0 2px ${accentHex}, 0 0 26px ${hexToRgba(accentHex, 0.6)}, 0 10px 34px rgba(0,0,0,0.5)`
+                  : `0 0 18px ${hexToRgba(accentHex, 0.4)}, 0 6px 22px rgba(0,0,0,0.45)`,
               }}
               onClick={() => onSelectPackage(pkg)}
             >
@@ -121,19 +121,45 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                   <div className="text-xs font-bold opacity-90">ENTRIES</div>
                 </div>
 
-                {/* Right Side - Price and SELECT button (same style as Enter Now) */}
+                {/* Right Side - Price (with struck regular price) + SAVE shield + SELECT button */}
                 <div className="flex items-center justify-end gap-2 sm:gap-2">
-                  <div className="text-base sm:text-lg font-bold" style={cardTextStyle}>${pkg.price}</div>
+                  <div className="relative flex items-center">
+                    <span className="relative inline-block text-base sm:text-lg font-extrabold" style={cardTextStyle}>
+                      ${pkg.price}
+                      {discount && (
+                        <span className="absolute left-full top-0 ml-1 -translate-y-[2px] whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                          ${discount.regularPrice}
+                        </span>
+                      )}
+                    </span>
+                    {discount && (
+                      <span
+                        className="absolute right-0 top-1/2 z-20 inline-flex -translate-y-1/2 translate-x-[58%] flex-col items-center justify-start text-black"
+                        style={{
+                          backgroundColor: accentHex,
+                          width: 44,
+                          height: 50,
+                          clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
+                          boxShadow: `0 0 14px ${hexToRgba(accentHex, 0.65)}`,
+                        }}
+                        aria-label={`Save ${discount.percentOff} percent off`}
+                      >
+                        <span className="mt-[5px] text-[6px] font-extrabold uppercase leading-none tracking-wide">Save</span>
+                        <span className="text-[13px] font-black leading-none">{discount.percentOff}%</span>
+                        <span className="text-[6px] font-extrabold uppercase leading-none tracking-wide">Off</span>
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectPackage(pkg);
                     }}
-                    className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", selectTextClass, colorScheme.borderGlow, isSelected ? "shadow-md" : "")}
-                    style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
+                    className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", isSelected ? "shadow-md" : "")}
+                    style={{ backgroundColor: "#000000", border: `1.5px solid ${accentHex}`, color: accentHex, boxShadow: `0 0 12px ${hexToRgba(accentHex, 0.35)}` }}
                   >
-                    <span style={colorScheme.textGradientStyle ?? undefined}>{isSelected ? "✓" : "SELECT"}</span>
+                    {isSelected ? "✓" : "SELECT"}
                   </button>
                 </div>
               </div>

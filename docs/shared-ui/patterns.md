@@ -18,6 +18,10 @@ Post-payment success screens and Klaviyo invoice email line items use `getReceip
 
 Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, or internal event payloads — those retain the raw `name`.
 
+## SpecialPackagesModal color scheme — 2026-05-15
+
+`SpecialPackagesModal/PackagesGrid` and `SpecialPackagesModal/BenefitsPanel` now use `getElectricPackageColorScheme` (electric dark: `linear-gradient(180deg,#0b0c0f,#060607)` body, tier-accent radial glow, accent border) instead of `getPackageColorSchemeForPromo`. `PackagesGrid` also renders a SAVE shield (clip-path polygon) and struck regular price via `getAdditionalPackDiscount` when the selected pack has a genuine member discount.
+
 ## Admin modal hover-preview pattern — 2026-05-14
 
 `AdminPromoToggle` (`src/components/modals/AdminPromoToggle.tsx`) gained a live per-package entry preview powered by `PromoPurchaseEntriesPreview` (`src/components/admin/PromoPurchaseEntriesPreview.tsx`).
