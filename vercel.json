@@ -47,7 +47,6 @@
   ],
   "functions": {
     "src/app/api/stripe/webhook/route.ts": { "memory": 1024, "maxDuration": 60 },
-    "src/app/api/stripe/process-event/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/process-stripe-webhook-queue/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/admin/stripe-webhook-queue/route.ts": { "memory": 1024, "maxDuration": 60 },
     "src/app/api/upload/cloudinary/route.ts": { "memory": 1024, "maxDuration": 30 },

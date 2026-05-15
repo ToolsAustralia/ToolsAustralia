@@ -2,7 +2,9 @@
 
 ## Overview
 
-Stripe webhook events are received by a thin receiver at `/api/stripe/webhook` that returns 200 in <1s, then processed asynchronously by a worker route at `/api/stripe/process-event` (300s budget). Events buffer in the `stripewebhookqueue` Mongo collection. A 1-minute cron sweeper retries failed events with exponential backoff and recovers in-flight rows whose worker crashed before completing.
+Stripe webhook events are received by a thin receiver at `/api/stripe/webhook` that returns 200 in <1s, then processed asynchronously **in-process** via `processQueuedEvent` scheduled on `after()`. Events buffer in the `stripewebhookqueue` Mongo collection. A 1-minute cron sweeper retries failed events with exponential backoff and recovers in-flight rows whose processing crashed before completing.
+
+> **2026-05-15:** the separate `/api/stripe/process-event` HTTP worker route and the receiver→worker `fetch` self-call were **deleted**. Processing now runs in-process through `processQueuedEvent` (called from the receiver's `after()`, the sweeper, and admin Replay). Index DDL was also moved off the request path into the `migrate:ensure-core-indexes` migration. See `gotchas.md` (2026-05-15 504 storm) for the why.
 
 This matches Stripe's documented webhook best practice: respond quickly, queue for async processing, retry idempotently, dead-letter permanent failures.
 
@@ -11,23 +13,29 @@ This matches Stripe's documented webhook best practice: respond quickly, queue f
 ```
 Stripe → POST /api/stripe/webhook  (receiver, maxDuration: 60s)
             │
+            ├─ connectDB
             ├─ verify signature
-            ├─ ProcessedStripeEvent dedup
-            ├─ enqueueStripeEvent(event)       ← upsert by eventId, no-op on dup
-            ├─ after(() => fetch('/api/stripe/process-event', { eventId }))
+            ├─ enqueueStripeEvent(event)       ← idempotent upsert by eventId
+            ├─ after(() => processQueuedEvent(event.id))   ← in-process, post-response
             └─ return 200
 
-         /api/stripe/process-event  (worker, maxDuration: 300s, x-internal-secret auth)
+         processQueuedEvent(eventId)  (in-process — no HTTP, no separate route)
             │
-            ├─ claimNextAttempt(eventId)       ← atomic queued → processing
-            ├─ dispatchStripeEvent(payload)    ← runs the lifted handler
+            ├─ claimNextAttempt(eventId)        ← atomic queued → processing
+            ├─ ProcessedStripeEvent short-circuit → markSucceeded, skipped "already_processed"
+            ├─ dispatchStripeEvent(payload)     ← runs the lifted handler
+            ├─ ackProcessedStripeEventOnce(payload)  if handler flagged it
             ├─ markSucceeded on success
             └─ markFailed on error  → attempts++, backoff or dead
 
          /api/cron/process-stripe-webhook-queue  (sweeper, * * * * *, 300s)
             │
             ├─ Recover orphans: status="processing" AND claimedAt < now-5min
-            └─ Dispatch due queued rows: status="queued" AND nextAttemptAt <= now
+            └─ Promise.allSettled(dueRows.map(r => processQueuedEvent(r.eventId)))
+               for status="queued" AND nextAttemptAt <= now  (bounded by SWEEP_BATCH_SIZE=20)
+
+         POST /api/admin/stripe-webhook-queue  (admin Replay)
+            └─ requeue row, then `const result = await processQueuedEvent(row.eventId)`
 ```
 
 ## Backoff schedule
@@ -78,70 +86,61 @@ The script is idempotent (filter is `{ status: "dead", processedAt: null }`); re
 | # | Layer | Where |
 |---|---|---|
 | 1 | `stripewebhookqueue.eventId` unique index | At enqueue |
-| 2 | `ProcessedStripeEvent` dedup | At receiver, before enqueue |
-| 3 | `claimNextAttempt` atomic findOneAndUpdate | At worker start |
+| 2 | `ProcessedStripeEvent` dedup | In `processQueuedEvent`, after claim, before dispatch |
+| 3 | `claimNextAttempt` atomic findOneAndUpdate | At start of `processQueuedEvent` |
 | 4 | `PaymentEvent` unique key `BenefitsGranted-invoice_<id>` | Inside handler |
 
 Layer 4 is load-bearing. The replay-safety regression test (`npm run test:webhook-queue-replay-safe`) proves dispatching the same event twice produces at most one `PaymentEvent` row.
 
 ## The sweeper does not charge or grant
 
-The sweeper is purely a "kick the worker" trigger. It queries Mongo and POSTs to the worker. It never calls Stripe and never grants benefits itself.
+The sweeper is purely a retry trigger. It queries Mongo and calls `processQueuedEvent` for each due row; that function is the only thing that dispatches handlers. The sweeper never calls Stripe and never grants benefits itself.
 
 ## Required environment variables
 
 | Var | Purpose |
 |---|---|
 | `STRIPE_WEBHOOK_SECRET` | Existing — signature verification |
-| `STRIPE_WORKER_INTERNAL_SECRET` | **New** — gates the worker route (`x-internal-secret` header) and is sent by the receiver fan-out + the sweeper. Generate a 32+ char random string. |
-| `NEXT_PUBLIC_SITE_URL` | **Critical for async webhook to work on Vercel.** Must be set to your customer-facing custom domain (e.g. `https://staging.toolsaustralia.com.au` for preview, `https://toolsaustralia.com.au` for production). The internal fan-out from receiver → worker uses this URL. **If unset, the receiver falls back to `VERCEL_URL` (the `*.vercel.app` per-deployment alias), which is gated by Vercel's bot-mitigation challenge — non-browser POSTs get a 429 response with `x-vercel-mitigated: challenge` and the worker never runs. Symptom: receiver returns 200 but benefits never get granted, and there are zero Vercel logs for `/api/stripe/process-event`.** See `gotchas.md` for the full incident write-up. |
-| `CRON_SECRET` | Existing — Vercel cron auth |
-| `VERCEL_AUTOMATION_BYPASS_SECRET` | Optional — only needed if you've also enabled Vercel Deployment Protection. The `dispatchToWorker` helper attaches this as the `x-vercel-protection-bypass` header when set. Generate via Vercel Dashboard → Settings → Deployment Protection → Protection Bypass for Automation. |
+| `NEXT_PUBLIC_SITE_URL` | Customer-facing custom domain. No longer load-bearing for webhook processing (processing is in-process; there is no receiver→worker self-call as of 2026-05-15), but still used elsewhere for absolute URLs. |
+| `CRON_SECRET` | Existing — Vercel cron auth for the sweeper |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | Optional Vercel Deployment Protection bypass. No longer relevant to this flow (the self-call it protected was deleted on 2026-05-15); kept for any other automation endpoints. |
 
 ## Receiver
 
 ### `POST /api/stripe/webhook` (receiver, maxDuration: 60s)
 
-**As of Task 10, the receiver is ack-fast.** It no longer awaits handler completion.
+The receiver is thin and ack-fast. It does **no** index DDL, **no** inline dedup, and **no** HTTP self-call.
 
 Flow:
-1. Verifies Stripe signature
-2. Deduplicates via `ProcessedStripeEvent` and `user.processedPayments` (unchanged — runs before enqueue)
+1. `connectDB()`
+2. Verifies Stripe signature (`stripe.webhooks.constructEvent`)
 3. Calls `enqueueStripeEvent(event)` — idempotent Mongo upsert by eventId
-4. Schedules `after(() => fetch('/api/stripe/process-event', ...))` — fires after the response is sent
+4. If the row was newly created, schedules `after(() => processQueuedEvent(event.id))` — runs in-process after the response is sent. If the event was already queued, skips the `after()` (the existing row will be picked up by claim/sweeper).
 5. Returns `{ received: true, queued: boolean }` **immediately** (target: <1s)
 
-The receiver no longer calls `dispatchStripeEvent`, `ackProcessedStripeEventOnce` (for the happy path), or `markEventProcessed` — those are now owned entirely by the worker route. The dedup short-circuit paths (skipped events) still call `ackProcessedStripeEventOnce` to keep `ProcessedStripeEvent` consistent.
+All dedup (including the `ProcessedStripeEvent` short-circuit that previously ran inline at the receiver) and all handler dispatch now live in `processQueuedEvent` — see below.
 
-## Worker Route
+## Processing — `processQueuedEvent`
 
-### `/api/stripe/process-event` (POST, maxDuration: 300s)
+`src/services/stripe-webhook-queue/processQueuedEvent.ts` is the single in-process
+processor. It replaced the deleted `/api/stripe/process-event` HTTP worker route
+(no more separate route, no `x-internal-secret`, no HTTP hop). It is called from
+three places: the receiver's `after()`, the sweeper cron, and admin Replay.
 
-The worker route processes queued Stripe events.
+**Signature:** `processQueuedEvent(eventId: string) => Promise<{ processed: boolean; skipped?: "not_claimable" | "already_processed"; error?: string }>`
 
-**Request:**
-- Headers: `x-internal-secret` — must match `process.env.STRIPE_WORKER_INTERNAL_SECRET` (32+ char string)
-- Body: `{ eventId: string }`
+(A `deps` seam exists solely for unit-testing the state machine without running the
+real handler — production always uses the default `dispatchStripeEvent`.)
 
-**Processing flow:**
-1. Authenticates the caller via the secret header
-2. Validates the `eventId` parameter
-3. Calls `claimNextAttempt(eventId)` — atomically reserves the queue row for processing
-   - If the row is already being processed or does not exist, returns `{ skipped: true, reason: "not_claimable" }`
-4. Dispatches the event to the handler via `dispatchStripeEvent(payload)`, which returns `{ shouldMarkAsProcessed }`
-5. If the handler marked it for acknowledgment, calls `ackProcessedStripeEventOnce(payload)` to mark the event as fully processed in `ProcessedStripeEvent`
-6. Marks the queue row as succeeded via `markSucceeded(eventId)`
-7. Returns `{ processed: true }`
+**Flow:**
+1. `claimNextAttempt(eventId)` — atomic `queued → processing`. If not claimable (already processing, or no such row), returns `{ processed: false, skipped: "not_claimable" }`.
+2. **Relocated layer-2 dedup:** `ProcessedStripeEvent.findOne({ eventId: payload.id })`. Stripe dashboard *resends* carry a fresh `event.id` and bypass enqueue idempotency, so this short-circuit must run on the processing path (it used to be inline at the receiver). If already processed → `markSucceeded(eventId)`, return `{ processed: false, skipped: "already_processed" }`.
+3. `dispatchStripeEvent(payload)` → `{ shouldMarkAsProcessed }`.
+4. If `shouldMarkAsProcessed`, `ackProcessedStripeEventOnce(payload)`.
+5. `markSucceeded(eventId)`, return `{ processed: true }`.
+6. On any throw: `markFailed(eventId, message)` (attempts++, backoff or dead), return `{ processed: false, error: message }`.
 
-**Error handling:**
-- If the handler throws, catches the error and calls `markFailed(eventId, errorMessage)`
-- Returns `{ processed: false, error: message }` with **status 200** (intentionally not 5xx)
-- Returning 200 tells the caller (sweeper or receiver) that we've recorded the failure internally; the queue row is already scheduled for the next retry attempt
-- The sweeper will eventually retry via exponential backoff, not HTTP-layer retries
-
-**Configuration:**
-- Requires `STRIPE_WORKER_INTERNAL_SECRET` env var set to a random 32+ character string
-- Must be called with the correct secret to prevent unauthorized event processing
+**The four-result shape:** `{processed:true}` (handled), `{skipped:"not_claimable"}` (another worker/claim won the row), `{skipped:"already_processed"}` (resend of a done event), `{error}` (handler threw — row already scheduled for retry). Callers never throw on a failed event; the queue row owns retry state.
 
 ## Sweeper Route
 
@@ -149,7 +148,7 @@ The worker route processes queued Stripe events.
 
 The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 1. **Recover orphaned rows** — Rows stuck in `processing` state for more than 5 minutes are rolled back to `queued` with an incremented attempt count
-2. **Dispatch due rows** — Rows in `queued` state with `nextAttemptAt ≤ now` are fan-out posted to the worker route in fire-and-forget mode
+2. **Dispatch due rows** — Rows in `queued` state with `nextAttemptAt ≤ now` are processed in-process via `Promise.allSettled(dueRows.map(r => processQueuedEvent(r.eventId)))`
 
 **Request:**
 - Headers: `Authorization: Bearer ${CRON_SECRET}` — validated against `process.env.CRON_SECRET`
@@ -162,15 +161,12 @@ The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
    - If retry budget is exhausted, marks as `dead` with error message
    - Otherwise, rolls back to `queued` with the new retry time
 3. Fetches up to 20 rows in `queued` state with `nextAttemptAt ≤ now`
-   - For each due row, fire-and-forget POSTs to `/api/stripe/process-event` with the `eventId`
-   - Uses the `STRIPE_WORKER_INTERNAL_SECRET` header for authentication
-   - Catches and logs any network errors; does not retry failed POSTs (the sweeper will try again next cycle)
+   - Calls `processQueuedEvent(row.eventId)` for each, awaited together via `Promise.allSettled` (bounded by `SWEEP_BATCH_SIZE`; no HTTP hop)
+   - `Promise.allSettled` means one failing row never aborts the batch; each row's own retry state is owned by `markFailed`
 4. Returns JSON with counts: `{ orphansRecovered: number, dispatched: number }`
 
 **Configuration:**
 - Requires `CRON_SECRET` env var (same as other cron routes)
-- Requires `STRIPE_WORKER_INTERNAL_SECRET` env var (passed to worker route)
-- Optional: `VERCEL_URL` for production, or falls back to `NEXT_PUBLIC_SITE_URL` / `http://localhost:3000`
 - Batch size: 20 rows per sweep (configurable via `SWEEP_BATCH_SIZE` constant)
 - Orphan threshold: 5 minutes (configurable via `ORPHAN_THRESHOLD_MS` constant)
 
@@ -179,7 +175,27 @@ The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 `/admin/stripe-webhook-queue` lists rows by status with a Replay button per row. Replay:
 1. Resets `status: "queued"`, `nextAttemptAt: now`, `claimedAt: null`, `lastError: null`.
 2. Does NOT reset `attempts` — preserves the audit trail.
-3. Immediately fires a fan-out POST to the worker (skips the 60s sweeper wait).
+3. `const result = await processQueuedEvent(row.eventId)` — runs in-process synchronously (no fan-out, no sweeper wait) and returns `result` in the JSON response (`{ replayed: true, eventId, result }`) so the admin sees the outcome immediately.
+
+## Index management
+
+Core MongoDB indexes are **no longer ensured on the request path**. The
+`ensureIndexesOnce()` runtime wrapper was deleted; `ensureCriticalIndexes()`
+(in `src/utils/database/ensure-indexes.ts`) is now called only by the
+out-of-band migration:
+
+```bash
+npm run migrate:ensure-core-indexes:dry   # prints what it would do
+npm run migrate:ensure-core-indexes        # live (script: scripts/migrate-ensure-core-indexes.ts)
+```
+
+This migration **must be run on every index-affecting deploy, BEFORE deploying
+receiver changes**, because it creates the
+`paymentIntentId_1_eventType_1_unique` index on `PaymentEvent` — that unique
+index is **dedup layer 4** and is load-bearing for the no-double-grant
+guarantee. See `gotchas.md` (2026-05-15 504 storm) for why this DDL was
+removed from the synchronous webhook path, and
+`docs/infrastructure/` for the migration script catalog.
 
 ## Testing
 
@@ -189,6 +205,7 @@ The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 | `npm run test:webhook-queue-enqueue` | Idempotent enqueue |
 | `npm run test:webhook-queue-claim` | Atomic claim, parallel race |
 | `npm run test:webhook-queue-mark-result` | Success / fail / dead transitions |
+| `npm run test:webhook-queue-process` | `processQueuedEvent` state machine (claim → dedup → dispatch → mark, 4-result shape) |
 | `npm run test:webhook-queue-replay-safe` | No double-grant on replay |
 | `npm run test:webhook-queue-orphan-recovery` | Orphan rows are recovered |
 
@@ -197,12 +214,12 @@ The sweeper route runs on a scheduled cron job (every minute, `* * * * *`) to:
 **A user reports missing benefits after a successful Stripe charge:**
 1. Open `/admin/stripe-webhook-queue`, filter by `dead`.
 2. Find the event for that invoice (eventId matches Stripe Dashboard).
-3. Click Replay. Wait ~30s.
-4. If still failing, check `lastError` and investigate. Use Stripe Dashboard "Resend" as a last resort (safe — layer 4 still blocks double-grants).
+3. Click Replay — it runs `processQueuedEvent` in-process and the response carries the `result`, so the outcome is immediate (no ~30s wait).
+4. If `result.error` is set, investigate via `lastError`. Use Stripe Dashboard "Resend" as a last resort (safe — layer 4 still blocks double-grants; resends are also caught by the layer-2 `already_processed` short-circuit).
 
 **Vercel deployment shows high `stripewebhookqueue` row count in `queued`:**
-- Normal during a burst (e.g., admin bulk charge). Should drain within minutes.
-- If persistent (>10 min with rows older than 5 min), the worker route may be erroring — check Vercel logs for `/api/stripe/process-event`.
+- Normal during a burst (e.g., admin bulk charge). Should drain within minutes (receiver `after()` plus the 1-minute sweeper, both calling `processQueuedEvent`).
+- If persistent (>10 min with rows older than 5 min), processing is erroring — check Vercel logs for the receiver (`/api/stripe/webhook`) and the sweeper (`/api/cron/process-stripe-webhook-queue`), and inspect `lastError` on stuck rows.
 
 ## Related
 

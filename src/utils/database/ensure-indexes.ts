@@ -17,29 +17,8 @@ import Variant from "@/models/ab-testing/Variant";
 import VariantAssignment from "@/models/ab-testing/VariantAssignment";
 import connectDB from "@/lib/mongodb";
 
-// ✅ CRITICAL: Singleton pattern - only run index creation once per server instance
-let indexesEnsured = false;
-let ensureIndexesPromise: Promise<void> | null = null;
-
-export async function ensureIndexesOnce(): Promise<void> {
-  // If already ensured, skip
-  if (indexesEnsured) {
-    return;
-  }
-
-  // If already in progress, wait for it to complete
-  if (ensureIndexesPromise) {
-    return ensureIndexesPromise;
-  }
-
-  // Start ensuring indexes
-  ensureIndexesPromise = ensureCriticalIndexes();
-  await ensureIndexesPromise;
-  indexesEnsured = true;
-  ensureIndexesPromise = null;
-}
-
-async function ensureCriticalIndexes(): Promise<void> {
+// Exported for scripts/migrate-ensure-core-indexes.ts — not for request-path use.
+export async function ensureCriticalIndexes(): Promise<void> {
   try {
     await connectDB();
 
@@ -222,5 +201,5 @@ async function ensureIndex(
   // console.log(`✅ Created index "${indexName}"`);
 }
 
-// ✅ NOTE: Indexes are now ensured via ensureIndexesOnce() called from webhook handler
-// This ensures indexes are created before any payment processing happens
+// ✅ NOTE: Indexes are ensured out-of-band via scripts/migrate-ensure-core-indexes.ts
+// (no longer on the request path) so payment processing isn't blocked on index builds

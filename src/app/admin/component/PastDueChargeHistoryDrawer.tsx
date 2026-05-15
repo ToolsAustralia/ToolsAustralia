@@ -50,6 +50,31 @@ function RunStatusBadge({ status }: { status: string }) {
   );
 }
 
+type AttemptStatus = "success" | "failed" | "skipped";
+
+const ALL_STATUSES: readonly AttemptStatus[] = ["success", "failed", "skipped"];
+
+const STATUS_FILTERS: { value: AttemptStatus; label: string; active: string }[] = [
+  {
+    value: "success",
+    label: "Succeeded",
+    active:
+      "bg-emerald-100 text-emerald-800 ring-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-800",
+  },
+  {
+    value: "failed",
+    label: "Failed",
+    active:
+      "bg-red-100 text-red-800 ring-red-300 dark:bg-red-950/50 dark:text-red-200 dark:ring-red-800",
+  },
+  {
+    value: "skipped",
+    label: "Skipped",
+    active:
+      "bg-amber-100 text-amber-800 ring-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-800",
+  },
+];
+
 function RetryStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
@@ -77,6 +102,9 @@ export default function PastDueChargeHistoryDrawer({
   const detailQuery = useChargePastDueRunDetail(runId);
 
   const [search, setSearch] = useState("");
+  const [activeStatuses, setActiveStatuses] = useState<Set<AttemptStatus>>(
+    () => new Set(ALL_STATUSES)
+  );
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -92,8 +120,19 @@ export default function PastDueChargeHistoryDrawer({
     const filtered = q
       ? augmented.filter((r) => (r.userEmail ?? "").toLowerCase().includes(q))
       : augmented;
-    return groupChargeAttemptsByUser(filtered);
-  }, [detailQuery.data, search]);
+    const groups = groupChargeAttemptsByUser(filtered);
+    // Status filter ("any matching attempt"): keep a user if at least one of
+    // their attempts has a status in the active set. An empty set is treated
+    // as no filter so the list never goes mysteriously blank.
+    const effective = activeStatuses.size === 0 ? new Set(ALL_STATUSES) : activeStatuses;
+    if (effective.size === ALL_STATUSES.length) return groups;
+    return groups.filter(
+      (g) =>
+        (effective.has("success") && g.successCount > 0) ||
+        (effective.has("failed") && g.failedCount > 0) ||
+        (effective.has("skipped") && g.skippedCount > 0)
+    );
+  }, [detailQuery.data, search, activeStatuses]);
 
   const selectableItems = useMemo<BulkRecoverItem[]>(() => {
     const items: BulkRecoverItem[] = [];
@@ -125,6 +164,15 @@ export default function PastDueChargeHistoryDrawer({
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleStatus = (s: AttemptStatus) => {
+    setActiveStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
       return next;
     });
   };
@@ -254,6 +302,30 @@ export default function PastDueChargeHistoryDrawer({
                   Per-invoice attempts
                 </h4>
                 <div className="flex items-center gap-3">
+                  <div
+                    className="flex items-center gap-1"
+                    role="group"
+                    aria-label="Filter by attempt status"
+                  >
+                    {STATUS_FILTERS.map((f) => {
+                      const on = activeStatuses.has(f.value);
+                      return (
+                        <button
+                          key={f.value}
+                          type="button"
+                          onClick={() => toggleStatus(f.value)}
+                          aria-pressed={on}
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition-colors ${
+                            on
+                              ? f.active
+                              : "bg-transparent text-gray-400 ring-gray-300 hover:text-gray-600 dark:text-neutral-500 dark:ring-neutral-700 dark:hover:text-neutral-300"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
                     <input
@@ -266,6 +338,7 @@ export default function PastDueChargeHistoryDrawer({
                   </div>
                   <span className="text-xs text-gray-500 dark:text-neutral-400">
                     {groupedAttempts.length} users
+                    {activeStatuses.size === 0 && " (no status filter)"}
                   </span>
                   {selectableItems.length > 0 && (
                     <button
