@@ -34,6 +34,7 @@
     "test:webhook-queue-replay-safe": "tsx src/services/stripe-webhook-handlers/__tests__/replay-safety.test.ts",
     "test:promo-banner-brand": "tsx src/utils/promo-banner/__tests__/resolve-promo-banner-asset-brand.test.ts",
     "test:landing-image-resolver": "tsx src/utils/promo/__tests__/landing-image-resolver.test.ts",
+    "test:additional-pack-discount": "tsx src/utils/membership/__tests__/additional-pack-discount.test.ts",
     "migrate:anchor-billing-24": "tsx scripts/migrate-anchor-billing-24.ts",
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",

@@ -27,6 +27,14 @@ Two helpers in `src/utils/membership/` control how package names are shown to us
 
 `CancellationUpsellModal/DowngradeCard.tsx` and `DowngradeConfirmModal/Hero.tsx` had their package-icon `<Image>` elements without `sizes` hints; Phase 5B added `sizes="48px"` / `sizes="44px"` matching their fixed cells. Markup only — no policy or transition logic touched.
 
+## P0a. Additional-pack discount util — 2026-05-15
+
+`src/utils/membership/additional-pack-discount.ts` — `getAdditionalPackDiscount(planId)`.
+
+Computes the 50%-off discount for member-only additional packs by pairing each `additional-{tier}-pack` against its matching `{tier}-pack` regular price from `membershipPackages`. Returns `{ regularPrice, discountedPrice, percentOff }` or `null` when there is no genuine discount (inactive pack, no matching regular pack, regular price not higher, non-additional or subscription ids). Accepts the `-member` suffix appended by `useMemberships`.
+
+**Rule:** UI that displays a strike-through "was $X" price for an additional pack must call this util — do not hard-code prices or assume 50%.
+
 ## P1. Pure-policy split for testability
 
 Stripe-touching logic and pure-decision logic are separated so the latter can be unit-tested without mocking Stripe.
