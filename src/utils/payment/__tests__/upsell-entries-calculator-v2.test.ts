@@ -156,7 +156,55 @@ async function main() {
     "mini-upsell-additional-tradie unaffected by membership multiplier change"
   );
 
-  // 3. Unknown offer → 0.
+  // 3. Stacking with active promo multiplier.
+  // Reset membership back to 10 for a cleaner stack test.
+  config.membership = 10;
+  await config.save();
+
+  // 5× active membership promo × 10× upsell × 3 base apprentice = 150
+  assert.equal(
+    await calculateUpsellEntriesForOffer("membership-upsell-tradie", 5),
+    150,
+    "membership-upsell-tradie stacked: 5× promo × 10× upsell × 3 base = 150"
+  );
+  // 3× active one-time promo × 2× upsell × 15 base tradie-pack = 90
+  assert.equal(
+    await calculateUpsellEntriesForOffer("onetime-upsell-tradie", 3),
+    90,
+    "onetime-upsell-tradie stacked: 3× promo × 2× upsell × 15 base = 90"
+  );
+  // 5× promo × 2× additional upsell × 15 base additional-tradie-pack = 150
+  assert.equal(
+    await calculateUpsellEntriesForOffer("additional-upsell-tradie", 5),
+    150,
+    "additional-upsell-tradie stacked: 5× promo × 2× upsell × 15 base = 150"
+  );
+  // Mini stacks with promo (upsell mult is fixed 1): 5× × 1 × 25 = 125
+  assert.equal(
+    await calculateUpsellEntriesForOffer("mini-upsell-additional-tradie", 5),
+    125,
+    "mini-upsell-additional-tradie stacked: 5× promo × 1 × 25 base = 125"
+  );
+
+  // promoMultiplier = 1 is the no-active-promo baseline → matches default behavior.
+  assert.equal(
+    await calculateUpsellEntriesForOffer("membership-upsell-tradie", 1),
+    30,
+    "1× active promo (i.e., no promo) yields same as default"
+  );
+  // Sub-1 or non-finite promo values are clamped to 1.
+  assert.equal(
+    await calculateUpsellEntriesForOffer("membership-upsell-tradie", 0),
+    30,
+    "0× promo is clamped to 1"
+  );
+  assert.equal(
+    await calculateUpsellEntriesForOffer("membership-upsell-tradie", NaN),
+    30,
+    "NaN promo is clamped to 1"
+  );
+
+  // 4. Unknown offer → 0.
   assert.equal(
     await calculateUpsellEntriesForOffer("does-not-exist"),
     0,

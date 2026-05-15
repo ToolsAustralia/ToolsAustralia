@@ -14,12 +14,18 @@ import { useEffectiveMultipliers } from "@/hooks/queries/useScheduledPromoQuerie
 /**
  * Reads from /api/admin/promo/effective so the banner reflects the canonical
  * Scheduled > Toggle > Alternating chain — same source the checkout payment path uses.
- * Earlier this only checked toggle promos via useAdminActivePromos, missing scheduled
- * and alternating phases.
  */
-function ActivePromoBanner() {
-  const { data, isLoading } = useEffectiveMultipliers();
-
+function ActivePromoBanner({
+  membership,
+  oneTime,
+  mini,
+  isLoading,
+}: {
+  membership: number | null;
+  oneTime: number | null;
+  mini: number | null;
+  isLoading: boolean;
+}) {
   if (isLoading) {
     return (
       <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
@@ -28,13 +34,7 @@ function ActivePromoBanner() {
     );
   }
 
-  const membershipMult = data?.["membership-packages"]?.multiplier ?? null;
-  const oneTimeMult = data?.["one-time-packages"]?.multiplier ?? null;
-  const miniMult = data?.["mini-packages"]?.multiplier ?? null;
-
-  const hasAnyActive =
-    membershipMult !== null || oneTimeMult !== null || miniMult !== null;
-
+  const hasAnyActive = membership !== null || oneTime !== null || mini !== null;
   const fmt = (m: number | null) => (m === null ? "—" : `${m}×`);
 
   return (
@@ -42,18 +42,17 @@ function ActivePromoBanner() {
       <strong>Active promo:</strong>{" "}
       {hasAnyActive ? (
         <span className="ml-1">
-          membership&nbsp;{fmt(membershipMult)}
+          membership&nbsp;{fmt(membership)}
           <span className="mx-2 text-amber-400">·</span>
-          one-time&nbsp;{fmt(oneTimeMult)}
+          one-time&nbsp;{fmt(oneTime)}
           <span className="mx-2 text-amber-400">·</span>
-          mini&nbsp;{fmt(miniMult)}
+          mini&nbsp;{fmt(mini)}
         </span>
       ) : (
         <span className="ml-1 italic text-amber-700">no active promo</span>
       )}
       <span className="ml-2 text-xs text-amber-600">
-        (promo multipliers apply on top of the trigger pack&apos;s base entries — upsell multipliers
-        below are separate)
+        (active promo <strong>stacks</strong> with the upsell category multiplier below — see Entry Preview)
       </span>
     </div>
   );
@@ -69,7 +68,12 @@ const CATEGORY_LABELS: Record<"membership" | "oneTime" | "additional", string> =
 
 export function UpsellMultiplierPanel() {
   const { data, isLoading, isError } = useUpsellMultipliersQuery();
+  const { data: effective, isLoading: isLoadingEffective } = useEffectiveMultipliers();
   const mutation = useUpsellMultipliersMutation();
+
+  const activeMembershipPromo = effective?.["membership-packages"]?.multiplier ?? null;
+  const activeOneTimePromo = effective?.["one-time-packages"]?.multiplier ?? null;
+  const activeMiniPromo = effective?.["mini-packages"]?.multiplier ?? null;
 
   const [draft, setDraft] = useState<{
     membership: number;
@@ -100,11 +104,18 @@ export function UpsellMultiplierPanel() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Upsell Multipliers</h2>
         <p className="mt-1 text-sm text-slate-600 dark:text-neutral-400">
           Sets how many free entries each upsell offers, as a multiplier of the trigger
-          pack&apos;s base entries. Active promo multipliers do not stack into upsell math.
+          pack&apos;s base entries. <strong>Active promo multipliers stack with these values</strong> —
+          if a 5× membership promo is live and the Membership upsell multiplier here is 10×, a
+          subscriber sees the Apprentice Pack upsell with 5 × 10 × 3 = 150 free entries.
         </p>
       </header>
 
-      <ActivePromoBanner />
+      <ActivePromoBanner
+        membership={activeMembershipPromo}
+        oneTime={activeOneTimePromo}
+        mini={activeMiniPromo}
+        isLoading={isLoadingEffective}
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {(["membership", "oneTime", "additional"] as const).map((key) => (
@@ -133,6 +144,9 @@ export function UpsellMultiplierPanel() {
         membership={current.membership}
         oneTime={current.oneTime}
         additional={current.additional}
+        activeMembershipPromo={activeMembershipPromo}
+        activeOneTimePromo={activeOneTimePromo}
+        activeMiniPromo={activeMiniPromo}
       />
 
       <footer className="mt-6 flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-neutral-700">

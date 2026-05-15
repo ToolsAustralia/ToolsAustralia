@@ -24,14 +24,18 @@ Eligibility is server-side; if a deploy changes eligibility but a user has the o
 
 If the user deletes their original PM between original purchase and upsell offer, `original-purchase-pm.ts` falls back to prompting for a new card. Don't error.
 
-## Promo multipliers and upsell multipliers are independent
+## Promo multipliers STACK with upsell multipliers
 
-Upsell entry counts use `categoryMultiplier × base` (from `UpsellMultiplierConfig`) — the active promo multiplier does **not** stack into upsell entry math. `upsell-promo-multiplier.ts` is only used for **hero image selection** (e.g., to pick the `10x-tradie-package.webp` image) and has no effect on the entries granted.
-
-If you see code applying a promo multiplier to upsell entries — that is the old (pre-remap) behavior and should be treated as a bug. The canonical formula is:
+Upsell entry counts use:
 
 ```
-upsellEntries = upsellCategoryMultiplier × baseEntries   (no promo factor)
+upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
 ```
 
-Note: during high-promo periods (e.g., a 10× promo for packages), the admin can choose to raise the `categoryMultiplier` knob for the relevant upsell category to compensate — that's the intended UX.
+The active promo (Scheduled > Toggle > Alternating, resolved via [PromoMultiplierResolverService](../../src/services/admin/PromoMultiplierResolverService.ts)) **stacks** with the admin-configured `UpsellMultiplierConfig` value. The promo factor comes from `originalPurchaseContext.promoMultiplier` (recorded at trigger-purchase time) so the user always sees a coherent stack tied to their own purchase.
+
+**Historical note (2026-05-15 revision).** Prior to this date the formula was `categoryMultiplier × baseEntries` (no stacking). The system was changed to stack on the user's request so promo seasons amplify upsell value naturally — admins no longer need to manually raise the category knob during a promo. If you see old code or docs claiming "promo multipliers do NOT stack into upsells," update them.
+
+**Mini upsells.** Mini upsells have a hardcoded `1×` category multiplier (no admin knob), so the formula reduces to `activePromoMultiplier × baseEntries` — they still benefit from the mini-packages promo when one is active.
+
+**`upsell-promo-multiplier.ts`.** That helper is used both for **hero image selection** (which `Nx-*.webp` variant to load) **and** as the `activePromoMultiplier` factor inside the calculator. Different name, same source.

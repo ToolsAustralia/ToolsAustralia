@@ -12,12 +12,18 @@ import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 
 /**
  * Resolve upsell entries for a specific upsell record.
- * - Membership / one-time / additional upsells: categoryMultiplier × baseEntries(template).
- * - Mini upsells: baseEntries(template) (1:1, never multiplied).
  *
- * Active promo multipliers do NOT stack into the upsell calculation.
+ * Formula (all categories): `activePromoMultiplier × upsellCategoryMultiplier × baseEntries`
+ * - Membership / one-time / additional upsells: upsellCategoryMultiplier is the admin-configured value.
+ * - Mini upsells: upsellCategoryMultiplier is fixed at 1 — so result is `activePromoMultiplier × baseEntries`.
+ *
+ * `activePromoMultiplier` should be the promo that applied to the original trigger purchase
+ * (recorded in `originalPurchaseContext.promoMultiplier`). Default 1× means no active promo.
  */
-export async function calculateUpsellEntriesForOffer(offerId: string): Promise<number> {
+export async function calculateUpsellEntriesForOffer(
+  offerId: string,
+  activePromoMultiplier: number = 1
+): Promise<number> {
   const offer = getUpsellPackageById(offerId);
   if (!offer) return 0;
 
@@ -32,20 +38,23 @@ export async function calculateUpsellEntriesForOffer(offerId: string): Promise<n
     packageType: lookupType,
   });
 
+  const promo = Number.isFinite(activePromoMultiplier) && activePromoMultiplier >= 1
+    ? activePromoMultiplier
+    : 1;
+
   if (offer.upsellCategory === "mini") {
-    return baseEntries; // fixed: no multiplier
+    return promo * baseEntries; // mini upsell category multiplier is fixed at 1
   }
 
-  const multiplier = await getUpsellMultiplier(offer.upsellCategory);
-  return multiplier * baseEntries;
+  const categoryMultiplier = await getUpsellMultiplier(offer.upsellCategory);
+  return promo * categoryMultiplier * baseEntries;
 }
 
 /**
  * Legacy entry point used by the existing upsell purchase route. Looks up the upsell by
  * trigger pack id (since callers pass `originalPurchaseContext`, not the upsell's own id)
- * and delegates to `calculateUpsellEntriesForOffer`. The `_promoMultiplier` argument is
- * retained for ABI compatibility with the legacy route but is intentionally unused — the
- * new formula does not stack with promo.
+ * and delegates to `calculateUpsellEntriesForOffer`, passing through the promo that applied
+ * to the original purchase so the new formula can stack it correctly.
  */
 export async function calculateUpsellEntriesFromContext(
   originalPurchaseContext: {
@@ -53,12 +62,12 @@ export async function calculateUpsellEntriesFromContext(
     packageType: "membership" | "one-time" | "mini-draw";
     baseEntries?: number;
   },
-  _promoMultiplier: number
+  promoMultiplier: number
 ): Promise<number> {
   const { upsellPackages } = await import("@/data/upsellPackages");
   const offer = upsellPackages.find((u) =>
     u.triggersOnPackageIds?.includes(originalPurchaseContext.packageId)
   );
   if (!offer) return 0;
-  return calculateUpsellEntriesForOffer(offer.id);
+  return calculateUpsellEntriesForOffer(offer.id, promoMultiplier);
 }

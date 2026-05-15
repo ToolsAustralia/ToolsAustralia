@@ -27,7 +27,7 @@ Going forward we want the upsell layer to compose *known packs* with *configurab
 | D1 | Upsell entities remain distinct records that **reference** a base pack for inclusion shape (Option B). Upsells get their own Stripe products. | ✅ Confirmed |
 | D2 | One admin-configurable multiplier knob **per upsell category** (membership / one-time / additional), three knobs total. Mini upsells use no multiplier — upsell entries equal the trigger pack's base entries (price is 50% off, entries identical). | ✅ Confirmed |
 | D3 | Tier-based purchase multiplier (subscriber vs. entrant vs. guest) is **already coded** in [src/utils/promo/get-effective-promo-type.ts](../../../src/utils/promo/get-effective-promo-type.ts) and is unchanged by this refactor. | ✅ Verified |
-| D4 | Upsell-entries formula becomes: `upsellEntries = upsellCategoryMultiplier × baseEntries`. **No stacking** with active promo multiplier. | ✅ Confirmed |
+| D4 | Upsell-entries formula: `upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries`. **Promo multipliers STACK** with the upsell category multiplier. When no active promo applies, the promo factor is `1×`. Mini upsells have a fixed `1×` upsell category multiplier — so they reduce to `activePromoMultiplier × baseEntries`. | ✅ Confirmed (2026-05-15 — revised from no-stacking; see Decision Log below) |
 | D5 | Promo multiplier range expanded to include `2, 3, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100`. Same list reused for upsell category multipliers. | ✅ Confirmed |
 | D6 | Admin promo / upsell configuration screens show per-package entry preview, including a sanity-check "purchase comparison" line that reflects the active promo. | ✅ Confirmed |
 | D7 | **No data migration** for existing Mini Pack 4–8 orders or Stripe products. Old SKUs retained for historical records; new mapping applies to future purchases only. Documented in [docs/upsell/](../../upsell/). | ✅ Confirmed |
@@ -96,7 +96,10 @@ The membership subscriptions, regular one-time packs, additional one-time packs,
 
 ### 3.2 Upsell mappings
 
-All upsells use the formula `upsellEntries = categoryMultiplier × triggerPack.baseEntries`. Active promo multipliers do **not** stack into the upsell calculation.
+All upsells use the formula `upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × triggerPack.baseEntries`. The active promo multiplier comes from the same source as checkout (Scheduled > Toggle > Alternating > 1×). When no promo applies, the factor is `1×`. Mini upsells have a fixed `1×` category multiplier so their result is `activePromoMultiplier × baseEntries`.
+
+**Worked example** — 5× active membership promo + 10× admin Membership upsell setting:
+- Tradie subscription → Apprentice Pack upsell hero: `5 × 10 × 3 = 150 free entries` (was 30 under the no-stacking variant)
 
 #### Membership upsells (default category multiplier `10×`, **60% off the template pack price**)
 
@@ -266,7 +269,7 @@ The same "entries-per-package preview" treatment is added to the existing **prom
 - [ ] `src/data/upsellPackages.ts` rewritten per §3.2; all 22 upsell records (3 membership + 6 one-time + 5 additional + 8 mini) have correct trigger, display name, Stripe description, price, base-pack reference, and tracking ID.
 - [ ] Mini-scoped Additional packs (5 records) created with new IDs and rendered on the mini-draw catalog.
 - [ ] `Mini Pack 4–8` source records flagged inactive; historical orders unaffected.
-- [ ] `upsell-entries-calculator.ts` reads category multiplier from admin config; formula is `categoryMultiplier × base`.
+- [ ] `upsell-entries-calculator.ts` reads category multiplier from admin config; formula is `activePromoMultiplier × categoryMultiplier × base` (promo stacks).
 - [ ] Admin Upsell-Multiplier panel renders preview tables per §5.
 - [ ] Admin promo screen shows per-package entry preview using the same UX.
 - [ ] `PromoMultiplier` type updated to allow `2, 3, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100`.

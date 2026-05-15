@@ -61,14 +61,33 @@ Note: the upsell references the **next tier down** pack (Tradie sub → Apprenti
 Upsell entries are calculated server-side at purchase time by `calculateUpsellEntriesForOffer` in [src/utils/payment/upsell-entries-calculator.ts](../../src/utils/payment/upsell-entries-calculator.ts):
 
 ```
-upsellEntries = upsellCategoryMultiplier × baseEntries(baseTemplatePackageId)
+upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries(baseTemplatePackageId)
 ```
 
-- **Membership / one-time / additional** upsells: multiplier comes from `UpsellMultiplierConfig` (looked up via `getUpsellMultiplier(category)`), base entries from `membershipPackages`.
-- **Mini** upsells: `baseEntries` unchanged (1:1); `getUpsellMultiplier` is never called.
-- **Active promo multipliers do NOT stack** into upsell entries. The promo system governs package purchases; upsells have their own admin-configured multiplier.
+**Factors:**
+- `activePromoMultiplier` — the promo that applied to the **original trigger purchase**, taken from `originalPurchaseContext.promoMultiplier` (recorded at trigger purchase time). Resolves canonically via [PromoMultiplierResolverService](../../src/services/admin/PromoMultiplierResolverService.ts) (Scheduled > Toggle > Alternating > 1×). When no promo applies, the factor is `1×`.
+- `upsellCategoryMultiplier` — admin-configured value from `UpsellMultiplierConfig`, looked up via `getUpsellMultiplier(category)`. Defaults: `membership=10`, `oneTime=2`, `additional=2`. Mini upsells use a fixed `1×` (no admin knob).
+- `baseEntries` — the upsell record's `baseTemplatePackageId` resolved against the static data:
+  - membership / one-time / additional → `membershipPackages` (`entriesPerMonth` for subscriptions, `totalEntries` for one-time packs)
+  - mini → `miniDrawPackages` (`originalEntries ?? entries`)
 
-The `UpsellMultiplierConfig` admin row stores three values: `membership`, `oneTime`, `additional` (defaults: 10, 2, 2).
+**Worked example.** Active promo: membership `5×`. Admin Membership upsell multiplier: `10×`. User buys Tradie subscription and accepts the Apprentice Pack upsell:
+
+```
+activePromoMultiplier (5)  ×  upsellCategoryMultiplier (10)  ×  baseEntries (3)  =  150 free entries
+```
+
+The 5× promo also applied to the Tradie subscription's own entries (`15 × 5 = 75`); the upsell stacks on top of the same promo.
+
+**Edge cases handled by the calculator:**
+- `activePromoMultiplier` is missing, `0`, negative, or `NaN` → clamped to `1` (treated as no promo).
+- Unknown `offerId` → returns `0` (caller treats as no upsell granted).
+- Mini upsell category → `categoryMultiplier` is bypassed (fixed at `1`); formula reduces to `activePromoMultiplier × baseEntries`.
+
+**Scalability of the model:**
+- Adding a new upsell category requires only: extending `UpsellCategory` union in [UpsellMultiplierConfig.ts](../../src/models/UpsellMultiplierConfig.ts), adding the new field with an enum-validated multiplier default, wiring it into `getUpsellMultiplier(category)` resolver, and adding rows for the new category in `upsellPackages.ts`. The formula is universal — no calculator change needed.
+- Adding new active-promo sources (e.g., a coupon system) plugs into `PromoMultiplierResolverService` and automatically flows into the upsell formula through `originalPurchaseContext.promoMultiplier`.
+- Adding new promo multiplier values: extend `PROMO_MULTIPLIERS` in [src/types/promo-multiplier.ts](../../src/types/promo-multiplier.ts) — Zod schema and Mongoose enums derive from this constant.
 
 ## Stripe description convention
 

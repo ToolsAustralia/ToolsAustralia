@@ -1,5 +1,7 @@
 # Upsell Remap & Per-Category Multiplier — Implementation Plan
 
+> **⚠️ POST-EXECUTION REVISION (2026-05-15).** The original plan specified a NO-STACKING formula `upsellEntries = categoryMultiplier × baseEntries`. After execution, the user requested stacking. The current canonical formula is `upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries` — see [the spec's D4 entry](../specs/2026-05-14-upsell-remap-and-multiplier-design.md#2-key-decisions) and [docs/upsell/architecture.md](../../upsell/architecture.md) for the live truth. Code blocks below reflect the original implementation; the calculator and tests have since been updated to stack.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace "Plus" upsell SKUs with reusable base-pack references, make upsell entries admin-configurable per category, restructure Mini Pack 4–8 into mini-scoped Additional packs, and standardize "free entries" terminology and Stripe descriptions.

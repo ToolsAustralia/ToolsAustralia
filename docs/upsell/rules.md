@@ -22,8 +22,14 @@ The cancel-upsell offer must be gated server-side via `cancellation-upsell-eligi
 
 All [payment](../payment/rules.md) PCI rules apply. PM ids only, no card data persisted in upsell-related rows.
 
-## R5. Upsell entries use the category multiplier, not the promo multiplier
+## R5. Upsell entries stack the active promo with the category multiplier
 
-`upsellEntries = upsellCategoryMultiplier × baseEntries`. The promo multiplier is **not** a factor in upsell entry math. `upsell-promo-multiplier.ts` is read-only context for the hero image selector — never use its output to scale entry grants.
+```
+upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
+```
 
-Admin can raise the category multiplier knob (`UpsellMultiplierConfig`) to increase upsell generosity during promo periods.
+The active promo factor is the one that applied to the **original trigger purchase** (read from `originalPurchaseContext.promoMultiplier`). It comes from the canonical resolver (Scheduled > Toggle > Alternating > 1×). No promo → factor of `1`.
+
+Mini upsells have a fixed `1×` category multiplier (no admin knob), so the formula reduces to `activePromoMultiplier × baseEntries` for the mini category.
+
+Sub-1 / NaN / negative promo values are clamped to `1` by the calculator — never trust caller-provided inputs.
