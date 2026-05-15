@@ -137,7 +137,7 @@ Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, blac
 
 `planIdToElectricTier(planId)` normalises any plan id — including `additional-*` prefixes and `*-member` suffixes — to a tier by substring matching. Unknown plan ids fall back to `power` (electric-red).
 
-Opt-in: only `ElectricPackageCard` (Phase 2) calls `getElectricPackageColorScheme`. Live `MembershipSection` and all subscription flows are unaffected.
+Opt-in: in Phase 1 only the Phase-1 `ElectricPackageCard` (rendered solely by the dev-only `/dev/membershipsection` harness) calls `getElectricPackageColorScheme`. Wiring it into the live `MembershipSection` is deferred to Phase 2. Live `MembershipSection` and all subscription flows are currently unaffected.
 
 Test: `npm run test:electric-scheme` (standalone tsx script, no DB required).
 

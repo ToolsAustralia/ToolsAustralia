@@ -20,6 +20,7 @@
 - **Theme toggle**: wraps output in a `.dark` class div
 - **Reduced-motion**: adds `[&_*]:!transition-none [&_*]:!animate-none` to disable animations
 - **Old-vs-new**: shows a reminder label to open the live section in another tab for comparison
+- **Locked-preview**: forces the member-only (additional) packs to render in their locked state regardless of access, so the locked card UI can be previewed from a no-access user state
 
 No Stripe, no providers, no real purchase. Mock data sourced from `src/data/membershipPackages.ts`.
 
