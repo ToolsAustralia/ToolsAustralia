@@ -36,6 +36,8 @@
     "migrate:anchor-billing-24:dry": "tsx scripts/migrate-anchor-billing-24.ts --dry-run",
     "migrate:affiliate-commission-pi-index": "tsx scripts/migrate-affiliate-commission-pi-index.ts",
     "migrate:affiliate-commission-pi-index:dry": "tsx scripts/migrate-affiliate-commission-pi-index.ts --dry-run",
+    "migrate:ensure-core-indexes": "tsx scripts/migrate-ensure-core-indexes.ts",
+    "migrate:ensure-core-indexes:dry": "tsx scripts/migrate-ensure-core-indexes.ts --dry-run",
     "backfill:subscription-end-dates": "tsx scripts/backfill-subscription-end-dates.ts",
     "stripe:list-active-paused-subscriptions": "tsx scripts/list-active-paused-subscriptions.ts",
     "stripe:resume-active-paused-subscriptions:dry": "tsx scripts/list-active-paused-subscriptions.ts --limit=200",

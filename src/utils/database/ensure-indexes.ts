@@ -39,7 +39,8 @@ export async function ensureIndexesOnce(): Promise<void> {
   ensureIndexesPromise = null;
 }
 
-async function ensureCriticalIndexes(): Promise<void> {
+// Exported for scripts/migrate-ensure-core-indexes.ts — not for request-path use; prefer ensureIndexesOnce().
+export async function ensureCriticalIndexes(): Promise<void> {
   try {
     await connectDB();
 
