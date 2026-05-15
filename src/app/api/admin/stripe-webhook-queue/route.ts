@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
-import { dispatchToWorker } from "@/services/stripe-webhook-queue/dispatchWorker";
+import { processQueuedEvent } from "@/services/stripe-webhook-queue/processQueuedEvent";
 
 const ALLOWED_STATUSES: ReadonlyArray<StripeWebhookQueueStatus> = [
   "queued",
@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
   // many times this event has failed previously.
   await row.save();
 
-  // Immediate fan-out so the engineer doesn't wait up to 60s for the sweeper.
-  void dispatchToWorker(row.eventId, "webhook-replay");
+  // Process immediately in-process so the admin sees the result now.
+  const result = await processQueuedEvent(row.eventId);
 
-  return NextResponse.json({ replayed: true, eventId: row.eventId });
+  return NextResponse.json({ replayed: true, eventId: row.eventId, result });
 }
