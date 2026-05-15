@@ -106,7 +106,7 @@ export default function ElectricPackageCard({
                 <span className={cn("text-[20px] font-bold line-through opacity-40", colorScheme.textMuted)}>
                   {entries.original}
                 </span>
-                <span className="text-[18px] font-bold" style={gradientText}>→</span>
+                <span className="text-[18px] font-bold" style={gradientText ? { color: colorScheme.accentHex } : undefined}>→</span>
                 <span className={cn("text-[34px] font-bold", gradientText ? "" : colorScheme.entriesText)} style={gradientText}>
                   {entries.display}
                 </span>
