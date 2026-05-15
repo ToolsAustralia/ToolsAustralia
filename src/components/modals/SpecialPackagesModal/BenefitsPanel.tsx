@@ -27,7 +27,7 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage }) => {
   const colorScheme = getElectricPackageColorScheme(selectedPackage._id || "");
   const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
   // Use solid accent color - gradient styles (packageInclusionTextStyle/textGradientStyle) can make text invisible on dark card backgrounds
-  const benefitsTextStyle = { color: accentHex };
+  const benefitsTextStyle = { color: accentHex, textShadow: `0 0 8px ${hexToRgba(accentHex, 0.55)}` };
   const darkBg = `linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
   return (
     <div
@@ -38,7 +38,7 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage }) => {
         boxShadow: `0 0 18px ${hexToRgba(accentHex, 0.4)}, 0 4px 20px rgba(0,0,0,0.45)`,
       }}
     >
-      <h4 className="text-xs sm:text-sm font-bold mb-2 sm:mb-3" style={benefitsTextStyle}>
+      <h4 className="text-xs sm:text-sm font-bold mb-2 sm:mb-3" style={{ ...benefitsTextStyle, textShadow: `0 0 12px ${hexToRgba(accentHex, 0.65)}` }}>
         {getPackageDisplayName(selectedPackage)} Benefits
       </h4>
       <div className="space-y-2 sm:space-y-2.5">

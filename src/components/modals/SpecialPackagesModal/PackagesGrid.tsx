@@ -14,6 +14,8 @@ import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPa
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
 import { hexToRgba } from "./utils";
+import BestValueBadge from "@/components/ui/BestValueBadge";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
 
 interface PackagesGridProps {
   packagesWithPromo: StaticMembershipPackage[];
@@ -66,6 +68,10 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               }}
               onClick={() => onSelectPackage(pkg)}
             >
+              {isOneTimeBestValuePlanId(pkg._id || "") && (
+                <BestValueBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+              )}
+
               {/* Promo Badge - Upper right, like PackageSelectionModal/MembershipSection */}
               {pkg.isPromoActive && pkg.promoMultiplier && (
                 <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
@@ -131,23 +137,6 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                       </span>
                     )}
                   </span>
-                  {discount && (
-                    <span
-                      className="inline-flex flex-shrink-0 flex-col items-center justify-start text-black"
-                      style={{
-                        backgroundColor: accentHex,
-                        width: 42,
-                        height: 48,
-                        clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
-                        boxShadow: `0 0 14px ${hexToRgba(accentHex, 0.65)}`,
-                      }}
-                      aria-label={`Save ${discount.percentOff} percent off`}
-                    >
-                      <span className="mt-[5px] text-[6px] font-extrabold uppercase leading-none tracking-wide">Save</span>
-                      <span className="text-[13px] font-black leading-none">{discount.percentOff}%</span>
-                      <span className="text-[6px] font-extrabold uppercase leading-none tracking-wide">Off</span>
-                    </span>
-                  )}
                   <button
                     type="button"
                     onClick={(e) => {

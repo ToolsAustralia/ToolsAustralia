@@ -20,7 +20,7 @@ Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, o
 
 ## SpecialPackagesModal color scheme — 2026-05-15
 
-`SpecialPackagesModal/PackagesGrid` and `SpecialPackagesModal/BenefitsPanel` now use `getElectricPackageColorScheme` (electric dark: `linear-gradient(180deg,#0b0c0f,#060607)` body, tier-accent radial glow, accent border) instead of `getPackageColorSchemeForPromo`. `PackagesGrid` also renders a SAVE shield (clip-path polygon) and struck regular price via `getAdditionalPackDiscount` when the selected pack has a genuine member discount.
+`SpecialPackagesModal/PackagesGrid` and `SpecialPackagesModal/BenefitsPanel` now use `getElectricPackageColorScheme` (electric dark: `linear-gradient(180deg,#0b0c0f,#060607)` body, tier-accent radial glow, accent border) instead of `getPackageColorSchemeForPromo`. `PackagesGrid` renders a struck regular price via `getAdditionalPackDiscount` when the pack has a genuine member discount (the SAVE shield clip-path polygon was removed from `PackagesGrid` — struck price is kept; the shield remains only in `ElectricPackageCard`). `PackagesGrid` also shows a `BestValueBadge` (top-left ribbon) on packs where `isOneTimeBestValuePlanId` returns true. `BenefitsPanel` benefit text and heading now carry a subtle `textShadow` glow matching the tier accent. `ElectricPackageCard` gains a VIP premium intensity path (`isPremium = !!colorScheme.textGradientStyle`) that applies a stronger outer bloom, brighter body radial gradient, solid-gold border, larger glowing title, and enlarged entries number; all non-VIP (Boss and below) tiers are visually unchanged.
 
 ## Admin modal hover-preview pattern — 2026-05-14
 
