@@ -35,14 +35,19 @@ function deriveTier(baseTemplatePackageId: string): string {
  *
  * Path scheme: {ROOT}/{upsellCategory}/{tier}[-Nx].webp
  *
+ * The `multiplier` arg should be the **effective** value the user will see —
+ * typically `activePromoMultiplier × upsellCategoryMultiplier`. This is what
+ * the artwork is themed for (e.g., the 50× hero is shown when a 5× promo stacks
+ * with a 10× Membership upsell setting), not the raw promo on its own.
+ *
  * Fallback chain:
- *   1. {category}/{tier}-{N}x.webp   (promo variant)
+ *   1. {category}/{tier}-{N}x.webp   (variant matching the effective multiplier)
  *   2. {category}/{tier}.webp        (default for this upsell)
  *   3. _fallback.webp                (global placeholder)
  */
 export function resolveUpsellImage(params: {
   offerId: string;
-  promoMultiplier?: number | null;
+  multiplier?: number | null;
 }): ResolvedUpsellImage {
   const pkg = getUpsellPackageById(params.offerId);
   if (!pkg) {
@@ -51,9 +56,9 @@ export function resolveUpsellImage(params: {
 
   const folder = pkg.upsellCategory;
   const tier = deriveTier(pkg.baseTemplatePackageId);
-  const m = params.promoMultiplier;
+  const m = params.multiplier;
 
-  // 1. Promo variant
+  // 1. Effective-multiplier variant
   if (m != null && isPromoMultiplier(m)) {
     const variantKey = `${folder}/${tier}-${m}x.webp`;
     if (UPSELL_IMAGE_MANIFEST.has(variantKey)) {

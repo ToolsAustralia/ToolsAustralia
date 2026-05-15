@@ -153,14 +153,19 @@ const PREVIEW_MEMBERSHIP_UPSELL_OFFER: UpsellOffer = {
   cooldownHours: 24,
 };
 
+/**
+ * Effective image multiplier = activePromoMultiplier × upsellCategoryMultiplier.
+ * For Membership (default 10× admin setting), a 5× active promo yields a 50× effective
+ * → modal loads `membership/apprentice-50x.webp`.
+ */
 const PREVIEW_MEMBERSHIP_PURCHASE_50X: OriginalPurchaseContext = {
   ...MOCK_ORIGINAL_PURCHASE,
-  promoMultiplier: 50,
+  promoMultiplier: 5, // 5 × 10 (default membership upsell setting) = 50× effective
 };
 
 const PREVIEW_MEMBERSHIP_PURCHASE_100X: OriginalPurchaseContext = {
   ...MOCK_ORIGINAL_PURCHASE,
-  promoMultiplier: 100,
+  promoMultiplier: 10, // 10 × 10 (default membership upsell setting) = 100× effective
 };
 
 const PREVIEW_USER_ID = "000000000000000000000001";

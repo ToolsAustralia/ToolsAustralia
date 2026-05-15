@@ -39,6 +39,7 @@ import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useUpsellMultipliersPublic } from "@/hooks/queries/useUpsellMultipliersPublic";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import {
@@ -867,40 +868,57 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     ]
   );
 
-  /** Resolved promo multiplier for hero art (drives which `{n}x-*.webp` exists). */
+  /**
+   * Public read of the three admin-configured upsell category multipliers.
+   * Combined with the active promo for the upsell's category, this gives the
+   * EFFECTIVE multiplier (e.g., 5× promo × 10× membership setting = 50×) that
+   * drives image variant selection — the same number the user perceives.
+   */
+  const { data: upsellMultipliers } = useUpsellMultipliersPublic();
+
+  /** Effective image multiplier (activePromo × upsellCategoryMultiplier). */
+  const effectiveImageMultiplier = useMemo(() => {
+    const upsellPackage = getUpsellPackageById(offer.id);
+    const category = upsellPackage?.upsellCategory;
+    let categoryMult = 1;
+    if (category === "membership") categoryMult = upsellMultipliers?.membership ?? 10;
+    else if (category === "one-time") categoryMult = upsellMultipliers?.oneTime ?? 2;
+    else if (category === "additional") categoryMult = upsellMultipliers?.additional ?? 2;
+    // mini: fixed 1×
+    return (effectiveUpsellPromoMultiplier ?? 1) * categoryMult;
+  }, [offer.id, effectiveUpsellPromoMultiplier, upsellMultipliers]);
+
+  /** Hero image src (picks `apprentice-Nx.webp` matching the effective multiplier). */
   const upsellImageSrc = useMemo(() => {
     const upsellPackage = getUpsellPackageById(offer.id);
     const upsellCategory = upsellPackage?.upsellCategory;
 
     const resolved = resolveUpsellImage({
       offerId: offer.id,
-      promoMultiplier: effectiveUpsellPromoMultiplier,
+      multiplier: effectiveImageMultiplier,
     });
 
     if (process.env.NODE_ENV !== "production") {
       console.log("🖼️ Upsell Image Debug:", {
         offerId: offer.id,
         packageType: upsellPackageType,
-        promoMultiplier: effectiveUpsellPromoMultiplier,
+        activePromo: effectiveUpsellPromoMultiplier,
+        upsellCategoryMultiplier: upsellMultipliers,
+        effectiveImageMultiplier,
         upsellCategory,
-        resolvedMembershipMultiplier,
-        resolvedOneTimeMultiplier,
-        resolvedMiniMultiplier,
-        originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
-        upsellPackageCategory: upsellPackage?.upsellCategory,
-        offerCategory: offer.category,
-        determinedFrom: originalPurchaseContext?.packageType
-          ? "originalPurchaseContext"
-          : upsellCategory === "membership"
-            ? "upsellCategory"
-            : "fallback",
         finalSrc: resolved.src,
         isPromoVariant: resolved.isPromoVariant,
       });
     }
 
     return resolved.src;
-  }, [offer.id, offer.category, upsellPackageType, effectiveUpsellPromoMultiplier, originalPurchaseContext?.packageType]);
+  }, [
+    offer.id,
+    upsellPackageType,
+    effectiveImageMultiplier,
+    effectiveUpsellPromoMultiplier,
+    upsellMultipliers,
+  ]);
 
   /** Matches hero artwork and Stripe charge (two decimal places). */
   const upsellPriceLabel = offer.discountedPrice.toFixed(2);

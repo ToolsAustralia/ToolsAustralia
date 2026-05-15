@@ -40,10 +40,10 @@ function testPromoVariantPreferredWhenAvailable() {
     const tier = expectedTier(pkg.baseTemplatePackageId);
     for (const m of PROMO_MULTIPLIERS) {
       const variantKey = `${pkg.upsellCategory}/${tier}-${m}x.webp`;
-      const r = resolveUpsellImage({ offerId: pkg.id, promoMultiplier: m });
+      const r = resolveUpsellImage({ offerId: pkg.id, multiplier: m });
 
       if (UPSELL_IMAGE_MANIFEST.has(variantKey)) {
-        assert.equal(r.src, `${ROOT}/${variantKey}`, `Promo variant should win: ${variantKey}`);
+        assert.equal(r.src, `${ROOT}/${variantKey}`, `Variant should win: ${variantKey}`);
         assert.equal(r.isPromoVariant, true);
       } else {
         // No variant on disk → falls back to default or global placeholder.
