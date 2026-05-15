@@ -5,7 +5,6 @@ import Image from "next/image";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
-import { getCardBorderStyle } from "@/utils/package-colors/packageColorScheme";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { cn } from "@/utils/cn";
 import BestValueBadge from "@/components/ui/BestValueBadge";
@@ -55,15 +54,23 @@ export default function ElectricPackageCard({
   const entries = readEntries(plan);
   const interactive = !state.locked && !state.isCurrent;
   const gradientText = colorScheme.textGradientStyle;
+  const accent = colorScheme.accentHex;
+
+  /** Big number: VIP keeps its gold gradient; others are white with a tier-colored glow. */
+  const bigNumberStyle: React.CSSProperties = gradientText
+    ? (gradientText as React.CSSProperties)
+    : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
 
   return (
     <div
       className={cn(
         "relative w-full rounded-3xl overflow-visible",
         "transition-[transform,box-shadow] duration-[var(--ta-transition-dur)]",
-        interactive && "hover:scale-[1.02] hover:brightness-110"
+        interactive && "hover:scale-[1.02]"
       )}
-      style={{ boxShadow: `0 0 0 1px ${colorScheme.accentHex}40, 0 0 28px ${colorScheme.accentHex}59, 0 0 64px ${colorScheme.accentHex}33, 0 12px 40px ${colorScheme.accentHex}26` }}
+      style={{
+        boxShadow: `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 14px 44px rgba(0,0,0,0.55)`,
+      }}
     >
       {/* Best Value (top-left) — takes precedence over the ribbon */}
       {showBestValue ? (
@@ -74,7 +81,7 @@ export default function ElectricPackageCard({
         </CornerRibbonBadge>
       ) : null}
 
-      {/* Entries / promo multiplier lightning badge (top-right) — only when a multiplier is active */}
+      {/* Promo multiplier lightning badge (top-right) — only when a multiplier is active */}
       {entries.multiplied && typeof plan.metadata?.promoMultiplier === "number" && (
         <div className="absolute -top-7 -right-6 z-30 pointer-events-none">
           <Image
@@ -82,128 +89,127 @@ export default function ElectricPackageCard({
             alt={`${plan.metadata.promoMultiplier}x entries`}
             width={96}
             height={96}
-            className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+            className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]"
             sizes="(max-width: 640px) 80px, 96px"
           />
         </div>
       )}
 
-      {/* Brand gradient body + electric edge */}
+      {/* Dark body with tier-coloured electric glow (matches reference concept) */}
       <div
-        className="relative isolate h-full rounded-3xl p-4 pt-10"
+        className="relative isolate h-full rounded-3xl px-4 pb-4 pt-16 sm:pt-[68px]"
         style={{
-          background: colorScheme.bgGradient,
-          backgroundOrigin: "border-box",
-          ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
+          background: `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
+          border: `2px solid ${accent}59`,
+          boxShadow: `inset 0 0 26px ${accent}1F`,
         }}
       >
         {/* Static electric inner sheen */}
         <div
-          className="pointer-events-none absolute inset-0.5 rounded-2xl z-0"
+          className="pointer-events-none absolute inset-0.5 rounded-[22px] z-0"
           style={{
-            background: `radial-gradient(130% 90% at 50% 0%, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 35%, transparent 60%), linear-gradient(to top, ${colorScheme.accentHex}33 0%, ${colorScheme.accentHex}14 30%, transparent 65%)`,
+            background: `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`,
           }}
           aria-hidden
         />
 
-        {/* Icon */}
+        {/* Icon — raised so it clears the package name */}
         {icon && (
-          <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-20">
+          <div className="absolute -top-12 sm:-top-14 left-1/2 -translate-x-1/2 z-20">
             <div className="w-20 h-20 sm:w-24 sm:h-24 relative">
               <Image
                 src={icon}
                 alt={`${getPackageDisplayName(plan)} icon`}
                 fill
                 sizes="(max-width: 640px) 80px, 96px"
-                className={cn("object-contain opacity-90", colorScheme.glow)}
+                className={cn("object-contain", colorScheme.glow)}
               />
             </div>
           </div>
         )}
 
         <div className="relative z-10 flex h-full flex-col uppercase">
-          {/* Title */}
+          {/* Title — tier colour (VIP keeps gold gradient) */}
           <h3
-            className={cn("text-center font-sans font-bold text-[20px] sm:text-[24px] leading-tight tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]", gradientText ? "" : colorScheme.text)}
-            style={gradientText}
+            className="text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide"
+            style={gradientText ? (gradientText as React.CSSProperties) : { color: accent, textShadow: `0 0 14px ${accent}80` }}
           >
             {getPackageDisplayName(plan)}
           </h3>
 
           {/* Entries */}
-          <div className={cn("mt-1 text-center", gradientText ? "" : colorScheme.text)}>
+          <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className={cn("text-[22px] sm:text-[26px] font-bold line-through opacity-40", colorScheme.textMuted)}>
+                <span className="text-[22px] sm:text-[26px] font-bold line-through text-white/35">
                   {entries.original}
                 </span>
-                <span className="text-[20px] sm:text-[24px] font-bold" style={gradientText ? { color: colorScheme.accentHex } : undefined}>→</span>
-                <span className={cn("text-[40px] sm:text-[52px] font-bold", gradientText ? "" : colorScheme.entriesText)} style={gradientText}>
+                <span className="text-[20px] sm:text-[24px] font-bold" style={{ color: accent }}>→</span>
+                <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className={cn("text-[40px] sm:text-[52px] font-bold", gradientText ? "" : colorScheme.entriesText)} style={gradientText}>
+              <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
-            <div className={cn("text-[15px] sm:text-[17px] tracking-wide font-semibold", gradientText ? "" : colorScheme.textMuted)} style={gradientText}>
-              free entries
+            <div className="mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em] text-white/65">
+              FREE ENTRIES
             </div>
           </div>
 
-          <div className="my-2 h-px w-full rounded-full bg-white/70 dark:bg-neutral-600/50" />
+          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: `${accent}59` }} />
 
-          {/* Price block — strikethrough + now + % OFF badge live HERE (never top-right) */}
+          {/* Price block — dark pill, struck regular price + now + SAVE % OFF badge */}
           <button
             type="button"
             disabled={!interactive}
             onClick={() => interactive && onSelect(plan)}
             aria-label={`Select ${getPackageDisplayName(plan)} for $${plan.price}`}
             className={cn(
-              "mx-auto mb-3 flex w-fit items-center gap-2 rounded-2xl bg-gradient-to-r px-3 py-1.5",
-              colorScheme.gradient,
-              colorScheme.buttonShadow,
-              interactive ? "cursor-pointer hover:opacity-90" : "cursor-not-allowed opacity-90",
-              "ring-1 ring-white/25 shadow-[0_4px_18px_rgba(0,0,0,0.35)]"
+              "mx-auto mb-3 flex w-fit items-center gap-2 rounded-2xl px-3.5 py-2",
+              interactive ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-90"
             )}
+            style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}
           >
             {discount && (
-              <span className={cn("text-sm font-bold line-through opacity-50", colorScheme.buttonText)}>
-                ${discount.regularPrice}
-              </span>
+              <span className="text-sm font-bold line-through text-white/40">${discount.regularPrice}</span>
             )}
-            <span className={cn("text-[20px] font-bold", colorScheme.buttonText)}>${plan.price}</span>
-            <span className={cn("text-[11px] font-semibold opacity-90", colorScheme.buttonText)}>
+            <span className="text-[24px] font-extrabold leading-none" style={{ color: accent }}>
+              ${plan.price}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
               {plan.period === "one-time" ? "one time" : "per giveaway"}
             </span>
             {discount && (
               <span
-                className="rounded-md px-1.5 py-0.5 text-[11px] font-black"
-                style={{ ...colorScheme.badgeStyle }}
+                className="rounded-md px-2 py-1 text-[12px] font-black uppercase leading-none text-black"
+                style={{ backgroundColor: accent, boxShadow: `0 0 14px ${accent}99` }}
               >
-                {discount.percentOff}% OFF
+                Save {discount.percentOff}%
               </span>
             )}
           </button>
 
-          {/* CTA */}
+          {/* CTA — black background, tier-coloured text */}
           <div className="mt-auto">
             <button
               type="button"
               disabled={!interactive}
               onClick={() => interactive && onSelect(plan)}
               className={cn(
-                "flex h-[48px] w-full items-center justify-center rounded-2xl px-5 font-sans font-black uppercase text-[15px]",
-                colorScheme.buttonText,
-                interactive ? "hover:brightness-110" : "opacity-60 cursor-not-allowed",
-                "ring-1 ring-white/20 shadow-[0_6px_20px_rgba(0,0,0,0.4)]"
+                "flex h-[50px] w-full items-center justify-center rounded-2xl px-5 font-sans font-black uppercase tracking-wide text-[16px]",
+                interactive ? "hover:brightness-125" : "opacity-50 cursor-not-allowed"
               )}
-              style={(colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle) as React.CSSProperties}
+              style={{
+                backgroundColor: "#000000",
+                border: `1.5px solid ${accent}`,
+                color: accent,
+                boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
+              }}
             >
-              <span style={gradientText ?? undefined}>
-                {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
-              </span>
+              {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
             </button>
           </div>
         </div>

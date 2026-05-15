@@ -117,7 +117,12 @@ export default function MembershipSectionDevClient() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          className={
+            "grid grid-cols-1 gap-x-6 gap-y-14 overflow-visible px-2 sm:grid-cols-2 " +
+            (plans.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-3")
+          }
+        >
           {plans.map((plan) => {
             const colorScheme =
               tab === "membership"
@@ -134,7 +139,7 @@ export default function MembershipSectionDevClient() {
                 : isOneTimeBestValuePlanId(plan.id);
             const ribbon = !showBestValue && plan.id.includes("foreman") ? "MOST POPULAR" : null;
             return (
-              <div key={plan.id} className="pt-8">
+              <div key={plan.id} className="overflow-visible px-2 pt-12">
                 <ElectricPackageCard
                   plan={plan}
                   colorScheme={colorScheme}
