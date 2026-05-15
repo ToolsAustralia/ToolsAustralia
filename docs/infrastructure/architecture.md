@@ -39,6 +39,10 @@ Plus:
 
 - [`scripts/verify-dashboard-stats-snapshot-drift.ts`](../../scripts/verify-dashboard-stats-snapshot-drift.ts) — read-only drift check. Samples N random snapshot dates, re-aggregates revenue live, reports per-bucket delta. Exits non-zero on any drift. npm script: `verify:dashboard-stats-drift`. Accepts `--samples=N`.
 
+### Core index ensure migration
+
+- [`scripts/migrate-ensure-core-indexes.ts`](../../scripts/migrate-ensure-core-indexes.ts) — runs `ensureCriticalIndexes()` out-of-band (moved off the webhook hot path after the 2026-05-15 504 storm). npm scripts: `migrate:ensure-core-indexes` (live), `migrate:ensure-core-indexes:dry` (preview). **Must run on every index-affecting deploy and BEFORE deploying webhook receiver changes** — it creates `paymentIntentId_1_eventType_1_unique` on `PaymentEvent`, the dedup-layer-4 unique index. See [mongodb/architecture.md](../mongodb/architecture.md#index-management--deploy-time-not-request-path) and [billing-stripe/gotchas.md](../billing-stripe/gotchas.md) (2026-05-15 504 storm).
+
 ### Stripe webhook queue `processedAt` backfill
 
 - [`scripts/backfill-stripe-webhook-queue-processed-at.ts`](../../scripts/backfill-stripe-webhook-queue-processed-at.ts) — one-shot backfill for dead-row TTL anchoring. Matches `{ status: "dead", processedAt: null }` and sets `processedAt = updatedAt` so the 30-day `dead_processedAt_ttl` index can actually expire them. Idempotent (re-runs after completion are no-ops). npm scripts: `backfill:webhook-queue-processed-at` (live), `backfill:webhook-queue-processed-at:dry`. See [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md#backfilling-processedat-on-dead-rows) for context.

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue from "@/models/StripeWebhookQueue";
 import { computeNextAttempt } from "@/services/stripe-webhook-queue/backoff";
-import { dispatchToWorker } from "@/services/stripe-webhook-queue/dispatchWorker";
+import { processQueuedEvent } from "@/services/stripe-webhook-queue/processQueuedEvent";
 
 const SWEEP_BATCH_SIZE = 20;
 const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000;
@@ -74,9 +74,9 @@ export async function GET(request: NextRequest) {
     .limit(SWEEP_BATCH_SIZE)
     .lean();
 
-  for (const row of dueRows) {
-    void dispatchToWorker(row.eventId, "webhook-sweeper");
-  }
+  await Promise.allSettled(
+    dueRows.map((row) => processQueuedEvent(row.eventId))
+  );
 
   return NextResponse.json({
     orphansRecovered: orphans.length,
