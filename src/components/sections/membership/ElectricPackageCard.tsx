@@ -161,45 +161,49 @@ export default function ElectricPackageCard({
 
           <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: `${accent}59` }} />
 
-          {/* Price block — dark pill, struck regular price + now + SAVE % OFF badge */}
+          {/* Price block — full-width dark panel; struck price upper-right of price,
+              "one time payment" full-width at the bottom, SAVE shield absolute. */}
           <button
             type="button"
             disabled={!interactive}
             onClick={() => interactive && onSelect(plan)}
             aria-label={`Select ${getPackageDisplayName(plan)} for $${plan.price}`}
             className={cn(
-              "mx-auto mb-3 flex w-fit items-center gap-2 rounded-2xl px-3.5 py-2",
+              "relative mb-3 w-full overflow-visible rounded-2xl px-4 pb-2 pt-3",
               interactive ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-90"
             )}
             style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}
           >
-            {discount && (
-              <span className="text-sm font-bold line-through text-white/40">${discount.regularPrice}</span>
-            )}
-            <span className="text-[24px] font-extrabold leading-none" style={{ color: accent }}>
-              ${plan.price}
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
-              {plan.period === "one-time" ? "one time" : "per giveaway"}
-            </span>
+            <div className="flex items-start justify-center">
+              <span className="relative inline-block text-[30px] font-extrabold leading-none" style={{ color: accent }}>
+                ${plan.price}
+                {discount && (
+                  <span className="absolute left-full top-0 ml-1.5 -translate-y-[3px] whitespace-nowrap text-[13px] font-bold leading-none text-white/40 line-through">
+                    ${discount.regularPrice}
+                  </span>
+                )}
+              </span>
+            </div>
+
+            <div className="mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+              {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
+            </div>
+
             {discount && (
               <span
-                className="relative ml-1 inline-flex flex-col items-center justify-start text-black"
+                className="absolute right-0 top-1/2 z-20 inline-flex -translate-y-1/2 translate-x-[28%] flex-col items-center justify-start text-black"
                 style={{
                   backgroundColor: accent,
-                  width: 54,
-                  height: 62,
-                  clipPath: "polygon(0% 0%, 100% 0%, 100% 62%, 50% 100%, 0% 62%)",
-                  boxShadow: `0 0 16px ${accent}99`,
+                  width: 56,
+                  height: 64,
+                  clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
+                  boxShadow: `0 0 18px ${accent}A6`,
                 }}
                 aria-label={`Save ${discount.percentOff} percent off`}
               >
-                <span className="mt-[5px] text-[8px] font-extrabold uppercase leading-none tracking-wide">Save</span>
-                <span className="mt-[1px] text-[18px] font-black leading-none">{discount.percentOff}%</span>
-                <span className="text-[8px] font-extrabold uppercase leading-none tracking-wide">Off</span>
-                <span className="mt-[3px] flex h-[13px] w-[13px] items-center justify-center rounded-full border border-black/55 text-[8px] font-black leading-none">
-                  ✓
-                </span>
+                <span className="mt-[7px] text-[8px] font-extrabold uppercase leading-none tracking-wide">Save</span>
+                <span className="mt-[2px] text-[19px] font-black leading-none">{discount.percentOff}%</span>
+                <span className="mt-[1px] text-[9px] font-extrabold uppercase leading-none tracking-wide">Off</span>
               </span>
             )}
           </button>
