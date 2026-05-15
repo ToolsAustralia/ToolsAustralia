@@ -4,7 +4,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from "react"
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getMemberOnlyPackages, getPackagesByType } from "@/data/membershipPackages";
 import { miniDrawPackages } from "@/data/miniDrawPackages";
-import type { UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
+import type { UpsellUserContext, OriginalPurchaseContext, UpsellOffer } from "@/types/upsell";
 import { SAMPLE_UPSELL_OFFERS } from "@/types/upsell";
 import type { ErrorContext } from "@/types/error-reporting";
 import { DEFAULT_PRIZE_SLUG, getPrizeBySlug } from "@/config/prizes";
@@ -122,6 +122,45 @@ const MOCK_ORIGINAL_PURCHASE: OriginalPurchaseContext = {
   packageType: "membership",
   price: 49.99,
   entries: 100,
+};
+
+/**
+ * Dev gallery preview: real `membership-upsell-tradie` upsell record with the user
+ * already on a Tradie subscription. promoMultiplier drives which `apprentice-Nx.webp`
+ * the hero image resolves to (so we can preview new artwork).
+ */
+const PREVIEW_MEMBERSHIP_UPSELL_OFFER: UpsellOffer = {
+  id: "membership-upsell-tradie",
+  title: "Apprentice Pack — Membership Bonus",
+  description: "Membership bonus — Apprentice Pack at 60% off.",
+  category: "membership",
+  originalPrice: 25,
+  discountedPrice: 9.99,
+  discountPercentage: 60,
+  entriesCount: 30,
+  buttonText: "Add Apprentice Pack - $9.99",
+  conditions: [
+    "25% Access to Partner Discounts",
+    "1 Day Access to Partner Discounts",
+    "30 free entries",
+  ],
+  urgencyText: "Limited time offer!",
+  priority: 10,
+  isActive: true,
+  targetAudience: ["membership-purchase"],
+  userSegments: ["new-user", "returning-user"],
+  maxShowsPerUser: 2,
+  cooldownHours: 24,
+};
+
+const PREVIEW_MEMBERSHIP_PURCHASE_50X: OriginalPurchaseContext = {
+  ...MOCK_ORIGINAL_PURCHASE,
+  promoMultiplier: 50,
+};
+
+const PREVIEW_MEMBERSHIP_PURCHASE_100X: OriginalPurchaseContext = {
+  ...MOCK_ORIGINAL_PURCHASE,
+  promoMultiplier: 100,
 };
 
 const PREVIEW_USER_ID = "000000000000000000000001";
@@ -263,6 +302,8 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "package-selection": "src/components/modals/PackageSelectionModal.tsx",
   "package-detail": "src/components/modals/PackageDetailModal.tsx",
   upsell: "src/components/modals/UpsellModal.tsx",
+  "upsell-membership-50x": "src/components/modals/UpsellModal.tsx",
+  "upsell-membership-100x": "src/components/modals/UpsellModal.tsx",
   "success-screen": "src/components/loading/SuccessScreen.tsx",
   "cancellation-upsell": "src/components/modals/CancellationUpsellModal.tsx",
   "cancellation-upsell-foreman": "src/components/modals/CancellationUpsellModal.tsx",
@@ -342,6 +383,18 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
   { id: "package-selection", label: "PackageSelectionModal", category: "Commerce", note: "Uses membership API" },
   { id: "package-detail", label: "PackageDetailModal", category: "Commerce" },
   { id: "upsell", label: "UpsellModal", category: "Commerce", note: "Uses payment hooks" },
+  {
+    id: "upsell-membership-50x",
+    label: "UpsellModal — Membership 50× hero",
+    category: "Commerce",
+    note: "Tradie sub → Apprentice Pack with 50× promo art",
+  },
+  {
+    id: "upsell-membership-100x",
+    label: "UpsellModal — Membership 100× hero",
+    category: "Commerce",
+    note: "Tradie sub → Apprentice Pack with 100× promo art",
+  },
   {
     id: "success-screen",
     label: "SuccessScreen",
@@ -993,6 +1046,24 @@ export default function ModalsGalleryClient() {
         offer={SAMPLE_UPSELL_OFFERS[0]}
         userContext={MOCK_UPSELL_USER}
         originalPurchaseContext={MOCK_ORIGINAL_PURCHASE}
+        onAccept={() => {}}
+        onDecline={() => {}}
+      />
+      <UpsellModal
+        isOpen={isOpen("upsell-membership-50x")}
+        onClose={close}
+        offer={PREVIEW_MEMBERSHIP_UPSELL_OFFER}
+        userContext={MOCK_UPSELL_USER}
+        originalPurchaseContext={PREVIEW_MEMBERSHIP_PURCHASE_50X}
+        onAccept={() => {}}
+        onDecline={() => {}}
+      />
+      <UpsellModal
+        isOpen={isOpen("upsell-membership-100x")}
+        onClose={close}
+        offer={PREVIEW_MEMBERSHIP_UPSELL_OFFER}
+        userContext={MOCK_UPSELL_USER}
+        originalPurchaseContext={PREVIEW_MEMBERSHIP_PURCHASE_100X}
         onAccept={() => {}}
         onDecline={() => {}}
       />

@@ -2,5 +2,6 @@
 // Regenerate: npm run build:upsell-manifest
 
 export const UPSELL_IMAGE_MANIFEST = new Set<string>([
-
+  "membership/apprentice-100x.webp",
+  "membership/apprentice-50x.webp",
 ]);
