@@ -98,13 +98,15 @@ The membership subscriptions, regular one-time packs, additional one-time packs,
 
 All upsells use the formula `upsellEntries = categoryMultiplier × triggerPack.baseEntries`. Active promo multipliers do **not** stack into the upsell calculation.
 
-#### Membership upsells (default category multiplier `10×`)
+#### Membership upsells (default category multiplier `10×`, **60% off the template pack price**)
 
-| Trigger | Upsell internal ID | UI display | Stripe description | Price | Base entries (template) | Default upsell entries (10×) | Partner % | Partner duration |
-|---|---|---|---|---|---|---|---|---|
-| `tradie-subscription` | `membership-upsell-tradie` | Apprentice Pack | "Apprentice Pack — Membership Bonus" | $9.99 | 3 (apprentice) | **30 free** | 25% | 1 day |
-| `foreman-subscription` | `membership-upsell-foreman` | Tradie Pack | "Tradie Pack — Membership Bonus" | $19.99 | 15 (tradie) | **150 free** | 40% | 2 days |
-| `boss-subscription` | `membership-upsell-boss` | Foreman Pack | "Foreman Pack — Membership Bonus" | $39.99 | 30 (foreman) | **300 free** | 55% | 4 days |
+Discount is taken against the **template pack's regular one-time price**, not the subscription price — the user perceives "Apprentice Pack at 60% off".
+
+| Trigger | Upsell internal ID | UI display | Stripe description | Template regular price | Upsell price (60% off) | Base entries (template) | Default upsell entries (10×) | Partner % | Partner duration |
+|---|---|---|---|---|---|---|---|---|---|
+| `tradie-subscription` | `membership-upsell-tradie` | Apprentice Pack | "Apprentice Pack — Membership Bonus" | $25 | **$9.99** | 3 (apprentice) | **30 free** | 25% | 1 day |
+| `foreman-subscription` | `membership-upsell-foreman` | Tradie Pack | "Tradie Pack — Membership Bonus" | $50 | **$19.99** | 15 (tradie) | **150 free** | 40% | 2 days |
+| `boss-subscription` | `membership-upsell-boss` | Foreman Pack | "Foreman Pack — Membership Bonus" | $100 | **$39.99** | 30 (foreman) | **300 free** | 55% | 4 days |
 
 #### One-time upsells (default category multiplier `2×`)
 
