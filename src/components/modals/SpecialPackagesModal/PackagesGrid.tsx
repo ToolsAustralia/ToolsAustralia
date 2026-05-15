@@ -55,17 +55,35 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
           const cardTextStyle = { color: accentHex };
           const cardInnerBg = `radial-gradient(120% 90% at 50% 0%, ${accentHex}33 0%, ${accentHex}12 30%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
           const discount = getAdditionalPackDiscount(pkg._id || "");
+          // No selection → every card shows the VIP-style gradient rim at full strength.
+          // A selection exists → only the selected card keeps that rim; the rest dim.
+          const showStrong = selectedPackage == null || isSelected;
+          const vipStyleBorderStyle = colorScheme.cardBorderGradient
+            ? getCardBorderStyle(colorScheme, cardInnerBg)
+            : {
+                background: `${cardInnerBg}, linear-gradient(135deg, ${accentHex} 0%, ${hexToRgba(accentHex, 0.5)} 50%, ${accentHex} 100%)`,
+                backgroundOrigin: "padding-box, border-box",
+                backgroundClip: "padding-box, border-box",
+                WebkitBackgroundClip: "padding-box, border-box",
+                backgroundRepeat: "no-repeat",
+                border: "2px solid transparent",
+              };
           return (
             <div
               key={pkg._id}
               className="relative rounded-2xl p-2.5 sm:p-4 transition-all duration-300 cursor-pointer"
-              style={{
-                ...getCardBorderStyle(colorScheme, cardInnerBg),
-                ...(!colorScheme.cardBorderGradient && { background: cardInnerBg }),
-                boxShadow: isSelected
-                  ? `0 0 0 2px ${accentHex}, 0 0 26px ${hexToRgba(accentHex, 0.6)}, 0 10px 34px rgba(0,0,0,0.5)`
-                  : `0 0 18px ${hexToRgba(accentHex, 0.4)}, 0 6px 22px rgba(0,0,0,0.45)`,
-              }}
+              style={
+                showStrong
+                  ? {
+                      ...vipStyleBorderStyle,
+                      boxShadow: `0 0 0 1px ${hexToRgba(accentHex, 0.4)}, 0 0 26px ${hexToRgba(accentHex, 0.55)}, 0 10px 34px rgba(0,0,0,0.5)`,
+                    }
+                  : {
+                      background: cardInnerBg,
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
+                    }
+              }
               onClick={() => onSelectPackage(pkg)}
             >
               {isOneTimeBestValuePlanId(pkg._id || "") && (
