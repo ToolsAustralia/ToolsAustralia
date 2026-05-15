@@ -57,10 +57,11 @@ export default function ElectricPackageCard({
   const accent = colorScheme.accentHex;
   const isPremium = !!gradientText; // VIP (electric-black) — the only electric scheme with a gradient text
 
-  /** Big number: VIP keeps its gold gradient; others are white with a tier-colored glow. */
-  const bigNumberStyle: React.CSSProperties = gradientText
-    ? { ...(gradientText as React.CSSProperties), filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` }
-    : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
+  /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
+  const bigNumberStyle: React.CSSProperties = {
+    color: "#FFFFFF",
+    textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80`,
+  };
 
   return (
     <div
@@ -180,7 +181,7 @@ export default function ElectricPackageCard({
             onClick={() => interactive && onSelect(plan)}
             aria-label={`Select ${getPackageDisplayName(plan)} for $${plan.price}`}
             className={cn(
-              "relative mb-3 w-full overflow-visible rounded-2xl px-4 pb-2 pt-3",
+              "relative mb-3 mx-auto w-fit overflow-visible rounded-2xl px-4 pb-2 pt-3",
               interactive ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-90"
             )}
             style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}

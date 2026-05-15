@@ -120,11 +120,14 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
-                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]" style={cardTextStyle}>
-                  <div className="text-base sm:text-lg font-bold">
+                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
+                  <div
+                    className="text-base sm:text-lg font-extrabold"
+                    style={{ color: "#FFFFFF", textShadow: `0 0 10px ${accentHex}, 0 0 20px ${accentHex}80` }}
+                  >
                     {pkg.totalEntries || 0}
                   </div>
-                  <div className="text-xs font-bold opacity-90">ENTRIES</div>
+                  <div className="text-[10px] font-bold tracking-wide opacity-90" style={cardTextStyle}>FREE ENTRIES</div>
                 </div>
 
                 {/* Right Side - Price (struck regular upper-right) + SELECT button */}
