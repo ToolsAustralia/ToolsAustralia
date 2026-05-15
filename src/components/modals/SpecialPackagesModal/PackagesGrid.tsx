@@ -126,17 +126,17 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
-                <div className="relative flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
-                  {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                    <span className="absolute -top-1 left-full ml-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
-                      {pkg.originalEntries}
-                    </span>
-                  )}
+                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
                   <div
-                    className="text-base sm:text-lg font-extrabold"
+                    className="relative text-base sm:text-lg font-extrabold"
                     style={{ color: "#FFFFFF", textShadow: `0 0 10px ${accentHex}, 0 0 20px ${accentHex}80` }}
                   >
                     {pkg.totalEntries || 0}
+                    {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
+                      <span className="absolute left-full top-0 ml-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                        {pkg.originalEntries}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] font-bold tracking-wide opacity-90" style={cardTextStyle}>FREE ENTRIES</div>
                 </div>
