@@ -160,16 +160,16 @@ export default function ElectricPackageCard({
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className="text-[16px] sm:text-[20px] font-bold line-through text-white/35">
+                <span className="text-[14px] sm:text-[17px] font-bold line-through text-white/35">
                   {entries.original}
                 </span>
-                <span className="text-[15px] sm:text-[18px] font-bold" style={{ color: accent }}>→</span>
-                <span className="text-[30px] sm:text-[40px] font-extrabold leading-none" style={bigNumberStyle}>
+                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: accent }}>→</span>
+                <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className="text-[30px] sm:text-[40px] font-extrabold leading-none" style={bigNumberStyle}>
+              <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
