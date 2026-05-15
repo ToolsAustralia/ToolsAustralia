@@ -19,6 +19,20 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 
 ## Sections
 
+### `sections/membership/ElectricPackageCard` — Phase-1 dev-only membership card
+
+[`src/components/sections/membership/ElectricPackageCard.tsx`](../../src/components/sections/membership/ElectricPackageCard.tsx) is a **pure presentational** component — no data fetching, no Stripe calls, no context reads. All decisions arrive as props.
+
+**Props:** `plan: LocalMembershipPlan`, `colorScheme: PackageColorScheme`, `state: ElectricPackageCardState` (`{ locked, lockReason?, isCurrent }`), `discount?: { regularPrice, percentOff } | null`, `onSelect: (plan) => void`.
+
+**Key behaviours:**
+- Entries strikethrough (`original → display`) renders when `plan.metadata.promoMultiplier > 1` (mirrors MembershipSection logic via a local `readEntries()` helper).
+- The **% OFF badge** and regular-price strikethrough live **only in the price block button** — never in the top-right corner (that space is reserved for the promo multiplier badge in the live section).
+- CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `"Enter Now"`.
+- Uses `getCardBorderStyle` + `PackageColorScheme.badgeStyle` / `enterNowButtonStyle` — no local colour literals.
+
+This component is **dev-phase 1 only** and is not yet wired into any page route.
+
 ### PromoTrustBar — final-hours urgency variant
 
 [`src/components/sections/promo/PromoTrustBar.tsx`](../../src/components/sections/promo/PromoTrustBar.tsx) is the thin strip that sits between [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) and [`PromoPackages`](../../src/components/sections/promo/PromoPackages.tsx) on `/promotions/[slug]` and `ToolsetLandingPage`. Default render: three icon+text trust items (Drawn live · randomdraws.com.au · Drawn every 27th).
