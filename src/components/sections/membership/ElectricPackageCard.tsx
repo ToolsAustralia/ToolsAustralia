@@ -78,9 +78,9 @@ export default function ElectricPackageCard({
     >
       {/* Best Value (top-left) — takes precedence over the ribbon */}
       {showBestValue ? (
-        <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+        <BestValueBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
       ) : ribbon ? (
-        <CornerRibbonBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme}>
+        <CornerRibbonBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme}>
           {ribbon}
         </CornerRibbonBadge>
       ) : null}
@@ -101,7 +101,7 @@ export default function ElectricPackageCard({
 
       {/* Dark body with tier-coloured electric glow (matches reference concept) */}
       <div
-        className="relative isolate h-full rounded-3xl px-4 pb-4 pt-16 sm:pt-[68px]"
+        className="relative isolate h-full rounded-3xl px-4 pb-4 pt-12 sm:pt-[52px]"
         style={{
           background: isPremium
             ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
@@ -123,13 +123,13 @@ export default function ElectricPackageCard({
 
         {/* Icon — raised so it clears the package name */}
         {icon && (
-          <div className="absolute -top-12 sm:-top-14 left-1/2 -translate-x-1/2 z-20">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 relative">
+          <div className="absolute -top-9 sm:-top-10 left-1/2 -translate-x-1/2 z-20">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 relative">
               <Image
                 src={icon}
                 alt={`${getPackageDisplayName(plan)} icon`}
                 fill
-                sizes="(max-width: 640px) 80px, 96px"
+                sizes="(max-width: 640px) 56px, 64px"
                 className={cn("object-contain", colorScheme.glow)}
               />
             </div>
