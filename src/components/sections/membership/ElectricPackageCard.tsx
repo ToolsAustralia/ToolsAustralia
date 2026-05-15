@@ -78,9 +78,9 @@ export default function ElectricPackageCard({
     >
       {/* Best Value (top-left) — takes precedence over the ribbon */}
       {showBestValue ? (
-        <BestValueBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} className="scale-[0.5] origin-top-left" />
+        <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
       ) : ribbon ? (
-        <CornerRibbonBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} className="scale-[0.5] origin-top-left">
+        <CornerRibbonBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme}>
           {ribbon}
         </CornerRibbonBadge>
       ) : null}

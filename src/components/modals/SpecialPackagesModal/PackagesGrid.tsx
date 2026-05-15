@@ -128,7 +128,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
                 <div className="relative flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
                   {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                    <span className="absolute left-full top-1/2 ml-1 -translate-y-1/2 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
+                    <span className="absolute -top-1 left-full ml-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
                       {pkg.originalEntries}
                     </span>
                   )}
@@ -145,7 +145,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 <div className="flex items-center justify-end gap-2">
                   <span className="relative inline-block text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
                     {discount && (
-                      <span className="absolute -top-3 right-0 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
+                      <span className="absolute -top-3 right-0 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
                         ${discount.regularPrice}
                       </span>
                     )}
