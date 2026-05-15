@@ -43,6 +43,7 @@ export default function MembershipSectionDevClient() {
   const [dark, setDark] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showOld, setShowOld] = useState(false);
+  const [lockedPreview, setLockedPreview] = useState(false);
   const [lastSelected, setLastSelected] = useState<string | null>(null);
 
   const hasAccess = userState === "subscriber" || userState === "entries";
@@ -54,11 +55,12 @@ export default function MembershipSectionDevClient() {
         .map((p) => toLocalPlan(p, mult));
     }
     const oneTime = membershipPackages.filter((p) => p.type === "one-time" && p.isActive);
-    const filtered = hasAccess
+    const showMemberOnly = hasAccess || lockedPreview;
+    const filtered = showMemberOnly
       ? oneTime.filter((p) => p.isMemberOnly === true)
       : oneTime.filter((p) => !p.isMemberOnly);
     return filtered.map((p) => toLocalPlan(p, mult));
-  }, [tab, hasAccess, mult]);
+  }, [tab, hasAccess, mult, lockedPreview]);
 
   return (
     <div className={dark ? "dark" : ""}>
@@ -102,6 +104,9 @@ export default function MembershipSectionDevClient() {
           </button>
           <button onClick={() => setShowOld((v) => !v)} className={BTN + " border-gray-400"}>
             old-vs-new: {showOld ? "on" : "off"}
+          </button>
+          <button onClick={() => setLockedPreview((v) => !v)} className={BTN + " border-gray-400"}>
+            locked-preview: {lockedPreview ? "on" : "off"}
           </button>
         </div>
 
