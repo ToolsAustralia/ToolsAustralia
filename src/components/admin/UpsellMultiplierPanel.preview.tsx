@@ -60,6 +60,28 @@ function HeaderCell({ children, align }: { children: React.ReactNode; align?: "r
   );
 }
 
+function EffectiveBadge({
+  promo,
+  setting,
+  effective,
+  hasPromo,
+}: {
+  promo: number | null;
+  setting: number;
+  effective: number;
+  hasPromo: boolean;
+}) {
+  return (
+    <div className="mb-3 inline-flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5">
+      <span className="text-xs uppercase tracking-wide text-emerald-700">Effective</span>
+      <span className="text-lg font-bold tabular-nums text-emerald-900">{effective}×</span>
+      <span className="text-[11px] text-emerald-600">
+        {hasPromo ? `(${promo}× active promo × ${setting}× setting)` : `(no active promo · ${setting}× setting only)`}
+      </span>
+    </div>
+  );
+}
+
 function PreviewTable({
   title,
   subtitle,
@@ -74,16 +96,14 @@ function PreviewTable({
   activePromo: number | null;
 }) {
   const records = upsellPackages.filter((p) => p.upsellCategory === categoryKey);
-  const effective = activePromo && activePromo > 1 ? activePromo * multiplier : multiplier;
-  const stackingLabel = activePromo && activePromo > 1
-    ? `${activePromo}× promo × ${multiplier}× = ${effective}× effective`
-    : `${multiplier}× (no active promo)`;
+  const hasPromo = activePromo !== null && activePromo > 1;
+  const effective = hasPromo ? (activePromo as number) * multiplier : multiplier;
 
   return (
     <div className="mb-6">
       <h3 className="mb-1 text-sm font-semibold text-slate-700">{title}</h3>
       {subtitle && <p className="mb-2 text-xs text-slate-500">{subtitle}</p>}
-      <p className="mb-2 text-[11px] text-slate-500">Effective per entry: {stackingLabel}</p>
+      <EffectiveBadge promo={activePromo} setting={multiplier} effective={effective} hasPromo={hasPromo} />
       <div className="overflow-x-auto rounded border border-slate-200">
         <table className="min-w-full text-xs">
           <thead className="bg-slate-50">
@@ -91,7 +111,7 @@ function PreviewTable({
               <HeaderCell>Trigger Pack</HeaderCell>
               <HeaderCell>Upsell Name</HeaderCell>
               <HeaderCell align="right">Base Entries</HeaderCell>
-              <HeaderCell align="right">Upsell Entries</HeaderCell>
+              <HeaderCell align="right">Upsell Entries ({effective}×)</HeaderCell>
               <HeaderCell align="right">Upsell Price</HeaderCell>
             </tr>
           </thead>
@@ -126,10 +146,8 @@ function PreviewTable({
 }
 
 function MiniPreviewTable({ activePromo }: { activePromo: number | null }) {
-  const effectiveLabel =
-    activePromo && activePromo > 1
-      ? `${activePromo}× promo × 1× (fixed) = ${activePromo}× effective`
-      : "1× (no active promo; same entries as trigger)";
+  const hasPromo = activePromo !== null && activePromo > 1;
+  const effective = hasPromo ? (activePromo as number) : 1;
   return (
     <div className="mb-2">
       <h3 className="mb-1 text-sm font-semibold text-slate-700">
@@ -138,7 +156,7 @@ function MiniPreviewTable({ activePromo }: { activePromo: number | null }) {
           (no admin knob — fixed 1× upsell multiplier; still stacks with active mini promo)
         </span>
       </h3>
-      <p className="mb-2 text-[11px] text-slate-500">Effective per entry: {effectiveLabel}</p>
+      <EffectiveBadge promo={activePromo} setting={1} effective={effective} hasPromo={hasPromo} />
       <div className="overflow-x-auto rounded border border-slate-200">
         <table className="min-w-full text-xs">
           <thead className="bg-slate-50">
@@ -146,7 +164,7 @@ function MiniPreviewTable({ activePromo }: { activePromo: number | null }) {
               <HeaderCell>Trigger Pack</HeaderCell>
               <HeaderCell>Upsell Name</HeaderCell>
               <HeaderCell align="right">Trigger Entries</HeaderCell>
-              <HeaderCell align="right">Upsell Entries</HeaderCell>
+              <HeaderCell align="right">Upsell Entries ({effective}×)</HeaderCell>
               <HeaderCell align="right">Upsell Price</HeaderCell>
             </tr>
           </thead>
