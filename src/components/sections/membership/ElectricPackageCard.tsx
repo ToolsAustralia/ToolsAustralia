@@ -203,7 +203,7 @@ export default function ElectricPackageCard({
 
             {discount && (
               <div
-                className="absolute -top-5 right-3 z-20 flex flex-col items-center"
+                className="absolute -top-5 left-3 z-20 flex flex-col items-center"
                 style={{ transform: "rotate(-7deg)" }}
                 aria-label={`${discount.percentOff} percent off`}
               >
