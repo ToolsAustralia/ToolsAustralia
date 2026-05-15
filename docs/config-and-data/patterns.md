@@ -28,3 +28,5 @@ export const membershipPackages: Record<string, MembershipPackage> = {
 ## P5. Brand assets via `brandLogos.ts` map
 
 Don't hardcode image paths in components — go through the map so renames are central.
+
+The `name` field is the human-readable label rendered as visible text in shop / mini-draw filters / partner sections (and as image `alt`). Use **Title Case** (e.g. `"Sidchrome"`, `"Milwaukee"`, `"Kincrome"`), not all-caps — capitalised wordmark styling, if needed, is achieved at render time with `uppercase` Tailwind classes, not by baking caps into the data. Several legacy entries (`DEWALT`, `KINCROME`) still use all-caps; normalise on touch.

@@ -323,6 +323,9 @@ export async function trackPixelSubscription(
     userPhone?: string;
     userFirstName?: string;
     userLastName?: string;
+    userState?: string;
+    userBirthdate?: string | Date;
+    userZipCode?: string;
     entriesPerMonth?: number;
     paymentIntentId?: string;
     eventSourceUrl?: string;
@@ -350,6 +353,9 @@ export async function trackPixelSubscription(
       userPhone,
       userFirstName,
       userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
       entriesPerMonth,
       paymentIntentId,
       eventSourceUrl,
@@ -391,6 +397,9 @@ export async function trackPixelSubscription(
         phone: userPhone,
         firstName: userFirstName,
         lastName: userLastName,
+        state: userState,
+        birthdate: userBirthdate,
+        zipCode: userZipCode,
       });
 
       // Get fbc and fbp - prioritize requestContext, then try to extract
@@ -471,9 +480,22 @@ export async function trackPixelSubscriptionUpgrade(params: {
   subscriptionId: string;
   userId?: string;
   userEmail?: string;
+  userPhone?: string;
+  userFirstName?: string;
+  userLastName?: string;
+  userState?: string;
+  userBirthdate?: string | Date;
+  userZipCode?: string;
   paymentIntentId?: string;
   prorationAmount?: number;
   entriesAdded?: number;
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+    event_source_url?: string;
+  };
 }): Promise<void> {
   try {
     const {
@@ -487,9 +509,16 @@ export async function trackPixelSubscriptionUpgrade(params: {
       subscriptionId,
       userId,
       userEmail,
+      userPhone,
+      userFirstName,
+      userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
       paymentIntentId,
       prorationAmount,
       entriesAdded,
+      requestContext,
     } = params;
 
     const commonParams = {
@@ -517,9 +546,19 @@ export async function trackPixelSubscriptionUpgrade(params: {
       : `upgrade-${subscriptionId}-${Date.now()}`;
     const hashed = prepareUserData({
       email: userEmail,
+      phone: userPhone,
+      firstName: userFirstName,
+      lastName: userLastName,
+      state: userState,
+      birthdate: userBirthdate,
+      zipCode: userZipCode,
       country: "AU",
       ...(userId && { externalId: userId }),
     });
+    if (requestContext?.client_ip_address) hashed.client_ip_address = requestContext.client_ip_address;
+    if (requestContext?.client_user_agent) hashed.client_user_agent = requestContext.client_user_agent;
+    if (requestContext?.fbc) hashed.fbc = requestContext.fbc;
+    if (requestContext?.fbp) hashed.fbp = requestContext.fbp;
 
     const upgradeFacebookEvent: FacebookEvent = {
       event_name: "Subscribe",
@@ -536,7 +575,7 @@ export async function trackPixelSubscriptionUpgrade(params: {
         package_type: "subscription_upgrade",
         ...(paymentIntentId && { order_id: paymentIntentId }),
       },
-      event_source_url: getServerEventSourceUrlFallback(),
+      event_source_url: requestContext?.event_source_url ?? getServerEventSourceUrlFallback(),
     };
 
     await sendFacebookEvent(upgradeFacebookEvent);
@@ -563,9 +602,22 @@ export async function trackPixelSubscriptionDowngrade(params: {
   subscriptionId: string;
   userId?: string;
   userEmail?: string;
+  userPhone?: string;
+  userFirstName?: string;
+  userLastName?: string;
+  userState?: string;
+  userBirthdate?: string | Date;
+  userZipCode?: string;
   paymentIntentId?: string;
   prorationAmount?: number;
   entriesRemoved?: number;
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+    event_source_url?: string;
+  };
 }): Promise<void> {
   try {
     const {
@@ -579,9 +631,16 @@ export async function trackPixelSubscriptionDowngrade(params: {
       subscriptionId,
       userId,
       userEmail,
+      userPhone,
+      userFirstName,
+      userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
       paymentIntentId,
       prorationAmount,
       entriesRemoved,
+      requestContext,
     } = params;
 
     const commonParams = {
@@ -607,9 +666,19 @@ export async function trackPixelSubscriptionDowngrade(params: {
     const capiEventId = `downgrade-${subscriptionId}-${Date.now()}`;
     const hashedDown = prepareUserData({
       email: userEmail,
+      phone: userPhone,
+      firstName: userFirstName,
+      lastName: userLastName,
+      state: userState,
+      birthdate: userBirthdate,
+      zipCode: userZipCode,
       country: "AU",
       ...(userId && { externalId: userId }),
     });
+    if (requestContext?.client_ip_address) hashedDown.client_ip_address = requestContext.client_ip_address;
+    if (requestContext?.client_user_agent) hashedDown.client_user_agent = requestContext.client_user_agent;
+    if (requestContext?.fbc) hashedDown.fbc = requestContext.fbc;
+    if (requestContext?.fbp) hashedDown.fbp = requestContext.fbp;
 
     const downgradeFacebookEvent: FacebookEvent = {
       event_name: "Subscribe",
@@ -626,7 +695,7 @@ export async function trackPixelSubscriptionDowngrade(params: {
         package_type: "subscription_downgrade",
         ...(paymentIntentId && { order_id: paymentIntentId }),
       },
-      event_source_url: getServerEventSourceUrlFallback(),
+      event_source_url: requestContext?.event_source_url ?? getServerEventSourceUrlFallback(),
     };
 
     await sendFacebookEvent(downgradeFacebookEvent);
@@ -636,70 +705,6 @@ export async function trackPixelSubscriptionDowngrade(params: {
     // console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
   } catch {
     // console.error(`❌ Error tracking pixel subscription downgrade:`, error);
-  }
-}
-
-/**
- * Track cancellation events
- */
-export async function trackPixelCancellation(params: {
-  value: number;
-  currency: string;
-  packageId: string;
-  packageName: string;
-  subscriptionId: string;
-  userId?: string;
-  userEmail?: string;
-  cancellationReason?: string;
-}): Promise<void> {
-  try {
-    const { value, currency, packageId, packageName, subscriptionId, userId, userEmail, cancellationReason } = params;
-
-    const commonParams = {
-      value,
-      currency,
-      content_type: "subscription_cancellation",
-      content_ids: [packageId],
-      subscription_id: subscriptionId,
-      package_id: packageId,
-      package_name: packageName,
-      cancellation_reason: cancellationReason,
-      user_id: userId,
-      user_email: userEmail,
-      platform: "tools-australia",
-    };
-
-    const cancelEventId = `cancel-${subscriptionId}`;
-    const hashedCancel = prepareUserData({
-      email: userEmail,
-      country: "AU",
-      ...(userId && { externalId: userId }),
-    });
-
-    const cancelFacebookEvent: FacebookEvent = {
-      event_name: "Unsubscribe",
-      event_time: Math.floor(Date.now() / 1000),
-      event_id: cancelEventId,
-      action_source: "website",
-      user_data: hashedCancel,
-      custom_data: {
-        currency,
-        value,
-        content_type: "product",
-        content_ids: [packageId],
-        content_name: packageName,
-        package_type: "subscription_cancellation",
-      },
-      event_source_url: getServerEventSourceUrlFallback(),
-    };
-
-    await sendFacebookEvent(cancelFacebookEvent);
-
-    // Track TikTok Pixel
-    await trackTikTokEvent("Unsubscribe", commonParams);
-    // console.log(`📱 TikTok Pixel: Cancellation tracked - ${packageName}`);
-  } catch {
-    // console.error("❌ Error tracking pixel cancellation:", error);
   }
 }
 

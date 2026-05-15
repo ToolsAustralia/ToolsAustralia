@@ -12,6 +12,7 @@ import {
   sendFacebookEvent,
   type FacebookEvent,
 } from "@/lib/facebook";
+import { toYYYYMMDD } from "@/utils/tracking/facebook-helpers";
 
 /** Normalize country to ISO 3166-1 alpha-2 lowercase, or null if not a 2-letter code. */
 function normalizeCountry(input: string | undefined): string | null {
@@ -115,6 +116,9 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     ...(u.zipCode && { zp: hashPII(u.zipCode) }),
     ...(normalizeCountry(u.country) && { country: hashPII(normalizeCountry(u.country)!) }),
     ...(u.externalId && { external_id: hashPII(u.externalId) }),
+    ...((u.birthdate && toYYYYMMDD(u.birthdate)) && {
+      db: hashPII(toYYYYMMDD(u.birthdate)!),
+    }),
     ...(u.fbc && { fbc: u.fbc }),
     ...(u.fbp && { fbp: u.fbp }),
     ...((u.clientIpAddress ?? ctx.clientIpAddress) && {

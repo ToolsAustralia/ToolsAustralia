@@ -6,12 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useEmblaCarousel from "embla-carousel-react";
 import { GripVertical } from "lucide-react";
 import type { ToolsetLandingSlug } from "@/config/promo-landing-slugs";
-import { POWERSET_IMAGES, POWERSET_LABELS } from "./constants";
+import { POWERSET_BRAND_TEXT, POWERSET_IMAGES, POWERSET_LABELS } from "./constants";
 import { buildPromotionsToolsetLandingHref } from "./utils";
-import {
-  getPackageColorScheme,
-  getToolsetBadgeStyle,
-} from "@/utils/package-colors/packageColorScheme";
+import { getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { SECTION_CONTAINER_CLASSES } from "@/components/ui";
 import { addThrottledResize } from "@/utils/dom/listenerHelpers";
@@ -35,14 +32,6 @@ function shuffleWithSeed<T>(arr: T[], seed: number): T[] {
   return result;
 }
 
-function getToolsetColorKey(toolset: string) {
-  if (toolset === "milwaukee") return "milwaukee-red";
-  if (toolset === "dewalt") return "dewalt-yellow";
-  if (toolset === "makita") return "makita-teal";
-  if (toolset === "ryobi") return "ryobi-green";
-  return "milwaukee-red";
-}
-
 function formatToolsetLabel(slug: ToolsetLandingSlug): string {
   return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
@@ -60,6 +49,14 @@ const SLIDE_WIDTH = 220;
 const SLIDE_GAP = 20;
 
 const ALL_TOOLSETS = ["ryobi", "milwaukee", "dewalt", "makita"] as const;
+
+/** Per-brand wordmark scale to compensate for differing intrinsic aspect ratios in the source images. */
+const WORDMARK_SCALE: Record<ToolsetLandingSlug, number> = {
+  ryobi: 1,
+  dewalt: 1,
+  milwaukee: 1.3,
+  makita: 0.8,
+};
 
 export function OtherToolsetsCarousel({
   referrerSlug,
@@ -142,8 +139,8 @@ export function OtherToolsetsCarousel({
 
   const renderCard = (slug: ToolsetLandingSlug) => {
     const imgSrc = POWERSET_IMAGES[slug];
-    const label = POWERSET_LABELS[slug];
-    const scheme = getPackageColorScheme(getToolsetColorKey(slug));
+    const wordmarkSrc = POWERSET_BRAND_TEXT[slug];
+    const ariaLabel = POWERSET_LABELS[slug] ?? formatToolsetLabel(slug);
     const badgeStyle = getToolsetBadgeStyle(slug);
     if (!imgSrc) return null;
     return (
@@ -151,29 +148,32 @@ export function OtherToolsetsCarousel({
         key={slug}
         type="button"
         onClick={() => handleClick(slug)}
+        aria-label={ariaLabel}
         className="relative w-full aspect-[3/4] rounded-xl overflow-hidden border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 transition-all duration-200 hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400 bg-white dark:bg-neutral-800 flex-shrink-0 min-w-0"
         style={{ boxShadow: badgeStyle?.boxShadow }}
       >
         <div className="absolute inset-0 flex flex-col">
+          {wordmarkSrc && (
+            <div className="relative flex-shrink-0 h-8 sm:h-9 lg:h-10 mt-3 mb-1">
+              <Image
+                src={wordmarkSrc}
+                alt={formatToolsetLabel(slug)}
+                fill
+                className="object-contain"
+                sizes="(max-width: 640px) 140px, 180px"
+                style={{ transform: `scale(${WORDMARK_SCALE[slug] ?? 1})`, transformOrigin: "center" }}
+              />
+            </div>
+          )}
           <div className="relative flex-1 min-h-0">
             <Image
               src={imgSrc}
-              alt={formatToolsetLabel(slug)}
+              alt=""
               fill
               className="object-contain p-2"
               sizes="(max-width: 640px) 170px, 220px"
             />
           </div>
-          {label && badgeStyle && (
-            <div
-              className="flex-shrink-0 p-2 rounded-b-lg"
-              style={{ background: badgeStyle.background, borderTop: badgeStyle.border }}
-            >
-              <p className={cn("font-sans font-extrabold font-[950] text-base sm:text-sm leading-tight text-center line-clamp-2", scheme.buttonText)}>
-                {formatToolsetLabel(slug)}
-              </p>
-            </div>
-          )}
         </div>
       </button>
     );

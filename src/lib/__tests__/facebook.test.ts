@@ -127,10 +127,86 @@ async function testFacebookProviderCanonicalTranslation() {
   restoreEnv(saved);
 }
 
+async function testFacebookProviderHashesBirthdateAsDb() {
+  const saved = snapshotEnv();
+  process.env.VERCEL_ENV = "production";
+  process.env.FACEBOOK_ACCESS_TOKEN = "test-token";
+  process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID = "123456789";
+  delete process.env.FACEBOOK_USE_TEST_EVENTS;
+  delete process.env.FACEBOOK_TEST_EVENT_CODE;
+
+  let capturedBody: { data: unknown[]; access_token: string } | null = null;
+  const prevFetch = global.fetch;
+  global.fetch = async function _captureFetch(_url, init) {
+    capturedBody = init?.body ? JSON.parse(String(init.body)) : null;
+    return new Response(JSON.stringify({ events_received: 1 }), { status: 200 });
+  } as typeof fetch;
+
+  const { facebookProvider } = await import("../tracking/providers/facebook");
+  const { hashData } = await import("../facebook");
+
+  // Case 1: birthdate as ISO string is normalized to YYYYMMDD then SHA-256 lowercased.
+  await facebookProvider.capiSend(
+    {
+      eventName: "Purchase",
+      eventId: "evt-db-1",
+      eventTime: 1700000000,
+      value: 10,
+      currency: "AUD",
+      userData: { email: "x@y.com", birthdate: "1990-06-15" },
+      customData: { orderId: "o-1" },
+    },
+    {},
+  );
+  const body1 = capturedBody as unknown as { data: unknown[] };
+  const event1 = body1.data[0] as { user_data?: { db?: string } };
+  assert.equal(event1.user_data?.db, hashData("19900615"), "db must be SHA-256 of YYYYMMDD");
+
+  // Case 2: unparseable birthdate is skipped (no db key).
+  capturedBody = null;
+  await facebookProvider.capiSend(
+    {
+      eventName: "Purchase",
+      eventId: "evt-db-2",
+      eventTime: 1700000000,
+      value: 10,
+      currency: "AUD",
+      userData: { email: "x@y.com", birthdate: "not-a-date" },
+      customData: { orderId: "o-2" },
+    },
+    {},
+  );
+  const body2 = capturedBody as unknown as { data: unknown[] };
+  const event2 = body2.data[0] as { user_data?: { db?: string } };
+  assert.equal(event2.user_data?.db, undefined, "db must be absent when birthdate is unparseable");
+
+  // Case 3: missing birthdate is skipped.
+  capturedBody = null;
+  await facebookProvider.capiSend(
+    {
+      eventName: "Purchase",
+      eventId: "evt-db-3",
+      eventTime: 1700000000,
+      value: 10,
+      currency: "AUD",
+      userData: { email: "x@y.com" },
+      customData: { orderId: "o-3" },
+    },
+    {},
+  );
+  const body3 = capturedBody as unknown as { data: unknown[] };
+  const event3 = body3.data[0] as { user_data?: { db?: string } };
+  assert.equal(event3.user_data?.db, undefined, "db must be absent when birthdate is missing");
+
+  global.fetch = prevFetch;
+  restoreEnv(saved);
+}
+
 async function run() {
   await testRefusesPurchaseWithoutEventId();
   await testRefusesNonProdWithoutTestEventCode();
   await testFacebookProviderCanonicalTranslation();
+  await testFacebookProviderHashesBirthdateAsDb();
   console.log("facebook CAPI guard tests passed");
 }
 

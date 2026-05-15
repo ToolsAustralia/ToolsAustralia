@@ -656,7 +656,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-05-08"
+      "lastVerified": "2026-05-14"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",
