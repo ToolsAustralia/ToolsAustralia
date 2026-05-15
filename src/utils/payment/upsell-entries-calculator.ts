@@ -1,30 +1,14 @@
-import { getPackageById } from "@/data/membershipPackages";
-import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { getUpsellMultiplier } from "@/services/upsell/UpsellMultiplierResolver";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 
-export interface PackageBaseEntriesParams {
-  packageId: string;
-  packageType: "membership" | "one-time" | "mini-draw";
-}
-
-export function getPackageBaseEntries(params: PackageBaseEntriesParams): number {
-  const { packageId, packageType } = params;
-  try {
-    if (packageType === "mini-draw") {
-      const pkg = getMiniDrawPackageById(packageId);
-      return pkg?.originalEntries ?? pkg?.entries ?? 0;
-    }
-    const pkg = getPackageById(packageId);
-    if (!pkg) return 0;
-    if (pkg.originalEntries !== undefined) return pkg.originalEntries;
-    if (pkg.type === "subscription") return pkg.entriesPerMonth ?? 0;
-    return pkg.totalEntries ?? 0;
-  } catch (err) {
-    console.error(`getPackageBaseEntries failed for ${packageId}:`, err);
-    return 0;
-  }
-}
+/**
+ * Async, multiplier-aware upsell-entries calculator. **Server-only by convention** —
+ * this file imports `UpsellMultiplierResolver`, which depends on Mongoose.
+ *
+ * Client components MUST NOT import from this file; use `package-base-entries.ts`
+ * for the pure base-entries lookup instead.
+ */
 
 /**
  * Resolve upsell entries for a specific upsell record.

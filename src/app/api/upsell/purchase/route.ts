@@ -9,10 +9,8 @@ import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
-import {
-  calculateUpsellEntriesFromContext,
-  getPackageBaseEntries,
-} from "@/utils/payment/upsell-entries-calculator";
+import { calculateUpsellEntriesFromContext } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";

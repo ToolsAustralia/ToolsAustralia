@@ -53,7 +53,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { convertUpsellToLocalPlan } from "@/utils/membership/membership-adapters";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
-import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
