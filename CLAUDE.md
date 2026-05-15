@@ -617,6 +617,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "package-lock.json",
         "vercel.json",
         ".gitignore",
+        ".env.example",
         "src/app/api/health/**",
         "src/app/api/cron/**",
         "src/app/api/upload/**",

@@ -74,13 +74,15 @@ The membership subscriptions, regular one-time packs, additional one-time packs,
 | `additional-power-pack` | Power Pack | "Additional Power Pack" | $250 | 600 free | 85% | 20 days |
 | `additional-vip-pack` | VIP Pack | "Additional VIP Pack" | $500 | 1500 free | 100% | 30 days |
 
-#### Mini Pack 1–3 (unchanged)
+#### Mini Pack 1–3 (price + duration unchanged; partner % refined 2026-05-15)
+
+Mini Pack 1–3 now form a small entry-level ladder (5% / 10% / 15%) rather than three identical 25% rows. Durations are unchanged.
 
 | Internal ID | UI display | Stripe description | Price | Base entries | Partner % | Partner duration |
 |---|---|---|---|---|---|---|
-| `mini-pack-1` | Mini Pack 1 | "Mini Pack 1" | $1 | 1 free | 25% | 1 hour |
-| `mini-pack-2` | Mini Pack 2 | "Mini Pack 2" | $5 | 5 free | 25% | 6 hours |
-| `mini-pack-3` | Mini Pack 3 | "Mini Pack 3" | $10 | 10 free | 25% | 12 hours |
+| `mini-pack-1` | Mini Pack 1 | "Mini Pack 1" | $1 | 1 free | 5% | 1 hour |
+| `mini-pack-2` | Mini Pack 2 | "Mini Pack 2" | $5 | 5 free | 10% | 6 hours |
+| `mini-pack-3` | Mini Pack 3 | "Mini Pack 3" | $10 | 10 free | 15% | 12 hours |
 
 #### Mini Pack 4–8 (renamed and restructured to mini-scoped Additional packs)
 
