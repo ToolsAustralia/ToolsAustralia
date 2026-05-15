@@ -121,35 +121,33 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                   <div className="text-xs font-bold opacity-90">ENTRIES</div>
                 </div>
 
-                {/* Right Side - Price (with struck regular price) + SAVE shield + SELECT button */}
-                <div className="flex items-center justify-end gap-2 sm:gap-2">
-                  <div className="relative flex items-center">
-                    <span className="relative inline-block text-base sm:text-lg font-extrabold" style={cardTextStyle}>
-                      ${pkg.price}
-                      {discount && (
-                        <span className="absolute left-full top-0 ml-1 -translate-y-[2px] whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
-                          ${discount.regularPrice}
-                        </span>
-                      )}
-                    </span>
+                {/* Right Side - Price (struck regular upper-right) + SAVE shield + SELECT button */}
+                <div className="flex items-center justify-end gap-2">
+                  <span className="inline-flex items-start gap-1 text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
+                    ${pkg.price}
                     {discount && (
-                      <span
-                        className="absolute right-0 top-1/2 z-20 inline-flex -translate-y-1/2 translate-x-[58%] flex-col items-center justify-start text-black"
-                        style={{
-                          backgroundColor: accentHex,
-                          width: 44,
-                          height: 50,
-                          clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
-                          boxShadow: `0 0 14px ${hexToRgba(accentHex, 0.65)}`,
-                        }}
-                        aria-label={`Save ${discount.percentOff} percent off`}
-                      >
-                        <span className="mt-[5px] text-[6px] font-extrabold uppercase leading-none tracking-wide">Save</span>
-                        <span className="text-[13px] font-black leading-none">{discount.percentOff}%</span>
-                        <span className="text-[6px] font-extrabold uppercase leading-none tracking-wide">Off</span>
+                      <span className="mt-[1px] text-[10px] font-bold leading-none text-white/40 line-through">
+                        ${discount.regularPrice}
                       </span>
                     )}
-                  </div>
+                  </span>
+                  {discount && (
+                    <span
+                      className="inline-flex flex-shrink-0 flex-col items-center justify-start text-black"
+                      style={{
+                        backgroundColor: accentHex,
+                        width: 42,
+                        height: 48,
+                        clipPath: "polygon(0% 0%, 100% 0%, 100% 64%, 50% 100%, 0% 64%)",
+                        boxShadow: `0 0 14px ${hexToRgba(accentHex, 0.65)}`,
+                      }}
+                      aria-label={`Save ${discount.percentOff} percent off`}
+                    >
+                      <span className="mt-[5px] text-[6px] font-extrabold uppercase leading-none tracking-wide">Save</span>
+                      <span className="text-[13px] font-black leading-none">{discount.percentOff}%</span>
+                      <span className="text-[6px] font-extrabold uppercase leading-none tracking-wide">Off</span>
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => {
