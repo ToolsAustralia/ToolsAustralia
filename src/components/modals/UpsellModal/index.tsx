@@ -42,6 +42,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { useUpsellMultipliersPublic } from "@/hooks/queries/useUpsellMultipliersPublic";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import {
   pickTriggeringPackageIdForUpsell,
   resolveUpsellPromoMultiplierForDisplay,
@@ -924,21 +925,39 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   const upsellPriceLabel = offer.discountedPrice.toFixed(2);
 
   /**
-   * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else
-   * resolveUpsellPromoMultiplierForDisplay (getEffectivePromoType + current promo hooks).
-   */
-  /**
-   * Display entries for the upsell offer. The authoritative runtime count is computed
-   * server-side via calculateUpsellEntriesForOffer (categoryMultiplier × baseEntries).
-   * Client-side we fall back to the offer's static entriesCount, which reflects the
-   * configured multiplier from UpsellMultiplierConfig at build/seed time.
+   * Display entries for the upsell offer. Mirrors the server-side calculator
+   * (`calculateUpsellEntriesForOffer`) so the hero number, the CTA, and the
+   * inclusion lines all stay in lockstep:
+   *
+   *   upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
+   *
+   * Mini upsells use a fixed 1× category multiplier. If anything is missing
+   * (no offer found, base entries unresolved) we fall back to the offer's
+   * static `entriesCount` so the modal still renders sensibly.
    */
   const computedUpsellEntries = useMemo(() => {
     const staticPkg = getUpsellPackageById(offer.id);
-    // Use static entriesCount as display value; actual entries granted are determined by the API route.
-    const fallback = staticPkg?.entriesCount ?? null;
-    return fallback && fallback > 0 ? fallback : null;
-  }, [offer.id]);
+    if (!staticPkg) return null;
+
+    const baseTemplate = staticPkg.baseTemplatePackageId;
+    const lookupType: "membership" | "one-time" | "mini-draw" =
+      staticPkg.upsellCategory === "mini" ? "mini-draw" : "one-time";
+    const baseEntries = getPackageBaseEntries({ packageId: baseTemplate, packageType: lookupType });
+    if (!baseEntries) return staticPkg.entriesCount ?? null;
+
+    let categoryMult = 1;
+    if (staticPkg.upsellCategory === "membership") categoryMult = upsellMultipliers?.membership ?? 10;
+    else if (staticPkg.upsellCategory === "one-time") categoryMult = upsellMultipliers?.oneTime ?? 2;
+    else if (staticPkg.upsellCategory === "additional") categoryMult = upsellMultipliers?.additional ?? 2;
+    // mini: stays at 1
+
+    const promo =
+      effectiveUpsellPromoMultiplier && effectiveUpsellPromoMultiplier >= 1
+        ? effectiveUpsellPromoMultiplier
+        : 1;
+
+    return promo * categoryMult * baseEntries;
+  }, [offer.id, effectiveUpsellPromoMultiplier, upsellMultipliers]);
 
   const packageInclusionLines = useMemo(() => {
     const fromOffer = offer.conditions?.filter(Boolean) ?? [];
