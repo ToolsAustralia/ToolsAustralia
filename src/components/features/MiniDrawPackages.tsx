@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Package, Info } from "lucide-react";
-import { getMiniDrawPackagesForViewer } from "@/data/miniDrawPackages";
+import { getMiniDrawPackages } from "@/data/miniDrawPackages";
 import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
@@ -22,8 +22,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { MiniDrawType } from "@/types/mini-draw";
 import { useAttribution } from "@/hooks/useAttribution";
-import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
-import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
@@ -50,10 +48,10 @@ export default function MiniDrawPackages({
       : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
 
-  // Derive tier-aware package list — mirrors the major-draw swap rule.
-  const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
-  const viewerPackages = getMiniDrawPackagesForViewer(hasAccess);
+  // Mini-draw catalog is intentionally NOT tier-gated: every visitor (signed-in or not,
+  // member or not, entrant or not) sees all 8 active packs (Mini Pack 1–3 + the five
+  // mini-scoped Additional packs). Login is enforced at purchase time via LoginPromptModal.
+  const viewerPackages = getMiniDrawPackages();
 
   /**
    * Calculate user's entry count for this specific minidraw
