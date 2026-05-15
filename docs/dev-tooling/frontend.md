@@ -4,11 +4,24 @@
 
 - `src/app/dev/` — dev panel
 - `src/app/dev/modals/` — interactive modal/overlay gallery
+- `src/app/dev/membershipsection/` — electric package card preview (returns 404 in production)
 - `src/app/test-pixels/` — pixel testing
 
 ## Components
 
 [src/components/dev/](../../src/components/dev/) — dev-only UI.
+
+### MembershipSectionDevClient
+
+`src/components/dev/MembershipSectionDevClient.tsx` — electric package card preview harness. Controls:
+- **User state**: `guest` | `subscriber` | `entries` — drives which one-time tab shows (regular vs member-only packs)
+- **Tab**: `one-time` | `membership` — switches between `ElectricPackageCard` with `getElectricPackageColorScheme` (one-time) and `getMembershipSectionColorScheme` (membership)
+- **Multiplier**: `1x` / `2x` / `5x` / `10x` — simulates promo multiplier in plan metadata
+- **Theme toggle**: wraps output in a `.dark` class div
+- **Reduced-motion**: adds `[&_*]:!transition-none [&_*]:!animate-none` to disable animations
+- **Old-vs-new**: shows a reminder label to open the live section in another tab for comparison
+
+No Stripe, no providers, no real purchase. Mock data sourced from `src/data/membershipPackages.ts`.
 
 ### ModalsGalleryClient
 
