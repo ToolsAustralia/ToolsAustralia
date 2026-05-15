@@ -31,6 +31,8 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 - CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `"Enter Now"`.
 - Uses `getCardBorderStyle` + `PackageColorScheme.badgeStyle` / `enterNowButtonStyle` — no local colour literals.
 
+The component accepts two optional badge props: `showBestValue` (renders a `BestValueBadge` in the top-left corner) and `ribbon` (renders a `CornerRibbonBadge` with the given label; ignored when `showBestValue` is true). A promo-multiplier lightning badge (`X2`/`X5`/`X10` webp) appears top-right when `entries.multiplied` is active. These badges are caller-driven — no internal tier logic in the card itself.
+
 This component is **dev-phase 1 only** and is not yet wired into any page route.
 
 ### PromoTrustBar — final-hours urgency variant

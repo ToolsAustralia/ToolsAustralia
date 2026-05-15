@@ -6,6 +6,7 @@ import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 
 type UserState = "guest" | "subscriber" | "entries";
@@ -127,6 +128,11 @@ export default function MembershipSectionDevClient() {
                 ? getAdditionalPackDiscount(plan.id)
                 : null;
             const locked = tab === "one-time" && plan.isMemberOnly === true && !hasAccess;
+            const showBestValue =
+              tab === "membership"
+                ? plan.id.includes("boss")
+                : isOneTimeBestValuePlanId(plan.id);
+            const ribbon = !showBestValue && plan.id.includes("foreman") ? "MOST POPULAR" : null;
             return (
               <div key={plan.id} className="pt-8">
                 <ElectricPackageCard
@@ -135,6 +141,8 @@ export default function MembershipSectionDevClient() {
                   state={{ locked, lockReason: "Subscription or Entries Required", isCurrent: false }}
                   discount={discount ? { regularPrice: discount.regularPrice, percentOff: discount.percentOff } : null}
                   onSelect={(p) => setLastSelected(`${p.name} ($${p.price})`)}
+                  showBestValue={showBestValue}
+                  ribbon={ribbon}
                 />
                 {showOld && (
                   <p className="mt-2 text-center text-xs text-gray-500 dark:text-neutral-400">
