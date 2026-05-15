@@ -119,7 +119,7 @@ export default function MembershipSectionDevClient() {
 
         <div
           className={
-            "grid grid-cols-1 gap-x-6 gap-y-14 overflow-visible px-2 sm:grid-cols-2 " +
+            "mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-6 gap-y-14 overflow-visible px-2 sm:grid-cols-2 " +
             (plans.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-3")
           }
         >
