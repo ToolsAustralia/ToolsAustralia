@@ -178,3 +178,28 @@ Subscription create routes accept a client-supplied `subscriptionRequestId` UUID
 Mitigated by:
 - [P10. One-shot idempotency-retry](./patterns.md#p10-one-shot-idempotency-retry-on-key-collisions) — catches the error, cancels the orphan, retries with a fresh key.
 - `extractFBCFromRequest` reading `_fbc` cookie first ([docs/tracking/gotchas.md](../tracking/gotchas.md)) — eliminates the most common drift cause.
+
+## 2026-05-15 504 storm — index DDL + self-call in the webhook path
+
+**Root cause.** The async-queue cutover (commit `8031be29`) made the receiver
+"thin" on paper but left `connectDB()` + `ensureIndexesOnce()` in the
+*synchronous, pre-ack* path of `/api/stripe/webhook`. `ensureIndexesOnce()` was a
+per-lambda-instance singleton wrapping `ensureCriticalIndexes()` — ~25–30
+serialized Atlas admin/DDL operations (drop-redundant + create-unique +
+ensure-index sweeps). On a warm instance it was a cached no-op, but the wrapper
+re-ran the full DDL on every *cold* instance. A bulk-charge burst spun up many
+cold lambdas at once, all racing the same Atlas admin commands; command latency
+blew past the 60s `maxDuration`, so the receiver itself started returning **504**.
+The 504s starved/saturated the deployment, and the receiver→worker HTTP
+self-call (already patched once in `6bc91a0d` for the Vercel-challenge issue)
+then `429`/`ECONNRESET`'d against the saturated deployment — so even enqueued
+events never got processed.
+
+**Fix (Tasks 1–6).** Index DDL moved entirely off the request path into the
+`migrate:ensure-core-indexes` migration (`scripts/migrate-ensure-core-indexes.ts`,
+must run before deploying receiver changes — it owns the dedup-layer-4 unique
+index). `ensureIndexesOnce()` deleted. The `/api/stripe/process-event` worker
+route and the HTTP self-call were deleted; processing now runs in-process via
+`processQueuedEvent` (receiver `after()` / sweeper / admin Replay). Receiver is
+now genuinely thin: `connectDB → verify → enqueue → after() → 200`. See
+[STRIPE_WEBHOOK_QUEUE.md](./STRIPE_WEBHOOK_QUEUE.md).
