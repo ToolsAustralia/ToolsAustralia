@@ -46,7 +46,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
   return (
     <>
       {/* Package List - Styled to match PackageSelectionModal (uses package color scheme) */}
-      <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+      <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6 pt-3">
         {packagesWithPromo.map((pkg) => {
           const colorScheme = getElectricPackageColorScheme(pkg._id || "");
           const isSelected = selectedPackage?._id === pkg._id;
@@ -127,7 +127,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                   <div className="text-xs font-bold opacity-90">ENTRIES</div>
                 </div>
 
-                {/* Right Side - Price (struck regular upper-right) + SAVE shield + SELECT button */}
+                {/* Right Side - Price (struck regular upper-right) + SELECT button */}
                 <div className="flex items-center justify-end gap-2">
                   <span className="inline-flex items-start gap-1 text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
                     ${pkg.price}
