@@ -535,7 +535,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-05-15"
     },
     "client-state": {
       "docs": "docs/client-state/",
