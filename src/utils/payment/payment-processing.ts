@@ -21,6 +21,7 @@ import {
   handleSubscriptionQueueUpdate,
 } from "@/utils/partner-discounts/partner-discount-queue";
 import { getPackageById } from "@/data/membershipPackages";
+import { getUpsellPackageById } from "@/data/upsellPackages";
 import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
@@ -1868,27 +1869,42 @@ async function handleUpsellPackage(
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
   // console.log(`🛒 Added upsell purchase atomically: ${packageData.packageName}`);
 
-  // Mini-draw upsells: grant partner discount window from miniDrawPackages upsell definition (single source of truth).
-  const miniUpsellMatch = packageData.packageId?.match(/^mini-pack-(\d+)-upgrade$/);
-  if (miniUpsellMatch && paymentIntentId) {
-    const basePackId = `mini-pack-${miniUpsellMatch[1]}`;
-    const miniBase = getMiniDrawPackageById(basePackId);
-    const upsellDef = miniBase?.upsell;
-    if (upsellDef && (upsellDef.partnerDiscountHours > 0 || upsellDef.partnerDiscountDays > 0)) {
-      if (!user.partnerDiscountQueue) {
-        user.partnerDiscountQueue = [];
-        user.markModified("partnerDiscountQueue");
+  // Grant partner discount window for all upsell categories. The window's % comes from the
+  // upsell record's `baseTemplatePackageId` (handled at display time by
+  // getPartnerCatalogAccessPercentForPlanId); duration comes from the upsell record itself.
+  // For mini upsells we also pull hour-granularity from the MiniDrawPackage upsell sub-field.
+  if (paymentIntentId) {
+    const upsellPkg = getUpsellPackageById(packageData.packageId);
+    if (upsellPkg) {
+      const days = upsellPkg.partnerDiscountDays ?? 0;
+
+      // Mini upsells: derive hour granularity from the MiniDrawPackage upsell sub-field if available
+      // (Mini Pack 1–3 use sub-day windows: 1h / 6h / 12h).
+      let hours = days * 24;
+      if (upsellPkg.upsellCategory === "mini") {
+        const miniBase = getMiniDrawPackageById(upsellPkg.baseTemplatePackageId);
+        const miniUpsellDef = miniBase?.upsell;
+        if (miniUpsellDef && miniUpsellDef.partnerDiscountHours > 0) {
+          hours = miniUpsellDef.partnerDiscountHours;
+        }
       }
-      await addToPartnerDiscountQueue(user as unknown as IUser, {
-        packageId: packageData.packageId,
-        packageName: upsellDef.name,
-        packageType: "upsell",
-        discountDays: upsellDef.partnerDiscountDays,
-        discountHours: upsellDef.partnerDiscountHours,
-        stripePaymentIntentId: paymentIntentId,
-      });
-      user.markModified("partnerDiscountQueue");
-      dispatchPackagePurchase(packageData.packageId, "upsell");
+
+      if (days > 0 || hours > 0) {
+        if (!user.partnerDiscountQueue) {
+          user.partnerDiscountQueue = [];
+          user.markModified("partnerDiscountQueue");
+        }
+        await addToPartnerDiscountQueue(user as unknown as IUser, {
+          packageId: packageData.packageId,
+          packageName: upsellPkg.name,
+          packageType: "upsell",
+          discountDays: days,
+          discountHours: hours,
+          stripePaymentIntentId: paymentIntentId,
+        });
+        user.markModified("partnerDiscountQueue");
+        dispatchPackagePurchase(packageData.packageId, "upsell");
+      }
     }
   }
 }
