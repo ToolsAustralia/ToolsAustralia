@@ -146,23 +146,30 @@ export default function ElectricPackageCard({
                 : { color: accent, textShadow: `0 0 14px ${accent}80` }
             }
           >
-            {getPackageDisplayName(plan)}
+            {getPackageDisplayName(plan)
+              .split(" ")
+              .map((word, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <br />}
+                  {word}
+                </React.Fragment>
+              ))}
           </h3>
 
           {/* Entries */}
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className="text-[22px] sm:text-[26px] font-bold line-through text-white/35">
+                <span className="text-[16px] sm:text-[20px] font-bold line-through text-white/35">
                   {entries.original}
                 </span>
-                <span className="text-[20px] sm:text-[24px] font-bold" style={{ color: accent }}>→</span>
-                <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
+                <span className="text-[15px] sm:text-[18px] font-bold" style={{ color: accent }}>→</span>
+                <span className="text-[30px] sm:text-[40px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className="text-[44px] sm:text-[58px] font-extrabold leading-none" style={bigNumberStyle}>
+              <span className="text-[30px] sm:text-[40px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
