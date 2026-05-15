@@ -78,9 +78,9 @@ export default function ElectricPackageCard({
     >
       {/* Best Value (top-left) — takes precedence over the ribbon */}
       {showBestValue ? (
-        <BestValueBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
+        <BestValueBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} className="scale-[0.5] origin-top-left" />
       ) : ribbon ? (
-        <CornerRibbonBadge position="top-left" size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme}>
+        <CornerRibbonBadge position="top-left" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} className="scale-[0.5] origin-top-left">
           {ribbon}
         </CornerRibbonBadge>
       ) : null}
@@ -186,14 +186,14 @@ export default function ElectricPackageCard({
             )}
             style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}
           >
-            <div className="flex items-start justify-center">
-              <span className="relative inline-block text-[30px] font-extrabold leading-none" style={{ color: accent }}>
+            <div className="flex flex-col items-center leading-none">
+              {discount && (
+                <span className="mb-0.5 text-[13px] font-bold leading-none text-white/40 line-through">
+                  ${discount.regularPrice}
+                </span>
+              )}
+              <span className="text-[30px] font-extrabold leading-none" style={{ color: accent }}>
                 ${plan.price}
-                {discount && (
-                  <span className="absolute left-full top-0 ml-1.5 -translate-y-[3px] whitespace-nowrap text-[13px] font-bold leading-none text-white/40 line-through">
-                    ${discount.regularPrice}
-                  </span>
-                )}
               </span>
             </div>
 
@@ -203,7 +203,7 @@ export default function ElectricPackageCard({
 
             {discount && (
               <div
-                className="absolute -top-5 left-3 z-20 flex flex-col items-center"
+                className="absolute -top-6 -left-2 z-20 flex flex-col items-center"
                 style={{ transform: "rotate(-7deg)" }}
                 aria-label={`${discount.percentOff} percent off`}
               >

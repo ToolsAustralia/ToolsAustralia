@@ -24,6 +24,10 @@ Theme bootstrap (in [theme](../theme/)) runs pre-React. If a shared-ui component
 
 When adding a new component, write the `dark:` variants alongside. It's hard to retrofit later.
 
+## ElectricPackageCard / PackagesGrid price layout
+
+`ElectricPackageCard` stacks the struck regular price above the discounted price in a vertical flex column so the `w-fit` panel contains both values without overflow; the swing tag is positioned at `-top-6 -left-2`. The `BestValueBadge` and `CornerRibbonBadge` are rendered `size="small"` with `scale-[0.5] origin-top-left` so the sash stays in the top-left corner without crossing the centred title. In `PackagesGrid` the struck original entries and struck regular price are `absolute` (offset `-top-3`) so they add no height to the row in the non-promo case.
+
 ## Image lazy-load gotchas
 
 Lazy-loaded images need width/height to prevent layout shift. The image helper in `utils/images/` enforces this via prop validation. Don't bypass.

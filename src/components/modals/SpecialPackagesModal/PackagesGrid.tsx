@@ -126,11 +126,11 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
-                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
+                <div className="relative flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
                   {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                    <div className="mb-0.5 text-[10px] font-bold leading-none text-white/40 line-through">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
                       {pkg.originalEntries}
-                    </div>
+                    </span>
                   )}
                   <div
                     className="text-base sm:text-lg font-extrabold"
@@ -143,13 +143,13 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
 
                 {/* Right Side - Price (struck regular upper-right) + SELECT button */}
                 <div className="flex items-center justify-end gap-2">
-                  <span className="inline-flex flex-col items-end leading-none" style={cardTextStyle}>
+                  <span className="relative inline-block text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
                     {discount && (
-                      <span className="mb-0.5 text-[10px] font-bold leading-none text-white/40 line-through">
+                      <span className="absolute -top-3 right-0 whitespace-nowrap text-[9px] font-bold leading-none text-white/40 line-through">
                         ${discount.regularPrice}
                       </span>
                     )}
-                    <span className="text-base sm:text-lg font-extrabold">${pkg.price}</span>
+                    ${pkg.price}
                   </span>
                   <button
                     type="button"
