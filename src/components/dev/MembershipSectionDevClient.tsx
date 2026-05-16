@@ -139,7 +139,7 @@ export default function MembershipSectionDevClient() {
                 : isOneTimeBestValuePlanId(plan.id);
             const ribbon = !showBestValue && plan.id.includes("foreman") ? "MOST POPULAR" : null;
             return (
-              <div key={plan.id} className="overflow-visible px-1 pt-12">
+              <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
                 <ElectricPackageCard
                   plan={plan}
                   colorScheme={colorScheme}
