@@ -209,24 +209,20 @@ export default function ElectricPackageCard({
               "relative mb-3 mx-auto w-fit overflow-visible rounded-2xl px-4 pb-2 pt-3",
               interactive ? "cursor-pointer hover:brightness-110" : "cursor-not-allowed opacity-90"
             )}
-            style={
-              isLight
-                ? { backgroundColor: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.32)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25)" }
-                : { backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }
-            }
+            style={{ backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }}
           >
             <div className="flex flex-col items-center leading-none">
               {discount && (
-                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? (blackText ? "text-black/45" : "text-white/55") : "text-white/40")}>
+                <span className="mb-0.5 text-[13px] font-bold leading-none line-through text-white/40">
                   ${discount.regularPrice}
                 </span>
               )}
-              <span className="text-[30px] font-extrabold leading-none" style={{ color: isLight ? lightInk : accent }}>
+              <span className="text-[30px] font-extrabold leading-none" style={{ color: accent }}>
                 ${plan.price}
               </span>
             </div>
 
-            <div className={cn("mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em]", isLight ? (blackText ? "text-black/65" : "text-white/75") : "text-white/55")}>
+            <div className="mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
               {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
             </div>
 
@@ -245,16 +241,15 @@ export default function ElectricPackageCard({
                 <span className="h-2 w-px" style={{ background: accent }} />
                 {/* tag body */}
                 <span
-                  className="relative flex items-center py-1 pl-3.5 pr-2.5"
+                  className="relative flex items-center py-1 pl-3.5 pr-2.5 text-black"
                   style={{
-                    backgroundColor: "#000000",
-                    color: accent,
+                    backgroundColor: accent,
                     clipPath: "polygon(13% 0, 100% 0, 100% 100%, 13% 100%, 0 50%)",
                     boxShadow: `0 0 14px ${accent}80, 0 2px 6px rgba(0,0,0,0.45)`,
                   }}
                 >
                   {/* punched hole near the point */}
-                  <span className="absolute left-[6px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white/30" />
+                  <span className="absolute left-[6px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-black/65" />
                   <span className="text-[13px] font-black leading-none tracking-tight">-{discount.percentOff}%</span>
                 </span>
               </div>
