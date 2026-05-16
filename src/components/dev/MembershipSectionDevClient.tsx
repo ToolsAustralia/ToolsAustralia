@@ -148,6 +148,7 @@ export default function MembershipSectionDevClient() {
                   onSelect={(p) => setLastSelected(`${p.name} ($${p.price})`)}
                   showBestValue={showBestValue}
                   ribbon={ribbon}
+                  theme={dark ? "dark" : "light"}
                 />
                 {showOld && (
                   <p className="mt-2 text-center text-xs text-gray-500 dark:text-neutral-400">
