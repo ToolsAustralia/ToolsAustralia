@@ -61,16 +61,6 @@ export default function ElectricPackageCard({
   const isPremium = !!gradientText; // VIP (electric-black) — the only electric scheme with a gradient text
 
   const isLight = theme === "light";
-  /** Black/white text that maximises contrast on a solid `hex` fill (WCAG-ish luminance). */
-  const onAccent = (hex: string): string => {
-    const n = hex.replace("#", "");
-    const lin = (i: number) => {
-      const c = parseInt(n.slice(i, i + 2), 16) / 255;
-      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-    };
-    const L = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
-    return L > 0.17 ? "#0A0A0A" : "#FFFFFF";
-  };
   const blackText = colorScheme.text.includes("black"); // lime/amber tiers use black ink
   const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
 
@@ -149,13 +139,13 @@ export default function ElectricPackageCard({
 
         {/* Icon — raised so it clears the package name */}
         {icon && (
-          <div className="absolute -top-9 sm:-top-10 left-1/2 -translate-x-1/2 z-20">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 relative">
+          <div className="absolute -top-10 sm:-top-12 left-1/2 -translate-x-1/2 z-20">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
               <Image
                 src={icon}
                 alt={`${getPackageDisplayName(plan)} icon`}
                 fill
-                sizes="(max-width: 640px) 56px, 64px"
+                sizes="(max-width: 640px) 64px, 80px"
                 className={cn("object-contain", colorScheme.glow)}
               />
             </div>
@@ -280,11 +270,12 @@ export default function ElectricPackageCard({
                 "flex h-[50px] w-full items-center justify-center rounded-2xl px-5 font-sans font-black uppercase tracking-wide text-[16px]",
                 interactive ? "hover:brightness-125" : "opacity-50 cursor-not-allowed"
               )}
-              style={
-                isLight
-                  ? { backgroundColor: accent, border: "1.5px solid rgba(255,255,255,0.40)", color: onAccent(accent), boxShadow: `0 8px 20px ${accent}40` }
-                  : { backgroundColor: "#000000", border: `1.5px solid ${accent}`, color: accent, boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F` }
-              }
+              style={{
+                backgroundColor: "#000000",
+                border: `1.5px solid ${accent}`,
+                color: accent,
+                boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
+              }}
             >
               {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
             </button>
