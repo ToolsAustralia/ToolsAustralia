@@ -71,13 +71,12 @@ export default function ElectricPackageCard({
     const L = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
     return L > 0.17 ? "#0A0A0A" : "#FFFFFF";
   };
-  const inkLight = isPremium ? "#5C4410" : "#0B0C0F"; // body text on white (VIP = deep bronze)
-  const surfaceLight = isPremium ? "#FFFDF5" : "#FFFFFF";
-  const surfaceLight2 = isPremium ? "#F4ECDA" : "#F6F7F9";
+  const blackText = colorScheme.text.includes("black"); // lime/amber tiers use black ink
+  const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
 
   /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
   const bigNumberStyle: React.CSSProperties = isLight
-    ? { color: inkLight }
+    ? { color: lightInk }
     : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
 
   return (
@@ -89,7 +88,7 @@ export default function ElectricPackageCard({
       )}
       style={{
         boxShadow: isLight
-          ? `0 0 0 1px ${accent}59, 0 12px 30px ${accent}26, 0 20px 50px rgba(15,23,42,0.12)`
+          ? `0 0 24px ${accent}33, 0 10px 30px ${accent}26, 0 16px 40px rgba(0,0,0,0.28)`
           : isPremium
             ? `0 0 0 1px #FFFCEB, 0 0 0 3px ${accent}, 0 0 14px ${accent}B3, 0 10px 30px rgba(0,0,0,0.6)`
             : `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 14px 44px rgba(0,0,0,0.55)`,
@@ -123,13 +122,13 @@ export default function ElectricPackageCard({
         className="relative isolate h-full rounded-3xl px-4 pb-4 pt-12 sm:pt-[52px]"
         style={{
           background: isLight
-            ? `linear-gradient(180deg, ${accent} 0%, ${accent} 36%, ${surfaceLight} 44%, ${surfaceLight} 70%, ${surfaceLight2} 100%)`
+            ? colorScheme.bgGradient
             : isPremium
               ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
               : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
-          border: isLight ? `1px solid ${accent}` : isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`,
+          border: isLight ? `2px solid ${accent}` : isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`,
           boxShadow: isLight
-            ? "inset 0 1px 0 rgba(255,255,255,0.45)"
+            ? "inset 0 1px 0 rgba(255,255,255,0.22)"
             : isPremium
               ? `inset 0 0 20px ${accent}2B`
               : `inset 0 0 26px ${accent}1F`,
@@ -140,7 +139,7 @@ export default function ElectricPackageCard({
           className="pointer-events-none absolute inset-0.5 rounded-[22px] z-0"
           style={{
             background: isLight
-              ? "transparent"
+              ? "radial-gradient(120% 85% at 50% 0%, rgba(255,255,255,0.20) 0%, transparent 55%), linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 48%)"
               : isPremium
                 ? `linear-gradient(180deg, ${accent}33 0%, transparent 12%), radial-gradient(120% 70% at 50% 0%, ${accent}1A 0%, transparent 52%)`
                 : `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`,
@@ -168,10 +167,10 @@ export default function ElectricPackageCard({
           <h3
             className="text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide"
             style={
-              isLight
-                ? { color: onAccent(accent) }
-                : gradientText
-                  ? { ...(gradientText as React.CSSProperties), ...(isPremium ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
+              gradientText
+                ? { ...(gradientText as React.CSSProperties), ...(isPremium && !isLight ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
+                : isLight
+                  ? { color: lightInk }
                   : { color: accent, textShadow: `0 0 14px ${accent}80` }
             }
           >
@@ -189,10 +188,10 @@ export default function ElectricPackageCard({
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? "text-slate-500" : "text-white/35")}>
+                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? (blackText ? "text-black/40" : "text-white/55") : "text-white/35")}>
                   {entries.original}
                 </span>
-                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: isLight ? inkLight : accent }}>→</span>
+                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: isLight ? lightInk : accent }}>→</span>
                 <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
@@ -202,12 +201,12 @@ export default function ElectricPackageCard({
                 {entries.display}
               </span>
             )}
-            <div className={cn("mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em]", isLight ? "text-slate-500" : "text-white/65")}>
+            <div className={cn("mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em]", isLight ? (blackText ? "text-black/70" : "text-white/80") : "text-white/65")}>
               FREE ENTRIES
             </div>
           </div>
 
-          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? "rgba(15,23,42,0.14)" : `${accent}59` }} />
+          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? (blackText ? "rgba(0,0,0,0.20)" : "rgba(255,255,255,0.45)") : `${accent}59` }} />
 
           {/* Price block — full-width dark panel; struck price upper-right of price,
               "one time payment" full-width at the bottom, swing price tag hooked top-right. */}
@@ -222,22 +221,22 @@ export default function ElectricPackageCard({
             )}
             style={
               isLight
-                ? { backgroundColor: surfaceLight, border: `1px solid ${accent}40`, boxShadow: "0 1px 3px rgba(15,23,42,0.08)" }
+                ? { backgroundColor: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.32)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25)" }
                 : { backgroundColor: "#0b0b0d", border: `1px solid ${accent}59`, boxShadow: `0 0 16px ${accent}26` }
             }
           >
             <div className="flex flex-col items-center leading-none">
               {discount && (
-                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? "text-slate-500" : "text-white/40")}>
+                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? (blackText ? "text-black/45" : "text-white/55") : "text-white/40")}>
                   ${discount.regularPrice}
                 </span>
               )}
-              <span className="text-[30px] font-extrabold leading-none" style={{ color: isLight ? inkLight : accent }}>
+              <span className="text-[30px] font-extrabold leading-none" style={{ color: isLight ? lightInk : accent }}>
                 ${plan.price}
               </span>
             </div>
 
-            <div className={cn("mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em]", isLight ? "text-slate-500" : "text-white/55")}>
+            <div className={cn("mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em]", isLight ? (blackText ? "text-black/65" : "text-white/75") : "text-white/55")}>
               {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
             </div>
 
@@ -283,7 +282,7 @@ export default function ElectricPackageCard({
               )}
               style={
                 isLight
-                  ? { backgroundColor: accent, border: `1.5px solid ${accent}`, color: onAccent(accent), boxShadow: `0 8px 20px ${accent}40` }
+                  ? { backgroundColor: accent, border: "1.5px solid rgba(255,255,255,0.40)", color: onAccent(accent), boxShadow: `0 8px 20px ${accent}40` }
                   : { backgroundColor: "#000000", border: `1.5px solid ${accent}`, color: accent, boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F` }
               }
             >

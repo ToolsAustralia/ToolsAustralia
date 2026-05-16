@@ -20,7 +20,7 @@ Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, o
 
 ## ElectricPackageCard light theme — 2026-05-16
 
-`ElectricPackageCard` now accepts an optional `theme?: "light" | "dark"` prop (default `"dark"`, keeping the existing electric design byte-for-byte unchanged); `"light"` activates the "tier-blocked premium" aesthetic — a solid saturated tier-colour band at the top of the card with a crisp edge to a near-white body below, tier colour as confident fills on the band, divider, and CTA button, and neutral deep-ink typography on the white body; dark rendering is unaffected for all existing consumers.
+`ElectricPackageCard` accepts an optional `theme?: "light" | "dark"` prop (default `"dark"`, keeping the existing electric design byte-for-byte unchanged); `"light"` is now the classic bright branded-tier card — the card body IS the vivid tier gradient (`colorScheme.bgGradient`), scheme-derived ink colours (`lightInk`: black for lime/amber tiers, white for all others), a solid bright CTA (`backgroundColor: accent`), keeping the new badge/struck-price/per-word-title structural elements; dark rendering is unaffected for all existing consumers.
 
 ## SpecialPackagesModal color scheme — 2026-05-15
 
