@@ -155,7 +155,7 @@ export default function ElectricPackageCard({
         <div className="relative z-10 flex h-full flex-col uppercase">
           {/* Title — tier colour (VIP keeps gold gradient) */}
           <h3
-            className="text-center font-sans font-extrabold text-[20px] sm:text-[26px] leading-tight tracking-wide"
+            className="text-center font-sans font-extrabold text-[16px] sm:text-[20px] leading-tight tracking-wide"
             style={
               gradientText
                 ? { ...(gradientText as React.CSSProperties), ...(isPremium && !isLight ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
@@ -245,15 +245,16 @@ export default function ElectricPackageCard({
                 <span className="h-2 w-px" style={{ background: accent }} />
                 {/* tag body */}
                 <span
-                  className="relative flex items-center py-1 pl-3.5 pr-2.5 text-black"
+                  className="relative flex items-center py-1 pl-3.5 pr-2.5"
                   style={{
-                    backgroundColor: accent,
+                    backgroundColor: "#000000",
+                    color: accent,
                     clipPath: "polygon(13% 0, 100% 0, 100% 100%, 13% 100%, 0 50%)",
                     boxShadow: `0 0 14px ${accent}80, 0 2px 6px rgba(0,0,0,0.45)`,
                   }}
                 >
                   {/* punched hole near the point */}
-                  <span className="absolute left-[6px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-black/65" />
+                  <span className="absolute left-[6px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white/30" />
                   <span className="text-[13px] font-black leading-none tracking-tight">-{discount.percentOff}%</span>
                 </span>
               </div>
