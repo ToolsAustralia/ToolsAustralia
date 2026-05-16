@@ -109,7 +109,7 @@ export default function ElectricPackageCard({
 
       {/* Dark body with tier-coloured electric glow (matches reference concept) */}
       <div
-        className="relative isolate h-full rounded-3xl px-4 pb-4 pt-12 sm:pt-[52px]"
+        className="relative isolate h-full rounded-3xl px-4 pb-4 pt-8 sm:pt-[38px]"
         style={{
           background: isLight
             ? colorScheme.bgGradient
@@ -155,7 +155,7 @@ export default function ElectricPackageCard({
         <div className="relative z-10 flex h-full flex-col uppercase">
           {/* Title — tier colour (VIP keeps gold gradient) */}
           <h3
-            className="text-center font-sans font-extrabold text-[16px] sm:text-[20px] leading-tight tracking-wide"
+            className="text-center font-sans font-extrabold text-[13px] sm:text-[16px] leading-tight tracking-wide whitespace-nowrap"
             style={
               gradientText
                 ? { ...(gradientText as React.CSSProperties), ...(isPremium && !isLight ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
@@ -164,14 +164,7 @@ export default function ElectricPackageCard({
                   : { color: accent, textShadow: `0 0 14px ${accent}80` }
             }
           >
-            {getPackageDisplayName(plan)
-              .split(" ")
-              .map((word, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <br />}
-                  {word}
-                </React.Fragment>
-              ))}
+            {getPackageDisplayName(plan)}
           </h3>
 
           {/* Entries */}
