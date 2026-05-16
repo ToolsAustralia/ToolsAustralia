@@ -218,7 +218,7 @@ export default function ElectricPackageCard({
                   ${discount.regularPrice}
                 </span>
               )}
-              <span className="text-[24px] font-extrabold leading-none" style={{ color: accent }}>
+              <span className="text-[16px] sm:text-[20px] font-extrabold leading-none" style={{ color: accent }}>
                 ${plan.price}
               </span>
             </div>
