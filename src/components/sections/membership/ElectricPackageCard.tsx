@@ -63,9 +63,9 @@ export default function ElectricPackageCard({
 
   const isLight = theme === "light";
   const isBoss = plan.id.toLowerCase().includes("boss");
-  /** Light Boss uses the live MembershipSection Boss card background (Tools Australia red) → white ink. */
-  const bossLightBg = getMembershipSectionColorScheme("boss-subscription", true).bgGradient;
-  const blackText = colorScheme.text.includes("black") && !(isLight && isBoss); // lime/amber tiers use black ink
+  /** Light Boss uses the live MembershipSection one-time Boss card background (DeWalt yellow). */
+  const bossLightBg = getMembershipSectionColorScheme("boss-pack", false).bgGradient;
+  const blackText = colorScheme.text.includes("black"); // lime/amber/boss tiers use black ink
   const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
 
   /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
