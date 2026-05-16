@@ -1988,6 +1988,58 @@
   }
 }
 
+/* ElectricPackageCard "Enter Now" — premium attention animation.
+   Tier-coloured breathing glow + expanding ring + refined shine sweep.
+   Glow colour comes from the inline CSS var --ta-cta-accent. */
+.ta-enter-cta {
+  position: relative;
+  overflow: hidden;
+  animation: ta-enter-glow 2.4s ease-in-out infinite;
+}
+.ta-enter-cta::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  transform: translateX(-130%);
+  animation: ta-enter-shine 3.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.ta-enter-cta > span {
+  position: relative;
+  z-index: 1;
+}
+@keyframes ta-enter-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 14px var(--ta-cta-accent),
+      0 0 0 0 color-mix(in srgb, var(--ta-cta-accent) 55%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 28px var(--ta-cta-accent),
+      0 0 0 5px color-mix(in srgb, var(--ta-cta-accent) 0%, transparent);
+    transform: scale(1.025);
+  }
+}
+@keyframes ta-enter-shine {
+  0% {
+    transform: translateX(-130%);
+  }
+  55%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ta-enter-cta,
+  .ta-enter-cta::after {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
 /* Hourglass flip animation - rotates 180 degrees in one direction with pause */
 @keyframes hourglass-flip {
   0% {

@@ -259,16 +259,21 @@ export default function ElectricPackageCard({
               onClick={() => interactive && onSelect(plan)}
               className={cn(
                 "flex h-[50px] w-full items-center justify-center rounded-2xl px-5 font-sans font-black uppercase tracking-wide text-[16px]",
-                interactive ? "hover:brightness-125" : "opacity-50 cursor-not-allowed"
+                interactive ? "ta-enter-cta hover:brightness-125" : "opacity-50 cursor-not-allowed"
               )}
-              style={{
-                backgroundColor: "#000000",
-                border: `1.5px solid ${accent}`,
-                color: accent,
-                boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
-              }}
+              style={
+                {
+                  backgroundColor: "#000000",
+                  border: `1.5px solid ${accent}`,
+                  color: accent,
+                  boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
+                  "--ta-cta-accent": accent,
+                } as React.CSSProperties
+              }
             >
-              {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
+              <span>
+                {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
+              </span>
             </button>
           </div>
         </div>
