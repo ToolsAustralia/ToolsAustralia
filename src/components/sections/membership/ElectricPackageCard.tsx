@@ -66,7 +66,9 @@ export default function ElectricPackageCard({
 
   /** Big number: all tiers (incl. VIP) use white + tier-accent glow. VIP title keeps its gold gradient. */
   const bigNumberStyle: React.CSSProperties = isLight
-    ? { color: lightInk }
+    ? gradientText
+      ? { ...(gradientText as React.CSSProperties) } // VIP keeps its original live gold gradient
+      : { color: lightInk }
     : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
 
   return (
