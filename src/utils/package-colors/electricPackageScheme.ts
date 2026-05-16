@@ -70,11 +70,11 @@ const ELECTRIC_LIME: PackageColorScheme = {
   cardBorderOpacity: "CC",
 };
 
-/** Foreman — bright cyan (#00E5FF / #0099B8), white text. */
+/** Foreman — bright cyan (#00E5FF / #0099B8); black ink (bright surface, like lime/amber). */
 const ELECTRIC_CYAN: PackageColorScheme = {
   bgGradient: "linear-gradient(135deg, #0099B8 0%, #00E5FF 50%, #0099B8 100%)",
   gradient: "from-[#0099B8] via-[#00E5FF] to-[#0099B8]",
-  text: "text-white",
+  text: "text-black",
   textMuted: "text-white/90",
   priceText: "text-white",
   priceBadgeBg: "bg-white/20 backdrop-blur-sm",
