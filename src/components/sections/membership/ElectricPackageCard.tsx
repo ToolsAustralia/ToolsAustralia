@@ -147,7 +147,7 @@ export default function ElectricPackageCard({
 
         {/* Icon — raised so it clears the package name */}
         {icon && (
-          <div className="absolute -top-10 sm:-top-12 left-1/2 -translate-x-1/2 z-20">
+          <div className="absolute -top-8 sm:-top-12 left-1/2 -translate-x-1/2 z-20">
             <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
               <Image
                 src={icon}
@@ -163,7 +163,7 @@ export default function ElectricPackageCard({
         <div className="relative z-10 flex h-full flex-col uppercase">
           {/* Title — tier colour (VIP keeps gold gradient) */}
           <h3
-            className="text-center font-sans font-extrabold text-[13px] sm:text-[16px] leading-tight tracking-wide whitespace-nowrap"
+            className="text-center font-sans font-extrabold text-[16px] sm:text-[18px] leading-tight tracking-wide whitespace-nowrap"
             style={
               gradientText
                 ? { ...(gradientText as React.CSSProperties), ...(isPremium && !isLight ? { filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` } : {}) }
@@ -183,12 +183,12 @@ export default function ElectricPackageCard({
                   {entries.original}
                 </span>
                 <span className="text-[12px] sm:text-[14px] font-bold" style={{ color: isLight ? lightInk : accent }}>→</span>
-                <span className="text-[26px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
+                <span className="text-[30px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className="text-[26px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
+              <span className="text-[30px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
