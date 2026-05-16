@@ -183,12 +183,12 @@ export default function ElectricPackageCard({
                   {entries.original}
                 </span>
                 <span className="text-[12px] sm:text-[14px] font-bold" style={{ color: isLight ? lightInk : accent }}>→</span>
-                <span className="text-[22px] sm:text-[30px] font-extrabold leading-none" style={bigNumberStyle}>
+                <span className="text-[26px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className="text-[22px] sm:text-[30px] font-extrabold leading-none" style={bigNumberStyle}>
+              <span className="text-[26px] sm:text-[32px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
