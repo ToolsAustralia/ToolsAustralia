@@ -97,7 +97,7 @@ export default function ElectricPackageCard({
 
       {/* Promo multiplier lightning badge (top-right) — only when a multiplier is active */}
       {entries.multiplied && typeof plan.metadata?.promoMultiplier === "number" && (
-        <div className="absolute -top-7 -right-8 z-30 pointer-events-none">
+        <div className="absolute -top-9 -right-10 z-30 pointer-events-none">
           <Image
             src={`/images/badge/X${plan.metadata.promoMultiplier}.webp`}
             alt={`${plan.metadata.promoMultiplier}x entries`}
