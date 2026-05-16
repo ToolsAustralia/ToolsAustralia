@@ -69,7 +69,7 @@ export default function ElectricPackageCard({
       return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     };
     const L = 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
-    return L > 0.42 ? "#0A0A0A" : "#FFFFFF";
+    return L > 0.17 ? "#0A0A0A" : "#FFFFFF";
   };
   const inkLight = isPremium ? "#5C4410" : "#0B0C0F"; // body text on white (VIP = deep bronze)
   const surfaceLight = isPremium ? "#FFFDF5" : "#FFFFFF";
@@ -123,7 +123,7 @@ export default function ElectricPackageCard({
         className="relative isolate h-full rounded-3xl px-4 pb-4 pt-12 sm:pt-[52px]"
         style={{
           background: isLight
-            ? `linear-gradient(180deg, ${accent} 0%, ${accent} 40%, ${surfaceLight} 43%, ${surfaceLight} 68%, ${surfaceLight2} 100%)`
+            ? `linear-gradient(180deg, ${accent} 0%, ${accent} 36%, ${surfaceLight} 44%, ${surfaceLight} 70%, ${surfaceLight2} 100%)`
             : isPremium
               ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
               : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
@@ -189,10 +189,10 @@ export default function ElectricPackageCard({
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? "text-slate-400" : "text-white/35")}>
+                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? "text-slate-500" : "text-white/35")}>
                   {entries.original}
                 </span>
-                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: accent }}>→</span>
+                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: isLight ? inkLight : accent }}>→</span>
                 <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
@@ -207,7 +207,7 @@ export default function ElectricPackageCard({
             </div>
           </div>
 
-          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? accent : `${accent}59` }} />
+          <div className="my-3 h-px w-full rounded-full" style={{ backgroundColor: isLight ? "rgba(15,23,42,0.14)" : `${accent}59` }} />
 
           {/* Price block — full-width dark panel; struck price upper-right of price,
               "one time payment" full-width at the bottom, swing price tag hooked top-right. */}
@@ -228,7 +228,7 @@ export default function ElectricPackageCard({
           >
             <div className="flex flex-col items-center leading-none">
               {discount && (
-                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? "text-slate-400" : "text-white/40")}>
+                <span className={cn("mb-0.5 text-[13px] font-bold leading-none line-through", isLight ? "text-slate-500" : "text-white/40")}>
                   ${discount.regularPrice}
                 </span>
               )}
