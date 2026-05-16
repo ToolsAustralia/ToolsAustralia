@@ -107,8 +107,8 @@ export default function ElectricPackageCard({
             alt={`${plan.metadata.promoMultiplier}x entries`}
             width={96}
             height={96}
-            className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]"
-            sizes="(max-width: 640px) 80px, 96px"
+            className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.6)]"
+            sizes="(max-width: 640px) 64px, 80px"
           />
         </div>
       )}
@@ -179,20 +179,20 @@ export default function ElectricPackageCard({
           <div className="mt-2 text-center">
             {entries.multiplied ? (
               <div className="flex items-center justify-center gap-1.5">
-                <span className={cn("text-[14px] sm:text-[17px] font-bold line-through", isLight ? (blackText ? "text-black/40" : "text-white/55") : "text-white/35")}>
+                <span className={cn("text-[12px] sm:text-[15px] font-bold line-through", isLight ? (blackText ? "text-black/40" : "text-white/55") : "text-white/35")}>
                   {entries.original}
                 </span>
-                <span className="text-[13px] sm:text-[15px] font-bold" style={{ color: isLight ? lightInk : accent }}>→</span>
-                <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
+                <span className="text-[12px] sm:text-[14px] font-bold" style={{ color: isLight ? lightInk : accent }}>→</span>
+                <span className="text-[22px] sm:text-[30px] font-extrabold leading-none" style={bigNumberStyle}>
                   {entries.display}
                 </span>
               </div>
             ) : (
-              <span className="text-[26px] sm:text-[34px] font-extrabold leading-none" style={bigNumberStyle}>
+              <span className="text-[22px] sm:text-[30px] font-extrabold leading-none" style={bigNumberStyle}>
                 {entries.display}
               </span>
             )}
-            <div className={cn("mt-1 text-[12px] sm:text-[13px] font-semibold tracking-[0.18em]", isLight ? (blackText ? "text-black/70" : "text-white/80") : "text-white/65")}>
+            <div className={cn("mt-1 text-[11px] sm:text-[12px] font-semibold tracking-[0.18em]", isLight ? (blackText ? "text-black/70" : "text-white/80") : "text-white/65")}>
               FREE ENTRIES
             </div>
           </div>
@@ -214,16 +214,16 @@ export default function ElectricPackageCard({
           >
             <div className="flex flex-col items-center leading-none">
               {discount && (
-                <span className="mb-0.5 text-[13px] font-bold leading-none line-through text-white/40">
+                <span className="mb-0.5 text-[11px] font-bold leading-none line-through text-white/40">
                   ${discount.regularPrice}
                 </span>
               )}
-              <span className="text-[30px] font-extrabold leading-none" style={{ color: accent }}>
+              <span className="text-[24px] font-extrabold leading-none" style={{ color: accent }}>
                 ${plan.price}
               </span>
             </div>
 
-            <div className="mt-1.5 w-full text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            <div className="mt-1.5 w-full text-center text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55">
               {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
             </div>
 

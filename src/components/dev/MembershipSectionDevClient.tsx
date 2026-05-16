@@ -119,7 +119,7 @@ export default function MembershipSectionDevClient() {
 
         <div
           className={
-            "mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-6 gap-y-14 overflow-visible px-2 sm:grid-cols-2 " +
+            "mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-3 gap-y-12 overflow-visible px-2 sm:grid-cols-2 " +
             (plans.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-3")
           }
         >
@@ -139,7 +139,7 @@ export default function MembershipSectionDevClient() {
                 : isOneTimeBestValuePlanId(plan.id);
             const ribbon = !showBestValue && plan.id.includes("foreman") ? "MOST POPULAR" : null;
             return (
-              <div key={plan.id} className="overflow-visible px-2 pt-12">
+              <div key={plan.id} className="overflow-visible px-1 pt-12">
                 <ElectricPackageCard
                   plan={plan}
                   colorScheme={colorScheme}
