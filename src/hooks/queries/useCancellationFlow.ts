@@ -4,7 +4,7 @@
  * Three mutations:
  *   - `useStartCancellationFlow`  → POST { action: "start", reason, reasonText? }
  *   - `useOutcomeCancellationFlow` → POST { action: "outcome", eventId, outcome, offerAccepted? }
- *   - `useAcceptOffer`            → POST { action: "accept_offer", eventId, offer }
+ *   - `useAcceptOffer`            → POST { action: "accept_offer", eventId, offer } (pause_30d | discount_50_2mo)
  *
  * No queryClient/invalidateQueries — the parent modal calls fetchSubscriptionBenefits
  * imperatively after a completed flow. These hooks only POST and surface status.
@@ -46,7 +46,8 @@ export interface AcceptOfferData {
 
 export interface AcceptOfferResponse {
   ok: boolean;
-  resumesAt: string;
+  resumesAt?: string; // present for pause_30d
+  couponId?: string; // present for discount_50_2mo
 }
 
 // ---------------------------------------------------------------------------
@@ -87,9 +88,10 @@ export const useOutcomeCancellationFlow = () => {
 };
 
 /**
- * Accepts a retention offer (Phase 3: only `pause_30d`).
+ * Accepts a retention offer (`pause_30d` or `discount_50_2mo`).
  * POSTs `{ action: "accept_offer", eventId, offer }`; the server applies the
- * pause and records the `saved` outcome, returning `{ ok, resumesAt }`.
+ * pause/discount and records the `saved` outcome, returning
+ * `{ ok, resumesAt }` (pause) or `{ ok, couponId }` (discount).
  */
 export const useAcceptOffer = () => {
   return useMutation({

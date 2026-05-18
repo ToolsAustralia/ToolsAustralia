@@ -4,16 +4,19 @@ import { planFlow } from "../CancellationFlowService";
 /**
  * Unit tests for planFlow (pure — no DB).
  *
- * IMPLEMENTED_OFFERS = { bonus_entries_100, tier_downgrade, pause_30d }.
- * discount_50_2mo / unsubscribe_marketing are NOT yet implemented, so
- * too_expensive → [discount_50_2mo, bonus_entries_100] filters to
- * [bonus_entries_100].
+ * IMPLEMENTED_OFFERS = { bonus_entries_100, tier_downgrade, pause_30d,
+ * discount_50_2mo }. Task 16 shipped discount_50_2mo, so
+ * too_expensive → [discount_50_2mo, bonus_entries_100] now surfaces BOTH
+ * (no longer filtered to [bonus_entries_100]). Only unsubscribe_marketing
+ * remains unimplemented (Task 17).
  */
 
 function testStandard() {
+  // too_expensive sequence is [discount_50_2mo, bonus_entries_100]; discount is
+  // now implemented (Task 16) so both surface (was [bonus_entries_100]).
   assert.deepStrictEqual(
     planFlow({ reason: "too_expensive", pastDue: false, consumed: {} }).offersShown,
-    ["bonus_entries_100"]
+    ["discount_50_2mo", "bonus_entries_100"]
   );
 }
 
@@ -31,12 +34,15 @@ function testPastDue() {
 }
 
 function testConsumedBonusEntries() {
+  // too_expensive → [discount_50_2mo, bonus_entries_100]. bonusEntries100
+  // consumed filters the +100 rung, but discount_50_2mo is NOT consumed and is
+  // now implemented (Task 16), so it still surfaces (was [] pre-Task-16).
   const r = planFlow({
     reason: "too_expensive",
     pastDue: false,
     consumed: { bonusEntries100: true },
   });
-  assert.deepStrictEqual(r.offersShown, []);
+  assert.deepStrictEqual(r.offersShown, ["discount_50_2mo"]);
 }
 
 function testGiveawayReason() {

@@ -36,6 +36,7 @@ import { resolveOfferSequence } from "@/utils/subscription/cancellation-flow-rou
 import { eligibleOffers, type ConsumedFlags } from "@/utils/subscription/cancellation-flow-eligibility";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { applyRetentionPause } from "@/services/subscription/RetentionPauseService";
+import { applyRetentionDiscount } from "@/services/subscription/RetentionDiscountService";
 import mongoose from "mongoose";
 
 // ---------------------------------------------------------------------------
@@ -205,23 +206,32 @@ export interface AcceptOfferInput {
 }
 
 export interface AcceptOfferResult {
-  resumesAt: string; // ISO-8601, only present for pause_30d
+  resumesAt?: string; // ISO-8601, only present for pause_30d
+  couponId?: string; // Stripe coupon id, only present for discount_50_2mo
 }
 
 /**
- * Map a `RetentionPauseService` typed error message to the HTTP status the
+ * Map a retention-offer service typed error message to the HTTP status the
  * route returns. Centralised so the contract is auditable in one place.
  *
- *   "retention pause already used"          → 409
- *   "past-due: retention pause not allowed" → 409
- *   "no active subscription"                → 409
- *   "user not found"                        → 404
- *   anything else                           → 500
+ * Covers BOTH `RetentionPauseService` and `RetentionDiscountService` message
+ * sets (the two share the same status semantics — a single shared helper keeps
+ * the contract DRY, see Task 16):
+ *
+ *   "retention pause already used"             → 409
+ *   "retention discount already used"          → 409
+ *   "past-due: retention pause not allowed"    → 409
+ *   "past-due: retention discount not allowed" → 409
+ *   "no active subscription"                   → 409
+ *   "user not found"                           → 404
+ *   anything else                              → 500
  */
-function retentionPauseErrorToStatus(message: string): number {
+function retentionOfferErrorToStatus(message: string): number {
   switch (message) {
     case "retention pause already used":
+    case "retention discount already used":
     case "past-due: retention pause not allowed":
+    case "past-due: retention discount not allowed":
     case "no active subscription":
       return 409;
     case "user not found":
@@ -234,47 +244,80 @@ function retentionPauseErrorToStatus(message: string): number {
 /**
  * Accept a retention offer.
  *
- * Phase-3 scope: only `pause_30d` is handled here. Any other offer value throws
- * `AcceptOfferError("unsupported offer", 400)` — Tasks 16/17 extend this.
+ * Supported offers: `pause_30d` (Task 14), `discount_50_2mo` (Task 16). Any
+ * other offer value throws `AcceptOfferError("unsupported offer", 400)` —
+ * Task 17 extends this for `unsubscribe_marketing`.
  *
  * `pause_30d` flow:
  *   1. `applyRetentionPause(userId)` — pauses the Stripe subscription 30 days.
  *   2. On success, `recordOutcome({ outcome: "saved", offerAccepted: "pause_30d" })`.
  *   3. Returns `{ resumesAt }`.
  *
- * `applyRetentionPause` throws typed `Error`s; their messages are mapped to an
- * HTTP status via `retentionPauseErrorToStatus` and re-thrown as
- * `AcceptOfferError` so the route can surface the correct status without
- * embedding any business logic.
+ * `discount_50_2mo` flow:
+ *   1. `applyRetentionDiscount(userId)` — attaches the 50%-off/2mo singleton
+ *      coupon to the Stripe subscription.
+ *   2. On success, `recordOutcome({ outcome: "saved", offerAccepted: "discount_50_2mo" })`.
+ *   3. Returns `{ couponId }`.
+ *
+ * Both `applyRetentionPause` and `applyRetentionDiscount` throw typed `Error`s;
+ * their messages are mapped to an HTTP status via the shared
+ * `retentionOfferErrorToStatus` and re-thrown as `AcceptOfferError` so the route
+ * can surface the correct status without embedding any business logic. A
+ * `500`-class (unmatched) error is re-thrown unwrapped so the route's generic
+ * handler logs and returns 500.
  */
 export async function acceptOffer({
   userId,
   eventId,
   offer,
 }: AcceptOfferInput): Promise<AcceptOfferResult> {
-  if (offer !== "pause_30d") {
-    throw new AcceptOfferError("unsupported offer", 400);
-  }
-
-  let resumesAt: string;
-  try {
-    ({ resumesAt } = await applyRetentionPause(userId));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Internal error";
-    const status = retentionPauseErrorToStatus(message);
-    if (status === 500) {
-      // Unexpected (e.g. Stripe API failure) — preserve the original for logs.
-      throw err;
+  if (offer === "pause_30d") {
+    let resumesAt: string;
+    try {
+      ({ resumesAt } = await applyRetentionPause(userId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      const status = retentionOfferErrorToStatus(message);
+      if (status === 500) {
+        // Unexpected (e.g. Stripe API failure) — preserve the original for logs.
+        throw err;
+      }
+      throw new AcceptOfferError(message, status);
     }
-    throw new AcceptOfferError(message, status);
+
+    await recordOutcome({
+      eventId,
+      userId,
+      outcome: "saved",
+      offerAccepted: "pause_30d",
+    });
+
+    return { resumesAt };
   }
 
-  await recordOutcome({
-    eventId,
-    userId,
-    outcome: "saved",
-    offerAccepted: "pause_30d",
-  });
+  if (offer === "discount_50_2mo") {
+    let couponId: string;
+    try {
+      ({ couponId } = await applyRetentionDiscount(userId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      const status = retentionOfferErrorToStatus(message);
+      if (status === 500) {
+        // Unexpected (e.g. Stripe API failure) — preserve the original for logs.
+        throw err;
+      }
+      throw new AcceptOfferError(message, status);
+    }
 
-  return { resumesAt };
+    await recordOutcome({
+      eventId,
+      userId,
+      outcome: "saved",
+      offerAccepted: "discount_50_2mo",
+    });
+
+    return { couponId };
+  }
+
+  throw new AcceptOfferError("unsupported offer", 400);
 }

@@ -45,7 +45,8 @@ const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptO
  *     → { ok: true }
  *
  *   { action: "accept_offer", eventId, offer }
- *     → { ok: true, resumesAt }   (Phase 3: only "pause_30d" handled)
+ *     → { ok: true, resumesAt }  ("pause_30d")
+ *     → { ok: true, couponId }   ("discount_50_2mo")
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -85,12 +86,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (parsed.data.action === "accept_offer") {
-      const { resumesAt } = await acceptOffer({
+      const result = await acceptOffer({
         userId,
         eventId: parsed.data.eventId,
         offer: parsed.data.offer as OfferType,
       });
-      return NextResponse.json({ ok: true, resumesAt });
+      // `result` carries `resumesAt` (pause_30d) or `couponId` (discount_50_2mo);
+      // spread so the route stays thin and offer-agnostic.
+      return NextResponse.json({ ok: true, ...result });
     }
 
     await recordOutcome({
