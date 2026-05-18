@@ -723,9 +723,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         text: `Accumulated major draw entries: about ${totalEntriesAfterUpgrade.toLocaleString()}`,
         icon: "star",
       });
-      if (upgrade.partnerDiscountDays > 0) {
-        benefits.push({ text: `${upgrade.partnerDiscountDays} days partner discounts`, icon: "tag" });
-      }
+      // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a day count.
+      benefits.push({ text: "Partner discounts while your membership is active", icon: "tag" });
       if (rewardsEnabled()) {
         const pts = Math.floor(upgrade.price);
         if (pts > 0) {

@@ -45,7 +45,7 @@ const subscriptionPackages: PackageData[] = [
     price: 20,
     entries: 15,
     entriesUnit: "mo",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: tradie,
     description: "For tradies getting started",
     benefits: [
@@ -59,7 +59,7 @@ const subscriptionPackages: PackageData[] = [
     price: 40,
     entries: 40,
     entriesUnit: "mo",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: foreman,
     description: "Popular with serious tool enthusiasts",
     benefits: [
@@ -73,7 +73,7 @@ const subscriptionPackages: PackageData[] = [
     price: 80,
     entries: 100,
     entriesUnit: "mo",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: boss,
     description: "Maximum entries, maximum value",
     benefits: [

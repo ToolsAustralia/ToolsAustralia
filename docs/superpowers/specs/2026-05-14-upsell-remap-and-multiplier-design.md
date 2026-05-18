@@ -49,9 +49,11 @@ The membership subscriptions, regular one-time packs, additional one-time packs,
 
 | Internal ID | UI display | Stripe description | Price | Base entries / mo | Partner % | Partner duration |
 |---|---|---|---|---|---|---|
-| `tradie-subscription` | Tradie | "Tradie Membership" | $20/mo | 15 free | 50% | 30 days |
-| `foreman-subscription` | Foreman | "Foreman Membership" | $40/mo | 40 free | 75% | 30 days |
-| `boss-subscription` | Boss | "Boss Membership" | $80/mo | 100 free | 100% | 30 days |
+| `tradie-subscription` | Tradie | "Tradie Membership" | $20/mo | 15 free | 50% | while membership active |
+| `foreman-subscription` | Foreman | "Foreman Membership" | $40/mo | 40 free | 75% | while membership active |
+| `boss-subscription` | Boss | "Boss Membership" | $80/mo | 100 free | 100% | while membership active |
+
+> Subscription partner access is **lifecycle-gated**, not duration-capped. `partnerDiscountDays: 0` on the subscription records; access is granted live via `subscription.isActive` and the queue row tracks `subscription.endDate` (renews each billing cycle). One-time/additional/mini packs keep their fixed day windows.
 
 #### One-time packs (shown to guests / no-access users)
 

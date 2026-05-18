@@ -1822,7 +1822,9 @@ async function handleSubscriptionPackage(
     }
   }
 
-  // Add subscription to partner discount queue (subscriptions always have 30 days recurring access)
+  // Add subscription to partner discount queue. Access is lifecycle-gated: the queue row's
+  // endDate tracks subscription.endDate and renews each billing cycle while isActive — there is
+  // no fixed day cap (subscription records carry partnerDiscountDays: 0 by design).
   const packageInfo = getPackageById(packageData.packageId);
   if (packageInfo && user.subscription?.endDate) {
     await handleSubscriptionQueueUpdate(user as unknown as IUser, "start", {

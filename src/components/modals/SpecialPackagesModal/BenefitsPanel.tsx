@@ -51,7 +51,11 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage }) => {
         </div>
         <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={lightningTextStyle}>
           <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={accentIconStyle} />
-          <span>{selectedPackage.partnerDiscountDays || 0} Days Partner Discounts</span>
+          <span>
+            {selectedPackage.type === "subscription"
+              ? "Partner Discounts while your membership is active"
+              : `${selectedPackage.partnerDiscountDays || 0} Days Partner Discounts`}
+          </span>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm" style={lightningTextStyle}>
           <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={accentIconStyle} />

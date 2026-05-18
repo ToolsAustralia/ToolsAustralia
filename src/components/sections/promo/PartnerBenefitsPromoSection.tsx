@@ -22,7 +22,7 @@ const BENEFITS = [
   {
     icon: Percent,
     title: "Partner Discounts & Shop Savings",
-    text: "Get 5–20% off in our shop and tiered access to partner brand discounts (50%–100% of offers by plan) for 30 days per cycle.",
+    text: "Get 5–20% off in our shop and tiered access to partner brand discounts (50%–100% of offers by plan) for as long as your membership stays active.",
   },
   {
     icon: ShieldCheck,
