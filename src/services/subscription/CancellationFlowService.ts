@@ -35,6 +35,7 @@ import User from "@/models/User";
 import { resolveOfferSequence } from "@/utils/subscription/cancellation-flow-routing";
 import { eligibleOffers, type ConsumedFlags } from "@/utils/subscription/cancellation-flow-eligibility";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { applyRetentionPause } from "@/services/subscription/RetentionPauseService";
 import mongoose from "mongoose";
 
 // ---------------------------------------------------------------------------
@@ -175,4 +176,105 @@ export async function getUserCancellationContext(userId: string): Promise<UserCa
     bonusEntries100: !!user.cancellationUpsellRedeemed,
   };
   return { pastDue, consumed };
+}
+
+// ---------------------------------------------------------------------------
+// Accept-offer API (DB + Stripe) — Phase 3
+// ---------------------------------------------------------------------------
+
+/**
+ * Typed error carrying the HTTP status the route should return. Lets the route
+ * stay thin: it does a single `instanceof AcceptOfferError` check and echoes
+ * `{ error: message }` with `error.status`. This mirrors the route's existing
+ * `"user not found" → 404` message-mapping pattern, just promoted to a class so
+ * the status decision lives in the service (business layer), not the handler.
+ */
+export class AcceptOfferError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AcceptOfferError";
+    this.status = status;
+  }
+}
+
+export interface AcceptOfferInput {
+  userId: string;
+  eventId: string;
+  offer: OfferType;
+}
+
+export interface AcceptOfferResult {
+  resumesAt: string; // ISO-8601, only present for pause_30d
+}
+
+/**
+ * Map a `RetentionPauseService` typed error message to the HTTP status the
+ * route returns. Centralised so the contract is auditable in one place.
+ *
+ *   "retention pause already used"          → 409
+ *   "past-due: retention pause not allowed" → 409
+ *   "no active subscription"                → 409
+ *   "user not found"                        → 404
+ *   anything else                           → 500
+ */
+function retentionPauseErrorToStatus(message: string): number {
+  switch (message) {
+    case "retention pause already used":
+    case "past-due: retention pause not allowed":
+    case "no active subscription":
+      return 409;
+    case "user not found":
+      return 404;
+    default:
+      return 500;
+  }
+}
+
+/**
+ * Accept a retention offer.
+ *
+ * Phase-3 scope: only `pause_30d` is handled here. Any other offer value throws
+ * `AcceptOfferError("unsupported offer", 400)` — Tasks 16/17 extend this.
+ *
+ * `pause_30d` flow:
+ *   1. `applyRetentionPause(userId)` — pauses the Stripe subscription 30 days.
+ *   2. On success, `recordOutcome({ outcome: "saved", offerAccepted: "pause_30d" })`.
+ *   3. Returns `{ resumesAt }`.
+ *
+ * `applyRetentionPause` throws typed `Error`s; their messages are mapped to an
+ * HTTP status via `retentionPauseErrorToStatus` and re-thrown as
+ * `AcceptOfferError` so the route can surface the correct status without
+ * embedding any business logic.
+ */
+export async function acceptOffer({
+  userId,
+  eventId,
+  offer,
+}: AcceptOfferInput): Promise<AcceptOfferResult> {
+  if (offer !== "pause_30d") {
+    throw new AcceptOfferError("unsupported offer", 400);
+  }
+
+  let resumesAt: string;
+  try {
+    ({ resumesAt } = await applyRetentionPause(userId));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    const status = retentionPauseErrorToStatus(message);
+    if (status === 500) {
+      // Unexpected (e.g. Stripe API failure) — preserve the original for logs.
+      throw err;
+    }
+    throw new AcceptOfferError(message, status);
+  }
+
+  await recordOutcome({
+    eventId,
+    userId,
+    outcome: "saved",
+    offerAccepted: "pause_30d",
+  });
+
+  return { resumesAt };
 }

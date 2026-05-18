@@ -1,9 +1,10 @@
 /**
  * useCancellationFlow — TanStack Query mutation hooks for the cancellation flow API.
  *
- * Two mutations:
+ * Three mutations:
  *   - `useStartCancellationFlow`  → POST { action: "start", reason, reasonText? }
  *   - `useOutcomeCancellationFlow` → POST { action: "outcome", eventId, outcome, offerAccepted? }
+ *   - `useAcceptOffer`            → POST { action: "accept_offer", eventId, offer }
  *
  * No queryClient/invalidateQueries — the parent modal calls fetchSubscriptionBenefits
  * imperatively after a completed flow. These hooks only POST and surface status.
@@ -38,6 +39,16 @@ export interface OutcomeCancellationFlowResponse {
   ok: boolean;
 }
 
+export interface AcceptOfferData {
+  eventId: string;
+  offer: OfferType;
+}
+
+export interface AcceptOfferResponse {
+  ok: boolean;
+  resumesAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Hooks
 // ---------------------------------------------------------------------------
@@ -70,6 +81,23 @@ export const useOutcomeCancellationFlow = () => {
         eventId,
         outcome,
         ...(offerAccepted ? { offerAccepted } : {}),
+      });
+    },
+  });
+};
+
+/**
+ * Accepts a retention offer (Phase 3: only `pause_30d`).
+ * POSTs `{ action: "accept_offer", eventId, offer }`; the server applies the
+ * pause and records the `saved` outcome, returning `{ ok, resumesAt }`.
+ */
+export const useAcceptOffer = () => {
+  return useMutation({
+    mutationFn: async ({ eventId, offer }: AcceptOfferData) => {
+      return apiPost<AcceptOfferResponse>("/api/subscription/cancellation-flow", {
+        action: "accept_offer",
+        eventId,
+        offer,
       });
     },
   });

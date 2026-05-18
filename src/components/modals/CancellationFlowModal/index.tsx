@@ -20,7 +20,7 @@ import React, { useEffect } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useCancellationFlow } from "./useCancellationFlow";
-import { useStartCancellationFlow, useOutcomeCancellationFlow } from "@/hooks/queries/useCancellationFlow";
+import { useStartCancellationFlow, useOutcomeCancellationFlow, useAcceptOffer } from "@/hooks/queries/useCancellationFlow";
 import StepIndicator from "./StepIndicator";
 import Step1Reason from "./Step1Reason";
 import Step2Offer from "./Step2Offer";
@@ -44,6 +44,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
 
   const startMutation = useStartCancellationFlow();
   const outcomeMutation = useOutcomeCancellationFlow();
+  const acceptOfferMutation = useAcceptOffer();
 
   // Reset flow state when the modal opens
   useEffect(() => {
@@ -95,6 +96,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
           <Step2Offer
             state={state}
             outcomeMutation={outcomeMutation}
+            acceptOfferMutation={acceptOfferMutation}
             onSaved={onSaved}
             onDecline={flowHook.decline}
             onRequestTierDowngrade={onRequestTierDowngrade}

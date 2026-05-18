@@ -33,8 +33,8 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 ### Rules (in order of evaluation)
 
 1. **Past-due → none** — if `ctx.pastDue` is `true`, returns `[]` immediately (spec §3a). Members with a past-due balance skip all retention rungs.
-2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that starts at Phase 2 with `bonus_entries_100` and `tier_downgrade`. Later tasks extend this set one entry at a time as each backend lands (Task 14 → `pause_30d`; Task 16 → `discount_50_2mo`; Task 17 → `unsubscribe_marketing`), preventing dead UI from surfacing unimplemented paths.
-3. **One-time consumed gate** — certain offers may only be accepted once per member. `ConsumedFlags` tracks redemption state; `bonus_entries_100` maps to the legacy field `user.cancellationUpsellRedeemed`. If the flag is set, the offer is filtered out. `tier_downgrade` and `unsubscribe_marketing` are not one-time gated (no entry in `ONE_TIME`).
+2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that started at Phase 2 with `bonus_entries_100` and `tier_downgrade`; **Task 14 added `pause_30d`**. Remaining tasks extend this set one entry at a time as each backend lands (Task 16 → `discount_50_2mo`; Task 17 → `unsubscribe_marketing`), preventing dead UI from surfacing unimplemented paths. Current set: `{ bonus_entries_100, tier_downgrade, pause_30d }`.
+3. **One-time consumed gate** — certain offers may only be accepted once per member. `ConsumedFlags` tracks redemption state; `bonus_entries_100` maps to the legacy field `user.cancellationUpsellRedeemed`, `pause_30d` maps to `consumed.pause30d` (← `user.retentionOffersConsumed.pause30d`). If the flag is set, the offer is filtered out. `tier_downgrade` and `unsubscribe_marketing` are not one-time gated (no entry in `ONE_TIME`).
 
 ### Types
 
@@ -93,6 +93,16 @@ Loads the User by id and derives:
 
 Throws `new Error("user not found")` when the userId does not match any document. Route handlers should map this to a 404 response.
 
+### Accept-offer (DB + Stripe) — Phase 3
+
+`acceptOffer({ userId, eventId, offer }) → Promise<{ resumesAt: string }>`
+
+Phase-3 scope: **only `pause_30d`**. Any other `offer` throws `AcceptOfferError("unsupported offer", 400)`.
+
+`pause_30d`: calls `applyRetentionPause(userId)` (`RetentionPauseService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"pause_30d" })` and returns `{ resumesAt }`. `applyRetentionPause`'s typed-error messages are mapped to an HTTP status by the private `retentionPauseErrorToStatus` and re-thrown as `AcceptOfferError(message, status)`; a `500`-class (unmatched) error is re-thrown unwrapped so the route's generic handler logs and returns 500. See the route's "`accept_offer` error → HTTP status map" table below for the exact mapping.
+
+`AcceptOfferError extends Error` carries `{ status: number }` so the route stays thin (single `instanceof` check, no business logic).
+
 ## API route
 
 ### `POST /api/subscription/cancellation-flow`
@@ -142,14 +152,51 @@ Success response `200`:
 { "ok": true }
 ```
 
+#### Action: `accept_offer` (Phase 3)
+
+Accept a retention offer that has its own side-effect (no pre-existing endpoint). **Phase-3 scope: only `pause_30d` is handled.** Any other `offer` value returns `400 {"error":"unsupported offer"}` (Tasks 16/17 extend `acceptOffer`).
+
+Request body:
+```json
+{
+  "action": "accept_offer",
+  "eventId": "<ObjectId string>",  // must be a valid MongoDB ObjectId (boundary-validated)
+  "offer": "pause_30d"             // OfferType (required)
+}
+```
+
+`pause_30d` flow (`CancellationFlowService.acceptOffer`):
+1. `applyRetentionPause(userId)` — pauses the Stripe subscription 30 days (`behavior:"void"`, `metadata.pauseReason="retention"`).
+2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"pause_30d" })` (the same idempotent terminal write used by `outcome`).
+3. Returns `{ ok: true, resumesAt: "<ISO-8601>" }`.
+
+Success response `200`:
+```json
+{ "ok": true, "resumesAt": "2026-06-17T12:00:00.000Z" }
+```
+
 #### Error responses
 
 | Status | Condition |
 |--------|-----------|
-| `400`  | JSON parse failure or Zod validation failure (including invalid `eventId` format) |
+| `400`  | JSON parse failure or Zod validation failure (including invalid `eventId` format); **`accept_offer` with any `offer` other than `pause_30d` → `"unsupported offer"`** |
 | `401`  | No valid session |
-| `404`  | `getUserCancellationContext` throws `"user not found"` |
-| `500`  | Unexpected server error |
+| `404`  | `getUserCancellationContext` throws `"user not found"`; **`accept_offer`: `applyRetentionPause` throws `"user not found"`** |
+| `409`  | **`accept_offer`/`pause_30d`: `applyRetentionPause` throws `"retention pause already used"`, `"past-due: retention pause not allowed"`, or `"no active subscription"`** |
+| `500`  | Unexpected server error (e.g. Stripe API failure during `applyRetentionPause`) |
+
+#### `accept_offer` error → HTTP status map
+
+`acceptOffer` calls `applyRetentionPause`, which throws typed `Error`s. `CancellationFlowService.retentionPauseErrorToStatus` maps the message to a status; the service re-throws as a typed `AcceptOfferError(message, status)`. The route does a single `instanceof AcceptOfferError` check and echoes `{ error: message }` with `error.status` — same message-mapping spirit as the existing `"user not found" → 404` path, just promoted to a class so the status decision stays in the service (no business logic in the handler). A `500`-class message (anything unmatched, e.g. a Stripe failure) is **not** wrapped — the original error re-throws and hits the route's generic 500 handler (`console.error` preserved).
+
+| `applyRetentionPause` thrown message | HTTP status |
+|---|---|
+| `"retention pause already used"` | `409` |
+| `"past-due: retention pause not allowed"` | `409` |
+| `"no active subscription"` | `409` |
+| `"user not found"` | `404` |
+| (anything else) | `500` (original error re-thrown, generic handler) |
+| `acceptOffer` itself, `offer !== "pause_30d"` | `400` `"unsupported offer"` |
 
 #### Boundary validation
 
@@ -159,7 +206,7 @@ The `eventId` field is validated with `mongoose.Types.ObjectId.isValid(v)` at th
 
 `src/app/api/subscription/cancellation-flow/route.ts`
 
-The route is thin: authorize (session/401) → parse JSON → Zod validate → delegate to `CancellationFlowService`. Auth is checked first, before any body parsing or DB work. No business logic lives in the handler.
+The route is thin: authorize (session/401) → parse JSON → Zod validate (discriminated union: `start | outcome | accept_offer`) → delegate to `CancellationFlowService`. Auth is checked first, before any body parsing or DB work. No business logic lives in the handler — the `accept_offer` error→status decision lives in `CancellationFlowService` (`AcceptOfferError.status`); the route only does `instanceof AcceptOfferError → NextResponse.json({error}, {status})`.
 
 ---
 
@@ -225,14 +272,14 @@ Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhausti
 
 - `bonus_entries_100` — renders `<Step3BonusEntries>` directly (same content; no duplication).
 - `tier_downgrade` — dark-themed "Switch to a cheaper plan" card. If `tierDowngradeAvailable` is `false` (no downgrade options exist on the account), renders `<Step3BonusEntries>` instead — no dead card, no silent no-op. If `true`, clicking "Switch plan" calls `props.onRequestTierDowngrade?.(state.eventId)` — the outcome mutation is **NOT** fired at this point. The parent stores the `eventId` in `pendingCancellationEventId` and records `{outcome:"saved",offerAccepted:"tier_downgrade"}` only if `handleDowngradeSubscription` succeeds. If `DowngradeConfirmModal` is dismissed, the eventId is cleared and the event matures to `abandoned`. Decline calls `onDecline()`.
+- `pause_30d` (Task 14) — `PauseOfferCard`: "Pause 30 days — keep your entries". Reuses the `upsell-shell` grammar (`InfoGrid` `framing="gain"`, `UrgencyBanner` tone gold, `TrustBar`) and the two-button accept/decline grid from `Step3BonusEntries`. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"pause_30d" })` (POST `{action:"accept_offer",...}`); on success → `onSaved()` (parent runs `fetchSubscriptionBenefits` + close, identical to the other offers). The server records the `saved/pause_30d` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()` (next rung). **409/404 graceful path:** the eligibility filter normally prevents an already-used / past-due / no-subscription member from ever seeing this card, but if the filter slipped through, the POST returns `409` (or `404`); the card catches the `ApiError`, shows a brief info toast, and calls `onDecline()` so the member advances to the next rung instead of dead-ending. Any other failure shows an error toast and leaves the card in place to retry.
 
 **Unimplemented (throws loudly until wired):**
 
-- `pause_30d` → Task 14 replaces the throw with the pause card.
 - `discount_50_2mo` → Task 16 replaces the throw with the discount card.
 - `unsubscribe_marketing` → Task 17 replaces the throw with the unsubscribe card.
 
-These are unreachable in Phase 2 because `IMPLEMENTED_OFFERS` in the eligibility filter only passes `bonus_entries_100` and `tier_downgrade`.
+The exhaustive `switch` + `never`-guard `default` is preserved; only `pause_30d` changed from `throw` → card. `discount_50_2mo` / `unsubscribe_marketing` still `throw` and remain unreachable because `IMPLEMENTED_OFFERS` only passes `bonus_entries_100`, `tier_downgrade`, and `pause_30d`.
 
 ### Step 3 — `Step3BonusEntries.tsx`
 
@@ -248,10 +295,11 @@ Decline → `onDecline()` → `decline()` in the hook → cursor exhausted → S
 
 ### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
 
-Two TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`**:
+Three TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`**:
 
 - `useStartCancellationFlow` — POSTs `{ action: "start", reason, reasonText? }`, returns `{ eventId, offersShown, pastDue }`.
 - `useOutcomeCancellationFlow` — POSTs `{ action: "outcome", eventId, outcome, offerAccepted? }`. Called fire-and-forget after cancel.
+- `useAcceptOffer` (Task 14) — POSTs `{ action: "accept_offer", eventId, offer }`, returns `{ ok, resumesAt }`. Used by `PauseOfferCard` via `mutateAsync` (the card awaits success before calling `onSaved`, and inspects the thrown `ApiError.status` for the 409/404 graceful-decline path). Threaded `index.tsx` → `Step2Offer` as `acceptOfferMutation`.
 
 The parent (`SubscriptionManagementModal`) refreshes data via its existing imperative `fetchSubscriptionBenefits()` call — no query invalidation needed in the modal itself.
 
@@ -270,22 +318,28 @@ The parent (`SubscriptionManagementModal`) refreshes data via its existing imper
 
 The old `CancellationUpsellModal` files are retained (not deleted); they will be removed in Phase 5 Task 19.
 
-### Phase-2 per-reason screen flow
+### Phase-3 per-reason screen flow
 
-After `IMPLEMENTED_OFFERS` filtering (`bonus_entries_100`, `tier_downgrade` only):
+After `IMPLEMENTED_OFFERS` filtering (`bonus_entries_100`, `tier_downgrade`, `pause_30d`):
 
 | Reason | offersShown | Step 1 → Step 2 | Step 2 → Step 3 | Step 3 → Step 4 |
 |---|---|---|---|---|
 | `too_expensive` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
 | `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | tier_downgrade card | +100 card | decline → Step 4 |
-| `dont_use_benefits` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `dont_use_benefits` | `[pause_30d, bonus_entries_100]` | **pause card** | +100 card | decline → Step 4 |
 | `too_many_messages` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
 | `joined_for_giveaway` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
 | `havent_won` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
-| `other` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `other` | `[pause_30d, bonus_entries_100]` | **pause card** | +100 card | decline → Step 4 |
+
+Per-reason trace (Task 14):
+- `dont_use_benefits` → sequence `[pause_30d, bonus_entries_100]` (nothing filtered). Step 2 = pause card. Accept → pause applied + `saved/pause_30d` recorded server-side → `onSaved`. Decline → +100 (Step 3) → decline → Step 4.
+- `other` → sequence `[pause_30d, discount_50_2mo, bonus_entries_100]`; `discount_50_2mo` still filtered (Task 16) → `[pause_30d, bonus_entries_100]`. Pause card leads, then +100.
+- `prefer_cheaper` → unchanged: `[tier_downgrade, bonus_entries_100]` (tier then +100).
+- All other reasons → unchanged from Phase 2.
 
 Notes:
-- `discount_50_2mo`, `pause_30d`, `unsubscribe_marketing` are removed by `IMPLEMENTED_OFFERS` in Phase 2, so the only variation is whether `tier_downgrade` leads (reason=`prefer_cheaper`) or `bonus_entries_100` leads directly.
+- `discount_50_2mo`, `unsubscribe_marketing` are still removed by `IMPLEMENTED_OFFERS`; `pause_30d` now surfaces (Task 14).
 - Accepting +100 at Step 2 (lead offer) or Step 3 (second rung) calls the same redeem endpoint and fires `offerAccepted:"bonus_entries_100"`.
 - Accepting `tier_downgrade` (when `tierDowngradeAvailable` is `true`) triggers `DowngradeConfirmModal` via `onRequestTierDowngrade`. The outcome `{offerAccepted:"tier_downgrade",outcome:"saved"}` is recorded **only** if the downgrade confirmation succeeds — never on card click.
 - If `tierDowngradeAvailable` is `false` and `tier_downgrade` is the current offer, `Step2Offer` renders `<Step3BonusEntries>` instead — the user gets the +100 rung with no dead UI.
@@ -301,17 +355,20 @@ side-effect API actually succeeds:
 
 - +100 accepted → one `saved/bonus_entries_100` after `/api/cancellation-upsell/redeem` succeeds.
 - `tier_downgrade` → one `saved/tier_downgrade`, recorded by the parent only on real downgrade success; dismiss records nothing.
+- `pause_30d` accepted → one `saved/pause_30d`, recorded **server-side inside `acceptOffer`** only after `applyRetentionPause` succeeds (not a client fire-and-forget). A 409/404 (filter slipped) records nothing — the member is declined to the next rung.
 - Step 4 "Cancel anyway" (normal **and** past-due) → one `cancelled` after `/api/stripe/cancel-subscription` succeeds.
 - "Keep my membership", past-due "Resolve payment", tier-downgrade dismiss, and no-downgrade-available → record **nothing**; the event stays `in_progress` and is later swept to `abandoned` by the §6a maturity job.
 
 **Plan deviation (intentional):** the original plan's Task 9 proposed a generic
-`accept_offer` route action for Phase 2. It was **not** added — the implemented
-architecture has Phase-2 offers (`bonus_entries_100`, `tier_downgrade`) call
-their existing battle-tested endpoints (`/api/cancellation-upsell/redeem`, the
-downgrade flow) and then log via the single `outcome` action. Adding
-`accept_offer` with no Phase-2 consumer would be dead code (CLAUDE.md rule #4).
-The `accept_offer` action is introduced in Phase 3 (Task 14) for `pause_30d`,
-the first offer with no pre-existing endpoint.
+`accept_offer` route action for Phase 2. It was **not** added in Phase 2 — the
+Phase-2 offers (`bonus_entries_100`, `tier_downgrade`) call their existing
+battle-tested endpoints (`/api/cancellation-upsell/redeem`, the downgrade flow)
+and log via the single `outcome` action; `accept_offer` with no Phase-2 consumer
+would have been dead code (CLAUDE.md rule #4). **Task 14 (Phase 3) adds
+`accept_offer`** for `pause_30d`, the first offer with no pre-existing endpoint —
+it now has a real consumer (`PauseOfferCard`). Scope is intentionally narrow:
+`acceptOffer` only handles `pause_30d`; every other offer value returns
+`400 "unsupported offer"` until Tasks 16/17 extend it.
 
 ## Pause-collision (Phase 3)
 

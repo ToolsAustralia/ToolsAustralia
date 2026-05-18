@@ -4,9 +4,10 @@ import { planFlow } from "../CancellationFlowService";
 /**
  * Unit tests for planFlow (pure — no DB).
  *
- * IMPLEMENTED_OFFERS = { bonus_entries_100, tier_downgrade } (Phase 2).
- * discount_50_2mo is NOT yet implemented, so too_expensive → sequence
- * [discount_50_2mo, bonus_entries_100] filters to [bonus_entries_100].
+ * IMPLEMENTED_OFFERS = { bonus_entries_100, tier_downgrade, pause_30d }.
+ * discount_50_2mo / unsubscribe_marketing are NOT yet implemented, so
+ * too_expensive → [discount_50_2mo, bonus_entries_100] filters to
+ * [bonus_entries_100].
  */
 
 function testStandard() {

@@ -9,6 +9,8 @@ import {
   startFlow,
   recordOutcome,
   getUserCancellationContext,
+  acceptOffer,
+  AcceptOfferError,
 } from "@/services/subscription/CancellationFlowService";
 
 const StartSchema = z.object({
@@ -24,7 +26,13 @@ const OutcomeSchema = z.object({
   offerAccepted: z.enum([...OFFER_TYPES] as [string, ...string[]]).optional(),
 });
 
-const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema]);
+const AcceptOfferSchema = z.object({
+  action: z.literal("accept_offer"),
+  eventId: z.string().refine((v) => mongoose.Types.ObjectId.isValid(v), "invalid eventId"),
+  offer: z.enum([...OFFER_TYPES] as [string, ...string[]]),
+});
+
+const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptOfferSchema]);
 
 /**
  * POST /api/subscription/cancellation-flow
@@ -35,6 +43,9 @@ const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema]);
  *
  *   { action: "outcome", eventId, outcome: "saved"|"cancelled", offerAccepted? }
  *     → { ok: true }
+ *
+ *   { action: "accept_offer", eventId, offer }
+ *     → { ok: true, resumesAt }   (Phase 3: only "pause_30d" handled)
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -73,6 +84,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ eventId, offersShown, pastDue });
     }
 
+    if (parsed.data.action === "accept_offer") {
+      const { resumesAt } = await acceptOffer({
+        userId,
+        eventId: parsed.data.eventId,
+        offer: parsed.data.offer as OfferType,
+      });
+      return NextResponse.json({ ok: true, resumesAt });
+    }
+
     await recordOutcome({
       eventId: parsed.data.eventId,
       userId,
@@ -81,6 +101,9 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof AcceptOfferError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     if (err instanceof Error && err.message === "user not found") {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

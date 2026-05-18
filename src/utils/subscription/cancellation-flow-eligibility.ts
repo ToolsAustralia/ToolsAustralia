@@ -21,7 +21,7 @@ const ONE_TIME: Partial<Record<OfferType, keyof ConsumedFlags>> = {
 export const IMPLEMENTED_OFFERS: ReadonlySet<OfferType> = new Set<OfferType>([
   "bonus_entries_100",
   "tier_downgrade",
-  // "pause_30d"             ← added in Task 14
+  "pause_30d", // ← added in Task 14
   // "discount_50_2mo"       ← added in Task 16
   // "unsubscribe_marketing" ← added in Task 17
 ]);
