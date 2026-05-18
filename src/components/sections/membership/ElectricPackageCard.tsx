@@ -30,6 +30,8 @@ export interface ElectricPackageCardProps {
   ribbon?: string | null;
   /** Visual theme. "dark" (default) = the final electric design, unchanged. */
   theme?: "light" | "dark";
+  /** Overrides the interactive CTA text (e.g. "Upgrade to Boss", "Update payment"). Default "Enter Now". */
+  ctaLabel?: string;
 }
 
 /** Reads the entries number out of the plan's feature list (mirrors MembershipSection). */
@@ -54,6 +56,7 @@ export default function ElectricPackageCard({
   showBestValue = false,
   ribbon = null,
   theme = "dark",
+  ctaLabel,
 }: ElectricPackageCardProps) {
   const icon = getPackageIcon(plan.id);
   const entries = readEntries(plan);
@@ -285,7 +288,7 @@ export default function ElectricPackageCard({
               }
             >
               <span>
-                {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : "Enter Now"}
+                {state.isCurrent ? "Current Plan" : state.locked ? state.lockReason ?? "Locked" : ctaLabel ?? "Enter Now"}
               </span>
             </button>
           </div>
