@@ -17,13 +17,15 @@ const ONE_TIME: Partial<Record<OfferType, keyof ConsumedFlags>> = {
 };
 
 /** Offers whose backend is shipped. Phase 2 ships these two; later tasks
- *  (14/16/17) each ADD one entry as their phase lands — preventing dead UI. */
+ *  (14/16/17) each ADD one entry as their phase lands — preventing dead UI.
+ *  As of Task 17 ALL OfferTypes are implemented — no unimplemented offers
+ *  remain (Phase 5 complete). */
 export const IMPLEMENTED_OFFERS: ReadonlySet<OfferType> = new Set<OfferType>([
   "bonus_entries_100",
   "tier_downgrade",
   "pause_30d", // ← added in Task 14
   "discount_50_2mo", // ← added in Task 16
-  // "unsubscribe_marketing" ← added in Task 17
+  "unsubscribe_marketing", // ← added in Task 17 (all OfferTypes now implemented)
 ]);
 
 export function eligibleOffers(sequence: OfferType[], ctx: EligibilityCtx): OfferType[] {

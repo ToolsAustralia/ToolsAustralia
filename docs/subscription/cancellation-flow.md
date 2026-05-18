@@ -33,7 +33,7 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 ### Rules (in order of evaluation)
 
 1. **Past-due → none** — if `ctx.pastDue` is `true`, returns `[]` immediately (spec §3a). Members with a past-due balance skip all retention rungs.
-2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that started at Phase 2 with `bonus_entries_100` and `tier_downgrade`; **Task 14 added `pause_30d`**, **Task 16 added `discount_50_2mo`**. The last task extends this set as its backend lands (Task 17 → `unsubscribe_marketing`), preventing dead UI from surfacing unimplemented paths. Current set: `{ bonus_entries_100, tier_downgrade, pause_30d, discount_50_2mo }`.
+2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that started at Phase 2 with `bonus_entries_100` and `tier_downgrade`; **Task 14 added `pause_30d`**, **Task 16 added `discount_50_2mo`**, **Task 17 added `unsubscribe_marketing`**. As of Task 17 **ALL `OfferType`s are implemented (Phase 5 complete)** — there are no unimplemented offers and this gate no longer filters anything in practice (it is retained as the structural guard for any future `OfferType` addition). Current set: `{ bonus_entries_100, tier_downgrade, pause_30d, discount_50_2mo, unsubscribe_marketing }`.
 3. **One-time consumed gate** — certain offers may only be accepted once per member. `ConsumedFlags` tracks redemption state; `bonus_entries_100` maps to the legacy field `user.cancellationUpsellRedeemed`, `pause_30d` maps to `consumed.pause30d` (← `user.retentionOffersConsumed.pause30d`), `discount_50_2mo` maps to `consumed.discount50_2mo` (← `user.retentionOffersConsumed.discount50_2mo`). If the flag is set, the offer is filtered out. `tier_downgrade` and `unsubscribe_marketing` are not one-time gated (no entry in `ONE_TIME`).
 
 ### Types
@@ -97,10 +97,11 @@ Throws `new Error("user not found")` when the userId does not match any document
 
 `acceptOffer({ userId, eventId, offer }) → Promise<{ resumesAt?: string; couponId?: string }>`
 
-Supported offers: **`pause_30d`** (Task 14) and **`discount_50_2mo`** (Task 16). Any other `offer` throws `AcceptOfferError("unsupported offer", 400)` (Task 17 extends this for `unsubscribe_marketing`).
+Supported offers: **`pause_30d`** (Task 14), **`discount_50_2mo`** (Task 16), and **`unsubscribe_marketing`** (Task 17). As of Task 17 `acceptOffer` covers **all 5** `OfferType`s with a real side-effect path (`bonus_entries_100` is accepted via its own `/api/cancellation-upsell/redeem` endpoint and `tier_downgrade` via the downgrade flow — see the outcome-recording invariant). Any value not matching a branch still throws `AcceptOfferError("unsupported offer", 400)`, but with all `OfferType`s handled this is now unreachable for valid input.
 
 - `pause_30d`: calls `applyRetentionPause(userId)` (`RetentionPauseService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"pause_30d" })` and returns `{ resumesAt }`.
 - `discount_50_2mo`: calls `applyRetentionDiscount(userId)` (`RetentionDiscountService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"discount_50_2mo" })` and returns `{ couponId }`.
+- `unsubscribe_marketing`: calls `applyMarketingUnsubscribe(userId)` (`RetentionUnsubscribeService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"unsubscribe_marketing" })` and returns `{}` (no extra data — the route spreads it as `{ ok: true }`). **No past-due guard and no one-time-consumed guard** — unsubscribing from marketing is harmless even when past-due and is not in the `ONE_TIME` map (idempotent). The only thrown message is `"user not found"` (→ 404 via the shared mapper); anything else is an unwrapped 500.
 
 Both services' typed-error messages are mapped to an HTTP status by the **shared** private helper `retentionOfferErrorToStatus` (generalized in Task 16 from the old pause-only `retentionPauseErrorToStatus` — it now covers BOTH the pause and discount message sets in one switch, keeping the error→status contract DRY) and re-thrown as `AcceptOfferError(message, status)`; a `500`-class (unmatched) error is re-thrown unwrapped so the route's generic handler logs and returns 500. See the route's "`accept_offer` error → HTTP status map" table below for the exact mapping.
 
@@ -157,14 +158,14 @@ Success response `200`:
 
 #### Action: `accept_offer` (Phase 3)
 
-Accept a retention offer that has its own side-effect (no pre-existing endpoint). **Supported offers: `pause_30d` (Task 14) and `discount_50_2mo` (Task 16).** Any other `offer` value returns `400 {"error":"unsupported offer"}` (Task 17 extends `acceptOffer` for `unsubscribe_marketing`).
+Accept a retention offer that has its own side-effect (no pre-existing endpoint). **Supported offers: `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17).** All `OfferType`s with a service-side side-effect are now handled; an unhandled value would return `400 {"error":"unsupported offer"}` but this is unreachable for valid input.
 
 Request body:
 ```json
 {
   "action": "accept_offer",
   "eventId": "<ObjectId string>",       // must be a valid MongoDB ObjectId (boundary-validated)
-  "offer": "pause_30d"                  // OfferType: "pause_30d" | "discount_50_2mo"
+  "offer": "pause_30d"                  // OfferType: "pause_30d" | "discount_50_2mo" | "unsubscribe_marketing"
 }
 ```
 
@@ -178,6 +179,11 @@ Request body:
 2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"discount_50_2mo" })`.
 3. Returns `{ ok: true, couponId: "retention-50off-2mo" }`.
 
+`unsubscribe_marketing` flow (`CancellationFlowService.acceptOffer`):
+1. `applyMarketingUnsubscribe(userId)` — persists `acceptsPromotionalEmail = false` (atomic `updateOne` `$set`) then best-effort `syncKlaviyoEmailMarketingFromAdminPreference(userDoc, false)` (unsubscribes **marketing email + marketing SMS**; transactional / account messages untouched). Klaviyo `success:false` is `console.error`-logged but non-fatal — the DB flag is the source of truth.
+2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"unsubscribe_marketing" })`.
+3. Returns `{ ok: true }` (no extra data — there is no `resumesAt`/`couponId`).
+
 The route is offer-agnostic: it spreads the service result (`{ ok: true, ...result }`), so `resumesAt` is present for pause, `couponId` for discount. No route schema change was needed — the `AcceptOfferSchema` discriminated-union member already validates `offer` against `OFFER_TYPES`, so `discount_50_2mo` simply became supported instead of returning `400 "unsupported offer"`.
 
 Success response `200`:
@@ -188,31 +194,35 @@ or, for `discount_50_2mo`:
 ```json
 { "ok": true, "couponId": "retention-50off-2mo" }
 ```
+or, for `unsubscribe_marketing`:
+```json
+{ "ok": true }
+```
 
 #### Error responses
 
 | Status | Condition |
 |--------|-----------|
-| `400`  | JSON parse failure or Zod validation failure (including invalid `eventId` format); **`accept_offer` with any `offer` other than `pause_30d` / `discount_50_2mo` → `"unsupported offer"`** |
+| `400`  | JSON parse failure or Zod validation failure (including invalid `eventId` format); **`accept_offer` with an unhandled `offer` → `"unsupported offer"` (unreachable for valid input — all `OfferType`s are handled)** |
 | `401`  | No valid session |
-| `404`  | `getUserCancellationContext` throws `"user not found"`; **`accept_offer`: `applyRetentionPause` / `applyRetentionDiscount` throws `"user not found"`** |
-| `409`  | **`accept_offer`/`pause_30d`: `applyRetentionPause` throws `"retention pause already used"`, `"past-due: retention pause not allowed"`, or `"no active subscription"`; `accept_offer`/`discount_50_2mo`: `applyRetentionDiscount` throws `"retention discount already used"`, `"past-due: retention discount not allowed"`, or `"no active subscription"`** |
-| `500`  | Unexpected server error (e.g. Stripe API failure during `applyRetentionPause` / `applyRetentionDiscount`) |
+| `404`  | `getUserCancellationContext` throws `"user not found"`; **`accept_offer`: `applyRetentionPause` / `applyRetentionDiscount` / `applyMarketingUnsubscribe` throws `"user not found"`** |
+| `409`  | **`accept_offer`/`pause_30d`: `applyRetentionPause` throws `"retention pause already used"`, `"past-due: retention pause not allowed"`, or `"no active subscription"`; `accept_offer`/`discount_50_2mo`: `applyRetentionDiscount` throws `"retention discount already used"`, `"past-due: retention discount not allowed"`, or `"no active subscription"`. `unsubscribe_marketing` has NO 409 path (not one-time gated, no past-due guard).** |
+| `500`  | Unexpected server error (e.g. Stripe API failure during `applyRetentionPause` / `applyRetentionDiscount`, or a Mongo failure during `applyMarketingUnsubscribe`) |
 
 #### `accept_offer` error → HTTP status map
 
-`acceptOffer` calls `applyRetentionPause` (pause) or `applyRetentionDiscount` (discount), which throw typed `Error`s. The **shared** `CancellationFlowService.retentionOfferErrorToStatus` (Task 16 generalized the old pause-only `retentionPauseErrorToStatus` into one helper covering both message sets — DRY, not duplicated per service) maps the message to a status; the service re-throws as a typed `AcceptOfferError(message, status)`. The route does a single `instanceof AcceptOfferError` check and echoes `{ error: message }` with `error.status` — same message-mapping spirit as the existing `"user not found" → 404` path, just promoted to a class so the status decision stays in the service (no business logic in the handler). A `500`-class message (anything unmatched, e.g. a Stripe failure) is **not** wrapped — the original error re-throws and hits the route's generic 500 handler (`console.error` preserved).
+`acceptOffer` calls `applyRetentionPause` (pause), `applyRetentionDiscount` (discount), or `applyMarketingUnsubscribe` (unsubscribe), which throw typed `Error`s. The **shared** `CancellationFlowService.retentionOfferErrorToStatus` (Task 16 generalized the old pause-only `retentionPauseErrorToStatus` into one helper covering all message sets — DRY, not duplicated per service) maps the message to a status; the service re-throws as a typed `AcceptOfferError(message, status)`. `applyMarketingUnsubscribe` only ever throws `"user not found"` (→ 404) — it has no 409 cases. The route does a single `instanceof AcceptOfferError` check and echoes `{ error: message }` with `error.status` — same message-mapping spirit as the existing `"user not found" → 404` path, just promoted to a class so the status decision stays in the service (no business logic in the handler). A `500`-class message (anything unmatched, e.g. a Stripe failure) is **not** wrapped — the original error re-throws and hits the route's generic 500 handler (`console.error` preserved).
 
-| thrown message (from `applyRetentionPause` / `applyRetentionDiscount`) | HTTP status |
+| thrown message (from `applyRetentionPause` / `applyRetentionDiscount` / `applyMarketingUnsubscribe`) | HTTP status |
 |---|---|
 | `"retention pause already used"` | `409` |
 | `"retention discount already used"` | `409` |
 | `"past-due: retention pause not allowed"` | `409` |
 | `"past-due: retention discount not allowed"` | `409` |
 | `"no active subscription"` | `409` |
-| `"user not found"` | `404` |
+| `"user not found"` (incl. `applyMarketingUnsubscribe`) | `404` |
 | (anything else) | `500` (original error re-thrown, generic handler) |
-| `acceptOffer` itself, `offer` not `pause_30d`/`discount_50_2mo` | `400` `"unsupported offer"` |
+| `acceptOffer` itself, `offer` an unhandled value | `400` `"unsupported offer"` (unreachable — all `OfferType`s handled) |
 
 #### Boundary validation
 
@@ -290,12 +300,11 @@ Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhausti
 - `tier_downgrade` — dark-themed "Switch to a cheaper plan" card. If `tierDowngradeAvailable` is `false` (no downgrade options exist on the account), renders `<Step3BonusEntries>` instead — no dead card, no silent no-op. If `true`, clicking "Switch plan" calls `props.onRequestTierDowngrade?.(state.eventId)` — the outcome mutation is **NOT** fired at this point. The parent stores the `eventId` in `pendingCancellationEventId` and records `{outcome:"saved",offerAccepted:"tier_downgrade"}` only if `handleDowngradeSubscription` succeeds. If `DowngradeConfirmModal` is dismissed, the eventId is cleared and the event matures to `abandoned`. Decline calls `onDecline()`.
 - `pause_30d` (Task 14) — `PauseOfferCard`: "Pause 30 days — keep your entries". Reuses the `upsell-shell` grammar (`InfoGrid` `framing="gain"`, `UrgencyBanner` tone gold, `TrustBar`) and the two-button accept/decline grid from `Step3BonusEntries`. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"pause_30d" })` (POST `{action:"accept_offer",...}`); on success → `onSaved()` (parent runs `fetchSubscriptionBenefits` + close, identical to the other offers). The server records the `saved/pause_30d` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()` (next rung). **409/404 graceful path:** the eligibility filter normally prevents an already-used / past-due / no-subscription member from ever seeing this card, but if the filter slipped through, the POST returns `409` (or `404`); the card catches the `ApiError`, shows a brief info toast, and calls `onDecline()` so the member advances to the next rung instead of dead-ending. Any other failure shows an error toast and leaves the card in place to retry.
 - `discount_50_2mo` (Task 16) — `DiscountOfferCard`: "50% off for 2 months". **Mirrors `PauseOfferCard` exactly** — same `upsell-shell` grammar (`InfoGrid` `framing="gain"`, gold `UrgencyBanner`, `TrustBar`), same two-button accept/decline grid, same 409/404 graceful-decline path. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"discount_50_2mo" })`; on success → `onSaved()`. The server (`acceptOffer` → `applyRetentionDiscount`) attaches the singleton coupon and records the `saved/discount_50_2mo` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()`. **409/404** (filter slipped: already-used / past-due / no-subscription) → info toast + `onDecline()`; any other failure → error toast, card stays for retry.
+- `unsubscribe_marketing` (Task 17) — `UnsubscribeOfferCard`: "Get fewer messages instead". **Mirrors `PauseOfferCard` / `DiscountOfferCard`** — same `upsell-shell` grammar and two-button grid. **Copy is explicit that it switches off MARKETING email + marketing SMS only** and that transactional / account messages (receipts, renewal notices, draw results) are **not** affected — it does not say just "emails". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"unsubscribe_marketing" })`; on success → `onSaved()`. The server (`acceptOffer` → `applyMarketingUnsubscribe`) persists `acceptsPromotionalEmail=false`, best-effort syncs Klaviyo, and records the `saved/unsubscribe_marketing` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()`. There is **no 409 path** (not one-time gated, no past-due guard); a rare 404/500 → toast + `onDecline()` (graceful, never dead-ends).
 
-**Unimplemented (throws loudly until wired):**
+**Unimplemented:** none. As of Task 17 every `OfferType` renders a real card.
 
-- `unsubscribe_marketing` → Task 17 replaces the throw with the unsubscribe card.
-
-The exhaustive `switch` + `never`-guard `default` is preserved; `pause_30d` (Task 14) and `discount_50_2mo` (Task 16) changed from `throw` → card. `unsubscribe_marketing` still `throw`s and remains unreachable because `IMPLEMENTED_OFFERS` only passes `bonus_entries_100`, `tier_downgrade`, `pause_30d`, and `discount_50_2mo`.
+The exhaustive `switch` + `never`-guard `default` is preserved; `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17) each changed from `throw` → card. **No `throw` case remains** — every one of the 5 `OfferType`s maps to a real card. The `never`-guard `default` is now genuinely unreachable for any valid `OfferType` and is kept intentionally as a compile-time exhaustiveness safety net for any future `OfferType` addition.
 
 ### Step 3 — `Step3BonusEntries.tsx`
 
@@ -315,7 +324,7 @@ Three TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`*
 
 - `useStartCancellationFlow` — POSTs `{ action: "start", reason, reasonText? }`, returns `{ eventId, offersShown, pastDue }`.
 - `useOutcomeCancellationFlow` — POSTs `{ action: "outcome", eventId, outcome, offerAccepted? }`. Called fire-and-forget after cancel.
-- `useAcceptOffer` (Task 14; extended Task 16) — POSTs `{ action: "accept_offer", eventId, offer }`, returns `{ ok, resumesAt? , couponId? }` (`resumesAt` for `pause_30d`, `couponId` for `discount_50_2mo`). Used by both `PauseOfferCard` and `DiscountOfferCard` via `mutateAsync` (each card awaits success before calling `onSaved`, and inspects the thrown `ApiError.status` for the 409/404 graceful-decline path). Threaded `index.tsx` → `Step2Offer` as `acceptOfferMutation`.
+- `useAcceptOffer` (Task 14; extended Task 16, Task 17) — POSTs `{ action: "accept_offer", eventId, offer }`, returns `{ ok, resumesAt?, couponId? }` (`resumesAt` for `pause_30d`, `couponId` for `discount_50_2mo`, neither for `unsubscribe_marketing` → just `{ ok }`). Used by `PauseOfferCard`, `DiscountOfferCard`, and `UnsubscribeOfferCard` via `mutateAsync` (each card awaits success before calling `onSaved`, and inspects the thrown `ApiError.status` for the graceful-decline path — 409/404 for pause/discount, 404/500 for unsubscribe which has no 409). Threaded `index.tsx` → `Step2Offer` as `acceptOfferMutation`.
 
 The parent (`SubscriptionManagementModal`) refreshes data via its existing imperative `fetchSubscriptionBenefits()` call — no query invalidation needed in the modal itself.
 
@@ -334,29 +343,31 @@ The parent (`SubscriptionManagementModal`) refreshes data via its existing imper
 
 The old `CancellationUpsellModal` files are retained (not deleted); they will be removed in Phase 5 Task 19.
 
-### Phase-3 per-reason screen flow
+### Per-reason screen flow (Task 17 — ALL offers implemented)
 
-After `IMPLEMENTED_OFFERS` filtering (`bonus_entries_100`, `tier_downgrade`, `pause_30d`, `discount_50_2mo` — only `unsubscribe_marketing` still filtered):
+`IMPLEMENTED_OFFERS` now contains every `OfferType`, so no offer is filtered (the only filters that remain in practice are past-due → `[]` and the one-time consumed flags for `pause_30d` / `discount_50_2mo` / `bonus_entries_100`):
 
 | Reason | offersShown | Step 1 → Step 2 | Step 2 → Step 3 | (then) → Step 4 |
 |---|---|---|---|---|
 | `too_expensive` | `[discount_50_2mo, bonus_entries_100]` | **discount card** | +100 card | decline → Step 4 |
 | `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | tier_downgrade card | +100 card | decline → Step 4 |
 | `dont_use_benefits` | `[pause_30d, bonus_entries_100]` | **pause card** | +100 card | decline → Step 4 |
-| `too_many_messages` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `too_many_messages` | `[unsubscribe_marketing, bonus_entries_100]` | **unsubscribe card** | +100 card | decline → Step 4 |
 | `joined_for_giveaway` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
 | `havent_won` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
 | `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | **pause card** | **discount card** → +100 card | decline → Step 4 |
 
-Per-reason trace (Task 16 — IMPLEMENTED = {bonus, tier, pause, discount}):
-- `too_expensive` → sequence `[discount_50_2mo, bonus_entries_100]` (nothing filtered). Step 2 = discount card. Accept → coupon applied + `saved/discount_50_2mo` recorded server-side → `onSaved`. Decline → +100 (Step 3) → decline → Step 4.
-- `other` → sequence `[pause_30d, discount_50_2mo, bonus_entries_100]` (nothing filtered now). Pause card leads → decline → discount card → decline → +100 → Step 4.
-- `dont_use_benefits` → `[pause_30d, bonus_entries_100]` (pause then +100) — unchanged from Task 14.
-- `prefer_cheaper` → `[tier_downgrade, bonus_entries_100]` (tier then +100) — unchanged.
-- `joined_for_giveaway` / `havent_won` / `too_many_messages` → `[bonus_entries_100]` (the +100 rung only; `unsubscribe_marketing` still filtered until Task 17).
+Per-reason trace (Task 17 — IMPLEMENTED = {bonus, tier, pause, discount, unsubscribe} — ALL):
+- `too_expensive` → `[discount_50_2mo, bonus_entries_100]`. Discount card → decline → +100 → Step 4.
+- `prefer_cheaper` → `[tier_downgrade, bonus_entries_100]`. Tier card → decline → +100 → Step 4.
+- `dont_use_benefits` → `[pause_30d, bonus_entries_100]`. Pause card → decline → +100 → Step 4.
+- `too_many_messages` → `[unsubscribe_marketing, bonus_entries_100]` (Task 17: unsubscribe no longer filtered). Unsubscribe card → accept = marketing email+SMS off + `saved/unsubscribe_marketing` recorded server-side → `onSaved`; decline → +100 → Step 4.
+- `joined_for_giveaway` / `havent_won` → `[bonus_entries_100]` (the +100 rung only — it is the sole lead).
+- `other` → `[pause_30d, discount_50_2mo, bonus_entries_100]`. Pause → decline → discount → decline → +100 → Step 4.
+- **Past-due (any reason) → `[]` → Step 4** (eligibility short-circuits before any rung).
 
 Notes:
-- `unsubscribe_marketing` is the only offer still removed by `IMPLEMENTED_OFFERS`; `pause_30d` (Task 14) and `discount_50_2mo` (Task 16) now surface.
+- `IMPLEMENTED_OFFERS` no longer removes any offer — all of `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17) surface.
 - Accepting +100 at Step 2 (lead offer) or Step 3 (second rung) calls the same redeem endpoint and fires `offerAccepted:"bonus_entries_100"`.
 - Accepting `tier_downgrade` (when `tierDowngradeAvailable` is `true`) triggers `DowngradeConfirmModal` via `onRequestTierDowngrade`. The outcome `{offerAccepted:"tier_downgrade",outcome:"saved"}` is recorded **only** if the downgrade confirmation succeeds — never on card click.
 - If `tierDowngradeAvailable` is `false` and `tier_downgrade` is the current offer, `Step2Offer` renders `<Step3BonusEntries>` instead — the user gets the +100 rung with no dead UI.
@@ -374,6 +385,7 @@ side-effect API actually succeeds:
 - `tier_downgrade` → one `saved/tier_downgrade`, recorded by the parent only on real downgrade success; dismiss records nothing.
 - `pause_30d` accepted → one `saved/pause_30d`, recorded **server-side inside `acceptOffer`** only after `applyRetentionPause` succeeds (not a client fire-and-forget). A 409/404 (filter slipped) records nothing — the member is declined to the next rung.
 - `discount_50_2mo` accepted → one `saved/discount_50_2mo`, recorded **server-side inside `acceptOffer`** only after `applyRetentionDiscount` succeeds (same model as `pause_30d`; not a client fire-and-forget). A 409/404 (filter slipped) records nothing — the member is declined to the next rung.
+- `unsubscribe_marketing` accepted → one `saved/unsubscribe_marketing`, recorded **server-side inside `acceptOffer`** only after `applyMarketingUnsubscribe` succeeds (same model as `pause_30d`/`discount_50_2mo`; not a client fire-and-forget). There is no 409 path; a rare 404/500 records nothing — the member is declined to the next rung. A failing Klaviyo sync does **not** block the outcome (DB flag is the source of truth).
 - Step 4 "Cancel anyway" (normal **and** past-due) → one `cancelled` after `/api/stripe/cancel-subscription` succeeds.
 - "Keep my membership", past-due "Resolve payment", tier-downgrade dismiss, and no-downgrade-available → record **nothing**; the event stays `in_progress` and is later swept to `abandoned` by the §6a maturity job.
 
@@ -384,9 +396,11 @@ battle-tested endpoints (`/api/cancellation-upsell/redeem`, the downgrade flow)
 and log via the single `outcome` action; `accept_offer` with no Phase-2 consumer
 would have been dead code (CLAUDE.md rule #4). **Task 14 (Phase 3) adds
 `accept_offer`** for `pause_30d`, the first offer with no pre-existing endpoint —
-it now has a real consumer (`PauseOfferCard`). Scope is intentionally narrow:
-`acceptOffer` only handles `pause_30d`; every other offer value returns
-`400 "unsupported offer"` until Tasks 16/17 extend it.
+it now has a real consumer (`PauseOfferCard`). **Task 16** extended it for
+`discount_50_2mo`, and **Task 17** for `unsubscribe_marketing`; `acceptOffer`
+now handles all three side-effect offers (`bonus_entries_100` / `tier_downgrade`
+keep their pre-existing endpoints). The `400 "unsupported offer"` fallthrough is
+retained but is now unreachable for any valid `OfferType`.
 
 ## Pause-collision (Phase 3)
 
@@ -720,6 +734,92 @@ filter surfaces it and `Step2Offer` renders `DiscountOfferCard`.
 >   because `discount_50_2mo` is not consumed and is now implemented).
 > The pure routing test (`cancellation-flow-routing.test.ts`) is unaffected —
 > `resolveOfferSequence` does not consult `IMPLEMENTED_OFFERS`.
+
+> **Test-expectation note (Task 17):** shipping `unsubscribe_marketing` made
+> `IMPLEMENTED_OFFERS` complete (all 5 `OfferType`s). Tests were corrected to the
+> new mathematically-correct reality (NOT hacked):
+> - `cancellation-flow-eligibility.test.ts`: the Task-16 `testUnimplementedFiltered`
+>   (used `unsubscribe_marketing` as the still-unimplemented example, asserting
+>   `[unsubscribe_marketing, bonus_entries_100] → [bonus_entries_100]`) is now
+>   **wrong** and was **deleted** — with all offers implemented there is no
+>   unimplemented `OfferType` left to assert. It is replaced by
+>   `testAllImplementedSurface` (all 5 in a sequence surface in full when none
+>   consumed / not past-due) plus `testUnsubscribeNotGated`
+>   (`[unsubscribe_marketing, bonus_entries_100] → unchanged`, and unaffected by
+>   other offers' consumed flags — it is not in `ONE_TIME`) and
+>   `testUnsubscribePastDue` (past-due still → `[]`). The `IMPLEMENTED_OFFERS`
+>   gate is still logically covered by the consumed / past-due tests. A header
+>   comment in the test file records that Phase 5 is complete.
+> - `CancellationFlowService.test.ts`: header comment updated (no offer remains
+>   unimplemented); added `testTooManyMessages` asserting
+>   `too_many_messages → ["unsubscribe_marketing","bonus_entries_100"]`
+>   (pre-Task-17 this was filtered to `["bonus_entries_100"]`; the mathematically
+>   correct post-Task-17 value is both). No existing service-test assertion was
+>   stale (none asserted `too_many_messages` before).
+> The routing test is unaffected (already asserted
+> `too_many_messages → [unsubscribe_marketing, bonus_entries_100]` — routing
+> never consulted `IMPLEMENTED_OFFERS`).
+
+## RetentionUnsubscribeService (Task 17)
+
+`src/services/subscription/RetentionUnsubscribeService.ts`
+
+Applies the `unsubscribe_marketing` retention offer: persists the member's
+marketing-opt-out and best-effort syncs Klaviyo.
+
+`applyMarketingUnsubscribe(userId) → Promise<{ ok: true }>`:
+
+1. Dynamic-imports `connectDB`, `User`, and
+   `syncKlaviyoEmailMarketingFromAdminPreference` (deferred so the module is
+   safely importable in env-less test environments, mirroring
+   `RetentionPauseService` / `RetentionDiscountService`). `await connectDB()`.
+2. Loads the user as a **full Mongoose doc** (`User.findById(userId)`, **no
+   `.lean()`**) — the Klaviyo sync expects an `IUser` shape, exactly as the
+   admin route (`src/app/api/admin/users/[id]/route.ts`) passes
+   `User.findById(...)` (no lean) to the same function. Missing user →
+   `throw new Error("user not found")` (route → 404 via the shared mapper).
+3. Persists `acceptsPromotionalEmail = false` via atomic
+   `User.updateOne({ _id }, { $set: { acceptsPromotionalEmail: false } })`
+   (dot-path `$set` style matching the other retention services). **This DB
+   flag is the authoritative record of the preference.**
+4. Calls `syncKlaviyoEmailMarketingFromAdminPreference(userDoc, false)` — this
+   unsubscribes **marketing email AND marketing SMS** (it does NOT touch
+   transactional SMS / transactional email). The function never throws (returns
+   `{ success, error? }`); it does **not** itself write the DB flag (hence step
+   3). A `success: false` is logged via `console.error` (survives production
+   `removeConsole`) but is **non-fatal** — the retention action still succeeds
+   because the DB flag is the source of truth and Klaviyo eventual-consistency
+   is acceptable.
+5. Returns `{ ok: true }`.
+
+### No past-due guard, no one-time-consumed guard (intentional)
+
+Unlike `RetentionPauseService` / `RetentionDiscountService`,
+`applyMarketingUnsubscribe` has **no guards**:
+
+- **No past-due guard** — unsubscribing from marketing is harmless and valid
+  even for a past-due member (it has no billing side-effect).
+- **No one-time-consumed guard** — `unsubscribe_marketing` has no entry in the
+  `ONE_TIME` map in `cancellation-flow-eligibility.ts`, so it is not gated by a
+  `retentionOffersConsumed` flag. It is also naturally **idempotent**:
+  re-applying simply re-sets `acceptsPromotionalEmail = false` and re-issues the
+  same Klaviyo unsubscribe.
+
+### Klaviyo files NOT modified
+
+Task 17 only **calls** the existing exported
+`syncKlaviyoEmailMarketingFromAdminPreference` — no file under
+`src/utils/integrations/klaviyo/**` was modified. That path belongs to the
+`tracking` domain in the Domain Manifest; since no klaviyo file changed, there
+is no `tracking`-doc obligation.
+
+### Test
+
+No dedicated test script — correctness is by inspection (the DB/Klaviyo path is
+network-bound, identical rationale to the un-tested Stripe paths in
+`RetentionPauseService` / `RetentionDiscountService`). The pure eligibility and
+service planning behavior (`unsubscribe_marketing` now surfacing) is covered by
+`test:cancellation-eligibility` and `test:cancellation-flow-service`.
 
 ## Retention-pause lifecycle: cron cleanup (Task 13)
 

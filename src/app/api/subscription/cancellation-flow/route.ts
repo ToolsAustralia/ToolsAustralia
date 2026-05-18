@@ -47,6 +47,7 @@ const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptO
  *   { action: "accept_offer", eventId, offer }
  *     → { ok: true, resumesAt }  ("pause_30d")
  *     → { ok: true, couponId }   ("discount_50_2mo")
+ *     → { ok: true }             ("unsubscribe_marketing")
  */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);

@@ -5,10 +5,10 @@ import { planFlow } from "../CancellationFlowService";
  * Unit tests for planFlow (pure — no DB).
  *
  * IMPLEMENTED_OFFERS = { bonus_entries_100, tier_downgrade, pause_30d,
- * discount_50_2mo }. Task 16 shipped discount_50_2mo, so
- * too_expensive → [discount_50_2mo, bonus_entries_100] now surfaces BOTH
- * (no longer filtered to [bonus_entries_100]). Only unsubscribe_marketing
- * remains unimplemented (Task 17).
+ * discount_50_2mo, unsubscribe_marketing }. As of Task 17 ALL OfferTypes are
+ * implemented (Phase 5 complete) — no unimplemented offer remains, so every
+ * resolved sequence surfaces in full (subject only to past-due / consumed).
+ * too_expensive → [discount_50_2mo, bonus_entries_100] surfaces BOTH.
  */
 
 function testStandard() {
@@ -52,12 +52,23 @@ function testGiveawayReason() {
   );
 }
 
+function testTooManyMessages() {
+  // too_many_messages → [unsubscribe_marketing, bonus_entries_100]. Task 17
+  // shipped unsubscribe_marketing so both surface (pre-Task-17 it was filtered
+  // to [bonus_entries_100]).
+  assert.deepStrictEqual(
+    planFlow({ reason: "too_many_messages", pastDue: false, consumed: {} }).offersShown,
+    ["unsubscribe_marketing", "bonus_entries_100"]
+  );
+}
+
 function run() {
   testStandard();
   testTier();
   testPastDue();
   testConsumedBonusEntries();
   testGiveawayReason();
+  testTooManyMessages();
   console.log("PASS planFlow");
 }
 

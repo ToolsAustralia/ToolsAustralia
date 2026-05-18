@@ -37,6 +37,7 @@ import { eligibleOffers, type ConsumedFlags } from "@/utils/subscription/cancell
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { applyRetentionPause } from "@/services/subscription/RetentionPauseService";
 import { applyRetentionDiscount } from "@/services/subscription/RetentionDiscountService";
+import { applyMarketingUnsubscribe } from "@/services/subscription/RetentionUnsubscribeService";
 import mongoose from "mongoose";
 
 // ---------------------------------------------------------------------------
@@ -244,9 +245,9 @@ function retentionOfferErrorToStatus(message: string): number {
 /**
  * Accept a retention offer.
  *
- * Supported offers: `pause_30d` (Task 14), `discount_50_2mo` (Task 16). Any
- * other offer value throws `AcceptOfferError("unsupported offer", 400)` —
- * Task 17 extends this for `unsubscribe_marketing`.
+ * Supported offers: `pause_30d` (Task 14), `discount_50_2mo` (Task 16),
+ * `unsubscribe_marketing` (Task 17). Any other offer value throws
+ * `AcceptOfferError("unsupported offer", 400)`.
  *
  * `pause_30d` flow:
  *   1. `applyRetentionPause(userId)` — pauses the Stripe subscription 30 days.
@@ -259,12 +260,22 @@ function retentionOfferErrorToStatus(message: string): number {
  *   2. On success, `recordOutcome({ outcome: "saved", offerAccepted: "discount_50_2mo" })`.
  *   3. Returns `{ couponId }`.
  *
+ * `unsubscribe_marketing` flow:
+ *   1. `applyMarketingUnsubscribe(userId)` — persists `acceptsPromotionalEmail
+ *      = false` and best-effort unsubscribes marketing email + SMS in Klaviyo.
+ *      NOT one-time gated and NO past-due guard (harmless / idempotent — see
+ *      RetentionUnsubscribeService header).
+ *   2. On success, `recordOutcome({ outcome: "saved",
+ *      offerAccepted: "unsubscribe_marketing" })`.
+ *   3. Returns `{}` (no extra data — the route spreads it as `{ ok: true }`).
+ *
  * Both `applyRetentionPause` and `applyRetentionDiscount` throw typed `Error`s;
  * their messages are mapped to an HTTP status via the shared
  * `retentionOfferErrorToStatus` and re-thrown as `AcceptOfferError` so the route
  * can surface the correct status without embedding any business logic. A
  * `500`-class (unmatched) error is re-thrown unwrapped so the route's generic
- * handler logs and returns 500.
+ * handler logs and returns 500. `applyMarketingUnsubscribe` only ever throws
+ * `"user not found"` (→ 404 via the same shared mapper); anything else is 500.
  */
 export async function acceptOffer({
   userId,
@@ -317,6 +328,30 @@ export async function acceptOffer({
     });
 
     return { couponId };
+  }
+
+  if (offer === "unsubscribe_marketing") {
+    try {
+      await applyMarketingUnsubscribe(userId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      const status = retentionOfferErrorToStatus(message);
+      if (status === 500) {
+        // Unexpected (e.g. Mongo failure) — preserve the original for logs.
+        throw err;
+      }
+      // Only "user not found" → 404 reaches here (no 409 cases for unsubscribe).
+      throw new AcceptOfferError(message, status);
+    }
+
+    await recordOutcome({
+      eventId,
+      userId,
+      outcome: "saved",
+      offerAccepted: "unsubscribe_marketing",
+    });
+
+    return {};
   }
 
   throw new AcceptOfferError("unsupported offer", 400);
