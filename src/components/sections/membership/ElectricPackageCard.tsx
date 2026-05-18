@@ -5,6 +5,7 @@ import Image from "next/image";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon } from "@/utils/images/package-icons";
 import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { cn } from "@/utils/cn";
 import BestValueBadge from "@/components/ui/BestValueBadge";
@@ -61,6 +62,10 @@ export default function ElectricPackageCard({
   const isPremium = !!gradientText; // VIP (electric-black) — the only electric scheme with a gradient text
 
   const isLight = theme === "light";
+  const lowerId = plan.id.toLowerCase();
+  /** Light membership-tab Tradie reuses the one-time Foreman (electric cyan) card bg. */
+  const isMembershipTradie = lowerId.includes("tradie") && lowerId.includes("subscription");
+  const tradieLightBg = getElectricPackageColorScheme("foreman-pack").bgGradient;
   const blackText = colorScheme.text.includes("black"); // lime/amber tiers use black ink
   const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
 
@@ -114,7 +119,9 @@ export default function ElectricPackageCard({
         className="relative isolate h-full rounded-3xl px-4 pb-4 pt-8 sm:pt-[38px]"
         style={{
           background: isLight
-            ? colorScheme.bgGradient
+            ? isMembershipTradie
+              ? tradieLightBg
+              : colorScheme.bgGradient
             : isPremium
               ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
               : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
