@@ -156,7 +156,8 @@
     "test:user-cancellation-offers": "tsx src/models/__tests__/User.cancellation-offers.test.ts",
     "test:cancellation-routing": "tsx src/utils/subscription/__tests__/cancellation-flow-routing.test.ts",
     "test:cancellation-eligibility": "tsx src/utils/subscription/__tests__/cancellation-flow-eligibility.test.ts",
-    "test:cancellation-flow-service": "tsx src/services/subscription/__tests__/CancellationFlowService.test.ts"
+    "test:cancellation-flow-service": "tsx src/services/subscription/__tests__/CancellationFlowService.test.ts",
+    "test:retention-pause": "tsx src/services/subscription/__tests__/RetentionPauseService.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

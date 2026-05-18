@@ -413,6 +413,110 @@ interface ClearPauseInput {
 domain (`docs/subscription/`); the Domain Manifest in `CLAUDE.md` already covers
 these paths — no manifest edit was required.
 
+## RetentionPauseService (Task 12)
+
+`src/services/subscription/RetentionPauseService.ts`
+
+Applies the `pause_30d` retention offer: pauses the member's Stripe subscription
+for 30 days with `behavior: "void"` and stamps `metadata.pauseReason = "retention"`
+so the webhook guard (`decideClearPause`) never clears it on a paid invoice.
+
+### Stripe update parameters
+
+```ts
+stripe.subscriptions.update(subscriptionId, {
+  pause_collection: {
+    behavior: "void",            // void (discard) invoices during pause window
+    resumes_at: resumesAtUnix,   // Unix seconds — now + 30 days
+  },
+  metadata: {
+    pauseReason: "retention",    // webhook guard key — matches decideClearPause check
+    pauseResumesAt: resumesAtIso,// ISO-8601 audit field
+  },
+});
+```
+
+Stripe metadata updates **merge** keys (they do not replace the whole metadata
+object), so setting only `pauseReason` and `pauseResumesAt` is safe — other
+existing metadata keys on the subscription are preserved.
+
+### Behavior: `void` vs `keep_as_draft`
+
+| | Recovery pause | Retention pause |
+|---|---|---|
+| `behavior` | `keep_as_draft` | `void` |
+| Effect on new invoices | Held as draft; collected when resumed | Voided and discarded |
+| `metadata.pauseReason` | (none) | `"retention"` |
+| `resumes_at` | (none — manual) | now + 30 d |
+
+`void` is appropriate for a voluntary pause: the member is choosing not to be
+charged for 30 days. The subscription auto-resumes on `resumes_at`; no manual
+`resumeAfterSuccessfulRenewalPayment` call is needed.
+
+### Entry accrual during pause
+
+No code is needed to freeze entries. Entries only accrue when Stripe fires a
+paid renewal invoice webhook (`invoice.payment_succeeded` with billing reason
+`subscription_cycle`). During a `void`-behavior pause Stripe discards new
+invoices — no paid invoice is created, so no renewal webhook fires and no entries
+are added. Existing accumulated entries on the member's account are unaffected.
+
+### Guards
+
+Three guards are evaluated in order by the pure helper `retentionPauseBlockReason(user)`:
+
+1. **Past-due** — `hasFailedRenewal(user)` returns `true` → throws `"past-due: retention pause not allowed"`. Defense in depth: the eligibility filter already excludes past-due members from seeing the offer, but the service enforces this at the write layer regardless.
+2. **Already consumed** — `user.retentionOffersConsumed?.pause30d` is `true` → throws `"retention pause already used"`. The pause is a one-time offer per member.
+3. **No subscription** — `user.stripeSubscriptionId` is missing → throws `"no active subscription"`. Cannot pause a subscription that does not exist.
+
+`retentionPauseBlockReason` is exported as a pure helper and unit-tested without any Stripe or DB dependency.
+
+### Ordering rationale: Stripe FIRST, then consumed-flag persist
+
+`applyRetentionPause` calls `stripe.subscriptions.update` **before** persisting
+`retentionOffersConsumed.pause30d = true`. The reasoning:
+
+- **If Stripe succeeds but Mongo write fails:** the member receives a real pause.
+  They may be re-offered the pause next time (the consumed flag is not set). This
+  is recoverable — an operator can manually set the flag, or the member declines
+  the re-offer.
+- **If Mongo write succeeds but Stripe fails (inverse order):** the member is
+  permanently marked consumed with no actual pause. This is a silent data loss
+  with no self-healing path.
+
+Therefore Stripe success is the prerequisite; the Mongo write is best-effort.
+A `console.error` is logged on Mongo write failure (survives production's
+`removeConsole` pass for `log`/`warn`) but the function does NOT re-throw —
+the pause is active and the caller receives `{ resumesAt }` normally.
+
+### Consumed-flag persistence
+
+```ts
+await User.updateOne(
+  { _id: user._id },
+  { $set: { "retentionOffersConsumed.pause30d": true } }
+);
+```
+
+Uses atomic `updateOne` with a dot-path `$set` (no full-document save) to match
+the pattern used by other services that persist nested flags in this codebase.
+
+### Test
+
+`src/services/subscription/__tests__/RetentionPauseService.test.ts`
+(`npm run test:retention-pause`)
+
+Covers:
+- `computeResumeAt` math (fixed date → expected unix seconds, spot-check vs 30 × 86400).
+- `retentionPauseBlockReason` guard logic for every branch: past-due, already-consumed,
+  no subscription ID, eligible user (null), past-due priority over consumed,
+  and undefined `retentionOffersConsumed` treated as not consumed.
+
+The Stripe/DB path is not tested (no network); correctness is by inspection. Heavy
+server-side imports (`stripe.ts`, `mongodb.ts`, `User.ts`) are deferred to the body
+of `applyRetentionPause` via dynamic `import()` so the module is safely importable
+in test environments that lack `STRIPE_SECRET_KEY`/`MONGODB_URI`.
+
 ## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
