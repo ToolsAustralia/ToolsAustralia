@@ -273,3 +273,14 @@ interface ICancellationFlowEvent {
 - `{ outcome: 1 }` — filter by lifecycle state
 - `{ retention90: 1 }` — backfill targeting
 - Compound: `{ outcome: 1, savedAt: 1, retention90: 1 }` — analytics queries joining save rate and 90-day retention
+
+## `User.retentionOffersConsumed` (top-level flags on `User`)
+
+Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.
+
+| Field | Type | Offer gated |
+|---|---|---|
+| `retentionOffersConsumed.pause30d` | `boolean` (default `false`) | 30-day billing pause offer |
+| `retentionOffersConsumed.discount50_2mo` | `boolean` (default `false`) | 50% discount for 2 months offer |
+
+**+100 entries offer:** reuses the existing top-level `cancellationUpsellRedeemed` flag (and `cancellationUpsellRedeemedAt`). No new field was added for it — the legacy flag was already purpose-built for this one-time offer and its semantics are identical.

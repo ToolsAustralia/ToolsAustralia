@@ -152,7 +152,8 @@
     "test:past-draws": "tsx --require ./src/components/modals/PastDrawsModal/__tests__/asset-stubs.cjs src/components/modals/PastDrawsModal/__tests__/PastDrawsModal.test.ts",
     "audit:decomposition": "tsx scripts/codemods/audit-component-decomposition.ts",
     "verify:dashboard-stats-drift": "tsx scripts/verify-dashboard-stats-snapshot-drift.ts",
-    "test:cancellation-flow-event": "tsx src/models/__tests__/CancellationFlowEvent.test.ts"
+    "test:cancellation-flow-event": "tsx src/models/__tests__/CancellationFlowEvent.test.ts",
+    "test:user-cancellation-offers": "tsx src/models/__tests__/User.cancellation-offers.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
