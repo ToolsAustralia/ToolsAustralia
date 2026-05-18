@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 interface BenefitCountdownProps {
   effectiveDate: Date;
@@ -13,6 +14,8 @@ interface BenefitCountdownProps {
     accumulatedEntries: number;
     /** Share of partner-offer catalog visible for this tier (see getPartnerCatalogAccessPercentForPlanId) */
     partnerDiscountAccessPercent: number;
+    /** Retained for caller compatibility; not rendered — subscription partner
+     * access is lifecycle-gated (shown as "While active"), not a day count. */
     partnerDiscountDays: number;
   };
   newBenefits: {
@@ -20,6 +23,7 @@ interface BenefitCountdownProps {
     /** Projected accumulated free entries after the plan change */
     accumulatedEntries: number;
     partnerDiscountAccessPercent: number;
+    /** Retained for caller compatibility; not rendered — see currentBenefits. */
     partnerDiscountDays: number;
   };
   onExpired?: () => void;
@@ -168,8 +172,8 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
             </div>
           </div>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
-            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{currentBenefits.partnerDiscountDays}</div>
-            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner days</div>
+            <div className="text-lg font-bold text-gray-900 dark:text-white">{getPartnerAccessDurationLabel({ isSubscription: true })!.short}</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner access</div>
           </div>
         </div>
       </div>
@@ -195,8 +199,8 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
             </div>
           </div>
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
-            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{newBenefits.partnerDiscountDays}</div>
-            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner days</div>
+            <div className="text-lg font-bold text-gray-900 dark:text-white">{getPartnerAccessDurationLabel({ isSubscription: true })!.short}</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner access</div>
           </div>
         </div>
       </div>

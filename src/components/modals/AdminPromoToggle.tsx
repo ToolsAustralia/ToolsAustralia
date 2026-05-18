@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useTogglePromo, useAdminActivePromos, type TogglePromoData } from "@/hooks/queries/usePromoQueries";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
+import { PromoPurchaseEntriesPreview } from "@/components/admin/PromoPurchaseEntriesPreview";
 import { Loader2, Zap } from "lucide-react";
 import type { PromoMultiplier } from "@/types/promo-multiplier";
 
@@ -23,6 +24,11 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
   const { data: activePromos = [], isLoading, refetch } = useAdminActivePromos();
   const togglePromoMutation = useTogglePromo();
   const [togglingPromo, setTogglingPromo] = useState<string | null>(null);
+
+  // Hover preview state — null means "no hover, fall back to active multiplier"
+  const [hoverMembership, setHoverMembership] = useState<number | null>(null);
+  const [hoverOneTime, setHoverOneTime] = useState<number | null>(null);
+  const [hoverMini, setHoverMini] = useState<number | null>(null);
 
   // Get active promo for each type
   const membershipPromo = activePromos.find((p) => p.type === "membership-packages");
@@ -50,7 +56,8 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
   const renderToggleSection = (
     type: "membership-packages" | "one-time-packages" | "mini-packages",
     currentPromo: typeof membershipPromo | typeof oneTimePromo | typeof miniPromo,
-    typeLabel: string
+    typeLabel: string,
+    onHover: (mult: number | null) => void
   ) => {
     const currentMultiplier = currentPromo?.multiplier || null;
     const isToggling = togglingPromo?.startsWith(type);
@@ -78,6 +85,8 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
               <button
                 key={multiplier}
                 onClick={() => handleToggle(type, multiplier)}
+                onMouseEnter={() => onHover(multiplier)}
+                onMouseLeave={() => onHover(null)}
                 disabled={isToggling || togglePromoMutation.isPending}
                 className={`
                   relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
@@ -109,6 +118,8 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           {/* OFF button */}
           <button
             onClick={() => handleToggle(type, null)}
+            onMouseEnter={() => onHover(1)}
+            onMouseLeave={() => onHover(null)}
             disabled={isToggling || togglePromoMutation.isPending || !currentPromo}
             className={`
               relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
@@ -131,6 +142,13 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
     );
   };
 
+  // Resolve the effective multiplier for the preview: hover > active > 1 (no promo)
+  const previewSnapshot = {
+    membershipPackages: hoverMembership ?? membershipPromo?.multiplier ?? 1,
+    oneTimePackages: hoverOneTime ?? oneTimePromo?.multiplier ?? 1,
+    miniPackages: hoverMini ?? miniPromo?.multiplier ?? 1,
+  };
+
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader title="Toggle Promos" onClose={onClose} showLogo={false} />
@@ -142,11 +160,13 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           </div>
         ) : (
           <div className="space-y-6 sm:space-y-8">
-            {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo")}
+            {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo", setHoverMembership)}
             <div className="border-t border-gray-200"></div>
-            {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages")}
+            {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages", setHoverOneTime)}
             <div className="border-t border-gray-200"></div>
-            {renderToggleSection("mini-packages", miniPromo, "Mini Packages")}
+            {renderToggleSection("mini-packages", miniPromo, "Mini Packages", setHoverMini)}
+            <div className="border-t border-gray-200"></div>
+            <PromoPurchaseEntriesPreview snapshot={previewSnapshot} />
           </div>
         )}
       </ModalContent>

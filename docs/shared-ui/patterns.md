@@ -1,5 +1,46 @@
 # Shared UI — Patterns
 
+## Package display names — 2026-05-14
+
+Two helpers control how package names are shown to users. See `docs/subscription/patterns.md P0` for the full rule summary.
+
+### Catalog surfaces — `getPackageDisplayName(plan)`
+Catalog-facing components (`MembershipSection`, `PackageSelectionModal/PlanCard`, `SpecialPackagesModal/PackagesGrid`, `SpecialPackagesModal/BenefitsPanel`, `PackageInclusionsSlideUp`) render package names via `getPackageDisplayName(plan)` from `src/utils/membership/getDisplayName.ts` instead of reading `plan.name` directly. This strips the `"Additional "` prefix from member-only one-time packs so users see "Tradie Pack" rather than "Additional Tradie Pack".
+
+Mini-draw package modals (`MiniDrawPackageModal`, `MiniDrawPackages` tooltip) use `pkg.displayName ?? pkg.name` since `MiniDrawPackage` carries its own `displayName` field.
+
+### Receipt surfaces — `getReceiptLabel(pkg)` / `getReceiptLabelByPackageId(id, resolvers)`
+Post-payment success screens and Klaviyo invoice email line items use `getReceiptLabel` from `src/utils/membership/getReceiptLabel.ts` to append a context suffix (`(Member)` or `(Mini Draw)`) so users can distinguish colliding display names in their purchase history.
+
+- `MiniDrawPackages.tsx` — `setProcessingPackageName(getReceiptLabel(pkg))` on purchase success.
+- `SpecialPackagesModal` — `setProcessingPackageName(getReceiptLabel(pkg))` on purchase success.
+- `MembershipModal` — `setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }))` for one-time and mini-draw purchases.
+
+Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, or internal event payloads — those retain the raw `name`.
+
+## MembershipModal + PackageSelectionModal electric scheme — 2026-05-18
+
+`MembershipModal/PlanSummaryCard` ("Selected Package" card) and `PackageSelectionModal/PlanGrid` + `PlanCard` ("Select Your Package" popup) now inherit the **same colour resolution as `MembershipSection`'s `renderPlanCard`**: membership-tab plans → `getMembershipSectionColorScheme(plan.id, true)`, one-time / additional packs → `getElectricPackageColorScheme(plan.id)` (replacing `getPackageColorSchemeForPromo` + the `useVariantContext`/`contextVariantConfig` wiring, which was deleted through `PlanSummaryCard` → `PaymentStep` → `MembershipModal/index`). In `PlanSummaryCard` the package **name and price** use the `ElectricPackageCard` dark-mode title style (tier accent + `0 0 14px {accent}80` glow, or the VIP champagne-gold gradient with drop-shadow); the **benefit/entry lines** use "electric white" (`#FFFFFF` + `0 0 8px {accent}66` glow), matching the MembershipSection entries block. The upsell-offer path (`isUpsellOffer`) still uses `promoThemePrimary` and is visually unchanged. The `Nx Bonus entries have been applied` band was removed from `PlanSummaryCard`. The package name renders via `getPackageDisplayName` (strips the internal `"Additional "` prefix). For member additional packs (`getAdditionalPackDiscount` non-null) the struck regular price (same `text-xs sm:text-sm` size as the discounted price) and a tier-accent `{percentOff}% Off` pill sit in normal flow on the row directly above the discounted price (not absolute). The discounted price renders as `= ${price}` (the leading `=` only when a discount applies, plain `${price}` otherwise) in accent title style, above an uppercase muted `One Time Payment` / `Per Giveaway` label. `PlanGrid` passes a `discount` prop (`getAdditionalPackDiscount`). In `PlanCard` the struck regular price + tier-accent `{percentOff}% Off` pill are NOT in the vertical price stack — they sit in a single horizontal row absolutely positioned `left-full top-1/2 -translate-y-1/2 ml-1.5` (middle-upper-right of the `${plan.price}` number) so they never push the `One Time` label down. The prop is only non-null for `additional-{tier}-pack`, so this only appears when the modal is showing additional packages.
+
+## ElectricPackageCard light theme — 2026-05-16
+
+`ElectricPackageCard` accepts an optional `theme?: "light" | "dark"` prop (default `"dark"`, keeping the existing electric design byte-for-byte unchanged); `"light"` is now the classic bright branded-tier card — the card body IS the vivid tier gradient (`colorScheme.bgGradient`), scheme-derived ink colours (`lightInk`: black for lime/amber tiers, white for all others), a solid bright CTA (`backgroundColor: accent`), keeping the new badge/struck-price/per-word-title structural elements; dark rendering is unaffected for all existing consumers.
+
+## SpecialPackagesModal color scheme — 2026-05-15
+
+`SpecialPackagesModal/PackagesGrid` and `SpecialPackagesModal/BenefitsPanel` now use `getElectricPackageColorScheme` (electric dark: `linear-gradient(180deg,#0b0c0f,#060607)` body, tier-accent radial glow, accent border) instead of `getPackageColorSchemeForPromo`. `PackagesGrid` renders a struck regular price via `getAdditionalPackDiscount` when the pack has a genuine member discount (the SAVE shield clip-path polygon was removed from `PackagesGrid` — struck price is kept; the shield remains only in `ElectricPackageCard`). `PackagesGrid` also shows a `BestValueBadge` (top-left ribbon) on packs where `isOneTimeBestValuePlanId` returns true. `BenefitsPanel` benefit text and heading now carry a subtle `textShadow` glow matching the tier accent. `ElectricPackageCard` gains a VIP premium intensity path (`isPremium = !!colorScheme.textGradientStyle`) that applies a stronger outer bloom, brighter body radial gradient, solid-gold border, larger glowing title, and enlarged entries number; all non-VIP (Boss and below) tiers are visually unchanged. The entries number on `ElectricPackageCard` now uses the same white+tier-accent-glow lightning style for all tiers including VIP (VIP title retains its gold gradient); the price panel is `w-fit mx-auto` (contained/centered, not full-width); `PackagesGrid` entries number is also white+glow with the label "FREE ENTRIES"; `BenefitsPanel` benefit text is white+glow while icons use the solid tier accent colour for contrast.
+
+## Admin modal hover-preview pattern — 2026-05-14
+
+`AdminPromoToggle` (`src/components/modals/AdminPromoToggle.tsx`) gained a live per-package entry preview powered by `PromoPurchaseEntriesPreview` (`src/components/admin/PromoPurchaseEntriesPreview.tsx`).
+
+**Hover-preview pattern:** The toggle buttons fire immediately on click (no draft/save step). To let admins preview before committing, three `hoverMultiplier` states (`hoverMembership`, `hoverOneTime`, `hoverMini`) are set via `onMouseEnter`/`onMouseLeave` on each multiplier button. The preview component receives a resolved `snapshot`:
+- `hover value` if a button is hovered
+- `active promo multiplier` if no hover
+- `1` (base entries, no multiplier) if no active promo and no hover
+
+The OFF button hovers as `1` so admins can see what entries look like with the multiplier removed. The `PromoPurchaseEntriesPreview` is a pure read-only component: it accepts a `PromoMultiplierSnapshot` and delegates all row computation to `src/utils/admin/promo-purchase-entries-preview.ts`, which reads exclusively from static package data (`membershipPackages`, `miniDrawPackages`).
+
 ## Site-wide interaction smoothness — Phase 5B (2026-05-10)
 
 Phase 5B is the last-mile cleanup of the smoothness arc: image `sizes` audit, deferred-mount infra, content-visibility on below-fold sections, and modal viewport plumbing.
@@ -90,6 +131,39 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 ### Print stylesheet
 
 `@media print` in `globals.css` hides `[data-floating-widget]`, `[data-tracking-pixel]`, `header[data-sticky="true"]`, and any `[data-print="hide"]` element, and forces black-on-white. Tag floating UI / pixel scripts with the matching `data-*` attribute when adding new ones (`RewardsFloatingWidget` and the analytics scripts already do).
+
+## MiniDrawPackages tier-aware catalog (2026-05-14)
+
+[`src/components/features/MiniDrawPackages.tsx`](../../src/components/features/MiniDrawPackages.tsx) is the purchase UI rendered on the `/mini-draws/[id]` page. It now uses `getMiniDrawPackagesForViewer(hasAccess)` instead of the raw `miniDrawPackages` array to show only the tier-appropriate packages:
+
+- Guests / users without current draw entries and no active subscription → Mini Pack 1, 2, 3 (`isMemberOnly` absent / false).
+- Users with an active subscription OR at least one current draw entry → the five `additional-*-pack-mini` records (`isMemberOnly: true`).
+
+`hasAccess` is derived via `useUserMajorDrawStats(userData?._id)` + `hasAdditionalPackageAccess(userData, userMajorDrawStats)`, reusing the same helpers as the major-draw catalog. The `viewerPackages` computed list replaces all three in-component usages of the raw array: the grid render, the selected-package-modal lookup, and the `handlePurchase` package lookup.
+
+### Post-purchase upsell trigger — segment contract (2026-05-18)
+
+`triggerUpsellModal` in `MiniDrawPackages.tsx` posts to `/api/upsell/trigger` with a `userType`. Every mini upsell record in `upsellPackages.ts` (built by `buildMiniUpsellRecords`) declares `userSegments: ["mini-draw-buyer"]`, and `getBestUpsellOfferForUser` → `filterUpsellPackagesByUserSegment` drops any offer whose segments don't include the sent `userType` (or `"all"`). Because this component **only ever sells mini-draw packs**, `userType` must always be `"mini-draw-buyer"` for `packageType === "mini-draw"` — it is now keyed off `packageType`, not an ID prefix. The previous `packageId.startsWith("mini-pack-")` check matched only the legacy `mini-pack-1|2|3` ids and silently dropped the upsell for the newer `additional-*-pack-mini` packs (Tradie→VIP), which is why only the old mini packs surfaced an upsell.
+
+### Per-tier electric theming (2026-05-18)
+
+The grid tiles, the desktop hover tooltip, and `MiniDrawPackageModal` use the **same electric visual language as `ElectricPackageCard`** (MembershipSection one-time tab), keyed per pack via `getMiniDrawPackageColorScheme(packId)` in `electricPackageScheme.ts`. Mapping: `mini-pack-1|2|3` → electric blue (one shared colour, matching the blue mini-pack upsell artwork); `additional-*-pack-mini` (Tradie→VIP) → lime / cyan / amber-gold / red / champagne-gold per tier.
+
+All three surfaces render a **dark radial body** (`radial-gradient(...accent...) , linear-gradient(180deg,#0b0c0f,#060607)`) — NOT a flat `bgGradient` fill — with an accent inner-sheen overlay, an accent border, and a layered accent glow box-shadow. VIP (`isPremium`, detected via `scheme.textGradientStyle`) gets the premium treatment used by the card: warm-black body (`#0b0a06→#050402`), a `0 0 0 1px #FFFCEB, 0 0 0 3px accent` double-rim, and the champagne-gold gradient text for title/price/big-number. Titles glow (`textShadow 0 0 14px accent80`); the modal hero entries number is white with an accent glow; the "Purchase Now" CTA mirrors the card's `ta-enter-cta` (black bg + `accent` border + `accent` text + glow), not a gradient fill. The "Partner catalog" (cyan) and "Partner access" (green) rows stay semantic — info accents, intentionally identical across all tiers and the tooltip/modal. `MiniDrawPackageModal` makes `ModalContainer` a transparent pass-through (`!bg-transparent !border-0 !shadow-none !overflow-visible`) and owns the electric body itself so the outer glow is not clipped. Section chrome ("Choose Your Pack" header, footer) is untouched; the legacy `isHighValue` yellow/amber gradient branch is removed.
+
+## Electric package color schemes — Phase 1 (2026-05-15)
+
+`src/utils/package-colors/electricPackageScheme.ts` is a self-contained, dev-only color-scheme module that maps package plan IDs to vivid "electric" `PackageColorScheme` objects. It does NOT extend `COLOR_KEYS` and does NOT edit `packageColorScheme.ts` — zero production impact until a component explicitly imports `getElectricPackageColorScheme`.
+
+Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, black text), `foreman` (#00E5FF cyan), `boss` (#E0A019 warm amber-gold, black text), `power` (#FF1F1F red), and `vip` (matte black + brilliant champagne white-gold `#FFDF63` with gradient text). VIP is differentiated from Boss by gold tone and a crisp polished finish — a sharp double-rim outer shadow and tight glow — not by larger text or heavier blur. VIP uses the `ELECTRIC_BLACK` constant (matte black with a `textGradientStyle` CSS object using a bright champagne-to-white-gold gradient); Boss uses `ELECTRIC_GOLD` with a warmer amber palette.
+
+`planIdToElectricTier(planId)` normalises any plan id — including `additional-*` prefixes and `*-member` suffixes — to a tier by substring matching. Unknown plan ids fall back to `power` (electric-red).
+
+Consumers: `ElectricPackageCard` (live `MembershipSection` one-time tab) and the mini-draw catalog (`MiniDrawPackages` grid + tooltip, `MiniDrawPackageModal`) via the `getMiniDrawPackageColorScheme(packId)` wrapper — see "Per-tier electric theming" above. Subscription/membership-tab cards keep their `getMembershipSectionColorScheme` palette and are unaffected by this module.
+
+Test: `npm run test:electric-scheme` (standalone tsx script, no DB required).
+
+Every Tailwind arbitrary class in this file uses literal hex values (no `${}` interpolation) so Tailwind's JIT content scanner can statically detect and emit them — matching the established pattern in `packageColorScheme.ts`.
 
 ## P1. Composition via children
 

@@ -23,10 +23,20 @@ type UserWithPartnerCatalogContext = (Partial<UserData> | Partial<IUser>) & {
  * Partner catalog access percent for a package/plan id (subscriptions, one-time, plus upsells).
  * Subscriptions: Tradie 50%, Foreman 75%, Boss 100%.
  * One-time ladder (6 tiers): VIP 100%, Power 85%, Boss 70%, Foreman 55%, Tradie 40%, Apprentice 25%.
- * Mini packs / mini-pack-*-upgrade: 1–3 → 25%, 4 → 30%, 5 → 50%, 6–7 → 60%, 8 → 80%.
- * Subscription-plus upsells align with base subscription tiers.
+ * Mini packs / mini-pack-N: 1 → 5%, 2 → 10%, 3 → 15%. (Packs 4–8 are now `additional-*-pack-mini` records and resolve via their `baseTemplatePackageId` → the Additional one-time ladder: 40/55/70/85/100%.)
+ *
+ * Upsell records (`membership-upsell-*`, `onetime-upsell-*`, `additional-upsell-*`, `mini-upsell-*`)
+ * resolve via their `baseTemplatePackageId` — the template pack's tier governs the partner %.
+ * Critically, a membership upsell's id contains the trigger tier (e.g., `membership-upsell-tradie`),
+ * not the template tier (Apprentice). Substring matching on the id alone would yield the wrong %.
  */
 export function getPartnerCatalogAccessPercentForPlanId(planId: string): number {
+  // Upsell records: recurse through the template pack so we read its tier, not the trigger's.
+  const upsell = getUpsellPackageById(planId);
+  if (upsell?.baseTemplatePackageId && upsell.baseTemplatePackageId !== planId) {
+    return getPartnerCatalogAccessPercentForPlanId(upsell.baseTemplatePackageId);
+  }
+
   const l = planId.toLowerCase();
 
   if (l.includes("plus-package") || l.endsWith("-plus-pack")) {
@@ -49,17 +59,23 @@ export function getPartnerCatalogAccessPercentForPlanId(planId: string): number 
   if (l.includes("tradie")) return 40;
   if (l.includes("apprentice")) return 25;
 
-  // Mini draw packs & upgrades (mini-pack-N[-upgrade]): catalog access % by tier.
+  // Mini draw packs (mini-pack-N): catalog access % by tier.
+  // Packs 4–8 were renamed to `additional-*-pack-mini` and resolve via baseTemplatePackageId
+  // recursion at the top of this function; the regex below only fires for vanilla Mini Pack 1–3.
   const miniMatch = l.match(/mini-pack-(\d+)/);
   if (miniMatch) {
     const n = parseInt(miniMatch[1], 10);
-    if (n >= 1 && n <= 3) return 25;
+    if (n === 1) return 5;
+    if (n === 2) return 10;
+    if (n === 3) return 15;
+    // Legacy mini-pack-4..8 ids retained for historical-order resolution only; the old tier
+    // mapping is left intact so receipts for past purchases keep their displayed %.
     if (n === 4) return 30;
     if (n === 5) return 50;
     if (n === 6) return 60;
     if (n === 7) return 60;
     if (n === 8) return 80;
-    return 25;
+    return 5;
   }
 
   return 100;

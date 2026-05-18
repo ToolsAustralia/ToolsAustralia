@@ -320,6 +320,10 @@ export async function addToPartnerDiscountQueue(
     queueItem.queuePosition = 0;
     queueItem.startDate = new Date();
 
+    // Membership is lifecycle-gated, not a finite window — never carry a day count.
+    queueItem.discountDays = 0;
+    queueItem.discountHours = 0;
+
     // Subscription ends when subscription ends (recurring)
     // We'll update this dynamically based on subscription status
     if (user.subscription?.endDate) {
@@ -745,13 +749,21 @@ export async function handleSubscriptionQueueUpdate(
       existingSubscription.queuePosition = 0;
       existingSubscription.startDate = new Date();
       existingSubscription.endDate = subscriptionData.endDate;
+      // Membership is lifecycle-gated: access lasts while subscribed, governed
+      // solely by endDate (= subscription.endDate, renews each cycle). It is NOT a
+      // finite day-count window — zero these so it never renders "N days access"
+      // or inflates the queued-days total (also heals legacy rows that stored 30).
+      existingSubscription.discountDays = 0;
+      existingSubscription.discountHours = 0;
     } else {
       const subscriptionItem: PartnerDiscountQueueItem = {
         packageId: subscriptionData.packageId,
         packageName: subscriptionData.packageName,
         packageType: "membership",
-        discountDays: 30, // Monthly subscription
-        discountHours: 30 * 24,
+        // Lifecycle-gated, not a fixed window — endDate (subscription.endDate) is
+        // the sole governor; discountDays/Hours stay 0 so it never shows a day count.
+        discountDays: 0,
+        discountHours: 0,
         purchaseDate: new Date(),
         startDate: new Date(),
         endDate: subscriptionData.endDate,
@@ -836,7 +848,10 @@ export function getQueueSummary(user: IUser) {
 
   const queuedItems =
     user.partnerDiscountQueue
-      ?.filter((item) => item.status === "queued")
+      // Membership is the ambient floor while subscribed (shown via activePeriod with
+      // its partner %, ending at subscription.endDate). It is NOT a finite "upcoming"
+      // benefit and must never appear in the queued list or the queued-days total.
+      ?.filter((item) => item.status === "queued" && item.packageType !== "membership")
       .sort((a, b) => {
         const tierDiff = partnerTierPercentForQueueItem(b) - partnerTierPercentForQueueItem(a);
         if (tierDiff !== 0) return tierDiff;
@@ -858,6 +873,11 @@ export function getQueueSummary(user: IUser) {
     activePeriod,
     queuedItems,
     totalQueuedDays: Math.round(queuedItems.reduce((sum, item) => sum + item.daysOfAccess, 0)),
-    totalQueuedItems: user.partnerDiscountQueue?.filter((item) => item.status === "queued").length || 0,
+    // Exclude membership: it is the ambient floor (shown via activePeriod), never a
+    // queued "upcoming" benefit — keep this count in lockstep with `queuedItems`.
+    totalQueuedItems:
+      user.partnerDiscountQueue?.filter(
+        (item) => item.status === "queued" && item.packageType !== "membership"
+      ).length || 0,
   };
 }

@@ -232,7 +232,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             features: [
               { text: "25% of Partner Discounts Available" },
               { text: "1 Days Access to Partner Discounts" },
-              { text: "3 Free Entries" },
+              { text: "3 free entries" },
             ],
             buttonText: "Buy Now",
             buttonStyle: "secondary" as const,
@@ -249,7 +249,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             features: [
               { text: "40% of Partner Discounts Available" },
               { text: "2 Days Access to Partner Discounts" },
-              { text: "15 Free Entries" },
+              { text: "15 free entries" },
             ],
             isPopular: true,
             buttonText: "Get Tradie",
@@ -268,7 +268,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             features: [
               { text: "55% of Partner Discounts Available" },
               { text: "4 Days Access to Partner Discounts" },
-              { text: "30 Free Entries" },
+              { text: "30 free entries" },
             ],
             buttonText: "Go Foreman",
             buttonStyle: "secondary" as const,
@@ -283,7 +283,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             price: 250,
             period: "one-time",
             features: [
-              { text: "150 Free Entries" },
+              { text: "150 free entries" },
               { text: "10 Days Access to Partner Discounts" },
               { text: "70% of Partner Discounts Available" },
             ],
@@ -302,7 +302,7 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
             features: [
               { text: "85% of Partner Discounts Available" },
               { text: "20 Days Access to Partner Discounts" },
-              { text: "600 Free Entries" },
+              { text: "600 free entries" },
             ],
             buttonText: "Get Power",
             buttonStyle: "secondary" as const,

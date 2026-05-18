@@ -19,6 +19,37 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 
 ## Sections
 
+### `sections/membership/ElectricPackageCard` — live membership card
+
+[`src/components/sections/membership/ElectricPackageCard.tsx`](../../src/components/sections/membership/ElectricPackageCard.tsx) is a **pure presentational** component — no data fetching, no Stripe calls, no context reads. All decisions arrive as props.
+
+**Props:** `plan: LocalMembershipPlan`, `colorScheme: PackageColorScheme`, `state: ElectricPackageCardState` (`{ locked, lockReason?, isCurrent }`), `discount?: { regularPrice, percentOff } | null`, `onSelect: (plan) => void`, `ctaLabel?: string`, `theme?: "light" | "dark"`.
+
+**Key behaviours:**
+- Entries strikethrough (`original → display`) renders when `plan.metadata.promoMultiplier > 1` (mirrors MembershipSection logic via a local `readEntries()` helper).
+- The **% OFF badge** and regular-price strikethrough live **only in the price block button** — never in the top-right corner (that space is reserved for the promo multiplier badge in the live section).
+- CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `ctaLabel ?? "Enter Now"`. The `ctaLabel` prop allows callers (e.g. `MembershipSection`) to pass computed text such as `"Upgrade to Boss"`, `"Downgrade to Tradie"`, or `"Update payment"` without the card knowing about subscription hierarchy.
+- All colour values come from `colorScheme` (`accentHex`, `badgeStyle`, `textGradientStyle`, etc.) — no local colour literals.
+- **Tier differentiation:** VIP is distinguished from Boss by gold tone and a crisp polished finish, not by larger text or heavier blur. VIP uses brilliant champagne/white-gold (`#FFDF63` accent) with a sharp double-rim outer shadow and tight glow; Boss uses warm amber-gold (`#E0A019` accent) with a calmer, standard finish. Both tiers share the same font sizes as all other electric tiers.
+- **Discount badge:** the price block renders a **swing price tag** (hook ring + string + notched tag body with punched hole) anchored to the top-right of the price button when `discount` is set. The tag is rotated −7° and uses `accent` as its background. The struck regular-price span remains immediately right of the discounted price in the button's `<div>`.
+- **`theme` prop:** `"dark"` (default) renders the electric dark background; `"light"` switches to the branded vivid card background using `colorScheme.bgGradient`. `MembershipSection` drives this via `useHtmlDarkForUi()`.
+
+The component accepts two optional badge props: `showBestValue` (renders a `BestValueBadge` in the top-left corner) and `ribbon` (renders a `CornerRibbonBadge` with the given label; ignored when `showBestValue` is true). A promo-multiplier lightning badge (`X2`/`X5`/`X10` webp) appears top-right when `entries.multiplied` is active. These badges are caller-driven — no internal tier logic in the card itself.
+
+This component is used by the live `MembershipSection` for both the membership and one-time tabs.
+
+### `features/PartnerDiscountQueue` — tier-themed partner discount card
+
+[`src/components/features/PartnerDiscountQueue.tsx`](../../src/components/features/PartnerDiscountQueue.tsx) renders the collapsible "Partner Discounts" card on `my-account`. Its visual identity is driven by the **active** package (subscription or active one-time period) resolved into `activePackageVisual` → `getMembershipSectionColorScheme(...)`, so the card matches the membership cards' tier colours.
+
+**Collapsed header:**
+- The right side shows **benefit chips, not a package icon**. Chip 1: `{partnerCatalogPct}% partner catalog`, filled with the tier `badgeStyle.background` (neutral amber/orange fallback when no active tier). Chip 2: `{shopDiscountPercent}% shop`, an outlined accent pill for active subscriptions — **currently gated off** via the local `SHOW_SHOP_DISCOUNT_CHIP = false` constant because the shop discount is not yet honoured at checkout; flip it to `true` when shop goes live. Chips render only when `summary.hasActiveAccess`.
+- The whole bar is tinted to the tier: corner glow blobs + an accent radial wash use `accentHex`; the subtitle takes `accentHexLight ?? accentHex` when a tier theme is present. All theming falls back to the prior neutral dark look when there is no active package.
+
+**Naming:** `cleanPackageName()` strips a leading `"Additional "` (case-insensitive) for **display only** — used for the active-period name and every "Upcoming" queued row. Icon/theme resolution still uses substring tier matching, so stripping the prefix is safe.
+
+**Upcoming (queued) rows:** each row resolves its own tier theme + package icon via `getPackageIconByName(item.packageName, type)` (membership → `subscription`, else `one-time`). The icon tile uses that tier's `badgeStyle.background`; rows with no resolvable package image fall back to the lucide `getPackageIcon(item.packageType)` on the original yellow/orange tile.
+
 ### PromoTrustBar — final-hours urgency variant
 
 [`src/components/sections/promo/PromoTrustBar.tsx`](../../src/components/sections/promo/PromoTrustBar.tsx) is the thin strip that sits between [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) and [`PromoPackages`](../../src/components/sections/promo/PromoPackages.tsx) on `/promotions/[slug]` and `ToolsetLandingPage`. Default render: three icon+text trust items (Drawn live · randomdraws.com.au · Drawn every 27th).
@@ -164,6 +195,12 @@ Layout is an infographic-style three-band frame: dark hero → white lose grid �
 
 If you add a new `confirmPayment` / `confirmSetup` call site here, do **not** wire it to `logPaymentError` directly — return the error up and let the parent log it. The noise filter lives at the parent now: see [MembershipModal.handlePaymentError](#paymentmethodselector) → [`isStripeNoiseError`](../../src/utils/payment/stripe/is-stripe-noise-error.ts) → [error-reporting gotchas](../error-reporting/gotchas.md#stripejs-client-side-validation-noise).
 
+### PackageInclusionsExpanded (PackageInclusionsSlideUp)
+
+[`src/components/modals/PackageInclusionsSlideUp.tsx`](../../src/components/modals/PackageInclusionsSlideUp.tsx) — inline expandable that renders full package inclusions cards below the "Click here to see full package inclusion" trigger. Now uses the same colour resolvers and tier overrides as `ElectricPackageCard` and `MembershipSection`: membership tab → `getMembershipSectionColorScheme(plan.id, true)`; one-time tab → `getElectricPackageColorScheme(plan.id)`; same three accent overrides (membership Tradie → electric cyan, membership Boss → electric red, one-time Boss → DeWalt yellow). Card surface is theme-aware via `useThemeStore`: dark → `rgba(13,14,18,0.92)` with tier-glow `boxShadow`; light → `rgba(255,255,255,0.95)` with a soft slate shadow. Feature text uses literal Tailwind classes (`text-white/85` dark, `text-slate-700` light). The old `getPackageColorSchemeForPromo` + `useVariantContext` wiring is removed. Chart (`VerticalAccumulationChart`) and layout structure are untouched.
+
+**Updated 2026-05-18**: dropped `getPackageColorSchemeForPromo`/`variantConfig`; wired to `getMembershipSectionColorScheme` + `getElectricPackageColorScheme` + `useThemeStore`; same tier overrides as live cards.
+
 ## Modal architecture sweep — 2026-05-09
 
 Twelve flat-file modals were decomposed into the canonical orchestrator-folder pattern in a single sweep. See:
@@ -203,6 +240,8 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.
+
+> **Gotcha:** A full-width fixed bar that only *visually* contains a centered child (e.g. [FloatingGetEntriesButton](../../src/components/sections/promo/FloatingGetEntriesButton.tsx) — `fixed left-0 right-0 z-50 flex justify-center`) still captures pointer events across its entire transparent width, blocking anything beneath it (the bottom-right user icon). Put `pointer-events-none` on the wrapper and `pointer-events-auto` on the actual interactive child so the bar is click-through everywhere except the button.
 
 ## Display helpers
 

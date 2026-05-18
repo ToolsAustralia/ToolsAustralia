@@ -23,6 +23,7 @@ import { Elements } from "@stripe/react-stripe-js";
 import { useSession } from "next-auth/react";
 import { Lock } from "lucide-react";
 import { resolveBillingAddress } from "@/lib/payment/defaultBillingAddress";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 
 import Shell from "./Shell";
@@ -72,8 +73,9 @@ function tierFromPackageName(name: string): "tier-tradie" | "tier-foreman" | "ti
 }
 
 /** Per-tier baseline benefit cells for the compact preview. Numbers mirror
- * VerticalAccumulationChart and the partner-discount catalog (Tradie 1d / 10%,
- * Foreman 7d / 25%, Boss 30d / 75%). Price is shown as $/mo. */
+ * VerticalAccumulationChart and the partner-discount catalog. These cells are
+ * subscription-only (Tradie/Foreman/Boss tiers): partner access is
+ * lifecycle-gated, so we show "While active" rather than a fixed day count. */
 function tierBenefitCells(
   packageName: string,
   monthlyPrice: number
@@ -81,13 +83,14 @@ function tierBenefitCells(
   const tier = tierFromPackageName(packageName);
   const benefits =
     tier === "tier-boss"
-      ? { entries: 100, days: 30, partner: "75%" }
+      ? { entries: 100, partner: "75%" }
       : tier === "tier-foreman"
-      ? { entries: 40, days: 7, partner: "25%" }
-      : { entries: 15, days: 1, partner: "10%" };
+      ? { entries: 40, partner: "25%" }
+      : { entries: 15, partner: "10%" };
+  const partnerAccess = getPartnerAccessDurationLabel({ isSubscription: true });
   return [
     { label: "Entries / mo", value: benefits.entries },
-    { label: "Partner days", value: benefits.days },
+    { label: "Partner access", value: partnerAccess ? partnerAccess.short : "While active" },
     { label: "Per month", value: `$${monthlyPrice}` },
   ];
 }

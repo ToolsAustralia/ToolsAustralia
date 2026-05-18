@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Package, Info } from "lucide-react";
-import { miniDrawPackages } from "@/data/miniDrawPackages";
+import { getMiniDrawPackages } from "@/data/miniDrawPackages";
 import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
@@ -13,8 +13,10 @@ import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
-import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
+import { getMiniDrawPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,6 +48,11 @@ export default function MiniDrawPackages({
       ? paymentMethodsData
       : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
+
+  // Mini-draw catalog is intentionally NOT tier-gated: every visitor (signed-in or not,
+  // member or not, entrant or not) sees all 8 active packs (Mini Pack 1–3 + the five
+  // mini-scoped Additional packs). Login is enforced at purchase time via LoginPromptModal.
+  const viewerPackages = getMiniDrawPackages();
 
   /**
    * Calculate user's entry count for this specific minidraw
@@ -148,7 +155,7 @@ export default function MiniDrawPackages({
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Get selected package for modal
-  const selectedPackage = selectedPackageId ? miniDrawPackages.find((p) => p._id === selectedPackageId) : null;
+  const selectedPackage = selectedPackageId ? viewerPackages.find((p) => p._id === selectedPackageId) : null;
 
   // Remaining capacity guard for client-side disablement
   const entriesRemaining =
@@ -178,7 +185,7 @@ export default function MiniDrawPackages({
     }
 
     // Get the package details
-    const pkg = miniDrawPackages.find((p) => p._id === packageId);
+    const pkg = viewerPackages.find((p) => p._id === packageId);
     if (!pkg) {
       showToast({
         type: "error",
@@ -325,7 +332,7 @@ export default function MiniDrawPackages({
         setSuccessToastShown(false);
 
         setPaymentIntentId(extractedPaymentIntentId);
-        setProcessingPackageName(pkg.name);
+        setProcessingPackageName(getReceiptLabel(pkg));
         setShowPaymentProcessing(true);
 
         // Store original purchase context for upsell (only after webhook confirms)
@@ -527,8 +534,11 @@ export default function MiniDrawPackages({
       if (packageId && packageType) {
         // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
 
-        const isMiniDrawPackage = packageId.startsWith("mini-pack-");
-        const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
+        // This component exclusively sells mini-draw packs, so every buyer here is a
+        // "mini-draw-buyer" — the segment every mini upsell record requires. The old
+        // `startsWith("mini-pack-")` check silently dropped the upsell for the newer
+        // `additional-*-pack-mini` packs (Tradie→VIP), which don't carry that prefix.
+        const userType = packageType === "mini-draw" ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
 
         // Map mini-draw to one-time for upsell trigger API (it only accepts subscription or one-time)
         const upsellPackageType = packageType === "mini-draw" ? "one-time" : packageType;
@@ -648,12 +658,31 @@ export default function MiniDrawPackages({
 
       {/* Package Grid */}
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
-        {miniDrawPackages.map((pkg) => {
+        {viewerPackages.map((pkg) => {
           const disabled =
             purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
           const isProcessing = purchasingPackageId === pkg._id;
-          const isHighValue = pkg.price >= 100;
           const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(pkg._id);
+          // Per-pack electric scheme — same function + visual language as the
+          // MembershipSection one-time ElectricPackageCard (dark radial body, accent
+          // glow, premium gold double-rim for VIP) so the catalog reads identically.
+          const scheme = getMiniDrawPackageColorScheme(pkg._id);
+          const accent = scheme.accentHex;
+          const gradientText = scheme.textGradientStyle as React.CSSProperties | undefined;
+          const isPremium = !!gradientText; // VIP — champagne gold gradient tier
+          const dotInk = scheme.text.includes("black") ? "#0A0A0A" : "#FFFFFF";
+          const tileBg = isPremium
+            ? `radial-gradient(120% 95% at 50% 0%, ${accent}26 0%, transparent 58%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
+            : `radial-gradient(120% 95% at 50% 0%, ${accent}3D 0%, ${accent}14 34%, transparent 64%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
+          const tileBorder = isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`;
+          const tileShadow = disabled
+            ? "none"
+            : isPremium
+              ? `0 0 0 1px #FFFCEB, 0 0 0 2px ${accent}, 0 0 12px ${accent}99, 0 8px 22px rgba(0,0,0,0.6)`
+              : `0 0 0 1px ${accent}40, 0 0 16px ${accent}59, 0 0 34px ${accent}2E, 0 8px 22px rgba(0,0,0,0.5)`;
+          const priceStyle: React.CSSProperties = gradientText
+            ? { ...gradientText }
+            : { color: "#FFFFFF", textShadow: `0 0 12px ${accent}, 0 0 24px ${accent}80` };
 
           return (
             <div key={pkg._id} className="relative" data-package-id={pkg._id}>
@@ -667,52 +696,65 @@ export default function MiniDrawPackages({
                   disabled={disabled}
                   title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} free entries · $${pkg.price}`}
                   className={`
-                    w-full relative overflow-hidden rounded-lg sm:rounded-xl transition-all duration-300
+                    w-full relative overflow-hidden rounded-xl sm:rounded-2xl transition-all duration-300
                     ${disabled
                       ? "opacity-50 cursor-not-allowed"
-                      : "hover:scale-105 hover:shadow-lg active:scale-[0.97]"
-                    }
-                    ${isHighValue
-                      ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-orange-600 shadow-md shadow-amber-500/20"
-                      : "bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500 shadow-sm shadow-yellow-400/15"
+                      : "hover:scale-105 hover:brightness-110 active:scale-[0.97]"
                     }
                   `}
+                  style={{
+                    background: tileBg,
+                    border: tileBorder,
+                    boxShadow: tileShadow,
+                  }}
                   suppressHydrationWarning
                 >
-                  <div className="py-2 sm:py-3 px-1 sm:px-2">
+                  {/* Electric inner sheen — accent wash from the top, mirrors the card */}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background: isPremium
+                        ? `linear-gradient(180deg, ${accent}2E 0%, transparent 14%), radial-gradient(120% 80% at 50% 0%, ${accent}1A 0%, transparent 55%)`
+                        : `radial-gradient(135% 95% at 50% 0%, ${accent}33 0%, ${accent}0D 32%, transparent 62%)`,
+                    }}
+                    aria-hidden
+                  />
+
+                  <div className="relative z-10 py-2.5 sm:py-3.5 px-1 sm:px-2">
                     {isProcessing ? (
                       <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-black/20 border-t-black" />
-                        <span className="text-3xs sm:text-2xs text-black/60 font-medium">
+                        <div
+                          className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2"
+                          style={{ borderColor: `${accent}40`, borderTopColor: accent }}
+                        />
+                        <span className="text-3xs sm:text-2xs font-semibold text-white/70">
                           Processing
                         </span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                        {/* Price */}
-                        <span className="text-sm sm:text-lg font-extrabold leading-none tracking-tight text-black">
+                        {/* Price — glowing tier ink (VIP keeps its gold gradient) */}
+                        <span
+                          className="text-base sm:text-xl font-extrabold leading-none tracking-tight"
+                          style={priceStyle}
+                        >
                           ${pkg.price}
                         </span>
 
                         {/* Free entries */}
-                        <span className="text-3xs sm:text-xs font-bold leading-tight text-black/70">
-                          {pkg.entries} {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
+                        <span className="text-3xs sm:text-xs font-semibold leading-tight text-white/65">
+                          {pkg.entries} {pkg.entries === 1 ? "free entry" : "free entries"}
                         </span>
 
                         {/* Capacity warning */}
                         {isExceedsCapacity(pkg.entries) && (
-                          <span className="text-3xs sm:text-2xs font-bold text-red-800 leading-tight mt-0.5">
+                          <span className="text-3xs sm:text-2xs font-bold text-red-400 leading-tight mt-0.5">
                             {entriesRemaining} left
                           </span>
                         )}
                       </div>
                     )}
                   </div>
-
-                  {/* Shine overlay for high-value */}
-                  {isHighValue && !disabled && (
-                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 pointer-events-none" />
-                  )}
                 </button>
 
                 {/* Info dot */}
@@ -721,7 +763,12 @@ export default function MiniDrawPackages({
                   onMouseLeave={() => {
                     if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
                   }}
-                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center shadow-md transition-all duration-200 hover:scale-110 z-20 bg-red-600 text-white hover:bg-red-675"
+                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 z-20"
+                  style={{
+                    backgroundColor: accent,
+                    color: dotInk,
+                    boxShadow: `0 0 10px ${accent}99, 0 2px 6px rgba(0,0,0,0.5)`,
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedPackageId(pkg._id);
@@ -733,11 +780,27 @@ export default function MiniDrawPackages({
 
                 {/* Hover tooltip (desktop) */}
                 {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
-                  <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-56 bg-gray-900 text-white text-sm rounded-xl p-3 shadow-2xl pointer-events-none">
-                    <div className="font-bold text-yellow-400 mb-1">{pkg.name}</div>
-                    <div className="text-gray-300 text-xs">
+                  <div
+                    className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2.5 z-50 w-56 text-white text-sm rounded-2xl p-3 pointer-events-none"
+                    style={{
+                      background: `radial-gradient(120% 90% at 50% 0%, ${accent}26 0%, transparent 60%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
+                      border: isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`,
+                      boxShadow: `0 0 0 1px ${accent}33, 0 0 22px ${accent}40, 0 12px 30px rgba(0,0,0,0.6)`,
+                    }}
+                  >
+                    <div
+                      className="font-bold mb-1"
+                      style={
+                        gradientText
+                          ? { ...gradientText }
+                          : { color: accent, textShadow: `0 0 12px ${accent}80` }
+                      }
+                    >
+                      {pkg.displayName ?? pkg.name}
+                    </div>
+                    <div className="text-white/65 text-xs">
                       ${pkg.price} &middot; {pkg.entries}{" "}
-                      {pkg.entries === 1 ? "Free Entry" : "Free Entries"}
+                      {pkg.entries === 1 ? "free entry" : "free entries"}
                     </div>
                     <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
                       <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
@@ -751,7 +814,10 @@ export default function MiniDrawPackages({
                           : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner access`}
                       </div>
                     )}
-                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+                    <div
+                      className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45"
+                      style={{ background: "#070708", borderRight: `1px solid ${accent}59`, borderBottom: `1px solid ${accent}59` }}
+                    />
                   </div>
                 )}
               </div>

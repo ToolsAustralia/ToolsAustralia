@@ -74,13 +74,13 @@ export default function FloatingGetEntriesButton() {
             damping: 20,
             duration: 0.5,
           }}
-          className="fixed bottom-4 left-0 right-0 flex justify-center z-50"
+          className="fixed bottom-4 left-0 right-0 flex justify-center z-50 pointer-events-none"
         >
           <motion.button
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`group relative inline-flex items-center justify-center gap-1.5 px-6 py-2.5 sm:px-8 sm:py-3 md:px-10 md:py-3 rounded-full font-extrabold text-sm sm:text-base md:text-lg tracking-wide ${shouldUseBlackText ? "text-black" : "text-white"} 
+            className={`group relative pointer-events-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 sm:px-8 sm:py-3 md:px-10 md:py-3 rounded-full font-extrabold text-sm sm:text-base md:text-lg tracking-wide ${shouldUseBlackText ? "text-black" : "text-white"}
                        border border-white/20 backdrop-blur-lg transition-all duration-300
                        ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : ""}`}
             style={

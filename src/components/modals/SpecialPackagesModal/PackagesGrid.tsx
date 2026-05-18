@@ -4,14 +4,15 @@ import React from "react";
 import Image from "next/image";
 import { CheckCircle, Check } from "lucide-react";
 import { type StaticMembershipPackage } from "@/data/membershipPackages";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
-import {
-  getPackageColorSchemeForPromo,
-  getCardBorderStyle,
-  type PackageColorsVariantConfig,
-} from "@/utils/package-colors/packageColorScheme";
+import { type PackageColorsVariantConfig } from "@/utils/package-colors/packageColorScheme";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
 import { hexToRgba } from "./utils";
+import BestValueBadge from "@/components/ui/BestValueBadge";
+import { isOneTimeBestValuePlanId } from "@/utils/membership/member-package-mapping";
 
 interface PackagesGridProps {
   packagesWithPromo: StaticMembershipPackage[];
@@ -32,7 +33,6 @@ interface PackagesGridProps {
 const PackagesGrid: React.FC<PackagesGridProps> = ({
   packagesWithPromo,
   selectedPackage,
-  variantConfig,
   onSelectPackage,
   couponCode,
   couponApplied,
@@ -43,28 +43,61 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
   return (
     <>
       {/* Package List - Styled to match PackageSelectionModal (uses package color scheme) */}
-      <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+      <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6 pt-3">
         {packagesWithPromo.map((pkg) => {
-          const colorScheme = getPackageColorSchemeForPromo(pkg._id || "", false, variantConfig);
+          const colorScheme = getElectricPackageColorScheme(pkg._id || "");
           const isSelected = selectedPackage?._id === pkg._id;
           const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
           // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
           const cardTextStyle = { color: accentHex };
-          const selectTextClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-          const cardInnerBg = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
+          const cardInnerBg = `radial-gradient(120% 90% at 50% 0%, ${accentHex}33 0%, ${accentHex}12 30%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
+          const discount = getAdditionalPackDiscount(pkg._id || "");
+          // No selection → every card shows the VIP-style gradient rim at full strength.
+          // A selection exists → only the selected card keeps that rim; the rest dim.
+          const showStrong = selectedPackage == null || isSelected;
+          // Identical box model in BOTH states (2px transparent border + bg-clip
+          // rim) so selecting a card causes NO layout shift — only the rim
+          // gradient + glow change. Selected uses the same strong rim as the
+          // default (nothing-selected) state.
+          const rimStyle = (gradientCss: string): React.CSSProperties => ({
+            background: `${cardInnerBg}, ${gradientCss}`,
+            backgroundOrigin: "padding-box, border-box",
+            backgroundClip: "padding-box, border-box",
+            WebkitBackgroundClip: "padding-box, border-box",
+            backgroundRepeat: "no-repeat",
+            border: "2px solid transparent",
+          });
+          const strongGradient =
+            colorScheme.cardBorderGradient ??
+            `linear-gradient(135deg, ${accentHex} 0%, ${hexToRgba(accentHex, 0.5)} 50%, ${accentHex} 100%)`;
+          const dimGradient = `linear-gradient(135deg, ${hexToRgba(accentHex, 0.18)} 0%, rgba(255,255,255,0.05) 50%, ${hexToRgba(accentHex, 0.18)} 100%)`;
           return (
             <div
               key={pkg._id}
               className="relative rounded-2xl p-2.5 sm:p-4 transition-all duration-300 cursor-pointer"
-              style={{
-                ...getCardBorderStyle(colorScheme, cardInnerBg),
-                ...(!colorScheme.cardBorderGradient && { background: cardInnerBg }),
-                boxShadow: isSelected
-                  ? `0 0 0 2px rgba(255,255,255,0.5), 0 0 24px ${hexToRgba(accentHex, 0.5)}, 0 8px 32px ${hexToRgba(accentHex, 0.2)}`
-                  : `0 0 15px ${hexToRgba(accentHex, 0.25)}, 0 4px 20px rgba(0,0,0,0.2)`,
-              }}
+              style={
+                showStrong
+                  ? {
+                      ...rimStyle(strongGradient),
+                      boxShadow: `0 0 0 1px ${hexToRgba(accentHex, 0.4)}, 0 0 26px ${hexToRgba(accentHex, 0.55)}, 0 10px 34px rgba(0,0,0,0.5)`,
+                    }
+                  : {
+                      ...rimStyle(dimGradient),
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
+                    }
+              }
               onClick={() => onSelectPackage(pkg)}
             >
+              {isOneTimeBestValuePlanId(pkg._id || "") && (
+                <BestValueBadge
+                  position="top-left"
+                  size="small"
+                  badgeStyle={colorScheme.badgeStyle}
+                  colorScheme={colorScheme}
+                  className="scale-[0.6] origin-top-left"
+                />
+              )}
+
               {/* Promo Badge - Upper right, like PackageSelectionModal/MembershipSection */}
               {pkg.isPromoActive && pkg.promoMultiplier && (
                 <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
@@ -109,41 +142,55 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                 {/* Package Name - Left, two rows (same row as entries & price) */}
                 <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={cardTextStyle}>
-                  {(() => {
-                    const parts = pkg.name.split(" ");
-                    if (parts[0]?.toLowerCase() === "additional" && parts.length > 1) {
-                      return (
-                        <>
-                          <span className="block">Additional</span>
-                          <span className="block">{parts.slice(1).join(" ")}</span>
-                        </>
-                      );
-                    }
-                    return <span>{pkg.name}</span>;
-                  })()}
+                  <span>
+                    {getPackageDisplayName(pkg)
+                      .split(" ")
+                      .map((word, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 && <br className="sm:hidden" />}
+                          {i > 0 && <span className="hidden sm:inline"> </span>}
+                          {word}
+                        </React.Fragment>
+                      ))}
+                  </span>
                 </div>
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
-                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]" style={cardTextStyle}>
-                  <div className="text-base sm:text-lg font-bold">
+                <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
+                  <div
+                    className="relative text-base sm:text-lg font-extrabold"
+                    style={{ color: "#FFFFFF", textShadow: `0 0 10px ${accentHex}, 0 0 20px ${accentHex}80` }}
+                  >
                     {pkg.totalEntries || 0}
+                    {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
+                      <span className="absolute right-full top-0 mr-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                        {pkg.originalEntries}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs font-bold opacity-90">ENTRIES</div>
+                  <div className="text-[10px] font-bold tracking-wide opacity-90" style={cardTextStyle}>FREE ENTRIES</div>
                 </div>
 
-                {/* Right Side - Price and SELECT button (same style as Enter Now) */}
-                <div className="flex items-center justify-end gap-2 sm:gap-2">
-                  <div className="text-base sm:text-lg font-bold" style={cardTextStyle}>${pkg.price}</div>
+                {/* Right Side - Price (struck regular upper-right) + SELECT button */}
+                <div className="flex items-center justify-end gap-2">
+                  <span className="relative inline-block text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
+                    {discount && (
+                      <span className="absolute -top-3 right-0 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                        ${discount.regularPrice}
+                      </span>
+                    )}
+                    ${pkg.price}
+                  </span>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectPackage(pkg);
                     }}
-                    className={cn("min-w-[52px] sm:min-w-[58px] px-2 py-1 sm:px-2.5 sm:py-1.5 text-2xs sm:text-xs font-bold rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", selectTextClass, colorScheme.borderGlow, isSelected ? "shadow-md" : "")}
-                    style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
+                    className={cn("min-w-[38px] sm:min-w-[58px] px-1.5 py-0.5 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-xs font-bold rounded-md sm:rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", isSelected ? "shadow-md" : "")}
+                    style={{ backgroundColor: "#000000", border: `1.5px solid ${accentHex}`, color: accentHex, boxShadow: `0 0 12px ${hexToRgba(accentHex, 0.35)}` }}
                   >
-                    <span style={colorScheme.textGradientStyle ?? undefined}>{isSelected ? "✓" : "SELECT"}</span>
+                    {isSelected ? "✓" : "SELECT"}
                   </button>
                 </div>
               </div>

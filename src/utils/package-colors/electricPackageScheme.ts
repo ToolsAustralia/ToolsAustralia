@@ -1,0 +1,235 @@
+/**
+ * Electric package color schemes — Phase 1, dev-only.
+ *
+ * Self-contained: reuses the existing PackageColorScheme shape but does NOT
+ * extend COLOR_KEYS or touch packageColorScheme.ts (zero production impact).
+ * Applied only to one-time + additional package cards by ElectricPackageCard.
+ * Membership-tab subscriptions keep their existing scheme (resolved elsewhere).
+ *
+ * NOTE: every Tailwind arbitrary class below uses LITERAL hex (no template
+ * interpolation) so Tailwind's JIT content scanner emits them — same pattern
+ * as packageColorScheme.ts. Do not refactor these into interpolated strings.
+ */
+import type { PackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+
+type ElectricTier = "apprentice" | "tradie" | "foreman" | "boss" | "power" | "vip";
+
+/** Apprentice — deep electric blue (#1E90FF / #0066CC), white text. */
+const ELECTRIC_BLUE: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #0066CC 0%, #1E90FF 50%, #0066CC 100%)",
+  gradient: "from-[#0066CC] via-[#1E90FF] to-[#0066CC]",
+  text: "text-white",
+  textMuted: "text-white/90",
+  priceText: "text-white",
+  priceBadgeBg: "bg-white/20 backdrop-blur-sm",
+  buttonBg: "bg-[#0066CC] active:scale-[0.98] border border-white/15",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(30,144,255,0.4)]",
+  buttonText: "text-white",
+  glow: "drop-shadow-[0_0_20px_rgba(30,144,255,0.4)]",
+  border: "border-[#1E90FF]/55",
+  shadow: "shadow-[#1E90FF]/40",
+  hoverShadow: "hover:shadow-[#1E90FF]/60",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#1E90FF",
+    boxShadow:
+      "0 0 35px rgba(30,144,255,0.4), 0 4px 20px rgba(30,144,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
+    border: "1px solid #1E90FF",
+  },
+  accentHex: "#1E90FF",
+  entriesText: "text-white",
+  cardBorderOpacity: "CC",
+};
+
+/** Tradie — neon lime (#CCFF00 / #7FB800), black text. */
+const ELECTRIC_LIME: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #7FB800 0%, #CCFF00 50%, #7FB800 100%)",
+  gradient: "from-[#7FB800] via-[#CCFF00] to-[#7FB800]",
+  text: "text-black",
+  textMuted: "text-black/80",
+  priceText: "text-black",
+  priceBadgeBg: "bg-white/20 backdrop-blur-sm",
+  buttonBg: "bg-[#7FB800] active:scale-[0.98] border border-white/15",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(204,255,0,0.4)]",
+  buttonText: "text-black",
+  glow: "drop-shadow-[0_0_20px_rgba(204,255,0,0.4)]",
+  border: "border-[#CCFF00]/55",
+  shadow: "shadow-[#CCFF00]/40",
+  hoverShadow: "hover:shadow-[#CCFF00]/60",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#CCFF00",
+    boxShadow:
+      "0 0 35px rgba(204,255,0,0.4), 0 4px 20px rgba(204,255,0,0.4), inset 0 1px 0 rgba(255,255,255,0.6)",
+    border: "1px solid #CCFF00",
+  },
+  accentHex: "#CCFF00",
+  entriesText: "text-black",
+  cardBorderOpacity: "CC",
+};
+
+/** Foreman — bright cyan (#00E5FF / #0099B8); white ink (like power red). */
+const ELECTRIC_CYAN: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #0099B8 0%, #00E5FF 50%, #0099B8 100%)",
+  gradient: "from-[#0099B8] via-[#00E5FF] to-[#0099B8]",
+  text: "text-white",
+  textMuted: "text-white/90",
+  priceText: "text-white",
+  priceBadgeBg: "bg-white/20 backdrop-blur-sm",
+  buttonBg: "bg-[#0099B8] active:scale-[0.98] border border-white/15",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(0,229,255,0.4)]",
+  buttonText: "text-white",
+  glow: "drop-shadow-[0_0_20px_rgba(0,229,255,0.4)]",
+  border: "border-[#00E5FF]/55",
+  shadow: "shadow-[#00E5FF]/40",
+  hoverShadow: "hover:shadow-[#00E5FF]/60",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#00E5FF",
+    boxShadow:
+      "0 0 35px rgba(0,229,255,0.4), 0 4px 20px rgba(0,229,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
+    border: "1px solid #00E5FF",
+  },
+  accentHex: "#00E5FF",
+  entriesText: "text-white",
+  cardBorderOpacity: "CC",
+};
+
+/** Boss — warm amber gold (#E0A019 / #8A5E00), black text. */
+const ELECTRIC_GOLD: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #8A5E00 0%, #E0A019 50%, #8A5E00 100%)",
+  gradient: "from-[#8A5E00] via-[#E0A019] to-[#8A5E00]",
+  text: "text-black",
+  textMuted: "text-black/80",
+  priceText: "text-black",
+  priceBadgeBg: "bg-white/20 backdrop-blur-sm",
+  buttonBg: "bg-[#8A5E00] active:scale-[0.98] border border-white/15",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(224,160,25,0.45)]",
+  buttonText: "text-black",
+  glow: "drop-shadow-[0_0_20px_rgba(224,160,25,0.45)]",
+  border: "border-[#E0A019]/55",
+  shadow: "shadow-[#E0A019]/40",
+  hoverShadow: "hover:shadow-[#E0A019]/60",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#E0A019",
+    boxShadow:
+      "0 0 35px rgba(224,160,25,0.45), 0 4px 20px rgba(224,160,25,0.45), inset 0 1px 0 rgba(255,255,255,0.6)",
+    border: "1px solid #E0A019",
+  },
+  accentHex: "#E0A019",
+  entriesText: "text-black",
+  cardBorderOpacity: "CC",
+};
+
+/** Power — aggressive red (#FF1F1F / #A30000), white text. */
+const ELECTRIC_RED: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #A30000 0%, #FF1F1F 50%, #A30000 100%)",
+  gradient: "from-[#A30000] via-[#FF1F1F] to-[#A30000]",
+  text: "text-white",
+  textMuted: "text-white/90",
+  priceText: "text-white",
+  priceBadgeBg: "bg-white/20 backdrop-blur-sm",
+  buttonBg: "bg-[#A30000] active:scale-[0.98] border border-white/15",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(255,31,31,0.45)]",
+  buttonText: "text-white",
+  glow: "drop-shadow-[0_0_20px_rgba(255,31,31,0.45)]",
+  border: "border-[#FF1F1F]/55",
+  shadow: "shadow-[#FF1F1F]/40",
+  hoverShadow: "hover:shadow-[#FF1F1F]/60",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#FF1F1F",
+    boxShadow:
+      "0 0 35px rgba(255,31,31,0.45), 0 4px 20px rgba(255,31,31,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+    border: "1px solid #FF1F1F",
+  },
+  accentHex: "#FF1F1F",
+  entriesText: "text-white",
+  cardBorderOpacity: "CC",
+};
+
+/** VIP — matte black + brilliant champagne white-gold, gradient text (premium tier). */
+const ELECTRIC_BLACK: PackageColorScheme = {
+  bgGradient: "linear-gradient(135deg, #000000 0%, #0A0A0A 50%, #000000 100%)",
+  gradient: "from-[#000000] via-[#0d0d0d] to-[#000000]",
+  text: "text-premium-gold",
+  textMuted: "text-premium-gold/90",
+  priceText: "text-premium-gold",
+  priceBadgeBg: "bg-white/10 backdrop-blur-sm",
+  buttonBg: "bg-[#0a0a0a] active:scale-[0.98] border border-premium-gold/40",
+  buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.4)]",
+  buttonHoverShadow: "hover:shadow-[0_4px_16px_rgba(255,223,99,0.4)]",
+  buttonText: "text-premium-gold",
+  glow: "drop-shadow-[0_0_22px_rgba(255,223,99,0.4)]",
+  border: "border-premium-gold/40",
+  shadow: "shadow-[#FFDF63]/20",
+  hoverShadow: "hover:shadow-[#FFDF63]/35",
+  borderGlow: "",
+  badgeStyle: {
+    background: "#0a0a0a",
+    boxShadow:
+      "0 0 35px rgba(255,223,99,0.22), 0 4px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,223,99,0.3)",
+    border: "1px solid rgba(255,223,99,0.5)",
+  },
+  accentHex: "#FFDF63",
+  entriesText: "text-premium-gold",
+  cardBorderOpacity: "CC",
+  textGradientStyle: {
+    backgroundImage:
+      "linear-gradient(135deg, #FFFDF0 0%, #FFF0A6 20%, #FFDF63 42%, #F2C233 62%, #CDA02A 82%, #8A6B1E 100%)",
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    color: "transparent",
+  },
+  cardBorderGradient:
+    "linear-gradient(135deg, #FFFDF0 0%, #FFF0A6 20%, #FFDF63 42%, #F2C233 62%, #CDA02A 82%, #8A6B1E 100%)",
+};
+
+const SCHEMES: Record<ElectricTier, PackageColorScheme> = {
+  apprentice: ELECTRIC_BLUE,
+  tradie: ELECTRIC_LIME,
+  foreman: ELECTRIC_CYAN,
+  boss: ELECTRIC_GOLD,
+  power: ELECTRIC_RED,
+  vip: ELECTRIC_BLACK,
+};
+
+/** Normalize any plan id (incl. `additional-*`, `*-member`) to an electric tier. */
+function planIdToElectricTier(planId: string): ElectricTier {
+  const id = planId.toLowerCase();
+  if (id.includes("vip")) return "vip";
+  if (id.includes("apprentice")) return "apprentice";
+  if (id.includes("tradie")) return "tradie";
+  if (id.includes("foreman")) return "foreman";
+  if (id.includes("boss")) return "boss";
+  if (id.includes("power")) return "power";
+  return "power"; // deterministic fallback (electric-red)
+}
+
+/**
+ * Electric scheme for a one-time / additional package id.
+ * Opt-in: only ElectricPackageCard uses this. Live MembershipSection is unaffected.
+ */
+export function getElectricPackageColorScheme(planId: string): PackageColorScheme {
+  return SCHEMES[planIdToElectricTier(planId)];
+}
+
+/**
+ * Electric scheme for a mini-draw pack id, keyed to keep the mini-draw grid,
+ * hover tooltip, and detail popup in lockstep with the MembershipSection one-time tab.
+ * - `mini-pack-1|2|3` → electric blue (the $1/$5/$10 starter packs share one colour,
+ *   matching the blue mini-pack upsell artwork).
+ * - `additional-*-pack-mini` (Tradie→VIP) → delegates to getElectricPackageColorScheme,
+ *   so each tier matches its MembershipSection one-time card exactly.
+ */
+export function getMiniDrawPackageColorScheme(packId: string): PackageColorScheme {
+  if (packId.startsWith("mini-pack-")) return SCHEMES.apprentice; // electric blue
+  return getElectricPackageColorScheme(packId);
+}

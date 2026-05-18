@@ -39,13 +39,10 @@ import { useToast } from "@/components/ui/Toast";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { useUpsellMultipliersPublic } from "@/hooks/queries/useUpsellMultipliersPublic";
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
-import {
-  calculateUpsellEntries,
-  calculateUpsellEntriesFromContext,
-  getPackageBaseEntries,
-} from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import {
   pickTriggeringPackageIdForUpsell,
   resolveUpsellPromoMultiplierForDisplay,
@@ -63,7 +60,7 @@ import TrustIndicators from "./TrustIndicators";
 // Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
 const stripePromise = getStripePromise();
 
-/** Swap static catalog entry counts in inclusion lines for promo-adjusted upsell entries (2 × base × multiplier). */
+/** Swap static catalog entry counts in inclusion lines with the dynamically resolved upsell entries. */
 function applyDynamicUpsellEntryCountToLines(lines: string[], calculatedEntries: number): string[] {
   return lines.map((line) => {
     const trimmed = line.trim();
@@ -90,29 +87,26 @@ function deriveUpsellPackageType(
   originalPurchaseContext: UpsellModalProps["originalPurchaseContext"]
 ): "membership" | "one-time" | "mini-draw" {
   const upsellPackage = getUpsellPackageById(offer.id);
-  const category = upsellPackage?.category;
+  const upsellCategory = upsellPackage?.upsellCategory;
 
   if (originalPurchaseContext?.packageType) {
     return originalPurchaseContext.packageType;
   }
-  if (category === "subscription-plus") {
+  if (upsellCategory === "membership") {
     return "membership";
   }
-  if (category === "one-time-plus" || category === "additional-upgrade") {
+  if (upsellCategory === "mini") {
+    return "mini-draw";
+  }
+  if (upsellCategory === "one-time" || upsellCategory === "additional") {
     const triggerId = pickTriggeringPackageIdForUpsell(
       upsellPackage?.triggersOnPackageIds,
       originalPurchaseContext?.packageId
     );
-    if (triggerId?.startsWith("mini-pack-")) {
+    if (triggerId?.startsWith("mini-pack-") || triggerId?.startsWith("additional-") && triggerId?.endsWith("-mini")) {
       return "mini-draw";
     }
     return "one-time";
-  }
-  if (offer.category === "membership") {
-    return "membership";
-  }
-  if (offer.category === "mini-draw") {
-    return "mini-draw";
   }
   return "one-time";
 }
@@ -875,92 +869,95 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
     ]
   );
 
-  /** Resolved promo multiplier for hero art (drives which `{n}x-*.webp` exists). */
+  /**
+   * Public read of the three admin-configured upsell category multipliers.
+   * Combined with the active promo for the upsell's category, this gives the
+   * EFFECTIVE multiplier (e.g., 5× promo × 10× membership setting = 50×) that
+   * drives image variant selection — the same number the user perceives.
+   */
+  const { data: upsellMultipliers } = useUpsellMultipliersPublic();
+
+  /** Effective image multiplier (activePromo × upsellCategoryMultiplier). */
+  const effectiveImageMultiplier = useMemo(() => {
+    const upsellPackage = getUpsellPackageById(offer.id);
+    const category = upsellPackage?.upsellCategory;
+    let categoryMult = 1;
+    if (category === "membership") categoryMult = upsellMultipliers?.membership ?? 10;
+    else if (category === "one-time") categoryMult = upsellMultipliers?.oneTime ?? 2;
+    else if (category === "additional") categoryMult = upsellMultipliers?.additional ?? 2;
+    // mini: fixed 1×
+    return (effectiveUpsellPromoMultiplier ?? 1) * categoryMult;
+  }, [offer.id, effectiveUpsellPromoMultiplier, upsellMultipliers]);
+
+  /** Hero image src (picks `apprentice-Nx.webp` matching the effective multiplier). */
   const upsellImageSrc = useMemo(() => {
     const upsellPackage = getUpsellPackageById(offer.id);
-    const category = upsellPackage?.category;
+    const upsellCategory = upsellPackage?.upsellCategory;
 
     const resolved = resolveUpsellImage({
       offerId: offer.id,
-      promoMultiplier: effectiveUpsellPromoMultiplier,
+      multiplier: effectiveImageMultiplier,
     });
 
     if (process.env.NODE_ENV !== "production") {
       console.log("🖼️ Upsell Image Debug:", {
         offerId: offer.id,
         packageType: upsellPackageType,
-        promoMultiplier: effectiveUpsellPromoMultiplier,
-        category,
-        resolvedMembershipMultiplier,
-        resolvedOneTimeMultiplier,
-        resolvedMiniMultiplier,
-        originalPurchaseContextPackageType: originalPurchaseContext?.packageType,
-        upsellPackageCategory: upsellPackage?.category,
-        offerCategory: offer.category,
-        determinedFrom: originalPurchaseContext?.packageType
-          ? "originalPurchaseContext"
-          : category === "subscription-plus"
-            ? "upsellCategory"
-            : "fallback",
+        activePromo: effectiveUpsellPromoMultiplier,
+        upsellCategoryMultiplier: upsellMultipliers,
+        effectiveImageMultiplier,
+        upsellCategory,
         finalSrc: resolved.src,
         isPromoVariant: resolved.isPromoVariant,
       });
     }
 
     return resolved.src;
-  }, [offer.id, offer.category, upsellPackageType, effectiveUpsellPromoMultiplier, originalPurchaseContext?.packageType]);
+  }, [
+    offer.id,
+    upsellPackageType,
+    effectiveImageMultiplier,
+    effectiveUpsellPromoMultiplier,
+    upsellMultipliers,
+  ]);
 
   /** Matches hero artwork and Stripe charge (two decimal places). */
   const upsellPriceLabel = offer.discountedPrice.toFixed(2);
 
   /**
-   * Same rules as /api/upsell/purchase: prefer stored promo from the triggering purchase, else
-   * resolveUpsellPromoMultiplierForDisplay (getEffectivePromoType + current promo hooks).
+   * Display entries for the upsell offer. Mirrors the server-side calculator
+   * (`calculateUpsellEntriesForOffer`) so the hero number, the CTA, and the
+   * inclusion lines all stay in lockstep:
+   *
+   *   upsellEntries = activePromoMultiplier × upsellCategoryMultiplier × baseEntries
+   *
+   * Mini upsells use a fixed 1× category multiplier. If anything is missing
+   * (no offer found, base entries unresolved) we fall back to the offer's
+   * static `entriesCount` so the modal still renders sensibly.
    */
   const computedUpsellEntries = useMemo(() => {
     const staticPkg = getUpsellPackageById(offer.id);
-    const packageType = upsellPackageType;
+    if (!staticPkg) return null;
 
-    const triggeringPackageId = pickTriggeringPackageIdForUpsell(
-      staticPkg?.triggersOnPackageIds,
-      originalPurchaseContext?.packageId
-    );
+    const baseTemplate = staticPkg.baseTemplatePackageId;
+    const lookupType: "membership" | "one-time" | "mini-draw" =
+      staticPkg.upsellCategory === "mini" ? "mini-draw" : "one-time";
+    const baseEntries = getPackageBaseEntries({ packageId: baseTemplate, packageType: lookupType });
+    if (!baseEntries) return staticPkg.entriesCount ?? null;
 
-    const baseEntries =
-      originalPurchaseContext?.baseEntries ??
-      (triggeringPackageId && packageType
-        ? getPackageBaseEntries({ packageId: triggeringPackageId, packageType })
-        : 0);
+    let categoryMult = 1;
+    if (staticPkg.upsellCategory === "membership") categoryMult = upsellMultipliers?.membership ?? 10;
+    else if (staticPkg.upsellCategory === "one-time") categoryMult = upsellMultipliers?.oneTime ?? 2;
+    else if (staticPkg.upsellCategory === "additional") categoryMult = upsellMultipliers?.additional ?? 2;
+    // mini: stays at 1
 
-    if (!packageType || baseEntries <= 0) {
-      return null;
-    }
+    const promo =
+      effectiveUpsellPromoMultiplier && effectiveUpsellPromoMultiplier >= 1
+        ? effectiveUpsellPromoMultiplier
+        : 1;
 
-    const promoMultiplier = effectiveUpsellPromoMultiplier;
-
-    if (triggeringPackageId) {
-      return calculateUpsellEntriesFromContext(
-        {
-          packageId: triggeringPackageId,
-          packageType,
-          baseEntries: originalPurchaseContext?.baseEntries,
-        },
-        promoMultiplier
-      );
-    }
-
-    return calculateUpsellEntries({
-      baseEntries,
-      packageType,
-      promoMultiplier,
-    });
-  }, [
-    offer.id,
-    upsellPackageType,
-    originalPurchaseContext?.packageId,
-    originalPurchaseContext?.baseEntries,
-    effectiveUpsellPromoMultiplier,
-  ]);
+    return promo * categoryMult * baseEntries;
+  }, [offer.id, effectiveUpsellPromoMultiplier, upsellMultipliers]);
 
   const packageInclusionLines = useMemo(() => {
     const fromOffer = offer.conditions?.filter(Boolean) ?? [];
@@ -990,7 +987,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         {/* Main Content - Ultra Compact */}
         <div className="px-3 sm:px-6 pb-2 sm:pb-4 pt-2 sm:pt-4">
           <PaymentSection
-            isResolvingPaymentMethod={isResolvingPaymentMethod}
             showInlineCardSetup={showInlineCardSetup}
             loadingSetupIntent={loadingSetupIntent}
             setupIntentSecret={setupIntentSecret}

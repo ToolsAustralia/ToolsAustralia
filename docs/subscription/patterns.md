@@ -2,9 +2,38 @@
 
 Recurring conventions you'll see throughout subscription code.
 
+## P0. Package display name helpers — 2026-05-14
+
+Two helpers in `src/utils/membership/` control how package names are shown to users:
+
+### `getPackageDisplayName(pkg)` — catalog surfaces
+`src/utils/membership/getDisplayName.ts`. Strips the `"Additional "` prefix from member-only one-time packs (e.g. `"Additional Tradie Pack"` → `"Tradie Pack"`). Used exclusively in catalog cards, modal headers, and plan selectors — anywhere the page context already implies draw scope.
+
+**Rule:** All catalog UI that renders a human-visible package name must call `getPackageDisplayName(plan)` instead of reading `plan.name` directly.
+
+### `getReceiptLabel(pkg)` / `getReceiptLabelByPackageId(packageId, resolvers)` — receipt surfaces
+`src/utils/membership/getReceiptLabel.ts`. Appends a context suffix so the same display name is distinguishable across SKUs in a purchase history view:
+
+| SKU | Input `name` | `getReceiptLabel` output |
+|---|---|---|
+| `tradie-pack` | "Tradie Pack" | "Tradie Pack" |
+| `additional-tradie-pack` | "Additional Tradie Pack" | "Tradie Pack (Member)" |
+| `additional-tradie-pack-mini` | "Additional Tradie Pack (Mini Draw)" | "Tradie Pack (Mini Draw)" |
+| `mini-pack-1` | "Mini Pack 1" | "Mini Pack 1" |
+
+**Rule:** Post-payment success screens, Klaviyo invoice email line items, and any order-history row that renders a package name must call `getReceiptLabel(pkg)` or `getReceiptLabelByPackageId(id, { membership: getPackageById, mini: getMiniDrawPackageById })`. Stripe metadata, Stripe descriptions, admin views, and internal event payloads (`packageName` on PaymentEvent) continue to use `pkg.name` unchanged.
+
 ## Site-wide interaction smoothness — Phase 5B (2026-05-10)
 
 `CancellationUpsellModal/DowngradeCard.tsx` and `DowngradeConfirmModal/Hero.tsx` had their package-icon `<Image>` elements without `sizes` hints; Phase 5B added `sizes="48px"` / `sizes="44px"` matching their fixed cells. Markup only — no policy or transition logic touched.
+
+## P0a. Additional-pack discount util — 2026-05-15
+
+`src/utils/membership/additional-pack-discount.ts` — `getAdditionalPackDiscount(planId)`.
+
+Computes the 50%-off discount for member-only additional packs by pairing each `additional-{tier}-pack` against its matching `{tier}-pack` regular price from `membershipPackages`. Returns `{ regularPrice, discountedPrice, percentOff }` or `null` when there is no genuine discount (inactive pack, no matching regular pack, regular price not higher, non-additional or subscription ids). Accepts the `-member` suffix appended by `useMemberships`.
+
+**Rule:** UI that displays a strike-through "was $X" price for an additional pack must call this util — do not hard-code prices or assume 50%.
 
 ## P1. Pure-policy split for testability
 

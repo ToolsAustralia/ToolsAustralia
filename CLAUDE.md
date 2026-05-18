@@ -169,7 +169,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-14"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -201,7 +201,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-05-13"
+      "lastVerified": "2026-05-14"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -345,7 +345,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-14"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",
@@ -534,7 +534,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "src/app/not-found.tsx"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-05-15"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -575,7 +575,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-13"
+      "lastVerified": "2026-05-14"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -616,6 +616,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "package-lock.json",
         "vercel.json",
         ".gitignore",
+        ".env.example",
         "src/app/api/health/**",
         "src/app/api/cron/**",
         "src/app/api/upload/**",

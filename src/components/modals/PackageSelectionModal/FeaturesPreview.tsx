@@ -63,7 +63,7 @@ const FeaturesPreview: React.FC<FeaturesPreviewProps> = ({ plan, colorScheme, ac
                     className="text-xs sm:text-sm"
                     style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: accentHex }}
                   >
-                    Free Entries Major Giveaway
+                    free entries Major Giveaway
                   </div>
                 </div>
               );

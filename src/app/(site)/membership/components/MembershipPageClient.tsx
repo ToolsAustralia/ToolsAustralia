@@ -82,7 +82,7 @@ export default function MembershipPageClient() {
         period: "mo",
         features: [
           {
-            text: `${promoEntries} Free Accumulated Entries${
+            text: `${promoEntries} free accumulated entries${
               membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
             }`,
           },

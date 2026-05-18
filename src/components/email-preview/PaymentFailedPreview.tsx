@@ -162,13 +162,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            PLACEHOLDER_ENTRIES_COUNT entries
+            PLACEHOLDER_ENTRIES_COUNT free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -223,13 +223,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            550 entries
+            550 free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -284,13 +284,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            2,200 entries
+            2,200 free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -415,7 +415,7 @@ const PaymentFailedPreview: React.FC = () => {
           <li>Failure Message: {currentScenario.failure_message}</li>
           <li>Amount: A${currentScenario.amount}</li>
           <li>Payment Intent ID: {currentScenario.payment_intent_id}</li>
-          <li>Expected Entries: {formatNumber(currentScenario.entries)} entries</li>
+          <li>Expected Entries: {formatNumber(currentScenario.entries)} free entries</li>
           <li>
             Next Payment Retry:{" "}
             {currentScenario.next_payment_attempt

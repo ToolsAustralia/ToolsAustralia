@@ -9,6 +9,10 @@ import type { PromoMultiplier } from "@/types/promo-multiplier";
 export interface MiniDrawPackage {
   _id: string;
   name: string;
+  /** Optional user-facing label override. If absent, `name` is shown. */
+  displayName?: string;
+  /** When true, this pack appears only for users with active subscription OR major draw entries. */
+  isMemberOnly?: boolean;
   price: number;
   entries: number;
   partnerDiscountHours: number;
@@ -18,10 +22,9 @@ export interface MiniDrawPackage {
   stripeProductId?: string;
   stripePriceId?: string;
   upsell?: MiniDrawUpsell;
-  // Promo-related fields (added dynamically)
-  originalEntries?: number; // Original entries before promo
-  promoMultiplier?: number; // Active promo multiplier
-  isPromoActive?: boolean; // Whether promo is currently active
+  originalEntries?: number;
+  promoMultiplier?: number;
+  isPromoActive?: boolean;
 }
 
 export interface MiniDrawUpsell {
@@ -58,10 +61,10 @@ export const miniDrawPackages: MiniDrawPackage[] = [
       _id: "mini-pack-1-upgrade",
       name: "Mini Pack 1 Upgrade",
       price: 0.5,
-      entries: 2,
+      entries: 1,
       partnerDiscountHours: 1,
       partnerDiscountDays: 0.04, // 1 hour = 1/24 day
-      description: "2 Free Entries with 1 Hour Access to Partner Discounts",
+      description: "1 Free Entry with 1 Hour Access to Partner Discounts",
       isActive: true,
       stripeProductId: "prod_mini_pack_1_upgrade",
       stripePriceId: "price_mini_pack_1_upgrade",
@@ -82,10 +85,10 @@ export const miniDrawPackages: MiniDrawPackage[] = [
       _id: "mini-pack-2-upgrade",
       name: "Mini Pack 2 Upgrade",
       price: 2.5,
-      entries: 10,
+      entries: 5,
       partnerDiscountHours: 6,
       partnerDiscountDays: 0.25,
-      description: "10 Free Entries with 6 Hours Access to Partner Discounts",
+      description: "5 Free Entries with 6 Hours Access to Partner Discounts",
       isActive: true,
       stripeProductId: "prod_mini_pack_2_upgrade",
       stripePriceId: "price_mini_pack_2_upgrade",
@@ -106,15 +109,18 @@ export const miniDrawPackages: MiniDrawPackage[] = [
       _id: "mini-pack-3-upgrade",
       name: "Mini Pack 3 Upgrade",
       price: 5.0,
-      entries: 20,
+      entries: 10,
       partnerDiscountHours: 12,
       partnerDiscountDays: 0.5,
-      description: "20 Free Entries with 12 Hours Access to Partner Discounts",
+      description: "10 Free Entries with 12 Hours Access to Partner Discounts",
       isActive: true,
       stripeProductId: "prod_mini_pack_3_upgrade",
       stripePriceId: "price_mini_pack_3_upgrade",
     },
   },
+  // Mini Pack 4–8 deactivated 2026-05-14 — replaced by additional-*-pack-mini records below.
+  // Records retained so historical orders, Stripe webhooks, and admin views can still
+  // resolve the package by id. See docs/superpowers/specs/2026-05-14-upsell-remap-and-multiplier-design.md.
   {
     _id: "mini-pack-4",
     name: "Mini Pack 4",
@@ -123,7 +129,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     partnerDiscountHours: 72,
     partnerDiscountDays: 3,
     description: "25 Free Entries with 3 Days Access to Partner Discounts",
-    isActive: true,
+    isActive: false,
     stripeProductId: "prod_mini_pack_4",
     stripePriceId: "price_mini_pack_4",
     upsell: {
@@ -147,7 +153,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     partnerDiscountHours: 144,
     partnerDiscountDays: 6,
     description: "50 Free Entries with 6 Days Access to Partner Discounts",
-    isActive: true,
+    isActive: false,
     stripeProductId: "prod_mini_pack_5",
     stripePriceId: "price_mini_pack_5",
     upsell: {
@@ -171,7 +177,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     partnerDiscountHours: 360,
     partnerDiscountDays: 15,
     description: "125 Free Entries with 15 Days Access to Partner Discounts",
-    isActive: true,
+    isActive: false,
     stripeProductId: "prod_mini_pack_6",
     stripePriceId: "price_mini_pack_6",
     upsell: {
@@ -195,7 +201,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     partnerDiscountHours: 720,
     partnerDiscountDays: 30,
     description: "250 Free Entries with 30 Days Access to Partner Discounts",
-    isActive: true,
+    isActive: false,
     stripeProductId: "prod_mini_pack_7",
     stripePriceId: "price_mini_pack_7",
     upsell: {
@@ -219,7 +225,7 @@ export const miniDrawPackages: MiniDrawPackage[] = [
     partnerDiscountHours: 960,
     partnerDiscountDays: 40,
     description: "500 Free Entries with 40 Days Access to Partner Discounts",
-    isActive: true,
+    isActive: false,
     stripeProductId: "prod_mini_pack_8",
     stripePriceId: "price_mini_pack_8",
     upsell: {
@@ -235,7 +241,133 @@ export const miniDrawPackages: MiniDrawPackage[] = [
       stripePriceId: "price_mini_pack_8_upgrade",
     },
   },
+
+  // === MINI-SCOPED ADDITIONAL PACKS (added 2026-05-14) ===
+  {
+    _id: "additional-tradie-pack-mini",
+    name: "Additional Tradie Pack (Mini Draw)",
+    displayName: "Tradie Pack",
+    isMemberOnly: true,
+    price: 25,
+    entries: 25,
+    partnerDiscountHours: 48,
+    partnerDiscountDays: 2,
+    description: "Tradie Pack scoped to this mini draw: 25 free entries with 2 days of 40% partner discount access.",
+    isActive: true,
+    upsell: {
+      _id: "mini-upsell-additional-tradie",
+      name: "Tradie Pack — Mini Draw Upsell",
+      price: 12.5,
+      entries: 25,
+      partnerDiscountHours: 48,
+      partnerDiscountDays: 2,
+      description: "Same Tradie Pack benefits at 50% off.",
+      isActive: true,
+    },
+  },
+  {
+    _id: "additional-foreman-pack-mini",
+    name: "Additional Foreman Pack (Mini Draw)",
+    displayName: "Foreman Pack",
+    isMemberOnly: true,
+    price: 50,
+    entries: 50,
+    partnerDiscountHours: 96,
+    partnerDiscountDays: 4,
+    description: "Foreman Pack scoped to this mini draw: 50 free entries with 4 days of 55% partner discount access.",
+    isActive: true,
+    upsell: {
+      _id: "mini-upsell-additional-foreman",
+      name: "Foreman Pack — Mini Draw Upsell",
+      price: 25,
+      entries: 50,
+      partnerDiscountHours: 96,
+      partnerDiscountDays: 4,
+      description: "Same Foreman Pack benefits at 50% off.",
+      isActive: true,
+    },
+  },
+  {
+    _id: "additional-boss-pack-mini",
+    name: "Additional Boss Pack (Mini Draw)",
+    displayName: "Boss Pack",
+    isMemberOnly: true,
+    price: 125,
+    entries: 125,
+    partnerDiscountHours: 240,
+    partnerDiscountDays: 10,
+    description: "Boss Pack scoped to this mini draw: 125 free entries with 10 days of 70% partner discount access.",
+    isActive: true,
+    upsell: {
+      _id: "mini-upsell-additional-boss",
+      name: "Boss Pack — Mini Draw Upsell",
+      price: 62.5,
+      entries: 125,
+      partnerDiscountHours: 240,
+      partnerDiscountDays: 10,
+      description: "Same Boss Pack benefits at 50% off.",
+      isActive: true,
+    },
+  },
+  {
+    _id: "additional-power-pack-mini",
+    name: "Additional Power Pack (Mini Draw)",
+    displayName: "Power Pack",
+    isMemberOnly: true,
+    price: 250,
+    entries: 250,
+    partnerDiscountHours: 480,
+    partnerDiscountDays: 20,
+    description: "Power Pack scoped to this mini draw: 250 free entries with 20 days of 85% partner discount access.",
+    isActive: true,
+    upsell: {
+      _id: "mini-upsell-additional-power",
+      name: "Power Pack — Mini Draw Upsell",
+      price: 125,
+      entries: 250,
+      partnerDiscountHours: 480,
+      partnerDiscountDays: 20,
+      description: "Same Power Pack benefits at 50% off.",
+      isActive: true,
+    },
+  },
+  {
+    _id: "additional-vip-pack-mini",
+    name: "Additional VIP Pack (Mini Draw)",
+    displayName: "VIP Pack",
+    isMemberOnly: true,
+    price: 500,
+    entries: 500,
+    partnerDiscountHours: 720,
+    partnerDiscountDays: 30,
+    description: "VIP Pack scoped to this mini draw: 500 free entries with 30 days of 100% partner discount access.",
+    isActive: true,
+    upsell: {
+      _id: "mini-upsell-additional-vip",
+      name: "VIP Pack — Mini Draw Upsell",
+      price: 250,
+      entries: 500,
+      partnerDiscountHours: 720,
+      partnerDiscountDays: 30,
+      description: "Same VIP Pack benefits at 50% off.",
+      isActive: true,
+    },
+  },
 ];
+
+/**
+ * Returns mini-draw packages appropriate for the viewer.
+ * - hasAccess=false → only non-member-only packs (Mini Pack 1–3)
+ * - hasAccess=true  → only member-only packs (additional-*-pack-mini),
+ *   mirroring the major-draw swap rule.
+ */
+export const getMiniDrawPackagesForViewer = (hasAccess: boolean): MiniDrawPackage[] => {
+  return miniDrawPackages.filter((pkg) => {
+    if (!pkg.isActive) return false;
+    const isMemberOnly = pkg.isMemberOnly === true;
+    return hasAccess ? isMemberOnly : !isMemberOnly;
+  });
+};
 
 /**
  * Helper function to get mini draw packages

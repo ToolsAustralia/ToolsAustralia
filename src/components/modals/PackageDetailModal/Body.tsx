@@ -3,6 +3,7 @@
 import React from "react";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { Check, Ticket, Sparkles, Calendar, Handshake, Percent } from "lucide-react";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 interface BodyProps {
   packageName: string;
@@ -77,7 +78,16 @@ const Body: React.FC<BodyProps> = ({
       label: "Partner offers",
     });
   }
-  if (partnerDays > 0) {
+  if (isSubscription) {
+    const durationLabel = getPartnerAccessDurationLabel({ isSubscription: true });
+    if (durationLabel) {
+      statCells.push({
+        icon: <Calendar size={14} strokeWidth={2.2} />,
+        value: durationLabel.short,
+        label: "Partner access",
+      });
+    }
+  } else if (partnerDays > 0) {
     statCells.push({
       icon: <Calendar size={14} strokeWidth={2.2} />,
       value: partnerDays,
@@ -177,7 +187,7 @@ const Body: React.FC<BodyProps> = ({
               </li>
             );
           })}
-          {partnerDays > 0 && (
+          {(isSubscription || partnerDays > 0) && (
             <li className="flex items-center gap-2.5 text-xs text-neutral-800 dark:text-neutral-100 leading-[1.45] font-medium">
               <span
                 className="flex-none w-5 h-5 rounded-md inline-flex items-center justify-center"
@@ -191,7 +201,14 @@ const Body: React.FC<BodyProps> = ({
                 <Handshake size={11} strokeWidth={2.6} />
               </span>
               <span>
-                Partner discounts for <strong className="font-extrabold">{partnerDays} days</strong>
+                {isSubscription ? (
+                  getPartnerAccessDurationLabel({ isSubscription: true })!.long
+                ) : (
+                  <>
+                    Partner discounts for{" "}
+                    <strong className="font-extrabold">{partnerDays} days</strong>
+                  </>
+                )}
               </span>
             </li>
           )}

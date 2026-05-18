@@ -1,144 +1,73 @@
-/**
- * Upsell Entries Calculator
- *
- * This module handles dynamic calculation of upsell entries based on the original package
- * and active promo multipliers. Upsells should always grant twice the entries of the
- * triggering package (including any active promo multipliers).
- *
- * Formula: upsellEntries = 2 × (packageBaseEntries × activePromoMultiplier)
- *
- * Example:
- * - Package: Tradie subscription (15 base entries)
- * - Active promo: 10x multiplier
- * - Package grants: 15 × 10 = 150 entries
- * - Upsell grants: 2 × 150 = 300 entries
- */
-
-import { getPackageById } from "@/data/membershipPackages";
-import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
-
-export interface CalculateUpsellEntriesParams {
-  baseEntries: number;
-  packageType: "membership" | "one-time" | "mini-draw";
-  promoMultiplier: number;
-}
-
-export interface PackageBaseEntriesParams {
-  packageId: string;
-  packageType: "membership" | "one-time" | "mini-draw";
-}
+import { getUpsellPackageById } from "@/data/upsellPackages";
+import { getUpsellMultiplier } from "@/services/upsell/UpsellMultiplierResolver";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 
 /**
- * Get base entries from package definition
- * Looks up the package and extracts base entries based on package type
+ * Async, multiplier-aware upsell-entries calculator. **Server-only by convention** —
+ * this file imports `UpsellMultiplierResolver`, which depends on Mongoose.
  *
- * @param params - Package identification parameters
- * @returns Base entries count, or 0 if package not found
+ * Client components MUST NOT import from this file; use `package-base-entries.ts`
+ * for the pure base-entries lookup instead.
  */
-export function getPackageBaseEntries(params: PackageBaseEntriesParams): number {
-  const { packageId, packageType } = params;
-
-  try {
-    if (packageType === "mini-draw") {
-      const miniPackage = getMiniDrawPackageById(packageId);
-      if (!miniPackage) {
-        console.warn(`⚠️ Mini-draw package not found: ${packageId}`);
-        return 0;
-      }
-      // For mini-draw packages, use originalEntries if promo was applied, otherwise use entries
-      return miniPackage.originalEntries ?? miniPackage.entries ?? 0;
-    } else {
-      // For membership and one-time packages
-      const membershipPackage = getPackageById(packageId);
-      if (!membershipPackage) {
-        console.warn(`⚠️ Package not found: ${packageId}`);
-        return 0;
-      }
-
-      // Use originalEntries if promo was applied, otherwise use the appropriate field
-      if (membershipPackage.originalEntries !== undefined) {
-        return membershipPackage.originalEntries;
-      }
-
-      // Extract base entries based on package type
-      if (membershipPackage.type === "subscription") {
-        return membershipPackage.entriesPerMonth ?? 0;
-      } else {
-        // One-time package
-        return membershipPackage.totalEntries ?? 0;
-      }
-    }
-  } catch (error) {
-    console.error(`❌ Error getting base entries for package ${packageId}:`, error);
-    return 0;
-  }
-}
 
 /**
- * Calculate upsell entries based on original package and promo multiplier
+ * Resolve upsell entries for a specific upsell record.
  *
- * Formula: upsellEntries = 2 × (baseEntries × promoMultiplier)
+ * Formula (all categories): `activePromoMultiplier × upsellCategoryMultiplier × baseEntries`
+ * - Membership / one-time / additional upsells: upsellCategoryMultiplier is the admin-configured value.
+ * - Mini upsells: upsellCategoryMultiplier is fixed at 1 — so result is `activePromoMultiplier × baseEntries`.
  *
- * @param params - Calculation parameters
- * @returns Calculated upsell entries count
+ * `activePromoMultiplier` should be the promo that applied to the original trigger purchase
+ * (recorded in `originalPurchaseContext.promoMultiplier`). Default 1× means no active promo.
  */
-export function calculateUpsellEntries(params: CalculateUpsellEntriesParams): number {
-  const { baseEntries, promoMultiplier } = params;
+export async function calculateUpsellEntriesForOffer(
+  offerId: string,
+  activePromoMultiplier: number = 1
+): Promise<number> {
+  const offer = getUpsellPackageById(offerId);
+  if (!offer) return 0;
 
-  // Validate inputs
-  if (baseEntries < 0) {
-    console.warn(`⚠️ Invalid baseEntries: ${baseEntries}, defaulting to 0`);
-    return 0;
+  // Pick the data source for base entries:
+  // - membership / one-time / additional upsells reference packs in membershipPackages.ts
+  // - mini upsells reference packs in miniDrawPackages.ts (Mini Pack 1–3 or additional-*-pack-mini)
+  const lookupType: "membership" | "one-time" | "mini-draw" =
+    offer.upsellCategory === "mini" ? "mini-draw" : "one-time";
+
+  const baseEntries = getPackageBaseEntries({
+    packageId: offer.baseTemplatePackageId,
+    packageType: lookupType,
+  });
+
+  const promo = Number.isFinite(activePromoMultiplier) && activePromoMultiplier >= 1
+    ? activePromoMultiplier
+    : 1;
+
+  if (offer.upsellCategory === "mini") {
+    return promo * baseEntries; // mini upsell category multiplier is fixed at 1
   }
 
-  if (promoMultiplier < 1) {
-    console.warn(`⚠️ Invalid promoMultiplier: ${promoMultiplier}, defaulting to 1`);
-    return 2 * baseEntries; // Fallback to 2x base entries without promo
-  }
-
-  // Calculate: 2 × (baseEntries × promoMultiplier)
-  const packageEntriesWithPromo = baseEntries * promoMultiplier;
-  const upsellEntries = 2 * packageEntriesWithPromo;
-
-  return Math.floor(upsellEntries); // Ensure integer result
+  const categoryMultiplier = await getUpsellMultiplier(offer.upsellCategory);
+  return promo * categoryMultiplier * baseEntries;
 }
 
 /**
- * Calculate upsell entries from original purchase context
- * This is a convenience function that combines lookup and calculation
- *
- * @param originalPurchaseContext - Original purchase context with package info
- * @param promoMultiplier - Active promo multiplier
- * @returns Calculated upsell entries count
+ * Legacy entry point used by the existing upsell purchase route. Looks up the upsell by
+ * trigger pack id (since callers pass `originalPurchaseContext`, not the upsell's own id)
+ * and delegates to `calculateUpsellEntriesForOffer`, passing through the promo that applied
+ * to the original purchase so the new formula can stack it correctly.
  */
-export function calculateUpsellEntriesFromContext(
+export async function calculateUpsellEntriesFromContext(
   originalPurchaseContext: {
     packageId: string;
     packageType: "membership" | "one-time" | "mini-draw";
     baseEntries?: number;
   },
   promoMultiplier: number
-): number {
-  // Use baseEntries from context if available, otherwise look up from package
-  const baseEntries =
-    originalPurchaseContext.baseEntries ??
-    getPackageBaseEntries({
-      packageId: originalPurchaseContext.packageId,
-      packageType: originalPurchaseContext.packageType,
-    });
-
-  if (baseEntries === 0) {
-    console.warn(
-      `⚠️ Could not determine base entries for package ${originalPurchaseContext.packageId}, returning 0`
-    );
-    return 0;
-  }
-
-  return calculateUpsellEntries({
-    baseEntries,
-    packageType: originalPurchaseContext.packageType,
-    promoMultiplier,
-  });
+): Promise<number> {
+  const { upsellPackages } = await import("@/data/upsellPackages");
+  const offer = upsellPackages.find((u) =>
+    u.triggersOnPackageIds?.includes(originalPurchaseContext.packageId)
+  );
+  if (!offer) return 0;
+  return calculateUpsellEntriesForOffer(offer.id, promoMultiplier);
 }
-
-

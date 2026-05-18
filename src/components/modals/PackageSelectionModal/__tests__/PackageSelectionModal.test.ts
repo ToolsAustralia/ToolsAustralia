@@ -38,7 +38,7 @@ const tradiePlan: LocalMembershipPlan = {
   period: "mo",
   features: [
     { text: "50% Access to Partner Discounts" },
-    { text: "15 Free Accumulated Entries" },
+    { text: "15 free accumulated entries" },
   ],
   buttonText: "Get Started",
   buttonStyle: "secondary",
@@ -53,7 +53,7 @@ const foremanPlan: LocalMembershipPlan = {
   period: "mo",
   features: [
     { text: "75% Access to Partner Discounts" },
-    { text: "40 Free Accumulated Entries" },
+    { text: "40 free accumulated entries" },
   ],
   isPopular: true,
   buttonText: "Go Pro",
@@ -69,7 +69,7 @@ const bossPlan: LocalMembershipPlan = {
   period: "mo",
   features: [
     { text: "100% Access to Partner Discounts" },
-    { text: "100 Free Accumulated Entries" },
+    { text: "100 free accumulated entries" },
   ],
   buttonText: "Become Boss",
   buttonStyle: "secondary",
@@ -84,7 +84,7 @@ const oneTimePlan: LocalMembershipPlan = {
   features: [
     { text: "40% of Partner Discounts Available" },
     { text: "2 Days Access to Partner Discounts" },
-    { text: "15 Free Entries" },
+    { text: "15 free entries" },
   ],
   isPopular: true,
   buttonText: "Get Tradie",

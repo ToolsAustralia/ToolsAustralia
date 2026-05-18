@@ -65,8 +65,16 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 
 | File | Purpose |
 |---|---|
-| `upsell-entries-calculator.ts` | Entries-granted math for upsell packages. |
-| `upsell-promo-multiplier.ts` | Promo multiplier application during upsell purchases. |
+| `upsell-entries-calculator.ts` | Entries-granted math for upsell packages. Formula: `upsellCategoryMultiplier × baseEntries`. Mini upsells return `baseEntries` unchanged (1:1, no multiplier). Active promo multipliers do **not** stack. |
+| `upsell-promo-multiplier.ts` | Promo multiplier resolution helpers used for hero image selection and display; not used in the entry calculation formula. |
+
+#### upsell-entries-calculator.ts — public API
+
+| Export | Type | Description |
+|---|---|---|
+| `getPackageBaseEntries(params)` | sync | Look up base entries from `membershipPackages` or `miniDrawPackages`. |
+| `calculateUpsellEntriesForOffer(offerId)` | async | Authoritative calculation: `categoryMultiplier × baseEntries`. Mini → `baseEntries` only. |
+| `calculateUpsellEntriesFromContext(context, _promoMultiplier)` | async | Legacy wrapper for the purchase route: looks up the offer by `triggersOnPackageIds` then delegates to `calculateUpsellEntriesForOffer`. The `_promoMultiplier` arg is ignored — retained for ABI compatibility. |
 
 ## Lib helpers
 

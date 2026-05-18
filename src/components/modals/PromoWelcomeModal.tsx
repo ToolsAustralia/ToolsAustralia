@@ -253,7 +253,7 @@ const PromoWelcomeModal: React.FC<PromoWelcomeModalProps> = ({ isOpen, onClose, 
                       Bonus Included
                     </div>
                     <div className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
-                      {campaignData.bonusEntries} {campaignData.bonusEntries === 1 ? "Entry" : "Entries"}
+                      {campaignData.bonusEntries} {campaignData.bonusEntries === 1 ? "free entry" : "free entries"}
                     </div>
                   </div>
                   <motion.div

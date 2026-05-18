@@ -1,29 +1,30 @@
 "use client";
 
 /**
- * PlanSummaryCard — "Selected Package" card with name/price/Change-link and an
- * optional promo multiplier band along the bottom. Used in step 2.
+ * PlanSummaryCard — "Selected Package" card with name/price/Change-link.
  *
- * Visual output (className strings, gradient backgrounds, border colors,
- * skeleton state) is preserved byte-for-byte from the original
- * MembershipModal.tsx (lines 5588-5763).
+ * Colour + text treatment is inherited from the MembershipSection electric
+ * cards (ElectricPackageCard dark mode): membership-tab plans resolve via
+ * getMembershipSectionColorScheme, one-time / additional packs via
+ * getElectricPackageColorScheme. Name + price use the card title style
+ * (tier accent + glow, gold gradient for VIP); benefit lines use the same
+ * electric white as the MembershipSection "free entries" block.
  */
 
 import React from "react";
 import { cn } from "@/utils/cn";
-import HexagonalPromoBadge from "../../ui/HexagonalPromoBadge";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { type PromoMultiplier } from "@/types/promo-multiplier";
-import { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
+import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { convertToAPIPlan } from "@/utils/membership/membership-adapters";
 import { getPackageById } from "@/data/membershipPackages";
-import { type VariantConfig } from "@/models/ab-testing/Variant";
 import { type MembershipPlan as ApiMembershipPlan } from "@/hooks/useMemberships";
 
 interface PlanSummaryCardProps {
   promoEnhancedPlan: LocalMembershipPlan;
   promoThemePrimary: string;
-  contextVariantConfig: VariantConfig | null;
   subscriptionPackages: ApiMembershipPlan[];
   oneTimePackages: ApiMembershipPlan[];
   onPackageChange: () => void;
@@ -32,7 +33,6 @@ interface PlanSummaryCardProps {
 const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
   promoEnhancedPlan,
   promoThemePrimary,
-  contextVariantConfig,
   subscriptionPackages,
   oneTimePackages,
   onPackageChange,
@@ -53,14 +53,17 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
           </div>
         </div>
       ) : (() => {
-          const planId = promoEnhancedPlan?.metadata?.isUpsellOffer
-            ? "power-pack"
-            : (promoEnhancedPlan?.id || "power-pack");
+          const isUpsellOffer = promoEnhancedPlan?.metadata?.isUpsellOffer === true;
+          const planId = isUpsellOffer ? "power-pack" : (promoEnhancedPlan?.id || "power-pack");
           const isMembershipTab = promoEnhancedPlan?.period !== "one-time";
-          const pkgScheme = getPackageColorSchemeForPromo(planId, isMembershipTab, contextVariantConfig);
-          const accentHex = promoEnhancedPlan?.metadata?.isUpsellOffer
-            ? promoThemePrimary
-            : (pkgScheme.accentHexLight ?? pkgScheme.accentHex);
+          // Same scheme resolution as MembershipSection's renderPlanCard so the
+          // selected-package card matches the grid card exactly.
+          const pkgScheme = isMembershipTab
+            ? getMembershipSectionColorScheme(planId, true)
+            : getElectricPackageColorScheme(planId);
+          const accentHex = isUpsellOffer ? promoThemePrimary : pkgScheme.accentHex;
+          // Member additional packs are sold below the matching non-member pack.
+          const discount = isUpsellOffer ? null : getAdditionalPackDiscount(promoEnhancedPlan?.id || "");
           const isPackageCard = Boolean(
             promoEnhancedPlan?.id &&
               (promoEnhancedPlan.id.startsWith("mini-pack-") ||
@@ -72,13 +75,17 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                 promoEnhancedPlan.id.includes("vip"))
           );
           const cardBorderColor = isPackageCard ? `${accentHex}${pkgScheme.cardBorderOpacity}` : undefined;
-          const nameStyle = isPackageCard && pkgScheme.textGradientStyle
-            ? pkgScheme.textGradientStyle
-            : isPackageCard
-              ? { color: accentHex }
-              : undefined;
-          const bonusBorderColor = isPackageCard ? `${accentHex}4D` : `${promoThemePrimary}4D`;
-          const bonusTextColor = isPackageCard ? accentHex : promoThemePrimary;
+          // Title style mirrors ElectricPackageCard dark mode: tier accent + glow,
+          // or the VIP champagne-gold gradient. Used for the name AND the price.
+          const gradientText = pkgScheme.textGradientStyle as React.CSSProperties | undefined;
+          const titleStyle: React.CSSProperties = gradientText
+            ? { ...gradientText, filter: `drop-shadow(0 0 4px ${accentHex}) drop-shadow(0 0 9px ${accentHex}80)` }
+            : { color: accentHex, textShadow: `0 0 14px ${accentHex}80` };
+          // Electric white — same treatment as the MembershipSection entries block.
+          const electricWhiteStyle: React.CSSProperties = {
+            color: "#FFFFFF",
+            textShadow: `0 0 8px ${accentHex}66`,
+          };
           const selectedCatalogId = (() => {
             const api = convertToAPIPlan(promoEnhancedPlan, [...subscriptionPackages, ...oneTimePackages]);
             return (api?._id || promoEnhancedPlan.id).trim();
@@ -101,11 +108,11 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
             <>
               <h3
                 className={`text-xs sm:text-sm font-bold mb-1 sm:mb-2 ${
-                  promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "" : "text-gray-800 dark:text-neutral-100"
+                  isUpsellOffer ? "" : "text-gray-800 dark:text-neutral-100"
                 }`}
-                style={promoEnhancedPlan?.metadata?.isUpsellOffer === true ? { color: promoThemePrimary } : undefined}
+                style={isUpsellOffer ? { color: promoThemePrimary } : undefined}
               >
-                {promoEnhancedPlan?.metadata?.isUpsellOffer === true ? "Limited Offer" : "Selected Package"}
+                {isUpsellOffer ? "Limited Offer" : "Selected Package"}
               </h3>
               <div
                 className="rounded-lg sm:rounded-xl p-2 sm:p-3"
@@ -126,20 +133,14 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <h4
-                      className={cn("font-bold text-xs sm:text-sm leading-tight", nameStyle ? "" : "")}
-                      style={nameStyle ?? (isPackageCard ? { color: accentHex } : undefined)}
+                      className="font-bold text-xs sm:text-sm leading-tight"
+                      style={isPackageCard ? titleStyle : undefined}
                     >
-                      {promoEnhancedPlan?.name || "No package selected"}
+                      {promoEnhancedPlan?.name ? getPackageDisplayName(promoEnhancedPlan) : "No package selected"}
                     </h4>
                     <p
                       className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
-                      style={
-                        isPackageCard && pkgScheme.textGradientStyle
-                          ? { ...pkgScheme.textGradientStyle, opacity: 0.9 }
-                          : isPackageCard
-                            ? { color: accentHex }
-                            : undefined
-                      }
+                      style={isPackageCard ? electricWhiteStyle : undefined}
                     >
                       {promoEnhancedPlan?.features && promoEnhancedPlan.features.length > 0
                         ? promoEnhancedPlan.features[0].text
@@ -148,13 +149,7 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                     {selectedEntriesCount > 0 ? (
                       <p
                         className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
-                        style={
-                          isPackageCard && pkgScheme.textGradientStyle
-                            ? { ...pkgScheme.textGradientStyle, opacity: 0.85 }
-                            : isPackageCard
-                              ? { color: accentHex }
-                              : undefined
-                        }
+                        style={isPackageCard ? electricWhiteStyle : undefined}
                       >
                         {promoEnhancedPlan?.period === "mo"
                           ? `${selectedEntriesCount} free entries every month`
@@ -163,23 +158,40 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                     ) : null}
                   </div>
                   <div className="flex flex-col gap-0.5 items-end shrink-0">
-                    <div
-                      className={cn("font-bold text-xs sm:text-sm leading-tight", pkgScheme.textGradientStyle ? "" : "")}
-                      style={
-                        isPackageCard && pkgScheme.textGradientStyle
-                          ? pkgScheme.textGradientStyle
-                          : isPackageCard
-                            ? { color: accentHex }
-                            : undefined
-                      }
-                    >
-                      {promoEnhancedPlan?.price && promoEnhancedPlan?.period
-                        ? promoEnhancedPlan.period === "one-time"
-                          ? `$${promoEnhancedPlan.price} One Time Payment`
-                          : `$${promoEnhancedPlan.price} Per Giveaway`
-                        : "No price"}
-                    </div>
-                    {promoEnhancedPlan?.metadata?.isUpsellOffer !== true && (
+                    {discount && (
+                      <div className="flex items-center gap-1.5 whitespace-nowrap leading-none">
+                        <span className="text-xs sm:text-sm font-bold leading-none line-through text-white/40">
+                          ${discount.regularPrice}
+                        </span>
+                        <span
+                          className="rounded-full px-1.5 py-0.5 text-3xs sm:text-2xs font-extrabold uppercase leading-none"
+                          style={{ backgroundColor: accentHex, color: "#0A0A0A" }}
+                        >
+                          {discount.percentOff}% Off
+                        </span>
+                      </div>
+                    )}
+                    {promoEnhancedPlan?.price && promoEnhancedPlan?.period ? (
+                      <div className="flex flex-col items-end leading-tight">
+                        <span
+                          className="font-bold text-xs sm:text-sm"
+                          style={isPackageCard ? titleStyle : undefined}
+                        >
+                          {discount ? `= $${promoEnhancedPlan.price}` : `$${promoEnhancedPlan.price}`}
+                        </span>
+                        <span className="text-3xs sm:text-2xs font-semibold uppercase tracking-wide text-white/55">
+                          {promoEnhancedPlan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        className="font-bold text-xs sm:text-sm leading-tight"
+                        style={isPackageCard ? titleStyle : undefined}
+                      >
+                        No price
+                      </div>
+                    )}
+                    {!isUpsellOffer && (
                       <button
                         onClick={onPackageChange}
                         type="button"
@@ -190,25 +202,6 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                     )}
                   </div>
                 </div>
-                {promoEnhancedPlan?.metadata?.isPromoActive &&
-                  promoEnhancedPlan?.metadata?.promoMultiplier && (
-                    <div
-                      className="mt-3 pt-3 border-t"
-                      style={{ borderColor: bonusBorderColor }}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-xs sm:text-sm font-semibold" style={{ color: bonusTextColor }}>
-                          <HexagonalPromoBadge
-                            multiplier={promoEnhancedPlan.metadata.promoMultiplier as PromoMultiplier}
-                            size="xs"
-                          />
-                        </span>
-                        <span className="text-xs sm:text-sm text-white font-bold">
-                          {promoEnhancedPlan.metadata.promoMultiplier}x Bonus entries have been applied
-                        </span>
-                      </div>
-                    </div>
-                  )}
               </div>
             </>
           );

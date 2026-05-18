@@ -4,6 +4,7 @@ import React from "react";
 import { ArrowUp } from "lucide-react";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 import { cn } from "@/utils/cn";
 import type { SubMgmtUser, UpgradeOption } from "./types";
 
@@ -72,8 +73,8 @@ const UpgradeList: React.FC<UpgradeListProps> = ({
                 {upgrade.description}
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-4 text-2xs sm:text-xs text-gray-500 dark:text-neutral-400">
-                <span className="font-medium">{totalEntriesAfterUpgrade} Free Accumulated Entries</span>
-                <span>{upgrade.partnerDiscountDays} days partner access</span>
+                <span className="font-medium">{totalEntriesAfterUpgrade} free accumulated entries</span>
+                <span>{getPartnerAccessDurationLabel({ isSubscription: true })!.long}</span>
               </div>
             </div>
             <div className={cn("w-full sm:w-auto sm:ml-4 rounded-2xl", upgradeColorScheme.glow)}>
