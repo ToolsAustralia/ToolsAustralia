@@ -26,6 +26,7 @@ import BlockedTransactionsManagement from "@/components/admin/BlockedTransaction
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
+import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import ActivityLogManagement from "./ActivityLogManagement";
 import UnviewedSubmissionsNotification from "@/components/admin/UnviewedSubmissionsNotification";
 import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
@@ -180,6 +181,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
                   {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
+                  {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
                   {selectedTab === "AB-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
@@ -255,6 +257,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* PROMO ANALYTICS TAB */}
           {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}
+
+          {/* CANCELLATION FLOW ANALYTICS TAB */}
+          {selectedTab === "cancellation-flow" && <CancellationFlowAnalytics />}
 
           {/* ACTIVITY LOG TAB */}
           {selectedTab === "activity-log" && <ActivityLogManagement />}

@@ -323,6 +323,43 @@ Admin-only. Returns expected vs present snapshot counts from the site launch dat
 4. Cron is idempotent — re-running heals partial failures.
 5. **Refund correction window:** 90 days (the cron's sliding window). Refunds older than 90 days that need to be reflected in dashboard revenue require a manual backfill of the affected date range via `backfill:dashboard-stats-snapshots`.
 
+## Cancellation-flow analytics
+
+### `GET /api/admin/cancellation-flow-analytics`
+
+Admin-only (session `role === "admin"`, else `401`). Read-only aggregated analytics for the subscription cancellation flow. Optional `?from=&to=` ISO-8601 datetime window on `startedAt` (`from` inclusive, `to` exclusive). Malformed `from`/`to` → `400`. With no range, the service defaults to the **last 90 days** so the query is always bounded (never an unbounded collection scan).
+
+Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/admin/cancellationFlowAnalytics.ts`, which fetches `CancellationFlowEvent` (`.lean()`) and hands off to the pure `summarizeCancellationEvents(events, now)` shaper (unit-tested: `npm run test:cancellation-analytics`).
+
+**Response (`data`):**
+
+```jsonc
+{
+  "data": {
+    "triggered": 8,
+    "byReason": { "too_expensive": { "count": 2, "sharePct": 25 }, "...": {} },
+    "funnel": { "reachedReason": 8, "reachedOffer": 7, "accepted": 5, "cancelled": 1, "abandoned": 1 },
+    "saveRate": 0.714,        // accepted / (accepted + cancelled + abandoned); 0 if denom 0
+    "saveRatePct": 71.4,
+    "byOfferAccepted": { "discount_50_2mo": 1, "...": 0 },
+    "pastDueExcludedFromOfferConversion": 1,
+    "retention90": { "retained": 2, "churned": 1, "pending": 2 }
+  },
+  "meta": { "timestamp": "..." }
+}
+```
+
+**Aggregation rules (pure shaper):**
+
+- `reachedReason` = total events (a reason is mandatory to start a flow).
+- `reachedOffer` = `offersShown.length > 0` **AND NOT** `pastDue` (past-due events excluded from offer-conversion denominators; the excluded count is surfaced as `pastDueExcludedFromOfferConversion`).
+- `accepted` = `outcome === "saved"`; `cancelled` = `outcome === "cancelled"`.
+- `abandoned` = `outcome === "in_progress"` **AND** `startedAt <= now - 1h`.
+- `saveRate = accepted / (accepted + cancelled + abandoned)`, `0` when the denominator is `0`. All share/rate divisions guard divide-by-zero.
+- `retention90` is over saved events only: `retained`/`churned` only count when matured (`savedAt <= now - 90d` and `retention90` set); otherwise `pending` (covers absent `retention90` or unmatured saves). `retention90` is populated by Task 21 — until then everything matured shows as `pending`.
+
+UI: `src/components/admin/CancellationFlowAnalytics.tsx`, mounted as the **Cancellation Flow** tab under the Analytics sidebar group (`selectedTab === "cancellation-flow"` in `AdminPage`). Data hook: `src/hooks/queries/admin/useCancellationFlowAnalytics.ts` (TanStack, queryKey `["admin", "cancellation-flow-analytics", filter]`).
+
 ## Auth
 
 Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(session)`. Middleware doesn't gate `/api/admin/**`.

@@ -280,6 +280,14 @@ Success (green) and error (red) panels use `{color}-50` light backgrounds with `
 
 Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — separate from member theme.
 
+## Cancellation Flow Analytics view (Admin > Analytics > Cancellation Flow) — Task 18
+
+[src/components/admin/CancellationFlowAnalytics.tsx](../../src/components/admin/CancellationFlowAnalytics.tsx) is a **read-only** panel mounted as the `cancellation-flow` tab in the Analytics sidebar group (`AdminSidebar` group `analytics`, rendered by `AdminPage` on `selectedTab === "cancellation-flow"`). No mutations, no charts library — reuses the same `StatCard` / table / CSS-bar primitives as sibling panels (matches `UpsellMultiplierPanel` styling).
+
+Sections: triggered + overall save-rate + saved/cancelled/abandoned stat cards; reason breakdown table (count + share%); a CSS-bar funnel (reached reason → reached offer → accepted/cancelled/abandoned); offers-accepted table; and a 90-day retention block (retained/churned/pending) with "pending until matured" copy (meaningful only after Task 21 populates `retention90`).
+
+Data hook: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/hooks/queries/admin/useCancellationFlowAnalytics.ts) — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", filter]`, follows the `useChargePastDueDeclineSummary` admin-hook pattern (inline key, `{ data, isLoading, isError }`). Endpoint + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
+
 ## className conventions (2026-05-08)
 
 All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.

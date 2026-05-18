@@ -848,6 +848,10 @@ Returns `{ processed, cleared, errors }`.
 
 Full cron documentation (auth, candidate query bound, idempotency, response shape) lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-resume-cron).
 
+## Admin analytics (Task 18)
+
+Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, and the 90-day retention split (`retained`/`churned`/`pending`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by Task 21. Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
+
 ## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
