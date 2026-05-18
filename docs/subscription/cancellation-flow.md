@@ -290,6 +290,29 @@ Notes:
 - Accepting `tier_downgrade` (when `tierDowngradeAvailable` is `true`) triggers `DowngradeConfirmModal` via `onRequestTierDowngrade`. The outcome `{offerAccepted:"tier_downgrade",outcome:"saved"}` is recorded **only** if the downgrade confirmation succeeds — never on card click.
 - If `tierDowngradeAvailable` is `false` and `tier_downgrade` is the current offer, `Step2Offer` renders `<Step3BonusEntries>` instead — the user gets the +100 rung with no dead UI.
 
+### Outcome-recording invariant (Task 9)
+
+Exactly one terminal `outcome` is recorded per `CancellationFlowEvent`. This is
+guaranteed by `recordOutcome`'s `updateOne` filter `{ _id, userId, outcome:
+"in_progress" }` — the first terminal write wins atomically and any subsequent
+call is a silent no-op (no double-count, no `saved`→`cancelled` overwrite).
+Every client path emits at most one `outcome`, and only **after** its
+side-effect API actually succeeds:
+
+- +100 accepted → one `saved/bonus_entries_100` after `/api/cancellation-upsell/redeem` succeeds.
+- `tier_downgrade` → one `saved/tier_downgrade`, recorded by the parent only on real downgrade success; dismiss records nothing.
+- Step 4 "Cancel anyway" (normal **and** past-due) → one `cancelled` after `/api/stripe/cancel-subscription` succeeds.
+- "Keep my membership", past-due "Resolve payment", tier-downgrade dismiss, and no-downgrade-available → record **nothing**; the event stays `in_progress` and is later swept to `abandoned` by the §6a maturity job.
+
+**Plan deviation (intentional):** the original plan's Task 9 proposed a generic
+`accept_offer` route action for Phase 2. It was **not** added — the implemented
+architecture has Phase-2 offers (`bonus_entries_100`, `tier_downgrade`) call
+their existing battle-tested endpoints (`/api/cancellation-upsell/redeem`, the
+downgrade flow) and then log via the single `outcome` action. Adding
+`accept_offer` with no Phase-2 consumer would be dead code (CLAUDE.md rule #4).
+The `accept_offer` action is introduced in Phase 3 (Task 14) for `pause_30d`,
+the first offer with no pre-existing endpoint.
+
 ### Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
