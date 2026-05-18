@@ -1,4 +1,4 @@
-import mongoose, { Schema, model, models } from "mongoose";
+import mongoose, { Document, Schema, model, models } from "mongoose";
 
 export const CANCELLATION_REASONS = [
   "too_expensive",
@@ -20,28 +20,33 @@ export const OFFER_TYPES = [
 ] as const;
 export type OfferType = (typeof OFFER_TYPES)[number];
 
-export interface ICancellationFlowEvent {
-  userId: mongoose.Types.ObjectId | string;
+export const OUTCOME_VALUES = ["in_progress", "saved", "cancelled"] as const;
+export type CancellationOutcome = (typeof OUTCOME_VALUES)[number];
+
+export interface ICancellationFlowEvent extends Document {
+  userId: mongoose.Types.ObjectId;
   reason: CancellationReason;
   reasonText?: string;
   offersShown: OfferType[];
-  offerAccepted?: OfferType | null;
-  outcome: "in_progress" | "saved" | "cancelled";
+  offerAccepted?: OfferType | null; // null allowed: Mongoose enum validator skips null/undefined
+  outcome: CancellationOutcome;
   pastDue: boolean;
   startedAt: Date;
   endedAt?: Date;
   savedAt?: Date;
   retention90?: "retained" | "churned" | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const schema = new Schema<ICancellationFlowEvent>(
+const CancellationFlowEventSchema = new Schema<ICancellationFlowEvent>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     reason: { type: String, enum: CANCELLATION_REASONS, required: true },
     reasonText: { type: String },
     offersShown: [{ type: String, enum: OFFER_TYPES }],
-    offerAccepted: { type: String, enum: OFFER_TYPES, default: null },
-    outcome: { type: String, enum: ["in_progress", "saved", "cancelled"], required: true, index: true },
+    offerAccepted: { type: String, enum: OFFER_TYPES, default: null }, // null allowed: Mongoose enum validator skips null/undefined
+    outcome: { type: String, enum: OUTCOME_VALUES, required: true, default: "in_progress", index: true },
     pastDue: { type: Boolean, default: false },
     startedAt: { type: Date, required: true },
     endedAt: { type: Date },
@@ -50,7 +55,7 @@ const schema = new Schema<ICancellationFlowEvent>(
   },
   { timestamps: true }
 );
-schema.index({ outcome: 1, savedAt: 1, retention90: 1 });
+CancellationFlowEventSchema.index({ outcome: 1, savedAt: 1, retention90: 1 });
 
 export default (models.CancellationFlowEvent as mongoose.Model<ICancellationFlowEvent>) ||
-  model<ICancellationFlowEvent>("CancellationFlowEvent", schema);
+  model<ICancellationFlowEvent>("CancellationFlowEvent", CancellationFlowEventSchema);
