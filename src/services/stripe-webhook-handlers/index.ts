@@ -46,8 +46,8 @@ import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-pe
 import {
   pauseAfterRenewalFailure,
   resumeAfterSuccessfulRenewalPayment,
-  shouldClearPauseCollectionAfterPaidInvoice,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
+import { decideClearPause } from "@/services/subscription/pauseCollectionPolicy";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { trackPixelSubscriptionRenewal } from "@/utils/tracking/pixel-purchase-tracking";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
@@ -3427,13 +3427,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
     if (invoiceIsPaid) {
-      const shouldClearPauseForCollection =
-        shouldClearPauseCollectionAfterPaidInvoice({
-          billingReason: expandedInvoice.billing_reason,
-          previousSubscriptionDbStatus: previousSubscriptionDbStatus,
-        }) ||
-        recordMembershipRecurringAffiliate ||
-        subscription.pause_collection != null;
+      const shouldClearPauseForCollection = decideClearPause({
+        billingReason: expandedInvoice.billing_reason ?? undefined,
+        previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
+        pauseCollectionPresent: subscription.pause_collection != null,
+        pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
+        recordMembershipRecurringAffiliate,
+      });
       if (shouldClearPauseForCollection) {
         try {
           await resumeAfterSuccessfulRenewalPayment(subscription.id);

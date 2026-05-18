@@ -98,6 +98,30 @@ See [subscription/gotchas.md](../subscription/gotchas.md#pause-collection-orphan
 
 Audit: `npx tsx scripts/list-active-paused-subscriptions.ts --limit=200` (CSV to stdout, dry-run by default).
 
+### Paid-invoice clear-pause decision is now centralized
+
+The webhook handler's `shouldClearPauseForCollection` decision (in
+`src/services/stripe-webhook-handlers/index.ts`, the paid-invoice path that runs
+`resumeAfterSuccessfulRenewalPayment` before `processPaymentBenefits`) no longer
+inlines the legacy `||` chain. It delegates the **entire** decision to
+`decideClearPause(...)` from `@/services/subscription/pauseCollectionPolicy`
+(single source of truth). `shouldClearPauseCollectionAfterPaidInvoice` is no
+longer imported here directly — it is still invoked, but only via
+`decideClearPause`.
+
+Behavioral impact:
+
+- **Recovery / regular renewal pauses: unchanged.** For any `pauseReason` that is
+  not `"retention"` (including undefined), `decideClearPause` reproduces the old
+  `shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate || subscription.pause_collection != null`
+  result exactly. Past-due/unpaid recovery and `subscription_cycle`/
+  `_threshold`/`_update` renewals still clear the pause and resume collection.
+- **Retention pauses: never cleared by a paid invoice.** If
+  `subscription.metadata.pauseReason === "retention"`, `decideClearPause`
+  short-circuits to `false` before any legacy condition runs, so a retention
+  `pause_30d` survives an incoming paid invoice instead of being silently
+  resumed. See [subscription/cancellation-flow.md](../subscription/cancellation-flow.md#pause-collision-phase-3).
+
 ## Stripe metadata 500-char cap
 
 Each Stripe metadata value is capped at 500 chars. Exceeding that on **any** key rejects the entire `subscriptions.create` / `paymentIntents.create` / `customers.update` call with `Metadata values can have up to 500 characters`, which surfaces to the user as a generic payment error and blocks checkout.

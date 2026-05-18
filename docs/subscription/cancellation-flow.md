@@ -323,14 +323,41 @@ survive that path; a recovery pause must keep behaving exactly as before.
 
 ### Where the real decision lives
 
-The real clear decision is in `src/services/stripe-webhook-handlers/index.ts`
-lines **3430-3436** (the `shouldClearPauseForCollection` expression):
+The clear decision is in `src/services/stripe-webhook-handlers/index.ts`
+lines **3430-3436** (the `shouldClearPauseForCollection` expression). As of
+Task 11 the webhook delegates the **entire** decision to `decideClearPause`
+(single source of truth) — it no longer inlines the legacy `||` chain:
+
+```ts
+const shouldClearPauseForCollection = decideClearPause({
+  billingReason: expandedInvoice.billing_reason ?? undefined,
+  previousSubscriptionDbStatus: previousSubscriptionDbStatus ?? undefined,
+  pauseCollectionPresent: subscription.pause_collection != null,
+  pauseReason: (subscription.metadata?.pauseReason as string | undefined) ?? undefined,
+  recordMembershipRecurringAffiliate,
+});
+```
+
+The historical inline expression it replaced (preserved here for the
+behavioral-equivalence argument below):
 
 ```ts
 shouldClearPauseCollectionAfterPaidInvoice({ billingReason, previousSubscriptionDbStatus })
   || recordMembershipRecurringAffiliate
   || subscription.pause_collection != null
 ```
+
+`decideClearPause` is imported directly from
+`@/services/subscription/pauseCollectionPolicy` (it is **not** re-exported via
+`SubscriptionCollectionPauseService`). The previously-imported
+`shouldClearPauseCollectionAfterPaidInvoice` was the only other reference in the
+webhook file, so its import was removed; the legacy sub-decision is still
+invoked, but now indirectly via `decideClearPause`.
+
+**Behavior:** recovery pauses are cleared exactly as before (no change);
+retention pauses (`pauseReason === "retention"`) are **never** cleared by a paid
+invoice, because `decideClearPause` short-circuits to `false` before any legacy
+condition runs.
 
 ### `decideClearPause` (the policy owner)
 
@@ -363,16 +390,22 @@ interface ClearPauseInput {
 ### Backward-compat guarantees
 
 - The existing `shouldClearPauseCollectionAfterPaidInvoice` export is
-  **unchanged** — Task 11 (which wires `decideClearPause` into the webhook
-  handler) and other callers/tests still rely on it. Its real signature is
+  **unchanged** — `decideClearPause` and other callers/tests still rely on it.
+  Its real signature is
   `{ billingReason: string | null | undefined; previousSubscriptionDbStatus: string | undefined }`.
+  The webhook no longer imports it directly (Task 11 removed that import since it
+  had no remaining reference in the file); it is now reached only via
+  `decideClearPause`.
 - For non-retention inputs (`pauseReason` undefined or any value other than
   `"retention"`), `decideClearPause` reproduces the legacy decision exactly:
   recovery pauses behave precisely as before.
-- Task 10 is purely **additive** in `pauseCollectionPolicy.ts` (new
-  `ClearPauseInput` + `decideClearPause`) and in the test file
-  (`SubscriptionCollectionPauseService.test.ts`). It does **not** touch
-  `stripe-webhook-handlers/index.ts` — that wiring is Task 11.
+- Task 11 made a single surgical change in `stripe-webhook-handlers/index.ts`:
+  the `shouldClearPauseForCollection` right-hand expression now calls
+  `decideClearPause(...)`. No surrounding logic (the
+  `if (shouldClearPauseForCollection) { … resumeAfterSuccessfulRenewalPayment … }`
+  block, affiliate eligibility, etc.) changed. `npm run type-check`,
+  `npm run test:stripe-collection-pause`, `npm run lint`, and `npm run build`
+  all pass.
 
 ### Domain
 
