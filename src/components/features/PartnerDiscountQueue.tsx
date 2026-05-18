@@ -433,16 +433,24 @@ export default function PartnerDiscountQueue({
 
   const partnerCatalogPct = partnerCatalogPercentForQueueDisplay(summary, activePeriod);
 
-  const displayTotalDaysRemaining = Math.max(0, Math.round(summary.totalDaysOfAccessRemaining));
   const displayQueuedDaysTotal = Math.max(0, Math.round(totalQueuedDays));
+
+  // Active package's OWN remaining window (NOT the active+queued sum). Mini packs
+  // can be sub-day, so prefer hours when under a day.
+  const activeDaysRemaining = Math.max(0, Math.round(activePeriod.daysRemaining));
+  const activeHoursRemaining = Math.max(0, Math.round(activePeriod.hoursRemaining));
+  const activeAccessLabel =
+    activeHoursRemaining > 0 && activeHoursRemaining < 24
+      ? `${activeHoursRemaining} ${activeHoursRemaining === 1 ? "hour" : "hours"} of access`
+      : `${activeDaysRemaining} ${activeDaysRemaining === 1 ? "day" : "days"} of access`;
 
   const queueHeading = titleOverride ?? "Partner Discounts";
   const queueSubtitle =
     subtitleOverride ??
     (summary.isActiveSubscription && summary.subscriptionBenefits
-      ? `${partnerCatalogPct}% of partner catalog • Active subscription`
-      : displayTotalDaysRemaining > 0
-      ? `${partnerCatalogPct}% of partner catalog • ${displayTotalDaysRemaining} days of access `
+      ? "Active subscription"
+      : activePeriod.isActive
+      ? activeAccessLabel
       : "You have no partner access yet");
 
   const handleToggle = () => {
@@ -544,14 +552,14 @@ export default function PartnerDiscountQueue({
                 </span>
               );
             })()
-          ) : displayTotalDaysRemaining > 0 ? (
+          ) : activePeriod.isActive && partnerCatalogPct > 0 ? (
             <div
               className={`bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 border-2 border-yellow-300 shadow-sm ${
                 isOptimisticUpdate ? "animate-pulse" : ""
               }`}
             >
               <p className="text-sm sm:text-2xl font-bold bg-gradient-to-r from-yellow-700 to-orange-600 bg-clip-text text-transparent leading-none">
-                {displayTotalDaysRemaining}
+                {partnerCatalogPct}%
               </p>
             </div>
           ) : null}
