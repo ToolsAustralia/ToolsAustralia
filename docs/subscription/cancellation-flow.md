@@ -313,6 +313,73 @@ downgrade flow) and then log via the single `outcome` action. Adding
 The `accept_offer` action is introduced in Phase 3 (Task 14) for `pause_30d`,
 the first offer with no pre-existing endpoint.
 
-### Note on shared-ui domain
+## Pause-collision (Phase 3)
+
+The retention `pause_30d` offer sets Stripe `pause_collection` with a
+`subscription.metadata.pauseReason = "retention"` marker. This collides with the
+**failed-renewal-recovery / paid-invoice path**, which historically clears any
+`pause_collection` once a membership invoice is paid. A retention pause must
+survive that path; a recovery pause must keep behaving exactly as before.
+
+### Where the real decision lives
+
+The real clear decision is in `src/services/stripe-webhook-handlers/index.ts`
+lines **3430-3436** (the `shouldClearPauseForCollection` expression):
+
+```ts
+shouldClearPauseCollectionAfterPaidInvoice({ billingReason, previousSubscriptionDbStatus })
+  || recordMembershipRecurringAffiliate
+  || subscription.pause_collection != null
+```
+
+### `decideClearPause` (the policy owner)
+
+`src/services/subscription/pauseCollectionPolicy.ts` now exports
+`decideClearPause(ClearPauseInput): boolean`, which owns the **whole** decision:
+
+- The legacy renewal/past-due sub-decision is **delegated** to the unchanged
+  `shouldClearPauseCollectionAfterPaidInvoice` (not reimplemented).
+- The moved `subscription.pause_collection != null` clause becomes the
+  `pauseCollectionPresent: boolean` input.
+- `recordMembershipRecurringAffiliate` is an optional input that forces a clear.
+- **New retention exclusion:** if `pauseReason === "retention"` the function
+  returns `false` first, *before* any legacy condition is evaluated — a
+  retention pause is never cleared by the recovery/paid-invoice path, even when
+  every legacy condition (e.g. `past_due` recovery on a renewal cycle) would
+  otherwise clear it.
+
+`ClearPauseInput`:
+
+```ts
+interface ClearPauseInput {
+  billingReason: string | undefined;
+  previousSubscriptionDbStatus: string | undefined;
+  pauseCollectionPresent: boolean;     // subscription.pause_collection != null
+  pauseReason: string | undefined;     // subscription.metadata.pauseReason
+  recordMembershipRecurringAffiliate?: boolean;
+}
+```
+
+### Backward-compat guarantees
+
+- The existing `shouldClearPauseCollectionAfterPaidInvoice` export is
+  **unchanged** — Task 11 (which wires `decideClearPause` into the webhook
+  handler) and other callers/tests still rely on it. Its real signature is
+  `{ billingReason: string | null | undefined; previousSubscriptionDbStatus: string | undefined }`.
+- For non-retention inputs (`pauseReason` undefined or any value other than
+  `"retention"`), `decideClearPause` reproduces the legacy decision exactly:
+  recovery pauses behave precisely as before.
+- Task 10 is purely **additive** in `pauseCollectionPolicy.ts` (new
+  `ClearPauseInput` + `decideClearPause`) and in the test file
+  (`SubscriptionCollectionPauseService.test.ts`). It does **not** touch
+  `stripe-webhook-handlers/index.ts` — that wiring is Task 11.
+
+### Domain
+
+`src/services/subscription/**` (and its tests) belong to the `subscription`
+domain (`docs/subscription/`); the Domain Manifest in `CLAUDE.md` already covers
+these paths — no manifest edit was required.
+
+## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
