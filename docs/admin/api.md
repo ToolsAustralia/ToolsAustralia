@@ -343,7 +343,14 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
     "saveRatePct": 71.4,
     "byOfferAccepted": { "discount_50_2mo": 1, "...": 0 },
     "pastDueExcludedFromOfferConversion": 1,
-    "retention90": { "retained": 2, "churned": 1, "pending": 2 }
+    "retention90": { "retained": 3, "churned": 2, "pending": 4 },
+    // Task 21: same matured/pending cutoff as `retention90`, keyed by offerAccepted.
+    // Every OfferType key is always present (zeroed when unused).
+    "retention90ByOffer": {
+      "discount_50_2mo": { "retained": 1, "churned": 1, "pending": 1 },
+      "pause_30d": { "retained": 1, "churned": 1, "pending": 1 },
+      "...": { "retained": 0, "churned": 0, "pending": 0 }
+    }
   },
   "meta": { "timestamp": "..." }
 }
@@ -356,7 +363,8 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
 - `accepted` = `outcome === "saved"`; `cancelled` = `outcome === "cancelled"`.
 - `abandoned` = `outcome === "in_progress"` **AND** `startedAt <= now - 1h`.
 - `saveRate = accepted / (accepted + cancelled + abandoned)`, `0` when the denominator is `0`. All share/rate divisions guard divide-by-zero.
-- `retention90` is over saved events only: `retained`/`churned` only count when matured (`savedAt <= now - 90d` and `retention90` set); otherwise `pending` (covers absent `retention90` or unmatured saves). `retention90` is populated by Task 21 — until then everything matured shows as `pending`.
+- `retention90` is over saved events only: `retained`/`churned` only count when matured (`savedAt <= now - 90d` and `retention90` set); otherwise `pending` (covers absent `retention90` or unmatured saves). `retention90` is populated by the §6a maturity cron (Task 20).
+- `retention90ByOffer` (Task 21) breaks the same split out **per `OfferType`**, keyed by the saved event's `offerAccepted`. It uses the **identical** matured/pending boundary (`savedAt <= now - 90d`) as the overall `retention90` and the §6a maturity cron — no skew. Only saved events with a non-null `offerAccepted` contribute (past-due saved events still count here; only the offer-conversion funnel excludes past-due). Every `OfferType` key is always present (zeroed when unused), so the per-offer totals reconcile with the overall split. The UI also derives a retained-% over matured (`retained ÷ (retained + churned)`, shown as “—” when none matured).
 
 UI: `src/components/admin/CancellationFlowAnalytics.tsx`, mounted as the **Cancellation Flow** tab under the Analytics sidebar group (`selectedTab === "cancellation-flow"` in `AdminPage`). Data hook: `src/hooks/queries/admin/useCancellationFlowAnalytics.ts` (TanStack, queryKey `["admin", "cancellation-flow-analytics", filter]`).
 

@@ -53,6 +53,13 @@ export default function CancellationFlowAnalytics() {
   }
 
   const { triggered, byReason, funnel, saveRatePct, byOfferAccepted, retention90 } = data;
+  const retention90ByOffer = data.retention90ByOffer;
+  /** Retained share over matured (retained + churned); 0 when none matured. */
+  const retainedPct = (retained: number, churned: number): string => {
+    const matured = retained + churned;
+    if (matured === 0) return "—";
+    return `${Math.round((retained / matured) * 1000) / 10}%`;
+  };
   const funnelSteps: Array<{ label: string; value: number }> = [
     { label: "Reached reason", value: funnel.reachedReason },
     { label: "Reached offer (not past-due)", value: funnel.reachedOffer },
@@ -173,19 +180,78 @@ export default function CancellationFlowAnalytics() {
         </table>
       </div>
 
-      {/* Retention 90 */}
+      {/* Retention 90 — overall */}
       <div className="mt-6">
         <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
           90-day retention (saved events)
         </h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <StatCard label="Retained" value={String(retention90.retained)} />
           <StatCard label="Churned" value={String(retention90.churned)} />
+          <StatCard
+            label="Retained %"
+            value={retainedPct(retention90.retained, retention90.churned)}
+            sub="over matured (retained + churned)"
+          />
           <StatCard label="Pending" value={String(retention90.pending)} />
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
-          Retained/churned are only meaningful once saves mature (90 days after save). Until then
-          saved events are counted as <strong>pending</strong>.
+          <strong>Pending</strong> = not yet 90 days old; matured to retained/churned by the daily
+          maturity cron. Retained % is computed over matured saves only.
+        </p>
+      </div>
+
+      {/* Retention 90 — per offer */}
+      <div className="mt-6">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
+          90-day retention by offer
+        </h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-slate-500 dark:border-neutral-700 dark:text-neutral-400">
+              <th className="py-2 font-medium">Offer</th>
+              <th className="py-2 text-right font-medium">Saved</th>
+              <th className="py-2 text-right font-medium">Retained</th>
+              <th className="py-2 text-right font-medium">Churned</th>
+              <th className="py-2 text-right font-medium">Pending</th>
+              <th className="py-2 text-right font-medium">Retained %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OFFER_TYPES.map((offer) => {
+              const split = retention90ByOffer[offer];
+              return (
+                <tr
+                  key={offer}
+                  className="border-b border-gray-100 last:border-0 dark:border-neutral-800"
+                >
+                  <td className="py-2 text-gray-900 dark:text-neutral-100">
+                    {OFFER_LABELS[offer]}
+                  </td>
+                  <td className="py-2 text-right text-gray-900 dark:text-neutral-100">
+                    {byOfferAccepted[offer]}
+                  </td>
+                  <td className="py-2 text-right text-gray-900 dark:text-neutral-100">
+                    {split.retained}
+                  </td>
+                  <td className="py-2 text-right text-gray-900 dark:text-neutral-100">
+                    {split.churned}
+                  </td>
+                  <td className="py-2 text-right text-slate-600 dark:text-neutral-400">
+                    {split.pending}
+                  </td>
+                  <td className="py-2 text-right text-slate-600 dark:text-neutral-400">
+                    {retainedPct(split.retained, split.churned)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="mt-2 text-xs text-slate-500 dark:text-neutral-400">
+          Which offers produce durable saves vs delayed churn. <strong>Pending</strong> saves are
+          not yet 90 days old (matured by the daily cron); Retained % is over matured saves
+          (retained ÷ (retained + churned), shown as “—” when none have matured yet).
         </p>
       </div>
     </section>

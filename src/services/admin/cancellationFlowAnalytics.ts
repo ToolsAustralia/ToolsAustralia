@@ -51,6 +51,13 @@ export interface CancellationFlowSummary {
   /** Past-due events are excluded from offer-conversion denominators; surfaced for UI copy. */
   pastDueExcludedFromOfferConversion: number;
   retention90: Retention90Split;
+  /**
+   * 90-day retention split per accepted offer. Same matured/pending logic as
+   * the overall {@link Retention90Split}, but keyed by the saved event's
+   * `offerAccepted`. Only saved events with a non-null `offerAccepted`
+   * contribute. Every `OfferType` key is always present (zeroed when unused).
+   */
+  retention90ByOffer: Record<OfferType, Retention90Split>;
 }
 
 function roundPct(n: number): number {
@@ -74,6 +81,10 @@ function roundPct(n: number): number {
  *  - retained = retention90 === "retained"
  *  - churned  = retention90 === "churned"
  *  - pending  = saved but retention90 null/absent OR savedAt > now - 90d
+ *
+ * retention90ByOffer applies the SAME matured/pending cutoff, keyed by the
+ * saved event's `offerAccepted` (saved events with no `offerAccepted` are
+ * excluded from the per-offer split but still counted in the overall one).
  */
 export function summarizeCancellationEvents(
   events: ICancellationFlowEvent[],
@@ -102,6 +113,10 @@ export function summarizeCancellationEvents(
   };
 
   const retention90: Retention90Split = { retained: 0, churned: 0, pending: 0 };
+  const retention90ByOffer = {} as Record<OfferType, Retention90Split>;
+  for (const offer of OFFER_TYPES) {
+    retention90ByOffer[offer] = { retained: 0, churned: 0, pending: 0 };
+  }
   let pastDueExcludedFromOfferConversion = 0;
 
   for (const ev of events) {
@@ -124,16 +139,26 @@ export function summarizeCancellationEvents(
         byOfferAccepted[ev.offerAccepted] += 1;
       }
 
-      // retention90 split over saved events only.
+      // retention90 split over saved events only. The same `matured` boundary
+      // is reused for the per-offer split below — no skew vs the overall split
+      // or the §6a maturity cron (all use savedAt <= now - 90d).
       const savedAtMs = ev.savedAt ? new Date(ev.savedAt).getTime() : null;
       const matured = savedAtMs !== null && savedAtMs <= retentionCutoff;
+      // Per-offer bucket (only when this saved event accepted a known offer).
+      const offerSplit =
+        ev.offerAccepted && retention90ByOffer[ev.offerAccepted] !== undefined
+          ? retention90ByOffer[ev.offerAccepted]
+          : null;
       if (ev.retention90 === "retained" && matured) {
         retention90.retained += 1;
+        if (offerSplit) offerSplit.retained += 1;
       } else if (ev.retention90 === "churned" && matured) {
         retention90.churned += 1;
+        if (offerSplit) offerSplit.churned += 1;
       } else {
         // null/absent retention90, or not yet matured (savedAt within last 90d).
         retention90.pending += 1;
+        if (offerSplit) offerSplit.pending += 1;
       }
     } else if (ev.outcome === "cancelled") {
       funnel.cancelled += 1;
@@ -165,6 +190,7 @@ export function summarizeCancellationEvents(
     byOfferAccepted,
     pastDueExcludedFromOfferConversion,
     retention90,
+    retention90ByOffer,
   };
 }
 
