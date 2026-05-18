@@ -156,6 +156,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/MembershipPackage.ts",
         "src/models/MembershipRenewalCycle.ts",
         "src/models/MembershipStatusHistory.ts",
+        "src/models/CancellationFlowEvent.ts",
         "src/models/MembershipDailySnapshot.ts",
         "src/models/ChargeJobLock.ts",
         "src/app/api/subscription/**",
