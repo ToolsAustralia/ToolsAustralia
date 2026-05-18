@@ -873,6 +873,11 @@ export function getQueueSummary(user: IUser) {
     activePeriod,
     queuedItems,
     totalQueuedDays: Math.round(queuedItems.reduce((sum, item) => sum + item.daysOfAccess, 0)),
-    totalQueuedItems: user.partnerDiscountQueue?.filter((item) => item.status === "queued").length || 0,
+    // Exclude membership: it is the ambient floor (shown via activePeriod), never a
+    // queued "upcoming" benefit — keep this count in lockstep with `queuedItems`.
+    totalQueuedItems:
+      user.partnerDiscountQueue?.filter(
+        (item) => item.status === "queued" && item.packageType !== "membership"
+      ).length || 0,
   };
 }
