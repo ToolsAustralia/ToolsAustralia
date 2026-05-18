@@ -183,6 +183,12 @@ Layout is an infographic-style three-band frame: dark hero → white lose grid �
 
 If you add a new `confirmPayment` / `confirmSetup` call site here, do **not** wire it to `logPaymentError` directly — return the error up and let the parent log it. The noise filter lives at the parent now: see [MembershipModal.handlePaymentError](#paymentmethodselector) → [`isStripeNoiseError`](../../src/utils/payment/stripe/is-stripe-noise-error.ts) → [error-reporting gotchas](../error-reporting/gotchas.md#stripejs-client-side-validation-noise).
 
+### PackageInclusionsExpanded (PackageInclusionsSlideUp)
+
+[`src/components/modals/PackageInclusionsSlideUp.tsx`](../../src/components/modals/PackageInclusionsSlideUp.tsx) — inline expandable that renders full package inclusions cards below the "Click here to see full package inclusion" trigger. Now uses the same colour resolvers and tier overrides as `ElectricPackageCard` and `MembershipSection`: membership tab → `getMembershipSectionColorScheme(plan.id, true)`; one-time tab → `getElectricPackageColorScheme(plan.id)`; same three accent overrides (membership Tradie → electric cyan, membership Boss → electric red, one-time Boss → DeWalt yellow). Card surface is theme-aware via `useThemeStore`: dark → `rgba(13,14,18,0.92)` with tier-glow `boxShadow`; light → `rgba(255,255,255,0.95)` with a soft slate shadow. Feature text uses literal Tailwind classes (`text-white/85` dark, `text-slate-700` light). The old `getPackageColorSchemeForPromo` + `useVariantContext` wiring is removed. Chart (`VerticalAccumulationChart`) and layout structure are untouched.
+
+**Updated 2026-05-18**: dropped `getPackageColorSchemeForPromo`/`variantConfig`; wired to `getMembershipSectionColorScheme` + `getElectricPackageColorScheme` + `useThemeStore`; same tier overrides as live cards.
+
 ## Modal architecture sweep — 2026-05-09
 
 Twelve flat-file modals were decomposed into the canonical orchestrator-folder pattern in a single sweep. See:
@@ -222,6 +228,8 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 ## Z-index ordering
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Always reference these — never use raw numbers.
+
+> **Gotcha:** A full-width fixed bar that only *visually* contains a centered child (e.g. [FloatingGetEntriesButton](../../src/components/sections/promo/FloatingGetEntriesButton.tsx) — `fixed left-0 right-0 z-50 flex justify-center`) still captures pointer events across its entire transparent width, blocking anything beneath it (the bottom-right user icon). Put `pointer-events-none` on the wrapper and `pointer-events-auto` on the actual interactive child so the bar is click-through everywhere except the button.
 
 ## Display helpers
 
