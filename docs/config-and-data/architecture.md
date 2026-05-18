@@ -45,6 +45,6 @@
 | [src/data/sampleProducts.ts](../../src/data/sampleProducts.ts) | Dev fixture |
 | [src/data/sampleUsers.ts](../../src/data/sampleUsers.ts) | Dev fixture |
 | [src/data/sampleWinners.ts](../../src/data/sampleWinners.ts) | Dev fixture |
-| [src/data/upsellPackages.ts](../../src/data/upsellPackages.ts) | **Static** upsell package definitions |
+| [src/data/upsellPackages.ts](../../src/data/upsellPackages.ts) | **Static** upsell package definitions. Each record's `stripeDescription` is the literal label that flows into the Stripe PaymentIntent (transactions tab); membership upsells use the ` — Membership Upsell` suffix — see [billing-stripe backend.md](../billing-stripe/backend.md#upsell-stripe-descriptions) |
 
 The "static package" data files are the source of truth for package configuration that the rest of the app references via string ids. See [subscription models.md](../subscription/models.md#membershippackage) for the dual-source caveat.

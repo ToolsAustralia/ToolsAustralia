@@ -220,3 +220,16 @@ function planIdToElectricTier(planId: string): ElectricTier {
 export function getElectricPackageColorScheme(planId: string): PackageColorScheme {
   return SCHEMES[planIdToElectricTier(planId)];
 }
+
+/**
+ * Electric scheme for a mini-draw pack id, keyed to keep the mini-draw grid,
+ * hover tooltip, and detail popup in lockstep with the MembershipSection one-time tab.
+ * - `mini-pack-1|2|3` → electric blue (the $1/$5/$10 starter packs share one colour,
+ *   matching the blue mini-pack upsell artwork).
+ * - `additional-*-pack-mini` (Tradie→VIP) → delegates to getElectricPackageColorScheme,
+ *   so each tier matches its MembershipSection one-time card exactly.
+ */
+export function getMiniDrawPackageColorScheme(packId: string): PackageColorScheme {
+  if (packId.startsWith("mini-pack-")) return SCHEMES.apprentice; // electric blue
+  return getElectricPackageColorScheme(packId);
+}

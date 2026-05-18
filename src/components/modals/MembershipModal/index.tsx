@@ -4472,7 +4472,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 isPlaceholderPlan={isPlaceholderPlan}
                 subscriptionPackages={subscriptionPackages}
                 oneTimePackages={oneTimePackages}
-                contextVariantConfig={contextVariantConfig}
                 promoThemePrimary={promoTheme.primary}
                 selectedPaymentMethod={selectedPaymentMethod}
                 showCardForm={showCardForm}

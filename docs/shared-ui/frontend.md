@@ -38,6 +38,18 @@ The component accepts two optional badge props: `showBestValue` (renders a `Best
 
 This component is used by the live `MembershipSection` for both the membership and one-time tabs.
 
+### `features/PartnerDiscountQueue` — tier-themed partner discount card
+
+[`src/components/features/PartnerDiscountQueue.tsx`](../../src/components/features/PartnerDiscountQueue.tsx) renders the collapsible "Partner Discounts" card on `my-account`. Its visual identity is driven by the **active** package (subscription or active one-time period) resolved into `activePackageVisual` → `getMembershipSectionColorScheme(...)`, so the card matches the membership cards' tier colours.
+
+**Collapsed header:**
+- The right side shows **benefit chips, not a package icon**. Chip 1: `{partnerCatalogPct}% partner catalog`, filled with the tier `badgeStyle.background` (neutral amber/orange fallback when no active tier). Chip 2: `{shopDiscountPercent}% shop`, an outlined accent pill for active subscriptions — **currently gated off** via the local `SHOW_SHOP_DISCOUNT_CHIP = false` constant because the shop discount is not yet honoured at checkout; flip it to `true` when shop goes live. Chips render only when `summary.hasActiveAccess`.
+- The whole bar is tinted to the tier: corner glow blobs + an accent radial wash use `accentHex`; the subtitle takes `accentHexLight ?? accentHex` when a tier theme is present. All theming falls back to the prior neutral dark look when there is no active package.
+
+**Naming:** `cleanPackageName()` strips a leading `"Additional "` (case-insensitive) for **display only** — used for the active-period name and every "Upcoming" queued row. Icon/theme resolution still uses substring tier matching, so stripping the prefix is safe.
+
+**Upcoming (queued) rows:** each row resolves its own tier theme + package icon via `getPackageIconByName(item.packageName, type)` (membership → `subscription`, else `one-time`). The icon tile uses that tier's `badgeStyle.background`; rows with no resolvable package image fall back to the lucide `getPackageIcon(item.packageType)` on the original yellow/orange tile.
+
 ### PromoTrustBar — final-hours urgency variant
 
 [`src/components/sections/promo/PromoTrustBar.tsx`](../../src/components/sections/promo/PromoTrustBar.tsx) is the thin strip that sits between [`PromoHero`](../../src/components/sections/promo/PromoHero.tsx) and [`PromoPackages`](../../src/components/sections/promo/PromoPackages.tsx) on `/promotions/[slug]` and `ToolsetLandingPage`. Default render: three icon+text trust items (Drawn live · randomdraws.com.au · Drawn every 27th).

@@ -26,6 +26,8 @@ interface PlanCardProps {
   plan: LocalMembershipPlan;
   colorScheme: ColorScheme;
   accentHex: string;
+  /** Set for additional (member) packs sold below the matching non-member pack. */
+  discount: { regularPrice: number; percentOff: number } | null;
   isCurrent: boolean;
   isSelected: boolean;
   showBestValueRibbon: boolean;
@@ -36,6 +38,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
   plan,
   colorScheme,
   accentHex,
+  discount,
   isCurrent,
   isSelected,
   showBestValueRibbon,
@@ -94,11 +97,26 @@ const PlanCard: React.FC<PlanCardProps> = ({
 
       {/* Price - Absolute top-left, no background */}
       <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
-        <div
-          className={cn("font-bold text-base sm:text-lg leading-tight", colorScheme.textGradientStyle ? "" : colorScheme.priceText)}
-          style={colorScheme.textGradientStyle ?? { color: accentHex }}
-        >
-          ${plan.price}
+        <div className="relative inline-block">
+          <div
+            className={cn("font-bold text-base sm:text-lg leading-tight", colorScheme.textGradientStyle ? "" : colorScheme.priceText)}
+            style={colorScheme.textGradientStyle ?? { color: accentHex }}
+          >
+            ${plan.price}
+          </div>
+          {discount && (
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1.5 flex items-center gap-1 whitespace-nowrap leading-none">
+              <span className="text-3xs sm:text-2xs font-bold line-through text-white/40">
+                ${discount.regularPrice}
+              </span>
+              <span
+                className="rounded-full px-1 py-0.5 text-3xs font-extrabold uppercase"
+                style={{ backgroundColor: accentHex, color: "#0A0A0A" }}
+              >
+                {discount.percentOff}% Off
+              </span>
+            </div>
+          )}
         </div>
         <div
           className="text-3xs sm:text-2xs font-semibold"

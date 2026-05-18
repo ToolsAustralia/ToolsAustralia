@@ -96,7 +96,7 @@ Each upsell record carries a `stripeDescription` field that flows into the payme
 | Suffix | Context |
 |---|---|
 | *(none — base name only)* | Regular pack purchase |
-| ` — Membership Bonus` | Membership upsell |
+| ` — Membership Upsell` | Membership upsell |
 | ` — Upsell` | One-time / Additional upsell |
 | ` — Mini Draw` | Mini-scoped Additional pack purchase |
 | ` — Mini Draw Upsell` | Mini-scoped Additional pack upsell |

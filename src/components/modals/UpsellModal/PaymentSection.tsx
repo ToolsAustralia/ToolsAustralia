@@ -8,7 +8,6 @@ import { StripeInlineCardSetupForm } from "@/components/payment/StripeInlineCard
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
 
 interface PaymentSectionProps {
-  isResolvingPaymentMethod: boolean;
   showInlineCardSetup: boolean;
   loadingSetupIntent: boolean;
   setupIntentSecret: string | null;
@@ -24,7 +23,6 @@ interface PaymentSectionProps {
 }
 
 const PaymentSection: React.FC<PaymentSectionProps> = ({
-  isResolvingPaymentMethod,
   showInlineCardSetup,
   loadingSetupIntent,
   setupIntentSecret,
@@ -40,12 +38,6 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
 }) => {
   return (
     <>
-      {isResolvingPaymentMethod && (
-        <div className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 py-4 text-sm text-gray-600 dark:border-neutral-700 dark:bg-neutral-800/90 dark:text-neutral-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading payment method…
-        </div>
-      )}
       {showInlineCardSetup && (
         <div className="mb-3 space-y-3 rounded-lg border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 p-3 sm:p-4 bg-gray-50 dark:bg-neutral-800/90 shadow-sm">
           <div className="flex items-start gap-2">

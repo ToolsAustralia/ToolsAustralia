@@ -987,7 +987,6 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
         {/* Main Content - Ultra Compact */}
         <div className="px-3 sm:px-6 pb-2 sm:pb-4 pt-2 sm:pt-4">
           <PaymentSection
-            isResolvingPaymentMethod={isResolvingPaymentMethod}
             showInlineCardSetup={showInlineCardSetup}
             loadingSetupIntent={loadingSetupIntent}
             setupIntentSecret={setupIntentSecret}
