@@ -80,9 +80,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 15,
     shopDiscountPercent: 5,
-    // Subscriptions are NOT duration-capped. Partner access is gated live by
-    // subscription.isActive (see partner-discount-queue.ts) and renews each billing
-    // cycle. 0 here = "no fixed window"; do not render a day count for subscriptions.
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
@@ -104,7 +102,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 40,
     shopDiscountPercent: 10,
-    // Subscription partner access is lifecycle-gated, not duration-capped. See tradie-subscription.
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
@@ -126,7 +124,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 100,
     shopDiscountPercent: 20,
-    // Subscription partner access is lifecycle-gated, not duration-capped. See tradie-subscription.
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
