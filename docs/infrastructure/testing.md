@@ -35,6 +35,10 @@ npm run test:ui-primitives          # Button, Badge, Card primitives
 npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
 ```
 
+- `npm run test:variant-config-membership-theme` — standalone `tsx` unit test
+  for `VariantConfig.membershipTheme.forceLight` default/merge/validation
+  (A/B membership dark-mode test).
+
 ## Dashboard stats snapshot scripts
 
 | npm script | purpose |

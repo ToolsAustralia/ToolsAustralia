@@ -38,6 +38,14 @@ The component accepts two optional badge props: `showBestValue` (renders a `Best
 
 This component is used by the live `MembershipSection` for both the membership and one-time tabs.
 
+### MembershipSection light/dark + A/B gating
+
+`MembershipSection` light/dark is the single `isDark` value (around line 58)
+that feeds the `theme` prop of every `ElectricPackageCard`. It is gated by the
+site-wide A/B flag: `isDark = useThemeStore(...) && !useMembershipThemeExperiment().forceLight`.
+With no active experiment, behavior is unchanged (schedule/toggle driven). See
+docs/ab-testing/architecture.md.
+
 ### `features/PartnerDiscountQueue` — tier-themed partner discount card
 
 [`src/components/features/PartnerDiscountQueue.tsx`](../../src/components/features/PartnerDiscountQueue.tsx) renders the collapsible "Partner Discounts" card on `my-account`. Its visual identity is driven by the **active** package (subscription or active one-time period) resolved into `activePackageVisual` → `getMembershipSectionColorScheme(...)`, so the card matches the membership cards' tier colours.
