@@ -160,3 +160,86 @@ The `eventId` field is validated with `mongoose.Types.ObjectId.isValid(v)` at th
 `src/app/api/subscription/cancellation-flow/route.ts`
 
 The route is thin: authorize (session/401) → parse JSON → Zod validate → delegate to `CancellationFlowService`. Auth is checked first, before any body parsing or DB work. No business logic lives in the handler.
+
+---
+
+## CancellationFlowModal (UI)
+
+`src/components/modals/CancellationFlowModal/`
+
+Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
+
+### Responsive presentation
+
+Uses `ModalContainer` (imported from `../ui`, same as `PackageSelectionModal`):
+
+```tsx
+const isNarrowViewport = useMediaQuery("(max-width: 639px)");
+<ModalContainer presentation={isNarrowViewport ? "sheet" : "dialog"} ... />
+```
+
+Desktop renders as a centered dialog; mobile (< 640px) renders as a bottom sheet.
+
+### Step machine (`useCancellationFlow.ts`)
+
+Plain `useState<FlowState>` — no router/URL state. Located in the modal folder alongside the components it serves.
+
+```ts
+FlowState = {
+  step: 1 | 2 | 3 | 4;
+  reason: CancellationReason | null;
+  reasonText: string;
+  eventId: string | null;
+  offersShown: OfferType[];
+  offerCursor: number;
+  pastDue: boolean;
+}
+```
+
+- **Step 1** — reason capture (7 radio options; "Other" reveals an optional textarea)
+- **Step 2/3** — offer reel (Phase 2 — not yet built; see below)
+- **Step 4** — confirm cancel or "Keep my membership"
+
+`applyStart({ eventId, offersShown, pastDue })` decides next step: if `offersShown.length === 0` → step 4; else → step 2.
+
+`decline()` advances `offerCursor`; when exhausted → step 4.
+
+`requestExit()` jumps directly to step 4 (used by the ✕ header button).
+
+### ✕ button wiring (important)
+
+The header ✕ calls `requestExit()` (→ Step 4), **not** `props.onClose` directly. This ensures the user always sees the "Are you sure?" confirm screen before truly closing. The only direct `onClose` path is the "Keep my membership" button in Step 4.
+
+Exception: if the user hits ✕ on Step 1 before selecting a reason, the modal closes directly (nothing to confirm).
+
+### Past-due variant (§3a)
+
+When the server returns `pastDue: true` (user has a failed renewal), `offersShown` is `[]` (eligibility filter short-circuits). `applyStart` routes directly to step 4 with `state.pastDue = true`. Step 4 renders the past-due variant: primary CTA is "Resolve payment" → `props.onResolvePayment()`, secondary is "Cancel anyway".
+
+### Phase-1 scope
+
+Steps 2 and 3 are not yet built. The index renders Step 4 for any `state.step >= 2`, with a `{/* PHASE-2: Step2Offer/Step3BonusEntries render here */}` comment marking the insertion point.
+
+### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
+
+Two TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`**:
+
+- `useStartCancellationFlow` — POSTs `{ action: "start", reason, reasonText? }`, returns `{ eventId, offersShown, pastDue }`.
+- `useOutcomeCancellationFlow` — POSTs `{ action: "outcome", eventId, outcome, offerAccepted? }`. Called fire-and-forget after cancel.
+
+The parent (`SubscriptionManagementModal`) refreshes data via its existing imperative `fetchSubscriptionBenefits()` call — no query invalidation needed in the modal itself.
+
+### Parent integration (`SubscriptionManagementModal`)
+
+- `showCancellationFlow` / `setShowCancellationFlow` — replaces the old `showCancellationUpsell`.
+- `handleCancelSubscription` — opens the flow unconditionally (the old client-side `cancellationUpsellRedeemed` lifetime gate is removed; server-side eligibility filter in `CancellationFlowService` handles one-time-consumed offers).
+- `onSaved` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
+- `onCancelled` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
+- `onResolvePayment` → `setShowCancellationFlow(false)` then `setIsRenewalFailedModalOpen(true)`.
+- `onClose` → `setShowCancellationFlow(false)` (plain close — only reachable from "Keep my membership" in Step 4).
+
+The old `CancellationUpsellModal` files are retained (not deleted); they will be removed in Phase 5 Task 19.
+
+### Note on shared-ui domain
+
+`src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.

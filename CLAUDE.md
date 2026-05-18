@@ -161,7 +161,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChargeJobLock.ts",
         "src/app/api/subscription/**",
         "src/app/api/memberships/**",
-        "src/components/modals/CancellationUpsellModal/**",
+        "src/components/modals/CancellationFlowModal/**",
         "src/components/modals/RenewalFailedModal/**",
         "src/components/modals/DowngradeConfirmModal/**",
         "src/components/modals/StripePaymentModal/**",

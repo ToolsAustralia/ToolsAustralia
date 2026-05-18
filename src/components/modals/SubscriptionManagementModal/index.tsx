@@ -9,10 +9,10 @@
  * modification because the folder/index.tsx resolves as the same import path.
  *
  * EMBEDDED CHILD MODAL INVARIANTS:
- * 1. StripePaymentModal, CancellationUpsellModal, RenewalFailedModal,
+ * 1. StripePaymentModal, CancellationFlowModal, RenewalFailedModal,
  *    UpgradeConfirmModal, and DowngradeConfirmModal all stay portal-rendered
  *    from THIS orchestrator. Whichever opens at any given time is determined
- *    by orchestrator state (`showStripePaymentModal`, `showCancellationUpsell`,
+ *    by orchestrator state (`showStripePaymentModal`, `showCancellationFlow`,
  *    `isRenewalFailedModalOpen`, etc.). The micro-stack z-index is preserved.
  * 2. `renderAsPanel` still bypasses `ModalContainer` — when true the body is
  *    rendered directly inside a `<div className="w-full">` wrapper for embed
@@ -29,7 +29,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useToast } from "@/components/ui/Toast";
 import { useRenewSubscription } from "@/hooks/queries/useSubscriptionQueries";
 import StripePaymentModal from "../StripePaymentModal";
-import CancellationUpsellModal from "../CancellationUpsellModal";
+import CancellationFlowModal from "../CancellationFlowModal";
 import DowngradeConfirmModal from "../DowngradeConfirmModal";
 import UpgradeConfirmModal from "../UpgradeConfirmModal";
 import RenewalFailedModal from "../RenewalFailedModal";
@@ -39,8 +39,6 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { calculateRenewalEntries, calculateUpgradeEntries } from "@/utils/payment/subscription-entries-calculator";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
-import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useLoading } from "@/contexts/LoadingContext";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -81,7 +79,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   renderAsPanel = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [showCancellationUpsell, setShowCancellationUpsell] = useState(false);
+  const [showCancellationFlow, setShowCancellationFlow] = useState(false);
   const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [showDowngradeConfirm, setShowDowngradeConfirm] = useState(false);
   const [selectedUpgrade, setSelectedUpgrade] = useState<UpgradeOption | null>(null);
@@ -132,7 +130,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
+
 
   // Helper function to get Tradie subscription package for non-subscribers
   const _getTradiePackage = (): LocalMembershipPlan => {
@@ -309,47 +307,6 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     return { currentEntries, upgradeEntriesGrant: entriesToGrant };
   }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
 
-  /** Cancellation upsell modal context — tier, locked-in entries, downgrade target, days to next draw. */
-  const cancellationUpsellContext = useMemo(() => {
-    const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
-    const accumulatedEntries = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
-
-    let daysUntilDraw: number | undefined;
-    let drawCloseLabel: string | undefined;
-    const drawDateIso = currentMajorDraw?.freezeEntriesAt || currentMajorDraw?.drawDate;
-    if (drawDateIso) {
-      const drawDate = new Date(drawDateIso);
-      if (!Number.isNaN(drawDate.getTime())) {
-        daysUntilDraw = Math.max(0, Math.ceil((drawDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-        drawCloseLabel = drawDate.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
-      }
-    }
-
-    const firstDowngrade = subscriptionBenefits?.availableDowngrades?.[0];
-    const downgrade = firstDowngrade
-      ? {
-          packageName: firstDowngrade.name,
-          saveLabel:
-            membershipPackage && membershipPackage.price > firstDowngrade.price
-              ? `Save $${membershipPackage.price - firstDowngrade.price}/mo`
-              : undefined,
-          // Open the themed DowngradeConfirmModal ON TOP of the cancellation modal
-          // (don't close the parent — switch-plan is a child flow).
-          onConfirm: () => {
-            setSelectedDowngrade(firstDowngrade);
-            setShowDowngradeConfirm(true);
-          },
-        }
-      : undefined;
-
-    return {
-      accumulatedEntries,
-      daysUntilDraw,
-      drawCloseLabel,
-      downgrade,
-    };
-  }, [user.subscription, currentMajorDraw, subscriptionBenefits, membershipPackage]);
-
   /** Pending plan change banner: accumulated entries + partner access % (same rules as confirmation copy) */
   const pendingBenefitCountdownProps = useMemo(() => {
     const pending = subscriptionBenefits?.currentBenefits?.pendingChange;
@@ -482,8 +439,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       }
       fetchSubscriptionBenefits();
       setSelectedDowngrade(null);
-      // User has chosen a downgrade; the cancellation upsell flow is over.
-      setShowCancellationUpsell(false);
+      // User has chosen a downgrade; close the cancellation flow.
+      setShowCancellationFlow(false);
     } catch (error) {
       console.error("Failed to downgrade subscription:", error);
       showToast({
@@ -499,98 +456,29 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
 
   const handleCancelSubscription = async () => {
     if (!activeSubscription) return;
-
-    if (user.cancellationUpsellRedeemed) {
-      await proceedWithCancellation();
-    } else if (canOfferCancellationUpsellRedeem(user)) {
-      setShowCancellationUpsell(true);
-    } else {
-      await proceedWithCancellation();
-    }
+    // Always open the cancellation flow — reason capture + offer routing live
+    // server-side (eligibility decided in CancellationFlowService). The old
+    // client-side `cancellationUpsellRedeemed` lifetime gate is removed; the
+    // server's eligibility filter handles one-time-consumed offers.
+    setShowCancellationFlow(true);
   };
 
-  const proceedWithCancellation = async () => {
-    if (!activeSubscription) return;
-
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/stripe/cancel-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // Include cookies for session authentication
-        body: JSON.stringify({ cancelAtPeriodEnd: true }), // Cancel at end of billing period
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to cancel subscription");
-      }
-
-      const cancelledImmediately = Boolean(result.data?.cancelledImmediately);
-      const isPastDueCancel = Boolean(result.data?.isPastDue);
-
-      if (cancelledImmediately) {
-        showToast({
-          type: "warning",
-          title: "Subscription Cancelled",
-          message:
-            typeof result.message === "string" && result.message.trim().length > 0
-              ? result.message
-              : isPastDueCancel
-                ? "Your subscription has been canceled. It was already past due, so access tied to an active paid subscription may have ended."
-                : "Your subscription has been canceled immediately.",
-          duration: 15000,
-        });
-      } else {
-        const resolvedEndDateIso =
-          result.data?.currentPeriodEnd || result.data?.endDate || user.subscription?.endDate || null;
-        const endDate = resolvedEndDateIso
-          ? new Date(resolvedEndDateIso).toLocaleDateString()
-          : "the end of your billing period";
-        const daysRemaining = resolvedEndDateIso
-          ? Math.max(0, Math.ceil((new Date(resolvedEndDateIso).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-          : "several";
-
-        showToast({
-          type: "warning",
-          title: "Subscription Cancelled",
-          message: `Your subscription will end on ${endDate} (${daysRemaining} days). You'll keep full access until then. We're sad to see you go!`,
-          duration: 15000,
-        });
-      }
-
-      // Refresh user data and benefits
-      if (onSubscriptionUpdate) {
-        onSubscriptionUpdate();
-      }
-      fetchSubscriptionBenefits();
-    } catch (error) {
-      console.error("Failed to cancel subscription:", error);
-      showToast({
-        type: "error",
-        title: "Cancellation Failed",
-        message: error instanceof Error ? error.message : "Failed to cancel subscription. Please try again.",
-        duration: 10000, // Show for 10 seconds for error messages
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUpsellRedeem = () => {
-    // User redeemed the offer, close the modal and refresh data
-    setShowCancellationUpsell(false);
+  const handleFlowSaved = () => {
+    // User accepted an offer — close the flow and refresh data.
+    setShowCancellationFlow(false);
     if (onSubscriptionUpdate) {
       onSubscriptionUpdate();
     }
     fetchSubscriptionBenefits();
   };
 
-  const handleUpsellDecline = () => {
-    // User declined the offer, proceed with cancellation
-    setShowCancellationUpsell(false);
-    proceedWithCancellation();
+  const handleFlowCancelled = () => {
+    // User went through the flow and confirmed cancellation — refresh data.
+    setShowCancellationFlow(false);
+    if (onSubscriptionUpdate) {
+      onSubscriptionUpdate();
+    }
+    fetchSubscriptionBenefits();
   };
 
   const handleReactivateSubscription = async () => {
@@ -957,21 +845,16 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
           upgradeInfo={upgradeData?.upgradeInfo}
         />
 
-        {/* Cancellation Upsell Modal */}
-        <CancellationUpsellModal
-          isOpen={showCancellationUpsell}
-          onClose={() => setShowCancellationUpsell(false)}
-          onRedeem={handleUpsellRedeem}
-          onDecline={handleUpsellDecline}
-          isPastDue={hasFailed}
+        {/* Cancellation Flow Modal — replaces the old CancellationUpsellModal */}
+        <CancellationFlowModal
+          isOpen={showCancellationFlow}
+          onClose={() => setShowCancellationFlow(false)}
+          onSaved={handleFlowSaved}
+          onCancelled={handleFlowCancelled}
           onResolvePayment={() => {
-            setShowCancellationUpsell(false);
+            setShowCancellationFlow(false);
             setIsRenewalFailedModalOpen(true);
           }}
-          accumulatedEntries={cancellationUpsellContext.accumulatedEntries}
-          daysUntilDraw={cancellationUpsellContext.daysUntilDraw}
-          drawCloseLabel={cancellationUpsellContext.drawCloseLabel}
-          downgrade={cancellationUpsellContext.downgrade}
         />
 
         {/* Renewal Failed Modal */}
