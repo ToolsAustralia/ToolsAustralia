@@ -7,10 +7,18 @@
  * ✕ button routes to Step 4 (confirm) via requestExit(), NOT onClose directly.
  *
  * Step routing:
- *   Step 1 → reason capture (Step1Reason)
- *   Step 2 → lead offer for the member's reason (Step2Offer)
- *   Step 3 → +100 bonus entries rung (Step3BonusEntries) — always the final offer
- *   Step 4 → confirm cancel or "Keep my membership" (Step4Confirm)
+ *   Step 1     → reason capture (Step1Reason)
+ *   Step 2     → OFFER phase: renders offersShown[offerCursor] via Step2Offer.
+ *                This is cursor-driven — declining advances the cursor and
+ *                Step2Offer re-renders the next rung (it handles ALL OfferTypes
+ *                including bonus_entries_100). The waterfall length is whatever
+ *                resolveOfferSequence produced (e.g. `other` has 3 rungs:
+ *                pause_30d → discount_50_2mo → bonus_entries_100).
+ *   Step 4     → confirm cancel or "Keep my membership" (Step4Confirm)
+ *
+ * There is no fixed "step 3" — the old hardcoded +100 step-3 was the bug
+ * (it skipped middle rungs of 3+ offer sequences). Step3BonusEntries is still
+ * a real component, rendered by Step2Offer for the bonus_entries_100 rung.
  *
  * Past-due path (§3a): server returns offersShown=[] → applyStart routes to
  * step 4 with state.pastDue=true → Step4Confirm renders the "Resolve payment" variant.
@@ -24,7 +32,6 @@ import { useStartCancellationFlow, useOutcomeCancellationFlow, useAcceptOffer } 
 import StepIndicator from "./StepIndicator";
 import Step1Reason from "./Step1Reason";
 import Step2Offer from "./Step2Offer";
-import Step3BonusEntries from "./Step3BonusEntries";
 import Step4Confirm from "./Step4Confirm";
 import type { CancellationFlowModalProps } from "./types";
 
@@ -92,6 +99,10 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
         );
 
       case 2:
+      case 3:
+        // OFFER phase. Step 3 is never produced by the step-machine anymore,
+        // but the FlowState.step type still allows it; route it through the
+        // same cursor-driven Step2Offer renderer so the union stays exhaustive.
         return (
           <Step2Offer
             state={state}
@@ -101,16 +112,6 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
             onDecline={flowHook.decline}
             onRequestTierDowngrade={onRequestTierDowngrade}
             tierDowngradeAvailable={tierDowngradeAvailable}
-          />
-        );
-
-      case 3:
-        return (
-          <Step3BonusEntries
-            state={state}
-            outcomeMutation={outcomeMutation}
-            onSaved={onSaved}
-            onDecline={flowHook.decline}
           />
         );
 

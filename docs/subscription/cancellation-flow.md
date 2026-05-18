@@ -270,13 +270,18 @@ FlowState = {
 ```
 
 - **Step 1** — reason capture (7 radio options; "Other" reveals an optional textarea)
-- **Step 2** — lead offer (`Step2Offer`) — dispatches over the current offer via exhaustive typed `switch`
-- **Step 3** — +100 bonus entries rung (`Step3BonusEntries`) — always the final offer when `offersShown.length > 1`
+- **Step 2 — the OFFER phase (cursor-driven)** — renders `offersShown[offerCursor]` via `Step2Offer`, which dispatches over the current offer via an exhaustive typed `switch` (handles **all 5** `OfferType`s including `bonus_entries_100`). The phase is **not** a fixed step counter: it renders whatever rung the cursor points at, for as many rungs as `offersShown` has (e.g. `other` = 3 rungs: `pause_30d → discount_50_2mo → bonus_entries_100`).
+- **Step 3 — retained in the `FlowState.step` union for type-compat but NEVER produced by the step-machine.** The old "step 3 = hardcoded +100 `Step3BonusEntries`" was the multi-rung-skipping bug: for a 3-rung sequence, declining rung 0 jumped straight to a hardcoded +100, skipping the middle rung entirely. `Step3BonusEntries` is still a real component — it is just rendered as the `bonus_entries_100` rung *within* the step-2 OFFER phase (via `Step2Offer`), not as a distinct hardcoded step.
 - **Step 4** — confirm cancel or "Keep my membership" (`Step4Confirm`)
 
-`applyStart({ eventId, offersShown, pastDue })` decides next step: if `offersShown.length === 0` → step 4; else → step 2.
+Pure transition helpers (exported from `useCancellationFlow.ts`, unit-tested without React in `__tests__/useCancellationFlow.test.ts`):
 
-`decline()` advances `offerCursor`; when exhausted → step 4. From Step 2 with a single offer, decline goes directly to Step 4 (cursor=1 >= length=1). From Step 2 with two offers, decline advances to Step 3 (cursor=1 < length=2); declining Step 3 goes to Step 4.
+- `offerPhaseFor(offersShown, cursor) → { step, offerCursor }` — `cursor >= length` → step 4; else step 2. Never returns step 3.
+- `nextOfferState(state) → { step, offerCursor }` — the decline reducer: `offerPhaseFor(offersShown, cursor + 1)`.
+
+`applyStart({ eventId, offersShown, pastDue })` uses `offerPhaseFor(offersShown, 0)`: if `offersShown.length === 0` → step 4 (past-due / no offers); else → step 2 cursor 0.
+
+`decline()` applies `nextOfferState`: from a **non-last** offer → stay step 2 with `offerCursor` advanced (Step2Offer re-renders the next rung — the middle rung of `other` is now reached, not skipped); from the **last** offer → step 4.
 
 `requestExit()` jumps directly to step 4 (used by the ✕ header button).
 
@@ -306,9 +311,9 @@ Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhausti
 
 The exhaustive `switch` + `never`-guard `default` is preserved; `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17) each changed from `throw` → card. **No `throw` case remains** — every one of the 5 `OfferType`s maps to a real card. The `never`-guard `default` is now genuinely unreachable for any valid `OfferType` and is kept intentionally as a compile-time exhaustiveness safety net for any future `OfferType` addition.
 
-### Step 3 — `Step3BonusEntries.tsx`
+### `Step3BonusEntries.tsx` (the `bonus_entries_100` rung — no longer a distinct "step 3")
 
-Universal "+100 bonus entries — stay active today" rung. Always the last offer in the reel.
+Universal "+100 bonus entries — stay active today" rung. **Rendered by `Step2Offer` for the `bonus_entries_100` offer during the cursor-driven step-2 OFFER phase** — it is NOT routed via a hardcoded step 3 anymore (that hardcoding was the bug). It is typically (but not necessarily) the last rung in `offersShown`.
 
 Accept flow (identical call chain to old `CancellationUpsellModal`):
 1. POST `/api/cancellation-upsell/redeem` with `credentials:"include"` (no body — the server identifies the user from the session).
@@ -316,7 +321,7 @@ Accept flow (identical call chain to old `CancellationUpsellModal`):
 3. Fire `outcomeMutation.mutate({outcome:"saved",offerAccepted:"bonus_entries_100"})` (fire-and-forget).
 4. Call `onSaved()`.
 
-Decline → `onDecline()` → `decline()` in the hook → cursor exhausted → Step 4.
+Decline → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4, otherwise the next rung renders.
 
 ### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
 
@@ -347,15 +352,17 @@ The old `CancellationUpsellModal` has been removed (Phase 5 Task 19) — `src/co
 
 `IMPLEMENTED_OFFERS` now contains every `OfferType`, so no offer is filtered (the only filters that remain in practice are past-due → `[]` and the one-time consumed flags for `pause_30d` / `discount_50_2mo` / `bonus_entries_100`):
 
-| Reason | offersShown | Step 1 → Step 2 | Step 2 → Step 3 | (then) → Step 4 |
-|---|---|---|---|---|
-| `too_expensive` | `[discount_50_2mo, bonus_entries_100]` | **discount card** | +100 card | decline → Step 4 |
-| `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | tier_downgrade card | +100 card | decline → Step 4 |
-| `dont_use_benefits` | `[pause_30d, bonus_entries_100]` | **pause card** | +100 card | decline → Step 4 |
-| `too_many_messages` | `[unsubscribe_marketing, bonus_entries_100]` | **unsubscribe card** | +100 card | decline → Step 4 |
-| `joined_for_giveaway` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
-| `havent_won` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
-| `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | **pause card** | **discount card** → +100 card | decline → Step 4 |
+The OFFER phase walks `offersShown` rung-by-rung (cursor-driven) — declining a non-last rung renders the next rung (still step 2); declining the last rung → Step 4. The "screen sequence" column lists every screen the user sees, in order:
+
+| Reason | offersShown | Screen sequence (each decline = next rung) |
+|---|---|---|
+| `too_expensive` | `[discount_50_2mo, bonus_entries_100]` | Reason → discount card → +100 card → Confirm |
+| `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | Reason → tier_downgrade card → +100 card → Confirm |
+| `dont_use_benefits` | `[pause_30d, bonus_entries_100]` | Reason → pause card → +100 card → Confirm |
+| `too_many_messages` | `[unsubscribe_marketing, bonus_entries_100]` | Reason → unsubscribe card → +100 card → Confirm |
+| `joined_for_giveaway` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
+| `havent_won` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
+| `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | Reason → **pause card → discount card → +100 card** (3-rung — discount no longer skipped, bug fixed) → Confirm |
 
 Per-reason trace (Task 17 — IMPLEMENTED = {bonus, tier, pause, discount, unsubscribe} — ALL):
 - `too_expensive` → `[discount_50_2mo, bonus_entries_100]`. Discount card → decline → +100 → Step 4.

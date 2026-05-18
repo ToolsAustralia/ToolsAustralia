@@ -11,9 +11,12 @@ interface StepConfig {
 }
 
 /**
- * Shows 2 indicator dots: "Reason" (step 1) and "Confirm" (step 4).
- * Steps 2/3 (Phase-2 offers) are collapsed into the Confirm dot until they ship.
- * Forward steps are disabled until the prerequisite step is reached.
+ * Presentational only. Shows 2 indicator dots: "Reason" (step 1) and the
+ * Offer→Confirm phase (steps 2/4 — step 3 is never produced). The OFFER phase
+ * is cursor-driven and can render 0..N rungs (e.g. `other` = 3 rungs); rather
+ * than a noisy per-rung counter we keep a single generic dot for the whole
+ * "before you go / confirm" half of the flow. Forward dot is disabled until
+ * the reason step is complete.
  */
 const STEP_CONFIGS: StepConfig[] = [
   { label: "Reason", steps: [1] },
