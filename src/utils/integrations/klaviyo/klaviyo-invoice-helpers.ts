@@ -8,6 +8,9 @@
  */
 
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getReceiptLabelByPackageId } from "@/utils/membership/getReceiptLabel";
+import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 
 export type PackageType = "membership" | "one-time" | "mini-draw" | "upsell";
 
@@ -143,7 +146,7 @@ export function buildInvoiceData(packageData: PackageData, paymentIntentId: stri
     entries_gained: packageData.entries,
     items: [
       {
-        description: packageData.packageName,
+        description: getReceiptLabelByPackageId(packageData.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
         quantity: 1,
         unit_price: packageData.price,
         total_price: packageData.price,
@@ -172,7 +175,7 @@ export function buildCombinedInvoiceData(
   // Build items array starting with original purchase
   const items: InvoiceItem[] = [
     {
-      description: originalPurchase.packageName,
+      description: getReceiptLabelByPackageId(originalPurchase.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
       quantity: 1,
       unit_price: originalPurchase.price,
       total_price: originalPurchase.price,

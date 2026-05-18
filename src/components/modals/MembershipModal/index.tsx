@@ -53,7 +53,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { convertUpsellToLocalPlan } from "@/utils/membership/membership-adapters";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
-import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
@@ -77,6 +77,8 @@ import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+import { getReceiptLabelByPackageId } from "@/utils/membership/getReceiptLabel";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
@@ -3169,7 +3171,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
 
             setPaymentIntentId(paymentIntentId);
-            setProcessingPackageName(activePlan.name);
+            setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
             setProcessingPackageType("mini-draw");
             setShowPaymentProcessing(true);
           } else {
@@ -3368,7 +3370,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
 
             setPaymentIntentId(paymentIntentId);
-            setProcessingPackageName(activePlan.name);
+            setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
             setProcessingPackageType("one-time");
             setShowPaymentProcessing(true);
           } else {
@@ -4470,7 +4472,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 isPlaceholderPlan={isPlaceholderPlan}
                 subscriptionPackages={subscriptionPackages}
                 oneTimePackages={oneTimePackages}
-                contextVariantConfig={contextVariantConfig}
                 promoThemePrimary={promoTheme.primary}
                 selectedPaymentMethod={selectedPaymentMethod}
                 showCardForm={showCardForm}

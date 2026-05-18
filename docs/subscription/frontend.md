@@ -1,5 +1,24 @@
 # Subscription — Frontend
 
+## MembershipSection card rendering
+
+`src/components/sections/MembershipSection.tsx` now renders `ElectricPackageCard` (from `src/components/sections/membership/`) for every plan card in both the mobile (`lg:hidden`) and desktop (`hidden lg:block`) branches. The old inline card markup is fully removed.
+
+**Color source:** membership tab → `getMembershipSectionColorScheme(plan.id, true)`; one-time tab → `getElectricPackageColorScheme(plan.id)`. The previous A/B `getPackageColorSchemeForPromo` per-card color override is dropped; variant hide/reorder/highlight logic in the `membershipPlans` build is intact.
+
+**Theme:** `theme={isDark ? "dark" : "light"}` driven by `useHtmlDarkForUi()`. Dark = electric dark background; light = branded vivid card background.
+
+**CTA text:** computed in the section map callback and passed as `ctaLabel` to the card. The mapping is:
+- `"Update payment"` — blocking subscription (`hasBlockingSub`) + `past_due` + subscription-type plan
+- `"Current Plan"` / `"Upgrade to …"` / `"Downgrade to …"` — active subscription on membership tab, based on `getPlanHierarchy`
+- `"Enter Now"` — default (new subscription, one-time tab, non-blocking states)
+
+**Promo multiplier badge:** rendered internally by `ElectricPackageCard`; the section no longer renders its own badge overlay. No double-badge.
+
+**Locked state:** `locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly` — same gate as before, now expressed as a prop rather than conditional button markup.
+
+---
+
 ## Hooks
 
 All client reads of subscription state go through one of these four hooks. They are the only sanctioned read path — components must not call `/api/memberships` directly.
@@ -85,3 +104,11 @@ interface StripePaymentModalProps {
 ```
 
 Smoke test: `npm run test:stripe-payment`.
+
+## SpecialPackagesModal — PackagesGrid
+
+[`src/components/modals/SpecialPackagesModal/PackagesGrid.tsx`](../../src/components/modals/SpecialPackagesModal/PackagesGrid.tsx) renders the list of one-time packages inside the special packages modal. Each row is a 3-column grid: package name left, entries center, price+select right.
+
+- **Price display:** regular (struck) price stacks on top of the discounted price in a vertical `flex-col items-end` span — struck regular price shown first (small, `text-white/40 line-through`), discounted price below (bold, accent-coloured).
+- **Entries display:** when `pkg.isPromoActive && pkg.originalEntries !== pkg.totalEntries`, a struck `originalEntries` line is shown on top of the boosted `totalEntries` count (mirrors the price stacking pattern).
+- **Best Value badge:** the `BestValueBadge` for one-time best-value plans is rendered at `scale-[0.6] origin-top-left` via the `className` prop, shrinking the corner ribbon ~40% and anchoring it tightly to the top-left corner of the card.

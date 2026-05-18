@@ -21,7 +21,6 @@ import PlanSummaryCard from "./PlanSummaryCard";
 import type { SavedPaymentMethod } from "@/hooks/useSavedPaymentMethods";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { type MembershipPlan as ApiMembershipPlan } from "@/hooks/useMemberships";
-import { type VariantConfig } from "@/models/ab-testing/Variant";
 
 interface PromoLinkInfoLite {
   bonusEntries: number;
@@ -52,8 +51,6 @@ interface PaymentStepProps {
   isPlaceholderPlan: boolean;
   subscriptionPackages: ApiMembershipPlan[];
   oneTimePackages: ApiMembershipPlan[];
-  // Variant
-  contextVariantConfig: VariantConfig | null;
   promoThemePrimary: string;
   // Stripe state
   selectedPaymentMethod: SavedPaymentMethod | null;
@@ -105,7 +102,6 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
   isPlaceholderPlan,
   subscriptionPackages,
   oneTimePackages,
-  contextVariantConfig,
   promoThemePrimary,
   selectedPaymentMethod,
   showCardForm,
@@ -267,7 +263,6 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
         <PlanSummaryCard
           promoEnhancedPlan={promoEnhancedPlan}
           promoThemePrimary={promoThemePrimary}
-          contextVariantConfig={contextVariantConfig}
           subscriptionPackages={subscriptionPackages}
           oneTimePackages={oneTimePackages}
           onPackageChange={onPackageChange}

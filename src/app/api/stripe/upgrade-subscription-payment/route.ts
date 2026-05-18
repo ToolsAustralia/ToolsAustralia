@@ -202,8 +202,8 @@ export async function POST(request: NextRequest) {
     // ✅ STRIPE BEST PRACTICE: For immediate upgrade with payment collection
     // Use 'always_invoice' to create invoice and attempt immediate payment
     // Use 'unchanged' billing cycle to maintain consistent billing dates and accurate proration
-    // Format description: (UPGRADE) PreviousPackage(Previous) to NewPackage(New)
-    const upgradeDescription = `(UPGRADE) ${currentPackage.name} to ${newPackage.name}`;
+    // Format description for Stripe transactions tab: "Tradie to Foreman Upgrade"
+    const upgradeDescription = `${currentPackage.name} to ${newPackage.name} Upgrade`;
 
     const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
       items: [

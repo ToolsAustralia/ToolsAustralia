@@ -216,30 +216,37 @@ function RotatingToolsetCard() {
         <div className="relative z-10 flex flex-row items-center gap-3 sm:gap-4 lg:gap-5">
           {/* Image column (always right) */}
           <div className="order-2 flex flex-col items-center shrink-0 w-[130px] sm:w-[170px] lg:w-[210px]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`wordmark-${active}`}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.25 }}
-                className={`relative ${
-                  active === "makita"
-                    ? "h-5 w-24 sm:h-5 sm:w-24 lg:h-6 lg:w-28"
-                    : "h-7 w-32 sm:h-7 sm:w-36 lg:h-8 lg:w-40"
-                }`}
-              >
-                <Image
-                  src={wordmarkSrc}
-                  alt={`${TOOLSET_DISPLAY_NAME[active]} wordmark`}
-                  fill
-                  className="object-contain"
-                  sizes="(max-width: 640px) 128px, 160px"
-                />
-              </motion.div>
-            </AnimatePresence>
+            {/* Fixed-height wordmark slot — constant box so Makita's shorter
+                wordmark (and the AnimatePresence swap gap) never shifts the
+                photo/pill below. */}
+            <div className="relative flex h-7 lg:h-8 w-full items-center justify-center">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`wordmark-${active}`}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.25 }}
+                  className={`relative ${
+                    active === "makita"
+                      ? "h-5 w-24 sm:h-5 sm:w-24 lg:h-6 lg:w-28"
+                      : "h-7 w-32 sm:h-7 sm:w-36 lg:h-8 lg:w-40"
+                  }`}
+                >
+                  <Image
+                    src={wordmarkSrc}
+                    alt={`${TOOLSET_DISPLAY_NAME[active]} wordmark`}
+                    fill
+                    className="object-contain"
+                    sizes="(max-width: 640px) 128px, 160px"
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
-            <div className="relative mt-2">
+            {/* Fixed-size photo slot — reserves the image box so the swap gap
+                doesn't collapse the column. */}
+            <div className="relative mt-2 flex h-[90px] w-[150px] sm:h-[105px] sm:w-[180px] lg:h-[120px] lg:w-[200px] items-center justify-center">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`photo-${active}`}
@@ -267,25 +274,29 @@ function RotatingToolsetCard() {
               </AnimatePresence>
             </div>
 
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`pill-${active}`}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.25 }}
-                className="mt-2 w-fit rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-xl backdrop-blur-md"
-                style={{
-                  background: badgeStyle.background,
-                  boxShadow: badgeStyle.boxShadow,
-                  border: badgeStyle.border,
-                }}
-              >
-                <p className={cn("font-sans text-3xs sm:text-2xs font-extrabold leading-tight whitespace-nowrap", scheme.buttonText)}>
-                  {pillLabel}
-                </p>
-              </motion.div>
-            </AnimatePresence>
+            {/* Fixed-height pill slot — keeps the dots row below from moving
+                during the brand swap gap. */}
+            <div className="relative mt-2 flex min-h-[24px] sm:min-h-[30px] w-full items-center justify-center">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`pill-${active}`}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.25 }}
+                  className="w-fit rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-xl backdrop-blur-md"
+                  style={{
+                    background: badgeStyle.background,
+                    boxShadow: badgeStyle.boxShadow,
+                    border: badgeStyle.border,
+                  }}
+                >
+                  <p className={cn("font-sans text-3xs sm:text-2xs font-extrabold leading-tight whitespace-nowrap", scheme.buttonText)}>
+                    {pillLabel}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Text column (always left) */}

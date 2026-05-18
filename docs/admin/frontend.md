@@ -18,6 +18,7 @@
   - **Email column** is clickable via `ClickableUserDisplay` — opens the same `UserDetailModal` the users + past-due-history tabs use. `BlockedRow.userId` is resolved server-side in `listBlocked` (joins `User` by `stripeCustomerId` then `customerEmail`); guests render as plain text.
   - **Eligibility verdict** is computed by the shared mapper [src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts) so the post-join filter and the in-row badge can never disagree.
   - **MultiSelectFilter** popover component lives at [src/components/admin/MultiSelectFilter.tsx](../../src/components/admin/MultiSelectFilter.tsx) and powers both the eligibility and decline-code multi-selects.
+- `PromoPurchaseEntriesPreview.tsx` — read-only preview table rendered inside `AdminPromoToggle`. Accepts a `PromoMultiplierSnapshot` (`{ membershipPackages, oneTimePackages, miniPackages }`) and renders three collapsible sections (Membership / One-Time + Additional / Mini) showing base → multiplied entry counts per package. The Mini section appends a note that mini upsells are immune to the multiplier. Data is computed purely from static package data via `src/utils/admin/promo-purchase-entries-preview.ts` — no API calls.
 - (other admin-specific components)
 
 > _TODO: enumerate full component list._
@@ -247,11 +248,32 @@ The footer uses explicit paired classes throughout:
 
 Success (green) and error (red) panels use `{color}-50` light backgrounds with `{color}-800`/`{color}-900` text in light mode for sufficient contrast, and `{color}-950/25` dark backgrounds with `{color}-200`/`{color}-300` text in dark mode.
 
+## Upsell Multiplier panel (PromoManagement > Upsell Multipliers tab — 2026-05-14)
+
+[src/components/admin/UpsellMultiplierPanel.tsx](../../src/components/admin/UpsellMultiplierPanel.tsx) — editable form for the singleton `UpsellMultiplierConfig` document. Mounted as the `"upsell-multipliers"` tab inside `PromoManagement`.
+
+**Shell features:**
+- Three `<select>` controls (Membership / One-Time / Additional) whose options come from `PROMO_MULTIPLIERS`.
+- Draft state — changes are held in `useState` until the admin clicks Save, letting the preview update instantly without persisting.
+- Save calls `PUT /api/admin/upsell-multipliers` via `useUpsellMultipliersMutation()`; Cancel resets draft to the last-saved values.
+- Active-promo banner reads `useAdminActivePromos()` and shows the current multiplier for each of the three promo types (membership-packages / one-time-packages / mini-packages). Renders "no active promo" when none are active.
+
+**Preview component** ([src/components/admin/UpsellMultiplierPanel.preview.tsx](../../src/components/admin/UpsellMultiplierPanel.preview.tsx)):
+- Accepts `{ membership, oneTime, additional }` props and renders four responsive tables: Membership / One-Time / Additional / Mini.
+- Per-row entry count = `multiplier × base`, where `base` is resolved via `getPackageById(record.baseTemplatePackageId)` (subscription → `entriesPerMonth`, one-time → `totalEntries`).
+- Mini table is static (no knob) — annotated "fixed 1:1 entries"; uses the hard-coded `MINI_ROWS` constant matching the `MINI_TIERS` in `upsellPackages.ts`.
+
+**TanStack Query hooks** ([src/hooks/queries/admin/useUpsellMultipliers.ts](../../src/hooks/queries/admin/useUpsellMultipliers.ts)):
+- `useUpsellMultipliersQuery()` — `useQuery` against `GET /api/admin/upsell-multipliers`. Query key: `["admin", "upsell-multipliers"]`. Uses `apiGet` from `@/lib/queries` for consistent auth + error handling.
+- `useUpsellMultipliersMutation()` — `useMutation` + `apiPut`; invalidates the query key on success.
+
 ## Hooks
 
 | Hook | Purpose |
 |---|---|
 | `useAdminMobileDateToolbarSlot()` | Admin-specific date toolbar mobile UX |
+| `useUpsellMultipliersQuery()` | GET singleton upsell multiplier config |
+| `useUpsellMultipliersMutation()` | PUT updated multiplier triple, invalidates query |
 | (admin queries via `useAdminQueries.ts`) | TanStack Query hooks for admin data |
 
 ## Theme

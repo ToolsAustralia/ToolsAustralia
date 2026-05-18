@@ -20,6 +20,12 @@ Server-side events are the source of truth for conversions. Pixel fires client-s
 
 Email / phone in CAPI events use SHA-256 hashing. Use the helper in `lib/facebook.ts` — don't roll your own hash.
 
+## P6. Klaviyo invoice line-item descriptions use receipt labels
+
+`src/utils/integrations/klaviyo/klaviyo-invoice-helpers.ts` builds the `item.description` field for Klaviyo invoice emails via `getReceiptLabelByPackageId(packageId, { membership: getPackageById, mini: getMiniDrawPackageById })` rather than the raw `packageName` string. This ensures users who hold multiple member/mini-draw SKUs with the same display name can tell them apart in their email receipt.
+
+**Rule:** The `packageName` field on `InvoiceData` and `PurchaseData` structs (and stored in PaymentEvent documents) continues to use the raw `pkg.name` value — only the rendered `item.description` is label-resolved. Do not change the stored `packageName` value; it is used for reconciliation and Stripe-side reference.
+
 ## Cursor agent
 
 `.cursor/agents/growth-integrations.md` covers this domain.

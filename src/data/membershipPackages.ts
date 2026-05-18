@@ -80,7 +80,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 15,
     shopDiscountPercent: 5,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("tradie-subscription"),
@@ -101,7 +102,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 40,
     shopDiscountPercent: 10,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("foreman-subscription"),
@@ -122,7 +124,8 @@ export const membershipPackages: StaticMembershipPackage[] = [
     ],
     entriesPerMonth: 100,
     shopDiscountPercent: 20,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("boss-subscription"),

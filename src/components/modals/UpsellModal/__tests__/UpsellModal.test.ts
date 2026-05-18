@@ -63,7 +63,7 @@ const sampleOffer: UpsellOffer = {
   entriesCount: 300,
   buttonText: "Double My Entries - $50",
   conditions: [
-    "300 Major Draw Entries",
+    "300 major draw free entries",
     "4 Days Partner Discount Access",
     "One-time purchase",
   ],
@@ -81,7 +81,7 @@ const miniDrawOffer: UpsellOffer = {
   title: "Mini Draw Bonus Pack",
   category: "mini-draw",
   discountedPrice: 45,
-  conditions: ["150 Mini Draw Entries", "Instant activation"],
+  conditions: ["150 mini draw free entries", "Instant activation"],
 };
 
 interface Combo {

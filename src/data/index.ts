@@ -65,8 +65,6 @@ export {
   filterUpsellPackagesByUserSegment,
   getBestUpsellOffer,
   type StaticUpsellPackage,
-  type UpsellImageDescriptor,
-  type UpsellImageGroup,
 } from "./upsellPackages";
 export {
   top5Winners,

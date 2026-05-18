@@ -31,7 +31,7 @@ import { useLoading } from "@/contexts/LoadingContext";
 // Upsell store removed - using unified modal priority system
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
-import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { PaymentProcessingScreen } from "@/components/loading";
@@ -50,6 +50,7 @@ import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-disco
 import { usePromoLink } from "@/hooks/usePromoLink";
 import { useReferralCode } from "@/hooks/useReferralCode";
 import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
+import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { buildMembershipStripeAppearance } from "@/utils/payment/stripe/membership-stripe-appearance";
@@ -437,7 +438,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       if (resolvedPaymentIntentId) {
         setPaymentIntentId(resolvedPaymentIntentId);
         setPurchasePaymentMethodId(paymentMethodIdToCharge);
-        setProcessingPackageName(pkg.name);
+        setProcessingPackageName(getReceiptLabel(pkg));
         setShowPaymentProcessing(true);
       } else {
         const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
@@ -856,7 +857,7 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         {/* Congratulations Section - Below Header (hidden when package is selected) */}
         {!selectedPackage && <PromoBanner firstName={userData?.firstName} />}
 
-        <ModalContent scrollbar="metallic" padding="none" className="flex flex-col p-3 sm:p-6">
+        <ModalContent scrollbar="metallic" padding="none" className="flex flex-col overflow-x-hidden p-3 sm:p-6">
           <PackagesGrid
             packagesWithPromo={packagesWithPromo}
             selectedPackage={selectedPackage}

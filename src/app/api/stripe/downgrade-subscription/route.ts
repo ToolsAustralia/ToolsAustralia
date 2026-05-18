@@ -172,8 +172,8 @@ export async function POST(request: NextRequest) {
     //   }))
     // );
 
-    // Format description: (DOWNGRADE) PreviousPackage(Previous) to NewPackage(New)
-    const downgradeDescription = `(DOWNGRADE) ${currentPackage.name} to ${newPackage.name}`;
+    // Format description for Stripe transactions tab: "Boss to Foreman Downgrade"
+    const downgradeDescription = `${currentPackage.name} to ${newPackage.name} Downgrade`;
 
     // Create subscription update with item replacements
     const subscriptionUpdateParams: Stripe.SubscriptionUpdateParams = {

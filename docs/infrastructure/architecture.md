@@ -90,6 +90,8 @@ Vercel scales CPU with memory, so 512MB is roughly half the CPU of 1024MB — fi
 
 `lib/environment.ts` validates and exposes env vars. Don't access `process.env.X` directly — go through this module so missing/invalid vars fail fast at boot.
 
+[`.env.example`](../../.env.example) is the checked-in scaffold — opt-in, not exhaustive. It documents the small set of env vars that have caused onboarding pain and aren't covered by `lib/environment.ts` boot validation (currently: `STRIPE_WORKER_INTERNAL_SECRET`, which gates the internal Stripe webhook worker route — see [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md)). `.gitignore` line 36 has a `!.env.example` negation against the blanket `.env*` rule so this single example file ships with the repo.
+
 ## Migrated from `src/docs/ENVIRONMENT_SETUP.md`
 
 > _TODO: read root file and merge._

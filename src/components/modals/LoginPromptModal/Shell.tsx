@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { Z_INDEX } from "@/constants/z-index";
 import { cn } from "@/utils/cn";
 
 interface ShellProps {
@@ -32,10 +34,14 @@ const Shell: React.FC<ShellProps> = ({ isOpen, onClose, children, labelledBy }) 
 
   if (!isOpen) return null;
 
-  return (
+  // Portal to <body>: without this, the modal renders inside whatever ancestor
+  // stacking context contains its mount point (e.g. mini-draws prize page's
+  // `lg:sticky` right column), which traps zIndex below sibling-column children
+  // like the gallery carousel's z-20 chevrons. Portaling escapes that.
+  const overlay = (
     <div
       className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 overflow-hidden"
-      style={{ zIndex: 90 }}
+      style={{ zIndex: Z_INDEX.MODAL_BASE }}
     >
       <div
         className="absolute inset-0 bg-black/85 backdrop-blur-md"
@@ -68,6 +74,11 @@ const Shell: React.FC<ShellProps> = ({ isOpen, onClose, children, labelledBy }) 
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined" && document.body) {
+    return createPortal(overlay, document.body);
+  }
+  return overlay;
 };
 
 export default Shell;

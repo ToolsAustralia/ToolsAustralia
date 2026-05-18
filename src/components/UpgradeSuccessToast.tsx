@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useSession } from "next-auth/react";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 /**
  * Component that checks for successful subscription upgrades/downgrades after page reload
@@ -58,16 +59,18 @@ export default function UpgradeSuccessToast() {
           const displayEntries = totalEntriesAfterUpgrade || entriesPerMonth;
 
           const partnerLine = packageId ? getPartnerDiscountBenefitTextForPackageId(packageId) : null;
+          // Subscription upgrade: partner access is lifecycle-gated (active
+          // while subscribed), never a fixed day count. partnerDiscountDays is
+          // ignored for the duration phrasing here.
+          void partnerDiscountDays;
           const partnerClause = partnerLine
             ? ` and ${partnerLine}`
-            : partnerDiscountDays && partnerDiscountDays > 0
-              ? ` and ${partnerDiscountDays} days of partner benefits access`
-              : " and partner benefits access";
+            : ` and ${getPartnerAccessDurationLabel({ isSubscription: true })!.long.toLowerCase()}`;
 
           showToast({
             type: "success",
             title: "Membership Upgraded Successfully!",
-            message: `Welcome to ${packageName} membership! You now have ${displayEntries} Free Accumulated Entries${partnerClause}. Your new benefits are active immediately!`,
+            message: `Welcome to ${packageName} membership! You now have ${displayEntries} free accumulated entries${partnerClause}. Your new benefits are active immediately!`,
             duration: 25000, // Show for 25 seconds for important upgrade info
             action: {
               label: "View Benefits",

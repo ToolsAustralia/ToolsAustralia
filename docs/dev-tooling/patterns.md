@@ -27,6 +27,10 @@ if (alreadyFixed) {
 await markSentinel();
 ```
 
+## P5. MembershipSectionDevClient theme toggle
+
+`MembershipSectionDevClient` (`/dev/membershipsection`) passes `theme={dark ? "dark" : "light"}` to `ElectricPackageCard`; toggling the dark/light button in the harness now switches between the electric dark and tier-blocked-premium light variants.
+
 ## P4. Examples are reference, not imports
 
 `src/examples/` is for documentation / copy-paste. Don't import from feature code.

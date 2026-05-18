@@ -2,10 +2,13 @@
 
 import React from "react";
 import { Check, Calendar, Tag, Percent, Sparkles } from "lucide-react";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 interface BenefitsBodyProps {
   toPackageName: string;
   toPartnerAccessPercent: number;
+  /** Retained for caller compatibility; not rendered — subscription partner
+   * access is lifecycle-gated (shown as "While active"), not a day count. */
   toPartnerDiscountDays: number;
   toEntriesPerMonth: number;
   currentEntries?: number;
@@ -90,7 +93,8 @@ const CheckItem: React.FC<{
 const BenefitsBody: React.FC<BenefitsBodyProps> = ({
   toPackageName,
   toPartnerAccessPercent,
-  toPartnerDiscountDays,
+  // toPartnerDiscountDays intentionally not destructured: subscription partner
+  // access is lifecycle-gated, so we no longer render a day count here.
   toEntriesPerMonth,
   currentEntries,
   saveLabel,
@@ -112,11 +116,11 @@ const BenefitsBody: React.FC<BenefitsBodyProps> = ({
           value={`${toPartnerAccessPercent}%`}
           label="Partner offers"
         />
-        {/* Cell 2: Days access */}
+        {/* Cell 2: Partner access — subscription downgrade, lifecycle-gated */}
         <StatCell
           icon={<Calendar size={18} />}
-          value={toPartnerDiscountDays}
-          label="Days access"
+          value={getPartnerAccessDurationLabel({ isSubscription: true })!.short}
+          label="Partner access"
         />
         {/* Cell 3: Free entries / cycle */}
         <StatCell

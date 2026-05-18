@@ -14,7 +14,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
-import { formatDisplayName } from "@/utils/display-name";
+import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
@@ -765,7 +765,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 dark:text-white hover:text-red-600 dark:hover:text-red-400 transition-colors">
-                            {formatDisplayName(userData?.firstName, userData?.lastName)}
+                            {formatNamePart(userData?.firstName)}
                           </span>
                           {(() => {
                             // Prioritize subscription over one-time packages

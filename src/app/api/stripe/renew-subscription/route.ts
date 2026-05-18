@@ -441,6 +441,8 @@ export async function POST(request: NextRequest) {
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
       collection_method: "charge_automatically",
+      // Stripe transactions tab: "Tradie Renewal" / "Foreman Renewal" / "Boss Renewal"
+      description: `${targetPackage.name} Renewal`,
       metadata: baseMetadata as Stripe.MetadataParam,
       ...restAnchorParams,
       ...(hasAnchor &&

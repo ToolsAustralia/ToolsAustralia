@@ -182,6 +182,9 @@ Wraps a single `InvoiceChargeLog.aggregate` over `status: "failed"` rows in the 
 - Contact submissions
 - Partner applications
 - Promo management
+- **Upsell multipliers** (`/api/admin/upsell-multipliers`):
+  - `GET /api/admin/upsell-multipliers` — returns the singleton `UpsellMultiplierConfig` document (`{ membership, oneTime, additional }`). Returns defaults `{ membership: 10, oneTime: 2, additional: 2 }` if no document exists yet.
+  - `PUT /api/admin/upsell-multipliers` — upserts the config document. Zod-validated; all three fields required; values must be members of `PROMO_MULTIPLIERS`. Called by `useUpsellMultipliersMutation()` in the admin panel.
 - Affiliate management
 - Draw management
 - Analytics dashboards (`/api/admin/dashboard/stats`)

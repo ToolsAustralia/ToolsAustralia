@@ -3211,7 +3211,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Webhook events don't always include all fields expanded, so we need to retrieve it fresh
     // This ensures we have access to subscription, payment_intent, and charge fields
     const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
-      expand: ["parent.subscription_details.subscription", "payment_intent", "charge"],
+      // Basil (2025-08-27): invoices no longer carry top-level payment_intent/charge —
+      // they live under payments.data[].payment. Keep legacy keys for older API safety.
+      expand: [
+        "parent.subscription_details.subscription",
+        "payment_intent",
+        "charge",
+        "payments.data.payment",
+      ],
     });
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
@@ -3331,23 +3338,42 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         subscription = await stripe.subscriptions.retrieve(subscriptionId);
       }
 
-      // Update payment intent description for recurring payments
-      const invoiceWithPaymentIntent = expandedInvoice as Stripe.Invoice & {
-        payment_intent?: string | Stripe.PaymentIntent;
-      };
-      if (expandedInvoice.billing_reason === "subscription_cycle" && invoiceWithPaymentIntent.payment_intent) {
+      // Relabel recurring renewal charges so the Stripe transactions list reads
+      // "Tradie Renewal" instead of the join-time subscription.description ("Tradie").
+      if (expandedInvoice.billing_reason === "subscription_cycle") {
         try {
-          const paymentIntentId =
-            typeof invoiceWithPaymentIntent.payment_intent === "string"
-              ? invoiceWithPaymentIntent.payment_intent
-              : invoiceWithPaymentIntent.payment_intent.id;
           const packageName = subscription.metadata.packageName || "Subscription";
+          const renewalDescription = `${packageName} Renewal`;
 
-          await stripe.paymentIntents.update(paymentIntentId, {
-            description: `${packageName} (RENEWAL)`,
-          });
+          // Basil: invoice.payment_intent/charge are gone — resolve the PI via the
+          // shared payments[].payment-aware helper, then derive the Charge from the PI.
+          const [paymentIntentId] = paymentIntentIdsOnInvoice(expandedInvoice);
+          if (paymentIntentId) {
+            const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+              expand: ["latest_charge"],
+            });
+            await stripe.paymentIntents.update(paymentIntentId, {
+              description: renewalDescription,
+            });
+
+            // The transactions list renders the *Charge* description, not the PI's,
+            // and the auto-cycle charge has already settled by the time this runs —
+            // so the Charge must be updated directly.
+            const chargeId = pi.latest_charge
+              ? typeof pi.latest_charge === "string"
+                ? pi.latest_charge
+                : pi.latest_charge.id
+              : undefined;
+            if (chargeId) {
+              await stripe.charges.update(chargeId, { description: renewalDescription });
+            } else {
+              webhookLog("warn", `No charge to relabel for renewal invoice ${expandedInvoice.id}`);
+            }
+          } else {
+            webhookLog("warn", `No payment intent on renewal invoice ${expandedInvoice.id} — cannot relabel`);
+          }
         } catch (updateError) {
-          webhookLog("error", `Failed to update payment intent description: ${updateError}`);
+          webhookLog("error", `Failed to relabel renewal charge/payment intent description: ${updateError}`);
         }
       }
     } catch (stripeError) {

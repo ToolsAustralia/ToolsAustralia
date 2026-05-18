@@ -17,9 +17,10 @@ import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatin
 import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
 import MonthlyRedeemablesCampaignPanel from "@/components/admin/MonthlyRedeemablesCampaignPanel";
 import MilestoneRewardsPanel from "@/components/admin/MilestoneRewardsPanel";
+import { UpsellMultiplierPanel } from "@/components/admin/UpsellMultiplierPanel";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import type { ScheduledPromo } from "@/types/admin";
-import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal, Layers } from "lucide-react";
 import { formatDisplayName } from "@/utils/display-name";
 import { cn } from "@/utils/cn";
 
@@ -33,7 +34,14 @@ export default function PromoManagement() {
   const [isBannerTextModalOpen, setIsBannerTextModalOpen] = useState(false);
   const [isAlternatingMultiplierModalOpen, setIsAlternatingMultiplierModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "redeemables" | "milestones" | "scheduled" | "bonus-entry" | "promo-links" | "banner-text" | "alternating"
+    | "redeemables"
+    | "milestones"
+    | "scheduled"
+    | "bonus-entry"
+    | "promo-links"
+    | "banner-text"
+    | "alternating"
+    | "upsell-multipliers"
   >("scheduled");
 
   const queryClient = useQueryClient();
@@ -47,6 +55,7 @@ export default function PromoManagement() {
     { id: "bonus-entry" as const, label: "Bonus Entry", icon: Gift },
     { id: "redeemables" as const, label: "Redeemables", icon: Gift },
     { id: "milestones" as const, label: "Milestones", icon: Medal },
+    { id: "upsell-multipliers" as const, label: "Upsell Multipliers", icon: Layers },
   ];
 
   const primaryActionButtonClass =
@@ -93,6 +102,8 @@ export default function PromoManagement() {
           {activeTab === "redeemables" && <MonthlyRedeemablesCampaignPanel />}
 
           {activeTab === "milestones" && <MilestoneRewardsPanel />}
+
+          {activeTab === "upsell-multipliers" && <UpsellMultiplierPanel />}
 
           {activeTab === "scheduled" && (
             <>

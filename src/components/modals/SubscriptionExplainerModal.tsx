@@ -6,6 +6,7 @@ import { X, CreditCard, Sparkles, Calendar, Percent } from "lucide-react";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 import { cn } from "@/utils/cn";
 
 export interface SubscriptionExplainerModalProps {
@@ -25,16 +26,6 @@ function tierFromName(name?: string): Tier {
   if (lower.includes("foreman")) return "foreman";
   if (lower.includes("tradie")) return "tradie";
   return "neutral";
-}
-
-/** Per-tier partner-discount day baseline — mirrors site-wide membership data
- * (Tradie 1d, Foreman 7d, Boss 30d). Used for the partner-days stat cell since
- * the explainer modal does not receive partnerDiscountDays as a prop. */
-function partnerDaysForTier(tier: Tier): number {
-  if (tier === "boss") return 30;
-  if (tier === "foreman") return 7;
-  if (tier === "tradie") return 1;
-  return 0;
 }
 
 const TIER_VARS: Record<Tier, React.CSSProperties> = {
@@ -280,8 +271,8 @@ const SubscriptionExplainerModal: React.FC<SubscriptionExplainerModalProps> = ({
               />
               <StatCell
                 icon={<Calendar size={14} strokeWidth={2.2} />}
-                value={partnerDaysForTier(tier)}
-                label="Days access"
+                value={getPartnerAccessDurationLabel({ isSubscription: true })!.short}
+                label="Partner access"
               />
               <StatCell
                 icon={<Sparkles size={14} strokeWidth={2.2} />}
