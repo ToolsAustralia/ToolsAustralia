@@ -101,7 +101,7 @@ export default function ElectricPackageCard({
 
       {/* Promo multiplier lightning badge (top-right) — only when a multiplier is active */}
       {entries.multiplied && typeof plan.metadata?.promoMultiplier === "number" && (
-        <div className="absolute -top-9 -right-2 sm:-right-7 z-30 pointer-events-none">
+        <div className="absolute -top-5 sm:-top-9 -right-5 sm:-right-7 z-30 pointer-events-none">
           <Image
             src={`/images/badge/X${plan.metadata.promoMultiplier}.webp`}
             alt={`${plan.metadata.promoMultiplier}x entries`}
@@ -148,12 +148,12 @@ export default function ElectricPackageCard({
         {/* Icon — raised so it clears the package name */}
         {icon && (
           <div className="absolute -top-8 sm:-top-12 left-1/2 -translate-x-1/2 z-20">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
+            <div className="w-[72px] h-[72px] sm:w-20 sm:h-20 relative">
               <Image
                 src={icon}
                 alt={`${getPackageDisplayName(plan)} icon`}
                 fill
-                sizes="(max-width: 640px) 64px, 80px"
+                sizes="(max-width: 640px) 72px, 80px"
                 className={cn("object-contain", colorScheme.glow)}
               />
             </div>
