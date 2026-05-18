@@ -124,9 +124,13 @@ Request body:
 {
   "action": "start",
   "reason": "too_expensive",       // CancellationReason (required)
-  "reasonText": "..."              // string, max 2000 chars (optional)
+  "reasonText": "..."              // string, max 2000 chars; REQUIRED (non-empty) when reason === "other", optional otherwise
 }
 ```
+
+Validation: a `Body.superRefine` rejects `{ action:"start", reason:"other" }`
+when `reasonText` is missing/blank (400) — so an "other" event always carries
+its explanation for admin.
 
 Success response `200`:
 ```json
@@ -244,14 +248,37 @@ Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 
 ### Responsive presentation
 
-Uses `ModalContainer` (imported from `../ui`, same as `PackageSelectionModal`):
+Uses `ModalContainer` (imported from `../ui`):
 
 ```tsx
-const isNarrowViewport = useMediaQuery("(max-width: 639px)");
-<ModalContainer presentation={isNarrowViewport ? "sheet" : "dialog"} ... />
+const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
+<ModalContainer
+  size="md"
+  presentation={isNarrowViewport ? "sheet" : "dialog"}
+  mobileFullBleed
+  padding="none"   // on ModalContent — see below
+/>
 ```
 
-Desktop renders as a centered dialog; mobile (< 640px) renders as a bottom sheet.
+- **Mobile + tablet (< `lg`/1024px):** near-fullscreen via `mobileFullBleed`
+  (full viewport width, bottom-flush, ~5% gap at the top, `h-[95dvh]`) with the
+  slide-up sheet animation.
+- **Desktop (≥ `lg`):** centered `md` dialog (was `sm` — `sm` was too thin and
+  caused the trust-footer cells to wrap).
+- **`ModalContent padding="none"`:** each step owns its own padding
+  (`Step1Reason` has `p-4`; `Step2Offer`/`Step3BonusEntries`/`Step4Confirm`
+  use `px-4 pt-4 pb-2`). This removes the previous double-padding (ModalContent
+  `p-4` *plus* each step's own padding) and lets the `TrustBar` sit **flush**
+  as a real footer instead of floating inside a padded box.
+
+### Copy de-duplication (Step 4)
+
+The confirm screen previously stated the same thing three times: the modal
+header ("Are you sure?"), a body paragraph ("Are you sure you want to
+cancel?…"), and the InfoGrid title ("Cancel now & you walk away from"). The
+redundant body paragraph was removed and the InfoGrid title shortened to
+"What you'll lose" — the header alone now carries the question. (The past-due
+variant keeps its body paragraph: it is informative, not redundant.)
 
 ### Step machine (`useCancellationFlow.ts`)
 
@@ -269,7 +296,7 @@ FlowState = {
 }
 ```
 
-- **Step 1** — reason capture (7 radio options; "Other" reveals an optional textarea)
+- **Step 1** — reason capture (7 radio options). "Other" reveals a **mandatory** free-text box: Continue is disabled until it is non-empty (trimmed), and the server rejects `reason="other"` with empty `reasonText` (see API note). Rationale: admin analytics must know what "other" actually means.
 - **Step 2 — the OFFER phase (cursor-driven)** — renders `offersShown[offerCursor]` via `Step2Offer`, which dispatches over the current offer via an exhaustive typed `switch` (handles **all 5** `OfferType`s including `bonus_entries_100`). The phase is **not** a fixed step counter: it renders whatever rung the cursor points at, for as many rungs as `offersShown` has (e.g. `other` = 3 rungs: `pause_30d → discount_50_2mo → bonus_entries_100`).
 - **Step 3 — retained in the `FlowState.step` union for type-compat but NEVER produced by the step-machine.** The old "step 3 = hardcoded +100 `Step3BonusEntries`" was the multi-rung-skipping bug: for a 3-rung sequence, declining rung 0 jumped straight to a hardcoded +100, skipping the middle rung entirely. `Step3BonusEntries` is still a real component — it is just rendered as the `bonus_entries_100` rung *within* the step-2 OFFER phase (via `Step2Offer`), not as a distinct hardcoded step.
 - **Step 4** — confirm cancel or "Keep my membership" (`Step4Confirm`)
@@ -285,11 +312,20 @@ Pure transition helpers (exported from `useCancellationFlow.ts`, unit-tested wit
 
 `requestExit()` jumps directly to step 4 (used by the ✕ header button).
 
-### ✕ button wiring (important)
+### ✕ button wiring (important — was an "uncloseable" bug)
 
-The header ✕ calls `requestExit()` (→ Step 4), **not** `props.onClose` directly. This ensures the user always sees the "Are you sure?" confirm screen before truly closing. The only direct `onClose` path is the "Keep my membership" button in Step 4.
+The header ✕ shows the retention confirm **once**, but must not trap the user:
 
-Exception: if the user hits ✕ on Step 1 before selecting a reason, the modal closes directly (nothing to confirm).
+- **Step 1, no reason picked** → ✕ closes directly (nothing to confirm).
+- **Step 1 (reason picked) / Step 2 / Step 3** → ✕ → `requestExit()` (jump to
+  the Step 4 confirm so the user sees the "Are you sure?" pitch once).
+- **Step 4** → ✕ → `props.onClose()` (**actually closes**).
+
+The previous logic called `requestExit()` even at Step 4 — a no-op loop (you're
+already at step 4) — and `closeOnBackdrop` is `false`, so the modal was
+**impossible to dismiss** except via the buttons. Step 4's ✕ now closes.
+Other direct `onClose` paths: "Keep my membership" (Step 4) and, for past-due,
+"Resolve payment" (`onResolvePayment`).
 
 ### Past-due variant (§3a)
 

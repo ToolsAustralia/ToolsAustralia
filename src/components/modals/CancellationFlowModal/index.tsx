@@ -44,7 +44,9 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   onRequestTierDowngrade,
   tierDowngradeAvailable,
 }) => {
-  const isNarrowViewport = useMediaQuery("(max-width: 639px)");
+  // Mobile + tablet (< lg) → slide-up sheet + near-fullscreen (mobileFullBleed).
+  // Desktop (≥ lg) → centered dialog.
+  const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
 
   const flowHook = useCancellationFlow();
   const { state, requestExit, reset } = flowHook;
@@ -62,18 +64,19 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   }, [isOpen]);
 
   const handleHeaderClose = () => {
-    // ✕ always routes to Step 4 (confirm), not a hard close
-    if (state.step === 1) {
-      // Nothing started yet — user hit ✕ before selecting a reason.
-      // Jump to step 4 only if a reason has been selected; otherwise just close.
-      if (state.reason !== null) {
-        requestExit();
-      } else {
-        onClose();
-      }
-    } else {
-      requestExit();
+    // ✕ routes to the Step 4 confirm so the user sees the retention pitch
+    // ONCE — but at Step 4 itself (or before a reason is picked) it must
+    // actually close, otherwise the modal is a trap (requestExit() at step 4
+    // is a no-op loop and backdrop-close is disabled).
+    if (state.step === 4) {
+      onClose();
+      return;
     }
+    if (state.step === 1 && state.reason === null) {
+      onClose();
+      return;
+    }
+    requestExit();
   };
 
   const getStepTitle = (): string => {
@@ -130,8 +133,9 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
     <ModalContainer
       isOpen={isOpen}
       onClose={handleHeaderClose}
-      size="sm"
+      size="md"
       presentation={isNarrowViewport ? "sheet" : "dialog"}
+      mobileFullBleed
       closeOnBackdrop={false}
       zIndex={80}
     >

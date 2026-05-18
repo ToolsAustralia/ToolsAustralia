@@ -31,7 +31,9 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
   const [localText, setLocalText] = useState("");
 
   const isOther = state.reason === "other";
-  const canContinue = state.reason !== null;
+  // "Other" requires the free-text — admin needs to know what "other" means.
+  const otherTextMissing = isOther && localText.trim().length === 0;
+  const canContinue = state.reason !== null && !otherTextMissing;
   const isPending = startMutation.isPending;
 
   const handleReasonChange = (value: CancellationReason) => {
@@ -54,7 +56,7 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
     try {
       const result = await startMutation.mutateAsync({
         reason: state.reason,
-        reasonText: isOther && state.reasonText ? state.reasonText : undefined,
+        reasonText: isOther ? localText.trim() : undefined,
       });
       applyStart({
         eventId: result.eventId,
@@ -67,7 +69,7 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 p-4 max-xs:p-3">
       <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-snug">
         Help us understand why you&apos;re leaving. We&apos;ll try to make it right.
       </p>
@@ -109,14 +111,14 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
         })}
       </fieldset>
 
-      {/* Optional free-text for "Other" */}
+      {/* Required free-text for "Other" — admin needs to know what it is */}
       {isOther && (
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="cancellation-reason-text"
             className="text-xs font-medium text-neutral-600 dark:text-neutral-400"
           >
-            Tell us more <span className="text-neutral-400 dark:text-neutral-500 font-normal">(optional)</span>
+            Tell us more <span className="text-red-600 dark:text-red-400 font-semibold">(required)</span>
           </label>
           <textarea
             id="cancellation-reason-text"
@@ -124,12 +126,25 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
             onChange={handleTextChange}
             maxLength={2000}
             rows={3}
-            placeholder="Anything you'd like to share…"
-            className="w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-200 px-3 py-2.5 resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-400 transition-colors"
+            required
+            aria-required="true"
+            aria-invalid={otherTextMissing}
+            placeholder="Please tell us why so we can improve…"
+            className={cn(
+              "w-full rounded-xl border bg-white dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-200 px-3 py-2.5 resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 transition-colors",
+              otherTextMissing
+                ? "border-red-300 dark:border-red-800 focus:ring-red-500/40 focus:border-red-400"
+                : "border-neutral-200 dark:border-neutral-700 focus:ring-red-500/40 focus:border-red-400"
+            )}
           />
-          <p className="text-right text-2xs text-neutral-400 dark:text-neutral-500">
-            {localText.length}/2000
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-2xs text-red-600 dark:text-red-400">
+              {otherTextMissing ? "This is required to continue." : " "}
+            </p>
+            <p className="text-right text-2xs text-neutral-400 dark:text-neutral-500">
+              {localText.length}/2000
+            </p>
+          </div>
         </div>
       )}
 

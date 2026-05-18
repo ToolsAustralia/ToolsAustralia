@@ -181,7 +181,7 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
               <span className="w-7 h-7 rounded-[7px] inline-flex items-center justify-center grow-0 shrink-0 basis-7 bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors duration-150 group-hover/cancel:bg-red-50 dark:group-hover/cancel:bg-red-950/40 group-hover/cancel:text-red-700 dark:group-hover/cancel:text-red-300 max-xs:w-6 max-xs:h-6 max-xs:basis-6 max-xs:rounded-md">
                 <LogOut size={16} className="max-xs:size-3" />
               </span>
-              <span className="block text-xs leading-[1.15] max-xs:text-[11px]">
+              <span className="block text-sm leading-[1.2] max-xs:text-xs">
                 No thanks,
                 <br />
                 cancel anyway
@@ -205,8 +205,8 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
                 <CreditCard size={16} className="max-xs:size-3" />
               </span>
               <span>
-                <span className="block text-xs leading-[1.15] max-xs:text-[11px]">Resolve payment</span>
-                <span className="block text-2xs font-medium opacity-75 mt-px tracking-normal max-xs:text-[9px]">Keep your spot in the draw</span>
+                <span className="block text-sm leading-[1.2] max-xs:text-xs">Resolve payment</span>
+                <span className="block text-xs font-medium opacity-75 mt-px tracking-normal max-xs:text-[10px]">Keep your spot in the draw</span>
               </span>
             </button>
           </div>
@@ -221,13 +221,9 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
   return (
     <div className="flex flex-col">
       <div className="px-4 pt-4 pb-2 max-xs:px-3 max-xs:pt-3">
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-snug mb-3">
-          Are you sure you want to cancel? Here&apos;s what you&apos;ll walk away from:
-        </p>
-
         <InfoGrid
           cells={cells}
-          title="Cancel now & you walk away from"
+          title="What you'll lose"
           framing="loss"
         />
 
@@ -249,7 +245,7 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
               <LogOut size={16} className="max-xs:size-3" />
             </span>
             <span>
-              <span className="block text-xs leading-[1.15] max-xs:text-[11px]">
+              <span className="block text-sm leading-[1.2] max-xs:text-xs">
                 {isCancelling ? "Cancelling…" : "No thanks, cancel anyway"}
               </span>
             </span>
@@ -272,8 +268,8 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
               <Lock size={16} className="max-xs:size-3" />
             </span>
             <span>
-              <span className="block text-xs leading-[1.15] max-xs:text-[11px]">Keep my membership</span>
-              <span className="block text-2xs font-medium opacity-75 mt-px tracking-normal max-xs:text-[9px]">Stay in the draw</span>
+              <span className="block text-sm leading-[1.2] max-xs:text-xs">Keep my membership</span>
+              <span className="block text-xs font-medium opacity-75 mt-px tracking-normal max-xs:text-[10px]">Stay in the draw</span>
             </span>
           </button>
         </div>
