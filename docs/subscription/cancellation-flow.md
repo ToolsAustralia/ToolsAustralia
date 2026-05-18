@@ -848,9 +848,30 @@ Returns `{ processed, cleared, errors }`.
 
 Full cron documentation (auth, candidate query bound, idempotency, response shape) lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-resume-cron).
 
+## §6a Retention-90 maturity: cron back-fill (Task 20)
+
+`src/app/api/cron/cancellation-retention-maturity/route.ts`
+(`GET /api/cron/cancellation-retention-maturity`, daily at 17:00 UTC — one hour after the resume cron, deliberately staggered to spread load)
+
+A saved cancellation flow (`outcome === "saved"`) only proves the save "stuck" 90 days later. This cron matures those events:
+
+1. `maturedFilter(now)` → `{ outcome:"saved", savedAt:{ $lte: now-90d }, retention90: null }`. Bounded date-window query (compound index `{outcome,savedAt,retention90}` serves it). `.limit(5000)` safety cap.
+2. For each event, load the member (`User.findById`, projected) and compute `isRetained(user)` — which mirrors the canonical "active recurring subscriber" predicate `getActiveSubscriptionFilter` (`src/utils/admin/userFilterBuilder.ts:42`) field-for-field: `isActive === true` AND `subscription.isActive === true` AND `subscription.autoRenew !== false` AND `subscription.status ∈ {active,trialing}`.
+3. `updateOne({ _id, retention90: null }, { $set: { retention90: retained ? "retained" : "churned" } })`.
+4. **Read-only on user/subscription** — never calls Stripe, never mutates the subscription. The only write is the `retention90` field on `CancellationFlowEvent`.
+5. **Missing user → churned**: a deleted account has no active recurring subscription, so the save did not durably retain a paying member (`isRetained(null) === false`).
+6. **Idempotent**: the `retention90: null` in BOTH the candidate filter and the update filter means a matured event is never re-selected and a concurrent run is a no-op once the value is set.
+7. Errors are isolated per event — one bad event does not abort the batch.
+
+Returns `{ processed, retained, churned, errors }`.
+
+The values written (`"retained"`/`"churned"`) exactly match the `CancellationFlowEvent.retention90` enum and the `summarizeCancellationEvents` shaper, whose `matured` cutoff (`savedAt <= now - 90d`) is identical to `maturedFilter`'s `$lte` — so the admin panel's retained/churned/pending split reflects this cron's output the moment it writes. Pure helpers (`maturedFilter`, `isRetained`, `NINETY_DAYS_MS`) are unit-tested: `npm run test:retention-maturity`.
+
+Full cron documentation lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-maturity-cron).
+
 ## Admin analytics (Task 18)
 
-Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, and the 90-day retention split (`retained`/`churned`/`pending`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by Task 21. Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
+Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, and the 90-day retention split (`retained`/`churned`/`pending`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by the §6a maturity cron (Task 20). Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
 
 ## Note on shared-ui domain
 

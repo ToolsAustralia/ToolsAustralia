@@ -15,6 +15,7 @@
 |---|---|---|---|
 | `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | 300s / 1024MB | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. |
 | `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s / 1024MB | Clears stale `pauseReason="retention"` metadata on Stripe subscriptions after the 30-day retention pause window has elapsed. See [architecture.md](./architecture.md#vercel-cron-schedules). |
+| `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | 300s / 1024MB | Matures saved cancellation-flow events ≥90 days old: sets `retention90` to `retained`/`churned` based on the member's CURRENT subscription state. Read-only on user/subscription. Idempotent. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 
 See [architecture.md](./architecture.md#vercel-cron-schedules) for the full cron table.
 
@@ -68,3 +69,60 @@ Each subscription is processed in a `try/catch`. Errors are collected in `errors
 - `processed`: total candidates retrieved from the DB and checked against Stripe.
 - `cleared`: subscriptions where the retention marker was successfully removed.
 - `errors`: per-subscription error messages (non-fatal).
+
+## Cancellation Retention Maturity Cron
+
+`GET /api/cron/cancellation-retention-maturity` — `src/app/api/cron/cancellation-retention-maturity/route.ts`. Daily at `0 17 * * *` (one hour after the resume cron at `0 16 * * *`, deliberately staggered to spread load).
+
+### Purpose
+
+"Matures" the 90-day retention outcome of saved cancellation flows. When a member is saved (accepts a retention offer instead of cancelling), the question "did the save actually stick?" can only be answered 90 days later. This cron back-fills `CancellationFlowEvent.retention90` so the admin analytics panel can show a real retained-vs-churned split for matured saves (`summarizeCancellationEvents` in `src/services/admin/cancellationFlowAnalytics.ts` only counts `retention90` for events whose `savedAt <= now - 90d`).
+
+### Auth
+
+`Bearer ${CRON_SECRET}` (copied verbatim from the resume cron). When `CRON_SECRET` is unset (local dev), all requests are authorized.
+
+### Candidate query (`maturedFilter(now)`)
+
+Pure exported helper, returns the Mongo filter:
+
+```js
+{ outcome: "saved", savedAt: { $lte: <now - 90d> }, retention90: null }
+```
+
+- Bounded by the `savedAt <= now - 90d` window — never an unbounded scan; the compound index `{ outcome:1, savedAt:1, retention90:1 }` on `CancellationFlowEvent` serves it directly.
+- The `$lte` cutoff is **exactly** `now - 90d`, identical to the `matured` cutoff in `summarizeCancellationEvents`, so the admin panel reflects this cron's writes the moment they land.
+- `.limit(5000)` safety cap — generous; the date window already bounds the set. Only guards a pathological backlog (cron down for months).
+
+### Per-event decision (`isRetained(user)`)
+
+Pure exported helper (unit-tested). Mirrors the canonical "active recurring subscriber" predicate `getActiveSubscriptionFilter` (`src/utils/admin/userFilterBuilder.ts:42`) field-for-field:
+
+- user account active → `isActive === true`
+- subscription active → `subscription.isActive === true`
+- will auto-renew → `subscription.autoRenew !== false` (true OR undefined; default true)
+- Stripe status → `subscription.status ∈ {active, trialing}`
+
+`retention90 = "retained"` iff all hold, else `"churned"`. A missing user (deleted account) → `isRetained(null) === false` → **churned** (a deleted user has no active recurring subscription, so the save did not durably retain a paying member).
+
+### Read-only on subscription
+
+This cron **never** calls Stripe and **never** mutates `User` or any subscription. The only write is `$set: { retention90 }` on `CancellationFlowEvent`.
+
+### Idempotency
+
+`updateOne({ _id, retention90: null }, { $set: { retention90 } })`. The `retention90: null` in both the candidate filter AND the update filter makes the job idempotent: once an event is matured it is never re-selected, and a concurrent run's update is a no-op once the value is set (the value is immutable thereafter).
+
+### Error isolation
+
+Each event is processed in a `try/catch`. Errors are collected in `errors[]` and logged via `console.error`. A single bad event never aborts the rest of the batch.
+
+### Response shape
+
+```json
+{ "processed": 42, "retained": 30, "churned": 12, "errors": [] }
+```
+
+- `processed`: matured events selected this run.
+- `retained` / `churned`: split written this run.
+- `errors`: per-event error messages (non-fatal).
