@@ -92,3 +92,71 @@ Loads the User by id and derives:
   - `bonusEntries100` ← `user.cancellationUpsellRedeemed` (legacy field; see `User.ts:181`)
 
 Throws `new Error("user not found")` when the userId does not match any document. Route handlers should map this to a 404 response.
+
+## API route
+
+### `POST /api/subscription/cancellation-flow`
+
+**Auth:** NextAuth session required (`session.user.id`). Returns `401` if unauthenticated.
+
+**Content-Type:** `application/json`
+
+#### Action: `start`
+
+Begin a cancellation flow for the authenticated user. Resolves offers and persists a `CancellationFlowEvent` with `outcome: "in_progress"`.
+
+Request body:
+```json
+{
+  "action": "start",
+  "reason": "too_expensive",       // CancellationReason (required)
+  "reasonText": "..."              // string, max 2000 chars (optional)
+}
+```
+
+Success response `200`:
+```json
+{
+  "eventId": "<ObjectId string>",
+  "offersShown": ["bonus_entries_100"],
+  "pastDue": false
+}
+```
+
+#### Action: `outcome`
+
+Record the terminal outcome for an in-progress flow event. Idempotent — subsequent calls on an already-terminal event are silently ignored.
+
+Request body:
+```json
+{
+  "action": "outcome",
+  "eventId": "<ObjectId string>",  // must be a valid MongoDB ObjectId (boundary-validated)
+  "outcome": "saved",              // "saved" | "cancelled" (required)
+  "offerAccepted": "bonus_entries_100"  // OfferType (optional)
+}
+```
+
+Success response `200`:
+```json
+{ "ok": true }
+```
+
+#### Error responses
+
+| Status | Condition |
+|--------|-----------|
+| `400`  | JSON parse failure or Zod validation failure (including invalid `eventId` format) |
+| `401`  | No valid session |
+| `404`  | `getUserCancellationContext` throws `"user not found"` |
+| `500`  | Unexpected server error |
+
+#### Boundary validation
+
+The `eventId` field is validated with `mongoose.Types.ObjectId.isValid(v)` at the Zod boundary before it reaches the service. This prevents a BSON cast error from propagating from `recordOutcome` (which calls `new mongoose.Types.ObjectId(eventId)` internally).
+
+#### Implementation file
+
+`src/app/api/subscription/cancellation-flow/route.ts`
+
+The route is thin: authorize (session/401) → parse JSON → Zod validate → delegate to `CancellationFlowService`. Auth is checked first, before any body parsing or DB work. No business logic lives in the handler.
