@@ -73,6 +73,9 @@ export default function ElectricPackageCard({
   /** Light one-time Boss reuses the membership Foreman (DeWalt yellow) card bg. */
   const isOneTimeBoss = lowerId.includes("boss") && !lowerId.includes("subscription");
   const bossLightBg = getMembershipSectionColorScheme("foreman-subscription", true).bgGradient;
+  /** Light membership Boss reuses the one-time Power (electric red) card bg. */
+  const isMembershipBoss = lowerId.includes("boss") && lowerId.includes("subscription");
+  const membershipBossLightBg = getElectricPackageColorScheme("power-pack").bgGradient;
   const blackText = colorScheme.text.includes("black"); // lime/amber tiers use black ink
   const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
 
@@ -130,7 +133,9 @@ export default function ElectricPackageCard({
               ? tradieLightBg
               : isOneTimeBoss
                 ? bossLightBg
-                : colorScheme.bgGradient
+                : isMembershipBoss
+                  ? membershipBossLightBg
+                  : colorScheme.bgGradient
             : isPremium
               ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
               : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,

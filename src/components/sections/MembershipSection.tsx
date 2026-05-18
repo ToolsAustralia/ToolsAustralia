@@ -431,7 +431,7 @@ export default function MembershipSection({
     const showBestValueRibbon =
       (activeTab === "membership" && plan.id === "boss-subscription") ||
       (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
-    const ribbon = current ? "CURRENT" : plan.isPopular ? "MOST POPULAR" : null;
+    const ribbon = plan.isPopular ? "MOST POPULAR" : null;
     return (
       <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
         <ElectricPackageCard
