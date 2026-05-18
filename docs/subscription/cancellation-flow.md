@@ -574,6 +574,108 @@ server-side imports (`stripe.ts`, `mongodb.ts`, `User.ts`) are deferred to the b
 of `applyRetentionPause` via dynamic `import()` so the module is safely importable
 in test environments that lack `STRIPE_SECRET_KEY`/`MONGODB_URI`.
 
+## RetentionDiscountService (Task 15)
+
+`src/services/subscription/RetentionDiscountService.ts`
+
+Applies the `discount_50_2mo` retention offer: attaches a stable, singleton
+Stripe coupon (50% off, repeating for 2 months) to the member's live
+subscription when they accept the offer in the cancellation flow.
+
+### Stable singleton coupon
+
+The discount is delivered through one fixed coupon, never per-member:
+
+```ts
+RETENTION_COUPON_ID = "retention-50off-2mo";
+
+buildCouponParams() === {
+  id: "retention-50off-2mo",
+  percent_off: 50,
+  duration: "repeating",
+  duration_in_months: 2,
+  name: "50% off for 2 months (retention)",
+}
+```
+
+`buildCouponParams()` is a pure helper (no Stripe/DB) and is unit-tested with
+exact-value assertions. Reusing a single coupon keeps the Stripe dashboard clean
+and makes the offer trivially auditable.
+
+### Idempotent + race-safe coupon ensure
+
+`applyRetentionDiscount` ensures the singleton exists before attaching it:
+
+1. `stripe.coupons.retrieve(RETENTION_COUPON_ID)` succeeds → coupon exists, use it.
+2. Retrieve throws a Stripe "resource_missing" / 404 (classified the same way as
+   `SubscriptionReferenceService.retrieveStripeSubscription`: `code === "resource_missing"`
+   / `"resource_missing_deleted"` or `statusCode === 404`) → `stripe.coupons.create(buildCouponParams())`.
+3. Retrieve throws anything else → rethrow (real Stripe/network failure).
+4. **Concurrent first-use race:** two requests both see the coupon missing and
+   both call `create` with the same fixed `id`. Stripe rejects the second create;
+   that "already exists" / idempotency error (`code === "resource_already_exists"` /
+   `"idempotency_key_in_use"`, or a message containing `already exists`) is
+   treated as success — the post-condition (coupon exists) holds. Any other
+   create error is rethrown.
+
+### `discounts` REPLACES existing discounts (intentional)
+
+The coupon is attached with the modern `discounts` array form — **not** the
+deprecated top-level `coupon` param:
+
+```ts
+await stripe.subscriptions.update(subscriptionId, {
+  discounts: [{ coupon: RETENTION_COUPON_ID }],
+});
+```
+
+Stripe v18 (`stripe@18.5.0`, API `2025-08-27.basil`) types
+`SubscriptionUpdateParams.discounts` as
+`Stripe.Emptyable<Array<{ coupon?: string; discount?: string; promotion_code?: string }>>`,
+so `[{ coupon: RETENTION_COUPON_ID }]` is the correct shape (verified by
+`npm run build`).
+
+Setting `discounts` **REPLACES** the subscription's existing discount set — if
+the member already had another discount it is overwritten by the retention
+coupon. This is intentional and acceptable: a member in the act of cancelling is
+taking the strongest save offer, so the retention 50%/2mo deliberately wins.
+(Note: this differs from `pause_collection`/`metadata` updates, which *merge*.)
+
+### Guards
+
+`retentionDiscountBlockReason(user)` — pure helper, unit-tested per branch.
+Evaluated in order (most critical first), mirroring `retentionPauseBlockReason`:
+
+1. **Past-due** — `hasFailedRenewal(user)` → `"past-due: retention discount not allowed"`.
+2. **Already consumed** — `user.retentionOffersConsumed?.discount50_2mo` → `"retention discount already used"`.
+3. **No subscription** — missing `user.stripeSubscriptionId` → `"no active subscription"`.
+4. Else `null` (eligible). Undefined `retentionOffersConsumed` → not consumed.
+
+### Ordering rationale: Stripe FIRST, then consumed-flag persist
+
+`applyRetentionDiscount` attaches the coupon on Stripe **before** persisting
+`retentionOffersConsumed.discount50_2mo = true` via atomic
+`User.updateOne({ _id }, { $set: { "retentionOffersConsumed.discount50_2mo": true } })`.
+Same reasoning as `RetentionPauseService`: if Stripe succeeds but the Mongo
+write fails, the member got a real discount but may be re-offered (recoverable);
+the inverse (flag set, no discount) is silent data loss. The Mongo failure is
+logged with `console.error` (survives production `removeConsole`) and does **not**
+re-throw — the discount is live and `applyRetentionDiscount` returns
+`{ couponId: RETENTION_COUPON_ID }` normally.
+
+### Test
+
+`src/services/subscription/__tests__/RetentionDiscountService.test.ts`
+(`npm run test:retention-discount`)
+
+Covers `buildCouponParams` exact values + key shape, and
+`retentionDiscountBlockReason` for every branch (past-due, already-consumed, no
+subscription, eligible/null, past-due priority over consumed, undefined consumed
+flag). The Stripe/DB path is not tested (no network); heavy server-side imports
+(`stripe.ts`, `mongodb.ts`, `User.ts`) are deferred to the body of
+`applyRetentionDiscount` via dynamic `import()` so the module is safely
+importable in env-less test environments.
+
 ## Retention-pause lifecycle: cron cleanup (Task 13)
 
 `src/app/api/cron/cancellation-retention-resume/route.ts`

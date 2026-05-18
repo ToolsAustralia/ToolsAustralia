@@ -158,6 +158,7 @@
     "test:cancellation-eligibility": "tsx src/utils/subscription/__tests__/cancellation-flow-eligibility.test.ts",
     "test:cancellation-flow-service": "tsx src/services/subscription/__tests__/CancellationFlowService.test.ts",
     "test:retention-pause": "tsx src/services/subscription/__tests__/RetentionPauseService.test.ts",
+    "test:retention-discount": "tsx src/services/subscription/__tests__/RetentionDiscountService.test.ts",
     "test:retention-resume-cron": "tsx src/app/api/cron/__tests__/cancellation-retention-resume.test.ts"
   },
   "dependencies": {
