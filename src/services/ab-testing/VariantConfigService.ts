@@ -26,6 +26,9 @@ export class VariantConfigService {
         oneTime: {},
         membership: {},
       },
+      membershipTheme: {
+        forceLight: false,
+      },
     };
   }
 
@@ -64,6 +67,10 @@ export class VariantConfigService {
           ...baseConfig.packageColors?.membership,
           ...variantConfig.packageColors?.membership,
         },
+      },
+      membershipTheme: {
+        ...baseConfig.membershipTheme,
+        ...variantConfig.membershipTheme,
       },
     };
   }
@@ -188,6 +195,21 @@ export class VariantConfigService {
         }
         if (packageColors.membership !== undefined && typeof packageColors.membership !== "object") {
           errors.push("PackageColors membership must be an object");
+        }
+      }
+    }
+
+    // Validate membershipTheme config (A/B dark-mode test)
+    if (cfg.membershipTheme !== undefined) {
+      if (typeof cfg.membershipTheme !== "object" || cfg.membershipTheme === null) {
+        errors.push("MembershipTheme config must be an object");
+      } else {
+        const membershipTheme = cfg.membershipTheme as Record<string, unknown>;
+        if (
+          membershipTheme.forceLight !== undefined &&
+          typeof membershipTheme.forceLight !== "boolean"
+        ) {
+          errors.push("MembershipTheme forceLight must be a boolean");
         }
       }
     }

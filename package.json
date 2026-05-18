@@ -24,6 +24,7 @@
     "test": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:anchor-billing": "tsx src/utils/billing/__tests__/anchor-billing.test.ts",
     "test:electric-scheme": "tsx src/utils/package-colors/__tests__/electricPackageScheme.test.ts",
+    "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",
     "test:redeemables": "tsx src/services/redeemables/__tests__/redeemables.test.ts",
     "test:webhook-queue-backoff": "tsx src/services/stripe-webhook-queue/__tests__/backoff.test.ts",
     "test:webhook-queue-enqueue": "tsx src/services/stripe-webhook-queue/__tests__/enqueue.test.ts",

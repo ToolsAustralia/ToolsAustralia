@@ -65,6 +65,13 @@ export interface VariantConfig {
     oneTime?: Partial<Record<OneTimePackageSlot, COLOR_KEYS>>;
     membership?: Partial<Record<MembershipPackageSlot, COLOR_KEYS>>;
   };
+  /**
+   * A/B test: when forceLight is true, the membership section renders in light
+   * mode regardless of the global dark-mode schedule/toggle.
+   */
+  membershipTheme?: {
+    forceLight?: boolean;
+  };
 }
 
 /**

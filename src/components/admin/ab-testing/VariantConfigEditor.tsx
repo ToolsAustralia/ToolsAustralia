@@ -86,6 +86,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       packages: variant?.config?.packages ?? {},
       membershipModal: variant?.config?.membershipModal ?? {},
       packageColors: variant?.config?.packageColors ?? { oneTime: {}, membership: {} },
+      membershipTheme: variant?.config?.membershipTheme ?? {},
     },
   });
 
@@ -650,6 +651,31 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
             }
             label="Show Package Selection First"
             description="When enabled, automatically opens package selection modal on step 2 for users coming from promotion/landing pages. This allows users to see all package options before proceeding with payment."
+          />
+        </div>
+      </FormSection>
+
+      {/* Membership Section Theme (A/B dark-mode test) */}
+      <FormSection title="Membership Section Theme" icon={Palette}>
+        <div className="space-y-4">
+          <Checkbox
+            id="membershipForceLight"
+            name="membershipForceLight"
+            checked={formData.config.membershipTheme?.forceLight ?? false}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  membershipTheme: {
+                    ...formData.config.membershipTheme,
+                    forceLight: e.target.checked,
+                  },
+                },
+              })
+            }
+            label="Force light mode on the membership section"
+            description="A/B test: when enabled, the membership section always renders in light mode for this variant, ignoring the site's dark-mode schedule/toggle. Leave OFF for the control variant."
           />
         </div>
       </FormSection>
