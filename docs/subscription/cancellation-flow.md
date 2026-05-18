@@ -26,6 +26,30 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 
 `CancellationReason` and `OfferType` are defined in `src/models/CancellationFlowEvent.ts` alongside the Mongoose schema and outcome enum.
 
+## Eligibility filter
+
+`src/utils/subscription/cancellation-flow-eligibility.ts` exports `eligibleOffers(sequence, ctx)`, a pure function that reduces the offer sequence from `resolveOfferSequence` to only the offers that can actually be shown to a member.
+
+### Rules (in order of evaluation)
+
+1. **Past-due → none** — if `ctx.pastDue` is `true`, returns `[]` immediately (spec §3a). Members with a past-due balance skip all retention rungs.
+2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that starts at Phase 2 with `bonus_entries_100` and `tier_downgrade`. Later tasks extend this set one entry at a time as each backend lands (Task 14 → `pause_30d`; Task 16 → `discount_50_2mo`; Task 17 → `unsubscribe_marketing`), preventing dead UI from surfacing unimplemented paths.
+3. **One-time consumed gate** — certain offers may only be accepted once per member. `ConsumedFlags` tracks redemption state; `bonus_entries_100` maps to the legacy field `user.cancellationUpsellRedeemed`. If the flag is set, the offer is filtered out. `tier_downgrade` and `unsubscribe_marketing` are not one-time gated (no entry in `ONE_TIME`).
+
+### Types
+
+```ts
+interface ConsumedFlags {
+  pause30d?: boolean;
+  discount50_2mo?: boolean;
+  bonusEntries100?: boolean; // sourced from legacy user.cancellationUpsellRedeemed
+}
+interface EligibilityCtx {
+  pastDue: boolean;
+  consumed: ConsumedFlags;
+}
+```
+
 ## Event model
 
 `CancellationFlowEvent` (see `src/models/CancellationFlowEvent.ts`) records each flow session:
