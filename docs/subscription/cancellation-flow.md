@@ -59,3 +59,36 @@ interface EligibilityCtx {
 - `outcome` — `in_progress | saved | cancelled`
 - `pastDue` flag
 - `retention90` — back-filled after 90 days (`retained | churned | null`)
+
+## CancellationFlowService
+
+`src/services/subscription/CancellationFlowService.ts` composes the routing and eligibility utilities and owns the event lifecycle.
+
+### Pure surface
+
+`planFlow({ reason, pastDue, consumed }) → { offersShown, pastDue }`
+
+Calls `resolveOfferSequence(reason)` then `eligibleOffers(sequence, { pastDue, consumed })`. No DB access — unit-testable in isolation (`npm run test:cancellation-flow-service`).
+
+### Lifecycle (DB)
+
+`startFlow({ userId, reason, reasonText?, pastDue, offersShown }) → Promise<string>`
+
+Creates a `CancellationFlowEvent` document with `outcome: "in_progress"` and `startedAt: new Date()`. Returns the event `_id` as a string. Callers store this id to pass to `recordOutcome`.
+
+`recordOutcome({ eventId, userId, outcome, offerAccepted? }) → Promise<void>`
+
+Idempotent terminal transition. Uses `updateOne({ _id, userId, outcome: "in_progress" }, { $set: { outcome, offerAccepted, endedAt, [savedAt] } })`. The `outcome: "in_progress"` filter guarantees exactly one terminal write per event — subsequent calls on an already-terminal event are silently ignored (no-op). `savedAt` is set only when `outcome === "saved"`.
+
+### User context (DB)
+
+`getUserCancellationContext(userId) → Promise<{ pastDue: boolean; consumed: ConsumedFlags }>`
+
+Loads the User by id and derives:
+- `pastDue` — via `hasFailedRenewal(user)` (`src/utils/subscription/subscription-helpers.ts:31`): `status === "past_due" && !isActive && autoRenew === true`. This is the same predicate used in `SubscriptionManagementModal/index.tsx:120`.
+- `consumed`:
+  - `pause30d` ← `user.retentionOffersConsumed?.pause30d`
+  - `discount50_2mo` ← `user.retentionOffersConsumed?.discount50_2mo`
+  - `bonusEntries100` ← `user.cancellationUpsellRedeemed` (legacy field; see `User.ts:181`)
+
+Throws `new Error("user not found")` when the userId does not match any document. Route handlers should map this to a 404 response.
