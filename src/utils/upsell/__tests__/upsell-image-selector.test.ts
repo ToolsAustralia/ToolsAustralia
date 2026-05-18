@@ -68,6 +68,22 @@ function testUnknownOfferFallsBack() {
   assert.equal(r.isPromoVariant, false);
 }
 
+/**
+ * Effective stacked multipliers can be values NOT in PROMO_MULTIPLIERS
+ * (one-time 3×2 = 6). The resolver must still pick up the matching file —
+ * the manifest is the gate, not the PROMO_MULTIPLIERS allowlist.
+ */
+function testEffectiveMultiplierOutsidePromoListResolves() {
+  if (UPSELL_IMAGE_MANIFEST.has("one-time/tradie-6x.webp")) {
+    const r = resolveUpsellImage({ offerId: "onetime-upsell-tradie", multiplier: 6 });
+    assert.equal(r.src, `${ROOT}/one-time/tradie-6x.webp`, "6× (3×2) must resolve even though 6 ∉ PROMO_MULTIPLIERS");
+    assert.equal(r.isPromoVariant, true);
+  }
+  // Non-integer / ≤1 multipliers never match a variant.
+  const noPromo = resolveUpsellImage({ offerId: "onetime-upsell-tradie", multiplier: 1 });
+  assert.equal(noPromo.isPromoVariant, false);
+}
+
 function run() {
   testEveryPackageResolvesPredictably();
   testPromoVariantPreferredWhenAvailable();

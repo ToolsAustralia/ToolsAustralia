@@ -1,6 +1,5 @@
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { UPSELL_IMAGE_MANIFEST } from "@/generated/upsellImageManifest";
-import { isPromoMultiplier } from "@/types/promo-multiplier";
 
 const ROOT = "/images/upsells";
 const FALLBACK_PATH = "_fallback.webp";
@@ -83,8 +82,11 @@ export function resolveUpsellImage(params: {
   const stem = imageStem(pkg.upsellCategory, tier);
   const m = params.multiplier;
 
-  // 1. Effective-multiplier variant
-  if (m != null && isPromoMultiplier(m)) {
+  // 1. Effective-multiplier variant.
+  // The manifest is the gate: effective multipliers (activePromo × categoryMult) can
+  // be values outside PROMO_MULTIPLIERS — e.g. one-time 3×2 = 6, additional 3×2 = 6.
+  // Accept any positive finite integer and let the on-disk file decide.
+  if (m != null && Number.isFinite(m) && m > 1 && Number.isInteger(m)) {
     const variantKey = `${folder}/${stem}-${m}x.webp`;
     if (UPSELL_IMAGE_MANIFEST.has(variantKey)) {
       return { src: `${ROOT}/${variantKey}`, isPromoVariant: true };
