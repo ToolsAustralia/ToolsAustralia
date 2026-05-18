@@ -124,7 +124,6 @@
     "confirm-stuck-pi": "tsx scripts/confirm-stuck-pi.ts",
     "confirm-stuck-pi:dry": "tsx scripts/confirm-stuck-pi.ts --dry-run",
     "test:codemods": "tsx scripts/codemods/__tests__/replace-classname.test.ts",
-    "test:cancellation-upsell": "tsx --require ./src/components/modals/CancellationUpsellModal/__tests__/asset-stubs.cjs src/components/modals/CancellationUpsellModal/__tests__/CancellationUpsellModal.test.ts",
     "test:renewal-failed": "tsx --require ./src/components/modals/RenewalFailedModal/__tests__/asset-stubs.cjs src/components/modals/RenewalFailedModal/__tests__/RenewalFailedModal.test.ts",
     "test:downgrade-confirm": "tsx --require ./src/components/modals/DowngradeConfirmModal/__tests__/asset-stubs.cjs src/components/modals/DowngradeConfirmModal/__tests__/DowngradeConfirmModal.test.ts",
     "test:upgrade-confirm": "tsx --require ./src/components/modals/UpgradeConfirmModal/__tests__/asset-stubs.cjs src/components/modals/UpgradeConfirmModal/__tests__/UpgradeConfirmModal.test.ts",

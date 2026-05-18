@@ -341,7 +341,7 @@ The parent (`SubscriptionManagementModal`) refreshes data via its existing imper
 - **Downgrade dismiss path** (`DowngradeConfirmModal` `onClose`): clears `pendingCancellationEventId.current` without recording any outcome — the event stays `in_progress` and matures to `abandoned` server-side.
 - `tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}` — threaded to `CancellationFlowModal` so `Step2Offer` can skip the dead tier card when no downgrade options exist.
 
-The old `CancellationUpsellModal` files are retained (not deleted); they will be removed in Phase 5 Task 19.
+The old `CancellationUpsellModal` has been removed (Phase 5 Task 19) — `src/components/modals/CancellationUpsellModal/` no longer exists. The +100-entries rung still POSTs to the existing, untouched `/api/cancellation-upsell/redeem` route (backed by `src/utils/redeemables/cancellation-upsell-eligibility.ts`); only the superseded modal UI was deleted.
 
 ### Per-reason screen flow (Task 17 — ALL offers implemented)
 
