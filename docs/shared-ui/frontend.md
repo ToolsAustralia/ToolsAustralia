@@ -19,23 +19,24 @@ See [architecture.md](./architecture.md#categories) for the full inventory.
 
 ## Sections
 
-### `sections/membership/ElectricPackageCard` — Phase-1 dev-only membership card
+### `sections/membership/ElectricPackageCard` — live membership card
 
 [`src/components/sections/membership/ElectricPackageCard.tsx`](../../src/components/sections/membership/ElectricPackageCard.tsx) is a **pure presentational** component — no data fetching, no Stripe calls, no context reads. All decisions arrive as props.
 
-**Props:** `plan: LocalMembershipPlan`, `colorScheme: PackageColorScheme`, `state: ElectricPackageCardState` (`{ locked, lockReason?, isCurrent }`), `discount?: { regularPrice, percentOff } | null`, `onSelect: (plan) => void`.
+**Props:** `plan: LocalMembershipPlan`, `colorScheme: PackageColorScheme`, `state: ElectricPackageCardState` (`{ locked, lockReason?, isCurrent }`), `discount?: { regularPrice, percentOff } | null`, `onSelect: (plan) => void`, `ctaLabel?: string`, `theme?: "light" | "dark"`.
 
 **Key behaviours:**
 - Entries strikethrough (`original → display`) renders when `plan.metadata.promoMultiplier > 1` (mirrors MembershipSection logic via a local `readEntries()` helper).
 - The **% OFF badge** and regular-price strikethrough live **only in the price block button** — never in the top-right corner (that space is reserved for the promo multiplier badge in the live section).
-- CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `"Enter Now"`.
+- CTA button label: `"Current Plan"` when `state.isCurrent`, `state.lockReason ?? "Locked"` when `state.locked`, otherwise `ctaLabel ?? "Enter Now"`. The `ctaLabel` prop allows callers (e.g. `MembershipSection`) to pass computed text such as `"Upgrade to Boss"`, `"Downgrade to Tradie"`, or `"Update payment"` without the card knowing about subscription hierarchy.
 - All colour values come from `colorScheme` (`accentHex`, `badgeStyle`, `textGradientStyle`, etc.) — no local colour literals.
 - **Tier differentiation:** VIP is distinguished from Boss by gold tone and a crisp polished finish, not by larger text or heavier blur. VIP uses brilliant champagne/white-gold (`#FFDF63` accent) with a sharp double-rim outer shadow and tight glow; Boss uses warm amber-gold (`#E0A019` accent) with a calmer, standard finish. Both tiers share the same font sizes as all other electric tiers.
 - **Discount badge:** the price block renders a **swing price tag** (hook ring + string + notched tag body with punched hole) anchored to the top-right of the price button when `discount` is set. The tag is rotated −7° and uses `accent` as its background. The struck regular-price span remains immediately right of the discounted price in the button's `<div>`.
+- **`theme` prop:** `"dark"` (default) renders the electric dark background; `"light"` switches to the branded vivid card background using `colorScheme.bgGradient`. `MembershipSection` drives this via `useHtmlDarkForUi()`.
 
 The component accepts two optional badge props: `showBestValue` (renders a `BestValueBadge` in the top-left corner) and `ribbon` (renders a `CornerRibbonBadge` with the given label; ignored when `showBestValue` is true). A promo-multiplier lightning badge (`X2`/`X5`/`X10` webp) appears top-right when `entries.multiplied` is active. These badges are caller-driven — no internal tier logic in the card itself.
 
-This component is **dev-phase 1 only** and is not yet wired into any page route.
+This component is used by the live `MembershipSection` for both the membership and one-time tabs.
 
 ### PromoTrustBar — final-hours urgency variant
 
