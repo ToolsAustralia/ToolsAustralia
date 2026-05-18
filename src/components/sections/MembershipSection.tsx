@@ -443,7 +443,7 @@ export default function MembershipSection({
           showBestValue={showBestValueRibbon}
           ribbon={showBestValueRibbon ? null : ribbon}
           ctaLabel={ctaLabel}
-          theme={isDark ? "dark" : "light"}
+          theme={!isMounted ? "dark" : isDark ? "dark" : "light"}
         />
       </div>
     );
@@ -554,7 +554,7 @@ export default function MembershipSection({
       {!loading && !error && (
         <div className="hidden lg:block overflow-visible">
           <div
-            className={`grid gap-3 sm:gap-4 overflow-visible pt-8 max-w-7xl mx-auto grid-cols-1 w-full ${
+            className={`grid gap-3 sm:gap-4 overflow-visible max-w-7xl mx-auto grid-cols-1 w-full ${
               membershipPlans.length === 5 ? "lg:grid-cols-5" : "md:grid-cols-3"
             }`}
           >
