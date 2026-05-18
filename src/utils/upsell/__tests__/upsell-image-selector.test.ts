@@ -12,16 +12,24 @@ function expectedTier(baseTemplatePackageId: string): string {
   return baseTemplatePackageId.replace(/^additional-/, "").replace(/-pack(-mini)?$/, "");
 }
 
+/** Mirror of imageStem in upsell-image-selector.ts. */
+function expectedStem(category: string, tier: string): string {
+  if (category === "additional") return `${tier}-additional`;
+  if (category === "mini") return tier.startsWith("mini-pack-") ? tier : `${tier}-mini`;
+  return tier;
+}
+
 function testEveryPackageResolvesPredictably() {
   for (const pkg of upsellPackages) {
     const r = resolveUpsellImage({ offerId: pkg.id });
     const tier = expectedTier(pkg.baseTemplatePackageId);
-    const expectedDefault = `${ROOT}/${pkg.upsellCategory}/${tier}.webp`;
+    const stem = expectedStem(pkg.upsellCategory, tier);
+    const expectedDefault = `${ROOT}/${pkg.upsellCategory}/${stem}.webp`;
 
     if (r.src === FALLBACK_SRC) {
       // Allowed when the default file isn't on disk yet.
       assert.ok(
-        !UPSELL_IMAGE_MANIFEST.has(`${pkg.upsellCategory}/${tier}.webp`),
+        !UPSELL_IMAGE_MANIFEST.has(`${pkg.upsellCategory}/${stem}.webp`),
         `${pkg.id} fell back to global placeholder but its default image IS on disk`
       );
     } else {
@@ -38,8 +46,9 @@ function testEveryPackageResolvesPredictably() {
 function testPromoVariantPreferredWhenAvailable() {
   for (const pkg of upsellPackages) {
     const tier = expectedTier(pkg.baseTemplatePackageId);
+    const stem = expectedStem(pkg.upsellCategory, tier);
     for (const m of PROMO_MULTIPLIERS) {
-      const variantKey = `${pkg.upsellCategory}/${tier}-${m}x.webp`;
+      const variantKey = `${pkg.upsellCategory}/${stem}-${m}x.webp`;
       const r = resolveUpsellImage({ offerId: pkg.id, multiplier: m });
 
       if (UPSELL_IMAGE_MANIFEST.has(variantKey)) {
