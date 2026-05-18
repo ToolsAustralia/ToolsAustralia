@@ -410,6 +410,45 @@ export default function MembershipSection({
     effectivePromoMultiplier > 1 &&
     hasMultiplierBanner(effectivePromoMultiplier);
 
+  /** Single source of truth for a package card — used by both the mobile and desktop grids. */
+  const renderPlanCard = (plan: LocalMembershipPlan) => {
+    const colorScheme =
+      activeTab === "membership"
+        ? getMembershipSectionColorScheme(plan.id, true)
+        : getElectricPackageColorScheme(plan.id);
+    const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
+    const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
+    const current = isCurrentSubscription(plan);
+    const hierarchy = getPlanHierarchy(plan);
+    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
+    let ctaLabel = "Enter Now";
+    if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
+    else if (hasActiveSubscription && activeTab === "membership") {
+      if (hierarchy.isCurrent) ctaLabel = "Current Plan";
+      else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
+      else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
+    }
+    const showBestValueRibbon =
+      (activeTab === "membership" && plan.id === "boss-subscription") ||
+      (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
+    const ribbon = current ? "CURRENT" : plan.isPopular ? "MOST POPULAR" : null;
+    return (
+      <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
+        <ElectricPackageCard
+          plan={plan}
+          colorScheme={colorScheme}
+          state={{ locked, lockReason: "Subscription or Entries Required", isCurrent: current }}
+          discount={discount ? { regularPrice: discount.regularPrice, percentOff: discount.percentOff } : null}
+          onSelect={handlePlanSelect}
+          showBestValue={showBestValueRibbon}
+          ribbon={showBestValueRibbon ? null : ribbon}
+          ctaLabel={ctaLabel}
+          theme={isDark ? "dark" : "light"}
+        />
+      </div>
+    );
+  };
+
   return (
     <section id="membership" className={cn(padding, "w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10")}>
   
@@ -506,43 +545,7 @@ export default function MembershipSection({
         {!loading && !error && (
           <div className="lg:hidden overflow-visible ">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-md mx-auto overflow-visible">
-              {membershipPlans.map((plan) => {
-                const colorScheme =
-                  activeTab === "membership"
-                    ? getMembershipSectionColorScheme(plan.id, true)
-                    : getElectricPackageColorScheme(plan.id);
-                const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
-                const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
-                const current = isCurrentSubscription(plan);
-                const hierarchy = getPlanHierarchy(plan);
-                const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-                let ctaLabel = "Enter Now";
-                if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
-                else if (hasActiveSubscription && activeTab === "membership") {
-                  if (hierarchy.isCurrent) ctaLabel = "Current Plan";
-                  else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
-                  else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
-                }
-                const showBestValueRibbon =
-                  (activeTab === "membership" && plan.id === "boss-subscription") ||
-                  (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
-                const ribbon = current ? "CURRENT" : plan.isPopular ? "MOST POPULAR" : null;
-                return (
-                  <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
-                    <ElectricPackageCard
-                      plan={plan}
-                      colorScheme={colorScheme}
-                      state={{ locked, lockReason: "Subscription or Entries Required", isCurrent: current }}
-                      discount={discount ? { regularPrice: discount.regularPrice, percentOff: discount.percentOff } : null}
-                      onSelect={handlePlanSelect}
-                      showBestValue={showBestValueRibbon}
-                      ribbon={showBestValueRibbon ? null : ribbon}
-                      ctaLabel={ctaLabel}
-                      theme={isDark ? "dark" : "light"}
-                    />
-                  </div>
-                );
-              })}
+              {membershipPlans.map(renderPlanCard)}
             </div>
           </div>
         )}
@@ -556,43 +559,7 @@ export default function MembershipSection({
             }`}
           >
             {membershipPlans.length > 0 ? (
-              membershipPlans.map((plan) => {
-              const colorScheme =
-                activeTab === "membership"
-                  ? getMembershipSectionColorScheme(plan.id, true)
-                  : getElectricPackageColorScheme(plan.id);
-              const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
-              const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
-              const current = isCurrentSubscription(plan);
-              const hierarchy = getPlanHierarchy(plan);
-              const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-              let ctaLabel = "Enter Now";
-              if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
-              else if (hasActiveSubscription && activeTab === "membership") {
-                if (hierarchy.isCurrent) ctaLabel = "Current Plan";
-                else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
-                else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
-              }
-              const showBestValueRibbon =
-                (activeTab === "membership" && plan.id === "boss-subscription") ||
-                (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
-              const ribbon = current ? "CURRENT" : plan.isPopular ? "MOST POPULAR" : null;
-              return (
-                <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
-                  <ElectricPackageCard
-                    plan={plan}
-                    colorScheme={colorScheme}
-                    state={{ locked, lockReason: "Subscription or Entries Required", isCurrent: current }}
-                    discount={discount ? { regularPrice: discount.regularPrice, percentOff: discount.percentOff } : null}
-                    onSelect={handlePlanSelect}
-                    showBestValue={showBestValueRibbon}
-                    ribbon={showBestValueRibbon ? null : ribbon}
-                    ctaLabel={ctaLabel}
-                    theme={isDark ? "dark" : "light"}
-                  />
-                </div>
-              );
-            })
+              membershipPlans.map(renderPlanCard)
           ) : (
             <div className="col-span-full text-center py-12">
               <p className="text-gray-600 dark:text-neutral-400">No membership packages available</p>
