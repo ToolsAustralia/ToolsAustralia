@@ -67,14 +67,17 @@ export default function ElectricPackageCard({
 
   const isLight = theme === "light";
   const lowerId = plan.id.toLowerCase();
+  /** Subscription (membership tab) vs one-time — period is reliable across live + dev
+   *  (live useMemberships ids are name-based with no "subscription" suffix). */
+  const isSubscription = plan.period !== "one-time";
   /** Light membership-tab Tradie reuses the one-time Foreman (electric cyan) card bg. */
-  const isMembershipTradie = lowerId.includes("tradie") && lowerId.includes("subscription");
+  const isMembershipTradie = lowerId.includes("tradie") && isSubscription;
   const tradieLightBg = getElectricPackageColorScheme("foreman-pack").bgGradient;
   /** Light one-time Boss reuses the membership Foreman (DeWalt yellow) card bg. */
-  const isOneTimeBoss = lowerId.includes("boss") && !lowerId.includes("subscription");
+  const isOneTimeBoss = lowerId.includes("boss") && !isSubscription;
   const bossLightBg = getMembershipSectionColorScheme("foreman-subscription", true).bgGradient;
   /** Light membership Boss reuses the one-time Power (electric red) card bg. */
-  const isMembershipBoss = lowerId.includes("boss") && lowerId.includes("subscription");
+  const isMembershipBoss = lowerId.includes("boss") && isSubscription;
   const membershipBossLightBg = getElectricPackageColorScheme("power-pack").bgGradient;
   const blackText = colorScheme.text.includes("black"); // lime/amber tiers use black ink
   const lightInk = blackText ? "#0A0A0A" : "#FFFFFF";   // text colour on the vivid branded card
