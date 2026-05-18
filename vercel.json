@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/process-stripe-webhook-queue",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/cancellation-retention-resume",
+      "schedule": "0 16 * * *"
     }
   ],
   "functions": {
@@ -68,6 +72,7 @@
     "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": { "memory": 1024, "maxDuration": 300 },
+    "src/app/api/cron/cancellation-retention-resume/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/admin/klaviyo/**/route.ts": { "memory": 1024, "maxDuration": 300 },
     "src/app/api/stripe/**/route.ts": { "memory": 512, "maxDuration": 60 },
     "src/app/api/payment-intent/**/route.ts": { "memory": 512, "maxDuration": 60 },

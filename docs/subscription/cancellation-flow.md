@@ -517,6 +517,33 @@ server-side imports (`stripe.ts`, `mongodb.ts`, `User.ts`) are deferred to the b
 of `applyRetentionPause` via dynamic `import()` so the module is safely importable
 in test environments that lack `STRIPE_SECRET_KEY`/`MONGODB_URI`.
 
+## Retention-pause lifecycle: cron cleanup (Task 13)
+
+`src/app/api/cron/cancellation-retention-resume/route.ts`
+(`GET /api/cron/cancellation-retention-resume`, daily at 16:00 UTC)
+
+After the 30-day retention pause window expires, Stripe auto-resumes the subscription's billing (`pause_collection` returns to null). However, the **Stripe metadata keys** `pauseReason="retention"` and `pauseResumesAt=<ISO>` set by `RetentionPauseService` are never cleared automatically.
+
+If left in place, these stale metadata keys create a production bug: a later failed-renewal recovery pause on the same subscription will still carry `pauseReason="retention"`, and `decideClearPause` (in `pauseCollectionPolicy.ts`) will refuse to clear `pause_collection` on a paid invoice — leaving the member stuck paused and never recovering billing.
+
+The cron's job is to detect this stale state and clear the markers. It:
+
+1. Queries users with `retentionOffersConsumed.pause30d === true` and a `stripeSubscriptionId`.
+2. For each candidate, retrieves the current Stripe subscription.
+3. Applies `shouldClearRetentionMarker({ pauseReason, pauseResumesAtIso, pauseCollectionPresent, now })` — a pure exported helper:
+   - `false` if `pauseReason !== "retention"` (idempotent no-op).
+   - `true` if `pause_collection` is already null (stale marker, Stripe already resumed).
+   - `true` if `pauseResumesAtIso` ≤ now (window elapsed).
+   - `false` if date is unparseable (conservative default).
+4. When clearing:
+   - Calls `resumeAfterSuccessfulRenewalPayment(subId)` if `pause_collection` is still active (defensive).
+   - Calls `stripe.subscriptions.update(subId, { metadata: { pauseReason: "", pauseResumesAt: "" } })` to remove the retention marker.
+5. Errors are isolated per subscription — one bad sub does not abort the batch.
+
+Returns `{ processed, cleared, errors }`.
+
+Full cron documentation (auth, candidate query bound, idempotency, response shape) lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-resume-cron).
+
 ## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
