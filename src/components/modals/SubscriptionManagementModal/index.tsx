@@ -23,7 +23,7 @@
  *    fold stay reachable on small viewports.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useToast } from "@/components/ui/Toast";
@@ -107,6 +107,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       };
     };
   } | null>(null);
+
+  // When the user accepts the tier_downgrade offer in CancellationFlowModal, we stash
+  // the eventId here so we can record outcome:"saved" only if/when the downgrade is
+  // actually confirmed — not on card click. Cleared after recording or on dismiss.
+  const pendingCancellationEventId = useRef<string | null>(null);
 
   // Toast notifications
   const { showToast } = useToast();
@@ -433,14 +438,34 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         })
       );
 
+      // If the downgrade was initiated from within the CancellationFlowModal, record
+      // the saved outcome now that the downgrade actually succeeded. This is the ONLY
+      // place the tier_downgrade outcome is committed — never on card click.
+      if (pendingCancellationEventId.current) {
+        const eventId = pendingCancellationEventId.current;
+        pendingCancellationEventId.current = null;
+        // Fire-and-forget — same pattern as useOutcomeCancellationFlow
+        fetch("/api/subscription/cancellation-flow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            action: "outcome",
+            eventId,
+            outcome: "saved",
+            offerAccepted: "tier_downgrade",
+          }),
+        }).catch((err: unknown) => {
+          console.error("Failed to record tier_downgrade cancellation outcome:", err);
+        });
+      }
+
       // Refresh user data and benefits
       if (onSubscriptionUpdate) {
         onSubscriptionUpdate();
       }
       fetchSubscriptionBenefits();
       setSelectedDowngrade(null);
-      // User has chosen a downgrade; close the cancellation flow.
-      setShowCancellationFlow(false);
     } catch (error) {
       console.error("Failed to downgrade subscription:", error);
       showToast({
@@ -799,7 +824,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         {selectedDowngrade && membershipPackage ? (
           <DowngradeConfirmModal
             isOpen={showDowngradeConfirm}
-            onClose={() => setShowDowngradeConfirm(false)}
+            onClose={() => {
+              // Dismiss without confirming — clear any stashed cancellation eventId so it
+              // matures naturally to "abandoned" rather than being incorrectly recorded.
+              pendingCancellationEventId.current = null;
+              setShowDowngradeConfirm(false);
+            }}
             onConfirm={handleDowngradeSubscription}
             isLoading={isLoading}
             fromPackageName={membershipPackage.name}
@@ -855,6 +885,30 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             setShowCancellationFlow(false);
             setIsRenewalFailedModalOpen(true);
           }}
+          onRequestTierDowngrade={(eventId) => {
+            // Stash the eventId — outcome is recorded only if downgrade is confirmed.
+            pendingCancellationEventId.current = eventId;
+            // Close the cancellation flow WITHOUT recording any outcome.
+            // The event stays in_progress until the downgrade completes (or is dismissed).
+            setShowCancellationFlow(false);
+            // Pick the cheapest available downgrade (same heuristic as the old
+            // CancellationUpsellModal downgrade prop). Falls back to the first
+            // if availableDowngrades is somehow unsorted.
+            const downgrades = subscriptionBenefits?.availableDowngrades ?? [];
+            const cheapest = downgrades.reduce<typeof downgrades[number] | null>(
+              (best, d) => (best === null || d.price < best.price ? d : best),
+              null
+            );
+            if (cheapest) {
+              setSelectedDowngrade(cheapest);
+              setShowDowngradeConfirm(true);
+            } else {
+              // No downgrade found (shouldn't happen if tierDowngradeAvailable is correct)
+              // — discard the stashed eventId so it doesn't linger.
+              pendingCancellationEventId.current = null;
+            }
+          }}
+          tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}
         />
 
         {/* Renewal Failed Modal */}

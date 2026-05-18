@@ -6,9 +6,11 @@
  * Desktop: centered dialog. Mobile (< 640px): bottom sheet.
  * ✕ button routes to Step 4 (confirm) via requestExit(), NOT onClose directly.
  *
- * PHASE-1 SCOPE: Steps 1 + 4 are live. Steps 2/3 (offer reel) are placeholders
- * — if state.step would be 2 or 3, Step 4 is rendered instead so the modal
- * ships immediately in a shippable state.
+ * Step routing:
+ *   Step 1 → reason capture (Step1Reason)
+ *   Step 2 → lead offer for the member's reason (Step2Offer)
+ *   Step 3 → +100 bonus entries rung (Step3BonusEntries) — always the final offer
+ *   Step 4 → confirm cancel or "Keep my membership" (Step4Confirm)
  *
  * Past-due path (§3a): server returns offersShown=[] → applyStart routes to
  * step 4 with state.pastDue=true → Step4Confirm renders the "Resolve payment" variant.
@@ -21,6 +23,8 @@ import { useCancellationFlow } from "./useCancellationFlow";
 import { useStartCancellationFlow, useOutcomeCancellationFlow } from "@/hooks/queries/useCancellationFlow";
 import StepIndicator from "./StepIndicator";
 import Step1Reason from "./Step1Reason";
+import Step2Offer from "./Step2Offer";
+import Step3BonusEntries from "./Step3BonusEntries";
 import Step4Confirm from "./Step4Confirm";
 import type { CancellationFlowModalProps } from "./types";
 
@@ -28,10 +32,10 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   isOpen,
   onClose,
   onCancelled,
-  // onSaved is part of the public API — used by Phase-2 offer steps when an
-  // offer is accepted. Not used by Phase-1 (Steps 2/3 not built yet).
-  onSaved: _onSaved,
+  onSaved,
   onResolvePayment,
+  onRequestTierDowngrade,
+  tierDowngradeAvailable,
 }) => {
   const isNarrowViewport = useMediaQuery("(max-width: 639px)");
 
@@ -68,34 +72,55 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
     switch (state.step) {
       case 1:
         return "Why are you cancelling?";
+      case 2:
+      case 3:
+        return "Before you go…";
       case 4:
-        return state.pastDue ? "Payment Required" : "Are you sure?";
-      default:
-        // Steps 2/3 not yet built — show confirm title
         return state.pastDue ? "Payment Required" : "Are you sure?";
     }
   };
 
   const renderStep = () => {
-    if (state.step === 1) {
-      return (
-        <Step1Reason
-          flowHook={flowHook}
-          startMutation={startMutation}
-        />
-      );
+    switch (state.step) {
+      case 1:
+        return (
+          <Step1Reason
+            flowHook={flowHook}
+            startMutation={startMutation}
+          />
+        );
+
+      case 2:
+        return (
+          <Step2Offer
+            state={state}
+            outcomeMutation={outcomeMutation}
+            onSaved={onSaved}
+            onDecline={flowHook.decline}
+            onRequestTierDowngrade={onRequestTierDowngrade}
+            tierDowngradeAvailable={tierDowngradeAvailable}
+          />
+        );
+
+      case 3:
+        return (
+          <Step3BonusEntries
+            state={state}
+            outcomeMutation={outcomeMutation}
+            onSaved={onSaved}
+            onDecline={flowHook.decline}
+          />
+        );
+
+      case 4:
+        return (
+          <Step4Confirm
+            state={state}
+            modalProps={{ onClose, onCancelled, onResolvePayment }}
+            outcomeMutation={outcomeMutation}
+          />
+        );
     }
-
-    // PHASE-2: Step2Offer/Step3BonusEntries render here (steps 2 and 3)
-    // For now, fall through to Step 4 for any step >= 2
-
-    return (
-      <Step4Confirm
-        state={state}
-        modalProps={{ onClose, onCancelled, onResolvePayment }}
-        outcomeMutation={outcomeMutation}
-      />
-    );
   };
 
   return (

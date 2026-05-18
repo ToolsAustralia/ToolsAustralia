@@ -197,12 +197,13 @@ FlowState = {
 ```
 
 - **Step 1** — reason capture (7 radio options; "Other" reveals an optional textarea)
-- **Step 2/3** — offer reel (Phase 2 — not yet built; see below)
-- **Step 4** — confirm cancel or "Keep my membership"
+- **Step 2** — lead offer (`Step2Offer`) — dispatches over the current offer via exhaustive typed `switch`
+- **Step 3** — +100 bonus entries rung (`Step3BonusEntries`) — always the final offer when `offersShown.length > 1`
+- **Step 4** — confirm cancel or "Keep my membership" (`Step4Confirm`)
 
 `applyStart({ eventId, offersShown, pastDue })` decides next step: if `offersShown.length === 0` → step 4; else → step 2.
 
-`decline()` advances `offerCursor`; when exhausted → step 4.
+`decline()` advances `offerCursor`; when exhausted → step 4. From Step 2 with a single offer, decline goes directly to Step 4 (cursor=1 >= length=1). From Step 2 with two offers, decline advances to Step 3 (cursor=1 < length=2); declining Step 3 goes to Step 4.
 
 `requestExit()` jumps directly to step 4 (used by the ✕ header button).
 
@@ -216,9 +217,34 @@ Exception: if the user hits ✕ on Step 1 before selecting a reason, the modal c
 
 When the server returns `pastDue: true` (user has a failed renewal), `offersShown` is `[]` (eligibility filter short-circuits). `applyStart` routes directly to step 4 with `state.pastDue = true`. Step 4 renders the past-due variant: primary CTA is "Resolve payment" → `props.onResolvePayment()`, secondary is "Cancel anyway".
 
-### Phase-1 scope
+### Step 2 — `Step2Offer.tsx`
 
-Steps 2 and 3 are not yet built. The index renders Step 4 for any `state.step >= 2`, with a `{/* PHASE-2: Step2Offer/Step3BonusEntries render here */}` comment marking the insertion point.
+Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhaustive typed `switch (offer: OfferType)` with a `never`-guard `default` so TypeScript errors if a new `OfferType` is added without handling it.
+
+**Implemented (Phase 2):**
+
+- `bonus_entries_100` — renders `<Step3BonusEntries>` directly (same content; no duplication).
+- `tier_downgrade` — dark-themed "Switch to a cheaper plan" card. If `tierDowngradeAvailable` is `false` (no downgrade options exist on the account), renders `<Step3BonusEntries>` instead — no dead card, no silent no-op. If `true`, clicking "Switch plan" calls `props.onRequestTierDowngrade?.(state.eventId)` — the outcome mutation is **NOT** fired at this point. The parent stores the `eventId` in `pendingCancellationEventId` and records `{outcome:"saved",offerAccepted:"tier_downgrade"}` only if `handleDowngradeSubscription` succeeds. If `DowngradeConfirmModal` is dismissed, the eventId is cleared and the event matures to `abandoned`. Decline calls `onDecline()`.
+
+**Unimplemented (throws loudly until wired):**
+
+- `pause_30d` → Task 14 replaces the throw with the pause card.
+- `discount_50_2mo` → Task 16 replaces the throw with the discount card.
+- `unsubscribe_marketing` → Task 17 replaces the throw with the unsubscribe card.
+
+These are unreachable in Phase 2 because `IMPLEMENTED_OFFERS` in the eligibility filter only passes `bonus_entries_100` and `tier_downgrade`.
+
+### Step 3 — `Step3BonusEntries.tsx`
+
+Universal "+100 bonus entries — stay active today" rung. Always the last offer in the reel.
+
+Accept flow (identical call chain to old `CancellationUpsellModal`):
+1. POST `/api/cancellation-upsell/redeem` with `credentials:"include"` (no body — the server identifies the user from the session).
+2. `useEntryRewardToast` to show the reward toast.
+3. Fire `outcomeMutation.mutate({outcome:"saved",offerAccepted:"bonus_entries_100"})` (fire-and-forget).
+4. Call `onSaved()`.
+
+Decline → `onDecline()` → `decline()` in the hook → cursor exhausted → Step 4.
 
 ### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
 
@@ -237,8 +263,32 @@ The parent (`SubscriptionManagementModal`) refreshes data via its existing imper
 - `onCancelled` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
 - `onResolvePayment` → `setShowCancellationFlow(false)` then `setIsRenewalFailedModalOpen(true)`.
 - `onClose` → `setShowCancellationFlow(false)` (plain close — only reachable from "Keep my membership" in Step 4).
+- `onRequestTierDowngrade(eventId)` → stores `eventId` in `pendingCancellationEventId` ref; immediately calls `setShowCancellationFlow(false)` (NO outcome recorded — the event stays `in_progress`); then selects the cheapest `DowngradeOption` from `subscriptionBenefits.availableDowngrades` (lowest `price`) and calls `setSelectedDowngrade(cheapest)` + `setShowDowngradeConfirm(true)`.
+- **Downgrade success path** (`handleDowngradeSubscription`): if `pendingCancellationEventId.current` is set, fire-and-forgets `POST /api/subscription/cancellation-flow` with `{action:"outcome",eventId,outcome:"saved",offerAccepted:"tier_downgrade"}`, then clears the ref. This is the only place the `tier_downgrade` outcome is recorded.
+- **Downgrade dismiss path** (`DowngradeConfirmModal` `onClose`): clears `pendingCancellationEventId.current` without recording any outcome — the event stays `in_progress` and matures to `abandoned` server-side.
+- `tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}` — threaded to `CancellationFlowModal` so `Step2Offer` can skip the dead tier card when no downgrade options exist.
 
 The old `CancellationUpsellModal` files are retained (not deleted); they will be removed in Phase 5 Task 19.
+
+### Phase-2 per-reason screen flow
+
+After `IMPLEMENTED_OFFERS` filtering (`bonus_entries_100`, `tier_downgrade` only):
+
+| Reason | offersShown | Step 1 → Step 2 | Step 2 → Step 3 | Step 3 → Step 4 |
+|---|---|---|---|---|
+| `too_expensive` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | tier_downgrade card | +100 card | decline → Step 4 |
+| `dont_use_benefits` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `too_many_messages` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `joined_for_giveaway` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `havent_won` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+| `other` | `[bonus_entries_100]` | +100 card | — | decline → Step 4 |
+
+Notes:
+- `discount_50_2mo`, `pause_30d`, `unsubscribe_marketing` are removed by `IMPLEMENTED_OFFERS` in Phase 2, so the only variation is whether `tier_downgrade` leads (reason=`prefer_cheaper`) or `bonus_entries_100` leads directly.
+- Accepting +100 at Step 2 (lead offer) or Step 3 (second rung) calls the same redeem endpoint and fires `offerAccepted:"bonus_entries_100"`.
+- Accepting `tier_downgrade` (when `tierDowngradeAvailable` is `true`) triggers `DowngradeConfirmModal` via `onRequestTierDowngrade`. The outcome `{offerAccepted:"tier_downgrade",outcome:"saved"}` is recorded **only** if the downgrade confirmation succeeds — never on card click.
+- If `tierDowngradeAvailable` is `false` and `tier_downgrade` is the current offer, `Step2Offer` renders `<Step3BonusEntries>` instead — the user gets the +100 rung with no dead UI.
 
 ### Note on shared-ui domain
 
