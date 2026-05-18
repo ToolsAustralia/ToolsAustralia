@@ -62,7 +62,7 @@ User-side cancellation runs through `/api/stripe/cancel-subscription` (the same 
 The cancel flow is a two-step modal sequence inside `SubscriptionManagementModal`:
 
 1. **`CancelSubscriptionModal`** (`src/components/modals/CancelSubscriptionModal/`) — lightweight "are you sure?" stop-and-confirm. Tier-themed (tradie/foreman/boss) dark hero with a loss grid showing what the user gives up, reversed action buttons (Keep = primary/red on the right, Yes cancel = outline/neutral on the left), and a trust bar footer. Calls `handleCancelSubscription` on confirm.
-2. **`CancellationUpsellModal`** — heavy save-modal that opens after cancel succeeds (or when `showCancellationUpsell` is set). Offers downgrade and resubscribe paths.
+2. **`CancellationFlowModal`** (`src/components/modals/CancellationFlowModal/`) — the multi-step save flow that opens after cancel succeeds (or when `showCancellationUpsell` is set). Reason-routed offers plus a universal +100-entries rung; replaced the removed single-screen `CancellationUpsellModal` (Phase 5 Task 19). See [cancellation-flow](./cancellation-flow.md).
 
 `CancelSubscriptionModal` accepts `fromPackageName` (drives tier theming + "Keep {name}" label), `accumulatedEntries` (shown in loss grid cell 1), and `billingEndDateLabel` (shown in hero sub-copy). It does **not** display pricing or charge anything — it is purely a confirmation gate.
 
