@@ -31,7 +31,7 @@ import {
 } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
-import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
+import { useThemeStore } from "@/stores/useThemeStore";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
@@ -55,7 +55,7 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
-  const isDark = useHtmlDarkForUi();
+  const isDark = useThemeStore((s) => s.theme === "dark");
   const theme = usePromoTheme();
   const promoThemeSlug = usePromoThemeStore((s) => s.slug);
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
@@ -443,7 +443,7 @@ export default function MembershipSection({
           showBestValue={showBestValueRibbon}
           ribbon={showBestValueRibbon ? null : ribbon}
           ctaLabel={ctaLabel}
-          theme={!isMounted ? "dark" : isDark ? "dark" : "light"}
+          theme={isDark ? "dark" : "light"}
         />
       </div>
     );
