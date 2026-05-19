@@ -982,3 +982,11 @@ The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `
 ## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
+
+## Task 5 — Step1Reason restyled via primitives + first-name greeting
+
+`Step1Reason.tsx` was restyled onto the Task-1 primitives (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `PrimaryCta` from `./primitives`). All existing logic is preserved unchanged: `selectReason`, `setReasonText`, `applyStart`, `handleContinue`, `handleReasonChange`, `handleTextChange`, `otherTextMissing`, `canContinue`, `isPending`, `isOther`, `REASON_OPTIONS`, the mandatory "Other" free-text + character counter + error.
+
+The `onClose: () => void` prop was added to `Step1ReasonProps` — wired through `FlowFrame`, resolving one of the three pending type errors that existed after Task 4.
+
+A best-effort first-name greeting is shown: `useUserContext()` is called unconditionally (safe — `CancellationFlowModal` always renders inside `UserProvider`, same as `MembershipModal` and `Header`), then `userData?.firstName` is accessed via optional chaining. If the value is a multi-word string, only the first whitespace-delimited token is used. If the context value is absent the headline falls back to the neutral "Before you go —".
