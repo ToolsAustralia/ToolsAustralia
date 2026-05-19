@@ -12,6 +12,43 @@ Routes owned by this domain. All handlers must follow the route conventions in C
 
 > _TODO: read the route handlers and fill in exact request/response shapes, status codes, and auth gating. The summaries below are the target shape; verify against [src/app/api/memberships/route.ts](../../src/app/api/memberships/route.ts), [src/app/api/memberships/[id]/route.ts](../../src/app/api/memberships/[id]/route.ts), and [src/app/api/subscription/benefits/route.ts](../../src/app/api/subscription/benefits/route.ts) before relying on this doc._
 
+## `GET /api/subscription/benefits` — active Stripe discount
+
+The benefits payload's `data` object now includes an **optional** `discount`
+field reflecting the member's **live, active Stripe subscription discount**
+(e.g. the accepted retention "50% off / 2 months" coupon):
+
+```jsonc
+"data": {
+  // ...currentBenefits, isCancelled, endDate, etc.
+  "discount": { "couponId": "retention-50off-2mo", "percentOff": 50, "endsAt": "2026-07-19T..." }
+}
+```
+
+- Shape: `{ couponId: string; percentOff: number; endsAt?: string /* ISO */ }`.
+- **Omitted entirely** when there is no active discount, the coupon is not a
+  percentage discount, or the Stripe read failed — consumers must treat it as
+  optional. The no-discount response is byte-identical to before.
+- Resolved by `getActiveStripeSubscriptionDiscount(user)` in
+  [src/utils/membership/subscription-benefits.ts](../../src/utils/membership/subscription-benefits.ts):
+  best-effort, **never throws**, returns `null` on any failure so this shared
+  endpoint is never broken for other consumers.
+- Adds **one** extra Stripe call (`subscriptions.retrieve` with `discounts`
+  expanded) **only when `user.stripeSubscriptionId` is present**. No Stripe
+  call is made when there is no subscription id.
+- `endsAt` is truthful only: set from Stripe's `discount.end`; else derived
+  from `discount.start + coupon.duration_in_months` for `repeating` coupons;
+  otherwise **omitted** (never fabricated).
+- Read live from Stripe (`subscription.discounts`), not from
+  `retentionOffersConsumed` — that persisted flag is not client-usable for
+  active/expiry state. `RetentionDiscountService` is unchanged.
+
+The Current Plan card ([CurrentBenefitsCard.tsx](../../src/components/modals/SubscriptionManagementModal/CurrentBenefitsCard.tsx))
+renders the discounted price prominently with the catalog price struck
+through and a "`{percentOff}% off · until {date}`" badge (or "`{percentOff}%
+off applied`" when `endsAt` is absent). When `discount` is absent the card is
+unchanged.
+
 ## Cross-domain routes that touch subscription
 
 These routes live in other domains but read/write subscription state:

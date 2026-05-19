@@ -52,6 +52,13 @@ const CurrentBenefitsCard: React.FC<CurrentBenefitsCardProps> = ({
   const currentPlanColorScheme = getMembershipSectionColorScheme(planId, true);
   const hasFailed = hasFailedRenewal(user);
 
+  const discount = subscriptionBenefits?.discount;
+  const discountedPrice =
+    discount && discount.percentOff > 0
+      ? Math.round(membershipPackage.price * (1 - discount.percentOff / 100) * 100) / 100
+      : null;
+  const discountEndsLabel = discount?.endsAt ? formatDate(discount.endsAt) : null;
+
   return (
     <>
       <div
@@ -84,8 +91,25 @@ const CurrentBenefitsCard: React.FC<CurrentBenefitsCardProps> = ({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs sm:text-sm opacity-90">Price:</span>
-              <span className="font-semibold text-xs sm:text-sm">${membershipPackage.price}/month</span>
+              {discountedPrice !== null && discount ? (
+                <span className="flex items-baseline gap-1.5 sm:gap-2 text-right">
+                  <span className="text-2xs sm:text-xs line-through opacity-70">
+                    ${membershipPackage.price}/month
+                  </span>
+                  <span className="font-bold text-xs sm:text-sm">${discountedPrice}/month</span>
+                </span>
+              ) : (
+                <span className="font-semibold text-xs sm:text-sm">${membershipPackage.price}/month</span>
+              )}
             </div>
+            {discountedPrice !== null && discount ? (
+              <div className="flex justify-end -mt-1.5 sm:-mt-2">
+                <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 text-2xs sm:text-xs font-medium">
+                  {discount.percentOff}% off
+                  {discountEndsLabel ? ` · until ${discountEndsLabel}` : " applied"}
+                </span>
+              </div>
+            ) : null}
             <div className="flex justify-between items-center">
               <span className="text-xs sm:text-sm opacity-90">Started:</span>
               <span className="font-semibold text-xs sm:text-sm">
