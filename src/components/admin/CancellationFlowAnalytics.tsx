@@ -1,11 +1,28 @@
 "use client";
 
-import {
-  CANCELLATION_REASONS,
-  OFFER_TYPES,
-  type CancellationReason,
-  type OfferType,
-} from "@/models/CancellationFlowEvent";
+// Hardcoded (NOT imported from @/models/CancellationFlowEvent): this is a
+// "use client" component and that module is a Mongoose model — runtime-importing
+// it in client code crashes (mongoose is serverExternalPackages). Keep these in
+// sync with CANCELLATION_REASONS / OFFER_TYPES in src/models/CancellationFlowEvent.ts.
+const CANCELLATION_REASONS = [
+  "too_expensive",
+  "prefer_cheaper",
+  "dont_use_benefits",
+  "too_many_messages",
+  "joined_for_giveaway",
+  "havent_won",
+  "other",
+] as const;
+
+const OFFER_TYPES = [
+  "pause_30d",
+  "discount_50_2mo",
+  "tier_downgrade",
+  "unsubscribe_marketing",
+  "bonus_entries_100",
+] as const;
+
+import type { CancellationReason, OfferType } from "@/models/CancellationFlowEvent";
 import { useCancellationFlowAnalytics } from "@/hooks/queries/admin/useCancellationFlowAnalytics";
 
 const REASON_LABELS: Record<CancellationReason, string> = {
