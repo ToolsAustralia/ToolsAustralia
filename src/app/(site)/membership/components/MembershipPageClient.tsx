@@ -220,6 +220,9 @@ export default function MembershipPageClient() {
           </div>
         </div>
         <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 w-full z-10 px-4">
+          <p className="text-center text-white/90 font-['Inter'] font-semibold text-sm sm:text-base lg:text-lg tracking-wide mb-3 sm:mb-4 drop-shadow-md">
+            WIN AUSTRALIA&apos;S TOP TOOL BRANDS
+          </p>
           <BrandScroller speed={800} speedMobile={400} />
         </div>
         <MetallicDivider className="absolute bottom-10 left-0 right-0" />

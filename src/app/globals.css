@@ -2152,6 +2152,12 @@ body[data-account-layout] .newsletter-section {
   display: none !important;
 }
 
+/* Account layout hides the newsletter card + footer, so the bottom-padding
+ * reservation that clears the overlapping card is just dead space there. */
+body[data-account-layout] .site-main-content {
+  padding-bottom: 0 !important;
+}
+
 /* ===== Device-tier tokens (added 2026-05-09) ===== */
 :root {
   --ta-blur:               12px;
