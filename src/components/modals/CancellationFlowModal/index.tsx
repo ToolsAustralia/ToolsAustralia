@@ -4,7 +4,7 @@
  * CancellationFlowModal — multi-step cancellation retention modal.
  *
  * Desktop: centered dialog. Mobile (< 640px): bottom sheet.
- * ✕ button routes to Step 4 (confirm) via requestExit(), NOT onClose directly.
+ * ✕ button always closes the modal immediately (no retention interception).
  *
  * Step routing:
  *   Step 1     → reason capture (Step1Reason)
@@ -62,7 +62,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   const firstName: string | undefined = raw ? raw.split(/\s+/)[0] : undefined;
 
   const flowHook = useCancellationFlow();
-  const { state, requestExit, reset } = flowHook;
+  const { state, reset } = flowHook;
 
   const startMutation = useStartCancellationFlow();
   const outcomeMutation = useOutcomeCancellationFlow();
@@ -77,24 +77,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   }, [isOpen]);
 
   const handleHeaderClose = () => {
-    // After a save-success, ✕ dismisses the modal entirely (no retention loop).
-    if (state.saveSuccess) {
-      onClose();
-      return;
-    }
-    // ✕ routes to the Step 4 confirm so the user sees the retention pitch
-    // ONCE — but at Step 4 itself (or before a reason is picked) it must
-    // actually close, otherwise the modal is a trap (requestExit() at step 4
-    // is a no-op loop and backdrop-close is disabled).
-    if (state.step === 4) {
-      onClose();
-      return;
-    }
-    if (state.step === 1 && state.reason === null) {
-      onClose();
-      return;
-    }
-    requestExit();
+    onClose();
   };
 
   const renderStep = () => {

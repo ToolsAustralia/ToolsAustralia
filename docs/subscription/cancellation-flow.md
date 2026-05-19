@@ -326,26 +326,26 @@ Pure transition helpers (exported from `useCancellationFlow.ts`, unit-tested wit
 
 `decline()` applies `nextOfferState`: from a **non-last** offer → stay step 2 with `offerCursor` advanced (Step2Offer re-renders the next rung — the middle rung of `other` is now reached, not skipped); from the **last** offer → step 4.
 
-`requestExit()` jumps directly to step 4 (used by the ✕ header button).
+`requestExit()` jumps directly to step 4. It is exported from the hook and tested, but is no longer used by the ✕ header button (the ✕ now closes directly via `onClose`).
 
 `markSaved(offer, result)` — hook action (wraps `applySaveSuccess`); called by the offer components after a successful accept API response.
 
-### ✕ button wiring (important — was an "uncloseable" bug)
+### ✕ button wiring
 
-The header ✕ shows the retention confirm **once**, but must not trap the user:
+The header ✕ **always closes the modal immediately** from every step — no retention interception.
 
-- **`state.saveSuccess` true** → ✕ closes directly (offer already accepted; no
-  more retention loop needed). Guard is prepended first in `handleHeaderClose`.
-- **Step 1, no reason picked** → ✕ closes directly (nothing to confirm).
-- **Step 1 (reason picked) / Step 2 / Step 3** → ✕ → `requestExit()` (jump to
-  the Step 4 confirm so the user sees the "Are you sure?" pitch once).
-- **Step 4** → ✕ → `props.onClose()` (**actually closes**).
+`handleHeaderClose` unconditionally calls `props.onClose()`. There is no
+`requestExit()` call in `index.tsx`; the step-conditional branching (save-success
+guard, step-4 guard, step-1-no-reason guard) has been removed entirely.
 
-The previous logic called `requestExit()` even at Step 4 — a no-op loop (you're
-already at step 4) — and `closeOnBackdrop` is `false`, so the modal was
-**impossible to dismiss** except via the buttons. Step 4's ✕ now closes.
-Other direct `onClose` paths: "Keep my membership" (Step 4) and, for past-due,
-"Resolve payment" (`onResolvePayment`).
+The Step 4 "Are you sure?" confirm screen is only reached via the **in-flow decline path**:
+declining the last offer → `decline()` → `offerPhaseFor` returns step 4. It is not
+reachable from the ✕ button.
+
+Other `onClose` paths: "Keep my membership" (Step 4) uses `modalProps.onClose`
+directly; "Resolve payment" uses `onResolvePayment`; `closeOnBackdrop={false}`
+is unchanged (backdrop does not close the modal — the ✕ must be used or a flow
+button clicked).
 
 ### Past-due variant (§3a)
 
