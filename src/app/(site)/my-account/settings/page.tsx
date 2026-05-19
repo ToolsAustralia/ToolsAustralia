@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
+  LogOut,
   Sparkles,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -394,23 +395,7 @@ export default function SettingsPage() {
               className="group sm:col-span-2 flex items-center gap-3 p-4 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-red-200 dark:hover:border-red-900/60 hover:bg-red-50/30 dark:hover:bg-red-950/20 transition-colors text-left"
             >
               <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">
-                {/* inline SVG to avoid importing LogOut from lucide just for the index-only card */}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
+                <LogOut className="w-5 h-5" strokeWidth={2} />
               </div>
               <div className="flex-1">
                 <p className="font-poppins font-bold text-base text-neutral-900 dark:text-white">Sign out</p>
