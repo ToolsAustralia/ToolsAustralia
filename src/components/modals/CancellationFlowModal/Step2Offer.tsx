@@ -31,9 +31,10 @@ import React, { useState } from "react";
 import { ApiError } from "@/lib/queries";
 import { useToast } from "@/components/ui/Toast";
 import type { OfferType } from "@/models/CancellationFlowEvent";
-import type { AcceptResult, FlowState } from "./types";
+import type { AcceptResult, CancellationEntrySnapshot, FlowState } from "./types";
 import type { useOutcomeCancellationFlow, useAcceptOffer } from "@/hooks/queries/useCancellationFlow";
 import Step3BonusEntries from "./Step3BonusEntries";
+import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import {
   FlowFrame,
   Eyebrow,
@@ -64,6 +65,12 @@ interface Step2OfferProps {
    * When false and the current offer is tier_downgrade, Step3BonusEntries is rendered instead.
    */
   tierDowngradeAvailable: boolean;
+  /**
+   * Real, parent-computed entry data. When present, the discount card shows the
+   * member's accumulation projection and the bonus card shows current/+100/total.
+   * When null/absent both cards render exactly as before (no fabrication).
+   */
+  entrySnapshot?: CancellationEntrySnapshot | null;
 }
 
 /** "Offer n of total" — the persuasion eyebrow tail. */
@@ -294,6 +301,7 @@ interface DiscountOfferCardProps {
   onClose: () => void;
   onDecline: () => void;
   onAcceptedOffer: (offer: OfferType, result: AcceptResult | null) => void;
+  entrySnapshot?: CancellationEntrySnapshot | null;
 }
 
 const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
@@ -302,6 +310,7 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
   onClose,
   onDecline,
   onAcceptedOffer,
+  entrySnapshot,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { showToast } = useToast();
@@ -411,6 +420,38 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Real entry-accumulation section — only when the parent could assemble
+          REAL data from subscriptionBenefits/membershipPackage. Absent → the
+          card above renders exactly as before (no fabricated numbers). */}
+      {entrySnapshot && (
+        <div className="mt-5 border-t border-dashed border-neutral-200 pt-4 dark:border-neutral-700">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span className="text-[12.5px] font-bold text-neutral-900 dark:text-white">
+              Your plan: {entrySnapshot.packageName}
+            </span>
+            <span className="text-[12px] text-neutral-600 dark:text-neutral-400">
+              {entrySnapshot.currentEntries.toLocaleString()} entries accumulated
+            </span>
+          </div>
+          <div className="mt-3">
+            <VerticalAccumulationChart
+              selectedPackageId={entrySnapshot.packageId}
+              showOnlySelectedPackage
+              userAccumulation={{
+                baseEntriesPerMonth: entrySnapshot.baseEntriesPerMonth,
+                lastMonthAccumulatedEntries: entrySnapshot.lastMonthAccumulatedEntries,
+              }}
+            />
+          </div>
+          <p className="mt-3 text-[12px] leading-relaxed text-neutral-600 dark:text-neutral-400">
+            Your entries keep stacking either way — the discount only halves the{" "}
+            <strong className="text-neutral-900 dark:text-white">price</strong> for
+            the next 2 months. Keep stacking these entries and pay half price while
+            you do.
+          </p>
+        </div>
+      )}
     </FlowFrame>
   );
 };
@@ -546,6 +587,7 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
   onAcceptedOffer,
   onRequestTierDowngrade,
   tierDowngradeAvailable,
+  entrySnapshot,
 }) => {
   const offer: OfferType = state.offersShown[state.offerCursor];
 
@@ -560,6 +602,7 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
           onClose={onClose}
           onAcceptedOffer={onAcceptedOffer}
           onDecline={onDecline}
+          entrySnapshot={entrySnapshot}
         />
       );
 
@@ -576,6 +619,7 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
             onClose={onClose}
             onAcceptedOffer={onAcceptedOffer}
             onDecline={onDecline}
+            entrySnapshot={entrySnapshot}
           />
         );
       }
@@ -613,6 +657,7 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
           onClose={onClose}
           onDecline={onDecline}
           onAcceptedOffer={onAcceptedOffer}
+          entrySnapshot={entrySnapshot}
         />
       );
 

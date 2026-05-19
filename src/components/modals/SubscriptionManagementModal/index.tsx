@@ -361,6 +361,54 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     };
   }, [subscriptionBenefits, user.subscription, membershipPromoMultiplier]);
 
+  /**
+   * Real entry snapshot for the CancellationFlowModal's 50% + bonus cards.
+   *
+   * Built ONLY from data already client-available on the active-subscription
+   * path: the resolved `membershipPackage`, `subscriptionBenefits.currentBenefits`
+   * (server-derived), and `user.subscription.lastMonthAccumulatedEntries` (the
+   * same accumulated figure CurrentBenefitsCard renders). If any required field
+   * cannot be assembled from real data we return `null` → the cancellation
+   * cards render exactly as before with NO fabricated numbers.
+   *
+   * `currentEntries` deliberately uses `lastMonthAccumulatedEntries` — the
+   * member's literal current major-draw entry count is NOT client-available
+   * (single source of truth is `majordraws.entries`, server-only). This is the
+   * accumulated figure the rest of the dashboard already shows as "your entries".
+   */
+  const cancellationEntrySnapshot = useMemo(() => {
+    if (!membershipPackage || !activeSubscription) return null;
+
+    const cb = subscriptionBenefits?.currentBenefits;
+    const packageId =
+      cb?.packageId ||
+      membershipPackage._id ||
+      (typeof activeSubscription.packageId === "string"
+        ? activeSubscription.packageId
+        : (activeSubscription.packageId as { _id?: string } | undefined)?._id) ||
+      "";
+    const packageName = cb?.packageName || membershipPackage.name || "";
+    const baseEntriesPerMonth =
+      cb?.entriesPerMonth ?? membershipPackage.entriesPerMonth ?? 0;
+
+    // No real base-entries / identifiers → don't fabricate; hide the section.
+    if (!packageId || !packageName || baseEntriesPerMonth <= 0) return null;
+
+    const subscriptionWithEntries = user.subscription as
+      | { lastMonthAccumulatedEntries?: number }
+      | undefined;
+    const lastMonthAccumulatedEntries =
+      subscriptionWithEntries?.lastMonthAccumulatedEntries ?? baseEntriesPerMonth;
+
+    return {
+      packageId,
+      packageName,
+      baseEntriesPerMonth,
+      currentEntries: lastMonthAccumulatedEntries,
+      lastMonthAccumulatedEntries,
+    };
+  }, [membershipPackage, activeSubscription, subscriptionBenefits, user.subscription]);
+
   const handleUpgradeSubscription = async () => {
     if (!selectedUpgrade || !membershipPackage) return;
 
@@ -909,6 +957,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             }
           }}
           tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}
+          entrySnapshot={cancellationEntrySnapshot}
         />
 
         {/* Renewal Failed Modal */}

@@ -21,8 +21,9 @@ import { useLoading } from "@/contexts/LoadingContext";
 import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
 import { useToast } from "@/components/ui/Toast";
 import type { OfferType } from "@/models/CancellationFlowEvent";
-import type { FlowState } from "./types";
+import type { CancellationEntrySnapshot, FlowState } from "./types";
 import type { useOutcomeCancellationFlow } from "@/hooks/queries/useCancellationFlow";
+import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
 import {
   FlowFrame,
   IconChip,
@@ -42,6 +43,12 @@ interface Step3BonusEntriesProps {
   onClose: () => void;
   onAcceptedOffer: (offer: OfferType, result: null) => void;
   onDecline: () => void;
+  /**
+   * Real, parent-computed entry data. When present, a compact
+   * current → +100 → total breakdown is shown (plus a factual next-renewal
+   * line). When null/absent the card renders exactly as before.
+   */
+  entrySnapshot?: CancellationEntrySnapshot | null;
 }
 
 const Step3BonusEntries: React.FC<Step3BonusEntriesProps> = ({
@@ -50,6 +57,7 @@ const Step3BonusEntries: React.FC<Step3BonusEntriesProps> = ({
   onClose,
   onAcceptedOffer,
   onDecline,
+  entrySnapshot,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { showLoading, hideLoading } = useLoading();
@@ -121,14 +129,64 @@ const Step3BonusEntries: React.FC<Step3BonusEntriesProps> = ({
       <SubCopy>
         Stay active today and we&apos;ll drop{" "}
         <strong className="text-neutral-900 dark:text-white">+{BONUS_ENTRIES} bonus entries</strong>{" "}
-        into your major draw count. No extra cost.
+        straight into your entries in the current major draw. No extra cost.
       </SubCopy>
       <ValueCard className="flex items-center gap-3">
         <div className="text-[34px] font-black tracking-[-0.03em] text-red-600 dark:text-red-400">+{BONUS_ENTRIES}</div>
         <div className="text-xs leading-snug text-neutral-600 dark:text-neutral-400">
-          bonus entries added instantly to the next major draw
+          bonus entries added straight to your entries in the current major draw
         </div>
       </ValueCard>
+
+      {/* Real entries breakdown — only when the parent could assemble REAL
+          data. Absent → the card renders exactly as before (no fabrication). */}
+      {entrySnapshot &&
+        (() => {
+          const current = entrySnapshot.currentEntries;
+          const afterBonus = current + BONUS_ENTRIES;
+          // Factual: what the NEXT renewal grants (canonical projection). This
+          // is a true statement about how renewals work, not a timing claim.
+          const afterRenewal = calculateRenewalEntries(
+            entrySnapshot.baseEntriesPerMonth,
+            afterBonus
+          ).newLastMonthAccumulatedEntries;
+          return (
+            <div className="mt-3.5 rounded-[11px] border border-neutral-200 bg-neutral-50 px-3.5 py-3 dark:border-neutral-700 dark:bg-neutral-900/40">
+              <div className="flex items-center justify-between text-[12.5px]">
+                <span className="text-neutral-600 dark:text-neutral-400">
+                  Your entries now
+                </span>
+                <span className="font-bold text-neutral-900 dark:text-white">
+                  {current.toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between text-[12.5px]">
+                <span className="text-neutral-600 dark:text-neutral-400">
+                  +100 now
+                </span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  +{BONUS_ENTRIES}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-dashed border-neutral-200 pt-2 text-[13px] dark:border-neutral-700">
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  Total in the current major draw
+                </span>
+                <span className="font-black text-red-600 dark:text-red-400">
+                  {afterBonus.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-neutral-500 dark:text-neutral-500">
+                Your next renewal then adds{" "}
+                <strong className="text-neutral-700 dark:text-neutral-300">
+                  +{entrySnapshot.baseEntriesPerMonth} entries
+                </strong>{" "}
+                — taking you to about {afterRenewal.toLocaleString()}.
+              </p>
+            </div>
+          );
+        })()}
+
       <UrgencyStrip>Someone&apos;s name gets called next draw — it could just as easily be yours.</UrgencyStrip>
       <PrimaryCta className="mt-[17px]" onClick={() => void handleAccept()} disabled={isProcessing}>
         {isProcessing ? "Adding bonus entries…" : `Keep me in the draw +${BONUS_ENTRIES} entries`}

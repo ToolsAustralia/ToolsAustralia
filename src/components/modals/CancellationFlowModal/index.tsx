@@ -49,6 +49,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   onResolvePayment,
   onRequestTierDowngrade,
   tierDowngradeAvailable,
+  entrySnapshot,
 }) => {
   // Mobile + tablet (< lg) → slide-up sheet + near-fullscreen (mobileFullBleed).
   // Desktop (≥ lg) → centered dialog.
@@ -105,6 +106,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
             onAcceptedOffer={flowHook.markSaved}
             onRequestTierDowngrade={onRequestTierDowngrade}
             tierDowngradeAvailable={tierDowngradeAvailable}
+            entrySnapshot={entrySnapshot}
             onClose={handleHeaderClose}
           />
         );

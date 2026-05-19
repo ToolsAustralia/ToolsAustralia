@@ -20,7 +20,10 @@
 
 import React, { useState } from "react";
 import type { OfferType } from "@/models/CancellationFlowEvent";
-import type { FlowState } from "@/components/modals/CancellationFlowModal/types";
+import type {
+  CancellationEntrySnapshot,
+  FlowState,
+} from "@/components/modals/CancellationFlowModal/types";
 import Step1Reason from "@/components/modals/CancellationFlowModal/Step1Reason";
 import Step2Offer from "@/components/modals/CancellationFlowModal/Step2Offer";
 import Step4Confirm from "@/components/modals/CancellationFlowModal/Step4Confirm";
@@ -235,6 +238,16 @@ const SAVE_SUCCESS_OFFERS: OfferType[] = [
   "bonus_entries_100",
 ];
 
+// Realistic REAL-data sample (Tradie: 150 accumulated → 165 → 180 projection;
+// +100 bonus → 250). Mirrors what the parent computes from subscriptionBenefits.
+const SAMPLE_ENTRY_SNAPSHOT: CancellationEntrySnapshot = {
+  packageId: "tradie-subscription",
+  packageName: "Tradie",
+  baseEntriesPerMonth: 15,
+  currentEntries: 150,
+  lastMonthAccumulatedEntries: 150,
+};
+
 export default function CancellationFlowHarnessClient() {
   const [dark, setDark] = useState(false);
   const [viewport, setViewport] = useState<Viewport>(360);
@@ -263,11 +276,11 @@ export default function CancellationFlowHarnessClient() {
           {/* ── Step 1 ────────────────────────────────────────────── */}
           <Step1Panel width={viewport} />
 
-          {/* ── Step 2 — each of the 5 offer types ───────────────── */}
+          {/* ── Step 2 — each of the 5 offer types (WITH real entrySnapshot) ── */}
           {ALL_OFFERS.map((offer) => (
             <Panel
               key={offer}
-              label={`Step 2 — Offer: ${offer} (cursor 0 of ${ALL_OFFERS.length})`}
+              label={`Step 2 — Offer: ${offer} (cursor 0 of ${ALL_OFFERS.length}) · entrySnapshot PRESENT`}
               width={viewport}
             >
               <Step2Offer
@@ -282,9 +295,50 @@ export default function CancellationFlowHarnessClient() {
                 onAcceptedOffer={noop}
                 onRequestTierDowngrade={noop}
                 tierDowngradeAvailable={true}
+                entrySnapshot={SAMPLE_ENTRY_SNAPSHOT}
               />
             </Panel>
           ))}
+
+          {/* ── Step 2 — graceful-hide proof: entrySnapshot ABSENT ──── */}
+          <Panel
+            label="Step 2 — Offer: discount_50_2mo · entrySnapshot ABSENT (graceful — no accumulation section)"
+            width={viewport}
+          >
+            <Step2Offer
+              state={baseState({
+                offersShown: ["discount_50_2mo", "bonus_entries_100"],
+                offerCursor: 0,
+              })}
+              outcomeMutation={mockMutation({ ok: true })}
+              acceptOfferMutation={mockMutation({ ok: true })}
+              onDecline={noop}
+              onClose={noop}
+              onAcceptedOffer={noop}
+              onRequestTierDowngrade={noop}
+              tierDowngradeAvailable={true}
+              entrySnapshot={null}
+            />
+          </Panel>
+          <Panel
+            label="Step 2 — Offer: bonus_entries_100 · entrySnapshot ABSENT (graceful — no breakdown)"
+            width={viewport}
+          >
+            <Step2Offer
+              state={baseState({
+                offersShown: ["bonus_entries_100"],
+                offerCursor: 0,
+              })}
+              outcomeMutation={mockMutation({ ok: true })}
+              acceptOfferMutation={mockMutation({ ok: true })}
+              onDecline={noop}
+              onClose={noop}
+              onAcceptedOffer={noop}
+              onRequestTierDowngrade={noop}
+              tierDowngradeAvailable={true}
+              entrySnapshot={null}
+            />
+          </Panel>
 
           {/* ── Step 2 — tier_downgrade with tierDowngradeAvailable=false ── */}
           <Panel

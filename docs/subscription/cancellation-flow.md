@@ -400,12 +400,13 @@ Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhausti
 - `onDecline: () => void` — wired to `flowHook.decline` (advances cursor).
 - `onClose: () => void` — threaded into each card's `FlowFrame`.
 - `tierDowngradeAvailable: boolean` — used by the `tier_downgrade` case.
+- `entrySnapshot?: CancellationEntrySnapshot | null` — real, parent-computed entry data, threaded into `DiscountOfferCard` and every `Step3BonusEntries` call site. `null`/absent → both cards render exactly as before (no fabricated numbers). See [Real entry data — `entrySnapshot`](#real-entry-data--entrysnapshot).
 
 **Offer cards:**
 
 - `pause_30d` (`PauseOfferCard`) — "Pause 30 days — keep your entries". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"pause_30d" })`; on success → `onAcceptedOffer("pause_30d", result)` → Save Success. The server records the `saved/pause_30d` outcome (server-side, not a client fire-and-forget). **Decline** → `onDecline()`. **409/404 graceful path:** catches the `ApiError`, shows a brief info toast, and calls `onDecline()` so the member advances to the next rung instead of dead-ending. Any other failure shows an error toast and leaves the card in place to retry.
 
-- `discount_50_2mo` (`DiscountOfferCard`) — "50% off for 2 months". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"discount_50_2mo" })`; on success → `onAcceptedOffer("discount_50_2mo", result)` → Save Success. The server records the `saved/discount_50_2mo` outcome. **Decline** → `onDecline()`. **409/404 graceful path:** info toast + `onDecline()`; any other failure → error toast, card stays for retry.
+- `discount_50_2mo` (`DiscountOfferCard`) — "50% off for 2 months". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"discount_50_2mo" })`; on success → `onAcceptedOffer("discount_50_2mo", result)` → Save Success. The server records the `saved/discount_50_2mo` outcome. **Decline** → `onDecline()`. **409/404 graceful path:** info toast + `onDecline()`; any other failure → error toast, card stays for retry. **When `entrySnapshot` is present**, a real entry-accumulation section renders **below** the existing two-column 50%/SAVE-50% value card (full-width inside the same `FlowFrame`, after the `lg:grid lg:grid-cols-2` block so it never breaks the desktop two-column layout or overflows the mobile sheet): a `Your plan: {packageName}` + `{currentEntries} entries accumulated` header, the reusable `<VerticalAccumulationChart selectedPackageId={packageId} showOnlySelectedPackage userAccumulation={{ baseEntriesPerMonth, lastMonthAccumulatedEntries }} />` (2-month projection, e.g. Tradie 150 → 165 → 180; multiplier/promo badge hidden by the chart's own `userAccumulation` path), and an **honest price framing line**: entries accumulate the same either way — the discount only halves the *price* for 2 months. The 50%/SAVE-50% value card, accept/decline handlers, and 409/404 logic are **unchanged**. When `entrySnapshot` is `null`/absent the card is byte-identical to before.
 
 - `unsubscribe_marketing` (`UnsubscribeOfferCard`) — "Get fewer messages instead". Copy is explicit that it switches off **marketing email + marketing SMS only** and that transactional / account messages are **not** affected. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"unsubscribe_marketing" })`; on success → `onAcceptedOffer("unsubscribe_marketing", result)` → Save Success. The server records the `saved/unsubscribe_marketing` outcome. **Decline** → `onDecline()`. **No 409 path** (not one-time gated, no past-due guard); a rare 404/500 → toast + `onDecline()` (graceful, never dead-ends).
 
@@ -421,7 +422,11 @@ Universal "+100 bonus entries — stay active today" rung. **Rendered by `Step2O
 
 The accept CTA reads **"Keep me in the draw +100 entries"** (non-processing state); processing state shows "Adding bonus entries…". The count is driven by the `BONUS_ENTRIES = 100` constant in the file, rendered as `` `Keep me in the draw +${BONUS_ENTRIES} entries` ``.
 
-Props: `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void`. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen). The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. **Decline** → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4.
+Props: `onClose: () => void`, `onAcceptedOffer: (offer: OfferType, result: null) => void`, and `entrySnapshot?: CancellationEntrySnapshot | null`. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen). The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. **Decline** → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4.
+
+**"Current major draw" copy correction (unconditional — applies even when `entrySnapshot` is `null`):** the `/api/cancellation-upsell/redeem` route adds the +100 to `accumulatedEntries` **and** to `MajorDraw.findOne({ isActive: true })` — i.e. the member's entries in the **current/active** major draw, not a future "next" draw. The card copy was corrected accordingly: the SubCopy now reads "straight into your entries in the current major draw" and the `ValueCard` caption reads "bonus entries added straight to your entries in the current major draw" (previously the misleading "added instantly to the next major draw"). The `UrgencyStrip` line ("Someone's name gets called next draw…") is general persuasion about the next time a draw is run and is left unchanged — it does not misrepresent where the +100 lands.
+
+**Real entries breakdown (when `entrySnapshot` is present):** between the `ValueCard` and the `UrgencyStrip`, a compact bordered breakdown renders — `Your entries now: {currentEntries}` → `+100 now: +100` → `Total in the current major draw: {currentEntries + 100}` — followed by a small factual sub-line: "Your next renewal then adds +{baseEntriesPerMonth} entries — taking you to about {N}", where `N` is computed via the canonical `calculateRenewalEntries(baseEntriesPerMonth, currentEntries + 100).newLastMonthAccumulatedEntries`. This is a true statement about how renewals accrue, **not** a claim about renewal-timing state (`entriesPendingRenewal` is intentionally not modelled — see below). When `entrySnapshot` is `null`/absent the breakdown and sub-line are omitted entirely and the card is byte-identical to before. All accept/redeem/outcome/toast logic is unchanged.
 
 Accept flow:
 1. POST `/api/cancellation-upsell/redeem` with `credentials:"include"`.
@@ -503,6 +508,31 @@ The parent (`SubscriptionManagementModal`) refreshes data via its existing imper
 - **Downgrade success path** (`handleDowngradeSubscription`): if `pendingCancellationEventId.current` is set, fire-and-forgets `POST /api/subscription/cancellation-flow` with `{action:"outcome",eventId,outcome:"saved",offerAccepted:"tier_downgrade"}`, then clears the ref. This is the only place the `tier_downgrade` outcome is recorded.
 - **Downgrade dismiss path** (`DowngradeConfirmModal` `onClose`): clears `pendingCancellationEventId.current` without recording any outcome — the event stays `in_progress` and matures to `abandoned` server-side.
 - `tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}` — threaded to `CancellationFlowModal` so `Step2Offer` can skip the dead tier card when no downgrade options exist.
+- `entrySnapshot={cancellationEntrySnapshot}` — real entry data computed by a parent `useMemo` (see next section); `null` when it cannot be assembled from real data.
+
+### Real entry data — `entrySnapshot`
+
+`CancellationEntrySnapshot` (defined in `CancellationFlowModal/types.ts`) is a single optional, parent-computed prop surfaced on the 50% discount card (`DiscountOfferCard`) and the +100 bonus card (`Step3BonusEntries`) so the member sees the real upside before cancelling. **Every figure is real or the section is hidden — no placeholders, ever.**
+
+Shape:
+
+```ts
+interface CancellationEntrySnapshot {
+  packageId: string;                  // e.g. "tradie-subscription" (VerticalAccumulationChart selection)
+  packageName: string;                // e.g. "Tradie"
+  baseEntriesPerMonth: number;        // canonical per-package renewal grant
+  currentEntries: number;             // = lastMonthAccumulatedEntries (see note)
+  lastMonthAccumulatedEntries: number;// feeds the 2-month accumulation projection
+}
+```
+
+**Parent computation** (`SubscriptionManagementModal/index.tsx`, `cancellationEntrySnapshot` `useMemo`): built only on the active-subscription path from data already client-available — the resolved `membershipPackage`, `subscriptionBenefits.currentBenefits` (server-derived, fetched by `fetchSubscriptionBenefits`), and `user.subscription.lastMonthAccumulatedEntries` (the same accumulated figure `CurrentBenefitsCard` renders). `baseEntriesPerMonth` resolves from `currentBenefits.entriesPerMonth ?? membershipPackage.entriesPerMonth`. If `membershipPackage`/`activeSubscription` are missing, or no real `packageId`/`packageName`/positive `baseEntriesPerMonth` can be resolved, the memo returns **`null`** and both cards render exactly as before.
+
+**Why `currentEntries` = `lastMonthAccumulatedEntries`:** the member's *literal current major-draw entry count* is **not client-available** — the single source of truth is `majordraws.entries` (server-only; the `User` model intentionally has no per-user major-draw count, and `/api/subscription/benefits` does not return it). `lastMonthAccumulatedEntries` is the accumulated-entries figure the rest of the dashboard already shows as "your entries", so it is the honest datum to surface.
+
+**Why there is no `entriesPendingRenewal`:** nothing client-side distinguishes "this period's grant already applied" from "pending the next renewal grant" — `lastMonthAccumulatedEntries` is mutated server-side on the renewal webhook with no client-visible timing flag. Rather than fabricate that state, the bonus card frames the next renewal as a **factual** statement ("your next renewal adds +N") computed via the canonical `calculateRenewalEntries`. This field and an "on renewal (pending)" timing sub-text were intentionally omitted.
+
+**Threading:** `index.tsx` → `<Step2Offer entrySnapshot>` → `DiscountOfferCard` (50% card section) and every `Step3BonusEntries` call site (including the `tier_downgrade`-unavailable and lead-`bonus_entries_100` fallbacks). No unrelated parent logic changed.
 
 The old `CancellationUpsellModal` has been removed — `src/components/modals/CancellationUpsellModal/` no longer exists. The +100-entries rung still POSTs to the existing, untouched `/api/cancellation-upsell/redeem` route (backed by `src/utils/redeemables/cancellation-upsell-eligibility.ts`); only the superseded modal UI was deleted.
 
