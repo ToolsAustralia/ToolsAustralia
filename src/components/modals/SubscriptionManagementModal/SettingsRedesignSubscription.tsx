@@ -126,32 +126,27 @@ const ManageRow: React.FC<{
 );
 
 /**
- * Package-tier-colored CTA — mirrors the legacy UpgradeList button:
- * `style = enterNowButtonStyle ?? badgeStyle`, text class
- * `enterNowButtonTextClass ?? (textGradientStyle ? "" : "text-white")`,
- * inner label gets `textGradientStyle` when present.
+ * Package-tier-colored CTA. Uses the scheme's canonical Enter-Now button
+ * classes (`buttonBg`/`buttonText`/`buttonShadow`) — the solid, vibrant
+ * package CTA treatment that reads correctly on BOTH light and dark
+ * surfaces — rather than the translucent `badgeStyle` the legacy modal
+ * relied on (which looks pale on the light settings page).
  */
 const PackageCta: React.FC<{
   scheme: PackageColorScheme;
   disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
-}> = ({ scheme, disabled, onClick, children }) => {
-  const buttonStyle = (scheme.enterNowButtonStyle ?? scheme.badgeStyle) as React.CSSProperties;
-  const textClass =
-    scheme.enterNowButtonTextClass ?? (scheme.textGradientStyle ? "" : "text-white");
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed w-full sm:w-auto ${textClass}`}
-      style={buttonStyle}
-    >
-      <span style={scheme.textGradientStyle ?? undefined}>{children}</span>
-    </button>
-  );
-};
+}> = ({ scheme, disabled, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={`rounded-xl px-4 py-2 text-sm font-bold transition-all hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed w-full sm:w-auto ${scheme.buttonBg} ${scheme.buttonText} ${scheme.buttonShadow}`}
+  >
+    {children}
+  </button>
+);
 
 const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> = ({
   user,
