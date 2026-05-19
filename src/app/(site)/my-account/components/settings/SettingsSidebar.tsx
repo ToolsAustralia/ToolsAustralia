@@ -1,8 +1,11 @@
+"use client";
+
 // SettingsSidebar — desktop vertical nav + mobile 4-col segmented strip.
 // Pure presentational. All business logic lives in page.tsx.
 
 import React from "react";
 import { User, CreditCard, KeyRound, Wallet, ChevronRight, LogOut } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Contract — shared type + tab definition
@@ -47,6 +50,8 @@ export const SETTINGS_TABS: Array<{
   },
 ];
 
+export const VALID_TAB_IDS: ReadonlySet<string> = new Set(SETTINGS_TABS.map((t) => t.id));
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -56,7 +61,7 @@ interface SettingsSidebarProps {
   setActiveTab: (id: SettingsSection) => void;
   hasAlert: boolean;
   isMobile?: boolean;
-  onSignOut: () => void;
+  onSignOut?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,19 +88,22 @@ export default function SettingsSidebar({
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
-                className={`relative flex flex-col items-center justify-center gap-1 px-1 py-2 rounded-xl text-[11px] font-semibold transition-colors ${
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex flex-col items-center justify-center gap-1 px-1 py-2 rounded-xl text-[11px] font-semibold transition-colors",
                   active
                     ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                }`}
+                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800",
+                )}
               >
                 <t.icon className="w-4 h-4" strokeWidth={2} />
                 <span className="truncate">{t.shortLabel}</span>
                 {showDot && (
                   <span
-                    className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${
-                      active ? "bg-red-400" : "bg-red-600"
-                    }`}
+                    className={cn(
+                      "absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full",
+                      active ? "bg-red-400" : "bg-red-600",
+                    )}
                   />
                 )}
               </button>
@@ -118,18 +126,21 @@ export default function SettingsSidebar({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors",
                 active
                   ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-                  : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-              }`}
+                  : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900",
+              )}
             >
               <div
-                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                className={cn(
+                  "w-9 h-9 rounded-lg flex items-center justify-center shrink-0",
                   active
                     ? "bg-white/15 dark:bg-neutral-900/10"
-                    : "bg-neutral-100 dark:bg-neutral-900 group-hover:bg-white dark:group-hover:bg-neutral-800"
-                }`}
+                    : "bg-neutral-100 dark:bg-neutral-900 group-hover:bg-white dark:group-hover:bg-neutral-800",
+                )}
               >
                 <t.icon className="w-4 h-4" strokeWidth={2} />
               </div>
@@ -141,19 +152,21 @@ export default function SettingsSidebar({
                   )}
                 </div>
                 <p
-                  className={`text-xs truncate ${
-                    active ? "opacity-70" : "text-neutral-500 dark:text-neutral-400"
-                  }`}
+                  className={cn(
+                    "text-xs truncate",
+                    active ? "opacity-70" : "text-neutral-500 dark:text-neutral-400",
+                  )}
                 >
                   {t.desc}
                 </p>
               </div>
               <ChevronRight
-                className={`w-4 h-4 shrink-0 transition ${
+                className={cn(
+                  "w-4 h-4 shrink-0 transition",
                   active
                     ? "opacity-90"
-                    : "opacity-0 -translate-x-1 group-hover:opacity-50 group-hover:translate-x-0"
-                }`}
+                    : "opacity-0 -translate-x-1 group-hover:opacity-50 group-hover:translate-x-0",
+                )}
                 strokeWidth={2}
               />
             </button>
@@ -161,18 +174,20 @@ export default function SettingsSidebar({
         })}
 
         {/* Sign out */}
-        <div className="pt-2 mt-2 border-t border-neutral-200 dark:border-neutral-800">
-          <button
-            type="button"
-            onClick={onSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-          >
-            <div className="w-9 h-9 rounded-lg bg-red-100 dark:bg-red-950/50 flex items-center justify-center shrink-0">
-              <LogOut className="w-4 h-4" strokeWidth={2} />
-            </div>
-            <span className="text-sm font-semibold">Sign out</span>
-          </button>
-        </div>
+        {onSignOut && (
+          <div className="pt-2 mt-2 border-t border-neutral-200 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            >
+              <div className="w-9 h-9 rounded-lg bg-red-100 dark:bg-red-950/50 flex items-center justify-center shrink-0">
+                <LogOut className="w-4 h-4" strokeWidth={2} />
+              </div>
+              <span className="text-sm font-semibold">Sign out</span>
+            </button>
+          </div>
+        )}
       </nav>
     </aside>
   );

@@ -18,7 +18,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { formatDisplayName } from "@/utils/display-name";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { SettingsBadge } from "../components/settings/ui/primitives";
-import SettingsSidebar, { SETTINGS_TABS, type SettingsSection } from "../components/settings/SettingsSidebar";
+import SettingsSidebar, { SETTINGS_TABS, VALID_TAB_IDS, type SettingsSection } from "../components/settings/SettingsSidebar";
 
 // Lazy-loaded: MembershipModal bundles Stripe + payment forms.
 const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
@@ -80,9 +80,8 @@ export default function SettingsPage() {
 
   // ?tab= is single source of truth for active section
   const tabParam = searchParams?.get("tab");
-  const validTabs = SETTINGS_TABS.map((t) => t.id) as string[];
   const activeSection: SettingsSection | null =
-    tabParam && validTabs.includes(tabParam) ? (tabParam as SettingsSection) : null;
+    tabParam && VALID_TAB_IDS.has(tabParam) ? (tabParam as SettingsSection) : null;
 
   const setActiveTab = useCallback(
     (id: SettingsSection) => {
@@ -425,7 +424,6 @@ export default function SettingsPage() {
               setActiveTab={setActiveTab}
               hasAlert={hasFailed}
               isMobile
-              onSignOut={handleSignOut}
             />
           </div>
 
