@@ -1,5 +1,12 @@
 import type { CancellationReason, OfferType } from "@/models/CancellationFlowEvent";
 
+/** Mirror of the useAcceptOffer response (kept local — no hook import). */
+export interface AcceptResult {
+  ok: boolean;
+  resumesAt?: string;
+  couponId?: string;
+}
+
 export interface FlowState {
   /**
    * 1 = reason capture, 2 = OFFER phase (cursor-driven over `offersShown` —
@@ -17,6 +24,12 @@ export interface FlowState {
   /** Index into `offersShown` for the current OFFER-phase rung (step 2). */
   offerCursor: number;
   pastDue: boolean;
+  /** Terminal flag: an offer was accepted — renderer shows StepSaveSuccess. */
+  saveSuccess: boolean;
+  /** Which offer was accepted (drives the success-screen copy). */
+  acceptedOffer: OfferType | null;
+  /** The accept response payload (couponId / resumesAt) — may be null. */
+  acceptResult: AcceptResult | null;
 }
 
 export interface CancellationFlowModalProps {

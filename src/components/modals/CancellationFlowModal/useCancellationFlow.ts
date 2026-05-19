@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { OfferType, CancellationReason } from "@/models/CancellationFlowEvent";
-import type { FlowState } from "./types";
+import type { FlowState, AcceptResult } from "./types";
 
 const INITIAL_STATE: FlowState = {
   step: 1,
@@ -12,6 +12,9 @@ const INITIAL_STATE: FlowState = {
   offersShown: [],
   offerCursor: 0,
   pastDue: false,
+  saveSuccess: false,
+  acceptedOffer: null,
+  acceptResult: null,
 };
 
 interface ApplyStartPayload {
@@ -50,6 +53,18 @@ export function offerPhaseFor(offersShown: OfferType[], cursor: number): OfferPh
  */
 export function nextOfferState(state: Pick<FlowState, "offersShown" | "offerCursor">): OfferPhase {
   return offerPhaseFor(state.offersShown, state.offerCursor + 1);
+}
+
+/**
+ * Pure: produce the terminal save-success slice. The renderer checks
+ * `saveSuccess` FIRST (orthogonal to `step` — the step union is NOT widened).
+ */
+export function applySaveSuccess(
+  state: FlowState,
+  offer: OfferType,
+  result: AcceptResult | null
+): FlowState {
+  return { ...state, saveSuccess: true, acceptedOffer: offer, acceptResult: result };
 }
 
 export function useCancellationFlow() {
@@ -97,6 +112,10 @@ export function useCancellationFlow() {
     setState((s) => ({ ...s, step: 4 }));
   };
 
+  const markSaved = (offer: OfferType, result: AcceptResult | null) => {
+    setState((s) => applySaveSuccess(s, offer, result));
+  };
+
   const reset = () => {
     setState(INITIAL_STATE);
   };
@@ -108,6 +127,7 @@ export function useCancellationFlow() {
     applyStart,
     decline,
     requestExit,
+    markSaved,
     reset,
   };
 }

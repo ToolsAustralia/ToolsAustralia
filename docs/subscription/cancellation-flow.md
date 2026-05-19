@@ -313,8 +313,14 @@ FlowState = {
   offersShown: OfferType[];
   offerCursor: number;
   pastDue: boolean;
+  // Terminal save-success fields (Task 2):
+  saveSuccess: boolean;       // renderer checks this FIRST — shows StepSaveSuccess
+  acceptedOffer: OfferType | null;  // drives success-screen copy
+  acceptResult: AcceptResult | null; // couponId / resumesAt from the accept response
 }
 ```
+
+`AcceptResult` is defined in `types.ts` as `{ ok: boolean; resumesAt?: string; couponId?: string }`. It mirrors the accept-offer API response payload without importing any hook.
 
 - **Step 1** — reason capture (7 radio options). "Other" reveals a **mandatory** free-text box: Continue is disabled until it is non-empty (trimmed), and the server rejects `reason="other"` with empty `reasonText` (see API note). Rationale: admin analytics must know what "other" actually means.
 - **Step 2 — the OFFER phase (cursor-driven)** — renders `offersShown[offerCursor]` via `Step2Offer`, which dispatches over the current offer via an exhaustive typed `switch` (handles **all 5** `OfferType`s including `bonus_entries_100`). The phase is **not** a fixed step counter: it renders whatever rung the cursor points at, for as many rungs as `offersShown` has (e.g. `other` = 3 rungs: `pause_30d → discount_50_2mo → bonus_entries_100`).
@@ -325,12 +331,15 @@ Pure transition helpers (exported from `useCancellationFlow.ts`, unit-tested wit
 
 - `offerPhaseFor(offersShown, cursor) → { step, offerCursor }` — `cursor >= length` → step 4; else step 2. Never returns step 3.
 - `nextOfferState(state) → { step, offerCursor }` — the decline reducer: `offerPhaseFor(offersShown, cursor + 1)`.
+- `applySaveSuccess(state, offer, result) → FlowState` — pure terminal transition: spreads `state` and sets `saveSuccess: true`, `acceptedOffer: offer`, `acceptResult: result`. Does **not** mutate the input. The `step` field is left unchanged — `saveSuccess` is orthogonal to `step` so the step union is NOT widened. The renderer checks `saveSuccess` first; when true it shows `StepSaveSuccess` regardless of `step`.
 
 `applyStart({ eventId, offersShown, pastDue })` uses `offerPhaseFor(offersShown, 0)`: if `offersShown.length === 0` → step 4 (past-due / no offers); else → step 2 cursor 0.
 
 `decline()` applies `nextOfferState`: from a **non-last** offer → stay step 2 with `offerCursor` advanced (Step2Offer re-renders the next rung — the middle rung of `other` is now reached, not skipped); from the **last** offer → step 4.
 
 `requestExit()` jumps directly to step 4 (used by the ✕ header button).
+
+`markSaved(offer, result)` — hook action (wraps `applySaveSuccess`); called by the offer components after a successful accept API response.
 
 ### ✕ button wiring (important — was an "uncloseable" bug)
 
