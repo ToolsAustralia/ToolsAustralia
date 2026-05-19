@@ -135,7 +135,7 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation, onCl
             aria-invalid={otherTextMissing}
             placeholder="Please tell us why so we can improve…"
             className={cn(
-              "w-full resize-none rounded-[14px] border bg-white px-3 py-2.5 text-sm text-neutral-800 transition-colors placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 dark:bg-neutral-900 dark:text-neutral-200",
+              "w-full resize-none rounded-[14px] border bg-white px-3 py-2.5 text-sm text-neutral-800 transition-colors placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500/40 dark:bg-neutral-900 dark:text-neutral-200",
               otherTextMissing ? "border-red-300 dark:border-red-800" : "border-neutral-200 dark:border-neutral-700"
             )}
           />
