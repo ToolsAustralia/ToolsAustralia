@@ -307,31 +307,24 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           {/* Phone number + Date of birth — same row */}
           <div className="grid grid-cols-2 gap-3 sm:gap-5 items-start">
             <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400 text-xs font-semibold border-r border-neutral-200 dark:border-neutral-700 pr-2.5 pointer-events-none">
-                  <span className="text-base">🇦🇺</span>
-                  <span>+61</span>
-                </div>
-                <SettingsInput
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  placeholder="Enter phone number"
-                  inputMode="tel"
-                  className="pl-[5.5rem]"
-                />
-              </div>
+              <SettingsInput
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                placeholder="Enter phone number"
+                inputMode="tel"
+              />
               <div className="flex gap-2 pt-1">
                 <SettingsButton
                   variant="primary"
-                  size="md"
+                  size="sm"
                   onClick={handleSaveMobile}
                   disabled={isSavingMobile}
                 >
-                  {isSavingMobile ? "Saving..." : "Save phone"}
+                  {isSavingMobile ? "Saving…" : "Save"}
                 </SettingsButton>
                 <SettingsButton
                   variant="secondary"
-                  size="md"
+                  size="sm"
                   onClick={() => setMobile(user.mobile || "")}
                 >
                   Reset
