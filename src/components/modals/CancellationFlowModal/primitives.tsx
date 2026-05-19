@@ -8,6 +8,7 @@
  */
 
 import React from "react";
+import Image from "next/image";
 import { X, ShieldCheck, Award, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -34,9 +35,20 @@ export const FlowFrame: React.FC<{
   <div className="flex flex-col">
     <div className="flex items-center justify-between px-5 pt-4 pb-1 max-xs:px-4">
       <div className="flex items-center gap-2 text-xs font-extrabold tracking-tight text-neutral-600 dark:text-neutral-300">
-        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[7px] bg-gradient-to-br from-red-600 to-red-800 text-[11px] font-black text-white shadow-[0_4px_9px_rgba(238,0,0,.35)]">
-          TA
-        </span>
+        <Image
+          src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
+          alt="Tools Australia"
+          width={22}
+          height={22}
+          className="block rounded-[7px] dark:hidden"
+        />
+        <Image
+          src="/images/Tools Australia Logo/Social Media Profile_Black Background.webp"
+          alt="Tools Australia"
+          width={22}
+          height={22}
+          className="hidden rounded-[7px] dark:block"
+        />
         Tools Australia
       </div>
       <button

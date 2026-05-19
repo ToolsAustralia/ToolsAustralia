@@ -252,7 +252,7 @@ Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 
 | Export | Purpose |
 |---|---|
-| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot. Renders an internal trust footer (SSL secure · NTP/16264 · Cancel anytime) by default; pass `trust={false}` to suppress it. `TrustFooter` itself is a private internal component of `FlowFrame` — it is not exported and cannot be used by step components directly. No visible progress indicator — each step renders its own `FlowFrame`. |
+| `FlowFrame` | Branded header (TA profile logo + "Tools Australia" text + close button) wrapping body slot. The logo is the real Tools Australia profile image — `Social Media Profile_Primary.webp` in light mode (`block dark:hidden`) and `Social Media Profile_Black Background.webp` in dark mode (`hidden dark:block`), rendered via `next/image` at 22 × 22 px with `rounded-[7px]`. Renders an internal trust footer (SSL secure · NTP/16264 · Cancel anytime) by default; pass `trust={false}` to suppress it. `TrustFooter` itself is a private internal component of `FlowFrame` — it is not exported and cannot be used by step components directly. No visible progress indicator — each step renders its own `FlowFrame`. |
 | `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"`. |
 | `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient. |
 | `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard`. |
@@ -272,7 +272,7 @@ Uses `ModalContainer` (imported from `../ui`):
 ```tsx
 const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
 <ModalContainer
-  size="md"
+  size="2xl"
   presentation={isNarrowViewport ? "sheet" : "dialog"}
   mobileFullBleed
   padding="none"   // on ModalContent — see below
@@ -282,7 +282,7 @@ const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
 - **Mobile + tablet (< `lg`/1024px):** near-fullscreen via `mobileFullBleed`
   (full viewport width, bottom-flush, ~5% gap at the top, `h-[95dvh]`) with the
   slide-up sheet animation.
-- **Desktop (≥ `lg`):** centered `md` dialog.
+- **Desktop (≥ `lg`):** centered `2xl` dialog (`max-w-2xl`). The wider size prevents the two-column offer step from wrapping. The `size` prop is only applied at `lg:` and above in `ModalContainer` when `mobileFullBleed` is true (`lg:max-w-2xl`), so mobile/tablet stays full-bleed and unchanged.
 - **`ModalContent padding="none"`:** each step owns its own padding via `FlowFrame`. This removes double-padding and lets `FlowFrame`'s internal trust footer sit flush as a real footer instead of floating inside a padded box.
 
 ### No progress indicator

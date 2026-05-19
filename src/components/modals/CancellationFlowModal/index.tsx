@@ -142,7 +142,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
     <ModalContainer
       isOpen={isOpen}
       onClose={handleHeaderClose}
-      size="md"
+      size="2xl"
       presentation={isNarrowViewport ? "sheet" : "dialog"}
       mobileFullBleed
       closeOnBackdrop={false}
