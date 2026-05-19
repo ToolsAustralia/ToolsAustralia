@@ -181,6 +181,10 @@ export interface IUser extends Document {
   cancellationUpsellRedeemed?: boolean;
   cancellationUpsellRedeemedAt?: Date;
 
+  // Retention Offer Consumption Flags (new cancellation flow one-time offers)
+  // +100 entries offer reuses the legacy cancellationUpsellRedeemed flag above
+  retentionOffersConsumed?: { pause30d?: boolean; discount50_2mo?: boolean };
+
   // Upsell Purchase Tracking
   upsellPurchases?: Array<{
     offerId: string;
@@ -786,6 +790,13 @@ const UserSchema = new Schema<IUser>(
     cancellationUpsellRedeemedAt: {
       type: Date,
       required: false,
+    },
+
+    // Retention Offer Consumption Flags (new cancellation flow one-time offers)
+    // +100 entries offer reuses the legacy cancellationUpsellRedeemed flag above
+    retentionOffersConsumed: {
+      pause30d: { type: Boolean, default: false },
+      discount50_2mo: { type: Boolean, default: false },
     },
 
     // Upsell Purchase Tracking

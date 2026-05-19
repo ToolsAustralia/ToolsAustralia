@@ -24,6 +24,42 @@ export function shouldClearPauseCollectionAfterPaidInvoice(params: {
 }
 
 /**
+ * Inputs for the full "should we clear pause_collection after a paid invoice" decision.
+ * Mirrors the real decision at `stripe-webhook-handlers/index.ts:3430-3436`.
+ */
+export interface ClearPauseInput {
+  billingReason: string | undefined;
+  previousSubscriptionDbStatus: string | undefined;
+  /** `subscription.pause_collection != null` — the moved non-null clause. */
+  pauseCollectionPresent: boolean;
+  /** `subscription.metadata.pauseReason` — a "retention" pause is never cleared here. */
+  pauseReason: string | undefined;
+  recordMembershipRecurringAffiliate?: boolean;
+}
+
+/**
+ * Owns the WHOLE clear decision for the paid-invoice / failed-renewal-recovery path:
+ *   shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate
+ *     || subscription.pause_collection != null
+ * plus the retention exclusion. Delegates the legacy sub-decision to the existing
+ * `shouldClearPauseCollectionAfterPaidInvoice` (unchanged) rather than reimplementing it.
+ */
+export function decideClearPause(i: ClearPauseInput): boolean {
+  // A retention pause is never cleared by the recovery/paid-invoice path.
+  if (i.pauseReason === "retention") return false;
+  if (
+    shouldClearPauseCollectionAfterPaidInvoice({
+      billingReason: i.billingReason,
+      previousSubscriptionDbStatus: i.previousSubscriptionDbStatus,
+    })
+  ) {
+    return true;
+  }
+  if (i.recordMembershipRecurringAffiliate) return true;
+  return i.pauseCollectionPresent;
+}
+
+/**
  * Human-readable label for `pause_collection` on a Stripe subscription (for logs/scripts).
  */
 export function describePauseCollection(subscription: {

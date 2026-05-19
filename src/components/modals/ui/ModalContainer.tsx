@@ -52,6 +52,14 @@ export interface ModalContainerProps {
    * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
    */
   presentation?: ModalPresentation;
+  /**
+   * When true, below the `lg` breakpoint (mobile + tablet) the panel renders
+   * near-fullscreen: full viewport width, flush to the bottom, with only a ~5%
+   * gap at the top (`h-[95dvh]`). At `lg` and up it falls back to the normal
+   * centered dialog at the given `size`. Opt-in; default false leaves every
+   * existing modal byte-for-byte unchanged.
+   */
+  mobileFullBleed?: boolean;
 }
 
 const ModalContainer: React.FC<ModalContainerProps> = ({
@@ -68,6 +76,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   nestedSecondary = false,
   zIndex,
   presentation = "dialog",
+  mobileFullBleed = false,
 }) => {
   const isDarkMode = useHtmlDarkForUi();
   const reduceMotion = useReducedMotion();
@@ -476,13 +485,22 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
 
   const modalZIndex = resolveZIndex();
 
-  const outerFlex = isSheet
-    ? "items-end justify-center pt-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-2 sm:pb-2"
-    : "items-center justify-center p-2";
+  const outerFlex = mobileFullBleed
+    ? "items-end justify-center p-0 lg:items-center lg:justify-center lg:p-2"
+    : isSheet
+      ? "items-end justify-center pt-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-2 sm:pb-2"
+      : "items-center justify-center p-2";
 
-  const panelShape = isSheet
-    ? `rounded-t-2xl rounded-b-none sm:rounded-2xl sm:rounded-b-2xl w-full ${sizeStyles[size]}`
-    : `rounded-2xl w-full ${sizeStyles[size]}`;
+  const panelShape = mobileFullBleed
+    ? `w-full max-w-none rounded-t-2xl rounded-b-none lg:${sizeStyles[size]} lg:rounded-2xl`
+    : isSheet
+      ? `rounded-t-2xl rounded-b-none sm:rounded-2xl sm:rounded-b-2xl w-full ${sizeStyles[size]}`
+      : `rounded-2xl w-full ${sizeStyles[size]}`;
+
+  // Full-bleed below lg = 95dvh (5% top gap, bottom-flush); normal at lg+.
+  const panelHeight = mobileFullBleed
+    ? "h-[95dvh] lg:h-auto lg:max-h-[88dvh]"
+    : heightStyles[height];
 
   const modalContent = (
     <div
@@ -512,7 +530,7 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
             : "bg-white border border-gray-200/90 shadow-2xl shadow-gray-900/10"
         }
         ${panelShape}
-        ${heightStyles[height]}
+        ${panelHeight}
         ${className}
       `}
         role="document"

@@ -67,6 +67,14 @@ Both infinite hooks share a `buildQueryString(filter, offset)` helper that skips
 
 Page size is `50` for both infinite hooks; `getNextPageParam` returns `loaded < total ? loaded : undefined`.
 
+### Cancellation-flow analytics hook (`src/hooks/queries/admin/`)
+
+| Hook | TanStack primitive | Query key | DTO(s) |
+|---|---|---|---|
+| `useCancellationFlowAnalytics(filter)` | `useQuery` | `["admin", "cancellation-flow-analytics", filter]` (inline key) | `CancellationFlowAnalyticsFilter`, `CancellationFlowSummary` |
+
+Read-only admin cancellation-flow analytics. `buildQueryString(filter)` skips absent `from`/`to`; both map 1:1 to query params on `/api/admin/cancellation-flow-analytics`. The whole `filter` is part of the query key, so changing the range refetches.
+
 ## P3. Modal priority coordination
 
 `useModalPriorityStore` exposes a `register / unregister / current` API. Modals register on mount with their priority; only the highest-priority active modal renders.

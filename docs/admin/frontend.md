@@ -288,6 +288,16 @@ Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — sepa
 the treatment variant of the site-wide membership dark-mode A/B test. See
 docs/ab-testing/architecture.md.
 
+## Cancellation Flow Analytics view (Admin > Analytics > Cancellation Flow) — Task 18
+
+[src/components/admin/CancellationFlowAnalytics.tsx](../../src/components/admin/CancellationFlowAnalytics.tsx) is a **read-only** panel mounted as the `cancellation-flow` tab in the Analytics sidebar group (`AdminSidebar` group `analytics`, rendered by `AdminPage` on `selectedTab === "cancellation-flow"`). No mutations, no charts library — reuses the same `StatCard` / table / CSS-bar primitives as sibling panels (matches `UpsellMultiplierPanel` styling).
+
+Sections: triggered + overall save-rate + saved/cancelled/abandoned stat cards; reason breakdown table (count + share%); a CSS-bar funnel (reached reason → reached offer → accepted/cancelled/abandoned); offers-accepted table; an overall 90-day retention block (retained/churned/**retained %**/pending); and (Task 21) a **90-day retention by offer** table (offer | saved | retained | churned | pending | retained %) showing which offers produce durable saves vs delayed churn. Retained % = `retained ÷ (retained + churned)` over matured saves (“—” when none matured, guarded). The placeholder "pending until matured" copy was replaced: real retained/churned now show where present, with a note that **pending = not yet 90 days old (matured by the daily maturity cron)**. Read-only; uses the same endpoint — `retention90ByOffer` is added to the typed `CancellationFlowSummary` DTO (no new query, no `any`).
+
+Data hook: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/hooks/queries/admin/useCancellationFlowAnalytics.ts) — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", filter]`, follows the `useChargePastDueDeclineSummary` admin-hook pattern (inline key, `{ data, isLoading, isError }`). Endpoint + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
+
+**Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
+
 ## className conventions (2026-05-08)
 
 All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.

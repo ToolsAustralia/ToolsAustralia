@@ -33,6 +33,7 @@ npm run test:downgrade-confirm      # smoke-renders DowngradeConfirmModal
 npm run test:renewal-failed         # smoke-renders RenewalFailedModal (open + closed)
 npm run test:ui-primitives          # Button, Badge, Card primitives
 npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, TrustBar primitives
+npm run test:cancellation-flow-hook # pure step-machine reducer (offerPhaseFor/nextOfferState) — locks the cursor-driven OFFER phase incl. the 3-rung `other` waterfall
 ```
 
 - `npm run test:variant-config-membership-theme` — standalone `tsx` unit test

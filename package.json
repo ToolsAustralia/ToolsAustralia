@@ -125,7 +125,6 @@
     "confirm-stuck-pi": "tsx scripts/confirm-stuck-pi.ts",
     "confirm-stuck-pi:dry": "tsx scripts/confirm-stuck-pi.ts --dry-run",
     "test:codemods": "tsx scripts/codemods/__tests__/replace-classname.test.ts",
-    "test:cancellation-upsell": "tsx --require ./src/components/modals/CancellationUpsellModal/__tests__/asset-stubs.cjs src/components/modals/CancellationUpsellModal/__tests__/CancellationUpsellModal.test.ts",
     "test:renewal-failed": "tsx --require ./src/components/modals/RenewalFailedModal/__tests__/asset-stubs.cjs src/components/modals/RenewalFailedModal/__tests__/RenewalFailedModal.test.ts",
     "test:downgrade-confirm": "tsx --require ./src/components/modals/DowngradeConfirmModal/__tests__/asset-stubs.cjs src/components/modals/DowngradeConfirmModal/__tests__/DowngradeConfirmModal.test.ts",
     "test:upgrade-confirm": "tsx --require ./src/components/modals/UpgradeConfirmModal/__tests__/asset-stubs.cjs src/components/modals/UpgradeConfirmModal/__tests__/UpgradeConfirmModal.test.ts",
@@ -152,7 +151,18 @@
     "test:login": "tsx --require ./src/components/modals/LoginModal/__tests__/asset-stubs.cjs src/components/modals/LoginModal/__tests__/LoginModal.test.ts",
     "test:past-draws": "tsx --require ./src/components/modals/PastDrawsModal/__tests__/asset-stubs.cjs src/components/modals/PastDrawsModal/__tests__/PastDrawsModal.test.ts",
     "audit:decomposition": "tsx scripts/codemods/audit-component-decomposition.ts",
-    "verify:dashboard-stats-drift": "tsx scripts/verify-dashboard-stats-snapshot-drift.ts"
+    "verify:dashboard-stats-drift": "tsx scripts/verify-dashboard-stats-snapshot-drift.ts",
+    "test:cancellation-flow-event": "tsx src/models/__tests__/CancellationFlowEvent.test.ts",
+    "test:user-cancellation-offers": "tsx src/models/__tests__/User.cancellation-offers.test.ts",
+    "test:cancellation-routing": "tsx src/utils/subscription/__tests__/cancellation-flow-routing.test.ts",
+    "test:cancellation-eligibility": "tsx src/utils/subscription/__tests__/cancellation-flow-eligibility.test.ts",
+    "test:cancellation-flow-service": "tsx src/services/subscription/__tests__/CancellationFlowService.test.ts",
+    "test:cancellation-flow-hook": "tsx src/components/modals/CancellationFlowModal/__tests__/useCancellationFlow.test.ts",
+    "test:retention-pause": "tsx src/services/subscription/__tests__/RetentionPauseService.test.ts",
+    "test:retention-discount": "tsx src/services/subscription/__tests__/RetentionDiscountService.test.ts",
+    "test:retention-resume-cron": "tsx src/app/api/cron/__tests__/cancellation-retention-resume.test.ts",
+    "test:cancellation-analytics": "tsx src/services/admin/__tests__/cancellationFlowAnalytics.test.ts",
+    "test:retention-maturity": "tsx src/app/api/cron/__tests__/cancellation-retention-maturity.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",

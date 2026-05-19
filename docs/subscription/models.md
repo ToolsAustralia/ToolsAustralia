@@ -230,3 +230,57 @@ Collection name forced: `"membershipdailysnapshots"`.
 **Locked-in pricing:** `unitPriceCents` is captured at write time. A future package price change writes new snapshots at the new price; existing rows keep the old price. Historical revenue is immutable.
 
 **Behavior on missing rows:** When the snapshot reader is asked for a date with no row (e.g., any date before this collection was first populated, or a one-off cron outage), it falls back to live counts and sets `summary.snapshotMissing: true` so the UI can flag the result. **No reconstruction is performed** — the dashboard surfaces the unknown state explicitly rather than fabricating it.
+
+## `CancellationFlowEvent`
+
+[src/models/CancellationFlowEvent.ts](../../src/models/CancellationFlowEvent.ts) — one document per cancellation-flow session. Records why a user initiated cancellation, which retention offers were shown, whether an offer was accepted, and the final outcome.
+
+```ts
+type CancellationReason =
+  | "too_expensive" | "prefer_cheaper" | "dont_use_benefits"
+  | "too_many_messages" | "joined_for_giveaway" | "havent_won" | "other";
+
+type OfferType =
+  | "pause_30d" | "discount_50_2mo" | "tier_downgrade"
+  | "unsubscribe_marketing" | "bonus_entries_100";
+
+interface ICancellationFlowEvent {
+  userId: ObjectId;
+  reason: CancellationReason;     // required; selected from pre-defined list
+  reasonText?: string;            // optional free-text elaboration
+  offersShown: OfferType[];       // ordered list of retention offers presented
+  offerAccepted?: OfferType | null; // null until user accepts (or never if they decline all)
+  outcome: "in_progress" | "saved" | "cancelled"; // lifecycle state
+  pastDue: boolean;               // true if user was past-due when flow started
+  startedAt: Date;                // when user entered the cancellation flow
+  endedAt?: Date;                 // when the flow closed (saved or cancelled)
+  savedAt?: Date;                 // set only when outcome === "saved"
+  retention90?: "retained" | "churned" | null; // backfilled ~90 days post-event
+}
+```
+
+### Field notes
+
+- **`outcome` lifecycle:** begins as `"in_progress"` when the flow opens. Transitions to `"saved"` (user accepted an offer and kept their membership) or `"cancelled"` (user completed cancellation). A document stuck in `"in_progress"` indicates an abandoned session.
+- **`pastDue`:** captured at flow-entry time. Past-due users see a different offer set and are exempt from some retention offers (e.g. billing-pause is not available when already past-due).
+- **`savedAt`:** only set when `outcome === "saved"`. Use this alongside `startedAt` to measure time-to-save and for cohort analysis.
+- **`retention90`:** nullable enum — starts `null`, backfilled by a script ~90 days after `savedAt` to record whether the "saved" user actually retained or churned. The enum has no `null` value (Mongoose skips enum validation for `null`), so the field defaults to `null` without a required constraint.
+- **`offerAccepted`:** `null` by default; set to the accepted `OfferType` string when outcome becomes `"saved"`. The enum constraint is skipped for the `null` default by Mongoose design.
+
+### Indexes
+
+- `{ userId: 1 }` — per-user history queries
+- `{ outcome: 1 }` — filter by lifecycle state
+- `{ retention90: 1 }` — backfill targeting
+- Compound: `{ outcome: 1, savedAt: 1, retention90: 1 }` — analytics queries joining save rate and 90-day retention
+
+## `User.retentionOffersConsumed` (top-level flags on `User`)
+
+Two boolean flags that gate the new cancellation-flow one-time retention offers. Both default to `false`. Set to `true` when the user successfully redeems the corresponding offer — prevents repeat redemption across sessions.
+
+| Field | Type | Offer gated |
+|---|---|---|
+| `retentionOffersConsumed.pause30d` | `boolean` (default `false`) | 30-day billing pause offer |
+| `retentionOffersConsumed.discount50_2mo` | `boolean` (default `false`) | 50% discount for 2 months offer |
+
+**+100 entries offer:** reuses the existing top-level `cancellationUpsellRedeemed` flag (and `cancellationUpsellRedeemedAt`). No new field was added for it — the legacy flag was already purpose-built for this one-time offer and its semantics are identical.

@@ -35,6 +35,21 @@
 - After cancellation (in `CancelSubscriptionService` step 4 of side effects, non-blocking)
 - After refund (`trackRefundedOrder` + sync, after a 500ms barrier)
 
+## Marketing preference sync (Klaviyo)
+
+`syncKlaviyoEmailMarketingFromAdminPreference(user, wantsPromotionalEmail)` in `src/utils/integrations/klaviyo/klaviyo-profile-sync.ts` synchronises both email and SMS marketing consent to Klaviyo when an admin (or the cancellation flow via `applyMarketingUnsubscribe`) changes `User.acceptsPromotionalEmail`.
+
+**Email path** — unchanged: `unsubscribeFromEmailList` / `subscribeToEmailList` keyed off `user.email`.
+
+**SMS unsubscribe path** — when `wantsPromotionalEmail === false`:
+- If `User.mobile` is present the E.164 phone is derived locally (fast path, unchanged).
+- If `User.mobile` is absent the function calls `klaviyo.findProfilePhoneByEmail(user.email)` to resolve the phone Klaviyo holds on the profile (same `/profiles/?filter=equals(email,…)` endpoint), then calls `unsubscribeFromSMSList` with that phone. This fixes a pre-existing bug (authored 2026-04-08) where SMS unsubscribe silently no-oped when no local mobile existed, leaving Klaviyo-side SMS consent as "Subscribed".
+- If neither source yields a phone, the function logs a `console.error` and performs a graceful no-op for SMS — email unsubscribe still completes and no exception is thrown (best-effort contract preserved for all callers).
+
+**SMS subscribe path** — unchanged: only fires when local `phoneE164` is present.
+
+**Callers unaffected**: `RetentionUnsubscribeService` (`applyMarketingUnsubscribe`), admin user route, and registration sync all call the same function with unchanged signatures and return shapes.
+
 ## Meta CAPI events
 
 Fired server-side from purchase / cancel / signup paths. Parallel to client-side pixel for redundancy.

@@ -88,7 +88,22 @@ import Modal from "@/components/ui/Modal";
 <Modal isOpen={open} onClose={close} zIndex={80}>
   {/* … */}
 </Modal>
+
+// Near-fullscreen on mobile + tablet, centered dialog on desktop
+<Modal isOpen={open} onClose={close} size="md" mobileFullBleed>
+  {/* … */}
+</Modal>
 ```
+
+**`mobileFullBleed`** (opt-in, default `false`): below the `lg` breakpoint the
+panel is full viewport width, bottom-flush, with only a ~5% gap at the top
+(`h-[95dvh]`); at `lg`+ it falls back to the normal centered dialog at `size`.
+The panel className is a raw template literal (not `cn`/`tailwind-merge`), so
+this is expressed via `lg:`-prefixed classes that don't conflict with the base
+mobile classes — a `className` override could NOT achieve this reliably. Default
+`false` leaves every existing `ModalContainer`/`Modal` consumer byte-identical.
+Used by `CancellationFlowModal` (with `presentation="sheet"` < lg for the
+slide-up animation).
 
 ## Design principles
 
