@@ -17,6 +17,7 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { queryKeys } from "@/lib/queryKeys";
 import { formatDisplayName } from "@/utils/display-name";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
 import { SettingsBadge } from "../components/settings/ui/primitives";
 import SettingsSidebar, { SETTINGS_TABS, VALID_TAB_IDS, type SettingsSection } from "../components/settings/SettingsSidebar";
 
@@ -77,6 +78,14 @@ export default function SettingsPage() {
     isLoading: loading,
     error,
   } = useMyAccountData(session?.user?.id);
+
+  // Real saved cards (brand/last4) for the index payment preview. Resolves the
+  // user internally; degrades gracefully to count text while loading/absent.
+  const {
+    paymentMethods: savedCards,
+    subscriptionDefaultPaymentMethodId,
+    loading: cardsLoading,
+  } = useSavedPaymentMethods();
 
   // ?tab= is single source of truth for active section
   const tabParam = searchParams?.get("tab");
@@ -211,12 +220,39 @@ export default function SettingsPage() {
 
   const subscriptionTone = isPastDue ? "danger" : isGuest ? undefined : "success";
 
-  // Payment card summary
-  const paymentCount = user.savedPaymentMethods?.length ?? 0;
-  const paymentPrimary = paymentCount === 0 ? "No cards saved" : `${paymentCount} card${paymentCount > 1 ? "s" : ""} saved`;
-  const paymentSecondary = paymentCount > 0 && user.savedPaymentMethods?.some((m) => m.isDefault)
-    ? "Default set"
-    : undefined;
+  // Payment card summary — prefer the real Stripe brand/last4 of the default
+  // card; fall back to the saved-method count while Stripe data loads/absent.
+  const paymentCount = savedCards.length || (user.savedPaymentMethods?.length ?? 0);
+  const defaultCard =
+    savedCards.find((m) => m.isDefault) ??
+    savedCards.find((m) => m.paymentMethodId === subscriptionDefaultPaymentMethodId) ??
+    savedCards[0];
+  const defaultCardMeta = defaultCard?.card;
+  let paymentPrimary: string;
+  let paymentSecondary: string | undefined;
+  if (paymentCount === 0) {
+    paymentPrimary = "No cards saved";
+    paymentSecondary = undefined;
+  } else if (defaultCardMeta) {
+    const brand = defaultCardMeta.brand
+      ? defaultCardMeta.brand.charAt(0).toUpperCase() + defaultCardMeta.brand.slice(1)
+      : "Card";
+    paymentPrimary = `${brand} •••• ${defaultCardMeta.last4}`;
+    paymentSecondary =
+      defaultCard?.isDefault || defaultCard?.paymentMethodId === subscriptionDefaultPaymentMethodId
+        ? "Default"
+        : undefined;
+  } else {
+    // Methods exist but Stripe card meta not yet resolved (or still loading).
+    paymentPrimary = cardsLoading
+      ? "Loading cards…"
+      : `${paymentCount} card${paymentCount > 1 ? "s" : ""} saved`;
+    paymentSecondary =
+      !cardsLoading &&
+      (savedCards.some((m) => m.isDefault) || (user.savedPaymentMethods?.some((m) => m.isDefault) ?? false))
+        ? "Default set"
+        : undefined;
+  }
 
   // ---------------------------------------------------------------------------
   // Render
