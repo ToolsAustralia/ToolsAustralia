@@ -339,6 +339,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                 label="Date of birth"
                 maxDate={new Date()}
                 placeholder="Select date of birth"
+                popoverClassName="left-auto right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:left-0 sm:right-0 sm:w-full"
               />
               {ineligibilityReasons.under18 && (
                 <p
