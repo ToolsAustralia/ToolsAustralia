@@ -31,9 +31,8 @@ function lines(offer: OfferType, result: AcceptResult | null): string[] {
         "Same shot at the major draw — nothing changed",
       ];
     case "pause_30d": {
-      const when = result?.resumesAt
-        ? new Date(result.resumesAt).toLocaleDateString()
-        : null;
+      const ts = result?.resumesAt ? new Date(result.resumesAt).getTime() : NaN;
+      const when = Number.isNaN(ts) ? null : new Date(ts).toLocaleDateString();
       return [
         when ? `Paused — billing resumes ${when}` : "Paused for 30 days — no charges",
         "Entries frozen, not lost",
@@ -61,8 +60,8 @@ const StepSaveSuccess: React.FC<Props> = ({ offer, result, firstName, onClose, o
   <FlowFrame onClose={onClose} trust={false}>
     <div className="flex flex-col items-center pt-6 text-center">
       <span className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-emerald-50 shadow-[0_0_0_10px_rgba(16,163,74,.07),0_0_0_22px_rgba(16,163,74,.04)] dark:bg-emerald-950/40">
-        <span className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-emerald-600 text-white motion-safe:animate-[scaleIn_.35s_ease-out]">
-          <Check size={26} strokeWidth={3} />
+        <span className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-emerald-600 text-white motion-safe:animate-[scaleIn_.35s_ease-out_forwards]">
+          <Check size={26} strokeWidth={3} aria-hidden="true" />
         </span>
       </span>
       <Headline>{firstName ? `You're all set, ${firstName}.` : "You're all set."}</Headline>
