@@ -22,14 +22,19 @@
  *
  * Past-due path (§3a): server returns offersShown=[] → applyStart routes to
  * step 4 with state.pastDue=true → Step4Confirm renders the "Resolve payment" variant.
+ *
+ * Save-success path: when state.saveSuccess is true (set by markSaved() after an
+ * offer is accepted), StepSaveSuccess is rendered instead of renderStep().
+ * Each step owns its own header via FlowFrame (Tasks 5-8); StepIndicator and the
+ * in-modal ModalHeader have been removed.
  */
 
 import React, { useEffect } from "react";
-import { ModalContainer, ModalHeader, ModalContent } from "../ui";
+import { ModalContainer, ModalContent } from "../ui";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useCancellationFlow } from "./useCancellationFlow";
 import { useStartCancellationFlow, useOutcomeCancellationFlow, useAcceptOffer } from "@/hooks/queries/useCancellationFlow";
-import StepIndicator from "./StepIndicator";
+import StepSaveSuccess from "./StepSaveSuccess";
 import Step1Reason from "./Step1Reason";
 import Step2Offer from "./Step2Offer";
 import Step4Confirm from "./Step4Confirm";
@@ -64,6 +69,11 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   }, [isOpen]);
 
   const handleHeaderClose = () => {
+    // After a save-success, ✕ dismisses the modal entirely (no retention loop).
+    if (state.saveSuccess) {
+      onClose();
+      return;
+    }
     // ✕ routes to the Step 4 confirm so the user sees the retention pitch
     // ONCE — but at Step 4 itself (or before a reason is picked) it must
     // actually close, otherwise the modal is a trap (requestExit() at step 4
@@ -79,18 +89,6 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
     requestExit();
   };
 
-  const getStepTitle = (): string => {
-    switch (state.step) {
-      case 1:
-        return "Why are you cancelling?";
-      case 2:
-      case 3:
-        return "Before you go…";
-      case 4:
-        return state.pastDue ? "Payment Required" : "Are you sure?";
-    }
-  };
-
   const renderStep = () => {
     switch (state.step) {
       case 1:
@@ -98,6 +96,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
           <Step1Reason
             flowHook={flowHook}
             startMutation={startMutation}
+            onClose={handleHeaderClose}
           />
         );
 
@@ -113,8 +112,10 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
             acceptOfferMutation={acceptOfferMutation}
             onSaved={onSaved}
             onDecline={flowHook.decline}
+            onAcceptedOffer={(o, r) => flowHook.markSaved(o, r)}
             onRequestTierDowngrade={onRequestTierDowngrade}
             tierDowngradeAvailable={tierDowngradeAvailable}
+            onClose={handleHeaderClose}
           />
         );
 
@@ -124,6 +125,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
             state={state}
             modalProps={{ onClose, onCancelled, onResolvePayment }}
             outcomeMutation={outcomeMutation}
+            onClose={handleHeaderClose}
           />
         );
     }
@@ -139,17 +141,17 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
       closeOnBackdrop={false}
       zIndex={80}
     >
-      <ModalHeader
-        title={getStepTitle()}
-        onClose={handleHeaderClose}
-        showLogo={false}
-        compact
-      />
-
-      <StepIndicator state={state} />
-
-      <ModalContent padding="md">
-        {renderStep()}
+      <ModalContent padding="none">
+        {state.saveSuccess && state.acceptedOffer ? (
+          <StepSaveSuccess
+            offer={state.acceptedOffer}
+            result={state.acceptResult}
+            onClose={onClose}
+            onDone={onSaved}
+          />
+        ) : (
+          renderStep()
+        )}
       </ModalContent>
     </ModalContainer>
   );

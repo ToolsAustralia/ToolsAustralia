@@ -345,6 +345,8 @@ Pure transition helpers (exported from `useCancellationFlow.ts`, unit-tested wit
 
 The header ✕ shows the retention confirm **once**, but must not trap the user:
 
+- **`state.saveSuccess` true** → ✕ closes directly (offer already accepted; no
+  more retention loop needed). Guard is prepended first in `handleHeaderClose`.
 - **Step 1, no reason picked** → ✕ closes directly (nothing to confirm).
 - **Step 1 (reason picked) / Step 2 / Step 3** → ✕ → `requestExit()` (jump to
   the Step 4 confirm so the user sees the "Are you sure?" pitch once).
@@ -964,6 +966,18 @@ Post-accept confirmation screen shown instead of the modal silently closing afte
 ### Animation
 
 The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `scaleIn` keyframe (`scale(.6)→scale(1)` with opacity 0→1) is defined in `src/app/globals.css`.
+
+## index.tsx shell (Task 4)
+
+**StepIndicator and in-modal ModalHeader removed.** `StepIndicator.tsx` has been deleted (`git rm`). The shared `ModalHeader` import is gone. Each step now owns its header via `FlowFrame` (wired in Tasks 5–8) — no visible progress indicator in the shell.
+
+### StepSaveSuccess routing (Task 4)
+
+`index.tsx` checks `state.saveSuccess && state.acceptedOffer` as the very first branch in its render return. When true, `<StepSaveSuccess offer={...} result={...} onClose={onClose} onDone={onSaved} />` is rendered directly inside `ModalContent` (instead of `renderStep()`). `ModalContent` now uses `padding="none"` so `FlowFrame` controls all internal spacing.
+
+### onAcceptedOffer wiring (Task 4)
+
+`renderStep()` passes `onAcceptedOffer={(o, r) => flowHook.markSaved(o, r)}` to `<Step2Offer>`. This both wires the save-success transition and avoids an unused-variable lint error on `flowHook.markSaved`. `onClose={handleHeaderClose}` is also passed to `<Step1Reason>`, `<Step2Offer>`, and `<Step4Confirm>` (received by those components' prop interfaces in Tasks 5–8).
 
 ## Note on shared-ui domain
 
