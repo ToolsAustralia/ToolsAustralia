@@ -409,10 +409,6 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-[11px] text-neutral-400 dark:text-neutral-600 mt-8 font-mono">
-            {`Member since ${new Date(user.createdAt).toLocaleDateString("en-AU", { month: "short", year: "numeric" })}`}
-          </p>
         </div>
       ) : (
         /* ── Tab view ────────────────────────────────────────────────────── */
@@ -439,7 +435,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Tab content */}
-            <div className="min-w-0">
+            <div className="min-w-0 pt-6 sm:pt-8 lg:pt-0">
               {activeSection === "profile" && <ProfileTab user={user} />}
               {activeSection === "subscription" && (
                 <SubscriptionTab
@@ -448,7 +444,13 @@ export default function SettingsPage() {
                   onSubscriptionUpdate={handleSubscriptionUpdate}
                 />
               )}
-              {activeSection === "password" && <PasswordTab userEmail={user.email} />}
+              {activeSection === "password" && (
+                <PasswordTab
+                  userEmail={user.email}
+                  isEmailVerified={user.isEmailVerified}
+                  hasPassword={user.hasPassword}
+                />
+              )}
               {activeSection === "payment" && <PaymentTab user={user} />}
             </div>
           </div>

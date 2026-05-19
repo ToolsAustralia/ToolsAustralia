@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Eye, EyeOff, KeyRound, Fingerprint, Smartphone, Mail, CheckCircle2, Check } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Fingerprint, Smartphone, Mail, CheckCircle2, Check, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/utils/cn";
 import {
@@ -15,7 +15,87 @@ import {
 
 interface PasswordTabProps {
   userEmail: string;
+  isEmailVerified?: boolean;
+  hasPassword?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Security score — pure, deterministic, no side-effects
+// ---------------------------------------------------------------------------
+
+function computeSecurityScore({
+  hasPassword,
+  isEmailVerified,
+  newPasswordStrength,
+}: {
+  hasPassword?: boolean;
+  isEmailVerified?: boolean;
+  newPasswordStrength: number;
+}): { score: number; label: "Strong" | "Decent" | "At risk" } {
+  let score = 0;
+  if (hasPassword !== false) score += 35;
+  if (isEmailVerified === true) score += 35;
+  if (newPasswordStrength > 0) score += Math.round((newPasswordStrength / 4) * 30);
+  score = Math.min(100, score);
+  const label: "Strong" | "Decent" | "At risk" =
+    score >= 80 ? "Strong" : score >= 60 ? "Decent" : "At risk";
+  return { score, label };
+}
+
+// ---------------------------------------------------------------------------
+// ScoreDial — SVG radial gauge
+// ---------------------------------------------------------------------------
+
+const DIAL_SIZE = 132;
+const DIAL_STROKE = 12;
+const DIAL_R = (DIAL_SIZE - DIAL_STROKE) / 2;
+const DIAL_C = 2 * Math.PI * DIAL_R;
+
+interface ScoreDialProps {
+  score: number;
+  label: "Strong" | "Decent" | "At risk";
+}
+
+const dialToneClasses: Record<ScoreDialProps["label"], { ring: string; text: string }> = {
+  Strong: { ring: "stroke-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
+  Decent: { ring: "stroke-amber-500",   text: "text-amber-600 dark:text-amber-400" },
+  "At risk": { ring: "stroke-red-600",  text: "text-red-600 dark:text-red-400" },
+};
+
+const ScoreDial = ({ score, label }: ScoreDialProps) => {
+  const offset = DIAL_C - (score / 100) * DIAL_C;
+  const tone = dialToneClasses[label];
+  return (
+    <div className="relative shrink-0" style={{ width: DIAL_SIZE, height: DIAL_SIZE }}>
+      <svg width={DIAL_SIZE} height={DIAL_SIZE} className="-rotate-90">
+        <circle
+          cx={DIAL_SIZE / 2}
+          cy={DIAL_SIZE / 2}
+          r={DIAL_R}
+          className="stroke-neutral-200 dark:stroke-neutral-800"
+          fill="none"
+          strokeWidth={DIAL_STROKE}
+        />
+        <circle
+          cx={DIAL_SIZE / 2}
+          cy={DIAL_SIZE / 2}
+          r={DIAL_R}
+          className={tone.ring}
+          fill="none"
+          strokeWidth={DIAL_STROKE}
+          strokeLinecap="round"
+          strokeDasharray={DIAL_C}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset .8s ease" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <p className={cn("font-poppins font-black text-4xl leading-none", tone.text)}>{score}</p>
+        <p className={cn("text-[10px] font-bold tracking-[0.18em] uppercase mt-1", tone.text)}>{label}</p>
+      </div>
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Local password input with eye-toggle — mirrors design's PWInput2 pattern
@@ -54,7 +134,7 @@ const PWInput = ({ show, setShow, ...props }: PWInputProps) => (
 // PasswordTab
 // ---------------------------------------------------------------------------
 
-export default function PasswordTab({ userEmail }: PasswordTabProps) {
+export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }: PasswordTabProps) {
   const { showToast } = useToast();
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -76,6 +156,8 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
   };
 
   const passwordStrength = calculatePasswordStrength(newPassword);
+  const newPasswordStrength = passwordStrength; // alias for score computation
+  const { score, label: scoreLabel } = computeSecurityScore({ hasPassword, isEmailVerified, newPasswordStrength });
   const strengthColors = ["bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-green-500"];
   const strengthLabels = ["Weak", "Fair", "Good", "Strong"];
 
@@ -167,8 +249,88 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
   const confirmMismatch =
     Boolean(newPassword) && Boolean(confirmNewPassword) && newPassword !== confirmNewPassword;
 
+  // Checklist rows for the security hero card
+  const newPwStrong = newPassword !== "" && passwordStrength >= 3;
+  const checklistRows: Array<{ met: boolean; label: string; hint: string }> = [
+    {
+      met: hasPassword !== false,
+      label: "Password set",
+      hint: hasPassword !== false ? "Configured" : "Set a password below",
+    },
+    {
+      met: isEmailVerified === true,
+      label: "Email verified",
+      hint: isEmailVerified === true ? "Verified" : "Check your inbox",
+    },
+    {
+      met: false,
+      label: "Two-factor authentication",
+      hint: "Coming soon",
+    },
+    {
+      met: newPwStrong,
+      label: "Strong new password",
+      hint: newPwStrong ? "Looks great" : "Type a strong password below",
+    },
+  ];
+
   return (
     <div className="space-y-6">
+      {/* ── Security overview ─────────────────────────────────────────────── */}
+      <Card className="overflow-hidden">
+        <div className="p-4 sm:p-6 grid sm:grid-cols-[auto_1fr] gap-5 sm:gap-6 items-center">
+          <ScoreDial score={score} label={scoreLabel} />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-neutral-500 dark:text-neutral-400">
+              Security score
+            </p>
+            <h2 className="font-poppins font-black text-2xl sm:text-3xl text-neutral-900 dark:text-white mt-1">
+              {scoreLabel === "Strong"
+                ? "Your account is secure"
+                : scoreLabel === "Decent"
+                ? "Your account is mostly secure"
+                : "Your account needs attention"}
+            </h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+              {scoreLabel !== "Strong"
+                ? "Complete the steps below to strengthen your account."
+                : "Great job — keep your password up to date."}
+            </p>
+            <div className="mt-4 space-y-2">
+              {checklistRows.map((row) => (
+                <div key={row.label} className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "w-5 h-5 rounded-full flex items-center justify-center shrink-0",
+                      row.met
+                        ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
+                        : "bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-600",
+                    )}
+                  >
+                    {row.met
+                      ? <Check className="w-3 h-3" strokeWidth={3} />
+                      : <Plus className="w-3 h-3" strokeWidth={3} />}
+                  </div>
+                  <p
+                    className={cn(
+                      "text-sm",
+                      row.met
+                        ? "text-neutral-700 dark:text-neutral-300"
+                        : "text-neutral-900 dark:text-white font-semibold",
+                    )}
+                  >
+                    {row.label}
+                  </p>
+                  <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                    · {row.hint}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* ── Change password ───────────────────────────────────────────────── */}
       <section>
         <SectionHeader

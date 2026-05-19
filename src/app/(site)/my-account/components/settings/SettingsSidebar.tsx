@@ -22,8 +22,8 @@ export const SETTINGS_TABS: Array<{
 }> = [
   {
     id: "profile",
-    label: "Profile",
-    shortLabel: "Profile",
+    label: "Account details",
+    shortLabel: "Account",
     icon: User,
     desc: "Personal info, contact",
   },
