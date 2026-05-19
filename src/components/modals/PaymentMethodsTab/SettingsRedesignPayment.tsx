@@ -202,7 +202,7 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="font-mono text-lg sm:text-xl tracking-[0.18em] mt-2">
+                    <div className="font-mono text-sm sm:text-base whitespace-nowrap tracking-[0.1em] mt-2">
                       •••• •••• •••• {meta?.last4 ?? "••••"}
                     </div>
                     <div className="flex items-end justify-between">
