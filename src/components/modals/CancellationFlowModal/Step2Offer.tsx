@@ -542,7 +542,6 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
   state,
   outcomeMutation,
   acceptOfferMutation,
-  onSaved,
   onDecline,
   onClose,
   onAcceptedOffer,
@@ -559,7 +558,8 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
         <Step3BonusEntries
           state={state}
           outcomeMutation={outcomeMutation}
-          onSaved={onSaved}
+          onClose={onClose}
+          onAcceptedOffer={onAcceptedOffer}
           onDecline={onDecline}
         />
       );
@@ -574,7 +574,8 @@ const Step2Offer: React.FC<Step2OfferProps> = ({
           <Step3BonusEntries
             state={state}
             outcomeMutation={outcomeMutation}
-            onSaved={onSaved}
+            onClose={onClose}
+            onAcceptedOffer={onAcceptedOffer}
             onDecline={onDecline}
           />
         );

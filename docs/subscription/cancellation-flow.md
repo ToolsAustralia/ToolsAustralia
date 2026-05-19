@@ -22,6 +22,10 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 | `SubCopy` | 13 px body paragraph |
 | `Eyebrow` | 10.5 px uppercase red label above headlines |
 
+### Step3BonusEntries (Task 7)
+
+`Step3BonusEntries` has been restyled onto the shared primitive grammar (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `ValueCard`, `UrgencyStrip`, `PrimaryCta`, `TextDecline`). Props updated: `onSaved` removed; `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void` added. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen) instead of the old `onSaved()`. The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. Both `<Step3BonusEntries>` call sites in `Step2Offer.tsx` (the `bonus_entries_100` case and the `tierDowngradeAvailable===false` fallback) now pass `onClose` and `onAcceptedOffer` from `Step2OfferProps`.
+
 ### Step2Offer internal component
 
 `OfferActions` (module-private, defined at the top of `Step2Offer.tsx`) renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each of the four offer cards renders this component twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift.
