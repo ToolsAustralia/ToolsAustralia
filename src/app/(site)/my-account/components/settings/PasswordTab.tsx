@@ -10,6 +10,7 @@ import {
   Field,
   SettingsButton,
   SettingsBadge,
+  SettingsInput,
 } from "./ui/primitives";
 
 interface PasswordTabProps {
@@ -47,20 +48,6 @@ const PWInput = ({ show, setShow, ...props }: PWInputProps) => (
       {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
     </button>
   </div>
-);
-
-// Non-toggling variant (current password field — type always "password")
-const PWInputFixed = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input
-    type="password"
-    className={cn(
-      "w-full rounded-xl border border-neutral-300 dark:border-neutral-700",
-      "bg-white dark:bg-neutral-950 text-neutral-900 dark:text-white",
-      "px-3.5 py-3 text-sm placeholder-neutral-400 dark:placeholder-neutral-500",
-      "focus:outline-none focus:ring-2 focus:ring-red-600/30 focus:border-red-600 transition",
-    )}
-    {...props}
-  />
 );
 
 // ---------------------------------------------------------------------------
@@ -194,16 +181,19 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
         <div className="grid lg:grid-cols-[1fr_300px] gap-5">
           {/* Form column */}
           <div className="space-y-5">
-            <Field label="Current password">
-              <PWInputFixed
+            <Field label="Current password" htmlFor="current-password">
+              <SettingsInput
+                type="password"
+                id="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="Enter current password"
               />
             </Field>
 
-            <Field label="New password">
+            <Field label="New password" htmlFor="new-password">
               <PWInput
+                id="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password"
@@ -246,9 +236,11 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
 
             <Field
               label="Confirm new password"
+              htmlFor="confirm-password"
               error={confirmMismatch ? "Passwords don't match." : undefined}
             >
               <PWInput
+                id="confirm-password"
                 value={confirmNewPassword}
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
                 placeholder="Re-enter new password"
@@ -344,7 +336,7 @@ export default function PasswordTab({ userEmail }: PasswordTabProps) {
               <SettingsButton
                 variant="dark"
                 size="sm"
-                className="mt-3 opacity-60 cursor-not-allowed"
+                className="mt-3"
                 disabled
               >
                 Coming soon
