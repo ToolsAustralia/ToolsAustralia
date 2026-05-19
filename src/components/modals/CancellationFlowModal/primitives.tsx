@@ -34,22 +34,21 @@ export const FlowFrame: React.FC<{
 }> = ({ onClose, children, trust = true }) => (
   <div className="flex min-h-full flex-col">
     <div className="flex items-center justify-between px-5 pt-4 pb-1 max-xs:px-4">
-      <div className="flex items-center gap-2 text-xs font-extrabold tracking-tight text-neutral-600 dark:text-neutral-300">
+      <div className="flex items-center">
         <Image
-          src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
+          src="/images/Tools Australia Logo/Primary Logo.webp"
           alt="Tools Australia"
-          width={22}
-          height={22}
-          className="block rounded-[7px] dark:hidden"
+          width={4404}
+          height={1488}
+          className="block h-5 w-auto dark:hidden"
         />
         <Image
-          src="/images/Tools Australia Logo/Social Media Profile_Black Background.webp"
+          src="/images/Tools Australia Logo/White-Text Logo.webp"
           alt="Tools Australia"
-          width={22}
-          height={22}
-          className="hidden rounded-[7px] dark:block"
+          width={4404}
+          height={1488}
+          className="hidden h-5 w-auto dark:block"
         />
-        Tools Australia
       </div>
       <button
         type="button"
