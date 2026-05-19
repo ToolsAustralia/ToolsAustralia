@@ -32,7 +32,7 @@ export const FlowFrame: React.FC<{
   children: React.ReactNode;
   trust?: boolean;
 }> = ({ onClose, children, trust = true }) => (
-  <div className="flex flex-col">
+  <div className="flex min-h-full flex-col">
     <div className="flex items-center justify-between px-5 pt-4 pb-1 max-xs:px-4">
       <div className="flex items-center gap-2 text-xs font-extrabold tracking-tight text-neutral-600 dark:text-neutral-300">
         <Image
@@ -60,7 +60,7 @@ export const FlowFrame: React.FC<{
         <X size={14} strokeWidth={2.5} />
       </button>
     </div>
-    <div className="px-5 pb-5 pt-3 max-xs:px-4">{children}</div>
+    <div className="flex-1 px-5 pb-5 pt-3 max-xs:px-4">{children}</div>
     {trust && <TrustFooter />}
   </div>
 );
