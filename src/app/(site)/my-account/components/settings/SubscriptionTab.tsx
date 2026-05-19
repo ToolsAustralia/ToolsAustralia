@@ -22,7 +22,7 @@ interface SubscriptionTabProps {
 
 export default function SubscriptionTab({ user, membershipModal, onSubscriptionUpdate }: SubscriptionTabProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <SubscriptionManagementModal
         isOpen
         onClose={() => {}}

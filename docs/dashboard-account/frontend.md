@@ -72,6 +72,66 @@ The settings page was redesigned with a status-aware index and `?tab=` URL sync:
   segmented strip via `lg:hidden` / `hidden lg:block` — CSS-only, no JS viewport detection.
 - All hooks, handlers, and tab component props are preserved unchanged.
 
+### Settings Redesign (2026-05-19)
+
+All work is contained in `src/app/(site)/my-account/components/settings/`.
+
+#### New shared primitives — `ui/primitives.tsx`
+
+Presentational-only components (`Card`, `SectionHeader`, `Field`, `SettingsInput`, `LockedField`,
+`SettingsButton`, `SettingsBadge`). Built with `cn()` + Tailwind; support light and dark modes.
+No business logic, no fetches.
+
+#### New `SettingsSidebar.tsx`
+
+Exports `SettingsSection` (type), `SETTINGS_TABS` (ordered array of tab definitions), and
+`VALID_TAB_IDS` (string union for URL-param validation). Renders a desktop vertical nav rail and a
+mobile 4-column button strip (`lg:hidden` / `hidden lg:block` — CSS-only, no JS viewport state).
+
+#### Tailwind tokens added to `tailwind.config.ts`
+
+- `shadow-lift` / `shadow-lift-dark` — card elevation shadows keyed to light/dark.
+- `animate-pulse-ring` — subtle ring pulse used on status badges.
+
+#### `settings/page.tsx` — status-aware redesigned index
+
+- **`deriveSettingsUserState`**: pure inline function → `{ state: "member"|"past_due"|"guest", tierLabel?, tierPrice? }`.
+- **Index view**: identity card (initials, email, `SettingsBadge`), past-due hero (only when `hasFailed`), guest CTA (only when `state==="guest"`), 2-col preview cards with real summaries, sign-out card, member-since footer.
+- **`?tab=` URL sync**: `searchParams.get("tab")` is the single source of truth for `activeSection`. Navigation uses `router.push(?tab=<id>, { scroll: false })`. Browser back returns to index correctly. Deep links work.
+- **Responsive layout**: `grid grid-cols-[260px_1fr]` on desktop with `SettingsSidebar`; mobile sticky segmented strip via CSS class toggling (`hidden lg:block` / `lg:hidden`).
+
+#### `ProfileTab.tsx` — re-skin (behavior preserved)
+
+Uses all primitives. Props extended additive-only with optional `subscription` + `enrichedOneTimePackages`.
+Guest upsell strip excluded for past-due users (`hasFailedRenewal` check). Positive eligibility
+callout only shown when state and birthdate are both filled. Decorative `Lock` icons carry `aria-hidden`.
+No sign-out section (index + sidebar already provide it). Profession stays free-text (emoji tiles deferred).
+
+#### `PasswordTab.tsx` — re-skin (behavior preserved)
+
+Full `primitives`-based re-skin. Password security-score dial and security checklist omitted (no backing data).
+`htmlFor`/`id` a11y wiring applied to all password fields.
+
+#### `SubscriptionTab.tsx` and `PaymentTab.tsx` — chrome alignment only
+
+Both wrappers had `<div className="space-y-4">` changed to `<div className="space-y-6">` to match
+the vertical rhythm of the re-skinned shell and sibling tabs. No other changes: `dynamic()` imports,
+embedded component props, and `renderAsPanel` flag are untouched.
+
+#### Flagged / deferred design elements (NOT implemented — follow-ups)
+
+1. **Subscription tab deep redesign** (PlanHero, TierLadder, AccumulationChart, BillingCalendar, guest feature-matrix) — the `SubscriptionManagementModal` is a 1000+ LOC component with complex billing logic; chrome-only wrapper for now.
+2. **Payment tab deep redesign** (credit-card skins, wallet grid) — `PaymentMethodsTab` wraps Stripe payment-method CRUD; chrome-only wrapper for now.
+3. **Password security-score dial + security checklist** — no backing data exists to drive these.
+4. **Profile profession emoji-tiles + State button-grid** — would change field semantics; kept as `Dropdown` + free-text `SettingsInput` to preserve existing behavior.
+5. **SMS 2FA toggle** — backend not implemented; renders a "Coming soon" placeholder only.
+6. **Index "password last changed N days ago" preview** — no backing data; generic label used instead.
+7. **Index payment preview brand/last4** (e.g. "Visa •••• 4242") — `user.savedPaymentMethods` carries no brand/last4 fields; card count + "Default set" label used instead.
+8. **Profile sign-out section** from the design — omitted; index and sidebar already surface sign-out.
+9. **`htmlFor`/`id` a11y wiring on Profile phone/profession `Field`s** — Password tab has full wiring; Profile is a small follow-up for full consistency.
+
+---
+
 ## Hooks
 
 See [architecture.md](./architecture.md#hooks) — `useDashboardEntryDisplay`, `useDashboardLandingOrchestration`.
