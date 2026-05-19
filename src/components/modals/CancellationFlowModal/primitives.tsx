@@ -117,14 +117,13 @@ export const PrimaryCta: React.FC<
     type="button"
     {...rest}
     className={cn(
-      "relative w-full overflow-hidden rounded-[15px] bg-gradient-to-b from-red-600 to-red-800 px-4 py-4 text-[14.5px] font-extrabold tracking-tight text-white",
+      "cf-cta-shine relative w-full overflow-hidden rounded-[15px] bg-gradient-to-b from-red-600 to-red-800 px-4 py-4 text-[14.5px] font-extrabold tracking-tight text-white",
       "shadow-[0_12px_26px_-8px_rgba(238,0,0,.5),inset_0_1px_0_rgba(255,255,255,.25)]",
       "transition-all duration-150 hover:[&:not(:disabled)]:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60",
-      "motion-safe:after:absolute motion-safe:after:inset-y-0 motion-safe:after:-left-1/3 motion-safe:after:w-1/4 motion-safe:after:bg-[linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent)] motion-safe:after:animate-[ctaShimmer_2.6s_ease-in-out_infinite]",
       className
     )}
   >
-    {children}
+    <span className="relative z-[1] inline-flex items-center justify-center gap-2">{children}</span>
   </button>
 );
 

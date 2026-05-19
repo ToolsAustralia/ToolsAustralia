@@ -156,7 +156,6 @@
   }
 }
 
-@keyframes ctaShimmer { 0% { transform: translateX(0) skewX(-12deg); } 60%, 100% { transform: translateX(320%) skewX(-12deg); } }
 
 /* Custom Viewport Height Utilities */
 /* Progressive enhancement: vh fallback for older browsers (Safari < 15.4, iOS < 15.4) */
@@ -2040,6 +2039,20 @@
     animation: none !important;
     transform: none !important;
   }
+}
+
+/* Cancellation CTA shine — same effect as the membership "Enter Now" button (.ta-enter-cta::after, ta-enter-shine keyframe). */
+.cf-cta-shine { position: relative; overflow: hidden; }
+.cf-cta-shine::after {
+  content: ""; position: absolute; inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  transform: translateX(-130%);
+  animation: ta-enter-shine 3.6s ease-in-out infinite;
+  pointer-events: none; z-index: 0;
+}
+.cf-cta-shine > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .cf-cta-shine::after { animation: none !important; transform: none !important; }
 }
 
 /* Hourglass flip animation - rotates 180 degrees in one direction with pause */

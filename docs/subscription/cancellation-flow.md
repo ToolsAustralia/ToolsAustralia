@@ -256,7 +256,7 @@ Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 | `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"`. |
 | `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient. |
 | `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard`. |
-| `PrimaryCta` | Full-width red gradient CTA button. In motion-safe contexts an `::after` pseudo-element runs the `ctaShimmer` keyframe (sweep from left to right, infinite). |
+| `PrimaryCta` | Full-width red gradient CTA button. Uses the shared `.cf-cta-shine` CSS class (same shine as the membership "Enter Now" button) — the `::after` pseudo-element runs the `ta-enter-shine` keyframe (3.6s ease-in-out infinite). Children are wrapped in `<span className="relative z-[1] inline-flex items-center justify-center gap-2">` to stay above the sweep. Reduced-motion gated. |
 | `TextDecline` | Underlined "no thanks" link-style button below `PrimaryCta`. |
 | `UrgencyStrip` | Gold persuasion strip with star icon — used once per screen maximum. |
 | `Headline` | `<h2>` at 23 px extrabold. Accepts `className`. |
@@ -418,6 +418,8 @@ The exhaustive `switch` + `never`-guard `default` is preserved; the `never`-guar
 ### `Step3BonusEntries.tsx` (the `bonus_entries_100` rung)
 
 Universal "+100 bonus entries — stay active today" rung. **Rendered by `Step2Offer` for the `bonus_entries_100` offer during the cursor-driven step-2 OFFER phase** — it is NOT routed via a hardcoded step 3 (that hardcoding was the multi-rung-skipping bug). It is typically (but not necessarily) the last rung in `offersShown`.
+
+The accept CTA reads **"Keep me in the draw +100 entries"** (non-processing state); processing state shows "Adding bonus entries…". The count is driven by the `BONUS_ENTRIES = 100` constant in the file, rendered as `` `Keep me in the draw +${BONUS_ENTRIES} entries` ``.
 
 Props: `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void`. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen). The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. **Decline** → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4.
 

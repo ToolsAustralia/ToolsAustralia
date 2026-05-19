@@ -131,7 +131,7 @@ const Step3BonusEntries: React.FC<Step3BonusEntriesProps> = ({
       </ValueCard>
       <UrgencyStrip>Someone&apos;s name gets called next draw — it could just as easily be yours.</UrgencyStrip>
       <PrimaryCta className="mt-[17px]" onClick={() => void handleAccept()} disabled={isProcessing}>
-        {isProcessing ? "Adding bonus entries…" : "Keep me in the draw"}
+        {isProcessing ? "Adding bonus entries…" : `Keep me in the draw +${BONUS_ENTRIES} entries`}
       </PrimaryCta>
       <TextDecline onClick={onDecline} disabled={isProcessing}>
         No thanks, cancel anyway
