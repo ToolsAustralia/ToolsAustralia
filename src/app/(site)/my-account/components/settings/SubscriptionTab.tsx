@@ -30,6 +30,7 @@ export default function SubscriptionTab({ user, membershipModal, onSubscriptionU
         membershipModal={membershipModal}
         onSubscriptionUpdate={onSubscriptionUpdate}
         renderAsPanel
+        settingsRedesign
       />
     </div>
   );
