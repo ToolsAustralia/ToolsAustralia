@@ -4,6 +4,7 @@
 
 import React from "react";
 import { Lock, Info, AlertTriangle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,9 +27,9 @@ interface CardProps {
   [key: string]: unknown;
 }
 
-export const Card = ({ children, className = "", as: As = "div", ...rest }: CardProps) => (
+export const Card = ({ children, className, as: As = "div", ...rest }: CardProps) => (
   <As
-    className={`rounded-2xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 ${className}`}
+    className={cn("rounded-2xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900", className)}
     {...rest}
   >
     {children}
@@ -74,15 +75,16 @@ export const SectionHeader = ({ title, description, icon: IconCmp, accent = "red
 
 interface FieldProps {
   label: string;
+  htmlFor?: string;
   locked?: boolean;
   hint?: string;
   error?: string;
   children: React.ReactNode;
 }
 
-export const Field = ({ label, locked, hint, error, children }: FieldProps) => (
+export const Field = ({ label, htmlFor, locked, hint, error, children }: FieldProps) => (
   <div className="space-y-1.5">
-    <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+    <label htmlFor={htmlFor} className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
       {locked && <Lock className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />}
       {label}
     </label>
@@ -109,8 +111,8 @@ const inputBase =
   "text-neutral-900 dark:text-white px-3.5 py-3 text-sm placeholder-neutral-400 dark:placeholder-neutral-500 " +
   "focus:outline-none focus:ring-2 focus:ring-red-600/30 focus:border-red-600 transition";
 
-export const SettingsInput = ({ className = "", ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input className={`${inputBase} ${className}`} {...props} />
+export const SettingsInput = ({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input className={cn(inputBase, className)} {...props} />
 );
 
 // ---------------------------------------------------------------------------
@@ -163,13 +165,18 @@ export const SettingsButton = ({
   size = "md",
   icon: IconCmp,
   children,
-  className = "",
+  className,
   type = "button",
   ...props
 }: SettingsButtonProps) => (
   <button
     type={type}
-    className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${buttonVariants[variant]} ${buttonSizes[size]} ${className}`}
+    className={cn(
+      "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-600/40",
+      buttonVariants[variant],
+      buttonSizes[size],
+      className,
+    )}
     {...props}
   >
     {IconCmp && <IconCmp className="w-4 h-4" strokeWidth={2.25} />}
@@ -197,8 +204,8 @@ const badgeTones: Record<BadgeTone, string> = {
   dark:    "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-transparent",
 };
 
-export const SettingsBadge = ({ tone = "neutral", icon: IconCmp, children, className = "" }: SettingsBadgeProps) => (
-  <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5 ${badgeTones[tone]} ${className}`}>
+export const SettingsBadge = ({ tone = "neutral", icon: IconCmp, children, className }: SettingsBadgeProps) => (
+  <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5", badgeTones[tone], className)}>
     {IconCmp && <IconCmp className="w-3 h-3" strokeWidth={2.5} />}
     {children}
   </span>
