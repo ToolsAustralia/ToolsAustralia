@@ -252,8 +252,7 @@ Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 
 | Export | Purpose |
 |---|---|
-| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot + optional `TrustFooter`. No visible progress indicator — each step renders its own `FlowFrame`. |
-| `TrustFooter` | SSL / NTP licence / Cancel-anytime strip, rendered flush at the modal bottom when `trust={true}` (the default). |
+| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot. Renders an internal trust footer (SSL secure · NTP/16264 · Cancel anytime) by default; pass `trust={false}` to suppress it. `TrustFooter` itself is a private internal component of `FlowFrame` — it is not exported and cannot be used by step components directly. No visible progress indicator — each step renders its own `FlowFrame`. |
 | `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"`. |
 | `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient. |
 | `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard`. |
@@ -284,7 +283,7 @@ const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
   (full viewport width, bottom-flush, ~5% gap at the top, `h-[95dvh]`) with the
   slide-up sheet animation.
 - **Desktop (≥ `lg`):** centered `md` dialog.
-- **`ModalContent padding="none"`:** each step owns its own padding via `FlowFrame`. This removes double-padding and lets `TrustFooter` sit flush as a real footer instead of floating inside a padded box.
+- **`ModalContent padding="none"`:** each step owns its own padding via `FlowFrame`. This removes double-padding and lets `FlowFrame`'s internal trust footer sit flush as a real footer instead of floating inside a padded box.
 
 ### No progress indicator
 
