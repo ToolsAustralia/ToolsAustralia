@@ -10,7 +10,23 @@
 - Rewards / redeemables wallet
 - Metrics / activity
 
-> _TODO: enumerate exact page subdirectories._
+### Settings page (`settings/page.tsx`) — redesign 2026-05-19
+
+The settings page was redesigned with a status-aware index and `?tab=` URL sync:
+
+- **`SettingsSection` type** and **`SETTINGS_TABS`** constant are owned by
+  `src/app/(site)/my-account/components/settings/SettingsSidebar.tsx` and re-exported from there.
+- **`?tab=` URL sync**: `activeSection` is derived from `searchParams.get("tab")` as single
+  source of truth. `setActiveTab(id)` pushes `?tab=<id>`; back from tab → index push; back from
+  index → `router.back()`.
+- **`deriveSettingsUserState`**: pure inline function mapping `user + hasFailed + membershipTier`
+  to `{ state: "member"|"past_due"|"guest", tierLabel?, tierPrice? }`.
+- **Index view**: identity card (initials, email, `SettingsBadge`), past-due hero (only when
+  `hasFailed`), guest CTA (only when `state==="guest"`), 2-col tab preview cards with real
+  summaries, sign-out card, member-since footer.
+- **Tab view**: desktop `grid grid-cols-[260px_1fr]` with `SettingsSidebar`; mobile sticky
+  segmented strip via `lg:hidden` / `hidden lg:block` — CSS-only, no JS viewport detection.
+- All hooks, handlers, and tab component props are preserved unchanged.
 
 ## Hooks
 
