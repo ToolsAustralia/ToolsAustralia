@@ -22,6 +22,12 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 | `SubCopy` | 13 px body paragraph |
 | `Eyebrow` | 10.5 px uppercase red label above headlines |
 
+### Step4Confirm (Task 8)
+
+`Step4Confirm` has been restyled via the shared primitive grammar. `onClose: () => void` added to `Step4ConfirmProps` — this is `handleHeaderClose` from `index.tsx` and feeds `FlowFrame`'s ✕ button. It is distinct from `modalProps.onClose`, which remains the "Keep my membership" handler in the normal variant.
+
+Normal variant: `FlowFrame` with `trust={false}` (no TrustFooter), two inline loss cards (Ticket + Trophy), a single `UrgencyStrip`, `PrimaryCta` wired to `modalProps.onClose` ("Keep my membership"), and `TextDecline` wired to `handleCancelAnyway`. Past-due variant: `FlowFrame` (with TrustFooter), gold `IconChip` + CreditCard icon, `ValueCard` with two `FeatureRow` items, `PrimaryCta` wired to `handleResolvePayment` ("Resolve payment"), `TextDecline` for cancel anyway. All cancel logic is preserved verbatim: the `/api/stripe/cancel-subscription` POST, all toast branches (`cancelledImmediately`, `isPastDue` message, period-end with computed `endDate`+`daysRemaining`), the fire-and-forget `outcomeMutation.mutate({outcome:"cancelled"})`, `modalProps.onCancelled()`, and the `catch`/`console.error`/error-toast path. This task resolves the last outstanding TypeScript error so `npm run type-check` is now fully green.
+
 ### Step3BonusEntries (Task 7)
 
 `Step3BonusEntries` has been restyled onto the shared primitive grammar (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `ValueCard`, `UrgencyStrip`, `PrimaryCta`, `TextDecline`). Props updated: `onSaved` removed; `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void` added. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen) instead of the old `onSaved()`. The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. Both `<Step3BonusEntries>` call sites in `Step2Offer.tsx` (the `bonus_entries_100` case and the `tierDowngradeAvailable===false` fallback) now pass `onClose` and `onAcceptedOffer` from `Step2OfferProps`.
