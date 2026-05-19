@@ -71,6 +71,30 @@ interface Step2OfferProps {
 const offerLabelFor = (state: FlowState): string =>
   `Offer ${state.offerCursor + 1} of ${state.offersShown.length}`;
 
+/** CTA + decline pair, rendered once per breakpoint slot so the two copies can't drift. */
+const OfferActions: React.FC<{
+  acceptLabel: string;
+  onAccept: () => void;
+  onDecline: () => void;
+  disabled?: boolean;
+  declineLabel?: string;
+}> = ({
+  acceptLabel,
+  onAccept,
+  onDecline,
+  disabled = false,
+  declineLabel = "No thanks, show me other options",
+}) => (
+  <>
+    <PrimaryCta className="mt-[17px]" onClick={onAccept} disabled={disabled}>
+      {acceptLabel}
+    </PrimaryCta>
+    <TextDecline onClick={onDecline} disabled={disabled}>
+      {declineLabel}
+    </TextDecline>
+  </>
+);
+
 // ---------------------------------------------------------------------------
 // tier_downgrade card
 // ---------------------------------------------------------------------------
@@ -112,12 +136,11 @@ const TierDowngradeCard: React.FC<TierDowngradeCardProps> = ({
             Switch to a cheaper plan and keep every entry — no need to cancel.
           </SubCopy>
           <div className="hidden lg:block">
-            <PrimaryCta className="mt-[17px]" onClick={handleAccept}>
-              Switch to a cheaper plan
-            </PrimaryCta>
-            <TextDecline onClick={onDecline}>
-              No thanks, show me other options
-            </TextDecline>
+            <OfferActions
+              acceptLabel="Switch to a cheaper plan"
+              onAccept={handleAccept}
+              onDecline={onDecline}
+            />
           </div>
         </div>
         <div>
@@ -132,12 +155,11 @@ const TierDowngradeCard: React.FC<TierDowngradeCardProps> = ({
             </div>
           </ValueCard>
           <div className="lg:hidden">
-            <PrimaryCta className="mt-[17px]" onClick={handleAccept}>
-              Switch to a cheaper plan
-            </PrimaryCta>
-            <TextDecline onClick={onDecline}>
-              No thanks, show me other options
-            </TextDecline>
+            <OfferActions
+              acceptLabel="Switch to a cheaper plan"
+              onAccept={handleAccept}
+              onDecline={onDecline}
+            />
           </div>
         </div>
       </div>
@@ -230,16 +252,12 @@ const PauseOfferCard: React.FC<PauseOfferCardProps> = ({
             stays exactly where it is.
           </SubCopy>
           <div className="hidden lg:block">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Pausing…" : "Pause my membership"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Pausing…" : "Pause my membership"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              No thanks, show me other options
-            </TextDecline>
+            />
           </div>
         </div>
         <div>
@@ -254,16 +272,12 @@ const PauseOfferCard: React.FC<PauseOfferCardProps> = ({
             </div>
           </ValueCard>
           <div className="lg:hidden">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Pausing…" : "Pause my membership"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Pausing…" : "Pause my membership"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              No thanks, show me other options
-            </TextDecline>
+            />
           </div>
         </div>
       </div>
@@ -356,16 +370,13 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
             <strong className="text-neutral-900 dark:text-white">50% off your next 2 months</strong>. Nothing else changes.
           </SubCopy>
           <div className="hidden lg:block">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Applying…" : "Keep me at 50% off"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Applying…" : "Keep me at 50% off"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              That&apos;s okay, show me other options
-            </TextDecline>
+              declineLabel="That's okay, show me other options"
+            />
           </div>
         </div>
         <div>
@@ -391,16 +402,13 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
             </div>
           </ValueCard>
           <div className="lg:hidden">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Applying…" : "Keep me at 50% off"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Applying…" : "Keep me at 50% off"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              That&apos;s okay, show me other options
-            </TextDecline>
+              declineLabel="That's okay, show me other options"
+            />
           </div>
         </div>
       </div>
@@ -493,16 +501,12 @@ const UnsubscribeOfferCard: React.FC<UnsubscribeOfferCardProps> = ({
             and draw results are not affected.
           </SubCopy>
           <div className="hidden lg:block">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Updating…" : "Send me fewer messages"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Updating…" : "Send me fewer messages"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              No thanks, show me other options
-            </TextDecline>
+            />
           </div>
         </div>
         <div>
@@ -517,16 +521,12 @@ const UnsubscribeOfferCard: React.FC<UnsubscribeOfferCardProps> = ({
             </div>
           </ValueCard>
           <div className="lg:hidden">
-            <PrimaryCta
-              className="mt-[17px]"
-              onClick={() => void handleAccept()}
+            <OfferActions
+              acceptLabel={isProcessing ? "Updating…" : "Send me fewer messages"}
+              onAccept={() => void handleAccept()}
+              onDecline={onDecline}
               disabled={isProcessing}
-            >
-              {isProcessing ? "Updating…" : "Send me fewer messages"}
-            </PrimaryCta>
-            <TextDecline onClick={onDecline} disabled={isProcessing}>
-              No thanks, show me other options
-            </TextDecline>
+            />
           </div>
         </div>
       </div>

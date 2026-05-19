@@ -22,6 +22,10 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 | `SubCopy` | 13 px body paragraph |
 | `Eyebrow` | 10.5 px uppercase red label above headlines |
 
+### Step2Offer internal component
+
+`OfferActions` (module-private, defined at the top of `Step2Offer.tsx`) renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each of the four offer cards renders this component twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift.
+
 ## Reason → Offer Routing
 
 `src/utils/subscription/cancellation-flow-routing.ts` exports `resolveOfferSequence(reason)`, a pure function that maps a `CancellationReason` to an ordered `OfferType[]`.
