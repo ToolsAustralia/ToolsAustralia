@@ -162,7 +162,7 @@ const Step3BonusEntries: React.FC<Step3BonusEntriesProps> = ({
               </div>
               <div className="mt-1.5 flex items-center justify-between text-[12.5px]">
                 <span className="text-neutral-600 dark:text-neutral-400">
-                  +100 now
+                  +{BONUS_ENTRIES} now
                 </span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
                   +{BONUS_ENTRIES}

@@ -398,7 +398,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       | { lastMonthAccumulatedEntries?: number }
       | undefined;
     const lastMonthAccumulatedEntries =
-      subscriptionWithEntries?.lastMonthAccumulatedEntries ?? baseEntriesPerMonth;
+      subscriptionWithEntries?.lastMonthAccumulatedEntries;
+    if (lastMonthAccumulatedEntries == null) return null;
 
     return {
       packageId,
