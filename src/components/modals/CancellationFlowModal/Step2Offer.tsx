@@ -320,12 +320,10 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
   // Only populated when the parent supplied a reliable numeric price.
   const currentPriceLabel = entrySnapshot?.currentPriceLabel;
   const currentPriceAmount = entrySnapshot?.currentPriceAmount;
+  const half = (currentPriceAmount ?? 0) * 0.5;
   const discountedPriceLabel =
     currentPriceAmount != null && currentPriceAmount > 0
-      ? (() => {
-          const half = currentPriceAmount * 0.5;
-          return `$${Number.isInteger(half) ? half : half.toFixed(2)}/mo`;
-        })()
+      ? `$${Number.isInteger(half) ? half : half.toFixed(2)}/mo`
       : undefined;
 
   const handleAccept = async () => {
@@ -375,6 +373,12 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
     }
   };
 
+  const savePill = (
+    <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
+      SAVE 50%
+    </span>
+  );
+
   return (
     <FlowFrame onClose={onClose}>
       <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
@@ -414,9 +418,7 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
                   <span className="text-[15px] font-bold text-neutral-400 line-through">
                     {currentPriceLabel}
                   </span>
-                  <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
-                    SAVE 50%
-                  </span>
+                  {savePill}
                 </div>
                 <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
                   for 2 months, then {currentPriceLabel}
@@ -431,9 +433,7 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
                     full price
                   </span>
                 </div>
-                <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
-                  SAVE 50%
-                </span>
+                {savePill}
               </div>
             )}
             <div className="mt-3.5 border-t border-dashed border-neutral-200 pt-3 dark:border-neutral-700">
