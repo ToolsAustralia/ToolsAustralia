@@ -39,6 +39,28 @@ export interface CancellationEntrySnapshot {
   currentEntries: number;
   /** Accumulated entries from the last renewal — feeds the 2-month projection. */
   lastMonthAccumulatedEntries: number;
+  /**
+   * Pre-formatted current monthly price label, e.g. "$20/mo".
+   *
+   * Populated by the parent (`SubscriptionManagementModal`) from the resolved
+   * `membershipPackage.price` using the same `$N/mo` convention as `DowngradeList`
+   * / `UpgradeList`. Optional — absent when the parent cannot determine a reliable
+   * numeric price (e.g. price is 0 or NaN). When absent, `DiscountOfferCard`
+   * falls back to the generic "50% off / full price" display exactly as before.
+   *
+   * The discount card derives `discountedPriceLabel` as 50% of the raw price
+   * from the parent — do NOT store a discounted label here; let the card compute
+   * it from the authoritative source so the 2-month framing is always consistent.
+   */
+  currentPriceLabel?: string;
+  /**
+   * Raw numeric current monthly price in AUD (whole dollars).
+   *
+   * Stored alongside `currentPriceLabel` so `DiscountOfferCard` can derive the
+   * discounted price label (price × 0.5) without re-parsing the formatted string.
+   * Optional — absent when `currentPriceLabel` is absent.
+   */
+  currentPriceAmount?: number;
 }
 
 export interface FlowState {

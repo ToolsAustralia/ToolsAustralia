@@ -401,12 +401,29 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       subscriptionWithEntries?.lastMonthAccumulatedEntries;
     if (lastMonthAccumulatedEntries == null) return null;
 
+    // Populate real price labels when the package has a reliable positive price.
+    // Convention matches DowngradeList / UpgradeList: "$N/mo" (whole dollars,
+    // no decimal for integers). If price is 0 / negative / non-finite, omit
+    // both fields so the discount card falls back to the generic display.
+    const rawPrice = membershipPackage.price;
+    const priceFields: {
+      currentPriceLabel?: string;
+      currentPriceAmount?: number;
+    } =
+      typeof rawPrice === "number" && Number.isFinite(rawPrice) && rawPrice > 0
+        ? {
+            currentPriceLabel: `$${Number.isInteger(rawPrice) ? rawPrice : rawPrice.toFixed(2)}/mo`,
+            currentPriceAmount: rawPrice,
+          }
+        : {};
+
     return {
       packageId,
       packageName,
       baseEntriesPerMonth,
       currentEntries: lastMonthAccumulatedEntries,
       lastMonthAccumulatedEntries,
+      ...priceFields,
     };
   }, [membershipPackage, activeSubscription, subscriptionBenefits, user.subscription]);
 

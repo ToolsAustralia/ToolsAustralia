@@ -518,21 +518,28 @@ Shape:
 
 ```ts
 interface CancellationEntrySnapshot {
-  packageId: string;                  // e.g. "tradie-subscription" (VerticalAccumulationChart selection)
-  packageName: string;                // e.g. "Tradie"
-  baseEntriesPerMonth: number;        // canonical per-package renewal grant
-  currentEntries: number;             // = lastMonthAccumulatedEntries (see note)
-  lastMonthAccumulatedEntries: number;// feeds the 2-month accumulation projection
+  packageId: string;                   // e.g. "tradie-subscription" (VerticalAccumulationChart selection)
+  packageName: string;                 // e.g. "Tradie"
+  baseEntriesPerMonth: number;         // canonical per-package renewal grant
+  currentEntries: number;              // = lastMonthAccumulatedEntries (see note)
+  lastMonthAccumulatedEntries: number; // feeds the 2-month accumulation projection
+  // Optional price fields — absent when no reliable price is available:
+  currentPriceLabel?: string;          // pre-formatted, e.g. "$20/mo" (same convention as DowngradeList/UpgradeList)
+  currentPriceAmount?: number;         // raw AUD amount, used by DiscountOfferCard to derive the 50% discounted label
 }
 ```
 
 **Parent computation** (`SubscriptionManagementModal/index.tsx`, `cancellationEntrySnapshot` `useMemo`): built only on the active-subscription path from data already client-available — the resolved `membershipPackage`, `subscriptionBenefits.currentBenefits` (server-derived, fetched by `fetchSubscriptionBenefits`), and `user.subscription.lastMonthAccumulatedEntries` (the same accumulated figure `CurrentBenefitsCard` renders). `baseEntriesPerMonth` resolves from `currentBenefits.entriesPerMonth ?? membershipPackage.entriesPerMonth`. The memo returns **`null`** (section hidden, both cards render exactly as before) when any of these conditions hold: `membershipPackage`/`activeSubscription` are missing; no real `packageId`/`packageName`/positive `baseEntriesPerMonth` can be resolved; or **`user.subscription.lastMonthAccumulatedEntries` is `null`/`undefined`** (brand-new member who has not yet had a renewal). There is no fallback to `baseEntriesPerMonth` for the present-tense "entries now" figure — if the real accumulated value is absent, the whole snapshot is `null` and no entry numbers are shown.
 
+`currentPriceLabel` and `currentPriceAmount` are populated from `membershipPackage.price` when the value is a finite, positive number. If price is 0, non-finite, or absent, the two fields are omitted from the snapshot (both left `undefined`) — the rest of the snapshot (entries section) is unaffected. Format matches the `$N/mo` convention used across `DowngradeList` / `UpgradeList` / `CurrentBenefitsCard` — integers are formatted without decimals, non-integers with 2 decimal places.
+
+**`DiscountOfferCard` — real vs. generic price display:** when `currentPriceAmount` is present and positive, the value block shows the concrete discounted price (`currentPriceAmount × 0.5`, formatted as `$N/mo`) with the current price struck-through and a "for 2 months, then `currentPriceLabel`" sub-line. The gold "SAVE 50%" pill is present in both paths. When `currentPriceAmount` is absent the card falls back to the original generic "50% off / full price" display — exactly as before.
+
 **Why `currentEntries` = `lastMonthAccumulatedEntries`:** the member's *literal current major-draw entry count* is **not client-available** — the single source of truth is `majordraws.entries` (server-only; the `User` model intentionally has no per-user major-draw count, and `/api/subscription/benefits` does not return it). `lastMonthAccumulatedEntries` is the accumulated-entries figure the rest of the dashboard already shows as "your entries", so it is the honest datum to surface.
 
 **Why there is no `entriesPendingRenewal`:** nothing client-side distinguishes "this period's grant already applied" from "pending the next renewal grant" — `lastMonthAccumulatedEntries` is mutated server-side on the renewal webhook with no client-visible timing flag. Rather than fabricate that state, the bonus card frames the next renewal as a **factual** statement ("your next renewal adds +N") computed via the canonical `calculateRenewalEntries`. This field and an "on renewal (pending)" timing sub-text were intentionally omitted.
 
-**Threading:** `index.tsx` → `<Step2Offer entrySnapshot>` → `DiscountOfferCard` (50% card section) and every `Step3BonusEntries` call site (including the `tier_downgrade`-unavailable and lead-`bonus_entries_100` fallbacks). No unrelated parent logic changed.
+**Threading:** `index.tsx` → `<Step2Offer entrySnapshot>` → `DiscountOfferCard` (50% card section, including price block) and every `Step3BonusEntries` call site (including the `tier_downgrade`-unavailable and lead-`bonus_entries_100` fallbacks). No unrelated parent logic changed.
 
 The old `CancellationUpsellModal` has been removed — `src/components/modals/CancellationUpsellModal/` no longer exists. The +100-entries rung still POSTs to the existing, untouched `/api/cancellation-upsell/redeem` route (backed by `src/utils/redeemables/cancellation-upsell-eligibility.ts`); only the superseded modal UI was deleted.
 

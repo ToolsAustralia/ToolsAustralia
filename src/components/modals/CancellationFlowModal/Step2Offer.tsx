@@ -316,6 +316,18 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
   const { showToast } = useToast();
   const offerLabel = offerLabelFor(state);
 
+  // Derive discounted price label from the real current price (50% off).
+  // Only populated when the parent supplied a reliable numeric price.
+  const currentPriceLabel = entrySnapshot?.currentPriceLabel;
+  const currentPriceAmount = entrySnapshot?.currentPriceAmount;
+  const discountedPriceLabel =
+    currentPriceAmount != null && currentPriceAmount > 0
+      ? (() => {
+          const half = currentPriceAmount * 0.5;
+          return `$${Number.isInteger(half) ? half : half.toFixed(2)}/mo`;
+        })()
+      : undefined;
+
   const handleAccept = async () => {
     if (isProcessing) return;
     if (!state.eventId) {
@@ -392,17 +404,38 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
             <div className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-neutral-400">
               Your new price · 2 months
             </div>
-            <div className="mt-1.5 flex items-center">
-              <div className="text-[30px] font-black tracking-[-0.03em] text-neutral-900 dark:text-white">
-                50% off
-                <span className="ml-2 text-[15px] font-bold text-neutral-400 line-through">
-                  full price
+            {discountedPriceLabel ? (
+              /* Real-price display — parent supplied a reliable current price */
+              <>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="text-[30px] font-black tracking-[-0.03em] text-neutral-900 dark:text-white">
+                    {discountedPriceLabel}
+                  </div>
+                  <span className="text-[15px] font-bold text-neutral-400 line-through">
+                    {currentPriceLabel}
+                  </span>
+                  <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
+                    SAVE 50%
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                  for 2 months, then {currentPriceLabel}
+                </p>
+              </>
+            ) : (
+              /* Generic fallback — no real price available */
+              <div className="mt-1.5 flex items-center">
+                <div className="text-[30px] font-black tracking-[-0.03em] text-neutral-900 dark:text-white">
+                  50% off
+                  <span className="ml-2 text-[15px] font-bold text-neutral-400 line-through">
+                    full price
+                  </span>
+                </div>
+                <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
+                  SAVE 50%
                 </span>
               </div>
-              <span className="ml-auto rounded-full bg-gradient-to-br from-amber-300 to-amber-400 px-2.5 py-1 text-[10.5px] font-black text-amber-900 shadow-[0_4px_10px_rgba(245,158,11,.35)]">
-                SAVE 50%
-              </span>
-            </div>
+            )}
             <div className="mt-3.5 border-t border-dashed border-neutral-200 pt-3 dark:border-neutral-700">
               <FeatureRow>Every accumulated entry stays locked in</FeatureRow>
               <FeatureRow>Same shot at the major draw &amp; $10k cash</FeatureRow>

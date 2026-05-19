@@ -238,14 +238,17 @@ const SAVE_SUCCESS_OFFERS: OfferType[] = [
   "bonus_entries_100",
 ];
 
-// Realistic REAL-data sample (Tradie: 150 accumulated → 165 → 180 projection;
-// +100 bonus → 250). Mirrors what the parent computes from subscriptionBenefits.
+// Realistic REAL-data sample (Tradie: $20/mo → $10/mo discounted; 150 accumulated
+// → 165 → 180 projection; +100 bonus → 250). Mirrors what the parent computes
+// from subscriptionBenefits + membershipPackage.price.
 const SAMPLE_ENTRY_SNAPSHOT: CancellationEntrySnapshot = {
   packageId: "tradie-subscription",
   packageName: "Tradie",
   baseEntriesPerMonth: 15,
   currentEntries: 150,
   lastMonthAccumulatedEntries: 150,
+  currentPriceLabel: "$20/mo",
+  currentPriceAmount: 20,
 };
 
 export default function CancellationFlowHarnessClient() {
