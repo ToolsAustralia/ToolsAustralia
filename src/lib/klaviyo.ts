@@ -1727,6 +1727,7 @@ class KlaviyoClient {
    *
    * @param email - Email address to search for
    * @returns Profile ID if found, null otherwise
+   * @see findProfilePhoneByEmail — sibling sharing this lookup; keep request/retry/timeout logic in sync.
    */
   async findProfileByEmail(email: string): Promise<string | null> {
     if (!this.isConfigured()) {
@@ -1777,6 +1778,7 @@ class KlaviyoClient {
    *
    * @param email - Email address to search for
    * @returns E.164 phone number if present on the Klaviyo profile, null otherwise
+   * @see findProfileByEmail — sibling sharing this lookup; keep request/retry/timeout logic in sync.
    */
   async findProfilePhoneByEmail(email: string): Promise<string | null> {
     if (!this.isConfigured()) {
