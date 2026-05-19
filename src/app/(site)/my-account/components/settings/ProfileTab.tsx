@@ -25,6 +25,7 @@ import GiveawayEligibilityNotice from "@/components/ui/GiveawayEligibilityNotice
 import BirthdatePicker from "@/components/ui/BirthdatePicker";
 import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
 import { cn } from "@/utils/cn";
+import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import {
   Card,
   SectionHeader,
@@ -141,7 +142,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const ineligibilityReasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
   const isIneligible = isGiveawayIneligible(state, birthdate || user.birthdate);
 
+  const hasFailed = hasFailedRenewal(user as unknown as import("@/models/User").IUser);
   const isGuest =
+    !hasFailed &&
     !user.subscription?.isActive &&
     !(user.enrichedOneTimePackages?.some((p) => p.isActive));
 
@@ -192,7 +195,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                   Full name
-                  <Lock className="w-3 h-3" strokeWidth={2.25} />
+                  <Lock className="w-3 h-3" strokeWidth={2.25} aria-hidden />
                 </p>
                 <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
                   {formatDisplayName(user.firstName, user.lastName)}
@@ -213,7 +216,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
                   Email
-                  <Lock className="w-3 h-3" strokeWidth={2.25} />
+                  <Lock className="w-3 h-3" strokeWidth={2.25} aria-hidden />
                 </p>
                 <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
                   {user.email}
@@ -359,7 +362,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           </Field>
 
           {/* Eligibility callout — positive */}
-          {!isIneligible && (
+          {!isIneligible && !!state && !!(birthdate || user.birthdate) && (
             <div
               className={cn(
                 "rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50",

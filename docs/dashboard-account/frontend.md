@@ -31,9 +31,28 @@ Key structural changes:
   (calls `requestModal`) when not.
 - **Phone field**: static `🇦🇺 +61` prefix adornment via `absolute` div + `SettingsInput` with
   `pl-[5.5rem]`; save/reset via `SettingsButton`.
-- **Positive eligibility callout**: emerald card shown when `!isGiveawayIneligible(...)`.
+- **Positive eligibility callout**: emerald card shown when `!isGiveawayIneligible(...)` AND the
+  user has already filled in both state and birthdate (`!!state && !!(birthdate || user.birthdate)`),
+  preventing premature display on blank profiles.
 - **Profession**: stays free-text `SettingsInput` (emoji tiles intentionally deferred).
 - No sign-out section (index + sidebar already provide it).
+
+### ProfileTab code-review fixes (2026-05-19)
+
+Three targeted fixes applied to `ProfileTab.tsx` without changing props, handlers, or other files:
+
+1. **Past-due guest-strip bug**: `isGuest` now excludes past-due members by importing
+   `hasFailedRenewal` from `@/utils/subscription/subscription-helpers` and computing
+   `const hasFailed = hasFailedRenewal(user as unknown as IUser)`. Guard is
+   `!hasFailed && !subscription?.isActive && !enrichedOneTimePackages?.some(p => p.isActive)`,
+   mirroring the `deriveSettingsUserState` precedence in `settings/page.tsx`.
+
+2. **Premature eligibility banner**: positive "You're eligible to win" callout now only renders
+   when `!isIneligible && !!state && !!(birthdate || user.birthdate)`.
+
+3. **Decorative Lock icons labelled**: both `Lock` icon instances in the Full name and Email
+   identity cards now carry `aria-hidden` since the surrounding label text already communicates
+   the locked state.
 
 ### Settings page (`settings/page.tsx`) — redesign 2026-05-19
 
