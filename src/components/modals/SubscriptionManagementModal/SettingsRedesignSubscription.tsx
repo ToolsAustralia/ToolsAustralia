@@ -14,6 +14,7 @@
  */
 
 import React from "react";
+import Image from "next/image";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -22,6 +23,7 @@ import {
   X,
   Trophy,
 } from "lucide-react";
+import { getPackageIconByName } from "@/utils/images/package-icons";
 import {
   getMembershipSectionColorScheme,
   type PackageColorScheme,
@@ -367,6 +369,7 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
             >
               {ladder.map((t, i) => {
                 const reached = currentIdx >= 0 && i <= currentIdx;
+                const tierIcon = getPackageIconByName(t.name, "subscription");
                 return (
                   <div key={`${t.name}-${t.price}`} className="flex flex-col items-center text-center">
                     <div
@@ -375,7 +378,17 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
                       } ${t.current ? "scale-110 shadow-lg" : ""}`}
                       style={reached ? { backgroundColor: accent } : undefined}
                     >
-                      {t.name.charAt(0).toUpperCase()}
+                      {tierIcon ? (
+                        <Image
+                          src={tierIcon}
+                          alt={`${t.name} icon`}
+                          width={36}
+                          height={36}
+                          className={`w-9 h-9 object-contain ${reached ? "" : "opacity-40 grayscale"}`}
+                        />
+                      ) : (
+                        t.name.charAt(0).toUpperCase()
+                      )}
                       {t.current && (
                         <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-[9px] font-black tracking-widest uppercase">
                           You
