@@ -26,6 +26,7 @@ export default function PaymentTab({ user }: PaymentTabProps) {
           subscription: user.subscription,
           stripeSubscriptionId: user.stripeSubscriptionId,
         }}
+        settingsRedesign
       />
     </div>
   );
