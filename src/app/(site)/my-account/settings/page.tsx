@@ -445,8 +445,9 @@ export default function SettingsPage() {
       ) : (
         /* ── Tab view ────────────────────────────────────────────────────── */
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-5 sm:py-8">
-          {/* Mobile: segmented strip — CSS-only responsive, no JS viewport detection */}
-          <div className="lg:hidden">
+          {/* Mobile: segmented strip — extends to screen edges (negative margins
+              cancel the parent container's px-3 sm:px-6 padding). Hidden at lg+. */}
+          <div className="lg:hidden -mx-3 sm:-mx-6">
             <SettingsSidebar
               activeTab={activeSection}
               setActiveTab={setActiveTab}
