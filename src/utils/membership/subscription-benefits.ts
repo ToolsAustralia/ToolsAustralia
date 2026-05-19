@@ -80,6 +80,94 @@ export function getCurrentUserBenefits(user: Partial<IUser>): UserBenefits | nul
 }
 
 /**
+ * Active Stripe subscription discount surfaced to the client (e.g. the
+ * accepted retention "50% off / 2 months" coupon). `endsAt` is only set when
+ * Stripe truly provides (`discount.end`) or derivably yields a real end date.
+ */
+export interface ActiveSubscriptionDiscount {
+  couponId: string;
+  percentOff: number;
+  endsAt?: string; // ISO
+}
+
+/**
+ * Best-effort read of the member's ACTIVE Stripe subscription discount.
+ *
+ * - Only calls Stripe when `stripeSubscriptionId` is present (no id → no call).
+ * - Single `subscriptions.retrieve` with `discounts` expanded so the discount
+ *   objects (coupon + end) are inlined rather than bare ids.
+ * - Non-throwing: ANY failure (Stripe error, no discount, percent-less coupon)
+ *   resolves to `null`. Callers MUST treat this as optional — the shared
+ *   benefits endpoint must never break because of this read.
+ *
+ * `endsAt` derivation (truthful only):
+ * - `discount.end` (unix seconds) → that exact date.
+ * - else if coupon `duration: "repeating"` with `duration_in_months` and a
+ *   `discount.start`, derive `start + duration_in_months` months.
+ * - else omitted (do not fabricate).
+ */
+export async function getActiveStripeSubscriptionDiscount(
+  user: Partial<IUser>
+): Promise<ActiveSubscriptionDiscount | null> {
+  const subscriptionId = user?.stripeSubscriptionId;
+  if (!subscriptionId) {
+    return null;
+  }
+
+  try {
+    const { stripe } = await import("@/lib/stripe");
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ["discounts"],
+    });
+
+    const discounts = subscription.discounts;
+    if (!Array.isArray(discounts) || discounts.length === 0) {
+      return null;
+    }
+
+    // After expand, entries are Discount objects (not bare id strings).
+    const discount = discounts.find(
+      (d): d is import("stripe").Stripe.Discount => typeof d !== "string" && d?.object === "discount"
+    );
+    if (!discount) {
+      return null;
+    }
+
+    const coupon = discount.coupon;
+    if (!coupon || typeof coupon.percent_off !== "number") {
+      // We only surface percentage discounts (the retention offer is percent_off).
+      return null;
+    }
+
+    const result: ActiveSubscriptionDiscount = {
+      couponId: coupon.id,
+      percentOff: coupon.percent_off,
+    };
+
+    if (typeof discount.end === "number") {
+      result.endsAt = new Date(discount.end * 1000).toISOString();
+    } else if (
+      coupon.duration === "repeating" &&
+      typeof coupon.duration_in_months === "number" &&
+      typeof discount.start === "number"
+    ) {
+      const start = new Date(discount.start * 1000);
+      const derived = new Date(start);
+      derived.setMonth(derived.getMonth() + coupon.duration_in_months);
+      result.endsAt = derived.toISOString();
+    }
+    // else: no truthful end date available → omit endsAt.
+
+    return result;
+  } catch (error) {
+    // Best-effort: never break the shared benefits endpoint.
+    console.error("[subscription-benefits] Failed to read active Stripe discount:", error);
+    return null;
+  }
+}
+
+/**
  * Get available upgrade options for a user
  */
 export function getAvailableUpgrades(user: Partial<IUser>): Array<{

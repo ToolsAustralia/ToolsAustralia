@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import type { OfferType } from "@/models/CancellationFlowEvent";
-import { offerPhaseFor, nextOfferState } from "../useCancellationFlow";
+import { offerPhaseFor, nextOfferState, applySaveSuccess } from "../useCancellationFlow";
+import type { FlowState, AcceptResult } from "../types";
+import type { AcceptOfferResponse } from "@/hooks/queries/useCancellationFlow";
+
+// Drift guard (compile-time only): AcceptResult must stay structurally
+// equivalent to the API hook's AcceptOfferResponse. If either side gains/loses
+// a field, one of these `true` assignments fails type-check.
+type _AcceptResultExtendsResponse = AcceptResult extends AcceptOfferResponse ? true : false;
+type _ResponseExtendsAcceptResult = AcceptOfferResponse extends AcceptResult ? true : false;
+const _driftA: _AcceptResultExtendsResponse = true;
+const _driftB: _ResponseExtendsAcceptResult = true;
+void _driftA;
+void _driftB;
 
 /**
  * Locks the cancellation-flow step-machine reducer.
@@ -99,12 +111,57 @@ function testOfferPhaseForEdges() {
   }
 }
 
+function baseState(): FlowState {
+  return {
+    step: 2,
+    reason: "too_expensive",
+    reasonText: "",
+    eventId: "evt_1",
+    offersShown: ["discount_50_2mo", "bonus_entries_100"],
+    offerCursor: 0,
+    pastDue: false,
+    saveSuccess: false,
+    acceptedOffer: null,
+    acceptResult: null,
+  };
+}
+
+function testApplySaveSuccessDiscount() {
+  const next = applySaveSuccess(baseState(), "discount_50_2mo", {
+    ok: true,
+    couponId: "retention-50off-2mo",
+  });
+  assert.equal(next.saveSuccess, true);
+  assert.equal(next.acceptedOffer, "discount_50_2mo");
+  assert.deepStrictEqual(next.acceptResult, { ok: true, couponId: "retention-50off-2mo" });
+  assert.equal(next.step, 2);
+  assert.equal(next.eventId, "evt_1");
+}
+
+function testApplySaveSuccessNoResult() {
+  const next = applySaveSuccess(baseState(), "unsubscribe_marketing", null);
+  assert.equal(next.saveSuccess, true);
+  assert.equal(next.acceptedOffer, "unsubscribe_marketing");
+  assert.equal(next.acceptResult, null);
+  assert.equal(next.step, 2);
+}
+
+function testApplySaveSuccessPure() {
+  const s = baseState();
+  applySaveSuccess(s, "pause_30d", { ok: true, resumesAt: "2026-06-17T00:00:00.000Z" });
+  assert.equal(s.saveSuccess, false);
+  assert.equal(s.acceptedOffer, null);
+}
+
 function run() {
   testOtherThreeRungWaterfall();
   testTwoElementSequence();
   testOneElementSequence();
   testEmptyPastDueSequence();
   testOfferPhaseForEdges();
+  testApplySaveSuccessDiscount();
+  testApplySaveSuccessNoResult();
+  testApplySaveSuccessPure();
   console.log("PASS useCancellationFlow step-machine (incl. 3-element `other` waterfall — discount reached, not skipped)");
 }
 

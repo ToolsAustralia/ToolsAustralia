@@ -296,6 +296,8 @@ Sections: triggered + overall save-rate + saved/cancelled/abandoned stat cards; 
 
 Data hook: [src/hooks/queries/admin/useCancellationFlowAnalytics.ts](../../src/hooks/queries/admin/useCancellationFlowAnalytics.ts) — TanStack `useQuery`, queryKey `["admin", "cancellation-flow-analytics", filter]`, follows the `useChargePastDueDeclineSummary` admin-hook pattern (inline key, `{ data, isLoading, isError }`). Endpoint + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
+**Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
+
 ## className conventions (2026-05-08)
 
 All admin components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}` across this domain. When adding new conditional classes, use `cn()` rather than template literals.

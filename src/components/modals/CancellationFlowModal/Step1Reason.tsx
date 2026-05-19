@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import { MessageCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { type CancellationReason } from "@/models/CancellationFlowEvent";
 import type { useStartCancellationFlow } from "@/hooks/queries/useCancellationFlow";
 import type { useCancellationFlow } from "./useCancellationFlow";
+import { FlowFrame, IconChip, Headline, SubCopy, PrimaryCta } from "./primitives";
+import { useUserContext } from "@/contexts/UserContext";
 
 interface ReasonOption {
   label: string;
@@ -24,14 +27,24 @@ const REASON_OPTIONS: ReasonOption[] = [
 interface Step1ReasonProps {
   flowHook: ReturnType<typeof useCancellationFlow>;
   startMutation: ReturnType<typeof useStartCancellationFlow>;
+  onClose: () => void;
 }
 
-const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) => {
+const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation, onClose }) => {
   const { state, selectReason, setReasonText, applyStart } = flowHook;
   const [localText, setLocalText] = useState("");
 
+  // Best-effort first name — optional chaining guards against missing data.
+  // CancellationFlowModal always renders inside UserProvider (same as MembershipModal
+  // and Header), so useUserContext() is safe to call here unconditionally.
+  const { userData } = useUserContext();
+  const raw = userData?.firstName;
+  const firstName: string | undefined = raw ? raw.split(/\s+/)[0] : undefined;
+
   const isOther = state.reason === "other";
-  const canContinue = state.reason !== null;
+  // "Other" requires the free-text — admin needs to know what "other" means.
+  const otherTextMissing = isOther && localText.trim().length === 0;
+  const canContinue = state.reason !== null && !otherTextMissing;
   const isPending = startMutation.isPending;
 
   const handleReasonChange = (value: CancellationReason) => {
@@ -54,7 +67,7 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
     try {
       const result = await startMutation.mutateAsync({
         reason: state.reason,
-        reasonText: isOther && state.reasonText ? state.reasonText : undefined,
+        reasonText: isOther ? localText.trim() : undefined,
       });
       applyStart({
         eventId: result.eventId,
@@ -67,12 +80,18 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-snug">
-        Help us understand why you&apos;re leaving. We&apos;ll try to make it right.
-      </p>
+    <FlowFrame onClose={onClose}>
+      <IconChip>
+        <MessageCircle size={22} strokeWidth={2} />
+      </IconChip>
+      <Headline>
+        {firstName ? `Before you go, ${firstName} —` : "Before you go —"}
+        <br />
+        what&apos;s making you leave?
+      </Headline>
+      <SubCopy>No hard sell. Tell us honestly and we&apos;ll see if there&apos;s a better fit than cancelling.</SubCopy>
 
-      <fieldset className="flex flex-col gap-2" aria-label="Cancellation reason">
+      <fieldset className="mt-4 flex flex-col gap-2" aria-label="Cancellation reason">
         <legend className="sr-only">Why are you cancelling?</legend>
         {REASON_OPTIONS.map((option) => {
           const isSelected = state.reason === option.value;
@@ -80,10 +99,10 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
             <label
               key={option.value}
               className={cn(
-                "flex items-start gap-3 rounded-xl border cursor-pointer px-3.5 py-3 transition-all duration-150",
+                "flex cursor-pointer items-center gap-3 rounded-[14px] border-[1.5px] px-4 py-3 text-[13px] font-semibold transition-all duration-150",
                 isSelected
-                  ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-700"
-                  : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                  ? "border-red-500 bg-gradient-to-b from-red-50 to-red-100/60 text-red-700 shadow-[0_6px_16px_-10px_rgba(238,0,0,.45)] dark:border-red-700 dark:from-red-950/40 dark:to-red-950/10 dark:text-red-300"
+                  : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:border-neutral-600"
               )}
             >
               <input
@@ -92,31 +111,18 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
                 value={option.value}
                 checked={isSelected}
                 onChange={() => handleReasonChange(option.value)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
+                className="h-4 w-4 shrink-0 accent-red-600"
               />
-              <span
-                className={cn(
-                  "text-sm font-medium leading-snug",
-                  isSelected
-                    ? "text-red-700 dark:text-red-300"
-                    : "text-neutral-800 dark:text-neutral-200"
-                )}
-              >
-                {option.label}
-              </span>
+              {option.label}
             </label>
           );
         })}
       </fieldset>
 
-      {/* Optional free-text for "Other" */}
       {isOther && (
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="cancellation-reason-text"
-            className="text-xs font-medium text-neutral-600 dark:text-neutral-400"
-          >
-            Tell us more <span className="text-neutral-400 dark:text-neutral-500 font-normal">(optional)</span>
+        <div className="mt-3 flex flex-col gap-1.5">
+          <label htmlFor="cancellation-reason-text" className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            Tell us more <span className="font-semibold text-red-600 dark:text-red-400">(required)</span>
           </label>
           <textarea
             id="cancellation-reason-text"
@@ -124,38 +130,32 @@ const Step1Reason: React.FC<Step1ReasonProps> = ({ flowHook, startMutation }) =>
             onChange={handleTextChange}
             maxLength={2000}
             rows={3}
-            placeholder="Anything you'd like to share…"
-            className="w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-200 px-3 py-2.5 resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-400 transition-colors"
+            required
+            aria-required="true"
+            aria-invalid={otherTextMissing}
+            placeholder="Please tell us why so we can improve…"
+            className={cn(
+              "w-full resize-none rounded-[14px] border bg-white px-3 py-2.5 text-sm text-neutral-800 transition-colors placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-500/40 dark:bg-neutral-900 dark:text-neutral-200",
+              otherTextMissing ? "border-red-300 dark:border-red-800" : "border-neutral-200 dark:border-neutral-700"
+            )}
           />
-          <p className="text-right text-2xs text-neutral-400 dark:text-neutral-500">
-            {localText.length}/2000
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-2xs text-red-600 dark:text-red-400">{otherTextMissing ? "This is required to continue." : " "}</p>
+            <p className="text-right text-2xs text-neutral-400 dark:text-neutral-500">{localText.length}/2000</p>
+          </div>
         </div>
       )}
 
-      {/* Error state */}
       {startMutation.isError && (
-        <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-          {startMutation.error instanceof Error
-            ? startMutation.error.message
-            : "Something went wrong. Please try again."}
+        <p className="mt-3 text-xs text-red-600 dark:text-red-400" role="alert">
+          {startMutation.error instanceof Error ? startMutation.error.message : "Something went wrong. Please try again."}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => void handleContinue()}
-        disabled={!canContinue || isPending}
-        className={cn(
-          "w-full rounded-xl px-4 py-3 text-sm font-bold transition-all duration-150",
-          "bg-gradient-to-b from-red-600 to-red-800 text-white border border-red-800",
-          "shadow-[0_6px_16px_rgba(238,0,0,0.22)] hover:[&:not(:disabled)]:-translate-y-px hover:[&:not(:disabled)]:shadow-[0_10px_22px_rgba(238,0,0,0.32)]",
-          "disabled:opacity-50 disabled:cursor-not-allowed"
-        )}
-      >
+      <PrimaryCta className="mt-[18px]" onClick={() => void handleContinue()} disabled={!canContinue || isPending}>
         {isPending ? "Loading…" : "Continue"}
-      </button>
-    </div>
+      </PrimaryCta>
+    </FlowFrame>
   );
 };
 

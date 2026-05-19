@@ -32,7 +32,22 @@ const AcceptOfferSchema = z.object({
   offer: z.enum([...OFFER_TYPES] as [string, ...string[]]),
 });
 
-const Body = z.discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptOfferSchema]);
+const Body = z
+  .discriminatedUnion("action", [StartSchema, OutcomeSchema, AcceptOfferSchema])
+  .superRefine((data, ctx) => {
+    // "other" must carry free-text — admin needs to know what "other" means.
+    if (
+      data.action === "start" &&
+      data.reason === "other" &&
+      (!data.reasonText || data.reasonText.trim().length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reasonText"],
+        message: "reasonText is required when reason is 'other'",
+      });
+    }
+  });
 
 /**
  * POST /api/subscription/cancellation-flow

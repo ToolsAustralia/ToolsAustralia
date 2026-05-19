@@ -123,6 +123,18 @@ export interface SubscriptionBenefits {
   nextBillingDate?: string;
   isCancelled: boolean;
   endDate?: string;
+  /**
+   * Live, active Stripe subscription discount (e.g. the accepted retention
+   * "50% off / 2 months" coupon). Read best-effort from Stripe on the
+   * benefits endpoint; omitted entirely when there is no active discount or
+   * the Stripe read failed. `endsAt` is only present when Stripe truly
+   * provides/derives the discount end (ISO string).
+   */
+  discount?: {
+    couponId: string;
+    percentOff: number;
+    endsAt?: string;
+  };
 }
 
 /** Active subscription branch — narrowed shape used by the section components. */
