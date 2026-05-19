@@ -1769,6 +1769,57 @@ class KlaviyoClient {
   }
 
   /**
+   * Find the E.164 phone number Klaviyo holds for a profile, looked up by email.
+   *
+   * Uses the same profile-search endpoint as `findProfileByEmail` but returns
+   * the `attributes.phone_number` field instead of the profile id. Returns `null`
+   * when the profile does not exist, has no phone, or the request fails.
+   *
+   * @param email - Email address to search for
+   * @returns E.164 phone number if present on the Klaviyo profile, null otherwise
+   */
+  async findProfilePhoneByEmail(email: string): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    if (!email || email.trim() === "") {
+      return null;
+    }
+
+    try {
+      const searchResponse = await Promise.race([
+        this.retryRequest(
+          () => this.makeRequest(`/profiles/?filter=equals(email,"${email}")`, "GET"),
+          2, // Fewer retries for lookup (non-critical)
+          1000 // Shorter delay
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Profile lookup timeout")), 10000)
+        ),
+      ]);
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existingProfile = searchData.data?.[0];
+        const phone = existingProfile?.attributes?.phone_number;
+        if (phone && typeof phone === "string" && phone.trim() !== "") {
+          return phone.trim();
+        }
+      }
+    } catch (error) {
+      // Non-critical — log but don't fail
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage.toLowerCase().includes("timeout");
+      if (!isTimeout && this.mode === "development") {
+        console.warn(`⚠️ Failed to find Klaviyo phone for ${email}:`, errorMessage);
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Merge source Klaviyo profile into destination (source is deleted after async task).
    * @see https://developers.klaviyo.com/en/reference/merge_profiles
    */

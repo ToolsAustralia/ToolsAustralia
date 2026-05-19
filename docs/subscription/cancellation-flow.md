@@ -184,7 +184,7 @@ Request body:
 3. Returns `{ ok: true, couponId: "retention-50off-2mo" }`.
 
 `unsubscribe_marketing` flow (`CancellationFlowService.acceptOffer`):
-1. `applyMarketingUnsubscribe(userId)` — persists `acceptsPromotionalEmail = false` (atomic `updateOne` `$set`) then best-effort `syncKlaviyoEmailMarketingFromAdminPreference(userDoc, false)` (unsubscribes **marketing email + marketing SMS**; transactional / account messages untouched). Klaviyo `success:false` is `console.error`-logged but non-fatal — the DB flag is the source of truth.
+1. `applyMarketingUnsubscribe(userId)` — persists `acceptsPromotionalEmail = false` (atomic `updateOne` `$set`) then best-effort `syncKlaviyoEmailMarketingFromAdminPreference(userDoc, false)` (unsubscribes **marketing email + marketing SMS**; transactional / account messages untouched). Klaviyo `success:false` is `console.error`-logged but non-fatal — the DB flag is the source of truth. (SMS unsubscribe now also fires when no local `User.mobile` — `syncKlaviyoEmailMarketingFromAdminPreference` resolves the Klaviyo-held phone as a fallback; see tracking docs.)
 2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"unsubscribe_marketing" })`.
 3. Returns `{ ok: true }` (no extra data — there is no `resumesAt`/`couponId`).
 

@@ -117,9 +117,24 @@ export async function syncKlaviyoEmailMarketingFromAdminPreference(
       const emailRes = await klaviyo.unsubscribeFromEmailList(profileId, user.email);
       if (!emailRes.success) errors.push(emailRes.error || "Email unsubscribe failed");
 
-      if (phoneE164) {
-        const smsRes = await klaviyo.unsubscribeFromSMSList(profileId, phoneE164);
+      // Resolve the phone number: prefer the locally-stored mobile, fall back to the
+      // phone Klaviyo holds on the profile. This handles members who provided their
+      // phone number during Klaviyo-side subscription flows but never stored it in
+      // User.mobile (pre-existing bug: SMS unsubscribe silently no-oped without a
+      // local mobile).
+      let resolvedPhone = phoneE164;
+      if (!resolvedPhone) {
+        resolvedPhone = await klaviyo.findProfilePhoneByEmail(user.email) ?? undefined;
+      }
+
+      if (resolvedPhone) {
+        const smsRes = await klaviyo.unsubscribeFromSMSList(profileId, resolvedPhone);
         if (!smsRes.success) errors.push(smsRes.error || "SMS marketing unsubscribe failed");
+      } else {
+        // No phone anywhere — genuine no-op for SMS; email unsubscribe already completed above.
+        console.error(
+          `[klaviyo-profile-sync] No phone number found (local or Klaviyo-held) for ${user.email} — SMS marketing unsubscribe skipped`
+        );
       }
     }
 
