@@ -156,6 +156,8 @@
   }
 }
 
+@keyframes ctaShimmer { 0% { transform: translateX(0) skewX(-12deg); } 60%, 100% { transform: translateX(320%) skewX(-12deg); } }
+
 /* Custom Viewport Height Utilities */
 /* Progressive enhancement: vh fallback for older browsers (Safari < 15.4, iOS < 15.4) */
 /* Modern browsers will use svh/dvh, older browsers will use vh fallback */

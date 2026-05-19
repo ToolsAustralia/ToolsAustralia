@@ -11,6 +11,20 @@ import React from "react";
 import { X, ShieldCheck, Award, Lock } from "lucide-react";
 import { cn } from "@/utils/cn";
 
+const TrustFooter: React.FC = () => (
+  <div className="flex items-center justify-between border-t border-neutral-200 px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:border-neutral-700 dark:text-neutral-500 max-xs:px-4">
+    <span className="inline-flex items-center gap-1.5">
+      <ShieldCheck size={12} /> SSL secure
+    </span>
+    <span className="inline-flex items-center gap-1.5">
+      <Award size={12} /> NTP/16264
+    </span>
+    <span className="inline-flex items-center gap-1.5">
+      <Lock size={12} /> Cancel anytime
+    </span>
+  </div>
+);
+
 /** Branded header + body + optional flush trust footer. No progress indicator. */
 export const FlowFrame: React.FC<{
   onClose: () => void;
@@ -39,20 +53,6 @@ export const FlowFrame: React.FC<{
   </div>
 );
 
-export const TrustFooter: React.FC = () => (
-  <div className="flex items-center justify-between border-t border-neutral-200 px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-neutral-400 dark:border-neutral-700 dark:text-neutral-500 max-xs:px-4">
-    <span className="inline-flex items-center gap-1.5">
-      <ShieldCheck size={12} /> SSL secure
-    </span>
-    <span className="inline-flex items-center gap-1.5">
-      <Award size={12} /> NTP/16264
-    </span>
-    <span className="inline-flex items-center gap-1.5">
-      <Lock size={12} /> Cancel anytime
-    </span>
-  </div>
-);
-
 export const IconChip: React.FC<{ children: React.ReactNode; tone?: "red" | "gold" }> = ({
   children,
   tone = "red",
@@ -77,6 +77,7 @@ export const ValueCard: React.FC<{
   <div
     className={cn(
       "relative mt-4 rounded-[20px] border border-neutral-200 bg-gradient-to-b from-white to-neutral-50 p-[18px] shadow-[0_12px_30px_-14px_rgba(0,0,0,.18)] dark:border-neutral-700 dark:from-neutral-900 dark:to-neutral-900/60",
+      /* gold 1px border-gradient: gradient overlay masked so only the inset ring shows */
       glow &&
         "before:pointer-events-none before:absolute before:inset-[-1px] before:rounded-[21px] before:bg-[linear-gradient(135deg,rgba(245,182,20,.7),transparent_45%)] before:[-webkit-mask:linear-gradient(#000_0_0)_content-box,linear-gradient(#000_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] before:p-px",
       className
@@ -89,7 +90,7 @@ export const ValueCard: React.FC<{
 export const FeatureRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="mt-2.5 flex items-center gap-2.5 text-[12.5px] leading-tight text-neutral-700 dark:text-neutral-300">
     <span className="flex h-[21px] w-[21px] flex-shrink-0 items-center justify-center rounded-[7px] bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 6 9 17l-5-5" />
       </svg>
     </span>
@@ -107,7 +108,7 @@ export const PrimaryCta: React.FC<
       "relative w-full overflow-hidden rounded-[15px] bg-gradient-to-b from-red-600 to-red-800 px-4 py-4 text-[14.5px] font-extrabold tracking-tight text-white",
       "shadow-[0_12px_26px_-8px_rgba(238,0,0,.5),inset_0_1px_0_rgba(255,255,255,.25)]",
       "transition-all duration-150 hover:[&:not(:disabled)]:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60",
-      "motion-safe:after:absolute motion-safe:after:inset-y-0 motion-safe:after:-left-3/5 motion-safe:after:w-2/5 motion-safe:after:-skew-x-12 motion-safe:after:bg-[linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent)]",
+      "motion-safe:after:absolute motion-safe:after:inset-y-0 motion-safe:after:-left-1/3 motion-safe:after:w-1/4 motion-safe:after:bg-[linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent)] motion-safe:after:animate-[ctaShimmer_2.6s_ease-in-out_infinite]",
       className
     )}
   >
@@ -133,7 +134,7 @@ export const TextDecline: React.FC<
 /** The single tasteful gold persuasion strip (confirm + bonus-rung loss line). */
 export const UrgencyStrip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="mt-3.5 flex items-center gap-2.5 rounded-[11px] border border-amber-200 bg-gradient-to-b from-amber-50 to-amber-100/60 px-3.5 py-3 dark:border-amber-900/50 dark:from-amber-950/30 dark:to-amber-950/10">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="#f5b614" stroke="#f5b614" className="flex-shrink-0">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" className="flex-shrink-0 text-amber-500 dark:text-amber-300">
       <path d="m12 2 2.4 7.4H22l-6 4.3 2.3 7.3-6.3-4.6L5.7 21 8 13.7 2 9.4h7.6z" />
     </svg>
     <span className="text-[11px] font-semibold leading-snug text-amber-800 dark:text-amber-300">
@@ -142,20 +143,20 @@ export const UrgencyStrip: React.FC<{ children: React.ReactNode }> = ({ children
   </div>
 );
 
-export const Headline: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h2 className="mt-3.5 text-[23px] font-extrabold leading-[1.28] tracking-[-0.025em] text-neutral-900 dark:text-white">
+export const Headline: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <h2 className={cn("mt-3.5 text-[23px] font-extrabold leading-[1.28] tracking-[-0.025em] text-neutral-900 dark:text-white", className)}>
     {children}
   </h2>
 );
 
-export const SubCopy: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="mt-2 text-[13px] leading-relaxed text-neutral-600 dark:text-neutral-400">
+export const SubCopy: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <p className={cn("mt-2 text-[13px] leading-relaxed text-neutral-600 dark:text-neutral-400", className)}>
     {children}
   </p>
 );
 
-export const Eyebrow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mt-1 text-[10.5px] font-extrabold uppercase tracking-[0.13em] text-red-600 dark:text-red-400">
+export const Eyebrow: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <div className={cn("mt-1 text-[10.5px] font-extrabold uppercase tracking-[0.13em] text-red-600 dark:text-red-400", className)}>
     {children}
   </div>
 );
