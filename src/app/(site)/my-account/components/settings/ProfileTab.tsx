@@ -11,11 +11,9 @@ import {
   Sparkles,
   ArrowUpRight,
   Info,
-  Pencil,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
-import Dropdown from "@/components/modals/ui/Dropdown";
 import { useToast } from "@/components/ui/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
@@ -35,6 +33,17 @@ import {
   SettingsButton,
   SettingsBadge,
 } from "./ui/primitives";
+
+// Claude-design profession tiles. Named tiles set `profession` to their label;
+// "Other" opens the free-text input so arbitrary professions still work.
+const PROFESSION_OPTIONS: Array<{ id: string; label: string; emoji: string }> = [
+  { id: "electrician", label: "Electrician", emoji: "⚡" },
+  { id: "plumber", label: "Plumber", emoji: "🔧" },
+  { id: "carpenter", label: "Carpenter", emoji: "🪚" },
+  { id: "mechanic", label: "Mechanic", emoji: "🛠️" },
+  { id: "builder", label: "Builder", emoji: "🏗️" },
+  { id: "other", label: "Other", emoji: "🧰" },
+];
 
 interface ProfileTabProps {
   user: {
@@ -67,8 +76,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   );
   const [isSavingMobile, setIsSavingMobile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  // State / Profession show as design cards; clicking opens the real input.
-  const [editingState, setEditingState] = useState(false);
+  // "Other" profession tile opens the free-text input.
   const [editingProfession, setEditingProfession] = useState(false);
 
   const invalidateAccountData = async () => {
@@ -282,7 +290,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
         <div className="space-y-5">
           {/* Phone number + Date of birth — same row */}
-          <div className="grid sm:grid-cols-2 gap-5 items-start">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 items-start">
             <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400 text-xs font-semibold border-r border-neutral-200 dark:border-neutral-700 pr-2.5 pointer-events-none">
@@ -336,88 +344,132 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             </div>
           </div>
 
-          {/* State + Profession — design cards; click opens the real input */}
-          <div className="grid sm:grid-cols-2 gap-5 items-start">
-            {/* State */}
-            <div className="space-y-1.5">
-              {editingState ? (
-                <Dropdown
-                  options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
-                  value={state}
-                  onChange={setState}
-                  placeholder="Select state"
-                  label="State"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingState(true)}
-                  className="w-full text-left rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3.5 py-3 flex items-center justify-between gap-3 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400">
-                      State
-                    </span>
-                    <span
+          {/* State — Claude design tile grid (codes map 1:1 to real `state`) */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              State
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {AUSTRALIAN_STATES.map((s) => {
+                const active = s.code === state;
+                const restricted = s.code === "SA" || s.code === "ACT";
+                return (
+                  <button
+                    key={s.code}
+                    type="button"
+                    onClick={() => setState(s.code)}
+                    className={cn(
+                      "relative px-3 py-2 rounded-xl border text-left transition-all",
+                      active
+                        ? "border-red-600 bg-red-50 dark:bg-red-950/30 ring-2 ring-red-600/20"
+                        : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700",
+                      restricted && !active && "opacity-60",
+                    )}
+                  >
+                    <p
                       className={cn(
-                        "block text-sm font-semibold truncate mt-0.5",
-                        state ? "text-neutral-900 dark:text-white" : "text-neutral-400 dark:text-neutral-500",
+                        "text-sm font-bold",
+                        active ? "text-red-700 dark:text-red-300" : "text-neutral-900 dark:text-white",
                       )}
                     >
-                      {AUSTRALIAN_STATES.find((s) => s.code === state)?.name ?? "Select state"}
-                    </span>
-                  </span>
-                  <Pencil className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
-              )}
-              {ineligibilityReasons.state && (
-                <p
-                  className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
-                  role="status"
-                >
-                  <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-                  SA and ACT residents cannot participate in giveaways.
-                </p>
-              )}
+                      {s.code}
+                    </p>
+                    <p
+                      className={cn(
+                        "text-[10px] truncate",
+                        active
+                          ? "text-red-600/70 dark:text-red-300/70"
+                          : "text-neutral-500 dark:text-neutral-400",
+                      )}
+                    >
+                      {restricted ? "Not eligible" : s.name}
+                    </p>
+                    {active && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center">
+                        <CheckCircle2 className="w-3 h-3" strokeWidth={3} aria-hidden />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            {ineligibilityReasons.state && (
+              <p
+                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+                role="status"
+              >
+                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                SA and ACT residents cannot participate in giveaways.
+              </p>
+            )}
+          </div>
 
-            {/* Profession */}
-            <div className="space-y-1.5">
-              {editingProfession ? (
-                <Field label="Profession">
-                  <SettingsInput
-                    value={profession}
-                    onChange={(e) => setProfession(e.target.value)}
-                    placeholder="Enter profession"
-                    maxLength={100}
-                    autoFocus
-                  />
-                </Field>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingProfession(true)}
-                  className="w-full text-left rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3.5 py-3 flex items-center justify-between gap-3 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400">
-                      Profession
-                    </span>
-                    <span
+          {/* Profession — Claude design emoji tiles; "Other" opens free text */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Profession
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {PROFESSION_OPTIONS.map((p) => {
+                const isOtherTile = p.id === "other";
+                const matchedNamed = PROFESSION_OPTIONS.some(
+                  (o) => o.id !== "other" && o.label.toLowerCase() === profession.trim().toLowerCase(),
+                );
+                const otherActive =
+                  editingProfession || (!!profession.trim() && !matchedNamed);
+                const active = isOtherTile
+                  ? otherActive
+                  : p.label.toLowerCase() === profession.trim().toLowerCase();
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      if (isOtherTile) {
+                        setEditingProfession(true);
+                        if (matchedNamed) setProfession("");
+                      } else {
+                        setEditingProfession(false);
+                        setProfession(p.label);
+                      }
+                    }}
+                    className={cn(
+                      "px-2 py-2.5 rounded-xl border text-center transition-all",
+                      active
+                        ? "border-red-600 bg-red-50 dark:bg-red-950/30"
+                        : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700",
+                    )}
+                  >
+                    <div className="text-lg leading-none mb-1">{p.emoji}</div>
+                    <p
                       className={cn(
-                        "block text-sm font-semibold truncate mt-0.5",
-                        profession
-                          ? "text-neutral-900 dark:text-white"
-                          : "text-neutral-400 dark:text-neutral-500",
+                        "text-[11px] font-semibold",
+                        active
+                          ? "text-red-700 dark:text-red-300"
+                          : "text-neutral-700 dark:text-neutral-300",
                       )}
                     >
-                      {profession || "Add your profession"}
-                    </span>
-                  </span>
-                  <Pencil className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={2} aria-hidden />
-                </button>
-              )}
+                      {p.label}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
+            {(editingProfession ||
+              (!!profession.trim() &&
+                !PROFESSION_OPTIONS.some(
+                  (o) => o.id !== "other" && o.label.toLowerCase() === profession.trim().toLowerCase(),
+                ))) && (
+              <div className="pt-1">
+                <SettingsInput
+                  value={profession}
+                  onChange={(e) => setProfession(e.target.value)}
+                  placeholder="Enter your profession"
+                  maxLength={100}
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
 
           {/* Eligibility callout — positive */}
