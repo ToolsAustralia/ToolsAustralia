@@ -10,6 +10,31 @@
 - Rewards / redeemables wallet
 - Metrics / activity
 
+### ProfileTab re-skin (Task 3, 2026-05-19)
+
+`src/app/(site)/my-account/components/settings/ProfileTab.tsx` was re-skinned to the redesigned
+look using Task-1 primitives (`Card`, `SectionHeader`, `Field`, `SettingsInput`, `SettingsButton`,
+`SettingsBadge` from `./ui/primitives`). Behavior (handlers, fetches, toasts, modal trigger,
+`Dropdown`/`BirthdatePicker`/`GiveawayEligibilityNotice`) is unchanged.
+
+Key structural changes:
+- **Props**: `ProfileTabProps.user` extended with optional `subscription?: { isActive: boolean }`
+  and `enrichedOneTimePackages?: Array<{ isActive: boolean }>` (additive only; no call-site change
+  needed — `page.tsx` passes the full `UserData` object).
+- **Guest upsell strip**: dark-gradient `Card` shown only when `!subscription.isActive &&
+  !enrichedOneTimePackages.some(p => p.isActive)`. "Join a plan" button uses `useRouter` to push
+  `?tab=subscription`.
+- **Identity cards**: two `Card`-based locked cards (Full name + Email) with `Lock` icon +
+  "Contact support to change" microcopy; rendered in `grid sm:grid-cols-2` within a `<section>`.
+- **Email verification row**: `ShieldCheck` icon card spanning 2 columns; `SettingsBadge
+  tone="success" icon={CheckCircle2}` when verified, `SettingsBadge tone="warning"` + `SettingsButton`
+  (calls `requestModal`) when not.
+- **Phone field**: static `🇦🇺 +61` prefix adornment via `absolute` div + `SettingsInput` with
+  `pl-[5.5rem]`; save/reset via `SettingsButton`.
+- **Positive eligibility callout**: emerald card shown when `!isGiveawayIneligible(...)`.
+- **Profession**: stays free-text `SettingsInput` (emoji tiles intentionally deferred).
+- No sign-out section (index + sidebar already provide it).
+
 ### Settings page (`settings/page.tsx`) — redesign 2026-05-19
 
 The settings page was redesigned with a status-aware index and `?tab=` URL sync:

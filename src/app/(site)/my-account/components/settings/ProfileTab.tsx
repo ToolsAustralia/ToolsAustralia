@@ -1,7 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { Lock } from "lucide-react";
+import {
+  User,
+  Mail,
+  ShieldCheck,
+  Lock,
+  CheckCircle2,
+  Phone,
+  Sparkles,
+  ArrowUpRight,
+  Info,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import Dropdown from "@/components/modals/ui/Dropdown";
 import { useToast } from "@/components/ui/Toast";
@@ -13,7 +24,15 @@ import { formatDisplayName } from "@/utils/display-name";
 import GiveawayEligibilityNotice from "@/components/ui/GiveawayEligibilityNotice";
 import BirthdatePicker from "@/components/ui/BirthdatePicker";
 import { isGiveawayIneligible, getGiveawayIneligibilityReasons } from "@/utils/giveaway-eligibility";
-import { Info } from "lucide-react";
+import { cn } from "@/utils/cn";
+import {
+  Card,
+  SectionHeader,
+  Field,
+  SettingsInput,
+  SettingsButton,
+  SettingsBadge,
+} from "./ui/primitives";
 
 interface ProfileTabProps {
   user: {
@@ -26,6 +45,8 @@ interface ProfileTabProps {
     state?: string;
     profession?: string;
     birthdate?: string;
+    subscription?: { isActive: boolean };
+    enrichedOneTimePackages?: Array<{ isActive: boolean }>;
   };
 }
 
@@ -34,6 +55,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
+  const router = useRouter();
 
   const [mobile, setMobile] = useState(user.mobile || "");
   const [state, setState] = useState(user.state || "");
@@ -117,97 +139,177 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   };
 
   const ineligibilityReasons = getGiveawayIneligibilityReasons(state, birthdate || user.birthdate);
+  const isIneligible = isGiveawayIneligible(state, birthdate || user.birthdate);
+
+  const isGuest =
+    !user.subscription?.isActive &&
+    !(user.enrichedOneTimePackages?.some((p) => p.isActive));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white pb-3 border-b border-gray-200 dark:border-neutral-700">
-          Personal Information
-        </h3>
-      </div>
-
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-            Name
-          </label>
-          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/50 dark:bg-neutral-900/50 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
-            {formatDisplayName(user.firstName, user.lastName)}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-            Email
-          </label>
-          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/50 dark:bg-neutral-900/50 px-3 py-2.5 text-sm text-gray-600 dark:text-gray-400 cursor-not-allowed">
-            {user.email}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email verification</label>
-          <div className="flex flex-col gap-2">
-            <div
-              className={`rounded-lg border px-3 py-2.5 text-sm font-semibold ${
-                user.isEmailVerified
-                  ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400"
-                  : "border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400"
-              }`}
-            >
-              {user.isEmailVerified ? "Verified" : "Not verified"}
+      {/* Guest upsell strip */}
+      {isGuest && (
+        <Card className="overflow-hidden shadow-lift dark:shadow-lift-dark">
+          <div className="grid sm:grid-cols-[1fr_auto] items-center gap-4 p-5 bg-gradient-to-br from-neutral-900 to-neutral-950 text-white rounded-2xl">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
+              </div>
+              <div>
+                <p className="font-poppins font-bold text-base">
+                  Unlock the full Tools Australia experience
+                </p>
+                <p className="text-sm text-white/70 mt-0.5">
+                  Become a member to enter giveaways, claim partner discounts and accumulate entries.
+                </p>
+              </div>
             </div>
-            {!user.isEmailVerified && (
-              <button
-                type="button"
-                onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-                className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md"
+            <SettingsButton
+              variant="dark"
+              size="md"
+              icon={ArrowUpRight}
+              onClick={() =>
+                router.push("/my-account/settings?tab=subscription", { scroll: false })
+              }
+            >
+              Join a plan
+            </SettingsButton>
+          </div>
+        </Card>
+      )}
+
+      {/* Personal Information */}
+      <section>
+        <SectionHeader title="Personal Information" icon={User} accent="red" />
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          {/* Full name identity card */}
+          <Card className="p-4 shadow-lift dark:shadow-lift-dark">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center justify-center">
+                <User className="w-4 h-4" strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                  Full name
+                  <Lock className="w-3 h-3" strokeWidth={2.25} />
+                </p>
+                <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
+                  {formatDisplayName(user.firstName, user.lastName)}
+                </p>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Contact support to change
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Email identity card */}
+          <Card className="p-4 shadow-lift dark:shadow-lift-dark">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 flex items-center justify-center">
+                <Mail className="w-4 h-4" strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                  Email
+                  <Lock className="w-3 h-3" strokeWidth={2.25} />
+                </p>
+                <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate mt-0.5">
+                  {user.email}
+                </p>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Contact support to change
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Email verification row */}
+          <Card className="sm:col-span-2 p-4 shadow-lift dark:shadow-lift-dark">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                    Email verification
+                  </p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                    Used for sign-in &amp; receipts
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {user.isEmailVerified ? (
+                  <SettingsBadge tone="success" icon={CheckCircle2}>
+                    Verified
+                  </SettingsBadge>
+                ) : (
+                  <>
+                    <SettingsBadge tone="warning">Not verified</SettingsBadge>
+                    <SettingsButton
+                      variant="primary"
+                      size="sm"
+                      onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
+                    >
+                      Verify Email
+                    </SettingsButton>
+                  </>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      {/* Contact & Details */}
+      <section>
+        <SectionHeader
+          title="Contact & Details"
+          description="Used for giveaway eligibility and important account alerts."
+          icon={Phone}
+          accent="red"
+        />
+
+        <div className="space-y-5">
+          {/* Phone number */}
+          <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400 text-xs font-semibold border-r border-neutral-200 dark:border-neutral-700 pr-2.5 pointer-events-none">
+                <span className="text-base">🇦🇺</span>
+                <span>+61</span>
+              </div>
+              <SettingsInput
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                placeholder="Enter phone number"
+                inputMode="tel"
+                className="pl-[5.5rem]"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <SettingsButton
+                variant="primary"
+                size="md"
+                onClick={handleSaveMobile}
+                disabled={isSavingMobile}
               >
-                Verify Email
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+                {isSavingMobile ? "Saving..." : "Save phone"}
+              </SettingsButton>
+              <SettingsButton
+                variant="secondary"
+                size="md"
+                onClick={() => setMobile(user.mobile || "")}
+              >
+                Reset
+              </SettingsButton>
+            </div>
+          </Field>
 
-      <div className="pt-6 border-t border-gray-200 dark:border-neutral-700">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white pb-3 border-b border-gray-200 dark:border-neutral-700">
-          Contact & Details
-        </h3>
-      </div>
-
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone number</label>
-          <input
-            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
-            value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
-            placeholder="Enter phone number"
-          />
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleSaveMobile}
-              disabled={isSavingMobile}
-              className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSavingMobile ? "Saving..." : "Save phone"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobile(user.mobile || "")}
-              className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div>
+          {/* State */}
+          <div className="space-y-1.5">
             <Dropdown
               options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
               value={state}
@@ -216,16 +318,18 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               label="State"
             />
             {ineligibilityReasons.state && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+              <p
+                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+                role="status"
+              >
                 <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
                 SA and ACT residents cannot participate in giveaways.
               </p>
             )}
           </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <div>
+          {/* Date of birth */}
+          <div className="space-y-1.5">
             <BirthdatePicker
               value={birthdate}
               onChange={setBirthdate}
@@ -234,52 +338,75 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               placeholder="Select date of birth"
             />
             {ineligibilityReasons.under18 && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300" role="status">
+              <p
+                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+                role="status"
+              >
                 <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
                 You must be 18 or over to participate in giveaways.
               </p>
             )}
           </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Profession</label>
-          <input
-            className="w-full rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:border-red-500 dark:focus:border-red-500 focus:border-l-2 focus:border-l-red-500 focus:outline-none transition-all"
-            value={profession}
-            onChange={(e) => setProfession(e.target.value)}
-            placeholder="Enter profession"
-            maxLength={100}
+          {/* Profession — free text (emoji tiles intentionally deferred) */}
+          <Field label="Profession">
+            <SettingsInput
+              value={profession}
+              onChange={(e) => setProfession(e.target.value)}
+              placeholder="Enter profession"
+              maxLength={100}
+            />
+          </Field>
+
+          {/* Eligibility callout — positive */}
+          {!isIneligible && (
+            <div
+              className={cn(
+                "rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50",
+                "bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 flex items-start gap-3"
+              )}
+            >
+              <CheckCircle2
+                className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
+                strokeWidth={2.25}
+              />
+              <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-200">
+                <span className="font-semibold">You&apos;re eligible to win.</span>{" "}
+                Your state, age and verification all check out.
+              </p>
+            </div>
+          )}
+
+          {/* Ineligibility notice */}
+          <GiveawayEligibilityNotice
+            show={isIneligible}
+            className="pt-1"
           />
-        </div>
 
-        <GiveawayEligibilityNotice
-          show={isGiveawayIneligible(state, birthdate || user.birthdate)}
-          className="pt-1"
-        />
-
-        <div className="flex gap-2 justify-end pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              setState(user.state || "");
-              setProfession(user.profession || "");
-              setBirthdate(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
-            }}
-            className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveProfile}
-            disabled={isSavingProfile}
-            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSavingProfile ? "Saving..." : "Save profile"}
-          </button>
+          {/* Save / Reset profile */}
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+            <SettingsButton
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setState(user.state || "");
+                setProfession(user.profession || "");
+                setBirthdate(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
+              }}
+            >
+              Reset
+            </SettingsButton>
+            <SettingsButton
+              variant="primary"
+              size="md"
+              onClick={handleSaveProfile}
+              disabled={isSavingProfile}
+            >
+              {isSavingProfile ? "Saving..." : "Save profile"}
+            </SettingsButton>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
