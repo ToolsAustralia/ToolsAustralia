@@ -945,6 +945,26 @@ Full cron documentation lives in [`docs/infrastructure/api.md`](../infrastructur
 
 Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, the 90-day retention split (`retained`/`churned`/`pending`), and (Task 21) the same split **per offer** (`retention90ByOffer`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by the §6a maturity cron (Task 20). **Task 21** surfaces `retention90ByOffer` (per-`OfferType` retained/churned/pending using the **identical** `savedAt <= now - 90d` matured cutoff as the overall split and the §6a cron — no skew) in the admin panel so admins can see which offers produce durable saves vs delayed churn. Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
 
+## StepSaveSuccess screen (Task 3)
+
+`src/components/modals/CancellationFlowModal/StepSaveSuccess.tsx`
+
+Post-accept confirmation screen shown instead of the modal silently closing after a retention offer is accepted. Covers: `discount_50_2mo`, `pause_30d`, `unsubscribe_marketing`, `bonus_entries_100`. `tier_downgrade` does **not** use this screen (it exits to the parent downgrade modal). Pure presentation — no API calls, no side effects.
+
+### Props
+
+| Prop | Type | Purpose |
+|---|---|---|
+| `offer` | `OfferType` | Drives the bullet-point copy via the `lines()` helper |
+| `result` | `AcceptResult \| null` | Provides `resumesAt` (pause) / `couponId` (discount) from the accept response |
+| `firstName` | `string?` | Personalises the headline (`"You're all set, {name}."`) |
+| `onClose` | `() => void` | Passed to `FlowFrame` — closes the modal without any further action |
+| `onDone` | `() => void` | CTA handler — wired to the parent's `onSaved()` callback |
+
+### Animation
+
+The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `scaleIn` keyframe (`scale(.6)→scale(1)` with opacity 0→1) is defined in `src/app/globals.css`.
+
 ## Note on shared-ui domain
 
 `src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.

@@ -128,6 +128,10 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 **MajorDrawSection migration (Phase 4, 2026-05-10):** [`MajorDrawSection`](../../src/components/sections/MajorDrawSection.tsx) shipped with four `Swiper` instances (mobile main + thumbs, desktop main + thumbs); Phase 4 replaced them with two `<PrizeImageGallery>` instances (a private inline two-Embla component declared in the same file). One instance is mounted inside the mobile `lg:hidden` layout and the other inside the desktop `hidden lg:grid` layout, so only one runs per viewport and the two have independent `activeIndex` state — matching the original Swiper behaviour. The component renders the bordered main-image card (with the brand-themed glow border + VIEW SPECS overlay) and the dragFree thumb strip together as siblings, accepting render-slot props (`specsButton`, `cardClassName`, `cardStyle`, `mainSizesAttr`, `thumbSizeClassName`, etc.) so per-layout sizing differs without forking the gallery. Pagination dots use the `EmblaPaginationDots` helper (also private to the file) rendered from `mainApi.scrollSnapList()`. Navigation buttons reuse the shared `<EmblaCarouselButton>` primitive. Phase 4 also removed `swiper` and the unused `embla-carousel-autoplay` from `package.json` (zero `from "swiper"` / `import "swiper/css"` hits remain in `src/`), so production builds for routes that include MajorDrawSection (`/`, `/promotions/[slug]`, `/my-account/draws`) drop the Swiper bundle (~50–60kB minified).
 
+### Additional keyframes in globals.css
+
+`@keyframes scaleIn` (Task 3 — cancellation flow): `scale(.6) opacity(0)` → `scale(1) opacity(1)` in 0.35s ease-out. Used by `StepSaveSuccess` check-circle via `motion-safe:animate-[scaleIn_.35s_ease-out]`.
+
 ### Print stylesheet
 
 `@media print` in `globals.css` hides `[data-floating-widget]`, `[data-tracking-pixel]`, `header[data-sticky="true"]`, and any `[data-print="hide"]` element, and forces black-on-white. Tag floating UI / pixel scripts with the matching `data-*` attribute when adding new ones (`RewardsFloatingWidget` and the analytics scripts already do).

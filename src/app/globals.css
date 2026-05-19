@@ -2217,3 +2217,5 @@ html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
 html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
   animation: none !important;
 }
+
+@keyframes scaleIn { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
