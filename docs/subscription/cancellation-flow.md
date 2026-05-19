@@ -2,6 +2,26 @@
 
 Covers the in-app cancellation retention flow: reason capture, offer routing, and event persistence.
 
+## Shared UI Primitives (Redesign)
+
+`src/components/modals/CancellationFlowModal/primitives.tsx` — introduced as part of the "Elevated Guided Conversational" redesign. A pure presentational module (no business logic, no API calls) that all step components import from to maintain visual consistency. Brand colour `#ee0000` + premium-gold accent; full light/dark support via Tailwind `dark:` variants.
+
+### Exported components
+
+| Export | Purpose |
+|---|---|
+| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot + optional `TrustFooter` |
+| `TrustFooter` | SSL / NTP licence / Cancel-anytime strip, rendered flush at the modal bottom |
+| `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"` |
+| `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient |
+| `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard` |
+| `PrimaryCta` | Full-width red gradient CTA button with shimmer `::after` animation |
+| `TextDecline` | Underlined "no thanks" link-style button below `PrimaryCta` |
+| `UrgencyStrip` | Gold persuasion strip with star icon — used once per screen maximum |
+| `Headline` | `<h2>` at 23 px extrabold |
+| `SubCopy` | 13 px body paragraph |
+| `Eyebrow` | 10.5 px uppercase red label above headlines |
+
 ## Reason → Offer Routing
 
 `src/utils/subscription/cancellation-flow-routing.ts` exports `resolveOfferSequence(reason)`, a pure function that maps a `CancellationReason` to an ordered `OfferType[]`.
