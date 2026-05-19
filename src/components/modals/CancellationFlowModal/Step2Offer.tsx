@@ -17,10 +17,11 @@
  *     stops MARKETING email + SMS only; transactional / account emails
  *     (receipts, renewals, draw results) are untouched.
  *
- * Every card is rendered on the shared primitive grammar (FlowFrame / Eyebrow /
+ * Every card is rendered on the shared primitive grammar (FlowFrame /
  * Headline / SubCopy / ValueCard / FeatureRow / PrimaryCta / TextDecline) with
- * a desktop two-column layout and a "Tailored for you · Offer n of total"
- * eyebrow. Accepting pause / discount / unsubscribe / bonus_entries_100 calls
+ * a desktop two-column layout. No offer-count eyebrow is shown — members are
+ * deliberately not told that further offers exist if they decline.
+ * Accepting pause / discount / unsubscribe / bonus_entries_100 calls
  * `onAcceptedOffer(offer, result)` which drives the Save Success screen.
  * tier_downgrade exits via `onRequestTierDowngrade` (parent owns the
  * downgrade modal); bonus_entries_100 delegates to Step3BonusEntries which
@@ -37,7 +38,6 @@ import Step3BonusEntries from "./Step3BonusEntries";
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import {
   FlowFrame,
-  Eyebrow,
   Headline,
   SubCopy,
   ValueCard,
@@ -73,10 +73,6 @@ interface Step2OfferProps {
   entrySnapshot?: CancellationEntrySnapshot | null;
 }
 
-/** "Offer n of total" — the persuasion eyebrow tail. */
-const offerLabelFor = (state: FlowState): string =>
-  `Offer ${state.offerCursor + 1} of ${state.offersShown.length}`;
-
 /** CTA + decline pair, rendered once per breakpoint slot so the two copies can't drift. */
 const OfferActions: React.FC<{
   acceptLabel: string;
@@ -89,7 +85,7 @@ const OfferActions: React.FC<{
   onAccept,
   onDecline,
   disabled = false,
-  declineLabel = "No thanks, show me other options",
+  declineLabel = "No thanks, cancel anyway",
 }) => (
   <>
     <PrimaryCta className="mt-[17px]" onClick={onAccept} disabled={disabled}>
@@ -118,8 +114,6 @@ const TierDowngradeCard: React.FC<TierDowngradeCardProps> = ({
   onDecline,
   onRequestTierDowngrade,
 }) => {
-  const offerLabel = offerLabelFor(state);
-
   const handleAccept = () => {
     // Do NOT record outcome here — the outcome is only recorded if the downgrade
     // is actually confirmed in DowngradeConfirmModal. Pass the eventId to the parent
@@ -132,7 +126,6 @@ const TierDowngradeCard: React.FC<TierDowngradeCardProps> = ({
     <FlowFrame onClose={onClose}>
       <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
         <div>
-          <Eyebrow>Tailored for you · {offerLabel}</Eyebrow>
           <Headline>
             Want something
             <br />
@@ -194,7 +187,6 @@ const PauseOfferCard: React.FC<PauseOfferCardProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { showToast } = useToast();
-  const offerLabel = offerLabelFor(state);
 
   const handleAccept = async () => {
     if (isProcessing) return;
@@ -247,7 +239,6 @@ const PauseOfferCard: React.FC<PauseOfferCardProps> = ({
     <FlowFrame onClose={onClose}>
       <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
         <div>
-          <Eyebrow>Tailored for you · {offerLabel}</Eyebrow>
           <Headline>
             Need a break,
             <br />
@@ -314,7 +305,6 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { showToast } = useToast();
-  const offerLabel = offerLabelFor(state);
 
   // Derive discounted price label from the real current price (50% off).
   // Only populated when the parent supplied a reliable numeric price.
@@ -383,7 +373,6 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
     <FlowFrame onClose={onClose}>
       <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
         <div>
-          <Eyebrow>Tailored for you · {offerLabel}</Eyebrow>
           <Headline>
             Keep everything —
             <br />
@@ -399,7 +388,6 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
               onAccept={() => void handleAccept()}
               onDecline={onDecline}
               disabled={isProcessing}
-              declineLabel="That's okay, show me other options"
             />
           </div>
         </div>
@@ -448,7 +436,6 @@ const DiscountOfferCard: React.FC<DiscountOfferCardProps> = ({
               onAccept={() => void handleAccept()}
               onDecline={onDecline}
               disabled={isProcessing}
-              declineLabel="That's okay, show me other options"
             />
           </div>
         </div>
@@ -510,7 +497,6 @@ const UnsubscribeOfferCard: React.FC<UnsubscribeOfferCardProps> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { showToast } = useToast();
-  const offerLabel = offerLabelFor(state);
 
   const handleAccept = async () => {
     if (isProcessing) return;
@@ -562,7 +548,6 @@ const UnsubscribeOfferCard: React.FC<UnsubscribeOfferCardProps> = ({
     <FlowFrame onClose={onClose}>
       <div className="lg:grid lg:grid-cols-2 lg:items-center lg:gap-6">
         <div>
-          <Eyebrow>Tailored for you · {offerLabel}</Eyebrow>
           <Headline>
             Too much
             <br />

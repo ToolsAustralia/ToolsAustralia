@@ -164,9 +164,3 @@ export const SubCopy: React.FC<{ children: React.ReactNode; className?: string }
     {children}
   </p>
 );
-
-export const Eyebrow: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
-  <div className={cn("mt-1 text-[10.5px] font-extrabold uppercase tracking-[0.13em] text-red-600 dark:text-red-400", className)}>
-    {children}
-  </div>
-);

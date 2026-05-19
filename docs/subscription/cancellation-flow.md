@@ -261,7 +261,6 @@ Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 | `UrgencyStrip` | Gold persuasion strip with star icon — used once per screen maximum. |
 | `Headline` | `<h2>` at 23 px extrabold. Accepts `className`. |
 | `SubCopy` | 13 px body paragraph. Accepts `className`. |
-| `Eyebrow` | 10.5 px uppercase red label above headlines. Accepts `className`. |
 
 These primitives replace the old in-modal `upsell-shell` (`InfoGrid` / `UrgencyBanner` / `TrustBar`) usage. The `upsell-shell` components are not used inside `CancellationFlowModal` steps.
 
@@ -387,13 +386,13 @@ A best-effort first-name greeting is shown: `useUserContext()` is called uncondi
 
 Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhaustive typed `switch (offer: OfferType)` with a `never`-guard `default` so TypeScript errors if a new `OfferType` is added without handling it.
 
-**Visual grammar:** all four offer cards (`DiscountOfferCard`, `PauseOfferCard`, `UnsubscribeOfferCard`, `TierDowngradeCard`) are built on the shared primitive grammar (`FlowFrame`/`Eyebrow`/`Headline`/`SubCopy`/`ValueCard`/`FeatureRow`/`PrimaryCta`/`TextDecline`). The old `upsell-shell` `InfoGrid`/`UrgencyBanner`/`TrustBar` and all `lucide-react` icons are not used in this file.
+**Visual grammar:** all four offer cards (`DiscountOfferCard`, `PauseOfferCard`, `UnsubscribeOfferCard`, `TierDowngradeCard`) are built on the shared primitive grammar (`FlowFrame`/`Headline`/`SubCopy`/`ValueCard`/`FeatureRow`/`PrimaryCta`/`TextDecline`). The old `upsell-shell` `InfoGrid`/`UrgencyBanner`/`TrustBar` and all `lucide-react` icons are not used in this file.
 
-**Eyebrow:** every card shows a `Tailored for you · Offer n of total` eyebrow (`Offer ${offerCursor + 1} of ${offersShown.length}`).
+**No offer-count eyebrow:** offer cards deliberately show no eyebrow. The previous `Tailored for you · Offer n of total` label (and its `offerLabelFor` helper / shared `Eyebrow` primitive) was removed — members must not be told that further offers exist if they decline, so `Headline` is the first element in each card's copy column.
 
 **Desktop layout:** each card uses `lg:grid lg:grid-cols-2 lg:items-center lg:gap-6`: copy + CTA in column 1, `ValueCard` + mobile CTA in column 2.
 
-**`OfferActions` (module-private):** renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each offer card renders `OfferActions` twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift.
+**`OfferActions` (module-private):** renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each offer card renders `OfferActions` twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift. The default `declineLabel` is `"No thanks, cancel anyway"` and **every** offer card relies on that default (no per-card override) — the decline link must read as a plain cancel and never hint that more offers exist. Mechanically, declining a non-final rung still advances to the next offer (unchanged behaviour) — only the copy reads as a plain cancel.
 
 **Props:**
 - `onAcceptedOffer: (offer: OfferType, result: AcceptResult | null) => void` — set by `index.tsx` to `flowHook.markSaved`. Called by each card after a successful accept; routes to Save Success. **`tier_downgrade` does NOT call this** — it exits via `onRequestTierDowngrade` instead.
