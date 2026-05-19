@@ -363,11 +363,25 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
               icon={Trophy}
               accent="amber"
             />
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: `repeat(${ladder.length}, minmax(0, 1fr))` }}
-            >
-              {ladder.map((t, i) => {
+            <div className="relative">
+              {/* Track — base + colored progress to the current tier */}
+              <div className="absolute left-7 right-7 top-7 h-1 rounded-full bg-neutral-200 dark:bg-neutral-800" />
+              {currentIdx >= 0 && (
+                <div
+                  className="absolute left-7 top-7 h-1 rounded-full"
+                  style={{
+                    width: `calc((100% - 3.5rem) * ${
+                      ladder.length > 1 ? currentIdx / (ladder.length - 1) : 0
+                    })`,
+                    backgroundColor: accent,
+                  }}
+                />
+              )}
+              <div
+                className="relative grid gap-3"
+                style={{ gridTemplateColumns: `repeat(${ladder.length}, minmax(0, 1fr))` }}
+              >
+                {ladder.map((t, i) => {
                 const reached = currentIdx >= 0 && i <= currentIdx;
                 const tierIcon = getPackageIconByName(t.name, "subscription");
                 return (
@@ -414,6 +428,7 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
                   </div>
                 );
               })}
+              </div>
             </div>
           </Card>
         )}
