@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { PROFESSIONS, isPredefinedProfession } from "@/data/professions";
 import { useToast } from "@/components/ui/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
@@ -34,16 +35,30 @@ import {
   SettingsBadge,
 } from "./ui/primitives";
 
-// Claude-design profession tiles. Named tiles set `profession` to their label;
-// "Other" opens the free-text input so arbitrary professions still work.
-const PROFESSION_OPTIONS: Array<{ id: string; label: string; emoji: string }> = [
-  { id: "electrician", label: "Electrician", emoji: "⚡" },
-  { id: "plumber", label: "Plumber", emoji: "🔧" },
-  { id: "carpenter", label: "Carpenter", emoji: "🪚" },
-  { id: "mechanic", label: "Mechanic", emoji: "🛠️" },
-  { id: "builder", label: "Builder", emoji: "🏗️" },
-  { id: "other", label: "Other", emoji: "🧰" },
-];
+// Claude-design profession tiles, sourced from the canonical PROFESSIONS list
+// (src/data/professions.ts) so every profession in the dropdown is shown.
+// Named tiles set `profession` to the canonical value; "Other" opens the
+// free-text input so arbitrary professions still work.
+const PROFESSION_EMOJI: Record<string, string> = {
+  Builder: "🏗️",
+  Electrician: "⚡",
+  Plumber: "🔧",
+  Construction: "👷",
+  Mechanic: "🛠️",
+  Landscaper: "🌿",
+  Welder: "🔥",
+  Bricklayer: "🧱",
+  Concreter: "🪨",
+  "Fitter & Turner": "⚙️",
+  Painter: "🎨",
+  Other: "🧰",
+};
+const PROFESSION_OPTIONS: Array<{ id: string; label: string; emoji: string }> =
+  PROFESSIONS.map((p) => ({
+    id: p.value,
+    label: p.label,
+    emoji: PROFESSION_EMOJI[p.value] ?? "🧰",
+  }));
 
 interface ProfileTabProps {
   user: {
@@ -411,15 +426,14 @@ export default function ProfileTab({ user }: ProfileTabProps) {
             </label>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {PROFESSION_OPTIONS.map((p) => {
-                const isOtherTile = p.id === "other";
-                const matchedNamed = PROFESSION_OPTIONS.some(
-                  (o) => o.id !== "other" && o.label.toLowerCase() === profession.trim().toLowerCase(),
-                );
+                const isOtherTile = p.id === "Other";
+                const hasPredefined = isPredefinedProfession(profession.trim());
                 const otherActive =
-                  editingProfession || (!!profession.trim() && !matchedNamed);
+                  editingProfession || (!!profession.trim() && !hasPredefined);
                 const active = isOtherTile
                   ? otherActive
-                  : p.label.toLowerCase() === profession.trim().toLowerCase();
+                  : hasPredefined &&
+                    p.label.toLowerCase() === profession.trim().toLowerCase();
                 return (
                   <button
                     key={p.id}
@@ -427,7 +441,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                     onClick={() => {
                       if (isOtherTile) {
                         setEditingProfession(true);
-                        if (matchedNamed) setProfession("");
+                        if (hasPredefined) setProfession("");
                       } else {
                         setEditingProfession(false);
                         setProfession(p.label);
@@ -456,10 +470,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               })}
             </div>
             {(editingProfession ||
-              (!!profession.trim() &&
-                !PROFESSION_OPTIONS.some(
-                  (o) => o.id !== "other" && o.label.toLowerCase() === profession.trim().toLowerCase(),
-                ))) && (
+              (!!profession.trim() && !isPredefinedProfession(profession.trim()))) && (
               <div className="pt-1">
                 <SettingsInput
                   value={profession}
