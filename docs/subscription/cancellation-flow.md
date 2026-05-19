@@ -8,19 +8,23 @@ Covers the in-app cancellation retention flow: reason capture, offer routing, an
 
 ### Routing table
 
-| Reason | Lead offer(s) | Full sequence |
-|---|---|---|
-| `too_expensive` | `discount_50_2mo` | `discount_50_2mo` → `bonus_entries_100` |
-| `prefer_cheaper` | `tier_downgrade` | `tier_downgrade` → `bonus_entries_100` |
-| `dont_use_benefits` | `pause_30d` | `pause_30d` → `bonus_entries_100` |
-| `too_many_messages` | `unsubscribe_marketing` | `unsubscribe_marketing` → `bonus_entries_100` |
-| `joined_for_giveaway` | `bonus_entries_100` | `bonus_entries_100` |
-| `havent_won` | `bonus_entries_100` | `bonus_entries_100` |
-| `other` | `pause_30d`, `discount_50_2mo` | `pause_30d` → `discount_50_2mo` → `bonus_entries_100` |
+Each reason maps to an **explicit, user-confirmed sequence** — there is no universal appending rule.
 
-### Universal final rung rule
+| Reason | Full sequence (order matters) |
+|---|---|
+| `too_expensive` | `discount_50_2mo` → `pause_30d` → `tier_downgrade` → `bonus_entries_100` |
+| `prefer_cheaper` | `tier_downgrade` → `discount_50_2mo` → `pause_30d` → `bonus_entries_100` |
+| `dont_use_benefits` | `pause_30d` → `discount_50_2mo` → `tier_downgrade` → `bonus_entries_100` |
+| `too_many_messages` | `unsubscribe_marketing` → `pause_30d` → `discount_50_2mo` → `tier_downgrade` → `bonus_entries_100` |
+| `joined_for_giveaway` | `bonus_entries_100` → `discount_50_2mo` → `tier_downgrade` → `pause_30d` |
+| `havent_won` | `bonus_entries_100` → `discount_50_2mo` → `tier_downgrade` → `pause_30d` |
+| `other` | `discount_50_2mo` → `tier_downgrade` → `pause_30d` → `bonus_entries_100` |
 
-`bonus_entries_100` is appended as the last offer for every reason **except** when it is already the sole lead offer (`joined_for_giveaway`, `havent_won`). Those reasons return `["bonus_entries_100"]` directly — no duplication.
+### Placement rules
+
+- **`unsubscribe_marketing`** appears **only** as the lead for `too_many_messages` — it is not in any other reason's sequence.
+- **`bonus_entries_100`** is placed explicitly per-reason: it **leads** for `joined_for_giveaway` and `havent_won` (members who care most about draws), and appears **last** for all other reasons. It is never duplicated.
+- The old "universal final rung rule" (append `bonus_entries_100` last unless sole lead) has been replaced entirely by these explicit sequences.
 
 ### Types
 
@@ -447,15 +451,15 @@ All cancel logic is preserved verbatim: the `/api/stripe/cancel-subscription` PO
 
 The OFFER phase walks `offersShown` rung-by-rung (cursor-driven) — declining a non-last rung renders the next rung (still step 2); declining the last rung → Step 4. Accepting any rung → Save Success (except `tier_downgrade` → exits to downgrade modal). The "screen sequence" column lists every screen the user sees, in order:
 
-| Reason | offersShown | Screen sequence (each decline = next rung) |
+| Reason | offersShown (full sequence; eligibility may filter) | Screen sequence (each decline = next rung) |
 |---|---|---|
-| `too_expensive` | `[discount_50_2mo, bonus_entries_100]` | Reason → discount card → +100 card → Confirm |
-| `prefer_cheaper` | `[tier_downgrade, bonus_entries_100]` | Reason → tier_downgrade card → +100 card → Confirm |
-| `dont_use_benefits` | `[pause_30d, bonus_entries_100]` | Reason → pause card → +100 card → Confirm |
-| `too_many_messages` | `[unsubscribe_marketing, bonus_entries_100]` | Reason → unsubscribe card → +100 card → Confirm |
-| `joined_for_giveaway` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
-| `havent_won` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
-| `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | Reason → pause card → discount card → +100 card (3-rung; middle rung no longer skipped) → Confirm |
+| `too_expensive` | `[discount_50_2mo, pause_30d, tier_downgrade, bonus_entries_100]` | Reason → discount card → pause card → downgrade card → +100 card → Confirm |
+| `prefer_cheaper` | `[tier_downgrade, discount_50_2mo, pause_30d, bonus_entries_100]` | Reason → downgrade card → discount card → pause card → +100 card → Confirm |
+| `dont_use_benefits` | `[pause_30d, discount_50_2mo, tier_downgrade, bonus_entries_100]` | Reason → pause card → discount card → downgrade card → +100 card → Confirm |
+| `too_many_messages` | `[unsubscribe_marketing, pause_30d, discount_50_2mo, tier_downgrade, bonus_entries_100]` | Reason → unsubscribe card → pause card → discount card → downgrade card → +100 card → Confirm |
+| `joined_for_giveaway` | `[bonus_entries_100, discount_50_2mo, tier_downgrade, pause_30d]` | Reason → +100 card → discount card → downgrade card → pause card → Confirm |
+| `havent_won` | `[bonus_entries_100, discount_50_2mo, tier_downgrade, pause_30d]` | Reason → +100 card → discount card → downgrade card → pause card → Confirm |
+| `other` | `[discount_50_2mo, tier_downgrade, pause_30d, bonus_entries_100]` | Reason → discount card → downgrade card → pause card → +100 card → Confirm |
 | **Past-due (any reason)** | `[]` | Reason → Confirm (resolve-payment variant) |
 
 Notes:
