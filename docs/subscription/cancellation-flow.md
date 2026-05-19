@@ -371,6 +371,10 @@ Pure presentation — no API calls, no side effects.
 
 The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `scaleIn` keyframe is defined in `src/app/globals.css`.
 
+**firstName wiring:** `index.tsx` derives the best-effort first name from `useUserContext()` — identical derivation to `Step1Reason` (`userData?.firstName`, first whitespace token, `undefined` fallback) — and passes it as `firstName` to `StepSaveSuccess`. The modal always renders inside `UserProvider`; no additional fetch or prop threading is required.
+
+**Confetti on mount:** `StepSaveSuccess` calls `useConfetti` and fires a single burst via `useEffect` on mount. The burst is gated: it only fires when `typeof window !== "undefined"` (SSR-safe) AND `window.matchMedia("(prefers-reduced-motion: reduce)").matches` is false. Uses `{ duration: 1500, particleCount: 40, origin: "top" }` — a light single burst, not looping.
+
 ### Step 1 — `Step1Reason.tsx`
 
 Restyled onto the shared primitive grammar (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `PrimaryCta`). All existing logic is preserved: `selectReason`, `setReasonText`, `applyStart`, `handleContinue`, `handleReasonChange`, `handleTextChange`, `otherTextMissing`, `canContinue`, `isPending`, `isOther`, `REASON_OPTIONS`, the mandatory "Other" free-text + character counter + error.

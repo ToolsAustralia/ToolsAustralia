@@ -39,6 +39,7 @@ import Step1Reason from "./Step1Reason";
 import Step2Offer from "./Step2Offer";
 import Step4Confirm from "./Step4Confirm";
 import type { CancellationFlowModalProps } from "./types";
+import { useUserContext } from "@/contexts/UserContext";
 
 const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   isOpen,
@@ -52,6 +53,13 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
   // Mobile + tablet (< lg) → slide-up sheet + near-fullscreen (mobileFullBleed).
   // Desktop (≥ lg) → centered dialog.
   const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
+
+  // Best-effort first name — mirrors Step1Reason exactly. Optional-chain guards
+  // against missing data. CancellationFlowModal always renders inside UserProvider
+  // (same as Step1Reason, MembershipModal, and Header), so this call is safe.
+  const { userData } = useUserContext();
+  const raw = userData?.firstName;
+  const firstName: string | undefined = raw ? raw.split(/\s+/)[0] : undefined;
 
   const flowHook = useCancellationFlow();
   const { state, requestExit, reset } = flowHook;
@@ -145,6 +153,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
           <StepSaveSuccess
             offer={state.acceptedOffer}
             result={state.acceptResult}
+            firstName={firstName}
             onClose={handleHeaderClose}
             onDone={onSaved}
           />
