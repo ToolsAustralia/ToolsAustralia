@@ -19,6 +19,7 @@
  */
 
 import React, { useState } from "react";
+import { OFFER_TYPES } from "@/models/CancellationFlowEvent";
 import type { OfferType } from "@/models/CancellationFlowEvent";
 import type { FlowState } from "@/components/modals/CancellationFlowModal/types";
 import Step1Reason from "@/components/modals/CancellationFlowModal/Step1Reason";
@@ -216,13 +217,7 @@ function Step1Panel({ width }: { width: number }) {
 // Main harness component
 // ---------------------------------------------------------------------------
 
-const ALL_OFFERS: OfferType[] = [
-  "discount_50_2mo",
-  "tier_downgrade",
-  "pause_30d",
-  "unsubscribe_marketing",
-  "bonus_entries_100",
-];
+const ALL_OFFERS: OfferType[] = [...OFFER_TYPES];
 
 const SAVE_SUCCESS_OFFERS: OfferType[] = [
   "discount_50_2mo",

@@ -62,7 +62,9 @@ When a modal is moved from a monolith `.tsx` file to a folder structure (`/index
 | Step 4 — normal | `Step4Confirm` | Standard confirm screen |
 | Step 4 — past-due | `Step4Confirm` | `pastDue=true` — payment-attention variant |
 
-**Mock strategy:** All mutations are no-op objects shaped like a TanStack Query `useMutation` result, cast `as never` to satisfy production prop types without weakening them. No network calls are made — clicking Accept/Decline/Cancel is a no-op.
+**Mock strategy:** All mutations are no-op objects shaped like a TanStack Query `useMutation` result, cast `as never` to satisfy production prop types without weakening them. Clicking Accept/Decline on Step2Offer and the confirm/back buttons on Step4Confirm all go through these mocked mutations — no network calls are made for those actions.
+
+**Caveat — Step4Confirm "Cancel anyway" CTA:** The "No thanks, cancel anyway" text-link inside `Step4Confirm` calls `fetch("/api/stripe/cancel-subscription")` directly inside the component (structural, not via the mocked mutation). This cannot be intercepted by the harness. Clicking it in dev with no active subscription will fire a real API request and return a 401/403. Do not click it during visual QA; treat it as a structural test only if you have a real dev subscription to cancel.
 
 **No `onSaved` on Step2Offer** — that prop was removed in Task 7; the harness passes only the current `Step2OfferProps` interface.
 
