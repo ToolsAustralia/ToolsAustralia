@@ -240,6 +240,9 @@ export default function PartnerHero({ onBecomePartnerAction }: PartnerHeroProps)
         </div>
       </div>
       <div className="py-6 sm:py-8 lg:py-10 w-full relative z-10">
+        <p className="text-center text-white/90 font-['Inter'] font-semibold text-sm sm:text-base lg:text-lg tracking-wide mb-4 sm:mb-6 drop-shadow-md">
+          WIN AUSTRALIA&apos;S TOP TOOL BRANDS
+        </p>
         <BrandScroller speed={800} speedMobile={400} />
       </div>
     </section>

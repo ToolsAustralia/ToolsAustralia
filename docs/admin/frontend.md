@@ -280,6 +280,14 @@ Success (green) and error (red) panels use `{color}-50` light backgrounds with `
 
 Admin uses [AdminThemeContext](../theme/architecture.md#three-contexts) — separate from member theme.
 
+## A/B variant editor — membership section theme
+
+`VariantConfigEditor` has a "Membership Section Theme" section with a
+**Force light mode on the membership section** checkbox bound to
+`config.membershipTheme.forceLight`. Leave OFF for the control variant; ON for
+the treatment variant of the site-wide membership dark-mode A/B test. See
+docs/ab-testing/architecture.md.
+
 ## Cancellation Flow Analytics view (Admin > Analytics > Cancellation Flow) — Task 18
 
 [src/components/admin/CancellationFlowAnalytics.tsx](../../src/components/admin/CancellationFlowAnalytics.tsx) is a **read-only** panel mounted as the `cancellation-flow` tab in the Analytics sidebar group (`AdminSidebar` group `analytics`, rendered by `AdminPage` on `selectedTab === "cancellation-flow"`). No mutations, no charts library — reuses the same `StatCard` / table / CSS-bar primitives as sibling panels (matches `UpsellMultiplierPanel` styling).

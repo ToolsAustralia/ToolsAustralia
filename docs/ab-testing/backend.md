@@ -19,3 +19,11 @@ Brief: dedupe-aware aggregations compute conversion rates per variant; statistic
 [src/app/api/ab-testing/](../../src/app/api/ab-testing/) — assignment endpoint, conversion tracking endpoint, dashboard data.
 
 > _TODO: read each handler._
+
+### VariantConfig.membershipTheme
+
+`VariantConfig` (src/models/ab-testing/Variant.ts) has an optional
+`membershipTheme?: { forceLight?: boolean }`. `VariantConfigService`
+defaults it to `{ forceLight: false }`, merges it, and validates that
+`forceLight` is a boolean. Treatment variant sets `forceLight: true` to force
+the membership section to light mode.

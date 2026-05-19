@@ -9,6 +9,7 @@ const MembershipModal = dynamic(() => import("@/components/modals/MembershipModa
   ssr: false,
 });
 import { useMemberships } from "@/hooks/useMemberships";
+import { useMembershipThemeExperiment } from "@/hooks/ab-testing/useMembershipThemeExperiment";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -55,7 +56,8 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
-  const isDark = useThemeStore((s) => s.theme === "dark");
+  const { forceLight } = useMembershipThemeExperiment();
+  const isDark = useThemeStore((s) => s.theme === "dark") && !forceLight;
   const theme = usePromoTheme();
   const promoThemeSlug = usePromoThemeStore((s) => s.slug);
   const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);

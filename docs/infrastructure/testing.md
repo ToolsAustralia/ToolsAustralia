@@ -36,6 +36,10 @@ npm run test:upsell-shell           # UpsellHero, InfoGrid, UrgencyBanner, Trust
 npm run test:cancellation-flow-hook # pure step-machine reducer (offerPhaseFor/nextOfferState) — locks the cursor-driven OFFER phase incl. the 3-rung `other` waterfall
 ```
 
+- `npm run test:variant-config-membership-theme` — standalone `tsx` unit test
+  for `VariantConfig.membershipTheme.forceLight` default/merge/validation
+  (A/B membership dark-mode test).
+
 ## Dashboard stats snapshot scripts
 
 | npm script | purpose |
