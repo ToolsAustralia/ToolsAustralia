@@ -80,7 +80,7 @@ portal, `hasFailedRenewal`, sign-out logic **exactly as-is**. Redesign the body:
   - Identity card: initials avatar, real `firstName/lastName` (`formatDisplayName`), real `email`, status badge — `Tier name` (member) / `Past due` (`hasFailedRenewal`) / `Guest` (no active subscription).
   - Past-due hero (only when `hasFailedRenewal`): red `animate-pulse-ring` card → opens Subscription tab.
   - Guest CTA (only when no active plan): dark high-contrast card → opens Subscription tab.
-  - Tab preview cards (real data): Profile → "Verified"/"Not verified"; Subscription → `Tier · $price/mo · Next billing <date>` / "Payment failed — tap to resolve" / "No active plan"; Password → static label "Change your account password" (no "last changed" data → **flag**); Payment → `Visa •••• 4242 · Default` from `savedPaymentMethods`, or "No cards saved".
+  - Tab preview cards (real data): Profile → "Verified"/"Not verified"; Subscription → `Tier · $price/mo · Next billing <date>` / "Payment failed — tap to resolve" / "No active plan"; Password → static label "Change your account password" (no "last changed" data → **flag**); Payment → from `user.savedPaymentMethods` (shape is only `{paymentMethodId,isDefault,createdAt}`, **no brand/last4** — those live in Stripe via `PaymentMethodsTab`): show `"<n> card<s> saved · Default set"` / `"<n> card<s> saved"` / `"No cards saved"`. Brand/last4 in the preview is **flagged** (would need a Stripe read not currently on this page).
   - Sign-out card → existing `handleSignOut`.
 - **Tab view** (`activeSection != null`):
   - Desktop: two-column `grid-cols-[260px_1fr]` — persistent vertical `SettingsSidebar` + tab content.
@@ -147,6 +147,7 @@ A single tracking section will be added to `docs/dashboard-account/frontend.md`
 4. Profile profession emoji-tiles + State button-grid — changes field semantics.
 5. SMS 2FA — backend not implemented ("Coming soon" placeholder rendered).
 6. Index "password last changed N days ago" preview — no backing data (generic label used).
+7. Index payment preview brand/last4 (e.g. "Visa •••• 4242") — `user.savedPaymentMethods` has no brand/last4; count/default used instead.
 
 ## 7. Non-goals
 
