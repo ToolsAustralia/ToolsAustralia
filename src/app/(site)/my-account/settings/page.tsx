@@ -18,6 +18,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { formatDisplayName } from "@/utils/display-name";
 import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
 import { useSavedPaymentMethods } from "@/hooks/useSavedPaymentMethods";
+import MembershipBadge from "@/components/ui/MembershipBadge";
 import { SettingsBadge } from "../components/settings/ui/primitives";
 import SettingsSidebar, { SETTINGS_TABS, VALID_TAB_IDS, type SettingsSection } from "../components/settings/SettingsSidebar";
 
@@ -188,12 +189,8 @@ export default function SettingsPage() {
   const isGuest = userState === "guest";
   const isPastDue = userState === "past_due";
 
-  // Full display name and initials for identity card
+  // Display name for the identity card.
   const displayName = formatDisplayName(user.firstName, user.lastName) || user.email;
-  const initials = [user.firstName, user.lastName]
-    .filter(Boolean)
-    .map((n) => (n as string).charAt(0).toUpperCase())
-    .join("") || user.email.charAt(0).toUpperCase();
 
   // Subscription card summary
   const subscriptionEndDate = user.subscription?.endDate
@@ -272,15 +269,6 @@ export default function SettingsPage() {
         <div className="max-w-3xl mx-auto px-3 sm:px-6 py-5 sm:py-8">
           {/* Identity card */}
           <div className="flex items-center gap-4 p-5 mb-5 rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lift dark:shadow-lift-dark">
-            <div
-              className={`w-14 h-14 rounded-2xl font-poppins font-bold text-xl text-white flex items-center justify-center shadow-lg ${
-                isGuest
-                  ? "bg-neutral-400 dark:bg-neutral-700 shadow-neutral-400/20"
-                  : "bg-gradient-to-br from-red-500 to-red-700 shadow-red-600/20"
-              }`}
-            >
-              {initials}
-            </div>
             <div className="flex-1 min-w-0">
               <h2 className="font-poppins font-bold text-base sm:text-lg text-neutral-900 dark:text-white truncate">
                 {displayName}
@@ -289,11 +277,19 @@ export default function SettingsPage() {
                 {user.email}
               </p>
             </div>
-            {!isGuest && !isPastDue && (
-              <SettingsBadge tone="success" icon={CheckCircle2}>
-                {tierLabel ?? "Member"}
-              </SettingsBadge>
-            )}
+            {!isGuest && !isPastDue &&
+              (user.subscriptionPackageData ? (
+                <MembershipBadge
+                  packageData={user.subscriptionPackageData}
+                  isActive
+                  membershipType={user.subscriptionPackageData.type ?? "subscription"}
+                  className="shrink-0"
+                />
+              ) : (
+                <SettingsBadge tone="success" icon={CheckCircle2}>
+                  Member
+                </SettingsBadge>
+              ))}
             {isPastDue && (
               <SettingsBadge tone="danger" icon={AlertTriangle}>
                 Past due
