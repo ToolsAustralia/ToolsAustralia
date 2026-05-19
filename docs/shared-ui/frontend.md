@@ -299,3 +299,16 @@ Fullpage modal for browsing a gallery of winner / prize / draw photos. Used by `
 #### Companion
 
 `FullscreenTriggerButton` — small expand-icon button used by callsites to open the viewer.
+
+## SubscriptionManagementModal / PaymentMethodsTab — settings redesign variant (2026-05-19)
+
+Both expose an opt-in `settingsRedesign?: boolean` prop (default false), set **only**
+by the settings page wrappers (`SubscriptionTab.tsx` / `PaymentTab.tsx`, alongside
+`renderAsPanel`). When true the panel body renders a new presentational component
+(`SettingsRedesignSubscription.tsx` / `SettingsRedesignPayment.tsx`) using the Claude
+settings design + Phase-1 settings primitives, while ALL hooks/handlers/derived
+values/Stripe `Elements`+`stripePromise` singleton/child modals/`ConfirmationModal`
+stay in the orchestrators unchanged. Modal-mode callers (`MembershipStatus`) and the
+`SettingsModal` panel embed do **not** set the prop, so their render is
+byte-behavior-identical. See `docs/dashboard-account/frontend.md` for the full
+Phase-2 write-up and the remaining flagged follow-ups.

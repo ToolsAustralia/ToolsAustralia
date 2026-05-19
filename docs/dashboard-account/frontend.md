@@ -112,23 +112,31 @@ No sign-out section (index + sidebar already provide it). Profession stays free-
 Full `primitives`-based re-skin. Password security-score dial and security checklist omitted (no backing data).
 `htmlFor`/`id` a11y wiring applied to all password fields.
 
-#### `SubscriptionTab.tsx` and `PaymentTab.tsx` — chrome alignment only
+### Settings Redesign Phase 2 (2026-05-19)
 
-Both wrappers had `<div className="space-y-4">` changed to `<div className="space-y-6">` to match
-the vertical rhythm of the re-skinned shell and sibling tabs. No other changes: `dynamic()` imports,
-embedded component props, and `renderAsPanel` flag are untouched.
+Resolves the bulk of the earlier flag list. **Frontend-only; no backend/hook/service/model/endpoint change.**
 
-#### Flagged / deferred design elements (NOT implemented — follow-ups)
+**Phase A — polish:**
+- Removed the index "Member since …" footer.
+- Renamed the tab **Profile → "Account details"** (sidebar `label`, `shortLabel: "Account"`; tab `id` stays `profile` so `?tab=profile` deep links/`VALID_TAB_IDS` are unaffected). Disambiguates from the bottom-nav "Profile" (=/my-account).
+- Added top spacing (`pt-6 sm:pt-8 lg:pt-0`) between the mobile sticky tab strip and tab content.
+- **Password security score** is now implemented (`PasswordTab.tsx`) as a **pure, deterministic, frontend-only** `computeSecurityScore({hasPassword,isEmailVerified,newPasswordStrength})`: password-set 35 + email-verified 35 + new-password-strength bonus up to 30 (live via the existing `calculatePasswordStrength`), clamped to 100; label Strong/Decent/At risk. Renders a `ScoreDial` SVG gauge + a truthful checklist (password set / email verified / 2FA "Coming soon" / strong new password). `isEmailVerified`/`hasPassword` passed additively from `page.tsx` (real `UserData` fields). No server/fabricated number.
 
-1. **Subscription tab deep redesign** (PlanHero, TierLadder, AccumulationChart, BillingCalendar, guest feature-matrix) — the `SubscriptionManagementModal` is a 1000+ LOC component with complex billing logic; chrome-only wrapper for now.
-2. **Payment tab deep redesign** (credit-card skins, wallet grid) — `PaymentMethodsTab` wraps Stripe payment-method CRUD; chrome-only wrapper for now.
-3. **Password security-score dial + security checklist** — no backing data exists to drive these.
-4. **Profile profession emoji-tiles + State button-grid** — would change field semantics; kept as `Dropdown` + free-text `SettingsInput` to preserve existing behavior.
-5. **SMS 2FA toggle** — backend not implemented; renders a "Coming soon" placeholder only.
-6. **Index "password last changed N days ago" preview** — no backing data; generic label used instead.
-7. **Index payment preview brand/last4** (e.g. "Visa •••• 4242") — `user.savedPaymentMethods` carries no brand/last4 fields; card count + "Default set" label used instead.
-8. **Profile sign-out section** from the design — omitted; index and sidebar already surface sign-out.
-9. **`htmlFor`/`id` a11y wiring on Profile phone/profession `Field`s** — Password tab has full wiring; Profile is a small follow-up for full consistency.
+**Phase B — index payment brand:** `settings/page.tsx` now calls the existing `useSavedPaymentMethods()` and shows the default card's real `Brand •••• last4` (+ "Default"), gracefully falling back to count/loading text. No new endpoint.
+
+**Phase C/D — Subscription & Payment tab merge (Claude design):** A new opt-in prop **`settingsRedesign?: boolean`** on `SubscriptionManagementModal` and `PaymentMethodsTab`, set **only** by the settings `SubscriptionTab.tsx` / `PaymentTab.tsx` wrappers (alongside `renderAsPanel`). When set, the panel body renders new presentational components:
+- `src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx`
+- `src/components/modals/PaymentMethodsTab/SettingsRedesignPayment.tsx`
+
+Both are **presentational only** — every value/handler is passed from the unchanged orchestrator. They reuse the verified logic sub-components (`CurrentBenefitsCard`/`UpgradeList`/`DowngradeList`/`CancelResumeRow`/`PastDueAlert`/`PendingChangeBanner`/empty states for subscription; the Stripe `<Elements>`+`AddPaymentForm` add-form and delete `ConfirmationModal` stay in `PaymentMethodsTab/index.tsx`, the `stripePromise` singleton is never re-instantiated) wrapped in the Claude tier-themed plan hero / wallet credit-card design. The 5 subscription child modals and the payment confirm-modal/add-form were hoisted so they render once in **both** branches. **Modal-mode callers (`MembershipStatus`) and the `SettingsModal` panel embed never set `settingsRedesign` → byte-behavior-identical** (verified by dedicated Opus reviews of Phase C & D).
+
+#### Flagged / deferred design elements (still NOT implemented — follow-ups)
+
+1. **Subscription `AccumulationChart`** (6-month entry-history bars) — no real entry-history data; the codebase deliberately never fabricates entry counts. Omitted.
+2. **Subscription synthetic future billing cycles** — only the real next-billing date is shown; the design's 3 projected cycles are omitted (would be synthetic).
+3. **SMS 2FA** — backend not implemented; renders a "Coming soon" placeholder only.
+4. **Pixel-internal re-skin of `CurrentBenefitsCard`/`UpgradeList`/`DowngradeList`** — these are logic-entangled (entry/discount math). The Phase-2 subscription view applies the Claude design at the section/hero level and **reuses these cards unchanged** to guarantee verbatim math; re-skinning their internals is a safe future follow-up, not a defect.
+5. **`htmlFor`/`id` a11y wiring on Profile phone/profession `Field`s** — Password tab has full wiring; Profile is a small follow-up for full consistency.
 
 ---
 
