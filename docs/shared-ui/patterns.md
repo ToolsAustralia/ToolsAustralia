@@ -130,7 +130,10 @@ Prefer these over `window.addEventListener("resize", …)` / `("scroll", …)` d
 
 ### Additional keyframes in globals.css
 
-`@keyframes scaleIn` (Task 3 — cancellation flow): `scale(.6) opacity(0)` → `scale(1) opacity(1)` in 0.35s ease-out. Used by `StepSaveSuccess` check-circle via `motion-safe:animate-[scaleIn_.35s_ease-out]`.
+Two keyframes were added to `src/app/globals.css` as part of the cancellation flow redesign:
+
+- **`@keyframes scaleIn`** — `scale(.6) opacity(0)` → `scale(1) opacity(1)` in 0.35s ease-out. Used by `StepSaveSuccess` check-circle via `motion-safe:animate-[scaleIn_.35s_ease-out_forwards]`.
+- **`@keyframes ctaShimmer`** — translates an `::after` pseudo-element from `translateX(0) skewX(-12deg)` to `translateX(320%) skewX(-12deg)` on a 2.6s ease-in-out infinite loop. Used by `PrimaryCta` (`primitives.tsx`) to produce the sweep shimmer on the red CTA button in motion-safe contexts.
 
 ### Print stylesheet
 

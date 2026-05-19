@@ -2,40 +2,6 @@
 
 Covers the in-app cancellation retention flow: reason capture, offer routing, and event persistence.
 
-## Shared UI Primitives (Redesign)
-
-`src/components/modals/CancellationFlowModal/primitives.tsx` — introduced as part of the "Elevated Guided Conversational" redesign. A pure presentational module (no business logic, no API calls) that all step components import from to maintain visual consistency. Brand colour `#ee0000` + premium-gold accent; full light/dark support via Tailwind `dark:` variants.
-
-### Exported components
-
-| Export | Purpose |
-|---|---|
-| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot + optional `TrustFooter` |
-| `TrustFooter` | SSL / NTP licence / Cancel-anytime strip, rendered flush at the modal bottom |
-| `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"` |
-| `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient |
-| `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard` |
-| `PrimaryCta` | Full-width red gradient CTA button with shimmer `::after` animation |
-| `TextDecline` | Underlined "no thanks" link-style button below `PrimaryCta` |
-| `UrgencyStrip` | Gold persuasion strip with star icon — used once per screen maximum |
-| `Headline` | `<h2>` at 23 px extrabold |
-| `SubCopy` | 13 px body paragraph |
-| `Eyebrow` | 10.5 px uppercase red label above headlines |
-
-### Step4Confirm (Task 8)
-
-`Step4Confirm` has been restyled via the shared primitive grammar. `onClose: () => void` added to `Step4ConfirmProps` — this is `handleHeaderClose` from `index.tsx` and feeds `FlowFrame`'s ✕ button. It is distinct from `modalProps.onClose`, which remains the "Keep my membership" handler in the normal variant.
-
-Normal variant: `FlowFrame` with `trust={false}` (no TrustFooter), two inline loss cards (Ticket + Trophy), a single `UrgencyStrip`, `PrimaryCta` wired to `modalProps.onClose` ("Keep my membership"), and `TextDecline` wired to `handleCancelAnyway`. Past-due variant: `FlowFrame` (with TrustFooter), gold `IconChip` + CreditCard icon, `ValueCard` with two `FeatureRow` items, `PrimaryCta` wired to `handleResolvePayment` ("Resolve payment"), `TextDecline` for cancel anyway. All cancel logic is preserved verbatim: the `/api/stripe/cancel-subscription` POST, all toast branches (`cancelledImmediately`, `isPastDue` message, period-end with computed `endDate`+`daysRemaining`), the fire-and-forget `outcomeMutation.mutate({outcome:"cancelled"})`, `modalProps.onCancelled()`, and the `catch`/`console.error`/error-toast path. This task resolves the last outstanding TypeScript error so `npm run type-check` is now fully green.
-
-### Step3BonusEntries (Task 7)
-
-`Step3BonusEntries` has been restyled onto the shared primitive grammar (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `ValueCard`, `UrgencyStrip`, `PrimaryCta`, `TextDecline`). Props updated: `onSaved` removed; `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void` added. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen) instead of the old `onSaved()`. The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. Both `<Step3BonusEntries>` call sites in `Step2Offer.tsx` (the `bonus_entries_100` case and the `tierDowngradeAvailable===false` fallback) now pass `onClose` and `onAcceptedOffer` from `Step2OfferProps`.
-
-### Step2Offer internal component
-
-`OfferActions` (module-private, defined at the top of `Step2Offer.tsx`) renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each of the four offer cards renders this component twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift.
-
 ## Reason → Offer Routing
 
 `src/utils/subscription/cancellation-flow-routing.ts` exports `resolveOfferSequence(reason)`, a pure function that maps a `CancellationReason` to an ordered `OfferType[]`.
@@ -67,7 +33,7 @@ Normal variant: `FlowFrame` with `trust={false}` (no TrustFooter), two inline lo
 ### Rules (in order of evaluation)
 
 1. **Past-due → none** — if `ctx.pastDue` is `true`, returns `[]` immediately (spec §3a). Members with a past-due balance skip all retention rungs.
-2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>` that started at Phase 2 with `bonus_entries_100` and `tier_downgrade`; **Task 14 added `pause_30d`**, **Task 16 added `discount_50_2mo`**, **Task 17 added `unsubscribe_marketing`**. As of Task 17 **ALL `OfferType`s are implemented (Phase 5 complete)** — there are no unimplemented offers and this gate no longer filters anything in practice (it is retained as the structural guard for any future `OfferType` addition). Current set: `{ bonus_entries_100, tier_downgrade, pause_30d, discount_50_2mo, unsubscribe_marketing }`.
+2. **IMPLEMENTED_OFFERS gate** — only offers whose backend is fully shipped are shown. `IMPLEMENTED_OFFERS` is a `ReadonlySet<OfferType>`. As of Phase 5 all `OfferType`s are implemented — `{ bonus_entries_100, tier_downgrade, pause_30d, discount_50_2mo, unsubscribe_marketing }` — so this gate no longer filters anything in practice. It is retained as the structural guard for any future `OfferType` addition.
 3. **One-time consumed gate** — certain offers may only be accepted once per member. `ConsumedFlags` tracks redemption state; `bonus_entries_100` maps to the legacy field `user.cancellationUpsellRedeemed`, `pause_30d` maps to `consumed.pause30d` (← `user.retentionOffersConsumed.pause30d`), `discount_50_2mo` maps to `consumed.discount50_2mo` (← `user.retentionOffersConsumed.discount50_2mo`). If the flag is set, the offer is filtered out. `tier_downgrade` and `unsubscribe_marketing` are not one-time gated (no entry in `ONE_TIME`).
 
 ### Types
@@ -127,17 +93,17 @@ Loads the User by id and derives:
 
 Throws `new Error("user not found")` when the userId does not match any document. Route handlers should map this to a 404 response.
 
-### Accept-offer (DB + Stripe) — Phase 3
+### Accept-offer (DB + Stripe)
 
 `acceptOffer({ userId, eventId, offer }) → Promise<{ resumesAt?: string; couponId?: string }>`
 
-Supported offers: **`pause_30d`** (Task 14), **`discount_50_2mo`** (Task 16), and **`unsubscribe_marketing`** (Task 17). As of Task 17 `acceptOffer` covers **all 5** `OfferType`s with a real side-effect path (`bonus_entries_100` is accepted via its own `/api/cancellation-upsell/redeem` endpoint and `tier_downgrade` via the downgrade flow — see the outcome-recording invariant). Any value not matching a branch still throws `AcceptOfferError("unsupported offer", 400)`, but with all `OfferType`s handled this is now unreachable for valid input.
+Supported offers: `pause_30d`, `discount_50_2mo`, and `unsubscribe_marketing`. All `OfferType`s with a service-side side-effect are handled; `bonus_entries_100` is accepted via its own `/api/cancellation-upsell/redeem` endpoint and `tier_downgrade` via the downgrade flow — see the outcome-recording invariant. Any value not matching a branch still throws `AcceptOfferError("unsupported offer", 400)`, but with all `OfferType`s handled this is now unreachable for valid input.
 
 - `pause_30d`: calls `applyRetentionPause(userId)` (`RetentionPauseService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"pause_30d" })` and returns `{ resumesAt }`.
 - `discount_50_2mo`: calls `applyRetentionDiscount(userId)` (`RetentionDiscountService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"discount_50_2mo" })` and returns `{ couponId }`.
 - `unsubscribe_marketing`: calls `applyMarketingUnsubscribe(userId)` (`RetentionUnsubscribeService`); on success calls `recordOutcome({ eventId, userId, outcome:"saved", offerAccepted:"unsubscribe_marketing" })` and returns `{}` (no extra data — the route spreads it as `{ ok: true }`). **No past-due guard and no one-time-consumed guard** — unsubscribing from marketing is harmless even when past-due and is not in the `ONE_TIME` map (idempotent). The only thrown message is `"user not found"` (→ 404 via the shared mapper); anything else is an unwrapped 500.
 
-Both services' typed-error messages are mapped to an HTTP status by the **shared** private helper `retentionOfferErrorToStatus` (generalized in Task 16 from the old pause-only `retentionPauseErrorToStatus` — it now covers BOTH the pause and discount message sets in one switch, keeping the error→status contract DRY) and re-thrown as `AcceptOfferError(message, status)`; a `500`-class (unmatched) error is re-thrown unwrapped so the route's generic handler logs and returns 500. See the route's "`accept_offer` error → HTTP status map" table below for the exact mapping.
+Both services' typed-error messages are mapped to an HTTP status by the **shared** private helper `retentionOfferErrorToStatus` (covers both the pause and discount message sets in one switch, keeping the error→status contract DRY) and re-thrown as `AcceptOfferError(message, status)`; a `500`-class (unmatched) error is re-thrown unwrapped so the route's generic handler logs and returns 500. See the route's "`accept_offer` error → HTTP status map" table below for the exact mapping.
 
 `AcceptOfferError extends Error` carries `{ status: number }` so the route stays thin (single `instanceof` check, no business logic).
 
@@ -194,9 +160,9 @@ Success response `200`:
 { "ok": true }
 ```
 
-#### Action: `accept_offer` (Phase 3)
+#### Action: `accept_offer`
 
-Accept a retention offer that has its own side-effect (no pre-existing endpoint). **Supported offers: `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17).** All `OfferType`s with a service-side side-effect are now handled; an unhandled value would return `400 {"error":"unsupported offer"}` but this is unreachable for valid input.
+Accept a retention offer that has its own side-effect (no pre-existing endpoint). Supported offers: `pause_30d`, `discount_50_2mo`, and `unsubscribe_marketing`. All `OfferType`s with a service-side side-effect are handled; an unhandled value would return `400 {"error":"unsupported offer"}` but this is unreachable for valid input.
 
 Request body:
 ```json
@@ -222,7 +188,7 @@ Request body:
 2. On success, `recordOutcome({ outcome:"saved", offerAccepted:"unsubscribe_marketing" })`.
 3. Returns `{ ok: true }` (no extra data — there is no `resumesAt`/`couponId`).
 
-The route is offer-agnostic: it spreads the service result (`{ ok: true, ...result }`), so `resumesAt` is present for pause, `couponId` for discount. No route schema change was needed — the `AcceptOfferSchema` discriminated-union member already validates `offer` against `OFFER_TYPES`, so `discount_50_2mo` simply became supported instead of returning `400 "unsupported offer"`.
+The route is offer-agnostic: it spreads the service result (`{ ok: true, ...result }`), so `resumesAt` is present for pause, `couponId` for discount. No route schema change is needed for future supported offers — the `AcceptOfferSchema` discriminated-union member already validates `offer` against `OFFER_TYPES`.
 
 Success response `200`:
 ```json
@@ -249,9 +215,9 @@ or, for `unsubscribe_marketing`:
 
 #### `accept_offer` error → HTTP status map
 
-`acceptOffer` calls `applyRetentionPause` (pause), `applyRetentionDiscount` (discount), or `applyMarketingUnsubscribe` (unsubscribe), which throw typed `Error`s. The **shared** `CancellationFlowService.retentionOfferErrorToStatus` (Task 16 generalized the old pause-only `retentionPauseErrorToStatus` into one helper covering all message sets — DRY, not duplicated per service) maps the message to a status; the service re-throws as a typed `AcceptOfferError(message, status)`. `applyMarketingUnsubscribe` only ever throws `"user not found"` (→ 404) — it has no 409 cases. The route does a single `instanceof AcceptOfferError` check and echoes `{ error: message }` with `error.status` — same message-mapping spirit as the existing `"user not found" → 404` path, just promoted to a class so the status decision stays in the service (no business logic in the handler). A `500`-class message (anything unmatched, e.g. a Stripe failure) is **not** wrapped — the original error re-throws and hits the route's generic 500 handler (`console.error` preserved).
+`acceptOffer` calls `applyRetentionPause` (pause), `applyRetentionDiscount` (discount), or `applyMarketingUnsubscribe` (unsubscribe), which throw typed `Error`s. The **shared** `CancellationFlowService.retentionOfferErrorToStatus` maps the message to a status; the service re-throws as a typed `AcceptOfferError(message, status)`. `applyMarketingUnsubscribe` only ever throws `"user not found"` (→ 404) — it has no 409 cases. The route does a single `instanceof AcceptOfferError` check and echoes `{ error: message }` with `error.status`. A `500`-class message (anything unmatched, e.g. a Stripe failure) is **not** wrapped — the original error re-throws and hits the route's generic 500 handler (`console.error` preserved).
 
-| thrown message (from `applyRetentionPause` / `applyRetentionDiscount` / `applyMarketingUnsubscribe`) | HTTP status |
+| thrown message | HTTP status |
 |---|---|
 | `"retention pause already used"` | `409` |
 | `"retention discount already used"` | `409` |
@@ -280,6 +246,26 @@ The route is thin: authorize (session/401) → parse JSON → Zod validate (disc
 
 Multi-step modal that replaces the old single-screen `CancellationUpsellModal`.
 
+### Shared primitives (`primitives.tsx`)
+
+`src/components/modals/CancellationFlowModal/primitives.tsx` is a pure presentational module (no business logic, no API calls) that all step components import from to maintain visual consistency. Brand colour `#ee0000` + premium-gold accent; full light/dark support via Tailwind `dark:` variants.
+
+| Export | Purpose |
+|---|---|
+| `FlowFrame` | Branded header (TA logo + close button) wrapping body slot + optional `TrustFooter`. No visible progress indicator — each step renders its own `FlowFrame`. |
+| `TrustFooter` | SSL / NTP licence / Cancel-anytime strip, rendered flush at the modal bottom when `trust={true}` (the default). |
+| `IconChip` | 46 × 46 px rounded icon container; `tone="red"` (default) or `tone="gold"`. |
+| `ValueCard` | Rounded card with subtle shadow; optional `glow` prop adds a gold border gradient. |
+| `FeatureRow` | Check-mark row for listing member benefits inside a `ValueCard`. |
+| `PrimaryCta` | Full-width red gradient CTA button. In motion-safe contexts an `::after` pseudo-element runs the `ctaShimmer` keyframe (sweep from left to right, infinite). |
+| `TextDecline` | Underlined "no thanks" link-style button below `PrimaryCta`. |
+| `UrgencyStrip` | Gold persuasion strip with star icon — used once per screen maximum. |
+| `Headline` | `<h2>` at 23 px extrabold. Accepts `className`. |
+| `SubCopy` | 13 px body paragraph. Accepts `className`. |
+| `Eyebrow` | 10.5 px uppercase red label above headlines. Accepts `className`. |
+
+These primitives replace the old in-modal `upsell-shell` (`InfoGrid` / `UrgencyBanner` / `TrustBar`) usage. The `upsell-shell` components are not used inside `CancellationFlowModal` steps.
+
 ### Responsive presentation
 
 Uses `ModalContainer` (imported from `../ui`):
@@ -297,22 +283,12 @@ const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
 - **Mobile + tablet (< `lg`/1024px):** near-fullscreen via `mobileFullBleed`
   (full viewport width, bottom-flush, ~5% gap at the top, `h-[95dvh]`) with the
   slide-up sheet animation.
-- **Desktop (≥ `lg`):** centered `md` dialog (was `sm` — `sm` was too thin and
-  caused the trust-footer cells to wrap).
-- **`ModalContent padding="none"`:** each step owns its own padding
-  (`Step1Reason` has `p-4`; `Step2Offer`/`Step3BonusEntries`/`Step4Confirm`
-  use `px-4 pt-4 pb-2`). This removes the previous double-padding (ModalContent
-  `p-4` *plus* each step's own padding) and lets the `TrustBar` sit **flush**
-  as a real footer instead of floating inside a padded box.
+- **Desktop (≥ `lg`):** centered `md` dialog.
+- **`ModalContent padding="none"`:** each step owns its own padding via `FlowFrame`. This removes double-padding and lets `TrustFooter` sit flush as a real footer instead of floating inside a padded box.
 
-### Copy de-duplication (Step 4)
+### No progress indicator
 
-The confirm screen previously stated the same thing three times: the modal
-header ("Are you sure?"), a body paragraph ("Are you sure you want to
-cancel?…"), and the InfoGrid title ("Cancel now & you walk away from"). The
-redundant body paragraph was removed and the InfoGrid title shortened to
-"What you'll lose" — the header alone now carries the question. (The past-due
-variant keeps its body paragraph: it is informative, not redundant.)
+`StepIndicator.tsx` has been deleted. The shared `ModalHeader` import is gone from `index.tsx`. Each step owns its branded header via `FlowFrame` — there is no visible step counter or progress bar in the shell.
 
 ### Step machine (`useCancellationFlow.ts`)
 
@@ -327,9 +303,9 @@ FlowState = {
   offersShown: OfferType[];
   offerCursor: number;
   pastDue: boolean;
-  // Terminal save-success fields (Task 2):
-  saveSuccess: boolean;       // renderer checks this FIRST — shows StepSaveSuccess
-  acceptedOffer: OfferType | null;  // drives success-screen copy
+  // Terminal save-success fields:
+  saveSuccess: boolean;           // renderer checks this FIRST — shows StepSaveSuccess
+  acceptedOffer: OfferType | null; // drives success-screen copy
   acceptResult: AcceptResult | null; // couponId / resumesAt from the accept response
 }
 ```
@@ -376,66 +352,91 @@ Other direct `onClose` paths: "Keep my membership" (Step 4) and, for past-due,
 
 When the server returns `pastDue: true` (user has a failed renewal), `offersShown` is `[]` (eligibility filter short-circuits). `applyStart` routes directly to step 4 with `state.pastDue = true`. Step 4 renders the past-due variant: primary CTA is "Resolve payment" → `props.onResolvePayment()`, secondary is "Cancel anyway".
 
+### Save Success screen (`StepSaveSuccess`)
+
+`src/components/modals/CancellationFlowModal/StepSaveSuccess.tsx`
+
+Post-accept confirmation screen shown when `state.saveSuccess && state.acceptedOffer` is true. Replaces `renderStep()` in `index.tsx` — the modal stays open and presents a confirmation instead of silently closing.
+
+**Covers:** `discount_50_2mo`, `pause_30d`, `unsubscribe_marketing`, `bonus_entries_100`. **`tier_downgrade` does NOT use this screen** — it exits to the parent downgrade modal via `onRequestTierDowngrade` instead.
+
+Pure presentation — no API calls, no side effects.
+
+| Prop | Type | Purpose |
+|---|---|---|
+| `offer` | `OfferType` | Drives the bullet-point copy via the internal `lines()` helper |
+| `result` | `AcceptResult \| null` | Provides `resumesAt` (pause) / `couponId` (discount) from the accept response |
+| `firstName` | `string?` | Personalises the headline (`"You're all set, {name}."`) |
+| `onClose` | `() => void` | Passed to `FlowFrame` — closes the modal (no further action) |
+| `onDone` | `() => void` | CTA handler — wired to the parent's `onSaved()` callback |
+
+The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `scaleIn` keyframe is defined in `src/app/globals.css`.
+
+### Step 1 — `Step1Reason.tsx`
+
+Restyled onto the shared primitive grammar (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `PrimaryCta`). All existing logic is preserved: `selectReason`, `setReasonText`, `applyStart`, `handleContinue`, `handleReasonChange`, `handleTextChange`, `otherTextMissing`, `canContinue`, `isPending`, `isOther`, `REASON_OPTIONS`, the mandatory "Other" free-text + character counter + error.
+
+The `onClose: () => void` prop feeds `FlowFrame`'s ✕ button (wired from `handleHeaderClose` in `index.tsx`).
+
+A best-effort first-name greeting is shown: `useUserContext()` is called unconditionally (safe — `CancellationFlowModal` always renders inside `UserProvider`), then `userData?.firstName` is accessed via optional chaining. If the value is a multi-word string, only the first whitespace-delimited token is used. If the context value is absent the headline falls back to the neutral "Before you go —".
+
 ### Step 2 — `Step2Offer.tsx`
 
 Renders the lead offer: `state.offersShown[state.offerCursor]`. Uses an exhaustive typed `switch (offer: OfferType)` with a `never`-guard `default` so TypeScript errors if a new `OfferType` is added without handling it.
 
-**Task 6 restyle:** all four offer cards (`DiscountOfferCard`, `PauseOfferCard`, `UnsubscribeOfferCard`, `TierDowngradeCard`) are now built on the shared primitive grammar (`FlowFrame`/`Eyebrow`/`Headline`/`SubCopy`/`ValueCard`/`FeatureRow`/`PrimaryCta`/`TextDecline`) — the old `upsell-shell` `InfoGrid`/`UrgencyBanner`/`TrustBar` and all `lucide-react` icons were dropped from this file. Each card uses a desktop two-column layout (`lg:grid lg:grid-cols-2`): copy + CTA in column 1, `ValueCard` + mobile CTA in column 2 (CTA/decline rendered once per breakpoint via `hidden lg:block` / `lg:hidden`). Every card shows a `Tailored for you · Offer n of total` eyebrow (`Offer ${offerCursor + 1} of ${offersShown.length}`). **Behavioural change:** `pause_30d`/`discount_50_2mo`/`unsubscribe_marketing` accept-success now calls `onAcceptedOffer(offer, result)` (= `flowHook.markSaved`, sets `saveSuccess`) instead of `onSaved()`, so the Save Success screen shows. `tier_downgrade` still exits via `onRequestTierDowngrade?.(state.eventId)` (no `onAcceptedOffer`). `Step2Offer` also takes `onClose` (threaded into each card's `FlowFrame`). The 409/404 graceful info-toast→`onDecline()` path, generic error toast, `isProcessing` guards, the `tierDowngradeAvailable===false` → `<Step3BonusEntries>` fallback, the `bonus_entries_100` → `<Step3BonusEntries>` delegation (unchanged props), and the exhaustive `switch`/`never` default are all preserved exactly.
+**Visual grammar:** all four offer cards (`DiscountOfferCard`, `PauseOfferCard`, `UnsubscribeOfferCard`, `TierDowngradeCard`) are built on the shared primitive grammar (`FlowFrame`/`Eyebrow`/`Headline`/`SubCopy`/`ValueCard`/`FeatureRow`/`PrimaryCta`/`TextDecline`). The old `upsell-shell` `InfoGrid`/`UrgencyBanner`/`TrustBar` and all `lucide-react` icons are not used in this file.
 
-**Implemented (Phase 2):**
+**Eyebrow:** every card shows a `Tailored for you · Offer n of total` eyebrow (`Offer ${offerCursor + 1} of ${offersShown.length}`).
 
-- `bonus_entries_100` — renders `<Step3BonusEntries>` directly (same content; no duplication).
-- `tier_downgrade` — dark-themed "Switch to a cheaper plan" card. If `tierDowngradeAvailable` is `false` (no downgrade options exist on the account), renders `<Step3BonusEntries>` instead — no dead card, no silent no-op. If `true`, clicking "Switch plan" calls `props.onRequestTierDowngrade?.(state.eventId)` — the outcome mutation is **NOT** fired at this point. The parent stores the `eventId` in `pendingCancellationEventId` and records `{outcome:"saved",offerAccepted:"tier_downgrade"}` only if `handleDowngradeSubscription` succeeds. If `DowngradeConfirmModal` is dismissed, the eventId is cleared and the event matures to `abandoned`. Decline calls `onDecline()`.
-- `pause_30d` (Task 14) — `PauseOfferCard`: "Pause 30 days — keep your entries". Reuses the `upsell-shell` grammar (`InfoGrid` `framing="gain"`, `UrgencyBanner` tone gold, `TrustBar`) and the two-button accept/decline grid from `Step3BonusEntries`. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"pause_30d" })` (POST `{action:"accept_offer",...}`); on success → `onSaved()` (parent runs `fetchSubscriptionBenefits` + close, identical to the other offers). The server records the `saved/pause_30d` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()` (next rung). **409/404 graceful path:** the eligibility filter normally prevents an already-used / past-due / no-subscription member from ever seeing this card, but if the filter slipped through, the POST returns `409` (or `404`); the card catches the `ApiError`, shows a brief info toast, and calls `onDecline()` so the member advances to the next rung instead of dead-ending. Any other failure shows an error toast and leaves the card in place to retry.
-- `discount_50_2mo` (Task 16) — `DiscountOfferCard`: "50% off for 2 months". **Mirrors `PauseOfferCard` exactly** — same `upsell-shell` grammar (`InfoGrid` `framing="gain"`, gold `UrgencyBanner`, `TrustBar`), same two-button accept/decline grid, same 409/404 graceful-decline path. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"discount_50_2mo" })`; on success → `onSaved()`. The server (`acceptOffer` → `applyRetentionDiscount`) attaches the singleton coupon and records the `saved/discount_50_2mo` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()`. **409/404** (filter slipped: already-used / past-due / no-subscription) → info toast + `onDecline()`; any other failure → error toast, card stays for retry.
-- `unsubscribe_marketing` (Task 17) — `UnsubscribeOfferCard`: "Get fewer messages instead". **Mirrors `PauseOfferCard` / `DiscountOfferCard`** — same `upsell-shell` grammar and two-button grid. **Copy is explicit that it switches off MARKETING email + marketing SMS only** and that transactional / account messages (receipts, renewal notices, draw results) are **not** affected — it does not say just "emails". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"unsubscribe_marketing" })`; on success → `onSaved()`. The server (`acceptOffer` → `applyMarketingUnsubscribe`) persists `acceptsPromotionalEmail=false`, best-effort syncs Klaviyo, and records the `saved/unsubscribe_marketing` outcome — the card does **not** fire `outcomeMutation`. **Decline** → `onDecline()`. There is **no 409 path** (not one-time gated, no past-due guard); a rare 404/500 → toast + `onDecline()` (graceful, never dead-ends).
+**Desktop layout:** each card uses `lg:grid lg:grid-cols-2 lg:items-center lg:gap-6`: copy + CTA in column 1, `ValueCard` + mobile CTA in column 2.
 
-**Unimplemented:** none. As of Task 17 every `OfferType` renders a real card.
+**`OfferActions` (module-private):** renders a `PrimaryCta` + `TextDecline` pair from props (`acceptLabel`, `onAccept`, `onDecline`, `disabled?`, `declineLabel?`). Each offer card renders `OfferActions` twice — once inside `hidden lg:block` (desktop column 1) and once inside `lg:hidden` (mobile, below the ValueCard) — eliminating duplicated button markup and ensuring the two breakpoint slots cannot drift.
 
-The exhaustive `switch` + `never`-guard `default` is preserved; `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17) each changed from `throw` → card. **No `throw` case remains** — every one of the 5 `OfferType`s maps to a real card. The `never`-guard `default` is now genuinely unreachable for any valid `OfferType` and is kept intentionally as a compile-time exhaustiveness safety net for any future `OfferType` addition.
+**Props:**
+- `onAcceptedOffer: (offer: OfferType, result: AcceptResult | null) => void` — set by `index.tsx` to `flowHook.markSaved`. Called by each card after a successful accept; routes to Save Success. **`tier_downgrade` does NOT call this** — it exits via `onRequestTierDowngrade` instead.
+- `onDecline: () => void` — wired to `flowHook.decline` (advances cursor).
+- `onClose: () => void` — threaded into each card's `FlowFrame`.
+- `tierDowngradeAvailable: boolean` — used by the `tier_downgrade` case.
 
-### `Step3BonusEntries.tsx` (the `bonus_entries_100` rung — no longer a distinct "step 3")
+**Offer cards:**
 
-Universal "+100 bonus entries — stay active today" rung. **Rendered by `Step2Offer` for the `bonus_entries_100` offer during the cursor-driven step-2 OFFER phase** — it is NOT routed via a hardcoded step 3 anymore (that hardcoding was the bug). It is typically (but not necessarily) the last rung in `offersShown`.
+- `pause_30d` (`PauseOfferCard`) — "Pause 30 days — keep your entries". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"pause_30d" })`; on success → `onAcceptedOffer("pause_30d", result)` → Save Success. The server records the `saved/pause_30d` outcome (server-side, not a client fire-and-forget). **Decline** → `onDecline()`. **409/404 graceful path:** catches the `ApiError`, shows a brief info toast, and calls `onDecline()` so the member advances to the next rung instead of dead-ending. Any other failure shows an error toast and leaves the card in place to retry.
 
-Accept flow (identical call chain to old `CancellationUpsellModal`):
-1. POST `/api/cancellation-upsell/redeem` with `credentials:"include"` (no body — the server identifies the user from the session).
+- `discount_50_2mo` (`DiscountOfferCard`) — "50% off for 2 months". **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"discount_50_2mo" })`; on success → `onAcceptedOffer("discount_50_2mo", result)` → Save Success. The server records the `saved/discount_50_2mo` outcome. **Decline** → `onDecline()`. **409/404 graceful path:** info toast + `onDecline()`; any other failure → error toast, card stays for retry.
+
+- `unsubscribe_marketing` (`UnsubscribeOfferCard`) — "Get fewer messages instead". Copy is explicit that it switches off **marketing email + marketing SMS only** and that transactional / account messages are **not** affected. **Accept** → `useAcceptOffer().mutateAsync({ eventId, offer:"unsubscribe_marketing" })`; on success → `onAcceptedOffer("unsubscribe_marketing", result)` → Save Success. The server records the `saved/unsubscribe_marketing` outcome. **Decline** → `onDecline()`. **No 409 path** (not one-time gated, no past-due guard); a rare 404/500 → toast + `onDecline()` (graceful, never dead-ends).
+
+- `bonus_entries_100` — delegates to `<Step3BonusEntries>` directly (see below).
+
+- `tier_downgrade` (`TierDowngradeCard`) — dark-themed "Switch to a cheaper plan" card. If `tierDowngradeAvailable` is `false`, renders `<Step3BonusEntries>` instead — no dead card. If `true`, clicking "Switch plan" calls `props.onRequestTierDowngrade?.(state.eventId)` — the outcome mutation is **NOT** fired at this point. The parent stores the `eventId` in `pendingCancellationEventId` and records `{outcome:"saved",offerAccepted:"tier_downgrade"}` only if `handleDowngradeSubscription` succeeds. `tier_downgrade` does NOT call `onAcceptedOffer` and does NOT show the Save Success screen. Decline calls `onDecline()`.
+
+The exhaustive `switch` + `never`-guard `default` is preserved; the `never`-guard is genuinely unreachable for any valid `OfferType` and is kept as a compile-time exhaustiveness safety net for any future `OfferType` addition.
+
+### `Step3BonusEntries.tsx` (the `bonus_entries_100` rung)
+
+Universal "+100 bonus entries — stay active today" rung. **Rendered by `Step2Offer` for the `bonus_entries_100` offer during the cursor-driven step-2 OFFER phase** — it is NOT routed via a hardcoded step 3 (that hardcoding was the multi-rung-skipping bug). It is typically (but not necessarily) the last rung in `offersShown`.
+
+Props: `onClose: () => void` and `onAcceptedOffer: (offer: OfferType, result: null) => void`. After the `/api/cancellation-upsell/redeem` POST succeeds and the entry-reward toast fires, the component calls `onAcceptedOffer("bonus_entries_100", null)` (routing to the Save Success screen). The fire-and-forget `outcomeMutation.mutate({ outcome:"saved", offerAccepted:"bonus_entries_100" })` is preserved. **Decline** → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4.
+
+Accept flow:
+1. POST `/api/cancellation-upsell/redeem` with `credentials:"include"`.
 2. `useEntryRewardToast` to show the reward toast.
 3. Fire `outcomeMutation.mutate({outcome:"saved",offerAccepted:"bonus_entries_100"})` (fire-and-forget).
-4. Call `onSaved()`.
+4. Call `onAcceptedOffer("bonus_entries_100", null)` → Save Success.
 
-Decline → `onDecline()` → `decline()` (`nextOfferState`) in the hook → advance cursor; if it was the last rung → Step 4, otherwise the next rung renders.
+### `Step4Confirm.tsx`
 
-### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
+Restyled via the shared primitive grammar. `onClose: () => void` added to `Step4ConfirmProps` — this is `handleHeaderClose` from `index.tsx` and feeds `FlowFrame`'s ✕ button. It is distinct from `modalProps.onClose`, which is the "Keep my membership" handler in the normal variant.
 
-Three TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`**:
+**Normal variant:** `FlowFrame` with `trust={false}` (no TrustFooter), two inline loss cards (Ticket + Trophy), a single `UrgencyStrip`, `PrimaryCta` wired to `modalProps.onClose` ("Keep my membership"), and `TextDecline` wired to `handleCancelAnyway`.
 
-- `useStartCancellationFlow` — POSTs `{ action: "start", reason, reasonText? }`, returns `{ eventId, offersShown, pastDue }`.
-- `useOutcomeCancellationFlow` — POSTs `{ action: "outcome", eventId, outcome, offerAccepted? }`. Called fire-and-forget after cancel.
-- `useAcceptOffer` (Task 14; extended Task 16, Task 17) — POSTs `{ action: "accept_offer", eventId, offer }`, returns `{ ok, resumesAt?, couponId? }` (`resumesAt` for `pause_30d`, `couponId` for `discount_50_2mo`, neither for `unsubscribe_marketing` → just `{ ok }`). Used by `PauseOfferCard`, `DiscountOfferCard`, and `UnsubscribeOfferCard` via `mutateAsync` (each card awaits success before calling `onSaved`, and inspects the thrown `ApiError.status` for the graceful-decline path — 409/404 for pause/discount, 404/500 for unsubscribe which has no 409). Threaded `index.tsx` → `Step2Offer` as `acceptOfferMutation`.
+**Past-due variant:** `FlowFrame` (with TrustFooter), gold `IconChip` + CreditCard icon, `ValueCard` with two `FeatureRow` items, `PrimaryCta` wired to `handleResolvePayment` ("Resolve payment"), `TextDecline` for cancel anyway.
 
-The parent (`SubscriptionManagementModal`) refreshes data via its existing imperative `fetchSubscriptionBenefits()` call — no query invalidation needed in the modal itself.
+All cancel logic is preserved verbatim: the `/api/stripe/cancel-subscription` POST, all toast branches (`cancelledImmediately`, `isPastDue` message, period-end with computed `endDate`+`daysRemaining`), the fire-and-forget `outcomeMutation.mutate({outcome:"cancelled"})`, `modalProps.onCancelled()`, and the `catch`/`console.error`/error-toast path.
 
-### Parent integration (`SubscriptionManagementModal`)
+### Per-reason screen flow
 
-- `showCancellationFlow` / `setShowCancellationFlow` — replaces the old `showCancellationUpsell`.
-- `handleCancelSubscription` — opens the flow unconditionally (the old client-side `cancellationUpsellRedeemed` lifetime gate is removed; server-side eligibility filter in `CancellationFlowService` handles one-time-consumed offers).
-- `onSaved` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
-- `onCancelled` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
-- `onResolvePayment` → `setShowCancellationFlow(false)` then `setIsRenewalFailedModalOpen(true)`.
-- `onClose` → `setShowCancellationFlow(false)` (plain close — only reachable from "Keep my membership" in Step 4).
-- `onRequestTierDowngrade(eventId)` → stores `eventId` in `pendingCancellationEventId` ref; immediately calls `setShowCancellationFlow(false)` (NO outcome recorded — the event stays `in_progress`); then selects the cheapest `DowngradeOption` from `subscriptionBenefits.availableDowngrades` (lowest `price`) and calls `setSelectedDowngrade(cheapest)` + `setShowDowngradeConfirm(true)`.
-- **Downgrade success path** (`handleDowngradeSubscription`): if `pendingCancellationEventId.current` is set, fire-and-forgets `POST /api/subscription/cancellation-flow` with `{action:"outcome",eventId,outcome:"saved",offerAccepted:"tier_downgrade"}`, then clears the ref. This is the only place the `tier_downgrade` outcome is recorded.
-- **Downgrade dismiss path** (`DowngradeConfirmModal` `onClose`): clears `pendingCancellationEventId.current` without recording any outcome — the event stays `in_progress` and matures to `abandoned` server-side.
-- `tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}` — threaded to `CancellationFlowModal` so `Step2Offer` can skip the dead tier card when no downgrade options exist.
-
-The old `CancellationUpsellModal` has been removed (Phase 5 Task 19) — `src/components/modals/CancellationUpsellModal/` no longer exists. The +100-entries rung still POSTs to the existing, untouched `/api/cancellation-upsell/redeem` route (backed by `src/utils/redeemables/cancellation-upsell-eligibility.ts`); only the superseded modal UI was deleted.
-
-### Per-reason screen flow (Task 17 — ALL offers implemented)
-
-`IMPLEMENTED_OFFERS` now contains every `OfferType`, so no offer is filtered (the only filters that remain in practice are past-due → `[]` and the one-time consumed flags for `pause_30d` / `discount_50_2mo` / `bonus_entries_100`):
-
-The OFFER phase walks `offersShown` rung-by-rung (cursor-driven) — declining a non-last rung renders the next rung (still step 2); declining the last rung → Step 4. The "screen sequence" column lists every screen the user sees, in order:
+The OFFER phase walks `offersShown` rung-by-rung (cursor-driven) — declining a non-last rung renders the next rung (still step 2); declining the last rung → Step 4. Accepting any rung → Save Success (except `tier_downgrade` → exits to downgrade modal). The "screen sequence" column lists every screen the user sees, in order:
 
 | Reason | offersShown | Screen sequence (each decline = next rung) |
 |---|---|---|
@@ -445,24 +446,16 @@ The OFFER phase walks `offersShown` rung-by-rung (cursor-driven) — declining a
 | `too_many_messages` | `[unsubscribe_marketing, bonus_entries_100]` | Reason → unsubscribe card → +100 card → Confirm |
 | `joined_for_giveaway` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
 | `havent_won` | `[bonus_entries_100]` | Reason → +100 card → Confirm |
-| `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | Reason → **pause card → discount card → +100 card** (3-rung — discount no longer skipped, bug fixed) → Confirm |
-
-Per-reason trace (Task 17 — IMPLEMENTED = {bonus, tier, pause, discount, unsubscribe} — ALL):
-- `too_expensive` → `[discount_50_2mo, bonus_entries_100]`. Discount card → decline → +100 → Step 4.
-- `prefer_cheaper` → `[tier_downgrade, bonus_entries_100]`. Tier card → decline → +100 → Step 4.
-- `dont_use_benefits` → `[pause_30d, bonus_entries_100]`. Pause card → decline → +100 → Step 4.
-- `too_many_messages` → `[unsubscribe_marketing, bonus_entries_100]` (Task 17: unsubscribe no longer filtered). Unsubscribe card → accept = marketing email+SMS off + `saved/unsubscribe_marketing` recorded server-side → `onSaved`; decline → +100 → Step 4.
-- `joined_for_giveaway` / `havent_won` → `[bonus_entries_100]` (the +100 rung only — it is the sole lead).
-- `other` → `[pause_30d, discount_50_2mo, bonus_entries_100]`. Pause → decline → discount → decline → +100 → Step 4.
-- **Past-due (any reason) → `[]` → Step 4** (eligibility short-circuits before any rung).
+| `other` | `[pause_30d, discount_50_2mo, bonus_entries_100]` | Reason → pause card → discount card → +100 card (3-rung; middle rung no longer skipped) → Confirm |
+| **Past-due (any reason)** | `[]` | Reason → Confirm (resolve-payment variant) |
 
 Notes:
-- `IMPLEMENTED_OFFERS` no longer removes any offer — all of `pause_30d` (Task 14), `discount_50_2mo` (Task 16), and `unsubscribe_marketing` (Task 17) surface.
-- Accepting +100 at Step 2 (lead offer) or Step 3 (second rung) calls the same redeem endpoint and fires `offerAccepted:"bonus_entries_100"`.
+- `IMPLEMENTED_OFFERS` no longer removes any offer — all 5 `OfferType`s surface.
+- Accepting +100 at any rung calls the same redeem endpoint and records `offerAccepted:"bonus_entries_100"`.
 - Accepting `tier_downgrade` (when `tierDowngradeAvailable` is `true`) triggers `DowngradeConfirmModal` via `onRequestTierDowngrade`. The outcome `{offerAccepted:"tier_downgrade",outcome:"saved"}` is recorded **only** if the downgrade confirmation succeeds — never on card click.
 - If `tierDowngradeAvailable` is `false` and `tier_downgrade` is the current offer, `Step2Offer` renders `<Step3BonusEntries>` instead — the user gets the +100 rung with no dead UI.
 
-### Outcome-recording invariant (Task 9)
+### Outcome-recording invariant
 
 Exactly one terminal `outcome` is recorded per `CancellationFlowEvent`. This is
 guaranteed by `recordOutcome`'s `updateOne` filter `{ _id, userId, outcome:
@@ -479,20 +472,42 @@ side-effect API actually succeeds:
 - Step 4 "Cancel anyway" (normal **and** past-due) → one `cancelled` after `/api/stripe/cancel-subscription` succeeds.
 - "Keep my membership", past-due "Resolve payment", tier-downgrade dismiss, and no-downgrade-available → record **nothing**; the event stays `in_progress` and is later swept to `abandoned` by the §6a maturity job.
 
-**Plan deviation (intentional):** the original plan's Task 9 proposed a generic
-`accept_offer` route action for Phase 2. It was **not** added in Phase 2 — the
-Phase-2 offers (`bonus_entries_100`, `tier_downgrade`) call their existing
-battle-tested endpoints (`/api/cancellation-upsell/redeem`, the downgrade flow)
-and log via the single `outcome` action; `accept_offer` with no Phase-2 consumer
-would have been dead code (CLAUDE.md rule #4). **Task 14 (Phase 3) adds
-`accept_offer`** for `pause_30d`, the first offer with no pre-existing endpoint —
-it now has a real consumer (`PauseOfferCard`). **Task 16** extended it for
-`discount_50_2mo`, and **Task 17** for `unsubscribe_marketing`; `acceptOffer`
-now handles all three side-effect offers (`bonus_entries_100` / `tier_downgrade`
-keep their pre-existing endpoints). The `400 "unsupported offer"` fallthrough is
-retained but is now unreachable for any valid `OfferType`.
+**Save Success is presentational.** The `markSaved` / `applySaveSuccess` state transition is purely a UI concern — it shows `StepSaveSuccess` instead of closing immediately. It does not trigger any additional server write; the `recordOutcome` call already happened inside `acceptOffer` on the server, or as a fire-and-forget from `Step3BonusEntries` for `bonus_entries_100`.
 
-## Pause-collision (Phase 3)
+**`bonus_entries_100` / `tier_downgrade` keep their pre-existing endpoints.** `accept_offer` was not added for Phase-2 offers (no pre-existing endpoint existed for `pause_30d` at the time) — `bonus_entries_100` uses `/api/cancellation-upsell/redeem` and `tier_downgrade` uses the downgrade flow. `accept_offer` was introduced for `pause_30d` (the first offer with no pre-existing endpoint), then extended for `discount_50_2mo` and `unsubscribe_marketing`. The `400 "unsupported offer"` fallthrough is retained but is now unreachable for any valid `OfferType`.
+
+### Mutation hooks (`src/hooks/queries/useCancellationFlow.ts`)
+
+Three TanStack `useMutation` hooks — **no `queryClient` / `invalidateQueries`**:
+
+- `useStartCancellationFlow` — POSTs `{ action: "start", reason, reasonText? }`, returns `{ eventId, offersShown, pastDue }`.
+- `useOutcomeCancellationFlow` — POSTs `{ action: "outcome", eventId, outcome, offerAccepted? }`. Called fire-and-forget after cancel.
+- `useAcceptOffer` — POSTs `{ action: "accept_offer", eventId, offer }`, returns `{ ok, resumesAt?, couponId? }` (`resumesAt` for `pause_30d`, `couponId` for `discount_50_2mo`, neither for `unsubscribe_marketing` → just `{ ok }`). Used by `PauseOfferCard`, `DiscountOfferCard`, and `UnsubscribeOfferCard` via `mutateAsync` (each card awaits success before calling `onAcceptedOffer`, and inspects the thrown `ApiError.status` for the graceful-decline path — 409/404 for pause/discount, 404/500 for unsubscribe which has no 409). Threaded `index.tsx` → `Step2Offer` as `acceptOfferMutation`.
+
+The parent (`SubscriptionManagementModal`) refreshes data via its existing imperative `fetchSubscriptionBenefits()` call — no query invalidation needed in the modal itself.
+
+### Parent integration (`SubscriptionManagementModal`)
+
+- `showCancellationFlow` / `setShowCancellationFlow` — replaces the old `showCancellationUpsell`.
+- `handleCancelSubscription` — opens the flow unconditionally (the old client-side `cancellationUpsellRedeemed` lifetime gate is removed; server-side eligibility filter in `CancellationFlowService` handles one-time-consumed offers).
+- `onSaved` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
+- `onCancelled` → calls `fetchSubscriptionBenefits()` + `onSubscriptionUpdate()` then closes.
+- `onResolvePayment` → `setShowCancellationFlow(false)` then `setIsRenewalFailedModalOpen(true)`.
+- `onClose` → `setShowCancellationFlow(false)` (plain close — only reachable from "Keep my membership" in Step 4).
+- `onRequestTierDowngrade(eventId)` → stores `eventId` in `pendingCancellationEventId` ref; immediately calls `setShowCancellationFlow(false)` (NO outcome recorded — the event stays `in_progress`); then selects the cheapest `DowngradeOption` from `subscriptionBenefits.availableDowngrades` (lowest `price`) and calls `setSelectedDowngrade(cheapest)` + `setShowDowngradeConfirm(true)`.
+- **Downgrade success path** (`handleDowngradeSubscription`): if `pendingCancellationEventId.current` is set, fire-and-forgets `POST /api/subscription/cancellation-flow` with `{action:"outcome",eventId,outcome:"saved",offerAccepted:"tier_downgrade"}`, then clears the ref. This is the only place the `tier_downgrade` outcome is recorded.
+- **Downgrade dismiss path** (`DowngradeConfirmModal` `onClose`): clears `pendingCancellationEventId.current` without recording any outcome — the event stays `in_progress` and matures to `abandoned` server-side.
+- `tierDowngradeAvailable={(subscriptionBenefits?.availableDowngrades?.length ?? 0) > 0}` — threaded to `CancellationFlowModal` so `Step2Offer` can skip the dead tier card when no downgrade options exist.
+
+The old `CancellationUpsellModal` has been removed — `src/components/modals/CancellationUpsellModal/` no longer exists. The +100-entries rung still POSTs to the existing, untouched `/api/cancellation-upsell/redeem` route (backed by `src/utils/redeemables/cancellation-upsell-eligibility.ts`); only the superseded modal UI was deleted.
+
+### Note on shared-ui domain
+
+`src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
+
+---
+
+## Pause-collision
 
 The retention `pause_30d` offer sets Stripe `pause_collection` with a
 `subscription.metadata.pauseReason = "retention"` marker. This collides with the
@@ -503,8 +518,7 @@ survive that path; a recovery pause must keep behaving exactly as before.
 ### Where the real decision lives
 
 The clear decision is in `src/services/stripe-webhook-handlers/index.ts`
-lines **3430-3436** (the `shouldClearPauseForCollection` expression). As of
-Task 11 the webhook delegates the **entire** decision to `decideClearPause`
+lines **3430-3436** (the `shouldClearPauseForCollection` expression). The webhook delegates the **entire** decision to `decideClearPause`
 (single source of truth) — it no longer inlines the legacy `||` chain:
 
 ```ts
@@ -572,19 +586,11 @@ interface ClearPauseInput {
   **unchanged** — `decideClearPause` and other callers/tests still rely on it.
   Its real signature is
   `{ billingReason: string | null | undefined; previousSubscriptionDbStatus: string | undefined }`.
-  The webhook no longer imports it directly (Task 11 removed that import since it
-  had no remaining reference in the file); it is now reached only via
+  The webhook no longer imports it directly; it is now reached only via
   `decideClearPause`.
 - For non-retention inputs (`pauseReason` undefined or any value other than
   `"retention"`), `decideClearPause` reproduces the legacy decision exactly:
   recovery pauses behave precisely as before.
-- Task 11 made a single surgical change in `stripe-webhook-handlers/index.ts`:
-  the `shouldClearPauseForCollection` right-hand expression now calls
-  `decideClearPause(...)`. No surrounding logic (the
-  `if (shouldClearPauseForCollection) { … resumeAfterSuccessfulRenewalPayment … }`
-  block, affiliate eligibility, etc.) changed. `npm run type-check`,
-  `npm run test:stripe-collection-pause`, `npm run lint`, and `npm run build`
-  all pass.
 
 ### Domain
 
@@ -592,7 +598,7 @@ interface ClearPauseInput {
 domain (`docs/subscription/`); the Domain Manifest in `CLAUDE.md` already covers
 these paths — no manifest edit was required.
 
-## RetentionPauseService (Task 12)
+## RetentionPauseService
 
 `src/services/subscription/RetentionPauseService.ts`
 
@@ -696,7 +702,7 @@ server-side imports (`stripe.ts`, `mongodb.ts`, `User.ts`) are deferred to the b
 of `applyRetentionPause` via dynamic `import()` so the module is safely importable
 in test environments that lack `STRIPE_SECRET_KEY`/`MONGODB_URI`.
 
-## RetentionDiscountService (Task 15)
+## RetentionDiscountService
 
 `src/services/subscription/RetentionDiscountService.ts`
 
@@ -729,16 +735,12 @@ and makes the offer trivially auditable.
 `applyRetentionDiscount` ensures the singleton exists before attaching it:
 
 1. `stripe.coupons.retrieve(RETENTION_COUPON_ID)` succeeds → coupon exists, use it.
-2. Retrieve throws a Stripe "resource_missing" / 404 (classified the same way as
-   `SubscriptionReferenceService.retrieveStripeSubscription`: `code === "resource_missing"`
-   / `"resource_missing_deleted"` or `statusCode === 404`) → `stripe.coupons.create(buildCouponParams())`.
+2. Retrieve throws a Stripe "resource_missing" / 404 → `stripe.coupons.create(buildCouponParams())`.
 3. Retrieve throws anything else → rethrow (real Stripe/network failure).
 4. **Concurrent first-use race:** two requests both see the coupon missing and
    both call `create` with the same fixed `id`. Stripe rejects the second create;
-   that "already exists" / idempotency error (`code === "resource_already_exists"` /
-   `"idempotency_key_in_use"`, or a message containing `already exists`) is
-   treated as success — the post-condition (coupon exists) holds. Any other
-   create error is rethrown.
+   that "already exists" / idempotency error is treated as success — the
+   post-condition (coupon exists) holds. Any other create error is rethrown.
 
 ### `discounts` REPLACES existing discounts (intentional)
 
@@ -750,12 +752,6 @@ await stripe.subscriptions.update(subscriptionId, {
   discounts: [{ coupon: RETENTION_COUPON_ID }],
 });
 ```
-
-Stripe v18 (`stripe@18.5.0`, API `2025-08-27.basil`) types
-`SubscriptionUpdateParams.discounts` as
-`Stripe.Emptyable<Array<{ coupon?: string; discount?: string; promotion_code?: string }>>`,
-so `[{ coupon: RETENTION_COUPON_ID }]` is the correct shape (verified by
-`npm run build`).
 
 Setting `discounts` **REPLACES** the subscription's existing discount set — if
 the member already had another discount it is overwritten by the retention
@@ -798,59 +794,7 @@ flag). The Stripe/DB path is not tested (no network); heavy server-side imports
 `applyRetentionDiscount` via dynamic `import()` so the module is safely
 importable in env-less test environments.
 
-### Wired into `acceptOffer` (Task 16)
-
-`CancellationFlowService.acceptOffer` now routes `offer === "discount_50_2mo"`
-to `applyRetentionDiscount(userId)` (mirroring the `pause_30d` →
-`applyRetentionPause` branch added in Task 14): on success it records
-`saved/discount_50_2mo` and returns `{ couponId }`. The error→status mapping is
-the **shared** `retentionOfferErrorToStatus` helper (Task 16 generalized the
-former pause-only `retentionPauseErrorToStatus` to cover both services' message
-sets, DRY). `IMPLEMENTED_OFFERS` now includes `discount_50_2mo`, so the eligibility
-filter surfaces it and `Step2Offer` renders `DiscountOfferCard`.
-
-> **Test-expectation note (Task 16):** shipping `discount_50_2mo` changed the
-> expected outputs of two pre-existing pure tests, which were updated to the new
-> reality (NOT left stale):
-> - `cancellation-flow-eligibility.test.ts`: the old `testUnimplementedFilteredPhase2`
->   (asserted `[discount_50_2mo, bonus_entries_100] → [bonus_entries_100]`) was
->   replaced by `testUnimplementedFiltered` using `unsubscribe_marketing`
->   (still unimplemented until Task 17); added `testDiscount50Implemented`
->   (`→ [discount_50_2mo, bonus_entries_100]`) and `testDiscount50Consumed`
->   (`consumed.discount50_2mo → [bonus_entries_100]`).
-> - `CancellationFlowService.test.ts`: `testStandard` (`too_expensive`) now
->   expects `["discount_50_2mo","bonus_entries_100"]` (was `["bonus_entries_100"]`);
->   `testConsumedBonusEntries` now expects `["discount_50_2mo"]` (was `[]`,
->   because `discount_50_2mo` is not consumed and is now implemented).
-> The pure routing test (`cancellation-flow-routing.test.ts`) is unaffected —
-> `resolveOfferSequence` does not consult `IMPLEMENTED_OFFERS`.
-
-> **Test-expectation note (Task 17):** shipping `unsubscribe_marketing` made
-> `IMPLEMENTED_OFFERS` complete (all 5 `OfferType`s). Tests were corrected to the
-> new mathematically-correct reality (NOT hacked):
-> - `cancellation-flow-eligibility.test.ts`: the Task-16 `testUnimplementedFiltered`
->   (used `unsubscribe_marketing` as the still-unimplemented example, asserting
->   `[unsubscribe_marketing, bonus_entries_100] → [bonus_entries_100]`) is now
->   **wrong** and was **deleted** — with all offers implemented there is no
->   unimplemented `OfferType` left to assert. It is replaced by
->   `testAllImplementedSurface` (all 5 in a sequence surface in full when none
->   consumed / not past-due) plus `testUnsubscribeNotGated`
->   (`[unsubscribe_marketing, bonus_entries_100] → unchanged`, and unaffected by
->   other offers' consumed flags — it is not in `ONE_TIME`) and
->   `testUnsubscribePastDue` (past-due still → `[]`). The `IMPLEMENTED_OFFERS`
->   gate is still logically covered by the consumed / past-due tests. A header
->   comment in the test file records that Phase 5 is complete.
-> - `CancellationFlowService.test.ts`: header comment updated (no offer remains
->   unimplemented); added `testTooManyMessages` asserting
->   `too_many_messages → ["unsubscribe_marketing","bonus_entries_100"]`
->   (pre-Task-17 this was filtered to `["bonus_entries_100"]`; the mathematically
->   correct post-Task-17 value is both). No existing service-test assertion was
->   stale (none asserted `too_many_messages` before).
-> The routing test is unaffected (already asserted
-> `too_many_messages → [unsubscribe_marketing, bonus_entries_100]` — routing
-> never consulted `IMPLEMENTED_OFFERS`).
-
-## RetentionUnsubscribeService (Task 17)
+## RetentionUnsubscribeService
 
 `src/services/subscription/RetentionUnsubscribeService.ts`
 
@@ -897,7 +841,7 @@ Unlike `RetentionPauseService` / `RetentionDiscountService`,
 
 ### Klaviyo files NOT modified
 
-Task 17 only **calls** the existing exported
+This service only **calls** the existing exported
 `syncKlaviyoEmailMarketingFromAdminPreference` — no file under
 `src/utils/integrations/klaviyo/**` was modified. That path belongs to the
 `tracking` domain in the Domain Manifest; since no klaviyo file changed, there
@@ -911,7 +855,7 @@ network-bound, identical rationale to the un-tested Stripe paths in
 service planning behavior (`unsubscribe_marketing` now surfacing) is covered by
 `test:cancellation-eligibility` and `test:cancellation-flow-service`.
 
-## Retention-pause lifecycle: cron cleanup (Task 13)
+## Retention-pause lifecycle: cron cleanup
 
 `src/app/api/cron/cancellation-retention-resume/route.ts`
 (`GET /api/cron/cancellation-retention-resume`, daily at 16:00 UTC)
@@ -938,7 +882,7 @@ Returns `{ processed, cleared, errors }`.
 
 Full cron documentation (auth, candidate query bound, idempotency, response shape) lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-resume-cron).
 
-## §6a Retention-90 maturity: cron back-fill (Task 20)
+## §6a Retention-90 maturity: cron back-fill
 
 `src/app/api/cron/cancellation-retention-maturity/route.ts`
 (`GET /api/cron/cancellation-retention-maturity`, daily at 17:00 UTC — one hour after the resume cron, deliberately staggered to spread load)
@@ -959,50 +903,6 @@ The values written (`"retained"`/`"churned"`) exactly match the `CancellationFlo
 
 Full cron documentation lives in [`docs/infrastructure/api.md`](../infrastructure/api.md#cancellation-retention-maturity-cron).
 
-## Admin analytics (Task 18)
+## Admin analytics
 
-Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, the 90-day retention split (`retained`/`churned`/`pending`), and (Task 21) the same split **per offer** (`retention90ByOffer`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by the §6a maturity cron (Task 20). **Task 21** surfaces `retention90ByOffer` (per-`OfferType` retained/churned/pending using the **identical** `savedAt <= now - 90d` matured cutoff as the overall split and the §6a cron — no skew) in the admin panel so admins can see which offers produce durable saves vs delayed churn. Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
-
-## StepSaveSuccess screen (Task 3)
-
-`src/components/modals/CancellationFlowModal/StepSaveSuccess.tsx`
-
-Post-accept confirmation screen shown instead of the modal silently closing after a retention offer is accepted. Covers: `discount_50_2mo`, `pause_30d`, `unsubscribe_marketing`, `bonus_entries_100`. `tier_downgrade` does **not** use this screen (it exits to the parent downgrade modal). Pure presentation — no API calls, no side effects.
-
-### Props
-
-| Prop | Type | Purpose |
-|---|---|---|
-| `offer` | `OfferType` | Drives the bullet-point copy via the `lines()` helper |
-| `result` | `AcceptResult \| null` | Provides `resumesAt` (pause) / `couponId` (discount) from the accept response |
-| `firstName` | `string?` | Personalises the headline (`"You're all set, {name}."`) |
-| `onClose` | `() => void` | Passed to `FlowFrame` — closes the modal without any further action |
-| `onDone` | `() => void` | CTA handler — wired to the parent's `onSaved()` callback |
-
-### Animation
-
-The green check circle uses `motion-safe:animate-[scaleIn_.35s_ease-out]`. The `scaleIn` keyframe (`scale(.6)→scale(1)` with opacity 0→1) is defined in `src/app/globals.css`.
-
-## index.tsx shell (Task 4)
-
-**StepIndicator and in-modal ModalHeader removed.** `StepIndicator.tsx` has been deleted (`git rm`). The shared `ModalHeader` import is gone. Each step now owns its header via `FlowFrame` (wired in Tasks 5–8) — no visible progress indicator in the shell.
-
-### StepSaveSuccess routing (Task 4)
-
-`index.tsx` checks `state.saveSuccess && state.acceptedOffer` as the very first branch in its render return. When true, `<StepSaveSuccess offer={...} result={...} onClose={onClose} onDone={onSaved} />` is rendered directly inside `ModalContent` (instead of `renderStep()`). `ModalContent` now uses `padding="none"` so `FlowFrame` controls all internal spacing.
-
-### onAcceptedOffer wiring (Task 4)
-
-`renderStep()` passes `onAcceptedOffer={(o, r) => flowHook.markSaved(o, r)}` to `<Step2Offer>`. This both wires the save-success transition and avoids an unused-variable lint error on `flowHook.markSaved`. `onClose={handleHeaderClose}` is also passed to `<Step1Reason>`, `<Step2Offer>`, and `<Step4Confirm>` (received by those components' prop interfaces in Tasks 5–8).
-
-## Note on shared-ui domain
-
-`src/components/modals/**` paths match both the `subscription` domain (this doc) and the `shared-ui` domain (`docs/shared-ui/`). The modal-primitive layer (`ModalContainer`, `ModalHeader`, `ModalContent`) is documented in `docs/shared-ui/ui-primitives.md`; the cancellation-specific step logic is documented here.
-
-## Task 5 — Step1Reason restyled via primitives + first-name greeting
-
-`Step1Reason.tsx` was restyled onto the Task-1 primitives (`FlowFrame`, `IconChip`, `Headline`, `SubCopy`, `PrimaryCta` from `./primitives`). All existing logic is preserved unchanged: `selectReason`, `setReasonText`, `applyStart`, `handleContinue`, `handleReasonChange`, `handleTextChange`, `otherTextMissing`, `canContinue`, `isPending`, `isOther`, `REASON_OPTIONS`, the mandatory "Other" free-text + character counter + error.
-
-The `onClose: () => void` prop was added to `Step1ReasonProps` — wired through `FlowFrame`, resolving one of the three pending type errors that existed after Task 4.
-
-A best-effort first-name greeting is shown: `useUserContext()` is called unconditionally (safe — `CancellationFlowModal` always renders inside `UserProvider`, same as `MembershipModal` and `Header`), then `userData?.firstName` is accessed via optional chaining. If the value is a multi-word string, only the first whitespace-delimited token is used. If the context value is absent the headline falls back to the neutral "Before you go —".
+Read-only cancellation-flow analytics live in the **admin** domain (not subscription): the pure shaper `summarizeCancellationEvents` + DB entry `getCancellationFlowAnalytics` in `src/services/admin/cancellationFlowAnalytics.ts`, the `GET /api/admin/cancellation-flow-analytics` route, and the `CancellationFlowAnalytics` panel (Analytics sidebar tab). The shaper reads `CancellationFlowEvent` (this domain's model) and derives: triggered, per-reason share, the reason→offer→accepted/cancelled/abandoned funnel, save rate, offers-accepted, past-due exclusion from offer-conversion, the 90-day retention split (`retained`/`churned`/`pending`), and the same split **per offer** (`retention90ByOffer`). `abandoned` = `outcome === "in_progress"` AND `startedAt <= now - 1h`; `retention90` only counts matured saves (else `pending`) and is populated by the §6a maturity cron. `retention90ByOffer` (per-`OfferType` retained/churned/pending using the **identical** `savedAt <= now - 90d` matured cutoff as the overall split and the §6a cron — no skew) surfaces in the admin panel so admins can see which offers produce durable saves vs delayed churn. Full contract: [`docs/admin/api.md`](../admin/api.md#cancellation-flow-analytics). Test: `npm run test:cancellation-analytics`.
