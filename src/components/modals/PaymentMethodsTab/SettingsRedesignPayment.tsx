@@ -186,7 +186,13 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
                   <div className="relative h-full p-5 flex flex-col justify-between">
                     <div className="flex items-start justify-between">
-                      <div className="w-10 h-7 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-600 shadow-inner" />
+                      <div className="w-10 h-7 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-600 relative overflow-hidden shadow-inner">
+                        <div className="absolute inset-1 grid grid-cols-3 grid-rows-3 gap-px">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <div key={i} className="bg-yellow-700/30 rounded-sm" />
+                          ))}
+                        </div>
+                      </div>
                       <div className="flex flex-col items-end gap-1">
                         {skin.mark}
                         {isDefault && (
