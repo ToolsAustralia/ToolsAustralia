@@ -102,7 +102,7 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
         <IconChip tone="gold"><CreditCard size={22} strokeWidth={2} /></IconChip>
         <Headline>Payment needs<br />attention</Headline>
         <SubCopy>Your subscription has a payment issue. Resolve it to keep your membership active and your entries safe.</SubCopy>
-        <ValueCard className="border-amber-200 from-amber-50 to-amber-100/40 dark:border-amber-900/50 dark:from-amber-950/30">
+        <ValueCard className="border-amber-200 from-amber-50 to-amber-100/40 dark:border-amber-900/50 dark:from-amber-950/30 dark:to-amber-950/10">
           <FeatureRow>Entries are on hold — settle up to keep them</FeatureRow>
           <FeatureRow>Cancelling now permanently forfeits accumulated entries</FeatureRow>
         </ValueCard>
@@ -110,6 +110,11 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
         <TextDecline onClick={() => void handleCancelAnyway()} disabled={isCancelling}>
           {isCancelling ? "Cancelling…" : "No thanks, cancel anyway"}
         </TextDecline>
+        {outcomeMutation.isError && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">
+            {outcomeMutation.error instanceof Error ? outcomeMutation.error.message : "Failed to record outcome. Please try again."}
+          </p>
+        )}
       </FlowFrame>
     );
   }
@@ -121,11 +126,11 @@ const Step4Confirm: React.FC<Step4ConfirmProps> = ({ state, modalProps, outcomeM
       <div className="mt-4 flex flex-col gap-2.5">
         <div className="flex items-center gap-3 rounded-[13px] border border-neutral-200 bg-neutral-50 px-3.5 py-3 dark:border-neutral-700 dark:bg-neutral-900">
           <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"><Ticket size={13} /></span>
-          <div><div className="text-[12.5px] font-bold text-neutral-900 dark:text-white">Accumulated entries</div><div className="text-[11px] text-neutral-400">Permanently lost on cancel</div></div>
+          <div><div className="text-[12.5px] font-bold text-neutral-900 dark:text-white">Accumulated entries</div><div className="text-[11px] text-neutral-500 dark:text-neutral-400">Permanently lost on cancel</div></div>
         </div>
         <div className="flex items-center gap-3 rounded-[13px] border border-neutral-200 bg-neutral-50 px-3.5 py-3 dark:border-neutral-700 dark:bg-neutral-900">
           <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400"><Trophy size={13} /></span>
-          <div><div className="text-[12.5px] font-bold text-neutral-900 dark:text-white">Your major draw spot</div><div className="text-[11px] text-neutral-400">Or $10,000 cash — gone</div></div>
+          <div><div className="text-[12.5px] font-bold text-neutral-900 dark:text-white">Your major draw spot</div><div className="text-[11px] text-neutral-500 dark:text-neutral-400">Or $10,000 cash — gone</div></div>
         </div>
       </div>
       <UrgencyStrip>Someone&apos;s name gets called next draw. It could just as easily be yours.</UrgencyStrip>
