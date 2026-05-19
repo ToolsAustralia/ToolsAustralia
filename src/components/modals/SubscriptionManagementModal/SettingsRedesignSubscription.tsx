@@ -174,7 +174,6 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
   if (membershipPackage && activeSubscription) {
     const scheme = getMembershipSectionColorScheme(planIdOf(membershipPackage), true);
     const accent = scheme.accentHex ?? "#ee0000";
-    const nextBilling = formatDate(activeSubscription.endDate);
     const isCancelled = subscriptionBenefits?.isCancelled;
 
     // Discount math — VERBATIM from CurrentBenefitsCard.
@@ -184,15 +183,22 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
         ? Math.round(membershipPackage.price * (1 - discount.percentOff / 100) * 100) / 100
         : null;
     const discountEndsLabel = discount?.endsAt ? formatDate(discount.endsAt) : null;
-    const startedLabel = new Date(activeSubscription.startDate).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-    const endLabel =
-      isCancelled
-        ? formatDate(subscriptionBenefits?.endDate || activeSubscription.endDate)
-        : nextBilling;
+    // Short month on mobile (e.g. "Dec 1, 2025") so the fact tiles don't wrap;
+    // full month from sm: up. Long form matches the legacy `formatDate` output.
+    const fmt = (v?: string | Date | null, month: "short" | "long" = "long"): string | null => {
+      if (!v) return null;
+      const d = v instanceof Date ? v : new Date(v);
+      return Number.isNaN(d.getTime())
+        ? null
+        : d.toLocaleDateString("en-US", { year: "numeric", month, day: "numeric" });
+    };
+    const startedShort = fmt(activeSubscription.startDate, "short");
+    const startedLong = fmt(activeSubscription.startDate, "long");
+    const endRaw = isCancelled
+      ? subscriptionBenefits?.endDate || activeSubscription.endDate
+      : activeSubscription.endDate;
+    const endShort = fmt(endRaw, "short");
+    const endLong = fmt(endRaw, "long");
     const endTitle = isCancelled ? "Subscription ends" : hasFailed ? "Failed on" : "Next billing";
 
     // Plan-benefits entries text — same util + inputs as CurrentBenefitsCard.
@@ -302,12 +308,18 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
             <div className="grid grid-cols-2 gap-3 mt-6">
               <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
                 <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">Started</p>
-                <p className="text-sm font-semibold mt-0.5">{startedLabel}</p>
+                <p className="text-sm font-semibold mt-0.5">
+                  <span className="sm:hidden">{startedShort}</span>
+                  <span className="hidden sm:inline">{startedLong}</span>
+                </p>
               </div>
-              {endLabel && (
+              {endShort && (
                 <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
                   <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">{endTitle}</p>
-                  <p className="text-sm font-semibold mt-0.5">{endLabel}</p>
+                  <p className="text-sm font-semibold mt-0.5">
+                    <span className="sm:hidden">{endShort}</span>
+                    <span className="hidden sm:inline">{endLong}</span>
+                  </p>
                 </div>
               )}
             </div>
