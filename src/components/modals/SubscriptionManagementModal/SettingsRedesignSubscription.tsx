@@ -24,6 +24,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
 import {
   Card,
@@ -394,37 +395,41 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
             />
             <div className="space-y-3">
               {!isCancelled &&
-                (subscriptionBenefits?.availableUpgrades ?? []).map((u) => (
-                  <ManageRow
-                    key={`up-${u.packageId}`}
-                    icon={ArrowUpRight}
-                    accentHex={accent}
-                    title={`Upgrade to ${u.name}`}
-                    desc={`$${u.price} / mo — ${u.entriesPerMonth} entries${
-                      u.shopDiscountPercent ? `, ${u.shopDiscountPercent}% partner discounts` : ""
-                    }`}
-                    cta={
-                      <SettingsButton variant="dark" size="sm" onClick={() => onSelectUpgrade(u)}>
-                        Upgrade
-                      </SettingsButton>
-                    }
-                  />
-                ))}
+                (subscriptionBenefits?.availableUpgrades ?? []).map((u) => {
+                  const partnerPct = getPartnerCatalogAccessPercentForMembershipPackageId(u.packageId);
+                  return (
+                    <ManageRow
+                      key={`up-${u.packageId}`}
+                      icon={ArrowUpRight}
+                      accentHex={getMembershipSectionColorScheme(u.packageId, true).accentHex ?? accent}
+                      title={`Upgrade to ${u.name}`}
+                      desc={`$${u.price} / mo — ${u.entriesPerMonth} entries, ${partnerPct}% partner discounts`}
+                      cta={
+                        <SettingsButton variant="dark" size="sm" onClick={() => onSelectUpgrade(u)}>
+                          Upgrade
+                        </SettingsButton>
+                      }
+                    />
+                  );
+                })}
               {!isCancelled &&
-                (subscriptionBenefits?.availableDowngrades ?? []).map((d) => (
-                  <ManageRow
-                    key={`down-${d.packageId}`}
-                    icon={RefreshCw}
-                    accentHex={accent}
-                    title={`Downgrade to ${d.name}`}
-                    desc={`$${d.price} / mo — Keep light access without losing your account`}
-                    cta={
-                      <SettingsButton variant="secondary" size="sm" onClick={() => onSelectDowngrade(d)}>
-                        Switch
-                      </SettingsButton>
-                    }
-                  />
-                ))}
+                (subscriptionBenefits?.availableDowngrades ?? []).map((d) => {
+                  const partnerPct = getPartnerCatalogAccessPercentForMembershipPackageId(d.packageId);
+                  return (
+                    <ManageRow
+                      key={`down-${d.packageId}`}
+                      icon={RefreshCw}
+                      accentHex={getMembershipSectionColorScheme(d.packageId, true).accentHex ?? accent}
+                      title={`Downgrade to ${d.name}`}
+                      desc={`$${d.price} / mo — ${d.entriesPerMonth} entries, ${partnerPct}% partner discounts`}
+                      cta={
+                        <SettingsButton variant="secondary" size="sm" onClick={() => onSelectDowngrade(d)}>
+                          Switch
+                        </SettingsButton>
+                      }
+                    />
+                  );
+                })}
               {/* Auto-renewal — display-only (no toggle endpoint exists) */}
               <ManageRow
                 icon={Bell}
