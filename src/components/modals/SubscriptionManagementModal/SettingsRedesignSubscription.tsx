@@ -18,12 +18,14 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Sparkles,
-  Bell,
   RefreshCw,
   X,
   Trophy,
 } from "lucide-react";
-import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
+import {
+  getMembershipSectionColorScheme,
+  type PackageColorScheme,
+} from "@/utils/package-colors/packageColorScheme";
 import { getPartnerCatalogAccessPercentForMembershipPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { calculateRenewalEntries } from "@/utils/payment/subscription-entries-calculator";
 import {
@@ -123,6 +125,34 @@ const ManageRow: React.FC<{
   </div>
 );
 
+/**
+ * Package-tier-colored CTA — mirrors the legacy UpgradeList button:
+ * `style = enterNowButtonStyle ?? badgeStyle`, text class
+ * `enterNowButtonTextClass ?? (textGradientStyle ? "" : "text-white")`,
+ * inner label gets `textGradientStyle` when present.
+ */
+const PackageCta: React.FC<{
+  scheme: PackageColorScheme;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}> = ({ scheme, disabled, onClick, children }) => {
+  const buttonStyle = (scheme.enterNowButtonStyle ?? scheme.badgeStyle) as React.CSSProperties;
+  const textClass =
+    scheme.enterNowButtonTextClass ?? (scheme.textGradientStyle ? "" : "text-white");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all hover:brightness-105 disabled:opacity-60 disabled:cursor-not-allowed w-full sm:w-auto ${textClass}`}
+      style={buttonStyle}
+    >
+      <span style={scheme.textGradientStyle ?? undefined}>{children}</span>
+    </button>
+  );
+};
+
 const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> = ({
   user,
   membershipPackage,
@@ -131,6 +161,8 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
   packagesLoading,
   hasFailed,
   pendingBenefitCountdownProps,
+  isLoading,
+  benefitsLoading,
   activeOneTimePackage,
   formatDate,
   onResolveFailed,
@@ -270,7 +302,7 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
             </div>
 
             {/* Plan facts */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-6">
+            <div className="grid grid-cols-2 gap-3 mt-6">
               <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
                 <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">Started</p>
                 <p className="text-sm font-semibold mt-0.5">{startedLabel}</p>
@@ -281,12 +313,6 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
                   <p className="text-sm font-semibold mt-0.5">{endLabel}</p>
                 </div>
               )}
-              <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
-                <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">Auto-renewal</p>
-                <p className="text-sm font-semibold mt-0.5">
-                  {activeSubscription.autoRenew && !hasFailed ? "Enabled" : "Disabled"}
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -397,17 +423,22 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
               {!isCancelled &&
                 (subscriptionBenefits?.availableUpgrades ?? []).map((u) => {
                   const partnerPct = getPartnerCatalogAccessPercentForMembershipPackageId(u.packageId);
+                  const sch = getMembershipSectionColorScheme(u.packageId, true);
                   return (
                     <ManageRow
                       key={`up-${u.packageId}`}
                       icon={ArrowUpRight}
-                      accentHex={getMembershipSectionColorScheme(u.packageId, true).accentHex ?? accent}
+                      accentHex={sch.accentHex ?? accent}
                       title={`Upgrade to ${u.name}`}
                       desc={`$${u.price} / mo — ${u.entriesPerMonth} entries, ${partnerPct}% partner discounts`}
                       cta={
-                        <SettingsButton variant="dark" size="sm" onClick={() => onSelectUpgrade(u)}>
+                        <PackageCta
+                          scheme={sch}
+                          disabled={isLoading || benefitsLoading}
+                          onClick={() => onSelectUpgrade(u)}
+                        >
                           Upgrade
-                        </SettingsButton>
+                        </PackageCta>
                       }
                     />
                   );
@@ -415,43 +446,26 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
               {!isCancelled &&
                 (subscriptionBenefits?.availableDowngrades ?? []).map((d) => {
                   const partnerPct = getPartnerCatalogAccessPercentForMembershipPackageId(d.packageId);
+                  const sch = getMembershipSectionColorScheme(d.packageId, true);
                   return (
                     <ManageRow
                       key={`down-${d.packageId}`}
                       icon={RefreshCw}
-                      accentHex={getMembershipSectionColorScheme(d.packageId, true).accentHex ?? accent}
+                      accentHex={sch.accentHex ?? accent}
                       title={`Downgrade to ${d.name}`}
                       desc={`$${d.price} / mo — ${d.entriesPerMonth} entries, ${partnerPct}% partner discounts`}
                       cta={
-                        <SettingsButton variant="secondary" size="sm" onClick={() => onSelectDowngrade(d)}>
+                        <PackageCta
+                          scheme={sch}
+                          disabled={isLoading || benefitsLoading}
+                          onClick={() => onSelectDowngrade(d)}
+                        >
                           Switch
-                        </SettingsButton>
+                        </PackageCta>
                       }
                     />
                   );
                 })}
-              {/* Auto-renewal — display-only (no toggle endpoint exists) */}
-              <ManageRow
-                icon={Bell}
-                accentHex={accent}
-                title="Auto-renewal"
-                desc="Renews automatically on your billing date"
-                cta={
-                  <span
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full ${
-                      activeSubscription.autoRenew ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-700"
-                    }`}
-                    role="img"
-                    aria-label={activeSubscription.autoRenew ? "Auto-renewal enabled" : "Auto-renewal disabled"}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                        activeSubscription.autoRenew ? "translate-x-[1.375rem]" : "translate-x-0.5"
-                      }`}
-                    />
-                  </span>
-                }
-              />
               {isCancelled ? (
                 <ManageRow
                   icon={RefreshCw}
