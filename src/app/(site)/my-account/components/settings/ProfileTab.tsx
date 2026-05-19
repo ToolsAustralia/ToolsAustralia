@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowUpRight,
   Info,
+  Pencil,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
@@ -66,6 +67,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   );
   const [isSavingMobile, setIsSavingMobile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  // State / Profession show as design cards; clicking opens the real input.
+  const [editingState, setEditingState] = useState(false);
+  const [editingProfession, setEditingProfession] = useState(false);
 
   const invalidateAccountData = async () => {
     if (!session?.user?.id) return;
@@ -277,89 +281,144 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         />
 
         <div className="space-y-5">
-          {/* Phone number */}
-          <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
-            <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400 text-xs font-semibold border-r border-neutral-200 dark:border-neutral-700 pr-2.5 pointer-events-none">
-                <span className="text-base">🇦🇺</span>
-                <span>+61</span>
+          {/* Phone number + Date of birth — same row */}
+          <div className="grid sm:grid-cols-2 gap-5 items-start">
+            <Field label="Phone number" hint="Used for renewal alerts and 2FA.">
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400 text-xs font-semibold border-r border-neutral-200 dark:border-neutral-700 pr-2.5 pointer-events-none">
+                  <span className="text-base">🇦🇺</span>
+                  <span>+61</span>
+                </div>
+                <SettingsInput
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="Enter phone number"
+                  inputMode="tel"
+                  className="pl-[5.5rem]"
+                />
               </div>
-              <SettingsInput
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="Enter phone number"
-                inputMode="tel"
-                className="pl-[5.5rem]"
+              <div className="flex gap-2 pt-1">
+                <SettingsButton
+                  variant="primary"
+                  size="md"
+                  onClick={handleSaveMobile}
+                  disabled={isSavingMobile}
+                >
+                  {isSavingMobile ? "Saving..." : "Save phone"}
+                </SettingsButton>
+                <SettingsButton
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setMobile(user.mobile || "")}
+                >
+                  Reset
+                </SettingsButton>
+              </div>
+            </Field>
+
+            <div className="space-y-1.5">
+              <BirthdatePicker
+                value={birthdate}
+                onChange={setBirthdate}
+                label="Date of birth"
+                maxDate={new Date()}
+                placeholder="Select date of birth"
               />
+              {ineligibilityReasons.under18 && (
+                <p
+                  className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+                  role="status"
+                >
+                  <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                  You must be 18 or over to participate in giveaways.
+                </p>
+              )}
             </div>
-            <div className="flex gap-2 pt-1">
-              <SettingsButton
-                variant="primary"
-                size="md"
-                onClick={handleSaveMobile}
-                disabled={isSavingMobile}
-              >
-                {isSavingMobile ? "Saving..." : "Save phone"}
-              </SettingsButton>
-              <SettingsButton
-                variant="secondary"
-                size="md"
-                onClick={() => setMobile(user.mobile || "")}
-              >
-                Reset
-              </SettingsButton>
-            </div>
-          </Field>
-
-          {/* State */}
-          <div className="space-y-1.5">
-            <Dropdown
-              options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
-              value={state}
-              onChange={setState}
-              placeholder="Select state"
-              label="State"
-            />
-            {ineligibilityReasons.state && (
-              <p
-                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
-                role="status"
-              >
-                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-                SA and ACT residents cannot participate in giveaways.
-              </p>
-            )}
           </div>
 
-          {/* Date of birth */}
-          <div className="space-y-1.5">
-            <BirthdatePicker
-              value={birthdate}
-              onChange={setBirthdate}
-              label="Date of birth"
-              maxDate={new Date()}
-              placeholder="Select date of birth"
-            />
-            {ineligibilityReasons.under18 && (
-              <p
-                className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
-                role="status"
-              >
-                <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
-                You must be 18 or over to participate in giveaways.
-              </p>
-            )}
-          </div>
+          {/* State + Profession — design cards; click opens the real input */}
+          <div className="grid sm:grid-cols-2 gap-5 items-start">
+            {/* State */}
+            <div className="space-y-1.5">
+              {editingState ? (
+                <Dropdown
+                  options={AUSTRALIAN_STATES.map((s) => ({ value: s.code, label: `${s.name} (${s.code})` }))}
+                  value={state}
+                  onChange={setState}
+                  placeholder="Select state"
+                  label="State"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingState(true)}
+                  className="w-full text-left rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3.5 py-3 flex items-center justify-between gap-3 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400">
+                      State
+                    </span>
+                    <span
+                      className={cn(
+                        "block text-sm font-semibold truncate mt-0.5",
+                        state ? "text-neutral-900 dark:text-white" : "text-neutral-400 dark:text-neutral-500",
+                      )}
+                    >
+                      {AUSTRALIAN_STATES.find((s) => s.code === state)?.name ?? "Select state"}
+                    </span>
+                  </span>
+                  <Pencil className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={2} aria-hidden />
+                </button>
+              )}
+              {ineligibilityReasons.state && (
+                <p
+                  className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"
+                  role="status"
+                >
+                  <Info className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+                  SA and ACT residents cannot participate in giveaways.
+                </p>
+              )}
+            </div>
 
-          {/* Profession — free text (emoji tiles intentionally deferred) */}
-          <Field label="Profession">
-            <SettingsInput
-              value={profession}
-              onChange={(e) => setProfession(e.target.value)}
-              placeholder="Enter profession"
-              maxLength={100}
-            />
-          </Field>
+            {/* Profession */}
+            <div className="space-y-1.5">
+              {editingProfession ? (
+                <Field label="Profession">
+                  <SettingsInput
+                    value={profession}
+                    onChange={(e) => setProfession(e.target.value)}
+                    placeholder="Enter profession"
+                    maxLength={100}
+                    autoFocus
+                  />
+                </Field>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingProfession(true)}
+                  className="w-full text-left rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-3.5 py-3 flex items-center justify-between gap-3 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-bold tracking-[0.14em] uppercase text-neutral-500 dark:text-neutral-400">
+                      Profession
+                    </span>
+                    <span
+                      className={cn(
+                        "block text-sm font-semibold truncate mt-0.5",
+                        profession
+                          ? "text-neutral-900 dark:text-white"
+                          : "text-neutral-400 dark:text-neutral-500",
+                      )}
+                    >
+                      {profession || "Add your profession"}
+                    </span>
+                  </span>
+                  <Pencil className="w-4 h-4 text-neutral-400 shrink-0" strokeWidth={2} aria-hidden />
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Eligibility callout — positive */}
           {!isIneligible && !!state && !!(birthdate || user.birthdate) && (
