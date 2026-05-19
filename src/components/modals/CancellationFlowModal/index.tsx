@@ -112,7 +112,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
             acceptOfferMutation={acceptOfferMutation}
             onSaved={onSaved}
             onDecline={flowHook.decline}
-            onAcceptedOffer={(o, r) => flowHook.markSaved(o, r)}
+            onAcceptedOffer={flowHook.markSaved}
             onRequestTierDowngrade={onRequestTierDowngrade}
             tierDowngradeAvailable={tierDowngradeAvailable}
             onClose={handleHeaderClose}
@@ -146,7 +146,7 @@ const CancellationFlowModal: React.FC<CancellationFlowModalProps> = ({
           <StepSaveSuccess
             offer={state.acceptedOffer}
             result={state.acceptResult}
-            onClose={onClose}
+            onClose={handleHeaderClose}
             onDone={onSaved}
           />
         ) : (
