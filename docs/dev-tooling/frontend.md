@@ -62,6 +62,8 @@ When a modal is moved from a monolith `.tsx` file to a folder structure (`/index
 | Step 4 — normal | `Step4Confirm` | Standard confirm screen |
 | Step 4 — past-due | `Step4Confirm` | `pastDue=true` — payment-attention variant |
 
+**`ALL_OFFERS` list:** The five offer types (`discount_50_2mo`, `tier_downgrade`, `pause_30d`, `unsubscribe_marketing`, `bonus_entries_100`) are hardcoded in the harness as a plain `OfferType[]` array. They are **not** imported from `OFFER_TYPES` at runtime — `CancellationFlowHarnessClient` is a `"use client"` component and `@/models/CancellationFlowEvent` is a Mongoose model module (`mongoose` is `serverExternalPackages`); runtime-importing it in client code crashes the browser. The `OfferType` type is imported `import type` (erased at build). If the offer set changes, update the hardcoded list by hand.
+
 **Mock strategy:** All mutations are no-op objects shaped like a TanStack Query `useMutation` result, cast `as never` to satisfy production prop types without weakening them. Clicking Accept/Decline on Step2Offer and the confirm/back buttons on Step4Confirm all go through these mocked mutations — no network calls are made for those actions.
 
 **Caveat — Step4Confirm "Cancel anyway" CTA:** The "No thanks, cancel anyway" text-link inside `Step4Confirm` calls `fetch("/api/stripe/cancel-subscription")` directly inside the component (structural, not via the mocked mutation). This cannot be intercepted by the harness. Clicking it in dev with no active subscription will fire a real API request and return a 401/403. Do not click it during visual QA; treat it as a structural test only if you have a real dev subscription to cancel.
