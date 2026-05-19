@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import type { OfferType } from "@/models/CancellationFlowEvent";
 import { offerPhaseFor, nextOfferState, applySaveSuccess } from "../useCancellationFlow";
-import type { FlowState } from "../types";
+import type { FlowState, AcceptResult } from "../types";
+import type { AcceptOfferResponse } from "@/hooks/queries/useCancellationFlow";
+
+// Drift guard (compile-time only): AcceptResult must stay structurally
+// equivalent to the API hook's AcceptOfferResponse. If either side gains/loses
+// a field, one of these `true` assignments fails type-check.
+type _AcceptResultExtendsResponse = AcceptResult extends AcceptOfferResponse ? true : false;
+type _ResponseExtendsAcceptResult = AcceptOfferResponse extends AcceptResult ? true : false;
+const _driftA: _AcceptResultExtendsResponse = true;
+const _driftB: _ResponseExtendsAcceptResult = true;
+void _driftA;
+void _driftB;
 
 /**
  * Locks the cancellation-flow step-machine reducer.
@@ -132,6 +143,7 @@ function testApplySaveSuccessNoResult() {
   assert.equal(next.saveSuccess, true);
   assert.equal(next.acceptedOffer, "unsubscribe_marketing");
   assert.equal(next.acceptResult, null);
+  assert.equal(next.step, 2);
 }
 
 function testApplySaveSuccessPure() {
