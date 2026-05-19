@@ -169,8 +169,19 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
             {cards.map((pm) => {
               const meta = pm.card;
               const skin = brandSkin(meta?.brand);
-              const isDefault =
-                pm.isDefault || pm.paymentMethodId === subscriptionDefaultPaymentMethodId;
+              // Single source of truth for the star. Two different "defaults"
+              // exist: the wallet default (pm.isDefault, a Mongo flag) and the
+              // card the Stripe subscription actually charges
+              // (subscriptionDefaultPaymentMethodId). OR-ing them starred both
+              // when they diverged. With an active subscription the truthful
+              // "charged for your subscription" card wins; otherwise (no sub,
+              // or Stripe returned no subscription default) fall back to the
+              // wallet default so exactly one card is always starred.
+              const subscriptionCardKnown =
+                Boolean(hasActiveSubscription) && Boolean(subscriptionDefaultPaymentMethodId);
+              const isDefault = subscriptionCardKnown
+                ? pm.paymentMethodId === subscriptionDefaultPaymentMethodId
+                : pm.isDefault;
               const isSettingDefault = settingDefaultId === pm.paymentMethodId;
               const isDeleting = deletingId === pm.paymentMethodId;
               return (
@@ -202,8 +213,11 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                         )}
                       </div>
                     </div>
-                    <div className="font-mono text-sm sm:text-base whitespace-nowrap tracking-[0.1em] mt-2">
-                      •••• •••• •••• {meta?.last4 ?? "••••"}
+                    <div className="font-mono flex items-center justify-between gap-1 w-full text-lg sm:text-base lg:text-sm tracking-[0.15em] mt-2">
+                      <span className="whitespace-nowrap">••••</span>
+                      <span className="whitespace-nowrap">••••</span>
+                      <span className="whitespace-nowrap">••••</span>
+                      <span className="whitespace-nowrap">{meta?.last4 ?? "••••"}</span>
                     </div>
                     <div className="flex items-end justify-between">
                       <div>
