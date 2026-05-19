@@ -17,13 +17,14 @@
  *     stops MARKETING email + SMS only; transactional / account emails
  *     (receipts, renewals, draw results) are untouched.
  *
- * Task 6: every card is now rendered on the shared primitive grammar
- * (FlowFrame / Eyebrow / Headline / SubCopy / ValueCard / FeatureRow /
- * PrimaryCta / TextDecline) with a desktop two-column layout and a
- * "Tailored for you · Offer n of total" eyebrow. The pause / discount /
- * unsubscribe accept success branch now calls `onAcceptedOffer(offer, result)`
- * (so the Save Success screen shows) instead of `onSaved()`. tier_downgrade
- * still exits via `onRequestTierDowngrade` (parent owns the downgrade modal).
+ * Every card is rendered on the shared primitive grammar (FlowFrame / Eyebrow /
+ * Headline / SubCopy / ValueCard / FeatureRow / PrimaryCta / TextDecline) with
+ * a desktop two-column layout and a "Tailored for you · Offer n of total"
+ * eyebrow. Accepting pause / discount / unsubscribe / bonus_entries_100 calls
+ * `onAcceptedOffer(offer, result)` which drives the Save Success screen.
+ * tier_downgrade exits via `onRequestTierDowngrade` (parent owns the
+ * downgrade modal); bonus_entries_100 delegates to Step3BonusEntries which
+ * also routes through `onAcceptedOffer`.
  */
 
 import React, { useState } from "react";
@@ -48,8 +49,6 @@ interface Step2OfferProps {
   state: FlowState;
   outcomeMutation: ReturnType<typeof useOutcomeCancellationFlow>;
   acceptOfferMutation: ReturnType<typeof useAcceptOffer>;
-  /** Still used by the Step3BonusEntries delegation (bonus_entries_100 + fallback). */
-  onSaved: () => void;
   onDecline: () => void;
   /** Branded header close — threaded into each card's FlowFrame. */
   onClose: () => void;
@@ -118,7 +117,7 @@ const TierDowngradeCard: React.FC<TierDowngradeCardProps> = ({
     // Do NOT record outcome here — the outcome is only recorded if the downgrade
     // is actually confirmed in DowngradeConfirmModal. Pass the eventId to the parent
     // so it can POST {outcome:"saved",offerAccepted:"tier_downgrade"} on real success.
-    // The parent will also close this modal without calling onSaved.
+    // The parent closes this modal directly (no Save Success screen for tier_downgrade).
     onRequestTierDowngrade?.(state.eventId);
   };
 
