@@ -57,6 +57,7 @@ import UpgradeList from "./UpgradeList";
 import DowngradeList from "./DowngradeList";
 import CancelResumeRow from "./CancelResumeRow";
 import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import SettingsRedesignSubscription from "./SettingsRedesignSubscription";
 
 interface SubscriptionManagementModalProps {
@@ -848,10 +849,52 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   };
 
   // Shared subscribe handler (close panel/modal then open membership selection).
-  const handleSubscribeClick = () => {
+  // When a `packageId` is provided (resubscribe tier picker), open the
+  // membership modal with that plan pre-selected — otherwise fall back to the
+  // legacy "show all packages" flow.
+  const handleSubscribeClick = (packageId?: string) => {
     onClose();
-    whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
+    whenGatesOpenElseGateModal(() => {
+      if (packageId) {
+        const apiPlan = subscriptionPackages.find(
+          (p) => p._id === packageId || p.id === packageId
+        );
+        if (apiPlan) {
+          membershipModal.openModal(convertToLocalPlan(apiPlan));
+          return;
+        }
+      }
+      membershipModal.openModalWithPackageSelectionFirst();
+    });
   };
+
+  // Resubscribe tier picker: route the chosen packageId through the existing
+  // subscribe flow with the package pre-selected.
+  const handlePickResubscribeTier = (packageId: string) => {
+    handleSubscribeClick(packageId);
+  };
+
+  // Build the resubscribe tier picker options from the same `subscriptionPackages`
+  // source UpgradeList/DowngradeList use. We filter by entriesPerMonth being a
+  // number — subscriptionPackages from useMemberships() is already the active
+  // subscription set; the entriesPerMonth check guards the type narrowing.
+  const resubscribePackages: ResubscribeTierOption[] = subscriptionPackages
+    .filter((p): p is typeof p & { entriesPerMonth: number } => typeof p.entriesPerMonth === "number")
+    .map((p) => ({
+      packageId: p._id,
+      name: p.name,
+      price: p.price,
+      entriesPerMonth: p.entriesPerMonth,
+    }));
+
+  const previousPackageId =
+    typeof user.subscription?.packageId === "string"
+      ? user.subscription.packageId
+      : (user.subscription?.packageId as { _id?: string } | undefined)?._id;
+
+  const lastMonthAccumulated =
+    (user.subscription as { lastMonthAccumulatedEntries?: number } | undefined)
+      ?.lastMonthAccumulatedEntries ?? 0;
 
   // Legacy 4-way state selector (modal mode + SettingsModal panel use this verbatim).
   const legacyStateBody =
@@ -869,7 +912,12 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
       <InactiveSubscriptionState
         status={user.subscription.status}
-        onSubscribeClick={handleSubscribeClick}
+        onSubscribeClick={() => handleSubscribeClick(undefined)}
+        packages={resubscribePackages}
+        previousPackageId={previousPackageId}
+        promoMultiplier={membershipPromoMultiplier}
+        lastMonthAccumulatedEntries={lastMonthAccumulated}
+        onPickTier={handlePickResubscribeTier}
       />
     ) : (
       <NoSubscriptionState onSubscribeClick={handleSubscribeClick} />
@@ -911,6 +959,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         onSubscriptionUpdate?.();
       }}
       onSubscribeClick={handleSubscribeClick}
+      packages={resubscribePackages}
+      previousPackageId={previousPackageId}
+      promoMultiplier={membershipPromoMultiplier}
+      lastMonthAccumulatedEntries={lastMonthAccumulated}
+      onPickTier={handlePickResubscribeTier}
     />
   );
 
