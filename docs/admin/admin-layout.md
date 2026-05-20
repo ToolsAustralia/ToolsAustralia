@@ -14,13 +14,13 @@ Each tab declares its required permission inline via the `requires` field on the
 
 Tabs that don't have a dedicated permission area in the catalog (e.g. `tiktok-ads`, `snapchat-ads`, `blocked-transactions`) map to the closest related area (`facebookAds.view` or `settings.view`).
 
-## Settings preview route (dev-only design mockup)
+## Team tab (top-level)
 
-`/admin/settings/preview` renders a static visual mockup of the Roles + Staff screens with mock data from `src/components/admin/settings/preview/mockData.ts` — no DB calls, no mutations. The page is gated behind the admin layout's staff/admin guard and a `usePermissions().has("settings.view")` check. Both light and dark themes are supported via the existing `dark:` Tailwind classes.
+The Team tab (formerly "Settings") lives in its own top-level sidebar group at the bottom, separate from Operations. URL is `/admin/team`. The group is intentionally a stub-with-one-tab today so the owner can grow it later (API keys, integrations, audit log) without renaming or restructuring the sidebar.
 
-The preview locks the visual direction before Tasks 20/21 build the real, API-integrated versions. The Discord-inspired structure (left-rail roles list + permission sections with toggleable Discord-style rows on Roles; member-list cards with role-color avatars on Staff) is carried into the real components at `src/components/admin/settings/RolesManagement.tsx` and `StaffManagement.tsx`.
+Internally the permission area is still called `settings` (covers `settings.view` / `settings.edit` / `settings.delete`) because the same area-string gates a few other sidebar entries (Activity Log, Blocked Transactions, Past-Due Charges, Webhook Queue). Renaming the catalog area would force a sweep of every consumer; the UI-facing label is what changed.
 
-## Settings → Roles management
+## Team → Roles management
 
 `src/components/admin/settings/RolesManagement.tsx` is the real, API-backed roles editor. It reads from `/api/admin/roles`, batches permission toggles into a single PATCH on save (so flipping ten toggles is one network call, not ten), and exposes a small color-preset picker for the Discord-style role chip. The Admin role's permissions are read-only here and the seed script is the only writer.
 
@@ -31,7 +31,7 @@ Save semantics:
 - Deleting checks `memberCount` client-side and refuses on the server too (`409`).
 - All mutations invalidate the `["admin", "roles"]` query so the sidebar and member counts stay current.
 
-## Settings → Staff management
+## Team → Staff management
 
 `src/components/admin/settings/StaffManagement.tsx` is the API-backed staff editor. It joins `Role.color` into the GET response so each staff row gets a role-colored avatar, marks `userType: "admin"` members with a Crown icon, and disables the "Remove" action on the currently-logged-in user.
 
@@ -42,6 +42,6 @@ Save semantics:
 
 ## SettingsTab wrapper
 
-`src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "settings"` inside `AdminPage.tsx`. It owns the Staff / Roles sub-nav (Staff is default) and delegates to the two management components. Sidebar already gates the tab on `settings.view`, so this component does not duplicate the permission check.
+`src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "team"` inside `AdminPage.tsx`. It owns the Staff / Roles sub-nav (Staff is default) and delegates to the two management components. The component is named `SettingsTab` for historical reasons (the tab was originally called "Settings"); the file can be renamed in a follow-up if anyone trips on it.
 
-The preview route can stay live in dev for quick visual reference or be removed once production is shipped — decide during the cleanup PR.
+Sidebar already gates the tab on `settings.view`, so this component does not duplicate the permission check.

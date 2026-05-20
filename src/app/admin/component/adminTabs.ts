@@ -23,7 +23,7 @@ import {
   LineChart,
   Megaphone,
   ScrollText,
-  Settings,
+  Shield,
   TrendingUp,
   Trophy,
   UserCheck,
@@ -96,7 +96,6 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
       { id: "submissions", label: "Submissions", icon: FileTextIcon, requires: "submissions.view" },
       { id: "error-reports", label: "Error Reports", icon: Bug, requires: "errorReports.view" },
       { id: "activity-log", label: "Activity Log", icon: ScrollText, requires: "settings.view" },
-      { id: "settings", label: "Settings", icon: Settings, requires: "settings.view" },
     ],
   },
   {
@@ -107,6 +106,16 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
       { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle, requires: "settings.view" },
       { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText, requires: "settings.view" },
       { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity, requires: "settings.view" },
+    ],
+  },
+  // Team lives in its own group at the bottom of the sidebar so the owner can
+  // grow it (API keys, integrations, audit) without crowding day-to-day tabs.
+  {
+    id: "team",
+    label: "Team",
+    groupIcon: Shield,
+    tabs: [
+      { id: "team", label: "Team", icon: Shield, requires: "settings.view" },
     ],
   },
 ];
