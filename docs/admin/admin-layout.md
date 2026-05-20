@@ -31,4 +31,17 @@ Save semantics:
 - Deleting checks `memberCount` client-side and refuses on the server too (`409`).
 - All mutations invalidate the `["admin", "roles"]` query so the sidebar and member counts stay current.
 
+## Settings → Staff management
+
+`src/components/admin/settings/StaffManagement.tsx` is the API-backed staff editor. It joins `Role.color` into the GET response so each staff row gets a role-colored avatar, marks `userType: "admin"` members with a Crown icon, and disables the "Remove" action on the currently-logged-in user.
+
+- The role dropdown auto-saves on change (single PATCH per change — the editor doesn't batch role changes since they're already atomic).
+- Resend invite is a single click — generates a fresh token and re-sends via SendGrid.
+- The Invite modal accepts email / first name / last name / role and notes that inviting into the **Admin** role creates a super-admin. The default selected role is the first non-Admin role to avoid accidental super-admin creation.
+- Removal demotes `userType` back to `customer`, clears `roleId`, deactivates the user, and wipes any invite token. The User document is preserved for audit history.
+
+## SettingsTab wrapper
+
+`src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "settings"` inside `AdminPage.tsx`. It owns the Staff / Roles sub-nav (Staff is default) and delegates to the two management components. Sidebar already gates the tab on `settings.view`, so this component does not duplicate the permission check.
+
 The preview route can stay live in dev for quick visual reference or be removed once production is shipped — decide during the cleanup PR.

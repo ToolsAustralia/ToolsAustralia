@@ -36,8 +36,12 @@ export async function GET() {
         .filter((id): id is string => Boolean(id))
     ),
   ];
-  const roles = await Role.find({ _id: { $in: roleIds } }).select("name").lean();
-  const roleMap = new Map(roles.map((r) => [r._id.toString(), r.name]));
+  const roles = await Role.find({ _id: { $in: roleIds } })
+    .select("name color")
+    .lean();
+  const roleMap = new Map(
+    roles.map((r) => [r._id.toString(), { name: r.name, color: r.color ?? null }])
+  );
 
   const now = new Date();
   return NextResponse.json({
@@ -51,7 +55,8 @@ export async function GET() {
       isEmailVerified: s.isEmailVerified,
       userType: s.userType,
       roleId: s.roleId?.toString() ?? null,
-      roleName: s.roleId ? roleMap.get(s.roleId.toString()) ?? null : null,
+      roleName: s.roleId ? roleMap.get(s.roleId.toString())?.name ?? null : null,
+      roleColor: s.roleId ? roleMap.get(s.roleId.toString())?.color ?? null : null,
       inviteStatus:
         !s.isActive && s.inviteToken
           ? s.inviteTokenExpires && s.inviteTokenExpires < now

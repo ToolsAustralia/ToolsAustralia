@@ -32,6 +32,7 @@ Each entry in `data`:
 | `userType` | `"staff" \| "admin"` | UI shows a crown / system badge for `admin` |
 | `roleId` | string \| null | `null` only briefly during onboarding |
 | `roleName` | string \| null | Joined from `Role.name` |
+| `roleColor` | string \| null | Joined from `Role.color` (6-digit hex). Drives the avatar color. |
 | `inviteStatus` | `"active" \| "pending" \| "expired"` | Derived from `isActive` + `inviteTokenExpires` |
 | `invitedAt` | ISO date \| null | |
 
