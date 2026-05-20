@@ -19,6 +19,17 @@
 
 The cron at 1:30 UTC is the **fallback authority** for transitions. The webhook also calls the service but its failure must not block payment processing. Cron will catch up.
 
+### R3a. New-entry purchases require `status: "active"` — the blackout covers freeze AND gap
+
+The gate for **new-entry purchases** (not renewals) is `currentMajorDraw?.status === "active"`. There are two windows where this is false:
+
+- **Freeze (8:00–8:30 PM, 27th)** — current draw is `frozen`.
+- **Gap (8:30 PM → 12:00 AM, 27th → 28th)** — current draw is `completed`, next is still `queued` (no row has `status: "active"`).
+
+Together they form a **~4-hour purchase blackout** every cycle. Don't write code that assumes the blackout is only the 30-minute freeze. The single source of truth on the frontend is [`useMajorDrawPurchaseGate`](../../src/hooks/useMajorDrawPurchaseGate.ts); on the backend it is [`enforceMajorDrawOpenForNewPurchasesOr403`](../../src/utils/draws/major-draw-gate-http.ts) (which wraps `checkMajorDrawActiveForNewPurchases` → `getActiveMajorDrawForNewEntryPurchases`, both in [`major-draw-helpers.ts`](../../src/utils/draws/major-draw-helpers.ts)). Both return the same answer because they share the same `status === "active"` predicate.
+
+**Renewals are different.** Subscription-renewal allocation uses [`getTargetMajorDraw`](../../src/utils/draws/major-draw-helpers.ts), which has explicit "freeze" and "no active draw (gap period)" branches that route to the next queued draw. Renewals are not blocked during the blackout — they're re-targeted. If you add a new purchase-path entry point, decide explicitly: is it a *new-entry purchase* (call the gate, 403 the user) or a *renewal-style allocation* (call `getTargetMajorDraw`, route forward).
+
 ## Eligibility
 
 ### R4. Subscriptions anchor renewals to the 24th to leave 3-day failed-renewal recovery window

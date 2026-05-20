@@ -6,10 +6,25 @@
 |---|---|
 | `major-draw-helpers.ts` | `getTargetMajorDraw()` — picks the active major draw for an action; calls transition service first. |
 | `major-draw-transition-service.ts` | The single authority for `queued → active → frozen → completed` transitions. Idempotent, debounced, never-throws. |
-| `major-draw-gate-http.ts` | HTTP-layer guard that blocks API actions on a frozen/completed draw. |
+| `major-draw-gate-http.ts` | HTTP-layer guard `enforceMajorDrawOpenForNewPurchasesOr403`. Returns 403 `GATES_CLOSED` whenever no draw has `status: "active"` — covers the 8:00–8:30 PM freeze, the 8:30 PM → 12:00 AM gap, and any other moment without an active draw. Wired into six purchase endpoints: `/api/upsell/purchase`, `/api/stripe/create-payment-intent`, `/api/stripe/create-subscription[-existing-user]`, `/api/stripe/create-one-time-purchase[-existing-user]`, `/api/stripe/upgrade-subscription-payment`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). |
 | `major-draw-strip-schedule.ts` | Strip-schedule helpers (visual schedule on the draw page) — _TODO: clarify exact role._ |
 | `mini-draw-helpers.ts` | Mini-draw-equivalent of major-draw-helpers (target selection, eligibility). |
 | `remove-draw-entries.ts` | Reverser used during refund processing — removes entries written by a successful payment. |
+| `has-membership-grant-this-draw.ts` | `hasMembershipGrantInCurrentDrawPeriod(userId)` — see below. |
+
+## `has-membership-grant-this-draw` helper
+
+[src/utils/draws/has-membership-grant-this-draw.ts](../../src/utils/draws/has-membership-grant-this-draw.ts) exports a single async helper consumed by the subscription upgrade flow:
+
+```ts
+hasMembershipGrantInCurrentDrawPeriod(userId: Types.ObjectId | string): Promise<boolean>
+```
+
+**Procedure:** load the `MajorDraw` with `status === "active"`, locate the user's row in `draw.entries[]`, and return `(entry?.entriesBySource?.membership ?? 0) > 0`. Returns `false` when no draw is active (between draws) or when the user has no row yet.
+
+**Failure mode:** fails open — any thrown error (DB outage, malformed cursor, etc.) is logged via `console.error` and the helper returns `false`. That defaults the caller to the more generous Mode A upgrade branch (see [subscription/rules.md R3a](../subscription/rules.md#r3a-upgrade-entries-stack-lastmonthaccumulated-unless-a-membership-grant-already-landed-this-draw)).
+
+**Sole caller (today):** `handleInvoicePaymentSucceeded` in [src/services/stripe-webhook-handlers/index.ts](../../src/services/stripe-webhook-handlers/index.ts) — used only on the `isUpgrade` branch to pick between Mode A (stack `lastMonthAccumulated`) and Mode B (legacy `newBase × promo`) of `calculateUpgradeEntries`. See [billing-stripe/architecture.md](../billing-stripe/architecture.md#upgrade-entries--mode-a--mode-b) for the routing diagram.
 
 ## Cross-domain helpers
 

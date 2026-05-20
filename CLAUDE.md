@@ -47,6 +47,52 @@ This rule overrides skills like `brainstorming`, `writing-plans`, and `writing-s
 
 This rule is not hook-enforced. You're expected to apply it on your own.
 
+### 5. Keep README.md and BUSINESS.md in sync with business-level changes
+
+The per-domain doc-sync hook covers `docs/<domain>/` updates. README.md and BUSINESS.md are the **top-level business status documents** at the repo root and the hook does not enforce them. You **must** update them in the same task when your change flips a fact they assert. Triggers:
+
+- A membership tier is added, removed, repriced, or its entries / partner-discount % / shop % change.
+- An access rule for a package family changes (e.g. who can see Additional packs, who gets partner access).
+- A "coming soon" item ships (shop, partner-discount API at 1K+ brands, TikTok / Snapchat insights sync, mobile app on Play Store, second monthly major draw).
+- A new "coming soon" item is added to the roadmap.
+- The major draw cadence (27th of month), freeze-period rule, or mini-draw trigger model changes.
+- The anchor-day-24 billing rule, refund-reversal model, or past-due recovery flow changes (see §9 of BUSINESS.md).
+- An ad platform moves from "prepared / shell only" to "live" or vice versa.
+- The partner-discount tier-visibility model changes (today: 50 / 75 / 100% of a 7-brand catalog).
+
+Both files include a "Coming soon" section — when something ships, **move the line out of "Coming soon" into "Live"** in the same edit, do not leave it in both.
+
+This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
+
+### 6. Verify before claiming
+
+Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
+
+- If you cannot reach high confidence, say "I haven't verified X" explicitly. Do not phrase guesses as facts.
+- After a fix, verify the *end-to-end* behavior, not just the first symptom. The Stripe Basil API issue and the MongoDB index collision were both missed by stopping at the first plausible cause.
+- If the user pushes back on a claim, treat that as a signal to re-verify from scratch, not to defend the original claim.
+
+This rule is not hook-enforced. You're expected to apply it on your own.
+
+### 7. Subagent scope discipline
+
+When dispatching subagents (Agent / Task tool), the dispatching prompt must include:
+- An **explicit list of files or paths** the subagent may modify.
+- An **explicit forbidden list** when the task is scoped to one layer (e.g. frontend-only tasks must list `src/app/api/**` as off-limits).
+- A verification step the subagent must run before reporting done.
+
+If a subagent report is truncated or ambiguous, do not mark the task complete — re-read the changed files yourself and finish verification directly. Subagents have twice scope-crept into backend route changes during frontend-only work; the cost of an extra sentence in the prompt is much smaller than the cost of that cleanup.
+
+### 8. Just do the thing on small fixes
+
+For one-line tweaks, color/style changes, copy edits, or single-file bug fixes: make the edit. Do not produce a verbose audit, design rationale, or "here's what I'm about to do" preamble before a 3-line change. If the user asks "why," explain *then*.
+
+Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills, prefer action.
+
+### 9. Worktree convention
+
+Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.

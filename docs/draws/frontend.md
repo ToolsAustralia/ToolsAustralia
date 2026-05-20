@@ -28,7 +28,7 @@
 | Hook | Purpose | Source |
 |---|---|---|
 | `useMajorDrawEntryCta()` | CTA state for the major-draw entry button | [src/hooks/useMajorDrawEntryCta.ts](../../src/hooks/useMajorDrawEntryCta.ts) |
-| `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
+| `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? `gatesClosed = currentMajorDraw?.status !== "active"`, which is true during both the **30-min freeze (8:00–8:30 PM)** and the **3h 30min gap (8:30 PM → 12:00 AM)**. Surfaces [`GateClosedModal`](../../src/components/modals/GateClosedModal.tsx) with the next draw's name and activation date. Mirrors the server gate in [backend.md](./backend.md) `major-draw-gate-http.ts`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
 | `useMiniDrawTrigger()` | Trigger / opening mini-draw modals or flows | [src/hooks/useMiniDrawTrigger.ts](../../src/hooks/useMiniDrawTrigger.ts) |
 | `usePastDrawsData()` | Fetch list of past draws for results page | [src/hooks/usePastDrawsData.ts](../../src/hooks/usePastDrawsData.ts) |
 

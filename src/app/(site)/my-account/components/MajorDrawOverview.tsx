@@ -14,6 +14,12 @@ interface MajorDrawOverviewProps {
   drawName: string;
   drawStatus: "queued" | "active" | "frozen" | "completed" | "cancelled";
   drawDate?: string;
+  /**
+   * Start of the current major-draw window. Used together with `drawDate` and
+   * `userSubscription.lastResubscribedAt` to decide whether to render the
+   * resubscribe + carry-over sub-line below the Membership chip.
+   */
+  activationDate?: string;
   totalEntries: number;
   membershipEntries: number;
   oneTimeEntries: number;
@@ -43,7 +49,16 @@ interface MajorDrawOverviewProps {
   } | null;
   onResolvePayment?: () => void;
   onOneTimeCardClick?: () => void;
-  userSubscription?: { lastMonthAccumulatedEntries?: number };
+  userSubscription?: {
+    lastMonthAccumulatedEntries?: number;
+    /**
+     * Timestamp of the most recent resubscribe (cancelled membership → reactivated).
+     * When this falls between `activationDate` and `drawDate`, the major-draw card
+     * shows a sub-line clarifying that the membership entries this period include
+     * a resubscribe + carry-over.
+     */
+    lastResubscribedAt?: string | Date;
+  };
   activeOneTimePackageIds?: Set<string>;
   className?: string;
 }
@@ -119,6 +134,7 @@ export default function MajorDrawOverview({
   drawName,
   drawStatus,
   drawDate,
+  activationDate,
   totalEntries,
   membershipEntries,
   oneTimeEntries,
@@ -176,6 +192,20 @@ export default function MajorDrawOverview({
         projectedTotalEntries.toLocaleString("en-AU").length
       )
     : 0;
+
+  /**
+   * True when the user's most recent resubscribe timestamp falls inside this
+   * draw's `[activationDate, drawDate]` window. Used to render a sub-line that
+   * clarifies the membership entries for this period include a resubscribe +
+   * carry-over from the previous membership.
+   */
+  const drawIncludesResubscribe = Boolean(
+    userSubscription?.lastResubscribedAt &&
+      activationDate &&
+      drawDate &&
+      new Date(userSubscription.lastResubscribedAt) >= new Date(activationDate) &&
+      new Date(userSubscription.lastResubscribedAt) <= new Date(drawDate)
+  );
 
   /** One badge per package id (user may have multiple active rows for the same upsell). */
   const oneTimeBadgesList = (() => {
@@ -412,6 +442,14 @@ export default function MajorDrawOverview({
                       </div>
                     )}
                   </div>
+
+                  {/* Resubscribe + carry-over sub-line — only on the draw whose
+                      window contains the user's `lastResubscribedAt` */}
+                  {drawIncludesResubscribe && displayMembershipEntries > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-neutral-400 mt-2">
+                      Includes resubscribe + carry-over from previous membership. Next month&apos;s renewal will use your new accumulated total.
+                    </p>
+                  )}
 
                   {/* Badges row */}
                   <div className="flex items-center justify-between gap-3 pt-1">

@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PaymentEvent, { type IPaymentEvent } from "@/models/PaymentEvent";
+import User from "@/models/User";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
+
+// Window during which the success-page carry-over banner is shown after a
+// resubscribe. Mirrors the Task 8 plan: 10 minutes is long enough to cover a
+// slow checkout but short enough to suppress banners for historic resubscribes
+// when an old PaymentIntent is re-fetched.
+const RESUBSCRIBE_BANNER_WINDOW_MS = 10 * 60 * 1000;
 
 type PaymentStatusPayload =
   | {
@@ -21,6 +28,9 @@ type PaymentStatusPayload =
         currency?: string;
         processedBy: string;
         timestamp: string;
+        wasRecentResubscribe?: boolean;
+        lastMonthAccumulatedEntries?: number;
+        entriesGranted?: number;
       };
     }
   | {
@@ -37,7 +47,15 @@ type PaymentStatusPayload =
 
 type PaymentEventLean = Pick<
   IPaymentEvent,
-  "paymentIntentId" | "eventType" | "packageType" | "packageId" | "packageName" | "data" | "processedBy" | "timestamp"
+  | "paymentIntentId"
+  | "eventType"
+  | "packageType"
+  | "packageId"
+  | "packageName"
+  | "data"
+  | "processedBy"
+  | "timestamp"
+  | "userId"
 >;
 
 // Lowered from 4000ms to 1000ms after the async webhook cutover: BenefitsGranted
@@ -72,6 +90,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     let payload: PaymentStatusPayload;
 
     if (paymentEvent) {
+      // Surface resubscribe carry-over context for the success page banner.
+      // We load just the two subscription fields we need from the user the
+      // PaymentEvent already references — no extra Stripe call, no new
+      // collection. The 10-min window filters out historic resubscribes when
+      // an old PaymentIntent id is re-fetched.
+      const resubscribeContext = await loadResubscribeContext(paymentEvent.userId);
+
       payload = {
         success: true,
         processed: true,
@@ -89,6 +114,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           processedBy: paymentEvent.processedBy,
           timestamp:
             paymentEvent.timestamp instanceof Date ? paymentEvent.timestamp.toISOString() : new Date().toISOString(),
+          wasRecentResubscribe: resubscribeContext.wasRecentResubscribe,
+          lastMonthAccumulatedEntries: resubscribeContext.lastMonthAccumulatedEntries,
+          entriesGranted: paymentEvent.data?.entries,
         },
       };
     } else {
@@ -149,7 +177,7 @@ async function getStripeProcessingHint(
 async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<PaymentEventLean | null> {
   const directId = `BenefitsGranted-${paymentIntentId}`;
   const direct = await PaymentEvent.findById(directId)
-    .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp")
+    .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp userId")
     .lean<PaymentEventLean | null>();
   if (direct) {
     return direct;
@@ -170,11 +198,45 @@ async function findBenefitsGrantedEvent(paymentIntentId: string): Promise<Paymen
     }
     const invoiceEventId = `BenefitsGranted-invoice_${invoiceId}`;
     return PaymentEvent.findById(invoiceEventId)
-      .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp")
+      .select("_id paymentIntentId eventType packageType packageId packageName data processedBy timestamp userId")
       .lean<PaymentEventLean | null>();
   } catch (err) {
     console.warn("[payment-status] Could not map PaymentIntent to invoice BenefitsGranted event:", paymentIntentId, err);
     return null;
+  }
+}
+
+/**
+ * Load the resubscribe carry-over context for the success-page banner.
+ *
+ * Returns `wasRecentResubscribe = true` only when the user's last resubscribe
+ * happened within the configured window, so historic resubscribes (looked up
+ * via an old PaymentIntent id) don't re-trigger the banner.
+ *
+ * `lastMonthAccumulatedEntries` is exposed so the client can compute
+ * `previousAccum = lastMonthAccumulatedEntries − entriesGranted` for the
+ * "carried over from your last billing cycle" line.
+ */
+async function loadResubscribeContext(
+  userId: IPaymentEvent["userId"]
+): Promise<{ wasRecentResubscribe: boolean; lastMonthAccumulatedEntries?: number }> {
+  try {
+    const user = await User.findById(userId)
+      .select("subscription.lastResubscribedAt subscription.lastMonthAccumulatedEntries")
+      .lean<{
+        subscription?: { lastResubscribedAt?: Date | string; lastMonthAccumulatedEntries?: number };
+      } | null>();
+    const lastResubscribedAt = user?.subscription?.lastResubscribedAt;
+    const wasRecentResubscribe = lastResubscribedAt
+      ? Date.now() - new Date(lastResubscribedAt).getTime() < RESUBSCRIBE_BANNER_WINDOW_MS
+      : false;
+    return {
+      wasRecentResubscribe,
+      lastMonthAccumulatedEntries: user?.subscription?.lastMonthAccumulatedEntries,
+    };
+  } catch (err) {
+    console.warn("[payment-status] Could not load resubscribe context for user:", userId, err);
+    return { wasRecentResubscribe: false };
   }
 }
 

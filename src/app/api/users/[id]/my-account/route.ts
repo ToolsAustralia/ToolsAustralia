@@ -15,6 +15,7 @@ import { authOptions } from "@/lib/auth";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
+import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -170,7 +171,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Get related data from database
-    const [activeMiniDraws, recentOrders] = await Promise.all([
+    const [activeMiniDraws, recentOrders, hasCurrentDrawMembershipGrant] = await Promise.all([
       MiniDraw.find({
         isActive: true,
         endDate: { $gt: new Date() },
@@ -183,6 +184,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .sort({ createdAt: -1 })
         .limit(10)
         .lean(),
+      hasMembershipGrantInCurrentDrawPeriod(userData._id),
     ]);
 
     // Calculate insights
@@ -225,6 +227,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           ...userData,
           subscriptionPackageData,
           enrichedOneTimePackages: oneTimePackageData,
+          hasCurrentDrawMembershipGrant,
         },
         activeMiniDraws,
         recentOrders,

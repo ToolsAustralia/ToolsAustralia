@@ -19,6 +19,19 @@ The `<Elements>` provider (Stripe.js root) is loaded by the consumers — typica
 | `useSetupIntent()` | client_secret + state for a save-card flow | [src/hooks/useSetupIntent.ts](../../src/hooks/useSetupIntent.ts) |
 | `use3DSRedirectHandler()` | Detects PI/SI id in URL and reconciles status after a 3DS redirect | [src/hooks/use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts) |
 | `useSavedPaymentMethods()` | Lists user's saved methods, supports set-default + delete | [src/hooks/useSavedPaymentMethods.ts](../../src/hooks/useSavedPaymentMethods.ts) |
+| `usePaymentStatus(paymentIntentId, options)` | Polls `/api/payment-status/[paymentIntentId]` until `processed === true` or 90s timeout. Returns `PaymentStatusResponse` — see [api.md](./api.md#get-apipayment-statuspaymentintentid--completed-branch-fields). | [src/hooks/queries/usePaymentQueries.ts](../../src/hooks/queries/usePaymentQueries.ts) |
+
+The `PaymentStatusResponse.data` shape on `usePaymentStatus` includes three optional resubscribe-banner fields populated by the route's `loadResubscribeContext()` helper:
+
+```ts
+// Resubscribe carry-over context for the success-page banner. Only
+// populated on completed payments; `wasRecentResubscribe` is true only if
+// the user's `subscription.lastResubscribedAt` is within the route's
+// 10-minute banner window (RESUBSCRIBE_BANNER_WINDOW_MS).
+wasRecentResubscribe?: boolean;
+lastMonthAccumulatedEntries?: number;
+entriesGranted?: number;
+```
 
 > _TODO: verify each hook's exact API (mutation vs query, query keys, return shape) — pull from source when refreshing._
 
