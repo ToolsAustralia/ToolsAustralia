@@ -55,3 +55,32 @@ After a successful login, `session.user` carries:
 Permissions are loaded from DB on login and refreshed at most every 5 minutes (`PERM_TTL_MS` in `src/lib/auth.ts`) or immediately when the user's `roleId` changes. This means a permission revocation can take up to 5 minutes to propagate to the affected staff member. If instant revocation is needed later, add a `User.tokenVersion` field and bump it on role change.
 
 The JWT also tracks `permissionsLoadedAt` (unix ms timestamp) to drive the TTL check on subsequent requests. Old tokens issued before this task lack this field; the `!token.permissionsLoadedAt` check in the jwt callback treats them as expired and reloads permissions immediately.
+
+## Permission checks (server)
+
+```ts
+import { requirePermission } from "@/lib/api-auth-permissions";
+
+export async function GET(req: NextRequest) {
+  const guard = await requirePermission("users.view");
+  if (guard instanceof NextResponse) return guard;
+  const { session } = guard;
+  // ... your logic
+}
+```
+
+`requirePermission` returns either `{ session }` (allowed) or a `NextResponse` with 401/403.
+
+### Legacy admin bridge
+
+Until the backfill in `scripts/migrate-seed-staff-roles.ts` runs against the production DB, users with the old `role: "admin"` flag but no `roleId` (i.e. `userType !== "staff"`) are treated as having every permission. `LEGACY_ADMIN_ALL` is a frozen copy of the full `PERMISSIONS` array for reference. This bridge is removed in the Phase 5 cleanup PR.
+
+### `userHasPermission` (non-handler contexts)
+
+```ts
+import { userHasPermission } from "@/lib/api-auth-permissions";
+
+const allowed = await userHasPermission(userId, "users.edit");
+```
+
+Reads user + role from DB. Use sparingly — it makes a DB round-trip. Prefer `requirePermission` in route handlers where the session is already available.

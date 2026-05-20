@@ -163,7 +163,8 @@
     "test:retention-resume-cron": "tsx src/app/api/cron/__tests__/cancellation-retention-resume.test.ts",
     "test:cancellation-analytics": "tsx src/services/admin/__tests__/cancellationFlowAnalytics.test.ts",
     "test:retention-maturity": "tsx src/app/api/cron/__tests__/cancellation-retention-maturity.test.ts",
-    "test:permissions": "tsx src/lib/__tests__/permissions.test.ts"
+    "test:permissions": "tsx src/lib/__tests__/permissions.test.ts",
+    "test:api-auth-permissions": "tsx src/lib/__tests__/api-auth-permissions.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
