@@ -172,3 +172,23 @@ Dashboard/account components use `cn()` from `@/utils/cn` for conditional class 
 ## Interaction smoothness (Phase 1, 2026-05-09)
 
 `MajorDrawHeaderStrip` and `MajorDrawOverview` (in [src/app/(site)/my-account/components/](../../src/app/(site)/my-account/components/)) are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) — the surrounding account dashboard does not re-render on every tick of the embedded countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.
+
+## Resubscribe carry-over sub-line on `MajorDrawOverview` (Phase 3, 2026-05-20)
+
+[`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) renders a small sub-line directly below the Membership / One-time entry cards (above the package badges row) when the user just resubscribed inside the current draw window. The exact copy is:
+
+> Includes resubscribe + carry-over from previous membership. Next month's renewal will use your new accumulated total.
+
+**Trigger** — the component computes `drawIncludesResubscribe` as:
+
+```
+userSubscription.lastResubscribedAt ∈ [activationDate, drawDate]
+```
+
+i.e. the user's `subscription.lastResubscribedAt` timestamp must fall inside the active draw's `activationDate..drawDate` window. The sub-line is additionally gated on `displayMembershipEntries > 0` so it does not appear on a freshly-pending renewal with zero membership entries.
+
+**Wiring** — `src/app/(site)/my-account/page.tsx` passes:
+- `activationDate={currentMajorDraw?.activationDate}` (new prop)
+- `userSubscription={{ …, lastResubscribedAt }}` (extended inline cast)
+
+**No new API** — detection is purely client-side from the existing user payload. The `lastResubscribedAt` field is the same UX-only timestamp set by `/api/stripe/create-subscription-existing-user`; see [subscription/models.md → `lastResubscribedAt`](../subscription/models.md) for how it's populated. Entries math is unaffected — this is a label/clarification only.
