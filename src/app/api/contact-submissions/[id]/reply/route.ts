@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { emailService } from "@/lib/email/";
 import mongoose from "mongoose";
 
@@ -27,10 +26,9 @@ export async function POST(
   try {
     await connectDB();
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("submissions.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const { id } = paramsSchema.parse(await params);
     if (!mongoose.Types.ObjectId.isValid(id)) {

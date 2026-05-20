@@ -52,7 +52,17 @@ After a successful login, `session.user` carries:
 }
 ```
 
-Permissions are loaded from DB on login and refreshed at most every 5 minutes (`PERM_TTL_MS` in `src/lib/auth.ts`) or immediately when the user's `roleId` changes. This means a permission revocation can take up to 5 minutes to propagate to the affected staff member. If instant revocation is needed later, add a `User.tokenVersion` field and bump it on role change.
+Permissions are loaded from DB on login and refreshed at most every 5 minutes (`PERM_TTL_MS` in `src/lib/auth.ts`) or immediately when the user's `roleId` changes — **but the role-change refresh alone leaves a window where a demoted admin keeps their old powers for up to 5 minutes**. To force instant revocation, the system also tracks `User.tokenVersion`: every time a staff member's effective permissions change (role reassignment, removal, or an edit to the role's permission list), the affected user's `tokenVersion` is incremented. The JWT callback compares the value stamped on the token against the DB value on every request — on mismatch it sets `token.deleted = true` and the session callback returns `null`, which logs the user out on their very next page load.
+
+Bump points:
+
+| Endpoint | When | How |
+|---|---|---|
+| `PATCH /api/admin/staff/[id]` | `roleId` changes | `user.tokenVersion += 1` |
+| `DELETE /api/admin/staff/[id]` | demote staff → customer | `user.tokenVersion += 1` |
+| `PATCH /api/admin/roles/[id]` | `permissions` array changes | `User.updateMany({ roleId }, { $inc: { tokenVersion: 1 } })` — bulk-bumps every holder of the role in one write |
+
+A user who has never had their `tokenVersion` stamped (token issued before the feature shipped) is backfilled silently — the first JWT callback after deploy stamps the current value and any future mismatch becomes actionable.
 
 The JWT also tracks `permissionsLoadedAt` (unix ms timestamp) to drive the TTL check on subsequent requests. Old tokens issued before this task lack this field; the `!token.permissionsLoadedAt` check in the jwt callback treats them as expired and reloads permissions immediately.
 

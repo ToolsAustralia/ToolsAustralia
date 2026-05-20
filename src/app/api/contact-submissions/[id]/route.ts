@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import mongoose from "mongoose";
 
 /**
@@ -33,14 +32,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to view submissions
+    const guard = await requirePermission("submissions.view");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = paramsSchema.parse(await params);
 
@@ -80,14 +73,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to update submissions
+    const guard = await requirePermission("submissions.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
@@ -147,10 +135,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     await connectDB();
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("submissions.edit");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = paramsSchema.parse(await params);
 
@@ -190,14 +176,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     await connectDB();
 
-    // Check if user is authenticated and has admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // TODO: Add admin role check here
-    // For now, we'll allow any authenticated user to delete submissions
+    const guard = await requirePermission("submissions.delete");
+    if (guard instanceof NextResponse) return guard;
 
     const { id } = paramsSchema.parse(await params);
 

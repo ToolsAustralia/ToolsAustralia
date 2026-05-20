@@ -84,7 +84,7 @@ async function uploadImageToCloudinary(file: File, folder: string = "mini-draws"
  */
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
+    const _guard = await requirePermission("miniDraws.edit");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

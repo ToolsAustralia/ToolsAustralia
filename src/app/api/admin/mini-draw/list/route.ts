@@ -22,7 +22,7 @@ const listQuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.view");
+    const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

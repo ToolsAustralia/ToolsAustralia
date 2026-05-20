@@ -56,9 +56,20 @@ test("Promos area has the 'end' sub-action", () => {
   assert.ok(AREA_ACTIONS.promos.includes("end"));
 });
 
-test("Major draw and AB testing have 'selectWinner'", () => {
+test("Major draw, mini draws, and AB testing have 'selectWinner'", () => {
   assert.ok(AREA_ACTIONS.majorDraw.includes("selectWinner"));
+  assert.ok(AREA_ACTIONS.miniDraws.includes("selectWinner"));
   assert.ok(AREA_ACTIONS.abTesting.includes("selectWinner"));
+});
+
+test("Submissions has reply (edit) and delete sub-actions", () => {
+  assert.ok(AREA_ACTIONS.submissions.includes("edit"));
+  assert.ok(AREA_ACTIONS.submissions.includes("delete"));
+});
+
+test("Mini draws has edit + delete (separate from major-draw permissions)", () => {
+  assert.ok(AREA_ACTIONS.miniDraws.includes("edit"));
+  assert.ok(AREA_ACTIONS.miniDraws.includes("delete"));
 });
 
 test("Affiliates has 'processPayout' and 'delete'", () => {
@@ -120,6 +131,9 @@ test("dangerous sub-actions are marked danger:true", () => {
     "users.delete",
     "promos.end",
     "majorDraw.selectWinner",
+    "miniDraws.selectWinner",
+    "miniDraws.delete",
+    "submissions.delete",
     "affiliates.processPayout",
     "affiliates.delete",
     "errorReports.delete",

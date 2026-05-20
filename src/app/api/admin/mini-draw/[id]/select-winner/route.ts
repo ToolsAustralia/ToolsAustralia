@@ -26,7 +26,7 @@ const selectWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.selectWinner");
+    const _guard = await requirePermission("miniDraws.selectWinner");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

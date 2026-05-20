@@ -9,7 +9,7 @@ import MiniDraw from "@/models/MiniDraw";
  */
 export async function GET() {
   try {
-    const _guard = await requirePermission("majorDraw.view");
+    const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

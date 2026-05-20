@@ -55,15 +55,15 @@ export const AREA_META: Record<Area, AreaMeta> = {
   },
   submissions: {
     label: "Submissions",
-    description: "Contact form submissions and inbox counts.",
+    description: "Contact form submissions — read the inbox, reply to customers, mark threads as handled.",
   },
   miniDraws: {
     label: "Mini Draws",
-    description: "Mini-draw read access. Mini-draw writes live under Major Draw.",
+    description: "Mini-draws: schedule, edit, reorder, declare winners.",
   },
   majorDraw: {
     label: "Major Draw",
-    description: "Major + mini draws: schedule, edit, declare winners.",
+    description: "Major draws: schedule, edit, declare the monthly winner.",
   },
   drawResults: {
     label: "Draw Results",
@@ -172,23 +172,46 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   // Submissions
   "submissions.view": {
     label: "View",
-    description: "See the contact-form submission badge and unread count in the admin layout.",
+    description: "Open the contact-form inbox, read messages, and see the admin layout's unread badge.",
+  },
+  "submissions.edit": {
+    label: "Edit / reply",
+    description: "Reply to a contact submission (sends the customer an email), update a thread's status, and mark it as read.",
+  },
+  "submissions.delete": {
+    label: "Delete",
+    description: "Permanently delete a contact submission and its reply history. Cannot be undone.",
+    danger: true,
   },
 
   // Mini Draws
   "miniDraws.view": {
     label: "View",
-    description: "Read-only access to mini-draw data. Mini-draw write actions are gated under Major Draw.",
+    description: "See the mini-draw list, individual draw detail, full-capacity counts, and exports.",
+  },
+  "miniDraws.edit": {
+    label: "Edit",
+    description: "Create mini-draws, update them, and reorder how they appear in the lineup.",
+  },
+  "miniDraws.selectWinner": {
+    label: "Select winner",
+    description: "Pick a winner for a mini-draw. The selection is recorded as a Winner document and cannot be undone.",
+    danger: true,
+  },
+  "miniDraws.delete": {
+    label: "Delete",
+    description: "Permanently delete a mini-draw. Existing entries are kept but the draw itself is removed.",
+    danger: true,
   },
 
   // Major Draw
   "majorDraw.view": {
     label: "View",
-    description: "See major-draw history, participants, scheduled months, current state, and mini-draw lists / exports.",
+    description: "See major-draw history, participants, scheduled months, and current state.",
   },
   "majorDraw.edit": {
     label: "Edit",
-    description: "Create / update major draws. Create, update, reorder, and delete mini-draws.",
+    description: "Create and update major draws. Mini-draw edits live under their own Mini Draws permission.",
   },
   "majorDraw.selectWinner": {
     label: "Select winner",

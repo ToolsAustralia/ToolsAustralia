@@ -114,21 +114,28 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/metrics/debug` | GET | `overview.view` |
 | `/api/admin/metrics/users` | GET | `overview.view` |
 | `/api/admin/metrics/users/major-draw-comparison` | GET | `overview.view` |
-| `/api/admin/mini-draw/[id]` | GET | `majorDraw.view` |
-| `/api/admin/mini-draw/[id]` | DELETE | `majorDraw.edit` |
-| `/api/admin/mini-draw/[id]/export` | GET | `majorDraw.view` |
-| `/api/admin/mini-draw/[id]/select-winner` | POST | `majorDraw.selectWinner` |
-| `/api/admin/mini-draw/create` | POST | `majorDraw.edit` |
-| `/api/admin/mini-draw/full-capacity-count` | GET | `majorDraw.view` |
-| `/api/admin/mini-draw/list` | GET | `majorDraw.view` |
-| `/api/admin/mini-draw/order` | POST | `majorDraw.edit` |
-| `/api/admin/mini-draw/update` | PUT | `majorDraw.edit` |
+| `/api/admin/mini-draw/[id]` | GET | `miniDraws.view` |
+| `/api/admin/mini-draw/[id]` | DELETE | `miniDraws.delete` |
+| `/api/admin/mini-draw/[id]/export` | GET | `miniDraws.view` |
+| `/api/admin/mini-draw/[id]/select-winner` | POST | `miniDraws.selectWinner` |
+| `/api/admin/mini-draw/create` | POST | `miniDraws.edit` |
+| `/api/admin/mini-draw/full-capacity-count` | GET | `miniDraws.view` |
+| `/api/admin/mini-draw/list` | GET | `miniDraws.view` |
+| `/api/admin/mini-draw/order` | POST | `miniDraws.edit` |
+| `/api/admin/mini-draw/update` | PUT | `miniDraws.edit` |
 | `/api/admin/promo-analytics` | GET | `promos.view` |
 | `/api/admin/promo-analytics/channel-detail` | GET | `promos.view` |
 | `/api/admin/promo-analytics/page-detail` | GET | `promos.view` |
 | `/api/admin/stripe-webhook-queue` | GET | `errorReports.view` |
 | `/api/admin/stripe-webhook-queue` | POST | `errorReports.edit` |
 | `/api/admin/submissions/unviewed-count` | GET | `overview.view` |
+| `/api/contact-submissions` | GET | `submissions.view` |
+| `/api/contact-submissions` | POST | _(public — no auth)_ |
+| `/api/contact-submissions/[id]` | GET | `submissions.view` |
+| `/api/contact-submissions/[id]` | PUT | `submissions.edit` |
+| `/api/contact-submissions/[id]` | PATCH (mark read) | `submissions.edit` |
+| `/api/contact-submissions/[id]` | DELETE | `submissions.delete` |
+| `/api/contact-submissions/[id]/reply` | POST | `submissions.edit` |
 | `/api/admin/upsell-multipliers` | GET | `overview.view` |
 | `/api/admin/upsell-multipliers` | PUT | `overview.edit` |
 | `/api/admin/winners/[id]` | GET | `majorDraw.view` |

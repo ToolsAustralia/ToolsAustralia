@@ -73,10 +73,22 @@ export async function PATCH(
 
   if (parsed.data.name !== undefined) role.name = parsed.data.name;
   if (parsed.data.color !== undefined) role.color = parsed.data.color;
+  const permissionsChanged =
+    parsed.data.permissions !== undefined &&
+    !samePermissions(role.permissions, parsed.data.permissions);
   if (parsed.data.permissions !== undefined) role.permissions = parsed.data.permissions;
 
   try {
     await role.save();
+    // Force-sign-out every staff member who holds this role so the new
+    // permissions take effect immediately. Bulk $inc keeps it to one write
+    // regardless of how many users are affected.
+    if (permissionsChanged) {
+      await User.updateMany(
+        { roleId: role._id },
+        { $inc: { tokenVersion: 1 } }
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     if (
@@ -127,4 +139,11 @@ export async function DELETE(
 
   await Role.deleteOne({ _id: role._id });
   return NextResponse.json({ success: true });
+}
+
+function samePermissions(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const aSet = new Set(a);
+  for (const p of b) if (!aSet.has(p)) return false;
+  return true;
 }

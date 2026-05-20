@@ -57,11 +57,18 @@ export async function PATCH(
     if (!role) {
       return NextResponse.json({ error: "Role not found" }, { status: 404 });
     }
+    const roleChanged =
+      (user.roleId?.toString() ?? null) !== role._id.toString();
     // Inviting/moving into Admin role keeps super-admin powers; otherwise
     // demote to custom-role staff.
     user.roleId = role._id;
     user.userType = role.name === "Admin" ? "admin" : "staff";
     user.role = user.userType === "admin" ? "admin" : "user";
+    // Force-sign-out the affected user on the next request so the new role
+    // takes effect immediately (no 5-minute permission cache drift).
+    if (roleChanged) {
+      user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+    }
   }
 
   if (parsed.data.resendInvite) {
@@ -126,6 +133,9 @@ export async function DELETE(
   user.isActive = false;
   user.inviteToken = undefined;
   user.inviteTokenExpires = undefined;
+  // Force-sign-out the removed user on the next request so they lose admin
+  // access immediately even if their JWT cookie is still valid.
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
   await user.save({ validateBeforeSave: false });
 
   return NextResponse.json({ success: true });

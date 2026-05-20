@@ -11,7 +11,7 @@ import mongoose from "mongoose";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("majorDraw.view");
+    const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
+    const _guard = await requirePermission("miniDraws.delete");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

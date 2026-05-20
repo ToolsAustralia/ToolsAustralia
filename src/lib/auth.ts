@@ -119,6 +119,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
             userType: user.userType ?? "customer",
             roleId: user.roleId ? user.roleId.toString() : null,
+            tokenVersion: user.tokenVersion ?? 0,
           };
 
           authDebugLog("✅ Returning user data:", result);
@@ -196,6 +197,7 @@ export const authOptions: NextAuthOptions = {
             token.roleId = dbUser.roleId ? dbUser.roleId.toString() : null;
             token.permissions = await loadPermissions(token.roleId);
             token.permissionsLoadedAt = Date.now();
+            token.tokenVersion = dbUser.tokenVersion ?? 0;
           } else {
             // If the user record has been removed, mark token as deleted
             // The session callback will return null when this flag is set
@@ -217,6 +219,7 @@ export const authOptions: NextAuthOptions = {
         token.roleId = user.roleId ?? null;
         token.permissions = await loadPermissions(token.roleId);
         token.permissionsLoadedAt = Date.now();
+        token.tokenVersion = user.tokenVersion ?? 0;
       } else if (token.sub && !user && !account) {
         // On subsequent requests, sync from database and refresh permissions if stale
         try {
@@ -227,6 +230,22 @@ export const authOptions: NextAuthOptions = {
             // The session callback will return null when this flag is set
             authDebugLog(
               `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"}`
+            );
+            token.deleted = true;
+            return token;
+          }
+
+          // Force sign-out when User.tokenVersion has been bumped (role change,
+          // staff removal, or a permission edit on the role the user holds).
+          // The guard intentionally only fires when the token already carried a
+          // tokenVersion — tokens issued before this field existed get one
+          // stamped below and become eligible for future invalidation.
+          if (
+            typeof token.tokenVersion === "number" &&
+            (dbUser.tokenVersion ?? 0) !== token.tokenVersion
+          ) {
+            authDebugLog(
+              `🔒 JWT invalidated: tokenVersion mismatch for user ${token.sub} (token=${token.tokenVersion}, db=${dbUser.tokenVersion ?? 0})`
             );
             token.deleted = true;
             return token;
@@ -249,6 +268,11 @@ export const authOptions: NextAuthOptions = {
             token.roleId = dbRoleId;
             token.permissions = await loadPermissions(dbRoleId);
             token.permissionsLoadedAt = Date.now();
+          }
+
+          // Backfill tokenVersion for tokens issued before the feature shipped.
+          if (typeof token.tokenVersion !== "number") {
+            token.tokenVersion = dbUser.tokenVersion ?? 0;
           }
         } catch (error) {
           console.error("Error syncing user data in JWT callback:", error);

@@ -46,6 +46,7 @@ declare module "next-auth" {
     role: string;
     userType: "customer" | "staff" | "admin";
     roleId: string | null;
+    tokenVersion?: number;
   }
 }
 
@@ -59,6 +60,12 @@ declare module "next-auth/jwt" {
     // Optional: old tokens issued before Task 4 deploy lack these. Callers must guard.
     permissions?: string[];
     permissionsLoadedAt?: number; // unix ms — when we last loaded perms from DB
+    /**
+     * Stamped from User.tokenVersion when the token is issued / refreshed.
+     * If this drops out of sync with the DB value, the JWT callback forces a
+     * sign-out (sets `deleted = true`). See docs/auth/roles.md.
+     */
+    tokenVersion?: number;
     deleted?: boolean;
   }
 }

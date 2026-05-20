@@ -36,7 +36,7 @@ const miniDrawUpdateSchema = z.object({
  */
 export async function PUT(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
+    const _guard = await requirePermission("miniDraws.edit");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

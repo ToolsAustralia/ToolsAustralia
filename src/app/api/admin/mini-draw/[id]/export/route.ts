@@ -26,7 +26,7 @@ const STATE_NAMES: Record<string, string> = {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("majorDraw.view");
+    const _guard = await requirePermission("miniDraws.view");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

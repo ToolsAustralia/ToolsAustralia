@@ -290,6 +290,14 @@ export interface IUser extends Document {
   invitedBy?: mongoose.Types.ObjectId;
   invitedAt?: Date;
 
+  /**
+   * Bumped whenever the user's effective permissions change (role reassignment,
+   * staff removal, or any permission edit on the role they hold). The JWT
+   * callback compares its stored value to the DB value on each request and
+   * forces a sign-out when they differ. See docs/auth/roles.md.
+   */
+  tokenVersion: number;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -406,6 +414,10 @@ const UserSchema = new Schema<IUser>(
       ref: "User",
     },
     invitedAt: Date,
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
 
     // Stripe Integration Fields
     stripeCustomerId: {
