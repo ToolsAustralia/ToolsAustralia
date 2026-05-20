@@ -4,6 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import connectDB from "./mongodb";
 import User from "@/models/User";
+import Role from "@/models/Role";
 import { verifyJWT } from "./jwt";
 
 /**
@@ -116,6 +117,8 @@ export const authOptions: NextAuthOptions = {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
+            userType: user.userType ?? "customer",
+            roleId: user.roleId ? user.roleId.toString() : null,
           };
 
           authDebugLog("✅ Returning user data:", result);
@@ -155,6 +158,8 @@ export const authOptions: NextAuthOptions = {
             firstName: payload.firstName,
             lastName: payload.lastName,
             role: payload.role,
+            userType: (payload as { userType?: "customer" | "staff" }).userType ?? "customer",
+            roleId: (payload as { roleId?: string | null }).roleId ?? null,
           };
         } catch (error) {
           console.error("❌ Auto-login token verification failed:", error);
@@ -168,6 +173,14 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user, account }) {
+      const PERM_TTL_MS = 5 * 60 * 1000;
+
+      const loadPermissions = async (roleId: string | null): Promise<string[]> => {
+        if (!roleId) return [];
+        const role = await Role.findById(roleId).select("permissions").lean();
+        return role?.permissions ?? [];
+      };
+
       // For Google OAuth, we need to fetch the user from database to get the role
       if (account?.provider === "google" || !token.role) {
         try {
@@ -179,6 +192,10 @@ export const authOptions: NextAuthOptions = {
             token.firstName = dbUser.firstName;
             token.lastName = dbUser.lastName;
             token.email = dbUser.email;
+            token.userType = dbUser.userType ?? "customer";
+            token.roleId = dbUser.roleId ? dbUser.roleId.toString() : null;
+            token.permissions = await loadPermissions(token.roleId);
+            token.permissionsLoadedAt = Date.now();
           } else {
             // If the user record has been removed, mark token as deleted
             // The session callback will return null when this flag is set
@@ -195,9 +212,12 @@ export const authOptions: NextAuthOptions = {
         token.firstName = user.firstName;
         token.lastName = user.lastName;
         token.email = user.email;
+        token.userType = user.userType ?? "customer";
+        token.roleId = user.roleId ?? null;
+        token.permissions = await loadPermissions(token.roleId);
+        token.permissionsLoadedAt = Date.now();
       } else if (token.sub && !user && !account) {
-        // On subsequent requests, sync email from database if it changed
-        // This ensures session stays in sync after email updates
+        // On subsequent requests, sync from database and refresh permissions if stale
         try {
           await connectDB();
           const dbUser = await User.findById(token.sub);
@@ -205,20 +225,30 @@ export const authOptions: NextAuthOptions = {
             // If the user has been deleted or deactivated, mark token as deleted
             // The session callback will return null when this flag is set
             authDebugLog(
-              `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"} – marking token as deleted`
+              `🔒 JWT invalidated: user ${token.sub} is ${!dbUser ? "missing" : "inactive"}`
             );
             token.deleted = true;
             return token;
           }
 
           // Keep session data in sync with the latest database values.
-          if (dbUser.email !== token.email) {
-            authDebugLog(`✅ Email synced from database: ${token.email} → ${dbUser.email}`);
-          }
           token.email = dbUser.email;
           token.firstName = dbUser.firstName;
           token.lastName = dbUser.lastName;
           token.role = dbUser.role;
+          token.userType = dbUser.userType ?? "customer";
+
+          const dbRoleId = dbUser.roleId ? dbUser.roleId.toString() : null;
+          const roleChanged = dbRoleId !== (token.roleId ?? null);
+          const expired =
+            !token.permissionsLoadedAt ||
+            Date.now() - token.permissionsLoadedAt > PERM_TTL_MS;
+
+          if (roleChanged || expired) {
+            token.roleId = dbRoleId;
+            token.permissions = await loadPermissions(dbRoleId);
+            token.permissionsLoadedAt = Date.now();
+          }
         } catch (error) {
           console.error("Error syncing user data in JWT callback:", error);
         }
@@ -242,7 +272,10 @@ export const authOptions: NextAuthOptions = {
       session.user.firstName = token.firstName as string;
       session.user.lastName = token.lastName as string;
       session.user.email = token.email as string;
-      
+      session.user.userType = (token.userType as "customer" | "staff") ?? "customer";
+      session.user.roleId = (token.roleId as string | null) ?? null;
+      session.user.permissions = (token.permissions as string[]) ?? [];
+
       return session;
     },
     async signIn({ user, account }) {

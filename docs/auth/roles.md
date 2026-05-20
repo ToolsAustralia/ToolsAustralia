@@ -38,3 +38,20 @@ The `User` collection gained six staff-related fields (`src/models/User.ts`):
 Three indexes were added: `userType: 1` (filter staff vs customers), `roleId: 1` (sparse, find all users with a given role), and `inviteToken: 1` (sparse + unique, fast token lookup during invite setup).
 
 Legacy `role: "user" | "admin"` is **kept for one deploy cycle** and dropped in a follow-up PR (Phase 5 of the spec).
+
+## Session shape
+
+After a successful login, `session.user` carries:
+
+```ts
+{
+  id, email, firstName, lastName, role,        // existing
+  userType: "customer" | "staff",
+  roleId: string | null,
+  permissions: string[],                       // strings from PERMISSIONS
+}
+```
+
+Permissions are loaded from DB on login and refreshed at most every 5 minutes (`PERM_TTL_MS` in `src/lib/auth.ts`) or immediately when the user's `roleId` changes. This means a permission revocation can take up to 5 minutes to propagate to the affected staff member. If instant revocation is needed later, add a `User.tokenVersion` field and bump it on role change.
+
+The JWT also tracks `permissionsLoadedAt` (unix ms timestamp) to drive the TTL check on subsequent requests. Old tokens issued before this task lack this field; the `!token.permissionsLoadedAt` check in the jwt callback treats them as expired and reloads permissions immediately.

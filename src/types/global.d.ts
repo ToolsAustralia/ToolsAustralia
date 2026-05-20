@@ -29,9 +29,12 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      role: string;
+      role: string;            // legacy, kept until Phase 5 cleanup
       firstName: string;
       lastName: string;
+      userType: "customer" | "staff";
+      roleId: string | null;
+      permissions: string[];
     };
   }
 
@@ -41,6 +44,8 @@ declare module "next-auth" {
     firstName: string;
     lastName: string;
     role: string;
+    userType: "customer" | "staff";
+    roleId: string | null;
   }
 }
 
@@ -49,7 +54,11 @@ declare module "next-auth/jwt" {
     role: string;
     firstName: string;
     lastName: string;
-    deleted?: boolean; // Flag to mark token as deleted when user is removed
+    userType: "customer" | "staff";
+    roleId: string | null;
+    permissions: string[];
+    permissionsLoadedAt: number; // unix ms — when we last loaded perms from DB
+    deleted?: boolean;
   }
 }
 
