@@ -75,13 +75,13 @@ async function main() {
   console.log(`Found ${legacyAdmins.length} legacy admin users and ${customerCount} customers`);
 
   for (const u of legacyAdmins) {
-    if (u.roleId && u.userType === "staff") continue;
+    if (u.roleId && u.userType === "admin") continue;
     if (!DRY_RUN) {
       u.roleId = adminId;
-      u.userType = "staff";
+      u.userType = "admin";
       await u.save({ validateBeforeSave: false });
     }
-    console.log(`  ↳ Linked ${u.email} → Admin role`);
+    console.log(`  ↳ Linked ${u.email} → Admin role (userType=admin)`);
   }
 
   if (!DRY_RUN) {

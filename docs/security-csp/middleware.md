@@ -13,6 +13,8 @@
 
 `src/middleware.ts` redirects staff users (`token.userType === "staff"`) to `/admin` when they attempt to load any path prefix in `STAFF_BLOCKED_PREFIXES`. This is intentional: staff accounts are not customer accounts. If a staff member wants to purchase, they must create a separate customer account.
 
+The check is a **strict equality** to `"staff"`. Users with `userType === "admin"` (the seeded Admin super-role) are **exempt by design** — they can visit customer pages such as `/shop` and `/my-account` normally. Only custom-role staff (Ads Manager, Customer Support, etc.) are blocked.
+
 The block fires before the protected-route and admin-route checks, so a staff user visiting `/my-account` is always redirected to `/admin` — never to `/login`.
 
 The block-list lives inline in `middleware.ts`. To add or remove a prefix, edit the `STAFF_BLOCKED_PREFIXES` array in the middleware function:

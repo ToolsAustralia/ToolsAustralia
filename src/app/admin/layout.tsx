@@ -16,8 +16,8 @@ export const metadata: Metadata = {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login?callbackUrl=/admin");
-  if (session.user.userType !== "staff") {
-    // Legacy bridge: a user with role:"admin" but no staff userType still gets in (Phase 5 removes this)
+  if (session.user.userType !== "staff" && session.user.userType !== "admin") {
+    // Legacy bridge: a user with role:"admin" but no staff/admin userType still gets in (Phase 5 removes this)
     if (session.user.role !== "admin") redirect("/");
   }
 

@@ -27,16 +27,23 @@ export async function requirePermission(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Super-admin: bypass permission check entirely.
+  if (session.user.userType === "admin") {
+    return { session };
+  }
+
   // Bridge for users not yet migrated to roleId (Phase 1 backfill window).
   // Legacy admins behave as if they had every permission.
   if (session.user.userType !== "staff" && session.user.role === "admin") {
     return { session };
   }
 
+  // Not an internal user — reject.
   if (session.user.userType !== "staff") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Staff: check specific permission.
   if (!hasPermissionInList(session.user.permissions ?? [], permission)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -55,6 +62,8 @@ export async function userHasPermission(
   await connectDB();
   const user = await User.findById(userId).select("roleId userType role").lean();
   if (!user) return false;
+  // Super-admin bypass
+  if (user.userType === "admin") return true;
   // Legacy bridge
   if (user.userType !== "staff" && user.role === "admin") return true;
   if (user.userType !== "staff" || !user.roleId) return false;

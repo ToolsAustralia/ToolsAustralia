@@ -282,7 +282,7 @@ export interface IUser extends Document {
 
   // Staff RBAC (see docs/auth/roles.md)
   roleId?: mongoose.Types.ObjectId | null; // null = customer
-  userType: "customer" | "staff";          // default "customer"
+  userType: "customer" | "staff" | "admin"; // default "customer"
 
   // Staff invitation flow
   inviteToken?: string;
@@ -393,7 +393,7 @@ const UserSchema = new Schema<IUser>(
     },
     userType: {
       type: String,
-      enum: ["customer", "staff"],
+      enum: ["customer", "staff", "admin"],
       default: "customer",
     },
     inviteToken: {

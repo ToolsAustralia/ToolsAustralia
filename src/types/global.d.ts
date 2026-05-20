@@ -32,7 +32,7 @@ declare module "next-auth" {
       role: string;            // legacy, kept until Phase 5 cleanup
       firstName: string;
       lastName: string;
-      userType: "customer" | "staff";
+      userType: "customer" | "staff" | "admin";
       roleId: string | null;
       permissions: string[];
     };
@@ -44,7 +44,7 @@ declare module "next-auth" {
     firstName: string;
     lastName: string;
     role: string;
-    userType: "customer" | "staff";
+    userType: "customer" | "staff" | "admin";
     roleId: string | null;
   }
 }
@@ -54,7 +54,7 @@ declare module "next-auth/jwt" {
     role: string;
     firstName: string;
     lastName: string;
-    userType: "customer" | "staff";
+    userType: "customer" | "staff" | "admin";
     roleId: string | null;
     // Optional: old tokens issued before Task 4 deploy lack these. Callers must guard.
     permissions?: string[];

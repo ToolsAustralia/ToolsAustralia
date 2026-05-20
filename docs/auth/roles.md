@@ -28,8 +28,8 @@ The `User` collection gained six staff-related fields (`src/models/User.ts`):
 
 | Field | Type | Notes |
 |---|---|---|
-| `roleId` | ObjectId → Role, nullable | `null` for customers; set for staff |
-| `userType` | "customer" \| "staff" | Derived from invite; defaults "customer" |
+| `roleId` | ObjectId → Role, nullable | `null` for customers; set for staff and admin |
+| `userType` | "customer" \| "staff" \| "admin" | Derived from invite; defaults "customer". `"admin"` is the super-role (seeded Admin role only). |
 | `inviteToken` | String, unique sparse | Single-use; cleared on setup |
 | `inviteTokenExpires` | Date | 7 days from invite |
 | `invitedBy` | ObjectId → User | Audit |
@@ -46,7 +46,7 @@ After a successful login, `session.user` carries:
 ```ts
 {
   id, email, firstName, lastName, role,        // existing
-  userType: "customer" | "staff",
+  userType: "customer" | "staff" | "admin",
   roleId: string | null,
   permissions: string[],                       // strings from PERMISSIONS
 }
@@ -70,6 +70,10 @@ export async function GET(req: NextRequest) {
 ```
 
 `requirePermission` returns either `{ session }` (allowed) or a `NextResponse` with 401/403.
+
+### Super-admin bypass
+
+Users with `userType === "admin"` (i.e. linked to the seeded Admin role) bypass all permission checks in `requirePermission` and `userHasPermission`. They always receive `{ session }` / `true` regardless of the requested permission. This is the correct behaviour for the super-role.
 
 ### Legacy admin bridge
 
