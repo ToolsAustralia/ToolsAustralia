@@ -15,3 +15,4 @@ The admin panel — user management, payments, draws, promo, error reports, part
 - [testing.md](./testing.md) — unit tests for admin services; dashboard stats snapshot tests
 - [staff-permissions-mapping.md](./staff-permissions-mapping.md) — route → required permission map
 - [roles-api.md](./roles-api.md) — `/api/admin/roles/**` CRUD
+- [staff-api.md](./staff-api.md) — `/api/admin/staff/**` list, invite, change role, deactivate

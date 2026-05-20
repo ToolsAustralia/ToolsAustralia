@@ -136,6 +136,10 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/roles` | POST | `settings.edit` |
 | `/api/admin/roles/[id]` | PATCH | `settings.edit` |
 | `/api/admin/roles/[id]` | DELETE | `settings.edit` |
+| `/api/admin/staff` | GET | `settings.view` |
+| `/api/admin/staff` | POST | `settings.edit` |
+| `/api/admin/staff/[id]` | PATCH | `settings.edit` |
+| `/api/admin/staff/[id]` | DELETE | `settings.edit` |
 
 | `/api/users/[id]` | GET (self) | _(any authenticated user — self-only)_ |
 | `/api/users/[id]` | GET (other user) | `users.view` |
