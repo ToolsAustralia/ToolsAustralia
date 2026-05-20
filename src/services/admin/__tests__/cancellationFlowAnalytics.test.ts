@@ -124,6 +124,23 @@ function sample(): ICancellationFlowEvent[] {
       outcome: "saved",
       savedAt: TEN_DAYS_AGO,
       retention90: "churned", // ignored: not matured
+      reasonText: "  needed to pause for a month  ", // trimmed on intake
+      startedAt: new Date(NOW.getTime() - 1000),
+    }),
+    // 13. in_progress "other" with free text, old enough to be abandoned
+    ev({
+      reason: "other",
+      offersShown: [],
+      outcome: "in_progress",
+      reasonText: "site keeps crashing",
+      startedAt: TWO_HOURS_AGO,
+    }),
+    // 14. cancelled "other" with empty reasonText → must NOT appear in list
+    ev({
+      reason: "other",
+      offersShown: [],
+      outcome: "cancelled",
+      reasonText: "   ", // whitespace-only
     }),
   ];
 }
@@ -136,45 +153,85 @@ function testEmptyArrayGuardsDivideByZero() {
   for (const r of Object.values(s.byReason)) {
     assert.equal(r.count, 0);
     assert.equal(r.sharePct, 0);
+    assert.equal(r.accepted, 0);
+    assert.equal(r.cancelled, 0);
+    assert.equal(r.abandoned, 0);
   }
   assert.deepEqual(s.retention90, { retained: 0, churned: 0, pending: 0 });
   assert.equal(s.pastDueExcludedFromOfferConversion, 0);
+  assert.deepEqual(s.otherReasonTexts, []);
 }
 
 function testTriggeredAndReasonShares() {
   const s = summarizeCancellationEvents(sample(), NOW);
-  // Task 21 added events 9-12 (4 "other"-reason saved events) → triggered 8 → 12.
-  assert.equal(s.triggered, 12);
+  // Reason×outcome work added events 13-14 (other-reason in_progress + cancelled) → 12 → 14.
+  assert.equal(s.triggered, 14);
   assert.equal(s.byReason.too_expensive.count, 2);
-  assert.equal(s.byReason.too_expensive.sharePct, 16.7); // 2/12 = 16.666 → roundPct 16.7 (was 25 @ 2/8)
+  assert.equal(s.byReason.too_expensive.sharePct, 14.3); // 2/14 → 14.285 → 14.3
   assert.equal(s.byReason.havent_won.count, 2);
   assert.equal(s.byReason.prefer_cheaper.count, 2);
   assert.equal(s.byReason.dont_use_benefits.count, 1);
-  assert.equal(s.byReason.dont_use_benefits.sharePct, 8.3); // 1/12 = 8.333 → roundPct 8.3 (was 12.5 @ 1/8)
+  assert.equal(s.byReason.dont_use_benefits.sharePct, 7.1); // 1/14 → 7.142 → 7.1
   assert.equal(s.byReason.too_many_messages.count, 1);
-  assert.equal(s.byReason.other.count, 4); // events 9-12 (Task 21)
+  assert.equal(s.byReason.other.count, 6); // events 9-14
+  assert.equal(s.byReason.other.sharePct, 42.9); // 6/14 → 42.857 → 42.9
   assert.equal(s.byReason.joined_for_giveaway.count, 0);
+}
+
+function testOutcomeByReason() {
+  const s = summarizeCancellationEvents(sample(), NOW);
+  // too_expensive: events 1, 2 saved
+  assert.deepEqual(
+    { a: s.byReason.too_expensive.accepted, c: s.byReason.too_expensive.cancelled, ab: s.byReason.too_expensive.abandoned },
+    { a: 2, c: 0, ab: 0 }
+  );
+  // dont_use_benefits: event 5 cancelled
+  assert.deepEqual(
+    { a: s.byReason.dont_use_benefits.accepted, c: s.byReason.dont_use_benefits.cancelled, ab: s.byReason.dont_use_benefits.abandoned },
+    { a: 0, c: 1, ab: 0 }
+  );
+  // prefer_cheaper: event 6 abandoned in_progress, event 7 recent in_progress (not abandoned)
+  assert.deepEqual(
+    { a: s.byReason.prefer_cheaper.accepted, c: s.byReason.prefer_cheaper.cancelled, ab: s.byReason.prefer_cheaper.abandoned },
+    { a: 0, c: 0, ab: 1 }
+  );
+  // other: 9,10,11,12 saved + 13 abandoned in_progress + 14 cancelled
+  assert.deepEqual(
+    { a: s.byReason.other.accepted, c: s.byReason.other.cancelled, ab: s.byReason.other.abandoned },
+    { a: 4, c: 1, ab: 1 }
+  );
+}
+
+function testOtherReasonTexts() {
+  const s = summarizeCancellationEvents(sample(), NOW);
+  // Event 14's whitespace-only reasonText is excluded; events 12 + 13 retained.
+  assert.equal(s.otherReasonTexts.length, 2);
+  // Trimmed; sorted by startedAt desc (event 12 startedAt = NOW-1s, event 13 = TWO_HOURS_AGO).
+  assert.equal(s.otherReasonTexts[0].text, "needed to pause for a month");
+  assert.equal(s.otherReasonTexts[0].outcome, "saved");
+  assert.equal(s.otherReasonTexts[1].text, "site keeps crashing");
+  assert.equal(s.otherReasonTexts[1].outcome, "in_progress");
 }
 
 function testFunnel() {
   const s = summarizeCancellationEvents(sample(), NOW);
-  assert.equal(s.funnel.reachedReason, 12); // was 8
+  assert.equal(s.funnel.reachedReason, 14);
   // reachedOffer: events 1-7 (7) + 9,10,11,12 (4) have offers shown & not pastDue;
-  // event 8 pastDue excluded. = 11 (was 7).
+  // events 8 (pastDue), 13, 14 (no offers shown) excluded. = 11.
   assert.equal(s.funnel.reachedOffer, 11);
-  // accepted: saved events 1,2,3,4,8,9,10,11,12 = 9 (was 5)
+  // accepted: events 1,2,3,4,8,9,10,11,12 = 9 (unchanged)
   assert.equal(s.funnel.accepted, 9);
-  // cancelled: event 5
-  assert.equal(s.funnel.cancelled, 1);
-  // abandoned: event 6 (old in_progress); event 7 recent is NOT abandoned
-  assert.equal(s.funnel.abandoned, 1);
+  // cancelled: events 5, 14
+  assert.equal(s.funnel.cancelled, 2);
+  // abandoned: event 6 + event 13 (both old in_progress); event 7 still recent
+  assert.equal(s.funnel.abandoned, 2);
 }
 
 function testSaveRate() {
   const s = summarizeCancellationEvents(sample(), NOW);
-  // accepted 9 / (9 + 1 + 1) = 9/11 (was 5/7)
-  assert.equal(s.saveRate, 9 / 11);
-  assert.equal(s.saveRatePct, 81.8); // round(9/11*100,1) = 81.818 → 81.8 (was 71.4)
+  // accepted 9 / (9 + 2 + 2) = 9/13
+  assert.equal(s.saveRate, 9 / 13);
+  assert.equal(s.saveRatePct, 69.2); // round(9/13*100,1) = 69.23 → 69.2
 }
 
 function testByOfferAccepted() {
@@ -288,6 +345,8 @@ function testSaveRateAllAccepted() {
 function run() {
   testEmptyArrayGuardsDivideByZero();
   testTriggeredAndReasonShares();
+  testOutcomeByReason();
+  testOtherReasonTexts();
   testFunnel();
   testSaveRate();
   testByOfferAccepted();
