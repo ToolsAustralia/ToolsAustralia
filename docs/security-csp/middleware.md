@@ -1,0 +1,32 @@
+# Middleware
+
+`src/middleware.ts` wraps every page request (matcher excludes `/api`, static assets, and image files) using NextAuth's `withAuth` helper, which decodes the JWT and makes it available as `req.nextauth.token` inside the middleware function.
+
+## Responsibilities
+
+1. **CSP nonce generation** — in production, generates a per-request nonce via `src/utils/security/nonce.ts` and writes CSP headers via `src/utils/security/csp.ts`. Disabled in development to allow Next.js dev tools.
+2. **Protected route gating** — `/rewards`, `/my-account` require an authenticated session; unauthenticated visitors are redirected to `/login`.
+3. **Admin route gating** — `/admin`, `/api/admin` require `token.role === "admin"`; others are redirected to `/`.
+4. **Staff route block** — see below.
+
+## Staff route block
+
+`src/middleware.ts` redirects staff users (`token.userType === "staff"`) to `/admin` when they attempt to load any path prefix in `STAFF_BLOCKED_PREFIXES`. This is intentional: staff accounts are not customer accounts. If a staff member wants to purchase, they must create a separate customer account.
+
+The block fires before the protected-route and admin-route checks, so a staff user visiting `/my-account` is always redirected to `/admin` — never to `/login`.
+
+The block-list lives inline in `middleware.ts`. To add or remove a prefix, edit the `STAFF_BLOCKED_PREFIXES` array in the middleware function:
+
+```
+/my-account, /affiliate, /shop, /checkout, /purchase-success,
+/major-draw, /mini-draws, /mini-draw-success, /upsell-success,
+/rewards, /membership, /partner
+```
+
+## Matcher
+
+```
+/((?!api|_next/static|_next/image|favicon\.ico|robots\.txt|sitemap\.xml|manifest\.json|sw\.js|icon\.ico|apple-icon\.png|\.well-known/|images/|fonts/|.*\.(png|jpg|jpeg|gif|webp|avif|svg|ico|ttf|woff|woff2|otf|map|txt|xml|json)$).*)
+```
+
+Single entry with a negative lookahead — all exclusions are in one regex so they are OR'd correctly (multiple matcher entries use include semantics in Next.js).

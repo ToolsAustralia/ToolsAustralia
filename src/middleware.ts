@@ -21,6 +21,33 @@ export default withAuth(
     const adminRoutes = ["/admin", "/api/admin"];
     const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
+    // Staff route block-list: staff accounts are not customer accounts.
+    // If a staff user tries to load a customer-only route, redirect them to /admin.
+    const STAFF_BLOCKED_PREFIXES = [
+      "/my-account",
+      "/affiliate",
+      "/shop",
+      "/checkout",
+      "/purchase-success",
+      "/major-draw",
+      "/mini-draws",
+      "/mini-draw-success",
+      "/upsell-success",
+      "/rewards",
+      "/membership",
+      "/partner",
+    ];
+
+    if (
+      token?.userType === "staff" &&
+      STAFF_BLOCKED_PREFIXES.some((p) => pathname.startsWith(p))
+    ) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
     // Check authentication for protected routes
     if (isProtectedRoute && !token) {
       const response = NextResponse.redirect(new URL("/login", req.url));
