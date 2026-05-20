@@ -56,8 +56,9 @@ declare module "next-auth/jwt" {
     lastName: string;
     userType: "customer" | "staff";
     roleId: string | null;
-    permissions: string[];
-    permissionsLoadedAt: number; // unix ms — when we last loaded perms from DB
+    // Optional: old tokens issued before Task 4 deploy lack these. Callers must guard.
+    permissions?: string[];
+    permissionsLoadedAt?: number; // unix ms — when we last loaded perms from DB
     deleted?: boolean;
   }
 }

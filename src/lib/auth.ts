@@ -208,6 +208,7 @@ export const authOptions: NextAuthOptions = {
         }
       } else if (user) {
         // For credentials login, use the user object directly
+        await connectDB();
         token.role = user.role;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
@@ -274,7 +275,7 @@ export const authOptions: NextAuthOptions = {
       session.user.email = token.email as string;
       session.user.userType = (token.userType as "customer" | "staff") ?? "customer";
       session.user.roleId = (token.roleId as string | null) ?? null;
-      session.user.permissions = (token.permissions as string[]) ?? [];
+      session.user.permissions = token.permissions ?? [];
 
       return session;
     },
