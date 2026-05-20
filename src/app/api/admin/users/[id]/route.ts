@@ -39,7 +39,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const guard = await requirePermission("users.view");
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
 
     const { id: userId } = await params;
 
@@ -83,7 +82,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const guard = await requirePermission("users.edit");
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
 
     const { id: userId } = await params;
 

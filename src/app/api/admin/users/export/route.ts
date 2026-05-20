@@ -35,10 +35,10 @@ import { formatDateInAEST } from "@/utils/common/timezone";
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
     const guard = await requirePermission("users.view");
     if (guard instanceof NextResponse) return guard;
+
+    await connectDB();
 
     const { searchParams } = new URL(request.url);
 

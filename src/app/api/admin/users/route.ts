@@ -35,7 +35,6 @@ export async function GET(request: NextRequest) {
 
     const guard = await requirePermission("users.view");
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
 
     const { searchParams } = new URL(request.url);
 
