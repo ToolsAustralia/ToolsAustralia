@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   BarChart3,
   Trophy,
@@ -51,6 +52,7 @@ type AdminTab = {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  requires: string;
 };
 
 const adminTabGroups: Array<{
@@ -64,9 +66,9 @@ const adminTabGroups: Array<{
     label: "Core",
     groupIcon: LayoutDashboard,
     tabs: [
-      { id: "overview", label: "Overview", icon: BarChart3 },
-      { id: "users", label: "Users", icon: Users },
-      { id: "affiliates", label: "Affiliates", icon: UserCheck },
+      { id: "overview", label: "Overview", icon: BarChart3, requires: "overview.view" },
+      { id: "users", label: "Users", icon: Users, requires: "users.view" },
+      { id: "affiliates", label: "Affiliates", icon: UserCheck, requires: "affiliates.view" },
     ],
   },
   {
@@ -74,29 +76,29 @@ const adminTabGroups: Array<{
     label: "Analytics",
     groupIcon: LineChart,
     tabs: [
-      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
-      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp },
-      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp },
-      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
-      { id: "cancellation-flow", label: "Cancellation Flow", icon: BarChart3 },
-      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical },
+      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp, requires: "facebookAds.view" },
+      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp, requires: "facebookAds.view" },
+      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp, requires: "facebookAds.view" },
+      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3, requires: "pageAnalytics.view" },
+      { id: "cancellation-flow", label: "Cancellation Flow", icon: BarChart3, requires: "pageAnalytics.view" },
+      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical, requires: "abTesting.view" },
     ],
   },
   {
     id: "promos",
     label: "Promos",
     groupIcon: Megaphone,
-    tabs: [{ id: "promos", label: "Promos", icon: Zap }],
+    tabs: [{ id: "promos", label: "Promos", icon: Zap, requires: "promos.view" }],
   },
   {
     id: "draws",
     label: "Draws",
     groupIcon: Trophy,
     tabs: [
-      { id: "major-draw", label: "Major Draw", icon: Gift },
-      { id: "mini-draws", label: "Mini Draws", icon: Trophy },
-      { id: "draw-results", label: "Draw Results", icon: Trophy },
-      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity },
+      { id: "major-draw", label: "Major Draw", icon: Gift, requires: "majorDraw.view" },
+      { id: "mini-draws", label: "Mini Draws", icon: Trophy, requires: "miniDraws.view" },
+      { id: "draw-results", label: "Draw Results", icon: Trophy, requires: "drawResults.view" },
+      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity, requires: "upcomingDraws.view" },
     ],
   },
   {
@@ -104,10 +106,10 @@ const adminTabGroups: Array<{
     label: "Operations",
     groupIcon: ClipboardList,
     tabs: [
-      { id: "submissions", label: "Submissions", icon: FileTextIcon },
-      { id: "error-reports", label: "Error Reports", icon: Bug },
-      { id: "activity-log", label: "Activity Log", icon: ScrollText },
-      { id: "settings", label: "Settings", icon: Settings },
+      { id: "submissions", label: "Submissions", icon: FileTextIcon, requires: "submissions.view" },
+      { id: "error-reports", label: "Error Reports", icon: Bug, requires: "errorReports.view" },
+      { id: "activity-log", label: "Activity Log", icon: ScrollText, requires: "settings.view" },
+      { id: "settings", label: "Settings", icon: Settings, requires: "settings.view" },
     ],
   },
   {
@@ -115,9 +117,9 @@ const adminTabGroups: Array<{
     label: "Billing",
     groupIcon: AlertCircle,
     tabs: [
-      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
-      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText },
-      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity },
+      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle, requires: "settings.view" },
+      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText, requires: "settings.view" },
+      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity, requires: "settings.view" },
     ],
   },
 ];
@@ -131,6 +133,7 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { has } = usePermissions();
   const [unviewedCount, setUnviewedCount] = useState(0);
   const [fullCapacityCount, setFullCapacityCount] = useState(0);
   const navScrollRef = useRef<HTMLDivElement>(null);
@@ -316,6 +319,8 @@ export default function AdminSidebar({
       <div ref={navScrollRef} className="flex-1 overflow-y-auto admin-scrollbar">
         <nav className="px-2 py-3 sm:px-3 space-y-4">
           {adminTabGroups.map((group) => {
+            const visibleTabs = group.tabs.filter((t) => has(t.requires));
+            if (visibleTabs.length === 0) return null;
             const isExpanded = expandedGroups.has(group.id);
             const GroupIcon = group.groupIcon;
             const operationsNeedsAttention = group.id === "operations" && unviewedCount > 0;
@@ -372,7 +377,7 @@ export default function AdminSidebar({
                 </button>
                 {isExpanded && (
                   <div className="ml-1.5 pl-2.5 border-l border-red-100 dark:border-red-900/50 space-y-0.5">
-                    {group.tabs.map((tab) => {
+                    {visibleTabs.map((tab) => {
                       const Icon = tab.icon;
                       const isActive =
                         (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
