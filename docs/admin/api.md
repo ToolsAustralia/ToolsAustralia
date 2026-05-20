@@ -327,7 +327,7 @@ Admin-only. Returns expected vs present snapshot counts from the site launch dat
 
 ### `GET /api/admin/cancellation-flow-analytics`
 
-Admin-only (session `role === "admin"`, else `401`). Read-only aggregated analytics for the subscription cancellation flow. Optional `?from=&to=` ISO-8601 datetime window on `startedAt` (`from` inclusive, `to` exclusive). Malformed `from`/`to` → `400`. With no range, the service defaults to the **last 90 days** so the query is always bounded (never an unbounded collection scan).
+Admin-only (session `role === "admin"`, else `401`). Read-only aggregated analytics for the subscription cancellation flow. Optional `?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` window on `startedAt`, **AEST-inclusive** (the route converts to UTC bounds: `startDate` → start of day AEST, `endDate` → start of next day AEST for the exclusive upper bound). Malformed dates → `400`. With no range, the service defaults to the **last 90 days** so the query is always bounded (never an unbounded collection scan).
 
 Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/admin/cancellationFlowAnalytics.ts`, which fetches `CancellationFlowEvent` (`.lean()`) and hands off to the pure `summarizeCancellationEvents(events, now)` shaper (unit-tested: `npm run test:cancellation-analytics`).
 
@@ -336,21 +336,28 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
 ```jsonc
 {
   "data": {
-    "triggered": 8,
-    "byReason": { "too_expensive": { "count": 2, "sharePct": 25 }, "...": {} },
-    "funnel": { "reachedReason": 8, "reachedOffer": 7, "accepted": 5, "cancelled": 1, "abandoned": 1 },
-    "saveRate": 0.714,        // accepted / (accepted + cancelled + abandoned); 0 if denom 0
-    "saveRatePct": 71.4,
-    "byOfferAccepted": { "discount_50_2mo": 1, "...": 0 },
+    "triggered": 14,
+    "byReason": {
+      // Per reason: count, share of total, plus outcome split (saved / cancelled / abandoned-in-progress).
+      "too_expensive": { "count": 2, "sharePct": 14.3, "accepted": 2, "cancelled": 0, "abandoned": 0 },
+      "...": {}
+    },
+    "funnel": { "reachedReason": 14, "reachedOffer": 11, "accepted": 9, "cancelled": 2, "abandoned": 2 },
+    "saveRate": 0.692,        // accepted / (accepted + cancelled + abandoned); 0 if denom 0
+    "saveRatePct": 69.2,
+    "byOfferAccepted": { "discount_50_2mo": 3, "...": 0 },
     "pastDueExcludedFromOfferConversion": 1,
     "retention90": { "retained": 3, "churned": 2, "pending": 4 },
-    // Task 21: same matured/pending cutoff as `retention90`, keyed by offerAccepted.
-    // Every OfferType key is always present (zeroed when unused).
     "retention90ByOffer": {
       "discount_50_2mo": { "retained": 1, "churned": 1, "pending": 1 },
       "pause_30d": { "retained": 1, "churned": 1, "pending": 1 },
       "...": { "retained": 0, "churned": 0, "pending": 0 }
-    }
+    },
+    // Free-text entries when reason === "other". Sorted by startedAt desc.
+    // Empty/whitespace-only reasonText is filtered out.
+    "otherReasonTexts": [
+      { "text": "site keeps crashing", "startedAt": "2026-05-18T10:00:00.000Z", "outcome": "in_progress" }
+    ]
   },
   "meta": { "timestamp": "..." }
 }
@@ -363,8 +370,10 @@ Thin handler — delegates to `getCancellationFlowAnalytics()` in `src/services/
 - `accepted` = `outcome === "saved"`; `cancelled` = `outcome === "cancelled"`.
 - `abandoned` = `outcome === "in_progress"` **AND** `startedAt <= now - 1h`.
 - `saveRate = accepted / (accepted + cancelled + abandoned)`, `0` when the denominator is `0`. All share/rate divisions guard divide-by-zero.
+- `byReason[reason]` carries an outcome split — `accepted` / `cancelled` / `abandoned` — counted with the same definitions as the funnel (abandoned uses the `>1h in_progress` cutoff). Saved past-due events still count toward `accepted` here (only the offer-conversion funnel excludes past-due).
 - `retention90` is over saved events only: `retained`/`churned` only count when matured (`savedAt <= now - 90d` and `retention90` set); otherwise `pending` (covers absent `retention90` or unmatured saves). `retention90` is populated by the §6a maturity cron (Task 20).
-- `retention90ByOffer` (Task 21) breaks the same split out **per `OfferType`**, keyed by the saved event's `offerAccepted`. It uses the **identical** matured/pending boundary (`savedAt <= now - 90d`) as the overall `retention90` and the §6a maturity cron — no skew. Only saved events with a non-null `offerAccepted` contribute (past-due saved events still count here; only the offer-conversion funnel excludes past-due). Every `OfferType` key is always present (zeroed when unused), so the per-offer totals reconcile with the overall split. The UI also derives a retained-% over matured (`retained ÷ (retained + churned)`, shown as “—” when none matured).
+- `retention90ByOffer` breaks the same split out **per `OfferType`**, keyed by the saved event's `offerAccepted`, using the **identical** matured/pending boundary (`savedAt <= now - 90d`) as the overall `retention90` and the §6a maturity cron — no skew. Only saved events with a non-null `offerAccepted` contribute (past-due saved events still count here; only the offer-conversion funnel excludes past-due). Every `OfferType` key is always present (zeroed when unused), so the per-offer totals reconcile with the overall split. The UI derives a retained-% over matured (`retained ÷ (retained + churned)`, shown as “—” when none matured).
+- `otherReasonTexts` lists every event with `reason === "other"` and a non-empty trimmed `reasonText`, sorted by `startedAt` desc. Each entry carries the trimmed text, ISO `startedAt`, and the event's current `outcome`. Whitespace-only `reasonText` is excluded.
 
 UI: `src/components/admin/CancellationFlowAnalytics.tsx`, mounted as the **Cancellation Flow** tab under the Analytics sidebar group (`selectedTab === "cancellation-flow"` in `AdminPage`). Data hook: `src/hooks/queries/admin/useCancellationFlowAnalytics.ts` (TanStack, queryKey `["admin", "cancellation-flow-analytics", filter]`).
 
