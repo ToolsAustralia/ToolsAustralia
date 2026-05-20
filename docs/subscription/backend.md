@@ -164,6 +164,13 @@ Why two modes: prior to this design, mid-cycle upgrades granted only `newBase ×
 
 `hasMembershipGrantInCurrentDrawPeriod` is computed by [`src/utils/draws/has-membership-grant-this-draw.ts`](../../src/utils/draws/has-membership-grant-this-draw.ts) (see [draws/backend.md](../draws/backend.md#has-membership-grant-this-draw-helper)) and fails open to `false` (Mode A) on any error. Tests live in [`src/utils/payment/__tests__/subscription-entries-calculator.test.ts`](../../src/utils/payment/__tests__/subscription-entries-calculator.test.ts) — runnable via `npm run test:subscription-entries-calculator`.
 
+**Modal preview parity (Phase 2, 2026-05-20).** The same boolean is surfaced to the client as `user.hasCurrentDrawMembershipGrant` by `GET /api/users/[id]/my-account` (see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)). All four `calculateUpgradeEntries` invocations in the upgrade modal pass it as the 4th argument so the previewed entry total matches what the webhook will actually grant:
+
+- [`UpgradeList.tsx`](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx) — per-row preview in the upgrade list.
+- [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) — the `upgradeModalData` memo, the pending-change banner's upgrade branch, and `totalEntriesAfterUpgrade`.
+
+Stale-payload caveat: a renewal landing between page load and click can drift the preview by one mode; the webhook is still authoritative and a refresh re-fetches the flag.
+
 ## Membership upsell semantics (upsell-remap — 2026-05-14)
 
 When a membership subscriber completes a purchase, they are offered a post-payment upsell. Under the remap the upsell references the **next tier down** base pack (not a bespoke "Plus" SKU):

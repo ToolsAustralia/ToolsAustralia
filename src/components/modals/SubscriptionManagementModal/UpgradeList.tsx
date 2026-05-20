@@ -43,10 +43,13 @@ const UpgradeList: React.FC<UpgradeListProps> = ({
           | { lastMonthAccumulatedEntries?: number }
           | undefined;
         const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+        const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+        const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
         const upgradeCalculation = calculateUpgradeEntries(
           upgrade.entriesPerMonth,
           lastMonthAccumulated,
-          membershipPromoMultiplier
+          membershipPromoMultiplier,
+          hasGrantThisDraw
         );
         const totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
         const upgradeColorScheme = getMembershipSectionColorScheme(upgrade.packageId, true);

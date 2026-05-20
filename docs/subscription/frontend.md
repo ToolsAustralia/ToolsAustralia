@@ -66,6 +66,21 @@ The cancel flow is a two-step modal sequence inside `SubscriptionManagementModal
 
 `CancelSubscriptionModal` accepts `fromPackageName` (drives tier theming + "Keep {name}" label), `accumulatedEntries` (shown in loss grid cell 1), and `billingEndDateLabel` (shown in hero sub-copy). It does **not** display pricing or charge anything — it is purely a confirmation gate.
 
+## Upgrade preview parity with the webhook (Phase 2, 2026-05-20)
+
+The upgrade-modal preview numbers must match what the webhook will eventually grant — the calculator behind both is `calculateUpgradeEntries` ([src/utils/payment/subscription-entries-calculator.ts](../../src/utils/payment/subscription-entries-calculator.ts)), which has two modes (see [rules.md → R3a](./rules.md#r3a-upgrade-entries-stack-lastmonthaccumulated-unless-a-membership-grant-already-landed-this-draw) and [backend.md → calculateUpgradeEntries — two modes](./backend.md#calculateupgradeentries--two-modes)).
+
+The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod`. It's served to the client as `user.hasCurrentDrawMembershipGrant` by `GET /api/users/[id]/my-account` (see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)). All four upgrade-preview call sites read it and pass it as the 4th argument to `calculateUpgradeEntries`:
+
+| Call site | File |
+|---|---|
+| Per-row preview in the upgrade list | [`UpgradeList.tsx`](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx) |
+| `upgradeModalData` memo | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+| Pending-change banner — upgrade branch | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+| `totalEntriesAfterUpgrade` block | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+
+**Stale-payload caveat.** The flag is captured on the my-account fetch; if a renewal lands between page load and the user clicking "Upgrade," the preview can drift by one mode (Mode A shown when the webhook will pick Mode B, or vice versa). The webhook is always the source of truth — refreshing the dashboard re-fetches the flag and brings the preview back in line.
+
 ## StripePaymentModal
 
 `src/components/modals/StripePaymentModal/` (folder/index.tsx pattern) — the "Complete Payment" modal shown during upgrade flows that require a PaymentIntent confirmation. Decomposed in Plan 6 Phase 4 from a 725-LOC monolith.

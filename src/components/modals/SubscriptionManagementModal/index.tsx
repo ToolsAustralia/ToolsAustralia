@@ -313,10 +313,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     if (!selectedUpgrade || !membershipPackage) return null;
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
     const currentEntries = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+    const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
     const { entriesToGrant } = calculateUpgradeEntries(
       selectedUpgrade.entriesPerMonth,
       currentEntries,
-      membershipPromoMultiplier
+      membershipPromoMultiplier,
+      hasGrantThisDraw
     );
     return { currentEntries, upgradeEntriesGrant: entriesToGrant };
   }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
@@ -344,10 +347,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         newAccumulated = calculateRenewalEntries(targetPkg.entriesPerMonth, lastAccumulated)
           .newLastMonthAccumulatedEntries;
       } else {
+        const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+        const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
         newAccumulated = calculateUpgradeEntries(
           targetPkg.entriesPerMonth,
           lastAccumulated,
-          membershipPromoMultiplier
+          membershipPromoMultiplier,
+          hasGrantThisDraw
         ).newLastMonthAccumulatedEntries;
       }
     }
@@ -662,6 +668,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     const upgrade = selectedUpgrade;
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
     const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+    const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
 
     let totalEntriesAfterUpgrade = upgrade?.entriesPerMonth ?? 0;
     let entriesFromUpgrade = 0;
@@ -669,7 +677,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       const upgradeCalculation = calculateUpgradeEntries(
         upgrade.entriesPerMonth,
         lastMonthAccumulated,
-        membershipPromoMultiplier
+        membershipPromoMultiplier,
+        hasGrantThisDraw
       );
       totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
       entriesFromUpgrade = upgradeCalculation.entriesToGrant;

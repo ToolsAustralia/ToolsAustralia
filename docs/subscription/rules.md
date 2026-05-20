@@ -28,6 +28,8 @@ Even when cancelling immediately, the user document's `subscription.lastMonthAcc
 
 The webhook is the source of truth: `handleInvoicePaymentSucceeded` calls `hasMembershipGrantInCurrentDrawPeriod(user._id)` ([src/utils/draws/has-membership-grant-this-draw.ts](../../src/utils/draws/has-membership-grant-this-draw.ts)) before invoking the calculator on the `isUpgrade` branch. The helper fails open (returns `false` → Mode A) on any error — the design accepts a rare over-credit on the same-period edge case over reverting the headline fix.
 
+**Modal preview parity (Phase 2, 2026-05-20).** The four `calculateUpgradeEntries` call sites in the upgrade modal — the `UpgradeList` row map ([src/components/modals/SubscriptionManagementModal/UpgradeList.tsx](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx)) and the three `index.tsx` call sites (the `upgradeModalData` memo, the pending-change banner's upgrade branch, and `totalEntriesAfterUpgrade`) — now read `user.hasCurrentDrawMembershipGrant` (served by `GET /api/users/[id]/my-account` — see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)) and pass it as the 4th argument so the displayed preview matches the webhook's eventual grant (Mode A vs Mode B). **Stale-payload caveat:** if a renewal lands between page load and the user clicking "Upgrade," the preview can drift by one mode. The webhook remains the source of truth; refreshing the dashboard re-fetches the flag and corrects the preview.
+
 Full math, worked examples, and the invariant are in [backend.md](./backend.md#entry-calculation-dispatcher--calculatesubscriptionentries). Tests: `npm run test:subscription-entries-calculator`.
 
 ### R4. Cancellation analytics events come from the webhook only
