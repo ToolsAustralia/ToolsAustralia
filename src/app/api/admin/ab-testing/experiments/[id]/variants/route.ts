@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
 import VariantConfigService from "@/services/ab-testing/VariantConfigService";
@@ -30,11 +29,8 @@ const updateVariantSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("abTesting.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { id: experimentId } = await params;
     
@@ -104,11 +100,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("abTesting.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { id: experimentId } = await params;
     const body = await request.json();
@@ -185,11 +178,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("abTesting.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { id: experimentId } = await params;
     const { searchParams } = new URL(request.url);

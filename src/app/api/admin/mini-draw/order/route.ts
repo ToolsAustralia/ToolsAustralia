@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import mongoose from "mongoose";
@@ -12,11 +11,10 @@ const orderSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const _guard = await requirePermission("majorDraw.edit");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await request.json();
     const { orderedIds } = orderSchema.parse(body);

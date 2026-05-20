@@ -8,10 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ErrorReport from "@/models/ErrorReport";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { ErrorReportStatus } from "@/types/error-reporting";
-import User from "@/models/User";
 import mongoose, { PipelineStage } from "mongoose";
 
 type ErrorReportQuery = Record<string, unknown>;
@@ -177,19 +175,10 @@ function buildTrendPipeline(query: ErrorReportQuery): PipelineStage[] {
  */
 export async function GET(request: NextRequest) {
   try {
+    const _guard = await requirePermission("errorReports.view");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-
-    // Check authentication and admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await User.findById(session.user.id).lean();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
@@ -34,13 +33,10 @@ const createMajorDrawSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
+    const _guard = await requirePermission("majorDraw.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // console.log("🎯 Creating new major draw...");
 

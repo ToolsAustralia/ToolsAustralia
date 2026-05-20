@@ -7,11 +7,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ErrorReport from "@/models/ErrorReport";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { z } from "zod";
 import { ErrorReportStatus } from "@/types/error-reporting";
-import User from "@/models/User";
 import mongoose from "mongoose";
 
 /**
@@ -32,19 +30,10 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const _guard = await requirePermission("errorReports.view");
+    if (_guard instanceof NextResponse) return _guard;
+
     await connectDB();
-
-    // Check authentication and admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await User.findById(session.user.id).lean();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -115,19 +104,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await requirePermission("errorReports.edit");
+    if (guard instanceof NextResponse) return guard;
+
+    const { session } = guard;
     await connectDB();
-
-    // Check authentication and admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await User.findById(session.user.id).lean();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 

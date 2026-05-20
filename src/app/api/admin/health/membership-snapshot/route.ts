@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
 import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
@@ -9,10 +8,8 @@ const TZ = "Australia/Sydney";
 const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
 
 export async function GET(_request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requirePermission("overview.view");
+  if (guard instanceof NextResponse) return guard;
 
   await connectDB();
 

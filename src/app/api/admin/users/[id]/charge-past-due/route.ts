@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
@@ -90,12 +89,10 @@ async function listOpenInvoicesForCustomer(customerId: string): Promise<Stripe.I
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
+    const guard = await requirePermission("users.view");
+    if (guard instanceof NextResponse) return guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const { id: userId } = await params;
     const loaded = await loadPastDueUserForCharge(userId);
@@ -246,12 +243,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    await connectDB();
+    const guard = await requirePermission("users.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     const adminId = session.user.id;
     const body = await request.json();

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
@@ -18,11 +17,9 @@ const processPayoutSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("affiliates.edit");
+    if (guard instanceof NextResponse) return guard;
+    const { session } = guard;
 
     const { id } = await params;
     const body = await request.json();

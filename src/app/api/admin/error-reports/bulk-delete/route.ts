@@ -7,10 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ErrorReport from "@/models/ErrorReport";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import { z } from "zod";
-import User from "@/models/User";
 import mongoose from "mongoose";
 
 const bulkDeleteSchema = z.object({
@@ -30,19 +28,11 @@ const bulkStatusSchema = z.object({
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const guard = await requirePermission("errorReports.edit");
+    if (guard instanceof NextResponse) return guard;
+
+    const { session } = guard;
     await connectDB();
-
-    // Check authentication and admin role
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const user = await User.findById(session.user.id).lean();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     // Parse and validate request body
     const body = await request.json().catch(() => ({}));
@@ -100,17 +90,11 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    const guard = await requirePermission("errorReports.edit");
+    if (guard instanceof NextResponse) return guard;
+
+    const { session } = guard;
     await connectDB();
-
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await User.findById(session.user.id).lean();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
-    }
 
     const body = await request.json().catch(() => ({}));
     const validatedData = bulkStatusSchema.parse(body);

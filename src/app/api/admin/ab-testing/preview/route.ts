@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 
 const previewRequestSchema = z.object({
   experimentId: z.string().min(1, "Experiment ID is required"),
@@ -14,11 +13,8 @@ const previewRequestSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("abTesting.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const body = await request.json();
     const validatedData = previewRequestSchema.parse(body);
@@ -60,11 +56,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const _guard = await requirePermission("abTesting.edit");
+    if (_guard instanceof NextResponse) return _guard;
 
     const { searchParams } = new URL(request.url);
     const experimentId = searchParams.get("experimentId");

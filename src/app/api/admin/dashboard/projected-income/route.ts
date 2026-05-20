@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
@@ -57,13 +56,10 @@ function getTodayThrough27thWindowInUTC(): { startUTC: Date; endUTC: Date; renew
  */
 export async function GET(_request: NextRequest) {
   try {
-    await connectDB();
+    const guard = await requirePermission("overview.view");
+    if (guard instanceof NextResponse) return guard;
 
-    // Verify admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    await connectDB();
 
     // Find users with active subscriptions that WILL auto-renew
     const activeSubscribers = await User.find({
