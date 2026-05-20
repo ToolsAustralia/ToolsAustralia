@@ -13,3 +13,11 @@ Per-action permission gating (e.g. who can edit users vs view them) happens at t
 Each tab declares its required permission inline via the `requires` field on the `adminTabGroups` array entries. To add a new tab, add the entry with the appropriate `<area>.view` permission. Groups with no visible tabs are omitted from the sidebar entirely.
 
 Tabs that don't have a dedicated permission area in the catalog (e.g. `tiktok-ads`, `snapchat-ads`, `blocked-transactions`) map to the closest related area (`facebookAds.view` or `settings.view`).
+
+## Settings preview route (dev-only design mockup)
+
+`/admin/settings/preview` renders a static visual mockup of the Roles + Staff screens with mock data from `src/components/admin/settings/preview/mockData.ts` — no DB calls, no mutations. The page is gated behind the admin layout's staff/admin guard and a `usePermissions().has("settings.view")` check. Both light and dark themes are supported via the existing `dark:` Tailwind classes.
+
+The preview locks the visual direction before Tasks 20/21 build the real, API-integrated versions. The Discord-inspired structure (left-rail roles list + permission grid on Roles; member-list cards with role-color avatars on Staff) is carried into the real components at `src/components/admin/settings/RolesManagement.tsx` and `StaffManagement.tsx`.
+
+The preview route can stay live in dev for quick visual reference or be removed once production is shipped — decide during the cleanup PR.
