@@ -17,6 +17,7 @@ Each role returned in `data.roles` carries:
 |---|---|---|
 | `id` | string | Mongo `_id` as string |
 | `name` | string | Trimmed, unique, ≤60 chars |
+| `color` | string \| null | 6-digit hex (e.g. `#ee0000`) for the Discord-style role chip. `null` if unset. |
 | `permissions` | `string[]` | Subset of `data.catalog` |
 | `isSystem` | boolean | `true` for the seeded Admin role |
 | `memberCount` | number | Result of an aggregation against `User.roleId` |
@@ -37,5 +38,6 @@ A role with `memberCount > 0` cannot be deleted — the API returns `409 "Cannot
 ## Validation
 
 - `name` is trimmed, required, max 60 chars.
+- `color` is optional; when provided it must match `/^#[0-9a-fA-F]{6}$/` (6-digit hex, leading `#`). Otherwise the API returns `400`.
 - `permissions` is validated against the in-process catalog (`isValidPermission`). Unknown strings cause `400 "Contains unknown permissions"`.
 - Duplicate names cause `409 "A role with that name already exists"` (Mongo `E11000`).

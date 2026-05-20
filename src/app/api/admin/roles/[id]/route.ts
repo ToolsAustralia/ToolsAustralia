@@ -7,8 +7,14 @@ import User from "@/models/User";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { isValidPermission } from "@/lib/permissions";
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
 const PatchRoleSchema = z.object({
   name: z.string().trim().min(1).max(60).optional(),
+  color: z
+    .string()
+    .regex(HEX_COLOR_RE, "color must be a 6-digit hex string like #ee0000")
+    .optional(),
   permissions: z
     .array(z.string())
     .refine((perms) => perms.every(isValidPermission), {
@@ -66,6 +72,7 @@ export async function PATCH(
   }
 
   if (parsed.data.name !== undefined) role.name = parsed.data.name;
+  if (parsed.data.color !== undefined) role.color = parsed.data.color;
   if (parsed.data.permissions !== undefined) role.permissions = parsed.data.permissions;
 
   try {

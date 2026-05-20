@@ -4,12 +4,19 @@ import { isValidPermission } from "@/lib/permissions";
 export interface IRole extends Document {
   _id: Types.ObjectId;
   name: string;
+  /**
+   * 6-digit hex color (e.g. "#ee0000") for the Discord-style role chip.
+   * Optional; clients should fall back to a neutral default when missing.
+   */
+  color?: string;
   permissions: string[];
   isSystem: boolean;
   createdBy: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 const RoleSchema = new Schema<IRole>(
   {
@@ -19,6 +26,13 @@ const RoleSchema = new Schema<IRole>(
       trim: true,
       maxlength: [60, "Role name cannot be more than 60 characters"],
       unique: true,
+    },
+    color: {
+      type: String,
+      validate: {
+        validator: (c: string) => !c || HEX_COLOR_RE.test(c),
+        message: "color must be a 6-digit hex string like #ee0000",
+      },
     },
     permissions: {
       type: [String],

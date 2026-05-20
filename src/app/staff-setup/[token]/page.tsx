@@ -91,7 +91,7 @@ export default function StaffSetupPage({
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Can't open this invite
+            Can&apos;t open this invite
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">{error}</p>
         </div>

@@ -6,8 +6,14 @@ import User from "@/models/User";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import { PERMISSIONS, isValidPermission } from "@/lib/permissions";
 
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
 const CreateRoleSchema = z.object({
   name: z.string().trim().min(1).max(60),
+  color: z
+    .string()
+    .regex(HEX_COLOR_RE, "color must be a 6-digit hex string like #ee0000")
+    .optional(),
   permissions: z
     .array(z.string())
     .refine((perms) => perms.every(isValidPermission), {
@@ -37,6 +43,7 @@ export async function GET() {
       roles: roles.map((r) => ({
         id: r._id.toString(),
         name: r.name,
+        color: r.color ?? null,
         permissions: r.permissions,
         isSystem: r.isSystem,
         memberCount: countMap.get(r._id.toString()) ?? 0,
@@ -72,6 +79,7 @@ export async function POST(req: NextRequest) {
   try {
     const role = await Role.create({
       name: parsed.data.name,
+      color: parsed.data.color,
       permissions: parsed.data.permissions,
       isSystem: false,
       createdBy: session.user.id,

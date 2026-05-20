@@ -21,6 +21,7 @@ async function main() {
     if (!DRY_RUN) {
       adminRole = await Role.create({
         name: "Admin",
+        color: "#ee0000",
         permissions: PERMISSIONS,
         isSystem: true,
         createdBy: null,
@@ -28,14 +29,22 @@ async function main() {
     }
     console.log(`✓ Seeded Admin role (${DRY_RUN ? "dry-run" : adminRole?._id})`);
   } else {
-    // Keep permissions in sync if catalog grew
+    // Keep permissions in sync if catalog grew, and backfill the color if missing
     const missing = PERMISSIONS.filter((p) => !adminRole!.permissions.includes(p));
-    if (missing.length > 0) {
+    const needsColor = !adminRole.color;
+    if (missing.length > 0 || needsColor) {
       if (!DRY_RUN) {
         adminRole.permissions = PERMISSIONS;
+        if (needsColor) adminRole.color = "#ee0000";
         await adminRole.save();
       }
-      console.log(`✓ Synced Admin role permissions (+${missing.length})`);
+      const changes = [
+        missing.length > 0 ? `+${missing.length} perms` : null,
+        needsColor ? "color" : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.log(`✓ Synced Admin role (${changes})`);
     } else {
       console.log("✓ Admin role already up to date");
     }
@@ -55,6 +64,7 @@ async function main() {
     if (!DRY_RUN) {
       await Role.create({
         name: "Ads Manager",
+        color: "#f59e0b",
         permissions: ADS_MANAGER_PERMS,
         isSystem: false,
         createdBy: null,
