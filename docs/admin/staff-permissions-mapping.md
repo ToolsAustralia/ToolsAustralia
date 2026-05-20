@@ -133,8 +133,23 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/winners/[id]` | GET | `majorDraw.view` |
 | `/api/admin/winners/[id]` | PATCH/DELETE | `majorDraw.edit` |
 
+| `/api/users/[id]` | GET (self) | _(any authenticated user — self-only)_ |
+| `/api/users/[id]` | GET (other user) | `users.view` |
+| `/api/users/[id]/my-account` | GET (self) | _(any authenticated user — self-only)_ |
+| `/api/users/[id]/my-account` | GET (other user) | `users.view` |
+| `/api/upload/cloudinary` | POST, DELETE | `promos.edit` |
+| `/api/major-draw/select-winner` | POST | `majorDraw.edit` |
+| `/api/partner-applications` | GET | `users.view` |
+| `/api/partner-applications` | POST | _(public — no auth required)_ |
+| `/api/partner-applications/[id]` | GET | `users.view` |
+| `/api/partner-applications/[id]` | PUT | `users.edit` |
+| `/api/partner-applications/[id]` | PATCH (mark read) | `users.view` |
+| `/api/partner-applications/[id]` | DELETE | `users.edit` |
+| `/api/debug/check-admin` | GET | _(open to any authenticated caller — diagnostic only)_ |
+
 ## Notes
 
-- All `/api/admin/**` routes now use `requirePermission()` — the legacy `session.user.role === "admin"` pattern has been fully removed.
+- All `/api/admin/**` routes and the non-admin routes listed above now use `requirePermission()` — the legacy `session.user.role === "admin"` pattern has been fully removed from API routes.
 - The `requirePermission()` helper (`src/lib/api-auth-permissions.ts`) includes a legacy bridge: existing `admin`-role users without a `roleId` are granted every permission during the transition window.
 - Cron routes (`/api/admin/cron/**`) and staff/roles management routes use their own auth patterns and are excluded from this table.
+- `/api/debug/check-admin` is intentionally ungated — it is a diagnostic endpoint that reports the caller's session/DB role, `userType`, and `permissions` fields. It does not expose sensitive data beyond what the session already contains.
