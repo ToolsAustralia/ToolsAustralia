@@ -35,7 +35,7 @@ import { formatDateInAEST } from "@/utils/common/timezone";
  */
 export async function GET(request: NextRequest) {
   try {
-    const guard = await requirePermission("users.view");
+    const guard = await requirePermission("users.export");
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();

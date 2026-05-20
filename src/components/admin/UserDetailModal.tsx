@@ -45,6 +45,7 @@ import {
   useAdminUserPaymentEventsInfinite,
 } from "@/hooks/queries/useAdminQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { usePermissions } from "@/hooks/usePermissions";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import ChargePastDueUserModal from "@/components/admin/ChargePastDueUserModal";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
@@ -351,6 +352,14 @@ const getPackageIconImage = (packageName?: string | null): StaticImageData | nul
  */
 export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserDetailModalProps) {
   const queryClient = useQueryClient();
+  // Per-action permission gating. Mutation endpoints already enforce each
+  // permission server-side; these flags just hide controls the current role
+  // is forbidden from using, so we don't surface 403s to staff.
+  const { has } = usePermissions();
+  const canEditUser = has("users.edit");
+  const canCharge = has("users.charge");
+  const canCancelSubscription = has("users.cancelSubscription");
+  const canDeleteUser = has("users.delete");
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showActionModal, setShowActionModal] = useState<{
@@ -1807,13 +1816,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               {updateUser.isPending ? "Updating..." : "Subscribe to marketing"}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => setActiveEditTab("overview")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
-                          >
-                            Edit Details
-                          </button>
+                          {canEditUser && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveEditTab("overview")}
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                            >
+                              Edit Details
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -2048,48 +2059,59 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     Quick Actions
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
-                    <button
-                      onClick={() => setShowSendEmailModal(true)}
-                      disabled={actionLoading === "send_email"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50"
-                    >
-                      <Send className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Send Email</span>
-                    </button>
+                    {/* Send Email + Set Password + Clear Payment Methods are
+                        all gated by users.edit (POST /actions endpoint). */}
+                    {canEditUser && (
+                      <button
+                        onClick={() => setShowSendEmailModal(true)}
+                        disabled={actionLoading === "send_email"}
+                        className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50"
+                      >
+                        <Send className="w-5 h-5 text-blue-600" />
+                        <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Send Email</span>
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => setShowAdminPasswordModal(true)}
-                      disabled={actionLoading === "admin_set_password"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors disabled:opacity-50"
-                    >
-                      <Key className="w-5 h-5 text-yellow-600" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Set Password</span>
-                    </button>
+                    {canEditUser && (
+                      <button
+                        onClick={() => setShowAdminPasswordModal(true)}
+                        disabled={actionLoading === "admin_set_password"}
+                        className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors disabled:opacity-50"
+                      >
+                        <Key className="w-5 h-5 text-yellow-600" />
+                        <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Set Password</span>
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() =>
-                        showActionConfirmation(
-                          "clear_payment_methods",
-                          "Clear Payment Methods",
-                          "This will remove all saved payment methods from both the database and Stripe. This action cannot be undone.",
-                          false
-                        )
-                      }
-                      disabled={actionLoading === "clear_payment_methods" || !user?.savedPaymentMethods || user.savedPaymentMethods.length === 0}
-                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
-                    >
-                      <CreditCard className="w-5 h-5 text-orange-600" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Clear Payment Methods</span>
-                    </button>
+                    {canEditUser && (
+                      <button
+                        onClick={() =>
+                          showActionConfirmation(
+                            "clear_payment_methods",
+                            "Clear Payment Methods",
+                            "This will remove all saved payment methods from both the database and Stripe. This action cannot be undone.",
+                            false
+                          )
+                        }
+                        disabled={actionLoading === "clear_payment_methods" || !user?.savedPaymentMethods || user.savedPaymentMethods.length === 0}
+                        className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+                      >
+                        <CreditCard className="w-5 h-5 text-orange-600" />
+                        <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Clear Payment Methods</span>
+                      </button>
+                    )}
 
-                    <button
-                      onClick={handleDeleteClick}
-                      disabled={isLoadingDeletionSummary || !userId}
-                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-red-300 dark:hover:border-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 className="w-5 h-5 text-red-600" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Delete User</span>
-                    </button>
+                    {/* Delete User — separate, far stronger permission. */}
+                    {canDeleteUser && (
+                      <button
+                        onClick={handleDeleteClick}
+                        disabled={isLoadingDeletionSummary || !userId}
+                        className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-red-300 dark:hover:border-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-5 h-5 text-red-600" />
+                        <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Delete User</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2283,19 +2305,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           {/* Show for active OR past_due: past_due has isActive=false but still has Stripe sub to cancel */}
-                          {(user.subscription?.isActive || user.subscription?.status === "past_due") && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCancelAtPeriodEnd(true);
-                                setShowCancelSubscriptionModal(true);
-                              }}
-                              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                              Cancel Subscription
-                            </button>
-                          )}
-                          {user.subscription?.status === "past_due" && userId && (
+                          {canCancelSubscription &&
+                            (user.subscription?.isActive || user.subscription?.status === "past_due") && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCancelAtPeriodEnd(true);
+                                  setShowCancelSubscriptionModal(true);
+                                }}
+                                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                Cancel Subscription
+                              </button>
+                            )}
+                          {canCharge && user.subscription?.status === "past_due" && userId && (
                             <button
                               type="button"
                               onClick={() => setShowChargePastDueUserModal(true)}
@@ -2304,13 +2327,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               Retry past due charge
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => setActiveEditTab("subscription")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
-                          >
-                            Edit Subscription
-                          </button>
+                          {canEditUser && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveEditTab("subscription")}
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                            >
+                              Edit Subscription
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -2916,13 +2941,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             Review package purchases below or switch to edit mode to grant additional entries.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditTab("purchases")}
-                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
-                        >
-                          Edit Packages
-                        </button>
+                        {canEditUser && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveEditTab("purchases")}
+                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit Packages
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -3340,13 +3367,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             Review draw entries below or switch to edit mode to adjust allocations.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditTab("activity")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
-                        >
-                          Edit Entries
-                        </button>
+                        {canEditUser && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveEditTab("activity")}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit Entries
+                          </button>
+                        )}
                       </div>
                     </>
                   )}

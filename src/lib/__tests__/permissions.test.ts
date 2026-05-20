@@ -48,7 +48,7 @@ test("PERMISSIONS contains exactly one entry per (area, action) pair", () => {
 test("Users area has the destructive + financial sub-actions", () => {
   assert.deepEqual(
     [...AREA_ACTIONS.users],
-    ["view", "edit", "charge", "cancelSubscription", "refund", "delete"]
+    ["view", "edit", "export", "charge", "cancelSubscription", "refund", "delete"]
   );
 });
 
@@ -150,6 +150,7 @@ test("dangerous sub-actions are marked danger:true", () => {
     "users.cancelSubscription",
     "users.refund",
     "users.delete",
+    "users.export",
     "promos.end",
     "promos.delete",
     "majorDraw.selectWinner",

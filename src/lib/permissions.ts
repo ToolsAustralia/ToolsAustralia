@@ -14,7 +14,7 @@
  */
 export const AREA_ACTIONS = {
   overview: ["view", "edit"],
-  users: ["view", "edit", "charge", "cancelSubscription", "refund", "delete"],
+  users: ["view", "edit", "export", "charge", "cancelSubscription", "refund", "delete"],
   promos: ["view", "edit", "end", "delete"],
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],

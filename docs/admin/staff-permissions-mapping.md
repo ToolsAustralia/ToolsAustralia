@@ -13,7 +13,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/users/[id]/delete` | DELETE | `users.delete` |
 | `/api/admin/users/[id]/deletion-summary` | GET | `users.view` |
 | `/api/admin/users/search` | GET | `users.view` |
-| `/api/admin/users/export` | GET | `users.view` |
+| `/api/admin/users/export` | GET | `users.export` |
 | `/api/admin/promo/active` | GET | `promos.view` |
 | `/api/admin/promo/active` | POST | _(public — no auth)_ |
 | `/api/admin/promo/alternating-multiplier` | GET | `promos.view` |

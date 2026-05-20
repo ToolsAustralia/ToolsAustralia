@@ -111,6 +111,11 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
     label: "Edit",
     description: "Edit names, mobile, address, notes, and status flags. Send verification / password-reset emails. Clear saved payment methods.",
   },
+  "users.export": {
+    label: "Export",
+    description: "Download the customer list as CSV (full names, emails, subscription state). Treat as sensitive — covers data-leakage risk separately from regular viewing.",
+    danger: true,
+  },
   "users.charge": {
     label: "Charge",
     description: "Manually charge past-due invoices, force-charge a customer's saved card, or recover a missed invoice. Moves money from the customer.",
