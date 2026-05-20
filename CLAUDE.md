@@ -47,6 +47,23 @@ This rule overrides skills like `brainstorming`, `writing-plans`, and `writing-s
 
 This rule is not hook-enforced. You're expected to apply it on your own.
 
+### 5. Keep README.md and BUSINESS.md in sync with business-level changes
+
+The per-domain doc-sync hook covers `docs/<domain>/` updates. README.md and BUSINESS.md are the **top-level business status documents** at the repo root and the hook does not enforce them. You **must** update them in the same task when your change flips a fact they assert. Triggers:
+
+- A membership tier is added, removed, repriced, or its entries / partner-discount % / shop % change.
+- An access rule for a package family changes (e.g. who can see Additional packs, who gets partner access).
+- A "coming soon" item ships (shop, partner-discount API at 1K+ brands, TikTok / Snapchat insights sync, mobile app on Play Store, second monthly major draw).
+- A new "coming soon" item is added to the roadmap.
+- The major draw cadence (27th of month), freeze-period rule, or mini-draw trigger model changes.
+- The anchor-day-24 billing rule, refund-reversal model, or past-due recovery flow changes (see §9 of BUSINESS.md).
+- An ad platform moves from "prepared / shell only" to "live" or vice versa.
+- The partner-discount tier-visibility model changes (today: 50 / 75 / 100% of a 7-brand catalog).
+
+Both files include a "Coming soon" section — when something ships, **move the line out of "Coming soon" into "Live"** in the same edit, do not leave it in both.
+
+This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
