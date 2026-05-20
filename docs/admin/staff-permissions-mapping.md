@@ -132,6 +132,10 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/upsell-multipliers` | PUT | `overview.edit` |
 | `/api/admin/winners/[id]` | GET | `majorDraw.view` |
 | `/api/admin/winners/[id]` | PATCH/DELETE | `majorDraw.edit` |
+| `/api/admin/roles` | GET | `settings.view` |
+| `/api/admin/roles` | POST | `settings.edit` |
+| `/api/admin/roles/[id]` | PATCH | `settings.edit` |
+| `/api/admin/roles/[id]` | DELETE | `settings.edit` |
 
 | `/api/users/[id]` | GET (self) | _(any authenticated user — self-only)_ |
 | `/api/users/[id]` | GET (other user) | `users.view` |
