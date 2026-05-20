@@ -13,6 +13,7 @@ Transactional email via SendGrid; HTML templates at repo root; SMS via separate 
 - [gotchas.md](./gotchas.md) — preview workflow, root template files
 - [models.md](./models.md) — _N/A — emails aren't persisted; uses User for recipients_
 - [testing.md](./testing.md) — `docs/SENDGRID_TESTING_GUIDE.md`
+- [staff-invite.md](./staff-invite.md) — staff invite template + `sendStaffInviteEmail` helper
 
 ## Migrated from
 
