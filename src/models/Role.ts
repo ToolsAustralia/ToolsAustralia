@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import { ALL_PERMISSIONS } from "@/lib/permissions";
+import { isValidPermission } from "@/lib/permissions";
 
 export interface IRole extends Document {
   _id: Types.ObjectId;
@@ -24,7 +24,7 @@ const RoleSchema = new Schema<IRole>(
       type: [String],
       default: [],
       validate: {
-        validator: (perms: string[]) => perms.every((p) => ALL_PERMISSIONS.has(p as never)),
+        validator: (perms: string[]) => perms.every(isValidPermission),
         message: (props) =>
           `Permission list contains unknown values: ${JSON.stringify(props.value)}`,
       },
@@ -46,7 +46,7 @@ const RoleSchema = new Schema<IRole>(
   }
 );
 
-RoleSchema.index({ name: 1 }, { unique: true });
+// Note: unique index on `name` is automatically created by Mongoose because `unique: true` is set above.
 
 if (mongoose.models.Role) {
   delete mongoose.models.Role;
