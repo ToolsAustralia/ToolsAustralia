@@ -6,7 +6,7 @@
 
 1. **CSP nonce generation** — in production, generates a per-request nonce via `src/utils/security/nonce.ts` and writes CSP headers via `src/utils/security/csp.ts`. Disabled in development to allow Next.js dev tools.
 2. **Protected route gating** — `/rewards`, `/my-account` require an authenticated session; unauthenticated visitors are redirected to `/login`.
-3. **Admin route gating** — `/admin`, `/api/admin` require `token.role === "admin"`; others are redirected to `/`.
+3. **Admin route gating** — `/admin`, `/api/admin` require an internal user. An internal user is any token where `userType === "staff"` (custom-role staff member) **or** `userType === "admin"` (seeded Admin super-role). The legacy `token.role === "admin"` bridge stays active until Phase 5 cleanup drops the `User.role` field. Anyone else hitting an admin route is redirected to `/`.
 4. **Staff route block** — see below.
 
 ## Staff route block

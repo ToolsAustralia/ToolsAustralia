@@ -61,8 +61,16 @@ export default withAuth(
       return response;
     }
 
-    // Check admin role for admin routes
-    if (isAdminRoute && (!token || token.role !== "admin")) {
+    // Check admin access for admin routes.
+    // Internal users = userType "staff" (custom role) or "admin" (super-role).
+    // Legacy bridge: pre-migration users with role:"admin" still pass through
+    // until Phase 5 drops the legacy field.
+    const isInternalUser =
+      token?.userType === "staff" ||
+      token?.userType === "admin" ||
+      token?.role === "admin";
+
+    if (isAdminRoute && (!token || !isInternalUser)) {
       const response = NextResponse.redirect(new URL("/", req.url));
       // Apply security headers to redirect response
       if (isProduction && nonce) {
@@ -128,8 +136,13 @@ export default withAuth(
         const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 
         if (isAdminRoute) {
-          // Admin routes require both a valid subject and admin role.
-          return !!token?.sub && token?.role === "admin";
+          // Admin routes require a valid subject AND an internal userType
+          // (staff or admin) OR the legacy admin role for the migration window.
+          const isInternalUser =
+            token?.userType === "staff" ||
+            token?.userType === "admin" ||
+            token?.role === "admin";
+          return !!token?.sub && isInternalUser;
         }
 
         return true;

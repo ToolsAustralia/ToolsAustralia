@@ -12,14 +12,18 @@ export default function AdminTabPage() {
   const { data: session, status } = useSession();
   const tab = params?.tab as string;
 
-  // Redirect if not authenticated or not admin
-  useEffect(() => {
-    if (status === "loading") return; // Still loading
+  // Internal users = userType "staff" / "admin", or legacy role:"admin"
+  // (the legacy bridge stays until Phase 5 drops User.role).
+  const isInternalUser =
+    session?.user?.userType === "staff" ||
+    session?.user?.userType === "admin" ||
+    session?.user?.role === "admin";
 
-    if (!session || session.user?.role !== "admin") {
-      router.push("/");
-    }
-  }, [session, status, router]);
+  // Redirect if not authenticated or not internal
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session || !isInternalUser) router.push("/");
+  }, [session, status, isInternalUser, router]);
 
   // Show loading while checking authentication
   if (status === "loading") {
@@ -30,8 +34,8 @@ export default function AdminTabPage() {
     );
   }
 
-  // Don't render if not authenticated or not admin
-  if (!session || session.user?.role !== "admin") {
+  // Don't render if not authenticated or not internal
+  if (!session || !isInternalUser) {
     return null;
   }
 

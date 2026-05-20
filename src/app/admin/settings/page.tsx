@@ -15,10 +15,16 @@ export default function AdminSettingsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
+  // Internal users = userType "staff" / "admin", or legacy role:"admin".
+  const isInternalUser =
+    session?.user?.userType === "staff" ||
+    session?.user?.userType === "admin" ||
+    session?.user?.role === "admin";
+
   useEffect(() => {
     if (status === "loading") return;
-    if (!session || session.user?.role !== "admin") router.push("/");
-  }, [session, status, router]);
+    if (!session || !isInternalUser) router.push("/");
+  }, [session, status, isInternalUser, router]);
 
   if (status === "loading") {
     return (
@@ -27,7 +33,7 @@ export default function AdminSettingsPage() {
       </div>
     );
   }
-  if (!session || session.user?.role !== "admin") return null;
+  if (!session || !isInternalUser) return null;
 
   const adminUser: AdminUser = {
     id: session.user?.id ?? "",
