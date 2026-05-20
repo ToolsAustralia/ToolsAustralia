@@ -84,3 +84,23 @@ const allowed = await userHasPermission(userId, "users.edit");
 ```
 
 Reads user + role from DB. Use sparingly — it makes a DB round-trip. Prefer `requirePermission` in route handlers where the session is already available.
+
+## Permission checks (client)
+
+```tsx
+import { usePermissions } from "@/hooks/usePermissions";
+
+function UsersTable() {
+  const { has, isLoading } = usePermissions();
+  if (isLoading) return <Spinner />;
+  if (!has("users.view")) return <Forbidden />;
+  return (
+    <>
+      <Table />
+      {has("users.edit") && <EditControls />}
+    </>
+  );
+}
+```
+
+The hook reads from the NextAuth session — no extra fetch.
