@@ -112,6 +112,18 @@ No sign-out section (index + sidebar already provide it). Profession stays free-
 Full `primitives`-based re-skin. Password security-score dial and security checklist omitted (no backing data).
 `htmlFor`/`id` a11y wiring applied to all password fields.
 
+> **Set-password mode (2026-05-19) — re-applied after a branch reset wiped it once.**
+> `PasswordTab` takes `hasPassword?: boolean` (passed by `settings/page.tsx` as
+> `hasPassword={user.hasPassword}`, sourced from `GET /api/users/[id]`). A derived
+> `isPasswordless = hasPassword === false` (undefined → treated as has-password, the safe default)
+> switches the tab to **set-password mode** for OAuth / passwordless accounts:
+> the "Current password" `Field` is hidden, header → "Set a password", button → "Set password",
+> and the `POST /api/user/change-password` body omits `currentPassword`. The security-score dial
+> and checklist are untouched (they only *read* `hasPassword`). Matching server behaviour:
+> [auth/api.md → POST /api/user/change-password](../auth/api.md). If a passwordless user again
+> sees `"Password changes not available for this account"`, both this UI branch **and** the
+> route's `isFirstTimeSet` branch were reverted.
+
 ### Settings Redesign Phase 2 (2026-05-19)
 
 Resolves the bulk of the earlier flag list. **Frontend-only; no backend/hook/service/model/endpoint change.**

@@ -52,6 +52,25 @@ Important: the fallback is non-deterministic across calls. Any code path that us
 
 Every browser pixel refuses to fire on any hostname not listed in `productionHostnames()`. For all three current providers that means **only** `toolsaustralia.com.au` and `www.toolsaustralia.com.au`. To test pixels in dev/preview, set `NEXT_PUBLIC_ENABLE_PIXEL_TESTING=true` (which `<ConversionPixels disabled />` reads) **and** mock the hostname in your test — there is no global "ignore hostname" override; this is intentional.
 
+## Meta Events Manager: keep "Automatic Advanced Matching" and "Track events automatically" OFF
+
+In Events Manager → Pixel `794467123372847` → Settings, two toggles must stay **Off**:
+
+1. **Automatic Advanced Matching** ("Automatic website matching" — the master toggle plus every per-field sub-toggle: Email, Phone, First/last name, Gender, City/State/ZIP, Country, Date of birth, External ID).
+2. **Track events automatically without code** (under "Event setup" — Meta's auto button/form click harvester that emits `SubscribedButtonClick`, `Lead`, etc. from page DOM heuristics).
+
+**Why off, not on:**
+
+- **AM is supplied manually in code.** [ConversionPixelsAdvancedMatching.tsx](../../src/components/tracking/ConversionPixelsAdvancedMatching.tsx) calls `fbq('init', pixelId, AM)` with `buildAdvancedMatching(userData)` after the user authenticates. Every subsequent `fbq('track', …)` automatically carries the nine hashed identity fields (em/ph/fn/ln/ct/st/zp/country/db/external_id) — controlled, post-consent, with the fields we choose. CAPI `user_data` is built server-side in [providers/facebook.ts](../../src/lib/tracking/providers/facebook.ts) the same way. Leaving auto-AM on means Meta *also* scrapes whatever happens to be in form inputs on the page — duplicate, uncontrolled, and active on pages like `/my-account/settings`, `/support`, `/reset-password` that aren't conversion contexts.
+- **Auto events pollute event quality.** `SubscribedButtonClick` fires on *every* `<button>` tap (state-tile picks, profession-tile picks, reset, navigation) and ships the button's `innerText` + hashed identity to Meta. It doesn't replace properly modeled funnel events; it just adds noise that depresses EMQ and inflates volume. Our explicit `trackConversion()` calls already cover the events that matter (`Purchase`, `Lead`, `CompleteRegistration`, etc.).
+- **Compliance.** Both auto features are the pattern EU/AU regulators have repeatedly flagged as undisclosed data sharing because the user never consented to having form-field PII or button labels exfiltrated on every page interaction.
+
+**What you'd notice if either gets re-enabled:**
+
+Outbound requests to `https://www.facebook.com/privacy_sandbox/pixel/register/trigger/?…&ev=SubscribedButtonClick&cd[buttonText]=…&ud[em]=…&ud[ph]=…` firing on routine clicks across non-conversion pages, including `/my-account/*`. If you see that pattern in DevTools Network, the toggle flipped on the Meta side — fix it in Events Manager, not in code.
+
+**Don't try to compensate in code.** There is no client-side switch to suppress Meta's auto features once they're enabled at the Pixel level; the only off-switch lives in Events Manager.
+
 ## Dedup id mapping
 
 Each provider's dedup field has a different name. The canonical `eventId` maps to:

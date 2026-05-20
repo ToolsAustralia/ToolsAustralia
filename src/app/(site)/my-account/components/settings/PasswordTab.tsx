@@ -161,6 +161,11 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
   const strengthColors = ["bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-green-500"];
   const strengthLabels = ["Weak", "Fair", "Good", "Strong"];
 
+  // OAuth / passwordless accounts (hasPassword === false) have no existing
+  // password — this tab becomes a first-time "set password" flow. When
+  // hasPassword is undefined (unknown), keep the safer change-password UI.
+  const isPasswordless = hasPassword === false;
+
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       showToast({
@@ -185,7 +190,9 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
       const res = await fetch("/api/user/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify(
+          isPasswordless ? { newPassword } : { currentPassword, newPassword },
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -193,8 +200,10 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
       }
       showToast({
         type: "success",
-        title: "Password changed",
-        message: "Your password has been updated.",
+        title: isPasswordless ? "Password set" : "Password changed",
+        message: isPasswordless
+          ? "You can now sign in with your email and this password."
+          : "Your password has been updated.",
       });
       setCurrentPassword("");
       setNewPassword("");
@@ -334,8 +343,12 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
       {/* ── Change password ───────────────────────────────────────────────── */}
       <section>
         <SectionHeader
-          title="Change password"
-          description="Use a passphrase or a password manager for best security. Minimum 6 characters."
+          title={isPasswordless ? "Set a password" : "Change password"}
+          description={
+            isPasswordless
+              ? "Your account signs in without a password. Set one to also sign in with your email. Minimum 6 characters."
+              : "Use a passphrase or a password manager for best security. Minimum 6 characters."
+          }
           icon={KeyRound}
           accent="red"
         />
@@ -343,15 +356,17 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
         <div className="grid lg:grid-cols-[1fr_300px] gap-5">
           {/* Form column */}
           <div className="space-y-5">
-            <Field label="Current password" htmlFor="current-password">
-              <SettingsInput
-                type="password"
-                id="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-              />
-            </Field>
+            {!isPasswordless && (
+              <Field label="Current password" htmlFor="current-password">
+                <SettingsInput
+                  type="password"
+                  id="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                />
+              </Field>
+            )}
 
             <Field label="New password" htmlFor="new-password">
               <PWInput
@@ -428,7 +443,13 @@ export default function PasswordTab({ userEmail, isEmailVerified, hasPassword }:
                 onClick={handleChangePassword}
                 disabled={isUpdatingPassword}
               >
-                {isUpdatingPassword ? "Updating..." : "Update password"}
+                {isUpdatingPassword
+                  ? isPasswordless
+                    ? "Setting..."
+                    : "Updating..."
+                  : isPasswordless
+                    ? "Set password"
+                    : "Update password"}
               </SettingsButton>
             </div>
           </div>
