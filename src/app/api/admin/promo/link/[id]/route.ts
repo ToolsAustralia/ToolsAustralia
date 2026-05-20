@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import PromoLink from "@/models/PromoLink";
 import { z } from "zod";
@@ -57,20 +56,10 @@ const updatePromoLinkSchema = z
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -169,7 +158,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await promoLink.save();
 
     console.log(`✅ Updated promo link ${id}`, {
-      updatedBy: user.email,
       appliesToMembership: promoLink.appliesToMembership,
       appliesToOneTime: promoLink.appliesToOneTime,
       campaignType: promoLink.campaignType,
@@ -234,20 +222,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -262,7 +240,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     console.log(`🗑️ Deleted promo link ${id}`, {
-      deletedBy: user.email,
       code: promoLink.code,
     });
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import ScheduledPromo from "@/models/ScheduledPromo";
 import { z } from "zod";
@@ -26,18 +25,10 @@ const updateScheduledPromoSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -92,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     await promo.save();
 
-    console.log(`✅ Updated scheduled promo ${id}`, { updatedBy: user.email });
+    console.log(`✅ Updated scheduled promo ${id}`);
 
     return NextResponse.json({
       success: true,
@@ -143,18 +134,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -171,7 +154,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     promo.deletedAt = new Date();
     await promo.save();
 
-    console.log(`🗑️ Soft-deleted scheduled promo ${id}`, { deletedBy: user.email });
+    console.log(`🗑️ Soft-deleted scheduled promo ${id}`);
 
     return NextResponse.json({
       success: true,

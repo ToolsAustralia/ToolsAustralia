@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import BonusEntryPromo from "@/models/BonusEntryPromo";
 import { z } from "zod";
@@ -27,20 +26,10 @@ const updateBonusEntryPromoSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -96,9 +85,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     await promo.save();
 
-    console.log(`✅ Updated bonus entry promo ${id}`, {
-      updatedBy: user.email,
-    });
+    console.log(`✅ Updated bonus entry promo ${id}`);
 
     return NextResponse.json({
       success: true,
@@ -149,20 +136,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    // Check admin authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const guard = await requirePermission("promos.edit");
+    if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    // Get user from database to verify admin role
-    const { default: User } = await import("@/models/User");
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
 
     const { id } = await params;
 
@@ -176,9 +153,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Bonus entry promo not found" }, { status: 404 });
     }
 
-    console.log(`🗑️ Deleted bonus entry promo ${id}`, {
-      deletedBy: user.email,
-    });
+    console.log(`🗑️ Deleted bonus entry promo ${id}`);
 
     return NextResponse.json({
       success: true,
