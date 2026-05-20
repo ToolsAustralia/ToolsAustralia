@@ -6,7 +6,7 @@
 |---|---|
 | `major-draw-helpers.ts` | `getTargetMajorDraw()` — picks the active major draw for an action; calls transition service first. |
 | `major-draw-transition-service.ts` | The single authority for `queued → active → frozen → completed` transitions. Idempotent, debounced, never-throws. |
-| `major-draw-gate-http.ts` | HTTP-layer guard that blocks API actions on a frozen/completed draw. |
+| `major-draw-gate-http.ts` | HTTP-layer guard `enforceMajorDrawOpenForNewPurchasesOr403`. Returns 403 `GATES_CLOSED` whenever no draw has `status: "active"` — covers the 8:00–8:30 PM freeze, the 8:30 PM → 12:00 AM gap, and any other moment without an active draw. Wired into six purchase endpoints: `/api/upsell/purchase`, `/api/stripe/create-payment-intent`, `/api/stripe/create-subscription[-existing-user]`, `/api/stripe/create-one-time-purchase[-existing-user]`, `/api/stripe/upgrade-subscription-payment`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). |
 | `major-draw-strip-schedule.ts` | Strip-schedule helpers (visual schedule on the draw page) — _TODO: clarify exact role._ |
 | `mini-draw-helpers.ts` | Mini-draw-equivalent of major-draw-helpers (target selection, eligibility). |
 | `remove-draw-entries.ts` | Reverser used during refund processing — removes entries written by a successful payment. |

@@ -75,11 +75,16 @@ Source of truth: [docs/draws/](docs/draws/), models `MajorDraw`, `MiniDraw`, `Ti
 
 - **Cadence: monthly, drawn on the 27th** of each month (cycle runs 28th → 27th).
 - **Times (Australian Eastern, AEST in winter / AEDT in summer):**
-  - **8:00 PM** — entries freeze. The pool for this cycle is locked.
-  - **8:30 PM** — the draw is run **live on Facebook**.
+  - **8:00 PM** — entries freeze. The pool for this cycle is locked. Draw transitions `active → frozen`.
+  - **8:30 PM** — the draw is run **live on Facebook**. Draw transitions `frozen → completed`.
+  - **12:00 AM (28th)** — the next cycle's draw transitions `queued → active` and new-entry purchases reopen.
 - **One Grand Winner per cycle today.** Adding **2nd-place and 3rd-place winners** is on the roadmap (see §16). The platform's `Winner` model already supports multiple winners per draw — the change is operational, not schema.
-- The freeze and draw times are **per-draw fields** on the `MajorDraw` document (`freezeEntriesAt`, `drawDate`) — they're data-driven, not hardcoded — but the convention above is what every cycle uses.
-- Purchases during the 8:00–8:30 PM freeze go into the **next** cycle's pool (`isInFreezePeriod`, `wasPaymentBeforeFreeze` in [src/utils/draws/major-draw-helpers.ts](src/utils/draws/major-draw-helpers.ts)).
+- The freeze, draw, and activation times are **per-draw fields** on the `MajorDraw` document (`freezeEntriesAt`, `drawDate`, `activationDate`) — they're data-driven, not hardcoded — but the convention above is what every cycle uses.
+- **Purchase blackout window — 8:00 PM (27th) → 12:00 AM (28th), ~4 hours total.** New major-draw entry purchases are blocked across the full window, not just the 30-minute freeze:
+  - **30-min freeze (8:00–8:30 PM)** — draw is `frozen`.
+  - **3h 30min gap (8:30 PM–12:00 AM)** — previous draw is `completed`, next is still `queued` (no `active` draw exists).
+  The frontend gate is [`useMajorDrawPurchaseGate`](src/hooks/useMajorDrawPurchaseGate.ts) — `gatesClosed = currentMajorDraw?.status !== "active"` — which surfaces [`GateClosedModal`](src/components/modals/GateClosedModal.tsx) ("Gates Are Closed") with the next-draw name and activation date. Wired into `MembershipModal`, `useMiniDrawTrigger`, and the `FloatingCountdownBanner` (which switches to a yellow "GATES CLOSED" theme). Server-side, [`enforceMajorDrawOpenForNewPurchasesOr403`](src/utils/draws/major-draw-gate-http.ts) returns **403 `GATES_CLOSED`** on six purchase endpoints: `/api/upsell/purchase`, `/api/stripe/create-payment-intent`, `/api/stripe/create-subscription[-existing-user]`, `/api/stripe/create-one-time-purchase[-existing-user]`, `/api/stripe/upgrade-subscription-payment`.
+- **Subscription renewals processed in this 4-hour window route into the NEXT cycle's pool, not the current one.** [`getTargetMajorDraw`](src/utils/draws/major-draw-helpers.ts) has explicit branches for both freeze (`currentDraw.status === "frozen"`) and gap ("No active draw (gap period) — use next queued draw"), so any webhook-driven renewal that lands at 8:14 PM or 10:47 PM on the 27th is allocated to the next draw, not the one being run that night.
 - All package purchases (subscription renewals, one-time, additional, upsell) contribute entries to the current cycle's `MonthlyEntryCampaign`.
 - **Under consideration:** adding a second major draw per month. Not implemented.
 
@@ -158,7 +163,7 @@ This section nails down the unit economics, because every other system in the do
 - **Carry-forward rule** — *subscription* entries accumulate monthly and carry forward while the subscription stays active (`User.subscription.lastMonthAccumulatedEntries`). **One-Time pack entries and Mini Pack entries do not carry forward** — they're scoped to the cycle they were bought in (Terms §5.3).
 - **No expiry on a `TicketEntry` row.** Entries don't tick down or auto-expire — they're consumed when the draw runs.
 - **Cancellation mid-cycle keeps existing entries valid.** If a user cancels before the 27th, the entries they've already earned this cycle stay in the pool — confirmed in code (no `TicketEntry` deletion in [`CancelSubscriptionService`](src/services/subscription/) or [`CancellationFlowService`](src/services/subscription/)) and stated explicitly in Terms §6: *"Entries for current competition period remain valid."*
-- **Freeze attribution** — `wasPaymentBeforeFreeze` uses a strict `<` comparison against `freezeEntriesAt`, so an entry granted **at or after 8:00 PM AEST/AEDT on the 27th** goes to the **next** queued draw, not the current one (§3a).
+- **Freeze + gap attribution** — `wasPaymentBeforeFreeze` uses a strict `<` comparison against `freezeEntriesAt`, so an entry granted **at or after 8:00 PM AEST/AEDT on the 27th** goes to the **next** queued draw. The same routing also applies in the **8:30 PM → 12:00 AM gap** via [`getTargetMajorDraw`](src/utils/draws/major-draw-helpers.ts)'s "No active draw (gap period)" branch: with the current draw `completed` and the next still `queued`, any renewal that lands in the gap is allocated to the next draw. End-to-end: **any entry granted between 8:00 PM (27th) and 12:00 AM (28th) belongs to the next cycle, not the one being run that night** (§3a).
 
 ---
 
@@ -648,6 +653,8 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Refund policy** — memberships are non-refundable once purchased (Terms §4); no pro-rate refunds; ACL rights preserved (§9h).
 - **`MajorDrawOverview`** — the primary ROI card on the member dashboard: entries this cycle, 3-month accumulation projection, countdown to draw date (§10h).
 - **Partner access %** — the fraction of the partner-brand catalog a tier can see; today 50/75/100% for subscriptions, 25–100% for one-time packs (time-limited).
-- **Freeze period** — the window between 8:00 PM and 8:30 PM AEST/AEDT on the 27th when entries are locked; purchases during this window route to the next month's draw.
+- **Freeze period** — the **30 minutes between 8:00 PM and 8:30 PM AEST/AEDT** on the 27th when the current draw is in `frozen` state and entries are locked. Subset of the broader "purchase blackout window."
+- **Purchase blackout window** — the **full ~4 hours from 8:00 PM (27th) to 12:00 AM (28th)** during which new-entry purchases return 403 `GATES_CLOSED`: the 30-min freeze followed by the **gap period** (8:30 PM–midnight) when the previous draw is `completed` and the next is still `queued`. Renewals processed in this window route to the next cycle's pool. See §3a.
+- **Gap period** — the **~3h 30min between draw end (8:30 PM) and next-draw activation (12:00 AM)** when no draw has `status: "active"`. New-entry purchases are blocked; renewals route to the next draw via `getTargetMajorDraw`'s explicit gap branch.
 - **Ledger pattern** — `PaymentEvent` records of benefit grants/reversals, so refunds can replay the ledger backward.
 - **Past-due** — subscription state when Stripe has failed to collect; recoverable via the admin tool or auto-recovery on next successful charge.
