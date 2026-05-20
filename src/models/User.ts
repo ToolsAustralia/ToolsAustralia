@@ -280,6 +280,16 @@ export interface IUser extends Document {
     stripePaymentIntentId?: string; // For refund tracking
   }>;
 
+  // Staff RBAC (see docs/auth/roles.md)
+  roleId?: mongoose.Types.ObjectId | null; // null = customer
+  userType: "customer" | "staff";          // default "customer"
+
+  // Staff invitation flow
+  inviteToken?: string;
+  inviteTokenExpires?: Date;
+  invitedBy?: mongoose.Types.ObjectId;
+  invitedAt?: Date;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -374,6 +384,30 @@ const UserSchema = new Schema<IUser>(
       enum: ["user", "admin"],
       default: "user",
     },
+
+    // Staff RBAC fields (see docs/auth/roles.md)
+    roleId: {
+      type: Schema.Types.ObjectId,
+      ref: "Role",
+      default: null,
+      sparse: true,
+    },
+    userType: {
+      type: String,
+      enum: ["customer", "staff"],
+      default: "customer",
+      required: true,
+    },
+    inviteToken: {
+      type: String,
+      trim: true,
+    },
+    inviteTokenExpires: Date,
+    invitedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+    invitedAt: Date,
 
     // Stripe Integration Fields
     stripeCustomerId: {
@@ -1158,6 +1192,11 @@ UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
 UserSchema.index({ "miniDrawParticipation.miniDrawId": 1 });
 UserSchema.index({ "miniDrawParticipation.isActive": 1 });
 UserSchema.index({ "miniDrawPackages.miniDrawId": 1 });
+
+// Staff RBAC indexes
+UserSchema.index({ userType: 1 });
+UserSchema.index({ roleId: 1 }, { sparse: true });
+UserSchema.index({ inviteToken: 1 }, { sparse: true, unique: true });
 
 // Clear any cached model to ensure schema changes take effect
 if (mongoose.models.User) {
