@@ -9,7 +9,7 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/stripe/create-subscription` | New user signup; uses anchor helper for 25th-27th joiners |
-| POST | `/api/stripe/create-subscription-existing-user` | Existing user (re-)subscribing |
+| POST | `/api/stripe/create-subscription-existing-user` | Existing user (re-)subscribing. On the resubscribe branch (gated by the same `isResubscribeForMetadata` boolean that decides `subscription.metadata.isResubscribe`), sets `existingUser.subscription.lastResubscribedAt = new Date()` immediately before the primary `save()` (with `markModified("subscription")`). UX-only timestamp consumed by `/api/payment-status/[paymentIntentId]` for the success-page carry-over banner; never fires on initial subscribe, upgrade, or renewal. |
 | POST | `/api/stripe/renew-subscription` | User retry on a failed renewal invoice; clears pause-collection on success |
 | POST | `/api/stripe/cancel-subscription` | User-facing cancel (delegates to subscription/CancelSubscriptionService) |
 | POST | `/api/stripe/cancel-incomplete-subscription` | Clean up stuck `incomplete` checkout |
