@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { AREA_ACTIONS, AREAS, type Area, type Permission } from "@/lib/permissions";
+import { AREA_META, PERMISSION_META } from "@/lib/permission-descriptions";
 import { MOCK_ROLES } from "./mockData";
 
 // Mock permission sets per role for the preview only (no API). Picks a
@@ -29,31 +30,21 @@ const MOCK_ROLE_PERMS: Record<string, ReadonlySet<Permission>> = {
   r4: new Set<Permission>(["overview.view", "promos.view", "promos.edit"]),
 };
 
-function formatAreaLabel(a: string) {
-  return a.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-}
-
-function formatActionLabel(a: string) {
-  // camelCase → human-readable
-  return a.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-}
-
-// Actions that warrant a visual warning (destructive / irreversible / money).
-const DANGER_ACTIONS = new Set([
-  "delete",
-  "charge",
-  "refund",
-  "cancelSubscription",
-  "selectWinner",
-  "processPayout",
-  "end",
-]);
-
 export default function RolesPreview() {
   const [selectedId, setSelectedId] = useState<string>(MOCK_ROLES[1]?.id ?? MOCK_ROLES[0]!.id);
   const selected = MOCK_ROLES.find((r) => r.id === selectedId) ?? MOCK_ROLES[0]!;
   const isAdminRole = selected.name === "Admin";
   const perms = MOCK_ROLE_PERMS[selected.id] ?? new Set<Permission>();
+  const [collapsed, setCollapsed] = useState<Set<Area>>(new Set());
+
+  function toggleCollapsed(area: Area) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(area)) next.delete(area);
+      else next.add(area);
+      return next;
+    });
+  }
 
   return (
     <div className="flex h-[calc(100vh-220px)] min-h-[520px] bg-gray-50 dark:bg-neutral-950 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -109,7 +100,7 @@ export default function RolesPreview() {
 
       {/* Editor pane */}
       <section className="flex-1 overflow-y-auto bg-white dark:bg-neutral-900">
-        <header className="flex items-center justify-between px-8 py-6 border-b border-gray-200 dark:border-gray-800">
+        <header className="flex items-center justify-between px-8 py-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur z-10">
           <div className="flex items-center gap-3 min-w-0">
             <span
               className="w-5 h-5 rounded ring-2 ring-white dark:ring-neutral-900 shadow-sm flex-shrink-0"
@@ -137,102 +128,171 @@ export default function RolesPreview() {
           </div>
         </header>
 
-        <div className="p-8">
+        <div className="p-8 space-y-3">
           {isAdminRole && (
-            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-              The Admin role has every permission and is managed by the seed script. Toggles are read-only.
-            </p>
+            <div className="mb-2 px-4 py-3 rounded-lg bg-red-50/60 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-300">
+              The Admin role has every permission and is managed by the seed script. Toggles are read-only here.
+            </div>
           )}
 
-          <div className="space-y-2">
-            {AREAS.map((area) => (
-              <AreaRow
-                key={area}
-                area={area}
-                perms={perms}
-                disabled={isAdminRole}
-              />
-            ))}
-          </div>
+          {AREAS.map((area) => (
+            <AreaSection
+              key={area}
+              area={area}
+              perms={perms}
+              disabled={isAdminRole}
+              collapsed={collapsed.has(area)}
+              onToggleCollapsed={() => toggleCollapsed(area)}
+            />
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function AreaRow({
+function AreaSection({
   area,
   perms,
   disabled,
+  collapsed,
+  onToggleCollapsed,
 }: {
   area: Area;
   perms: ReadonlySet<Permission>;
   disabled: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
+  const meta = AREA_META[area];
   const actions = AREA_ACTIONS[area];
   const grantedCount = actions.filter((a) =>
     perms.has(`${area}.${a}` as Permission)
   ).length;
+
   return (
-    <div className="flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-neutral-950/40">
-      <div className="w-40 flex-shrink-0">
-        <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-          {formatAreaLabel(area)}
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-neutral-900 overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className="w-full flex items-center gap-3 px-5 py-4 bg-gray-50 dark:bg-neutral-950/60 hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors text-left"
+      >
+        <ChevronDown
+          className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${
+            collapsed ? "-rotate-90" : "rotate-0"
+          }`}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{meta.label}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {grantedCount} of {actions.length} granted
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {meta.description}
+          </p>
         </div>
-        <div className="text-[11px] text-gray-500 dark:text-gray-500">
-          {grantedCount}/{actions.length} actions
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1.5 flex-1">
-        {actions.map((action) => {
-          const perm = `${area}.${action}` as Permission;
-          const on = perms.has(perm);
-          return (
-            <ActionPill
-              key={perm}
-              label={formatActionLabel(action)}
-              on={on}
-              disabled={disabled}
-              danger={DANGER_ACTIONS.has(action)}
-            />
-          );
-        })}
-      </div>
+      </button>
+
+      {!collapsed && (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {actions.map((action) => {
+            const perm = `${area}.${action}` as Permission;
+            const pmeta = PERMISSION_META[perm];
+            const on = perms.has(perm);
+            return (
+              <li key={perm}>
+                <ActionRow
+                  label={pmeta.label}
+                  description={pmeta.description}
+                  on={on}
+                  danger={pmeta.danger}
+                  disabled={disabled}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
 
-function ActionPill({
+function ActionRow({
   label,
+  description,
   on,
-  disabled,
   danger,
+  disabled,
 }: {
   label: string;
+  description: string;
   on: boolean;
-  disabled?: boolean;
   danger?: boolean;
+  disabled?: boolean;
 }) {
-  // Three visual states:
-  //  - on + danger  → red-tinted (charge / delete / refund / cancelSub / selectWinner / processPayout / end)
-  //  - on           → brand red gradient (normal grant)
-  //  - off          → neutral outline
-  const className = on
-    ? danger
-      ? "bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-900 text-red-700 dark:text-red-300"
-      : "bg-gradient-to-r from-[#ee0000] to-[#ff4444] border border-transparent text-white shadow-sm shadow-red-500/20"
-    : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600";
+  // Entire row is the click target — toggling the toggle and clicking the
+  // description do the same thing. Discord-style.
+  const labelColor = danger
+    ? "text-red-700 dark:text-red-400"
+    : "text-gray-900 dark:text-gray-100";
 
   return (
     <button
       type="button"
       aria-pressed={on}
       disabled={disabled}
-      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${className} ${
-        disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+      className={`w-full text-left flex items-start gap-4 px-5 py-4 transition-colors ${
+        disabled
+          ? "cursor-not-allowed opacity-80"
+          : "hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer"
       }`}
     >
-      {label}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${labelColor}`}>{label}</span>
+          {danger && (
+            <span className="text-[10px] uppercase font-semibold tracking-wide px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400">
+              Sensitive
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+          {description}
+        </p>
+      </div>
+      <ToggleSwitch on={on} danger={danger} disabled={disabled} />
     </button>
+  );
+}
+
+function ToggleSwitch({
+  on,
+  danger,
+  disabled,
+}: {
+  on: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  const onColor = danger
+    ? "bg-gradient-to-r from-red-600 to-red-500"
+    : "bg-gradient-to-r from-[#ee0000] to-[#ff4444]";
+  const offColor = "bg-gray-200 dark:bg-neutral-700";
+  return (
+    <span
+      role="presentation"
+      aria-hidden
+      className={`mt-0.5 relative inline-flex w-11 h-6 rounded-full transition-colors flex-shrink-0 ${
+        on ? onColor : offColor
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      <span
+        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+          on ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </span>
   );
 }

@@ -397,6 +397,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/staff-setup/**",
         "src/lib/api-auth-permissions.ts",
         "src/lib/permissions.ts",
+        "src/lib/permission-descriptions.ts",
         "src/hooks/usePermissions.ts",
         "src/models/Role.ts",
         "scripts/migrate-seed-staff-roles.ts",

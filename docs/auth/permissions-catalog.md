@@ -21,6 +21,17 @@ export const AREA_ACTIONS = {
 
 `PERMISSIONS` is derived from this map. `Permission` is the union of every `<area>.<action>` string and is fully type-safe — passing an action foreign to an area is a TypeScript error.
 
+## Descriptions
+
+Every area and every permission has a human-readable label + Discord-style explanation in `src/lib/permission-descriptions.ts`. The Settings → Roles UI renders the description next to each toggle so the owner knows what they're granting before they flip it.
+
+The label + description files are **enforced** by `npm run test:permissions`:
+- every area in `AREAS` must have an `AREA_META` entry,
+- every permission in `PERMISSIONS` must have a `PERMISSION_META` entry,
+- dangerous sub-actions (`charge`, `cancelSubscription`, `refund`, `delete`, `selectWinner`, `processPayout`, `end`) must have `danger: true` so the UI tints them red.
+
+When adding a new permission, add the description in the same commit — the test will fail otherwise.
+
 ## Adding a permission
 
 1. Add the action to the relevant area's tuple in `AREA_ACTIONS`. Use `view` for read-only routes and a descriptive verb (`charge`, `selectWinner`, `processPayout`, `refund`, `end`, `delete`) for write actions whose impact justifies a separate gate. Treat any **irreversible**, **money-moving**, or **destructive** action as a candidate for its own sub-action.

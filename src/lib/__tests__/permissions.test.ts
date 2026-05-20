@@ -8,6 +8,10 @@ import {
   actionsFor,
   permissionFor,
 } from "@/lib/permissions";
+import {
+  AREA_META,
+  PERMISSION_META,
+} from "@/lib/permission-descriptions";
 
 let failures = 0;
 const test = (name: string, fn: () => void) => {
@@ -79,6 +83,52 @@ test("isValidPermission accepts known and rejects unknown", () => {
 test("actionsFor returns the declared tuple", () => {
   assert.deepEqual([...actionsFor("settings")], ["view", "edit"]);
   assert.deepEqual([...actionsFor("overview")], ["view", "edit"]);
+});
+
+test("AREA_META has an entry for every area", () => {
+  for (const a of AREAS) {
+    const meta = AREA_META[a];
+    assert.ok(meta, `AREA_META is missing ${a}`);
+    assert.ok(meta.label.trim().length > 0, `${a} has empty label`);
+    assert.ok(meta.description.trim().length > 0, `${a} has empty description`);
+  }
+});
+
+test("PERMISSION_META has an entry for every permission", () => {
+  for (const p of PERMISSIONS) {
+    const meta = PERMISSION_META[p];
+    assert.ok(meta, `PERMISSION_META is missing ${p}`);
+    assert.ok(meta.label.trim().length > 0, `${p} has empty label`);
+    assert.ok(meta.description.trim().length > 0, `${p} has empty description`);
+  }
+});
+
+test("PERMISSION_META has no orphans (every key is a known permission)", () => {
+  for (const key of Object.keys(PERMISSION_META)) {
+    assert.ok(
+      isValidPermission(key),
+      `PERMISSION_META contains unknown permission: ${key}`
+    );
+  }
+});
+
+test("dangerous sub-actions are marked danger:true", () => {
+  const dangerExpected = [
+    "users.charge",
+    "users.cancelSubscription",
+    "users.refund",
+    "users.delete",
+    "promos.end",
+    "majorDraw.selectWinner",
+    "affiliates.processPayout",
+    "affiliates.delete",
+    "errorReports.delete",
+    "abTesting.selectWinner",
+    "abTesting.delete",
+  ] as const;
+  for (const p of dangerExpected) {
+    assert.equal(PERMISSION_META[p].danger, true, `${p} should be marked danger`);
+  }
 });
 
 test("permissionFor composes (area, action) into a valid string", () => {
