@@ -108,3 +108,16 @@ function UsersTable() {
 ```
 
 The hook reads from the NextAuth session — no extra fetch.
+
+## Staff invite + setup
+
+1. An admin POSTs `{ email, firstName, lastName, roleId }` to `/api/admin/staff`.
+2. The server creates a `User` with `isActive: false`, the resolved `userType` (`"admin"` if the target role is **Admin**, otherwise `"staff"`), the chosen `roleId`, and a single-use `inviteToken` whose `inviteTokenExpires` is 7 days from now.
+3. SendGrid sends the invite email (`src/lib/email/staff-invite.ts`) with a link to `${NEXTAUTH_URL}/staff-setup/${inviteToken}`.
+4. The invitee opens the link. The setup page (`src/app/staff-setup/[token]/page.tsx`) calls `GET /api/auth/staff-setup?token=...` to fetch the invitee's first name + email, then renders the password form.
+5. On submit, `POST /api/auth/staff-setup` with `{ token, password }` hashes the password (bcrypt, 12 rounds — matching the rest of the auth surface), flips `isActive` and `isEmailVerified` to true, clears the invite token, and returns the email so the page can redirect to `/login?email=…&staffSetup=ok`.
+6. The user logs in via the normal `/login` flow; the JWT callback loads their permissions and lands them in `/admin`.
+
+The invite token endpoint always returns `410 "Invalid or used invite link"` for unknown / used / non-staff tokens — the response is identical so it can't be used to enumerate emails. Expired tokens get a more specific message because expiry isn't a security secret (admin can resend).
+
+The setup route is public — middleware doesn't gate it (it's outside `protectedRoutes` / `adminRoutes` and not in `STAFF_BLOCKED_PREFIXES`).
