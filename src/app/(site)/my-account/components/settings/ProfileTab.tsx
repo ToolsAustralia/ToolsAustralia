@@ -5,6 +5,7 @@ import {
   User,
   Mail,
   ShieldCheck,
+  AlertTriangle,
   Lock,
   CheckCircle2,
   Phone,
@@ -259,8 +260,19 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           <Card className="sm:col-span-2 p-4 shadow-lift dark:shadow-lift-dark">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" strokeWidth={2} />
+                <div
+                  className={cn(
+                    "shrink-0 w-10 h-10 rounded-xl flex items-center justify-center",
+                    user.isEmailVerified
+                      ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
+                      : "bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400",
+                  )}
+                >
+                  {user.isEmailVerified ? (
+                    <ShieldCheck className="w-5 h-5" strokeWidth={2} />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5" strokeWidth={2} />
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-neutral-900 dark:text-white">
@@ -277,16 +289,13 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                     Verified
                   </SettingsBadge>
                 ) : (
-                  <>
-                    <SettingsBadge tone="warning">Not verified</SettingsBadge>
-                    <SettingsButton
-                      variant="primary"
-                      size="sm"
-                      onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-                    >
-                      Verify Email
-                    </SettingsButton>
-                  </>
+                  <SettingsButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
+                  >
+                    Verify Email
+                  </SettingsButton>
                 )}
               </div>
             </div>
