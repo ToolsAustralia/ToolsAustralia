@@ -416,7 +416,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/email-preview/**",
         "*-email-template.html"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-20"
     },
     "tracking": {
       "docs": "docs/tracking/",
@@ -585,7 +585,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-05-20"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -605,7 +605,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/rate-limiting/**",
         "next.config.ts"
       ],
-      "lastVerified": "2026-04-28"
+      "lastVerified": "2026-05-20"
     },
     "mongodb": {
       "docs": "docs/mongodb/",
