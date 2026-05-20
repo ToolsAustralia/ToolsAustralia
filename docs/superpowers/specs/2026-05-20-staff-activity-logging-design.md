@@ -298,5 +298,50 @@ Pattern matches the existing `tsx` test scripts (no jest/vitest in this repo).
 ## Open questions for the implementation plan
 
 - **Phasing:** the spec calls for "all mutations in Phase 1" — the implementation plan can group the route migration into 5–6 batches (one commit per batch) so review stays manageable.
-- **Per-resource view in other modals:** Phase 1 ships the embed in `UserDetailModal` only. `AffiliateDetailModal`, `ExperimentDetailModal`, etc. can get the same treatment in a follow-up; they're additive and don't block the audit feature from being useful.
-- **Bulk operations:** routes like `error-reports/bulk-delete` operate on N ids. Phase 1 logs one row with no `resourceId` and the ids in the path. A follow-up could expand bulk operations to log N rows or attach the id list to a `metadata` field — deferred.
+
+## Held back from Phase 1 (with rationale)
+
+Each item below was discussed during brainstorming and consciously punted. Anyone picking up the feature later can read this section to know what's *not* being built and why — so they don't reinvent the discussion.
+
+| Held back | Rationale | What it would take to ship later |
+|---|---|---|
+| **Before/after diff capture** (`changes: { field: { from, to } }` on each row) | Adds 200–2000 bytes per row and requires loading the pre-mutation document inside every route handler. The action + path + status already answers "who did what?"; the diff is only needed for the deeper question "what exactly changed?". Defer until a forensic incident makes the gap concrete. | Add a `changes` field to the schema. In `requirePermissionWithAudit`, accept an optional `captureDiff(oldDoc, newDoc) => Record<string, {from, to}>` callback. The biggest cost is plumbing pre-mutation snapshots through each handler — probably 30–60 mins per area. |
+| **IP address + user-agent capture** | Useful for security forensics ("the deletion came from this IP") but only valuable once you have a reason to look. Easy to add (the request carries both), but it inflates every row by ~150 bytes and we're not currently triaging by network signature. | Read `req.headers.get("x-forwarded-for")` and `req.headers.get("user-agent")` inside `safeLog`, store as optional fields. <30 min. |
+| **Logging customer-facing reads of customer data** (e.g. opening a UserDetailModal) | The spec only instruments mutations. Reads of customer profiles are arguably worth logging for privacy compliance (who looked at whose data?). Out of scope for Phase 1 because (a) read traffic is high-volume and would dominate the log, and (b) no current privacy requirement forces it. | Gate behind a new `audit.logReads` toggle (env var or role permission) so it can be enabled later without bloating every install. New permission area would be `audit: ["view", "logReads"]`. |
+| **Per-resource Activity tab inside `AffiliateDetailModal`, `ExperimentDetailModal`, and other detail modals** | Phase 1 ships the embedded view only inside `UserDetailModal` because customers are the most common forensic target. The other detail modals follow the same pattern — they just need a copy of the tab implementation. | Each modal: ~30 min. Reuse the `useStaffActivity` hook with `resourceType` matching the modal's domain (Affiliate / Experiment / Promo / etc.). |
+| **N-row expansion for bulk operations** (e.g. `error-reports/bulk-delete` deleting 50 reports logs one row, not 50) | Bulk routes operate on N ids. Logging one row per affected id would correctly reflect the audit trail but multiplies write volume. The single-row alternative captures the action + path; the id list could go in a future `metadata` field. | Add an optional `metadata: Mixed` field to `StaffActivity`. In bulk handlers, pass `{ resourceIds: [...] }` through `requirePermissionWithAudit` context or a separate logBulk helper. The trade-off is a heavier write per bulk action versus losing the granular trail. |
+| **Allowlist routes** (`/api/admin/allowlist/**`) | These still use the legacy `requireAdminUser` helper (`src/lib/api-auth.ts`), not `requirePermission`. They're outside the RBAC pipeline so the audit wrapper can't be slotted in without first migrating them. | Migrate the allowlist routes to `requirePermission("users.edit")` (or a more specific permission), then swap to `requirePermissionWithAudit`. Estimated 1–2 hours. |
+| **Email/Slack alerts on suspicious 403s** | A custom-role staff member repeatedly hitting `users.delete` is a signal worth surfacing actively. Phase 1 just records the rows; an alerting layer is out of scope. | Background job (Vercel cron) that queries `StaffActivity` for 403 spikes per actor over a rolling window and pings via SendGrid + Slack webhook. ~2–3 hours. |
+| **Configurable retention** | Phase 1 hardcodes the 180-day TTL. Different deployments may want different windows (compliance regimes vary). | Replace the TTL constant with `process.env.AUDIT_LOG_TTL_DAYS ?? 180`. The Mongo TTL index does need to be rebuilt if the value changes — note the operational caveat in `docs/admin/staff-activity-log.md`. 15 min code + docs. |
+| **Cursor-based filtering by free-text resource name** | The list endpoint filters by `actorId` / `action` / `status` / `resourceType` + `resourceId`. There's no full-text search across actor names or resource labels. | Add a `search` query param that joins against `User.firstName + lastName` and `Role.name`. Cost is one extra `$lookup` per page — moderate. |
+| **Export to CSV** | The viewer is browse-only in Phase 1. Audit exports for compliance reports are a natural follow-up. | Mirror `/api/admin/users/export` with a streaming CSV writer gated by a new `audit.export` permission. ~1 hour. |
+| **UI for purging on demand** | The TTL handles regular cleanup. An admin "purge rows older than X" action is unusual but legitimate (e.g. GDPR right-to-erasure on a former staff member). | Add `DELETE /api/admin/staff-activity` with `before` + `actorId` query params, gated by a new `audit.delete` permission. ~1 hour. Doc the GDPR rationale so future maintainers don't strip it as YAGNI. |
+
+## Future work checklist
+
+Mirror of the table above as a flat task list for tracking. Pick any of these up as separate small PRs once Phase 1 lands and you've used the audit log in anger:
+
+- [ ] Capture before/after diffs (`StaffActivity.changes`)
+- [ ] Capture IP + user-agent on each row
+- [ ] Optional read logging (`audit.logReads`)
+- [ ] Embedded Activity tab in `AffiliateDetailModal`
+- [ ] Embedded Activity tab in `ExperimentDetailModal`
+- [ ] Embedded Activity tab in `MajorDraw` + `MiniDraw` detail surfaces
+- [ ] N-row expansion (or metadata.resourceIds) for bulk operations
+- [ ] Migrate `requireAdminUser` allowlist routes into the audit pipeline
+- [ ] Suspicious-pattern alerts (403 spikes by actor)
+- [ ] Configurable retention via env var
+- [ ] Full-text search across actor + resource names
+- [ ] CSV export (gated by `audit.export`)
+- [ ] On-demand purge (gated by `audit.delete`, GDPR rationale)
+
+## Ongoing documentation home
+
+This spec captures the *design*. Once Phase 1 ships, the living documentation moves to:
+
+- **`docs/admin/staff-activity-log.md`** — user-facing reference (what the tab does, how to read a row, how the permission gates work). The doc-sync hook keeps it in lockstep with the code under the `admin` domain.
+- **`docs/auth/rbac-smoke-checklist.md`** — appended with the manual smoke steps from this spec's Testing section.
+- **`docs/admin/staff-permissions-mapping.md`** — the new `/api/admin/staff-activity` GET endpoint gets a row.
+- **CLAUDE.md Domain Manifest** — `src/lib/audit-log.ts`, `src/models/StaffActivity.ts`, and `src/app/api/admin/staff-activity/**` need to land in either the `auth` domain (since they're permission-adjacent) or the `admin` domain (since they're surfaced in the admin UI). Implementation plan picks one — recommend `admin` because the audit feature is a property of the admin panel, not of authentication itself.
+
+When future enhancements land, update this spec's "Future work checklist" by checking off the relevant item AND link to the PR that delivered it — the spec stays the index of "what this feature looks like as of today."
