@@ -2,25 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
 import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { data: session, status } = useSession();
-
-  // Redirect if not authenticated or not admin
-  useEffect(() => {
-    if (status === "loading") return; // Still loading
-
-    if (!session || session.user?.role !== "admin") {
-      router.push("/");
-    }
-  }, [session, status, router]);
+  const { data: session } = useSession();
+  const { isLoading, isStaff } = usePermissions();
 
   // Show loading while checking authentication
-  if (status === "loading") {
+  if (isLoading) {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
@@ -28,16 +20,18 @@ export default function AdminDashboard() {
     );
   }
 
-  // Don't render if not authenticated or not admin
-  if (!session || session.user?.role !== "admin") {
+  // Don't render if not staff — the admin layout's server guard handles the redirect,
+  // but we gate here too as a belt-and-suspenders for the client.
+  if (!isStaff) {
+    router.push("/");
     return null;
   }
 
   // Create admin user object from session
   const adminUser: AdminUser = {
-    id: session.user?.id || "",
-    name: `${session.user?.firstName || ""} ${session.user?.lastName || ""}`.trim(),
-    email: session.user?.email || "",
+    id: session?.user?.id || "",
+    name: `${session?.user?.firstName || ""} ${session?.user?.lastName || ""}`.trim(),
+    email: session?.user?.email || "",
     role: "admin",
     isAdmin: true,
     lastLogin: new Date(),
