@@ -179,7 +179,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("abTesting.edit");
+    const guard = await requirePermission("abTesting.delete");
     if (guard instanceof NextResponse) return guard;
 
     const { id } = await params;

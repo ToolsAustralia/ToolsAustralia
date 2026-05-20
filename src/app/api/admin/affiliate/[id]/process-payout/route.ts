@@ -17,7 +17,7 @@ const processPayoutSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("affiliates.edit");
+    const guard = await requirePermission("affiliates.processPayout");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

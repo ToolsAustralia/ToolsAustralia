@@ -37,7 +37,7 @@ const declareWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("abTesting.edit");
+    const guard = await requirePermission("abTesting.selectWinner");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

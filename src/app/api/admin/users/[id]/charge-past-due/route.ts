@@ -243,7 +243,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("users.edit");
+    const guard = await requirePermission("users.charge");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

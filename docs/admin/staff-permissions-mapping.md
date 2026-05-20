@@ -9,8 +9,8 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/users/[id]` | GET | `users.view` |
 | `/api/admin/users/[id]` | PATCH | `users.edit` |
 | `/api/admin/users/[id]/actions` | POST | `users.edit` |
-| `/api/admin/users/[id]/cancel-subscription` | POST | `users.edit` |
-| `/api/admin/users/[id]/delete` | DELETE | `users.edit` |
+| `/api/admin/users/[id]/cancel-subscription` | POST | `users.cancelSubscription` |
+| `/api/admin/users/[id]/delete` | DELETE | `users.delete` |
 | `/api/admin/users/[id]/deletion-summary` | GET | `users.view` |
 | `/api/admin/users/search` | GET | `users.view` |
 | `/api/admin/users/export` | GET | `users.view` |
@@ -32,7 +32,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo/bonus-entry/[id]` | DELETE | `promos.edit` |
 | `/api/admin/promo/create` | POST | `promos.edit` |
 | `/api/admin/promo/effective` | GET | `promos.view` |
-| `/api/admin/promo/end` | POST | `promos.edit` |
+| `/api/admin/promo/end` | POST | `promos.end` |
 | `/api/admin/promo/history` | GET | `promos.view` |
 | `/api/admin/promo/toggle` | POST | `promos.edit` |
 | `/api/admin/promo/link/list` | GET | `promos.view` |
@@ -45,27 +45,28 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo/scheduled/[id]` | PATCH | `promos.edit` |
 | `/api/admin/promo/scheduled/[id]` | DELETE | `promos.edit` |
 | `/api/admin/users/[id]/charge-past-due` | GET | `users.view` |
-| `/api/admin/users/[id]/charge-past-due` | POST | `users.edit` |
-| `/api/admin/users/[id]/force-charge` | POST | `users.edit` |
+| `/api/admin/users/[id]/charge-past-due` | POST | `users.charge` |
+| `/api/admin/users/[id]/force-charge` | POST | `users.charge` |
 | `/api/admin/users/[id]/payment-events` | GET | `users.view` |
-| `/api/admin/users/[id]/payment-events/[eventId]/reverse` | POST | `users.edit` |
-| `/api/admin/users/[id]/recover-past-due-invoice` | GET | `users.edit` |
-| `/api/admin/users/[id]/recover-past-due-invoice` | POST | `users.edit` |
+| `/api/admin/users/[id]/payment-events/[eventId]/reverse` | POST | `users.refund` |
+| `/api/admin/users/[id]/recover-past-due-invoice` | GET | `users.charge` |
+| `/api/admin/users/[id]/recover-past-due-invoice` | POST | `users.charge` |
 | `/api/admin/ab-testing/experiments` | GET | `abTesting.view` |
 | `/api/admin/ab-testing/experiments` | POST | `abTesting.edit` |
 | `/api/admin/ab-testing/experiments/[id]` | GET | `abTesting.view` |
 | `/api/admin/ab-testing/experiments/[id]` | PATCH | `abTesting.edit` |
-| `/api/admin/ab-testing/experiments/[id]` | DELETE | `abTesting.edit` |
+| `/api/admin/ab-testing/experiments/[id]` | DELETE | `abTesting.delete` |
 | `/api/admin/ab-testing/experiments/[id]/analytics` | GET | `abTesting.view` |
 | `/api/admin/ab-testing/experiments/[id]/history` | GET | `abTesting.view` |
 | `/api/admin/ab-testing/experiments/[id]/variants` | POST/PATCH/DELETE | `abTesting.edit` |
 | `/api/admin/ab-testing/experiments/[id]/winner` | GET | `abTesting.view` |
-| `/api/admin/ab-testing/experiments/[id]/winner` | POST | `abTesting.edit` |
+| `/api/admin/ab-testing/experiments/[id]/winner` | POST | `abTesting.selectWinner` |
 | `/api/admin/ab-testing/preview` | POST/DELETE | `abTesting.edit` |
 | `/api/admin/activity-log` | GET | `overview.view` |
 | `/api/admin/affiliate/[id]` | GET | `affiliates.view` |
-| `/api/admin/affiliate/[id]` | PUT/DELETE | `affiliates.edit` |
-| `/api/admin/affiliate/[id]/process-payout` | POST | `affiliates.edit` |
+| `/api/admin/affiliate/[id]` | PUT | `affiliates.edit` |
+| `/api/admin/affiliate/[id]` | DELETE | `affiliates.delete` |
+| `/api/admin/affiliate/[id]/process-payout` | POST | `affiliates.processPayout` |
 | `/api/admin/affiliate/[id]/referred-users` | POST/DELETE | `affiliates.edit` |
 | `/api/admin/affiliate/create` | POST | `affiliates.edit` |
 | `/api/admin/affiliate/list` | GET | `affiliates.view` |
@@ -87,7 +88,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/error-reports` | GET | `errorReports.view` |
 | `/api/admin/error-reports/[id]` | GET | `errorReports.view` |
 | `/api/admin/error-reports/[id]` | PATCH | `errorReports.edit` |
-| `/api/admin/error-reports/bulk-delete` | DELETE | `errorReports.edit` |
+| `/api/admin/error-reports/bulk-delete` | DELETE | `errorReports.delete` |
 | `/api/admin/error-reports/bulk-delete` | PATCH | `errorReports.edit` |
 | `/api/admin/facebook-ads/hourly-insights` | GET/POST | `facebookAds.view` |
 | `/api/admin/facebook-ads/insights` | GET | `facebookAds.view` |
@@ -95,8 +96,8 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/health/dashboard-stats-snapshot` | GET | `overview.view` |
 | `/api/admin/health/membership-snapshot` | GET | `overview.view` |
 | `/api/admin/invoices/charge-past-due` | GET | `users.view` |
-| `/api/admin/invoices/charge-past-due` | POST | `users.edit` |
-| `/api/admin/invoices/recover-past-due` | POST | `users.edit` |
+| `/api/admin/invoices/charge-past-due` | POST | `users.charge` |
+| `/api/admin/invoices/recover-past-due` | POST | `users.charge` |
 | `/api/admin/klaviyo/draw-reset-execute` | POST | `overview.edit` |
 | `/api/admin/klaviyo/draw-reset-preview` | GET | `overview.view` |
 | `/api/admin/klaviyo/draw-reset-progress` | GET | `overview.view` |
@@ -107,7 +108,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/major-draw/participants` | GET | `majorDraw.view` |
 | `/api/admin/major-draw/scheduled-months` | GET | `majorDraw.view` |
 | `/api/admin/major-draw/select-winner` | GET | `majorDraw.view` |
-| `/api/admin/major-draw/select-winner` | POST | `majorDraw.edit` |
+| `/api/admin/major-draw/select-winner` | POST | `majorDraw.selectWinner` |
 | `/api/admin/major-draw/update` | GET | `majorDraw.view` |
 | `/api/admin/major-draw/update` | PUT | `majorDraw.edit` |
 | `/api/admin/metrics/debug` | GET | `overview.view` |
@@ -116,7 +117,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/mini-draw/[id]` | GET | `majorDraw.view` |
 | `/api/admin/mini-draw/[id]` | DELETE | `majorDraw.edit` |
 | `/api/admin/mini-draw/[id]/export` | GET | `majorDraw.view` |
-| `/api/admin/mini-draw/[id]/select-winner` | POST | `majorDraw.edit` |
+| `/api/admin/mini-draw/[id]/select-winner` | POST | `majorDraw.selectWinner` |
 | `/api/admin/mini-draw/create` | POST | `majorDraw.edit` |
 | `/api/admin/mini-draw/full-capacity-count` | GET | `majorDraw.view` |
 | `/api/admin/mini-draw/list` | GET | `majorDraw.view` |
@@ -146,7 +147,7 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/users/[id]/my-account` | GET (self) | _(any authenticated user — self-only)_ |
 | `/api/users/[id]/my-account` | GET (other user) | `users.view` |
 | `/api/upload/cloudinary` | POST, DELETE | `promos.edit` |
-| `/api/major-draw/select-winner` | POST | `majorDraw.edit` |
+| `/api/major-draw/select-winner` | POST | `majorDraw.selectWinner` |
 | `/api/partner-applications` | GET | `users.view` |
 | `/api/partner-applications` | POST | _(public — no auth required)_ |
 | `/api/partner-applications/[id]` | GET | `users.view` |

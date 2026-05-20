@@ -250,7 +250,7 @@ export async function GET(_request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("users.edit");
+    const guard = await requirePermission("users.charge");
     if (guard instanceof NextResponse) return guard;
 
     const { session } = guard;

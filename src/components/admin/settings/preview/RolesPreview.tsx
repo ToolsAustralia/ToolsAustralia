@@ -2,17 +2,58 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { AREAS } from "@/lib/permissions";
-import { MOCK_ROLES, MOCK_PERMISSION_GRID } from "./mockData";
+import { AREA_ACTIONS, AREAS, type Area, type Permission } from "@/lib/permissions";
+import { MOCK_ROLES } from "./mockData";
+
+// Mock permission sets per role for the preview only (no API). Picks a
+// sensible per-role grant so the toggles look believable when clicking
+// between roles. The real component (Task 20) reads from the DB.
+const MOCK_ROLE_PERMS: Record<string, ReadonlySet<Permission>> = {
+  r1: new Set(
+    AREAS.flatMap((a) => AREA_ACTIONS[a].map((act) => `${a}.${act}` as Permission))
+  ),
+  r2: new Set<Permission>([
+    "overview.view",
+    "facebookAds.view",
+    "facebookAds.edit",
+    "pageAnalytics.view",
+    "promoAnalytics.view",
+    "abTesting.view",
+  ]),
+  r3: new Set<Permission>([
+    "overview.view",
+    "submissions.view",
+    "users.view",
+    "users.edit",
+  ]),
+  r4: new Set<Permission>(["overview.view", "promos.view", "promos.edit"]),
+};
 
 function formatAreaLabel(a: string) {
   return a.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
 
+function formatActionLabel(a: string) {
+  // camelCase → human-readable
+  return a.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
+// Actions that warrant a visual warning (destructive / irreversible / money).
+const DANGER_ACTIONS = new Set([
+  "delete",
+  "charge",
+  "refund",
+  "cancelSubscription",
+  "selectWinner",
+  "processPayout",
+  "end",
+]);
+
 export default function RolesPreview() {
   const [selectedId, setSelectedId] = useState<string>(MOCK_ROLES[1]?.id ?? MOCK_ROLES[0]!.id);
   const selected = MOCK_ROLES.find((r) => r.id === selectedId) ?? MOCK_ROLES[0]!;
   const isAdminRole = selected.name === "Admin";
+  const perms = MOCK_ROLE_PERMS[selected.id] ?? new Set<Permission>();
 
   return (
     <div className="flex h-[calc(100vh-220px)] min-h-[520px] bg-gray-50 dark:bg-neutral-950 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -103,37 +144,15 @@ export default function RolesPreview() {
             </p>
           )}
 
-          <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-neutral-950 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                <tr>
-                  <th className="text-left py-3 px-4">Area</th>
-                  <th className="py-3 px-4 w-32 text-center">View</th>
-                  <th className="py-3 px-4 w-32 text-center">Edit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {AREAS.map((a) => {
-                  const row = MOCK_PERMISSION_GRID.find((r) => r.area === a)!;
-                  const viewOn = isAdminRole ? true : row.adsManager.view;
-                  const editOn = isAdminRole ? true : row.adsManager.edit;
-                  return (
-                    <tr
-                      key={a}
-                      className="border-t border-gray-200 dark:border-gray-800 hover:bg-gray-50/60 dark:hover:bg-neutral-800/40"
-                    >
-                      <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{formatAreaLabel(a)}</td>
-                      <td className="py-3 px-4 text-center">
-                        <TogglePill on={viewOn} disabled={isAdminRole} />
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <TogglePill on={editOn} disabled={isAdminRole} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {AREAS.map((area) => (
+              <AreaRow
+                key={area}
+                area={area}
+                perms={perms}
+                disabled={isAdminRole}
+              />
+            ))}
           </div>
         </div>
       </section>
@@ -141,23 +160,79 @@ export default function RolesPreview() {
   );
 }
 
-function TogglePill({ on, disabled }: { on: boolean; disabled?: boolean }) {
+function AreaRow({
+  area,
+  perms,
+  disabled,
+}: {
+  area: Area;
+  perms: ReadonlySet<Permission>;
+  disabled: boolean;
+}) {
+  const actions = AREA_ACTIONS[area];
+  const grantedCount = actions.filter((a) =>
+    perms.has(`${area}.${a}` as Permission)
+  ).length;
+  return (
+    <div className="flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-neutral-950/40">
+      <div className="w-40 flex-shrink-0">
+        <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+          {formatAreaLabel(area)}
+        </div>
+        <div className="text-[11px] text-gray-500 dark:text-gray-500">
+          {grantedCount}/{actions.length} actions
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 flex-1">
+        {actions.map((action) => {
+          const perm = `${area}.${action}` as Permission;
+          const on = perms.has(perm);
+          return (
+            <ActionPill
+              key={perm}
+              label={formatActionLabel(action)}
+              on={on}
+              disabled={disabled}
+              danger={DANGER_ACTIONS.has(action)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ActionPill({
+  label,
+  on,
+  disabled,
+  danger,
+}: {
+  label: string;
+  on: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  // Three visual states:
+  //  - on + danger  → red-tinted (charge / delete / refund / cancelSub / selectWinner / processPayout / end)
+  //  - on           → brand red gradient (normal grant)
+  //  - off          → neutral outline
+  const className = on
+    ? danger
+      ? "bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-900 text-red-700 dark:text-red-300"
+      : "bg-gradient-to-r from-[#ee0000] to-[#ff4444] border border-transparent text-white shadow-sm shadow-red-500/20"
+    : "bg-white dark:bg-neutral-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600";
+
   return (
     <button
       type="button"
       aria-pressed={on}
       disabled={disabled}
-      className={`relative inline-flex w-11 h-6 rounded-full transition-colors ${
-        on
-          ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444]"
-          : "bg-gray-200 dark:bg-neutral-700"
-      } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:brightness-110"}`}
+      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${className} ${
+        disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+      }`}
     >
-      <span
-        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-          on ? "translate-x-5" : "translate-x-0.5"
-        }`}
-      />
+      {label}
     </button>
   );
 }

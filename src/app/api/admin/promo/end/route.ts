@@ -12,7 +12,7 @@ const endPromoSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermission("promos.end");
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();

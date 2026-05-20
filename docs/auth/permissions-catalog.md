@@ -4,34 +4,60 @@ The permission catalog (`src/lib/permissions.ts`) is the **single source of trut
 
 ## Shape
 
-Permissions are strings of the form `<area>.<action>` where:
-- `area` is one of 15 admin areas (see `AREAS`)
-- `action` is `view` or `edit`
+Permissions are strings of the form `<area>.<action>`. Each area declares its own list of actions in `AREA_ACTIONS`. Most areas only need `view` and `edit`, but areas with destructive, financial, or otherwise irreversible operations get extra sub-actions so roles can grant write access without granting the dangerous ones.
 
-Total: 30 permissions.
+```ts
+export const AREA_ACTIONS = {
+  users: ["view", "edit", "charge", "cancelSubscription", "refund", "delete"],
+  promos: ["view", "edit", "end"],
+  majorDraw: ["view", "edit", "selectWinner"],
+  affiliates: ["view", "edit", "processPayout", "delete"],
+  errorReports: ["view", "edit", "delete"],
+  abTesting: ["view", "edit", "selectWinner", "delete"],
+  // ...view-only areas: pageAnalytics, promoAnalytics, submissions, miniDraws, drawResults, upcomingDraws
+  // ...view + edit areas: overview, facebookAds, settings
+} as const;
+```
 
-## Adding a new area
+`PERMISSIONS` is derived from this map. `Permission` is the union of every `<area>.<action>` string and is fully type-safe — passing an action foreign to an area is a TypeScript error.
 
-1. Add the area name to the `AREAS` tuple in `src/lib/permissions.ts`.
-2. Gate the new code path on `<area>.view` or `<area>.edit` via `requirePermission()` (server) or `usePermissions().has()` (client).
-3. Optionally grant the new permissions to the seeded Admin role via a one-off script (Admin auto-gains every permission on seed; existing custom roles do not auto-gain new permissions — by design).
+## Adding a permission
+
+1. Add the action to the relevant area's tuple in `AREA_ACTIONS`. Use `view` for read-only routes and a descriptive verb (`charge`, `selectWinner`, `processPayout`, `refund`, `end`, `delete`) for write actions whose impact justifies a separate gate. Treat any **irreversible**, **money-moving**, or **destructive** action as a candidate for its own sub-action.
+2. Gate the matching route handler with `requirePermission("<area>.<action>")`.
+3. Update [docs/admin/staff-permissions-mapping.md](../admin/staff-permissions-mapping.md) so the route → permission map stays current.
+4. Re-run `npm run migrate:seed-staff-roles`. The seeded **Admin** role picks up every catalog permission automatically; existing custom roles do **not** auto-gain new permissions (this is intentional — the UI surfaces the new toggle so the owner can opt in).
+
+## Sub-action conventions
+
+When deciding whether to add a sub-action instead of reusing `edit`, ask: *would I trust this person to flip a normal toggle but not to do this thing?* If yes, split it.
+
+| Sub-action | Used for | Examples |
+|---|---|---|
+| `charge` | Anything that moves money **from** a customer | `users.charge`, force-charge, manual past-due retry |
+| `cancelSubscription` | Ending a billing relationship | `users.cancelSubscription` |
+| `refund` | Replays of refund / reversal processing | `users.refund` |
+| `delete` | Hard removes / soft archives with no undo button | `users.delete`, `affiliates.delete`, `errorReports.delete`, `abTesting.delete` |
+| `selectWinner` | Irreversible prize/winner declaration | `majorDraw.selectWinner`, `abTesting.selectWinner` |
+| `processPayout` | Money **out** to a third party | `affiliates.processPayout` |
+| `end` | Permanently closing a live entity | `promos.end` |
 
 ## Areas
 
-| Area | Notes |
-|---|---|
-| `overview` | Admin dashboard landing |
-| `users` | Customer user management |
-| `promos` | Promo creation & toggling |
-| `facebookAds` | Facebook Ads management |
-| `pageAnalytics` | Page analytics dashboard |
-| `promoAnalytics` | Promo-specific analytics |
-| `submissions` | Contact form submissions |
-| `miniDraws` | Mini-draw management |
-| `majorDraw` | Major draw operations |
-| `drawResults` | Past draw results admin view |
-| `upcomingDraws` | Upcoming draws calendar |
-| `affiliates` | Affiliate program admin |
-| `errorReports` | Error report viewing |
-| `abTesting` | A/B test management |
-| `settings` | Admin settings (includes Roles & Staff sub-tabs) |
+| Area | Actions | Notes |
+|---|---|---|
+| `overview` | view, edit | Admin dashboard landing. `edit` covers upsell multipliers and Klaviyo draw-reset execute. |
+| `users` | view, edit, charge, cancelSubscription, refund, delete | Customer user management. `edit` = profile + status actions only; financial/destructive actions are their own permission. |
+| `promos` | view, edit, end | Promo CRUD lives under `edit`. Ending a live promo is irreversible. |
+| `facebookAds` | view, edit | Insights + sync. |
+| `pageAnalytics` | view | Read-only dashboard. |
+| `promoAnalytics` | view | Read-only dashboard. |
+| `submissions` | view | Contact form submissions (no admin writes today). |
+| `miniDraws` | view | Currently unused area; mini-draw write routes are gated under `majorDraw.*`. |
+| `majorDraw` | view, edit, selectWinner | Covers mini-draws too. `selectWinner` is irreversible. |
+| `drawResults` | view | Past draw results admin view. |
+| `upcomingDraws` | view | Upcoming draws calendar. |
+| `affiliates` | view, edit, processPayout, delete | `processPayout` moves money to an affiliate; gate separately. |
+| `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
+| `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
+| `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |

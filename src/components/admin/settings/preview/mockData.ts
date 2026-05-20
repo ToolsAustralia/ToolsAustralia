@@ -1,4 +1,4 @@
-import { AREAS } from "@/lib/permissions";
+import { AREA_ACTIONS, AREAS } from "@/lib/permissions";
 
 export interface MockRole {
   id: string;
@@ -23,11 +23,13 @@ export interface MockStaff {
   lastLogin: string | null;
 }
 
+const CATALOG_SIZE = AREAS.reduce((sum, a) => sum + AREA_ACTIONS[a].length, 0);
+
 export const MOCK_ROLES: MockRole[] = [
-  { id: "r1", name: "Admin",           color: "#ee0000", permissionCount: 30, memberCount: 1, isSystem: true  },
-  { id: "r2", name: "Ads Manager",     color: "#f59e0b", permissionCount: 6,  memberCount: 2, isSystem: false },
-  { id: "r3", name: "Email Marketing", color: "#3b82f6", permissionCount: 4,  memberCount: 1, isSystem: false },
-  { id: "r4", name: "Designer",        color: "#a855f7", permissionCount: 3,  memberCount: 0, isSystem: false },
+  { id: "r1", name: "Admin",           color: "#ee0000", permissionCount: CATALOG_SIZE, memberCount: 1, isSystem: true  },
+  { id: "r2", name: "Ads Manager",     color: "#f59e0b", permissionCount: 6,            memberCount: 2, isSystem: false },
+  { id: "r3", name: "Email Marketing", color: "#3b82f6", permissionCount: 4,            memberCount: 1, isSystem: false },
+  { id: "r4", name: "Designer",        color: "#a855f7", permissionCount: 3,            memberCount: 0, isSystem: false },
 ];
 
 export const MOCK_STAFF: MockStaff[] = [
@@ -36,13 +38,3 @@ export const MOCK_STAFF: MockStaff[] = [
   { id: "s3", firstName: "Sam",    lastName: "Patel",  email: "sam@example.com",       roleId: "r2", roleName: "Ads Manager",     roleColor: "#f59e0b", userType: "staff", inviteStatus: "pending", invitedAt: "2026-05-18T09:30:00Z",     lastLogin: null },
   { id: "s4", firstName: "Carlos", lastName: "Diaz",   email: "carlos@example.com",    roleId: "r3", roleName: "Email Marketing", roleColor: "#3b82f6", userType: "staff", inviteStatus: "expired", invitedAt: "2026-04-01T12:00:00Z",     lastLogin: null },
 ];
-
-// Per-area view/edit toggles for the "Ads Manager" preview role.
-// Used to show a realistic permission grid when that role is selected.
-export const MOCK_PERMISSION_GRID = AREAS.map((a) => ({
-  area: a,
-  adsManager: {
-    view: ["overview", "facebookAds", "pageAnalytics", "promoAnalytics", "abTesting"].includes(a),
-    edit: ["facebookAds"].includes(a),
-  },
-}));

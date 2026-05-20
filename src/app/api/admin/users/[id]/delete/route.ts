@@ -20,7 +20,7 @@ import mongoose from "mongoose";
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("users.edit");
+    const guard = await requirePermission("users.delete");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await connectDB();
 
-    const guard = await requirePermission("users.edit");
+    const guard = await requirePermission("users.cancelSubscription");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

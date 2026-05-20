@@ -13,7 +13,7 @@ type RouteParams = { params: Promise<{ id: string; eventId: string }> };
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {
   try {
-    const _guard = await requirePermission("users.edit");
+    const _guard = await requirePermission("users.refund");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

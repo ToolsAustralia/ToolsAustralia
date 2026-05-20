@@ -16,7 +16,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission("users.edit");
+  const guard = await requirePermission("users.charge");
   if (guard instanceof NextResponse) return guard;
 
   await connectDB();
@@ -43,7 +43,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const guard = await requirePermission("users.edit");
+    const guard = await requirePermission("users.charge");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

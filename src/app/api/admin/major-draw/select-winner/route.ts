@@ -33,7 +33,7 @@ const selectWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("majorDraw.edit");
+    const guard = await requirePermission("majorDraw.selectWinner");
     if (guard instanceof NextResponse) return guard;
 
     const { session } = guard;

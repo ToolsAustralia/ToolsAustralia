@@ -28,7 +28,7 @@ const bulkStatusSchema = z.object({
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const guard = await requirePermission("errorReports.edit");
+    const guard = await requirePermission("errorReports.delete");
     if (guard instanceof NextResponse) return guard;
 
     const { session } = guard;

@@ -17,7 +17,7 @@ export async function POST() {
     console.log("🎯 Selecting major draw winner...");
 
     // Verify staff permission before hitting the database
-    const guard = await requirePermission("majorDraw.edit");
+    const guard = await requirePermission("majorDraw.selectWinner");
     if (guard instanceof NextResponse) return guard;
     const { session } = guard;
 

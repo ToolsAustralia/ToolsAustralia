@@ -441,7 +441,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("affiliates.edit");
+    const guard = await requirePermission("affiliates.delete");
     if (guard instanceof NextResponse) return guard;
 
     const { id } = await params;
