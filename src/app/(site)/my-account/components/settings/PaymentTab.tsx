@@ -15,7 +15,7 @@ interface PaymentTabProps {
 
 export default function PaymentTab({ user }: PaymentTabProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PaymentMethodsTab
         user={{
           _id: user._id,
@@ -26,6 +26,7 @@ export default function PaymentTab({ user }: PaymentTabProps) {
           subscription: user.subscription,
           stripeSubscriptionId: user.stripeSubscriptionId,
         }}
+        settingsRedesign
       />
     </div>
   );

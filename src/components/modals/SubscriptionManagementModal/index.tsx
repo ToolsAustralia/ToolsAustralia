@@ -57,6 +57,7 @@ import UpgradeList from "./UpgradeList";
 import DowngradeList from "./DowngradeList";
 import CancelResumeRow from "./CancelResumeRow";
 import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import SettingsRedesignSubscription from "./SettingsRedesignSubscription";
 
 interface SubscriptionManagementModalProps {
   isOpen: boolean;
@@ -68,6 +69,13 @@ interface SubscriptionManagementModalProps {
    * When true, renders content without modal chrome so it can be embedded.
    */
   renderAsPanel?: boolean;
+  /**
+   * Opt-in (settings page only). When true AND renderAsPanel, the panel body
+   * uses the Claude settings redesign layout instead of the legacy body.
+   * All logic/handlers/child modals are unchanged. Modal-mode callers
+   * (MembershipStatus) and SettingsModal never set this → byte-identical.
+   */
+  settingsRedesign?: boolean;
 }
 
 const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = ({
@@ -77,6 +85,7 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   onSubscriptionUpdate,
   membershipModal: parentMembershipModal,
   renderAsPanel = false,
+  settingsRedesign = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showCancellationFlow, setShowCancellationFlow] = useState(false);
@@ -829,42 +838,76 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     );
   };
 
-  const subscriptionContent = (
-    <>
-      {!renderAsPanel && <ModalHeader title="Manage Subscription" onClose={onClose} showLogo={false} />}
-      <ModalContent padding="lg">
-        {membershipPackage && activeSubscription ? (
-          renderActiveSubscriptionContent()
-        ) : activeOneTimePackage ? (
-          <OneTimeOnlyState
-            packageDisplayName={
-              typeof activeOneTimePackage.packageId === "string"
-                ? (activeOneTimePackage as { packageData?: { name?: string } }).packageData?.name ?? "One-Time Package"
-                : (activeOneTimePackage.packageId as { name: string }).name
-            }
-            onSubscribeClick={() => {
-              onClose();
-              whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
-            }}
-          />
-        ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
-          <InactiveSubscriptionState
-            status={user.subscription.status}
-            onSubscribeClick={() => {
-              onClose();
-              whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
-            }}
-          />
-        ) : (
-          <NoSubscriptionState
-            onSubscribeClick={() => {
-              onClose();
-              whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
-            }}
-          />
-        )}
+  // Shared subscribe handler (close panel/modal then open membership selection).
+  const handleSubscribeClick = () => {
+    onClose();
+    whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
+  };
 
-        {/* Cancel confirmation modal removed — clicking Cancel now goes straight
+  // Legacy 4-way state selector (modal mode + SettingsModal panel use this verbatim).
+  const legacyStateBody =
+    membershipPackage && activeSubscription ? (
+      renderActiveSubscriptionContent()
+    ) : activeOneTimePackage ? (
+      <OneTimeOnlyState
+        packageDisplayName={
+          typeof activeOneTimePackage.packageId === "string"
+            ? (activeOneTimePackage as { packageData?: { name?: string } }).packageData?.name ?? "One-Time Package"
+            : (activeOneTimePackage.packageId as { name: string }).name
+        }
+        onSubscribeClick={handleSubscribeClick}
+      />
+    ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
+      <InactiveSubscriptionState
+        status={user.subscription.status}
+        onSubscribeClick={handleSubscribeClick}
+      />
+    ) : (
+      <NoSubscriptionState onSubscribeClick={handleSubscribeClick} />
+    );
+
+  // Settings-page Claude redesign body (opt-in; reuses the same logic
+  // sub-components + handlers, only the surrounding layout differs).
+  const settingsBody = (
+    <SettingsRedesignSubscription
+      user={user}
+      membershipPackage={membershipPackage}
+      activeSubscription={activeSubscription}
+      subscriptionBenefits={subscriptionBenefits}
+      packagesLoading={packagesLoading}
+      hasFailed={hasFailed}
+      pendingBenefitCountdownProps={pendingBenefitCountdownProps}
+      isLoading={isLoading}
+      benefitsLoading={benefitsLoading}
+      membershipPromoMultiplier={membershipPromoMultiplier}
+      activeOneTimePackage={
+        activeOneTimePackage as
+          | { packageId: string | { name: string }; packageData?: { name?: string } }
+          | null
+      }
+      formatDate={formatDate}
+      onResolveFailed={() => setIsRenewalFailedModalOpen(true)}
+      onCancel={() => void handleCancelSubscription()}
+      onReactivate={handleReactivateSubscription}
+      onSelectUpgrade={(upgrade) => {
+        setSelectedUpgrade(upgrade);
+        setShowUpgradeConfirm(true);
+      }}
+      onSelectDowngrade={(downgrade) => {
+        setSelectedDowngrade(downgrade);
+        setShowDowngradeConfirm(true);
+      }}
+      onPendingExpired={() => {
+        fetchSubscriptionBenefits();
+        onSubscriptionUpdate?.();
+      }}
+      onSubscribeClick={handleSubscribeClick}
+    />
+  );
+
+  const childModals = (
+    <>
+      {/* Cancel confirmation modal removed — clicking Cancel now goes straight
          * to handleCancelSubscription() which either offers the cancellation
          * upsell (if eligible) or proceeds with the API cancel. */}
 
@@ -990,6 +1033,15 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
             }
           }}
         />
+    </>
+  );
+
+  const subscriptionContent = (
+    <>
+      {!renderAsPanel && <ModalHeader title="Manage Subscription" onClose={onClose} showLogo={false} />}
+      <ModalContent padding="lg">
+        {renderAsPanel && settingsRedesign ? settingsBody : legacyStateBody}
+        {childModals}
       </ModalContent>
     </>
   );

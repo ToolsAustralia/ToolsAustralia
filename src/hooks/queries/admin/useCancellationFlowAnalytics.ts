@@ -4,10 +4,10 @@ import type { CancellationFlowSummary } from "@/services/admin/cancellationFlowA
 export type { CancellationFlowSummary } from "@/services/admin/cancellationFlowAnalytics";
 
 export interface CancellationFlowAnalyticsFilter {
-  /** ISO datetime string (inclusive lower bound on startedAt). */
-  from?: string;
-  /** ISO datetime string (exclusive upper bound on startedAt). */
-  to?: string;
+  /** AEST yyyy-MM-dd (inclusive lower bound on startedAt). */
+  startDate?: string;
+  /** AEST yyyy-MM-dd (inclusive upper bound on startedAt; server adds +1 day). */
+  endDate?: string;
 }
 
 export interface UseCancellationFlowAnalyticsResult {
@@ -18,8 +18,8 @@ export interface UseCancellationFlowAnalyticsResult {
 
 function buildQueryString(filter: CancellationFlowAnalyticsFilter): string {
   const params = new URLSearchParams();
-  if (filter.from) params.set("from", filter.from);
-  if (filter.to) params.set("to", filter.to);
+  if (filter.startDate) params.set("startDate", filter.startDate);
+  if (filter.endDate) params.set("endDate", filter.endDate);
   return params.toString();
 }
 

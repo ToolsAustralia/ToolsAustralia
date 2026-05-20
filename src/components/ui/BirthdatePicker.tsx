@@ -54,6 +54,8 @@ export interface BirthdatePickerProps {
   "aria-invalid"?: boolean;
   /** Fires when the calendar popover opens or closes (e.g. for modal scroll/padding). */
   onOpenChange?: (open: boolean) => void;
+  /** Optional className merged into the popover panel (e.g. to widen + right-anchor on mobile when the trigger sits in a narrow column). */
+  popoverClassName?: string;
 }
 
 const DEFAULT_MAX = new Date();
@@ -76,6 +78,7 @@ export default function BirthdatePicker({
   id,
   "aria-invalid": _ariaInvalid,
   onOpenChange,
+  popoverClassName,
 }: BirthdatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<"month" | "year" | null>(null);
@@ -238,7 +241,10 @@ export default function BirthdatePicker({
         <div
           role="dialog"
           aria-label="Choose date of birth"
-          className="absolute left-0 right-0 z-50 mt-1 w-full min-w-0 rounded-xl border border-gray-200 bg-[#ffffff] py-4 px-3 shadow-xl dark:border-neutral-600 dark:bg-[#171717] lg:px-2.5 lg:py-3"
+          className={cn(
+            "absolute left-0 right-0 z-50 mt-1 w-full min-w-0 rounded-xl border border-gray-200 bg-[#ffffff] py-4 px-3 shadow-xl dark:border-neutral-600 dark:bg-[#171717] lg:px-2.5 lg:py-3",
+            popoverClassName,
+          )}
         >
           {/* Month & year — pick the day from the calendar below */}
           <div className="grid grid-cols-2 gap-3 mb-4 lg:gap-2 lg:mb-3">

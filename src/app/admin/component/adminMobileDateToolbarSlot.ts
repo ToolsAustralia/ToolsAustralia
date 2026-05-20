@@ -6,6 +6,7 @@ export const ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR = [
   "overview",
   "facebook-ads",
   "promo-analytics",
+  "cancellation-flow",
 ] as const;
 
 export type AdminTabWithMobileLayoutDate = (typeof ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR)[number];

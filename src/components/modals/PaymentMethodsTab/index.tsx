@@ -43,6 +43,7 @@ import { formatDisplayName } from "@/utils/display-name";
 import SavedMethodRow from "./SavedMethodRow";
 import AddPaymentCTA from "./AddPaymentCTA";
 import AddPaymentForm from "./AddPaymentForm";
+import SettingsRedesignPayment from "./SettingsRedesignPayment";
 
 // Module-scope Stripe singleton — Stripe prohibits re-instantiation per render.
 const stripePromise = getStripePromise();
@@ -60,11 +61,17 @@ interface PaymentMethodsTabProps {
     };
     stripeSubscriptionId?: string;
   };
+  /**
+   * Opt-in (settings page only). When true, renders the Claude settings
+   * redesign body. All Stripe hooks/handlers/Elements/ConfirmationModal stay
+   * here unchanged. SettingsModal never sets this → byte-identical there.
+   */
+  settingsRedesign?: boolean;
 }
 
 type DeleteFlowState = { paymentMethodId: string; kind: PaymentMethodDeleteFlowKind };
 
-const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
+const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRedesign = false }) => {
   const { showToast } = useToast();
   const {
     paymentMethods,
@@ -279,6 +286,98 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
 
   const deleteModalCopy = deleteFlow ? getPaymentMethodDeleteMessages(deleteFlow.kind) : null;
 
+  // Stripe add-form block — built once, reused by both legacy and settings
+  // bodies so the `stripePromise` singleton is never re-instantiated.
+  const addFormNode =
+    setupIntentClientSecret != null ? (
+      <div className="border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 rounded-lg p-2 sm:p-4 bg-gray-50 dark:bg-neutral-800 shadow-sm">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-neutral-100">Add New Payment Method</h4>
+          <Button
+            type="button"
+            onClick={() => {
+              setShowAddForm(false);
+              setSetupIntentClientSecret(null);
+            }}
+            className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
+          >
+            Cancel
+          </Button>
+        </div>
+        <Elements
+          key={setupIntentClientSecret || "no-secret"}
+          stripe={stripePromise}
+          options={{
+            clientSecret: setupIntentClientSecret,
+            appearance: {
+              theme: "stripe",
+              variables: {
+                spacingUnit: "4px",
+                borderRadius: "8px",
+                fontFamily: 'system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif',
+                fontSizeBase: "14px",
+              },
+            },
+          }}
+        >
+          <AddPaymentForm
+            clientSecret={setupIntentClientSecret}
+            onSuccess={handlePaymentMethodSaved}
+            onCancel={() => {
+              setShowAddForm(false);
+              setSetupIntentClientSecret(null);
+            }}
+            userEmail={user.email}
+            userName={formatDisplayName(user.firstName, user.lastName) || undefined}
+            userPhone={user.mobile || undefined}
+          />
+        </Elements>
+      </div>
+    ) : null;
+
+  // Delete confirmation modal — rendered once for BOTH branches.
+  const confirmModal = (
+    <ConfirmationModal
+      isOpen={deleteFlow !== null}
+      onClose={() => {
+        if (deletingId) return;
+        setDeleteFlow(null);
+      }}
+      onConfirm={handleConfirmDelete}
+      type="delete"
+      title={deleteModalCopy?.title ?? "Remove payment method"}
+      message={deleteModalCopy?.message ?? ""}
+      confirmText={deleteModalCopy?.confirmText ?? "Remove"}
+      cancelText="Cancel"
+      isLoading={deletingId !== null}
+      requireCheckboxToConfirm={deleteModalCopy?.requireCheckbox}
+    />
+  );
+
+  if (settingsRedesign) {
+    return (
+      <div>
+        <SettingsRedesignPayment
+          paymentMethods={paymentMethods}
+          subscriptionDefaultPaymentMethodId={subscriptionDefaultPaymentMethodId}
+          loading={loading}
+          error={error}
+          hasActiveSubscription={Boolean(hasActiveSubscription)}
+          subscriptionStatus={subscriptionStatus}
+          showAddForm={showAddForm}
+          isCreatingSetupIntent={isCreatingSetupIntent}
+          settingDefaultId={settingDefaultId}
+          deletingId={deletingId}
+          addForm={addFormNode}
+          onAddNew={() => void handleAddNewPaymentMethod()}
+          onSetDefault={(id) => void handleSetDefault(id)}
+          onDelete={handleDeleteClick}
+        />
+        {confirmModal}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 sm:space-y-4">
       <div>
@@ -330,51 +429,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
         />
       )}
 
-      {!loading && showAddForm && setupIntentClientSecret && (
-        <div className="border-2 border-gray-200 dark:border-neutral-700 border-l-4 border-l-red-500 dark:border-l-red-400 rounded-lg p-2 sm:p-4 bg-gray-50 dark:bg-neutral-800 shadow-sm">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-neutral-100">Add New Payment Method</h4>
-            <Button
-              type="button"
-              onClick={() => {
-                setShowAddForm(false);
-                setSetupIntentClientSecret(null);
-              }}
-              className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-white px-2 py-1 hover:bg-gray-200 dark:hover:bg-neutral-700 rounded transition-colors"
-            >
-              Cancel
-            </Button>
-          </div>
-          <Elements
-            key={setupIntentClientSecret || "no-secret"}
-            stripe={stripePromise}
-            options={{
-              clientSecret: setupIntentClientSecret,
-              appearance: {
-                theme: "stripe",
-                variables: {
-                  spacingUnit: "4px",
-                  borderRadius: "8px",
-                  fontFamily: 'system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif',
-                  fontSizeBase: "14px",
-                },
-              },
-            }}
-          >
-            <AddPaymentForm
-              clientSecret={setupIntentClientSecret}
-              onSuccess={handlePaymentMethodSaved}
-              onCancel={() => {
-                setShowAddForm(false);
-                setSetupIntentClientSecret(null);
-              }}
-              userEmail={user.email}
-              userName={formatDisplayName(user.firstName, user.lastName) || undefined}
-              userPhone={user.mobile || undefined}
-            />
-          </Elements>
-        </div>
-      )}
+      {!loading && showAddForm && addFormNode}
 
       {!loading && !showAddForm && paymentMethods.length > 0 && (
         <div className="space-y-2 sm:space-y-3">
@@ -417,22 +472,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={deleteFlow !== null}
-        onClose={() => {
-          if (deletingId) return;
-          setDeleteFlow(null);
-        }}
-        onConfirm={handleConfirmDelete}
-        type="delete"
-        title={deleteModalCopy?.title ?? "Remove payment method"}
-        message={deleteModalCopy?.message ?? ""}
-        confirmText={deleteModalCopy?.confirmText ?? "Remove"}
-        cancelText="Cancel"
-        isLoading={deletingId !== null}
-        requireCheckboxToConfirm={deleteModalCopy?.requireCheckbox}
-      />
+      {confirmModal}
     </div>
   );
 };

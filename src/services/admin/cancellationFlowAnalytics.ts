@@ -16,6 +16,20 @@ export interface ReasonBreakdown {
   count: number;
   /** Share of total triggered events, 0–100. 0 when there are no events. */
   sharePct: number;
+  /** Saved (outcome === "saved") events with this reason. */
+  accepted: number;
+  /** Cancelled (outcome === "cancelled") events with this reason. */
+  cancelled: number;
+  /** In-progress events with this reason whose startedAt is older than 1h. */
+  abandoned: number;
+}
+
+/** Free-text entry from a user who selected reason="other". */
+export interface OtherReasonEntry {
+  text: string;
+  /** ISO string (Date is serialized over the wire by NextResponse.json). */
+  startedAt: string;
+  outcome: "in_progress" | "saved" | "cancelled";
 }
 
 export interface CancellationFunnel {
@@ -58,6 +72,11 @@ export interface CancellationFlowSummary {
    * contribute. Every `OfferType` key is always present (zeroed when unused).
    */
   retention90ByOffer: Record<OfferType, Retention90Split>;
+  /**
+   * Free-text entries from events whose reason was "other". Sorted by
+   * startedAt descending. Empty `reasonText` values are excluded.
+   */
+  otherReasonTexts: OtherReasonEntry[];
 }
 
 function roundPct(n: number): number {
@@ -96,8 +115,10 @@ export function summarizeCancellationEvents(
 
   const byReason = {} as Record<CancellationReason, ReasonBreakdown>;
   for (const reason of CANCELLATION_REASONS) {
-    byReason[reason] = { count: 0, sharePct: 0 };
+    byReason[reason] = { count: 0, sharePct: 0, accepted: 0, cancelled: 0, abandoned: 0 };
   }
+
+  const otherReasonTexts: OtherReasonEntry[] = [];
 
   const byOfferAccepted = {} as Record<OfferType, number>;
   for (const offer of OFFER_TYPES) {
@@ -124,6 +145,17 @@ export function summarizeCancellationEvents(
       byReason[ev.reason].count += 1;
     }
 
+    if (ev.reason === "other" && typeof ev.reasonText === "string" && ev.reasonText.trim().length > 0) {
+      otherReasonTexts.push({
+        text: ev.reasonText.trim(),
+        startedAt: (ev.startedAt instanceof Date
+          ? ev.startedAt
+          : new Date(ev.startedAt as unknown as string)
+        ).toISOString(),
+        outcome: ev.outcome,
+      });
+    }
+
     if (ev.pastDue) {
       pastDueExcludedFromOfferConversion += 1;
     }
@@ -134,6 +166,7 @@ export function summarizeCancellationEvents(
 
     if (ev.outcome === "saved") {
       funnel.accepted += 1;
+      if (byReason[ev.reason]) byReason[ev.reason].accepted += 1;
 
       if (ev.offerAccepted && byOfferAccepted[ev.offerAccepted] !== undefined) {
         byOfferAccepted[ev.offerAccepted] += 1;
@@ -162,13 +195,18 @@ export function summarizeCancellationEvents(
       }
     } else if (ev.outcome === "cancelled") {
       funnel.cancelled += 1;
+      if (byReason[ev.reason]) byReason[ev.reason].cancelled += 1;
     } else if (ev.outcome === "in_progress") {
       const startedAtMs = ev.startedAt ? new Date(ev.startedAt).getTime() : null;
       if (startedAtMs !== null && startedAtMs <= abandonedCutoff) {
         funnel.abandoned += 1;
+        if (byReason[ev.reason]) byReason[ev.reason].abandoned += 1;
       }
     }
   }
+
+  // Sort "other" free-text entries newest first.
+  otherReasonTexts.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
   // Shares — guard divide-by-zero.
   if (triggered > 0) {
@@ -191,6 +229,7 @@ export function summarizeCancellationEvents(
     pastDueExcludedFromOfferConversion,
     retention90,
     retention90ByOffer,
+    otherReasonTexts,
   };
 }
 

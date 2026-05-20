@@ -144,6 +144,8 @@ const config: Config = {
       boxShadow: {
         xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
         "2xl": "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        lift: "0 1px 0 rgba(0,0,0,0.02), 0 12px 32px -16px rgba(0,0,0,0.18)",
+        "lift-dark": "0 1px 0 rgba(255,255,255,0.04), 0 16px 40px -20px rgba(0,0,0,0.7)",
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
@@ -160,6 +162,7 @@ const config: Config = {
         "border-glow-gold": "border-glow-gold 2s ease-in-out infinite",
         "border-glow-orange": "border-glow-orange 2s ease-in-out infinite",
         "badge-pulse": "badgePulse 1.5s ease-in-out infinite",
+        "pulse-ring": "pulseRing 1.8s ease-out infinite",
         // Migrated from inline <style> blocks per Phase 0 of the cleanup spec:
         "spin-reverse": "spin-reverse 1.5s linear infinite",
         "sparkle": "sparkle 2.5s ease-in-out infinite",
@@ -205,6 +208,10 @@ const config: Config = {
         memberBenefitFloat: {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-8px)" },
+        },
+        pulseRing: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(238,0,0,0.45)" },
+          "50%": { boxShadow: "0 0 0 8px rgba(238,0,0,0)" },
         },
       },
     },
