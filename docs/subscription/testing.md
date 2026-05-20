@@ -7,8 +7,9 @@ Per CLAUDE.md, this repo has **no jest/vitest**. Tests are standalone `tsx` scri
 | File | Script | Covers |
 |---|---|---|
 | [`src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts`](../../src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts) | `npm run test:stripe-collection-pause` | `pauseCollectionPolicy` clearing rules and `describePauseCollection` formatting. Imports the pure helpers directly to avoid mocking Stripe. |
+| [`src/utils/payment/__tests__/subscription-entries-calculator.test.ts`](../../src/utils/payment/__tests__/subscription-entries-calculator.test.ts) | `npm run test:subscription-entries-calculator` | `calculateUpgradeEntries` Mode A / Mode B math and the `calculateSubscriptionEntries` dispatcher routing for upgrade + `hasMembershipGrantInCurrentDrawPeriod` flag combinations. 11 cases (Mode A primary / no-promo / fresh, Mode B renewal-then-upgrade / initial-then-upgrade, three defensive inputs, three dispatcher integration cases). |
 
-> _TODO: enumerate any additional `__tests__` files under subscription as they're added — the bootstrap pass picked up only this one._
+> _TODO: enumerate any additional `__tests__` files under subscription as they're added._
 
 ## Cross-cutting tests that exercise subscription paths
 
