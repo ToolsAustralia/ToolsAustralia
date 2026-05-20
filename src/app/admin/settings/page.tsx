@@ -35,12 +35,15 @@ export default function AdminSettingsPage() {
   }
   if (!session || !isInternalUser) return null;
 
+  const roleLabel =
+    session.user?.roleName ??
+    (session.user?.userType === "admin" ? "Admin" : "Staff");
   const adminUser: AdminUser = {
     id: session.user?.id ?? "",
     name: `${session.user?.firstName ?? ""} ${session.user?.lastName ?? ""}`.trim(),
     email: session.user?.email ?? "",
-    role: "admin",
-    isAdmin: true,
+    role: roleLabel,
+    isAdmin: session.user?.userType === "admin",
     lastLogin: new Date(),
   };
 

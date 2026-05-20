@@ -134,7 +134,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermission("promos.delete");
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();

@@ -34,6 +34,8 @@ declare module "next-auth" {
       lastName: string;
       userType: "customer" | "staff" | "admin";
       roleId: string | null;
+      /** Display name of the assigned Role, joined server-side. `null` for customers. */
+      roleName: string | null;
       permissions: string[];
     };
   }
@@ -60,6 +62,8 @@ declare module "next-auth/jwt" {
     // Optional: old tokens issued before Task 4 deploy lack these. Callers must guard.
     permissions?: string[];
     permissionsLoadedAt?: number; // unix ms — when we last loaded perms from DB
+    /** Cached Role.name for sidebar display (refreshed together with permissions). */
+    roleName?: string | null;
     /**
      * Stamped from User.tokenVersion when the token is issued / refreshed.
      * If this drops out of sync with the DB value, the JWT callback forces a

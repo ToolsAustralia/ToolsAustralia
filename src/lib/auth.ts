@@ -176,10 +176,17 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account }) {
       const PERM_TTL_MS = 5 * 60 * 1000;
 
-      const loadPermissions = async (roleId: string | null): Promise<string[]> => {
-        if (!roleId) return [];
-        const role = await Role.findById(roleId).select("permissions").lean();
-        return role?.permissions ?? [];
+      const loadRole = async (
+        roleId: string | null
+      ): Promise<{ permissions: string[]; name: string | null }> => {
+        if (!roleId) return { permissions: [], name: null };
+        const role = await Role.findById(roleId)
+          .select("permissions name")
+          .lean();
+        return {
+          permissions: role?.permissions ?? [],
+          name: role?.name ?? null,
+        };
       };
 
       // For Google OAuth, we need to fetch the user from database to get the role
@@ -195,7 +202,11 @@ export const authOptions: NextAuthOptions = {
             token.email = dbUser.email;
             token.userType = dbUser.userType ?? "customer";
             token.roleId = dbUser.roleId ? dbUser.roleId.toString() : null;
-            token.permissions = await loadPermissions(token.roleId);
+            {
+              const r = await loadRole(token.roleId);
+              token.permissions = r.permissions;
+              token.roleName = r.name;
+            }
             token.permissionsLoadedAt = Date.now();
             token.tokenVersion = dbUser.tokenVersion ?? 0;
           } else {
@@ -217,7 +228,11 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email;
         token.userType = user.userType ?? "customer";
         token.roleId = user.roleId ?? null;
-        token.permissions = await loadPermissions(token.roleId);
+        {
+          const r = await loadRole(token.roleId);
+          token.permissions = r.permissions;
+          token.roleName = r.name;
+        }
         token.permissionsLoadedAt = Date.now();
         token.tokenVersion = user.tokenVersion ?? 0;
       } else if (token.sub && !user && !account) {
@@ -266,7 +281,9 @@ export const authOptions: NextAuthOptions = {
 
           if (roleChanged || expired) {
             token.roleId = dbRoleId;
-            token.permissions = await loadPermissions(dbRoleId);
+            const r = await loadRole(dbRoleId);
+            token.permissions = r.permissions;
+            token.roleName = r.name;
             token.permissionsLoadedAt = Date.now();
           }
 
@@ -297,8 +314,10 @@ export const authOptions: NextAuthOptions = {
       session.user.firstName = token.firstName as string;
       session.user.lastName = token.lastName as string;
       session.user.email = token.email as string;
-      session.user.userType = (token.userType as "customer" | "staff") ?? "customer";
+      session.user.userType =
+        (token.userType as "customer" | "staff" | "admin") ?? "customer";
       session.user.roleId = (token.roleId as string | null) ?? null;
+      session.user.roleName = (token.roleName as string | null) ?? null;
       session.user.permissions = token.permissions ?? [];
 
       return session;

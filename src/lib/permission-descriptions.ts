@@ -146,6 +146,11 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
     description: "Permanently end a live promo. Once ended it cannot be re-opened.",
     danger: true,
   },
+  "promos.delete": {
+    label: "Delete",
+    description: "Delete promo sub-entities (bonus-entry rules, links, scheduled promos, banner texts, alternating multipliers). The parent promo itself is ended via the End permission, not deleted.",
+    danger: true,
+  },
 
   // Facebook Ads
   "facebookAds.view": {
@@ -293,6 +298,11 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   },
   "settings.edit": {
     label: "Edit",
-    description: "Create and edit roles, invite staff, change a staff member's role, and deactivate staff.",
+    description: "Create and edit roles, invite staff, and change a staff member's role.",
+  },
+  "settings.delete": {
+    label: "Delete",
+    description: "Delete a role (only when no staff hold it) and remove a staff member (demote them to a regular customer account).",
+    danger: true,
   },
 };

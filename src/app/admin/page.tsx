@@ -1,15 +1,31 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AdminPage from "@/app/admin/component/AdminPage";
 import { AdminUser } from "@/types/admin";
 import { usePermissions } from "@/hooks/usePermissions";
+import { firstAccessibleTabId } from "@/app/admin/component/adminTabs";
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { isLoading, isStaff } = usePermissions();
+  const { isLoading, isStaff, has } = usePermissions();
+
+  // If the user can't see Overview, redirect to the first tab they CAN see.
+  // This catches custom-role staff (e.g. Submissions-only) who would otherwise
+  // land here and stare at Forbidden errors. Runs as soon as permissions are
+  // loaded; layout's server guard already verified they're internal users.
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isStaff) return;
+    if (has("overview.view")) return;
+    const target = firstAccessibleTabId(has);
+    if (target && target !== "overview") {
+      router.replace(`/admin/${target}`);
+    }
+  }, [isLoading, isStaff, has, router]);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -28,12 +44,15 @@ export default function AdminDashboard() {
   }
 
   // Create admin user object from session
+  const roleLabel =
+    session?.user?.roleName ??
+    (session?.user?.userType === "admin" ? "Admin" : "Staff");
   const adminUser: AdminUser = {
     id: session?.user?.id || "",
     name: `${session?.user?.firstName || ""} ${session?.user?.lastName || ""}`.trim(),
     email: session?.user?.email || "",
-    role: "admin",
-    isAdmin: true,
+    role: roleLabel,
+    isAdmin: session?.user?.userType === "admin",
     lastLogin: new Date(),
   };
 

@@ -6,32 +6,16 @@ import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  BarChart3,
-  Trophy,
-  Settings,
-  Shield,
-  LogOut,
-  Home,
-  Activity,
-  Crown,
-  X,
-  Gift,
-  FileText as FileTextIcon,
-  Users,
-  Zap,
-  UserCheck,
-  TrendingUp,
-  FlaskConical,
-  Bug,
-  ScrollText,
+  AlertCircle,
   ChevronDown,
   ChevronRight,
-  LayoutDashboard,
-  LineChart,
-  Megaphone,
-  ClipboardList,
-  AlertCircle,
+  Crown,
+  Home,
+  LogOut,
+  Shield,
+  X,
 } from "lucide-react";
+import { ADMIN_TAB_GROUPS } from "./adminTabs";
 
 const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
@@ -48,81 +32,7 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
-type AdminTab = {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  requires: string;
-};
-
-const adminTabGroups: Array<{
-  id: string;
-  label: string;
-  groupIcon: React.ComponentType<{ className?: string }>;
-  tabs: AdminTab[];
-}> = [
-  {
-    id: "core",
-    label: "Core",
-    groupIcon: LayoutDashboard,
-    tabs: [
-      { id: "overview", label: "Overview", icon: BarChart3, requires: "overview.view" },
-      { id: "users", label: "Users", icon: Users, requires: "users.view" },
-      { id: "affiliates", label: "Affiliates", icon: UserCheck, requires: "affiliates.view" },
-    ],
-  },
-  {
-    id: "analytics",
-    label: "Analytics",
-    groupIcon: LineChart,
-    tabs: [
-      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp, requires: "facebookAds.view" },
-      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp, requires: "facebookAds.view" },
-      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp, requires: "facebookAds.view" },
-      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3, requires: "pageAnalytics.view" },
-      { id: "cancellation-flow", label: "Cancellation Flow", icon: BarChart3, requires: "pageAnalytics.view" },
-      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical, requires: "abTesting.view" },
-    ],
-  },
-  {
-    id: "promos",
-    label: "Promos",
-    groupIcon: Megaphone,
-    tabs: [{ id: "promos", label: "Promos", icon: Zap, requires: "promos.view" }],
-  },
-  {
-    id: "draws",
-    label: "Draws",
-    groupIcon: Trophy,
-    tabs: [
-      { id: "major-draw", label: "Major Draw", icon: Gift, requires: "majorDraw.view" },
-      { id: "mini-draws", label: "Mini Draws", icon: Trophy, requires: "miniDraws.view" },
-      { id: "draw-results", label: "Draw Results", icon: Trophy, requires: "drawResults.view" },
-      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity, requires: "upcomingDraws.view" },
-    ],
-  },
-  {
-    id: "operations",
-    label: "Operations",
-    groupIcon: ClipboardList,
-    tabs: [
-      { id: "submissions", label: "Submissions", icon: FileTextIcon, requires: "submissions.view" },
-      { id: "error-reports", label: "Error Reports", icon: Bug, requires: "errorReports.view" },
-      { id: "activity-log", label: "Activity Log", icon: ScrollText, requires: "settings.view" },
-      { id: "settings", label: "Settings", icon: Settings, requires: "settings.view" },
-    ],
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    groupIcon: AlertCircle,
-    tabs: [
-      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle, requires: "settings.view" },
-      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText, requires: "settings.view" },
-      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity, requires: "settings.view" },
-    ],
-  },
-];
+const adminTabGroups = ADMIN_TAB_GROUPS;
 
 export default function AdminSidebar({
   selectedTab: _selectedTab,

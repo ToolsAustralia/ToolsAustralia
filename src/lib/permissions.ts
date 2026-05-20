@@ -15,7 +15,7 @@
 export const AREA_ACTIONS = {
   overview: ["view", "edit"],
   users: ["view", "edit", "charge", "cancelSubscription", "refund", "delete"],
-  promos: ["view", "edit", "end"],
+  promos: ["view", "edit", "end", "delete"],
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],
   promoAnalytics: ["view"],
@@ -27,7 +27,7 @@ export const AREA_ACTIONS = {
   affiliates: ["view", "edit", "processPayout", "delete"],
   errorReports: ["view", "edit", "delete"],
   abTesting: ["view", "edit", "selectWinner", "delete"],
-  settings: ["view", "edit"],
+  settings: ["view", "edit", "delete"],
 } as const satisfies Record<string, readonly string[]>;
 
 export const AREAS = Object.keys(AREA_ACTIONS) as Array<keyof typeof AREA_ACTIONS>;

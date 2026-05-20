@@ -39,13 +39,18 @@ export default function AdminTabPage() {
     return null;
   }
 
-  // Create admin user object from session
+  // Create admin user object from session — `role` is the display name of
+  // the user's assigned Role document so the sidebar can show "Customer
+  // Support" instead of the legacy "admin" string.
+  const roleLabel =
+    session.user?.roleName ??
+    (session.user?.userType === "admin" ? "Admin" : "Staff");
   const adminUser: AdminUser = {
     id: session.user?.id || "",
     name: `${session.user?.firstName || ""} ${session.user?.lastName || ""}`.trim(),
     email: session.user?.email || "",
-    role: "admin",
-    isAdmin: true,
+    role: roleLabel,
+    isAdmin: session.user?.userType === "admin",
     lastLogin: new Date(),
   };
 

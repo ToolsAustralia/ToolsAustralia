@@ -115,7 +115,7 @@ export async function DELETE(
   }
 
   await connectDB();
-  const guard = await requirePermission("settings.edit");
+  const guard = await requirePermission("settings.delete");
   if (guard instanceof NextResponse) return guard;
 
   const role = await Role.findById(id);

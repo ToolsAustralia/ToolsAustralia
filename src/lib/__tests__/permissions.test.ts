@@ -72,6 +72,27 @@ test("Mini draws has edit + delete (separate from major-draw permissions)", () =
   assert.ok(AREA_ACTIONS.miniDraws.includes("delete"));
 });
 
+test("delete is always its own sub-action where a feature exposes a delete route", () => {
+  // Repo rule: a delete must be gated separately from edit so a role can
+  // grant write access without granting destructive removal.
+  const deleteCapableAreas = [
+    "users",
+    "promos",
+    "miniDraws",
+    "submissions",
+    "affiliates",
+    "errorReports",
+    "abTesting",
+    "settings",
+  ] as const;
+  for (const a of deleteCapableAreas) {
+    assert.ok(
+      AREA_ACTIONS[a].includes("delete"),
+      `${a} has DELETE routes but its catalog entry lacks a 'delete' sub-action`
+    );
+  }
+});
+
 test("Affiliates has 'processPayout' and 'delete'", () => {
   assert.ok(AREA_ACTIONS.affiliates.includes("processPayout"));
   assert.ok(AREA_ACTIONS.affiliates.includes("delete"));
@@ -92,7 +113,7 @@ test("isValidPermission accepts known and rejects unknown", () => {
 });
 
 test("actionsFor returns the declared tuple", () => {
-  assert.deepEqual([...actionsFor("settings")], ["view", "edit"]);
+  assert.deepEqual([...actionsFor("settings")], ["view", "edit", "delete"]);
   assert.deepEqual([...actionsFor("overview")], ["view", "edit"]);
 });
 
@@ -130,6 +151,7 @@ test("dangerous sub-actions are marked danger:true", () => {
     "users.refund",
     "users.delete",
     "promos.end",
+    "promos.delete",
     "majorDraw.selectWinner",
     "miniDraws.selectWinner",
     "miniDraws.delete",
@@ -139,6 +161,7 @@ test("dangerous sub-actions are marked danger:true", () => {
     "errorReports.delete",
     "abTesting.selectWinner",
     "abTesting.delete",
+    "settings.delete",
   ] as const;
   for (const p of dangerExpected) {
     assert.equal(PERMISSION_META[p].danger, true, `${p} should be marked danger`);

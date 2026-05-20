@@ -19,17 +19,17 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo/alternating-multiplier` | GET | `promos.view` |
 | `/api/admin/promo/alternating-multiplier` | POST | `promos.edit` |
 | `/api/admin/promo/alternating-multiplier/[id]` | PATCH | `promos.edit` |
-| `/api/admin/promo/alternating-multiplier/[id]` | DELETE | `promos.edit` |
+| `/api/admin/promo/alternating-multiplier/[id]` | DELETE | `promos.delete` |
 | `/api/admin/promo/banner-text` | GET | `promos.view` |
 | `/api/admin/promo/banner-text` | POST | `promos.edit` |
 | `/api/admin/promo/banner-text/active` | GET | _(public — no auth)_ |
 | `/api/admin/promo/banner-text/[id]` | PUT | `promos.edit` |
-| `/api/admin/promo/banner-text/[id]` | DELETE | `promos.edit` |
+| `/api/admin/promo/banner-text/[id]` | DELETE | `promos.delete` |
 | `/api/admin/promo/bonus-entry/active` | GET | `promos.view` |
 | `/api/admin/promo/bonus-entry/create` | POST | `promos.edit` |
 | `/api/admin/promo/bonus-entry/list` | GET | `promos.view` |
 | `/api/admin/promo/bonus-entry/[id]` | PATCH | `promos.edit` |
-| `/api/admin/promo/bonus-entry/[id]` | DELETE | `promos.edit` |
+| `/api/admin/promo/bonus-entry/[id]` | DELETE | `promos.delete` |
 | `/api/admin/promo/create` | POST | `promos.edit` |
 | `/api/admin/promo/effective` | GET | `promos.view` |
 | `/api/admin/promo/end` | POST | `promos.end` |
@@ -38,12 +38,12 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo/link/list` | GET | `promos.view` |
 | `/api/admin/promo/link/create` | POST | `promos.edit` |
 | `/api/admin/promo/link/[id]` | PATCH | `promos.edit` |
-| `/api/admin/promo/link/[id]` | DELETE | `promos.edit` |
+| `/api/admin/promo/link/[id]` | DELETE | `promos.delete` |
 | `/api/admin/promo/scheduled/list` | GET | `promos.view` |
 | `/api/admin/promo/scheduled/create` | POST | `promos.edit` |
 | `/api/admin/promo/scheduled/apply-month` | POST | `promos.edit` |
 | `/api/admin/promo/scheduled/[id]` | PATCH | `promos.edit` |
-| `/api/admin/promo/scheduled/[id]` | DELETE | `promos.edit` |
+| `/api/admin/promo/scheduled/[id]` | DELETE | `promos.delete` |
 | `/api/admin/users/[id]/charge-past-due` | GET | `users.view` |
 | `/api/admin/users/[id]/charge-past-due` | POST | `users.charge` |
 | `/api/admin/users/[id]/force-charge` | POST | `users.charge` |
@@ -143,11 +143,11 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/roles` | GET | `settings.view` |
 | `/api/admin/roles` | POST | `settings.edit` |
 | `/api/admin/roles/[id]` | PATCH | `settings.edit` |
-| `/api/admin/roles/[id]` | DELETE | `settings.edit` |
+| `/api/admin/roles/[id]` | DELETE | `settings.delete` |
 | `/api/admin/staff` | GET | `settings.view` |
 | `/api/admin/staff` | POST | `settings.edit` |
 | `/api/admin/staff/[id]` | PATCH | `settings.edit` |
-| `/api/admin/staff/[id]` | DELETE | `settings.edit` |
+| `/api/admin/staff/[id]` | DELETE | `settings.delete` |
 
 | `/api/users/[id]` | GET (self) | _(any authenticated user — self-only)_ |
 | `/api/users/[id]` | GET (other user) | `users.view` |
