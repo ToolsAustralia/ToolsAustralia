@@ -22,6 +22,7 @@ import {
   type Permission,
 } from "@/lib/permissions";
 import { AREA_META, PERMISSION_META } from "@/lib/permission-descriptions";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Preset role colors. Custom hex is not exposed yet — keep the palette small.
 const ROLE_COLOR_PRESETS = [
@@ -74,6 +75,10 @@ export default function RolesManagement() {
     queryFn: fetchRoles,
   });
 
+  const perms = usePermissions();
+  const canEditSettings = perms.has("settings.edit");
+  const canDeleteSettings = perms.has("settings.delete");
+
   const roles = data?.data.roles ?? [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? roles.find((r) => r.id === selectedId) ?? null : null;
@@ -108,14 +113,16 @@ export default function RolesManagement() {
         roles={roles}
         selectedId={selectedId}
         onSelect={setSelectedId}
-        onCreate={() => setCreating(true)}
+        onCreate={canEditSettings ? () => setCreating(true) : undefined}
       />
 
       {selected ? (
         <RoleEditor
           key={selected.id}
           role={selected}
-          onDeleteRequest={() => setDeletingId(selected.id)}
+          onDeleteRequest={
+            canDeleteSettings ? () => setDeletingId(selected.id) : undefined
+          }
         />
       ) : (
         <div className="flex-1 grid place-items-center text-gray-500 dark:text-gray-400 text-sm">
@@ -160,12 +167,14 @@ function RolesSidebar({
   roles: ApiRole[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onCreate: () => void;
+  /** Undefined hides the "+" button (caller gates by settings.edit). */
+  onCreate?: () => void;
 }) {
   return (
     <aside className="w-72 bg-white dark:bg-neutral-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100">Roles</h3>
+        {onCreate && (
         <button
           type="button"
           onClick={onCreate}
@@ -174,6 +183,7 @@ function RolesSidebar({
         >
           <Plus className="w-4 h-4" />
         </button>
+        )}
       </div>
       <ul className="flex-1 overflow-y-auto p-2 space-y-0.5">
         {roles.map((r) => {
@@ -221,7 +231,8 @@ function RoleEditor({
   onDeleteRequest,
 }: {
   role: ApiRole;
-  onDeleteRequest: () => void;
+  /** Undefined hides the Delete button (caller gates by settings.delete). */
+  onDeleteRequest?: () => void;
 }) {
   const qc = useQueryClient();
   const isAdminRole = role.name === "Admin";
@@ -335,14 +346,16 @@ function RoleEditor({
             )}
             Save
           </button>
-          <button
-            type="button"
-            disabled={role.isSystem || role.memberCount > 0}
-            onClick={onDeleteRequest}
-            className="px-3 py-1.5 text-sm rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" /> Delete
-          </button>
+          {onDeleteRequest && (
+            <button
+              type="button"
+              disabled={role.isSystem || role.memberCount > 0}
+              onClick={onDeleteRequest}
+              className="px-3 py-1.5 text-sm rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" /> Delete
+            </button>
+          )}
         </div>
       </header>
 

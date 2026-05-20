@@ -16,6 +16,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface StaffUser {
   id: string;
@@ -83,6 +84,10 @@ export default function StaffManagement() {
     queryFn: fetchRolesSummary,
   });
 
+  const perms = usePermissions();
+  const canInviteStaff = perms.has("settings.edit");
+  const canRemoveStaff = perms.has("settings.delete");
+
   const [search, setSearch] = useState("");
   const [inviting, setInviting] = useState(false);
   const [removing, setRemoving] = useState<StaffUser | null>(null);
@@ -142,13 +147,15 @@ export default function StaffManagement() {
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ee0000]/40"
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setInviting(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white font-medium hover:shadow-lg hover:shadow-red-500/20 transition-shadow"
-        >
-          <Plus className="w-4 h-4" /> Invite staff
-        </button>
+        {canInviteStaff && (
+          <button
+            type="button"
+            onClick={() => setInviting(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white font-medium hover:shadow-lg hover:shadow-red-500/20 transition-shadow"
+          >
+            <Plus className="w-4 h-4" /> Invite staff
+          </button>
+        )}
       </header>
 
       {filtered.length === 0 ? (
@@ -164,7 +171,9 @@ export default function StaffManagement() {
               roles={roles}
               error={rowError[s.id] ?? null}
               onRowError={handleRowError}
-              onRemoveRequest={() => setRemoving(s)}
+              onRemoveRequest={
+                canRemoveStaff ? () => setRemoving(s) : undefined
+              }
               onMutated={() => qc.invalidateQueries({ queryKey: ["admin", "staff"] })}
             />
           ))}
@@ -208,7 +217,8 @@ function StaffRow({
   roles: RoleSummary[];
   error: string | null;
   onRowError: (id: string, message: string | null) => void;
-  onRemoveRequest: () => void;
+  /** Undefined hides the Remove button (caller gates by settings.delete). */
+  onRemoveRequest?: () => void;
   onMutated: () => void;
 }) {
   const { data: session } = useSession();
@@ -314,15 +324,17 @@ function StaffRow({
               )}
             </button>
           )}
-          <button
-            type="button"
-            title={isSelf ? "Can't remove yourself" : "Remove staff member"}
-            disabled={isSelf}
-            onClick={onRemoveRequest}
-            className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {onRemoveRequest && (
+            <button
+              type="button"
+              title={isSelf ? "Can't remove yourself" : "Remove staff member"}
+              disabled={isSelf}
+              onClick={onRemoveRequest}
+              className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
