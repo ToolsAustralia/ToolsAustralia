@@ -390,13 +390,11 @@ const UserSchema = new Schema<IUser>(
       type: Schema.Types.ObjectId,
       ref: "Role",
       default: null,
-      sparse: true,
     },
     userType: {
       type: String,
       enum: ["customer", "staff"],
       default: "customer",
-      required: true,
     },
     inviteToken: {
       type: String,
