@@ -173,25 +173,9 @@ Dashboard/account components use `cn()` from `@/utils/cn` for conditional class 
 
 `MajorDrawHeaderStrip` and `MajorDrawOverview` (in [src/app/(site)/my-account/components/](../../src/app/(site)/my-account/components/)) are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) — the surrounding account dashboard does not re-render on every tick of the embedded countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.
 
-## Resubscribe carry-over sub-line on `MajorDrawOverview` (Phase 3, 2026-05-20)
+## Resubscribe carry-over sub-line on `MajorDrawOverview` (Phase 3, 2026-05-20 — REVERTED 2026-05-21)
 
-[`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) renders a small sub-line directly below the Membership / One-time entry cards (above the package badges row) when the user just resubscribed inside the current draw window. The exact copy is:
-
-> Includes resubscribe + carry-over from previous membership. Next month's renewal will use your new accumulated total.
-
-**Trigger** — the component computes `drawIncludesResubscribe` as:
-
-```
-userSubscription.lastResubscribedAt ∈ [activationDate, drawDate]
-```
-
-i.e. the user's `subscription.lastResubscribedAt` timestamp must fall inside the active draw's `activationDate..drawDate` window. The sub-line is additionally gated on `displayMembershipEntries > 0` so it does not appear on a freshly-pending renewal with zero membership entries.
-
-**Wiring** — `src/app/(site)/my-account/page.tsx` passes:
-- `activationDate={currentMajorDraw?.activationDate}` (new prop)
-- `userSubscription={{ …, lastResubscribedAt }}` (extended inline cast)
-
-**No new API** — detection is purely client-side from the existing user payload. The `lastResubscribedAt` field is the same UX-only timestamp set by `/api/stripe/create-subscription-existing-user`; see [subscription/models.md → `lastResubscribedAt`](../subscription/models.md) for how it's populated. Entries math is unaffected — this is a label/clarification only.
+> **Deprecated / reverted 2026-05-21 (Phase 5 of the tier-picker polish round).** The activity-tab sub-line ("Includes resubscribe + carry-over from previous membership…") was removed from [`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) along with its `activationDate` prop, the `lastResubscribedAt` entry on the nested `userSubscription` prop type, and the `drawIncludesResubscribe` derivation. `src/app/(site)/my-account/page.tsx` no longer forwards `activationDate` or `lastResubscribedAt` to the component. The success-page "Welcome back!" banner (10-minute `wasRecentResubscribe` window keyed off `User.subscription.lastResubscribedAt`) remains the canonical carry-over surface for returning users — the schema field and the resubscribe write site in `/api/stripe/create-subscription-existing-user` are unchanged. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §3.
 
 ## Empty-state nudge animations on `MajorDrawOverview` (Phase 4, 2026-05-21)
 
@@ -224,3 +208,9 @@ Both utility classes are wrapped in `@media (prefers-reduced-motion: no-preferen
 - **One-time card** (already an existing `<button>` with `onOneTimeCardClick`): when `oneTimeEntries === 0` AND `!hasClickedNudge("onetime")`, the button gains the `ta-nudge-shimmer` class and its `onClick` is extended to first call `markNudgeClicked("onetime")` and then invoke the existing `onOneTimeCardClick?.()`. The button shape, focus ring, and downstream handler are unchanged.
 
 No new props, no new API, no service or model change — the nudge is purely a client-side presentational layer on top of the existing empty-state detection. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §4.
+
+## Settings page back-button hard-route (Phase 5, 2026-05-21)
+
+[`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) passes an explicit `onBackClick={() => router.push("/my-account")}` to `DashboardHeader` (alongside the existing `showBackButton` flag). The chevron now always routes to `/my-account` rather than relying on browser-history previous or stepping through the settings index from a sub-tab. The previously-defined `handleBackClick` callback that routed sub-tabs back to the settings index has been removed — `?tab=` deep links still work via `searchParams`, but the back button itself is a single hard route.
+
+This mirrors the user's intent: "clicking the back button should navigate him to /my-account, not in the previous page." Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §6.

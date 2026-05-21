@@ -121,14 +121,6 @@ export default function SettingsPage() {
     signOut({ callbackUrl: "/" });
   }, []);
 
-  const handleBackClick = useCallback(() => {
-    if (activeSection) {
-      router.push("/my-account/settings", { scroll: false });
-    } else {
-      router.back();
-    }
-  }, [activeSection, router]);
-
   // ---------------------------------------------------------------------------
   // Loading / error states
   // ---------------------------------------------------------------------------
@@ -261,7 +253,7 @@ export default function SettingsPage() {
         title={headerTitle}
         showBackButton
         showRenewalAlert={hasFailed}
-        onBackClick={handleBackClick}
+        onBackClick={() => router.push("/my-account")}
       />
 
       {activeSection === null ? (
