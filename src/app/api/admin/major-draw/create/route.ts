@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
     await newMajorDraw.save();
 
     // console.log(`✅ Major draw created successfully: ${newMajorDraw.name} (ID: ${newMajorDraw._id})`)
-    await log(200);;
+    await log(200);
 
     return NextResponse.json({
       success: true,

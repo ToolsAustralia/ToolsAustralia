@@ -274,6 +274,7 @@ export async function POST(request: NextRequest) {
     if (lock && lock.isLocked) {
       // Check if lock has expired
       if (lock.lockedUntil && new Date(lock.lockedUntil) > now) {
+        await log(409);
         return NextResponse.json(
           {
             error: "Operation in progress",
