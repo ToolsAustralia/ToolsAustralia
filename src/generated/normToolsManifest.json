@@ -1,7 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T10:29:07.326Z",
+  "generatedAt": "2026-05-21T10:33:15.701Z",
   "endpoints": [
+    {
+      "registryKey": "pending-actions.status",
+      "tier": "read",
+      "path": "/v1/pending-actions/:id/status",
+      "method": "GET",
+      "summary": "Norm polls a pending action's resolution status"
+    },
     {
       "registryKey": "roas.summary",
       "tier": "read",

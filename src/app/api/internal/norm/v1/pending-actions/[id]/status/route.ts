@@ -1,15 +1,7 @@
-import { z } from "zod";
 import { withNorm } from "@/lib/internal-norm/withNorm";
+import { NormPendingActionStatusSchema } from "@/lib/internal-norm/schemas/pending-actions";
 import NormPendingAction from "@/models/NormPendingAction";
 import type { Document } from "mongoose";
-
-const ResponseSchema = z.object({
-  id: z.string(),
-  registryKey: z.string(),
-  status: z.enum(["pending", "approved", "denied", "expired"]),
-  resolvedAt: z.string().optional(),
-  resolutionOutcome: z.object({ ok: z.boolean(), errorCode: z.string().optional() }).optional(),
-});
 
 interface NormPendingActionDoc extends Document {
   _id: string;
@@ -20,7 +12,7 @@ interface NormPendingActionDoc extends Document {
 }
 
 export const GET = withNorm(
-  { tier: "read", registryKey: "pending-actions.status", requiredPermission: "overview.view", responseSchema: ResponseSchema },
+  { tier: "read", registryKey: "pending-actions.status", requiredPermission: "overview.view", responseSchema: NormPendingActionStatusSchema },
   async (ctx) => {
     const id = ctx.url.pathname.split("/").slice(-2, -1)[0];
     const action = await NormPendingAction.findById(id).lean() as NormPendingActionDoc | null;

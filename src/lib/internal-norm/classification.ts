@@ -1,6 +1,7 @@
 // src/lib/internal-norm/classification.ts
 import type { z } from "zod";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/permissions";
+import { NormPendingActionStatusSchema } from "./schemas/pending-actions";
 import { NormRoasSummarySchema, NormRoasBreakdownSchema } from "./schemas/roas";
 import {
   NormDashboardStatsSchema,
@@ -171,6 +172,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/pending-actions/:id/status",
     method: "GET",
     summary: "Norm polls a pending action's resolution status",
+    responseSchema: NormPendingActionStatusSchema,
   },
 
   // ─── ROAS (wired) ─────────────────────────────────────────────────────
