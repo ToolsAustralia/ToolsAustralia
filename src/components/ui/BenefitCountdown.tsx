@@ -2,20 +2,28 @@
 
 import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 interface BenefitCountdownProps {
   effectiveDate: Date;
   changeType: "upgrade" | "downgrade";
   currentBenefits: {
     packageName: string;
-    entriesPerMonth: number;
-    shopDiscountPercent: number;
+    /** Current accumulated free entries (membership balance), not base monthly grant only */
+    accumulatedEntries: number;
+    /** Share of partner-offer catalog visible for this tier (see getPartnerCatalogAccessPercentForPlanId) */
+    partnerDiscountAccessPercent: number;
+    /** Retained for caller compatibility; not rendered — subscription partner
+     * access is lifecycle-gated (shown as "While active"), not a day count. */
     partnerDiscountDays: number;
   };
   newBenefits: {
     packageName: string;
-    entriesPerMonth: number;
-    shopDiscountPercent: number;
+    /** Projected accumulated free entries after the plan change */
+    accumulatedEntries: number;
+    partnerDiscountAccessPercent: number;
+    /** Retained for caller compatibility; not rendered — see currentBenefits. */
     partnerDiscountDays: number;
   };
   onExpired?: () => void;
@@ -69,104 +77,130 @@ const BenefitCountdown: React.FC<BenefitCountdownProps> = ({
 
   if (isExpired) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <CheckCircle className="w-4 h-4 text-green-600" />
-          <span className="text-sm font-medium text-green-800">
+      <div className="rounded-lg border-2 border-green-200 bg-green-50 p-3 sm:p-4 dark:border-green-800 dark:bg-green-950/40">
+        <div className="mb-2 flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
+          <span className="text-sm font-semibold text-green-900 dark:text-green-100">
             Your {newBenefits.packageName} benefits are now active!
           </span>
         </div>
-        <div className="text-xs text-green-700">
-          You now have {newBenefits.entriesPerMonth} entries per month and {newBenefits.shopDiscountPercent}% shop
-          discount.
+        <div className="text-xs text-green-800 dark:text-green-200/90">
+          You now have {newBenefits.accumulatedEntries.toLocaleString()} accumulated free entries and{" "}
+          {newBenefits.partnerDiscountAccessPercent}% access to partner discount offers.
         </div>
       </div>
     );
   }
 
-  const getUrgencyColor = () => {
-    if (timeLeft.days <= 1) return "text-red-600";
-    if (timeLeft.days <= 3) return "text-orange-600";
-    return "text-blue-600";
-  };
+  const urgency =
+    timeLeft.days <= 1
+      ? {
+          accent: "text-red-600 dark:text-red-400",
+          border: "border-red-200 dark:border-red-800",
+          leftBar: "border-l-red-500 dark:border-l-red-500",
+        }
+      : timeLeft.days <= 3
+        ? {
+            accent: "text-orange-600 dark:text-orange-400",
+            border: "border-orange-200 dark:border-orange-800",
+            leftBar: "border-l-orange-500 dark:border-l-orange-500",
+          }
+        : {
+            accent: "text-blue-600 dark:text-blue-400",
+            border: "border-blue-200 dark:border-blue-800",
+            leftBar: "border-l-blue-500 dark:border-l-blue-400",
+          };
 
-  const getUrgencyBg = () => {
-    if (timeLeft.days <= 1) return "bg-red-50 border-red-200";
-    if (timeLeft.days <= 3) return "bg-orange-50 border-orange-200";
-    return "bg-blue-50 border-blue-200";
-  };
+  const cardFrame =
+    changeType === "downgrade"
+      ? "border-orange-200 dark:border-orange-800 border-l-4 border-l-orange-500 dark:border-l-orange-500"
+      : "border-green-200 dark:border-green-800 border-l-4 border-l-green-500 dark:border-l-green-500";
 
   return (
-    <div className={`${getUrgencyBg()} border rounded-lg p-3 sm:p-4`}>
-      <div className="flex items-center gap-2 mb-3">
-        <Clock className={`w-4 h-4 ${getUrgencyColor()}`} />
-        <span className="text-sm font-medium text-gray-800">
+    <div className={cn("rounded-lg border-2 bg-white p-3 shadow-sm sm:p-4 dark:bg-neutral-800", cardFrame)}>
+      <div className="mb-3 flex items-center gap-2">
+        <Clock className={cn("h-4 w-4 flex-shrink-0", urgency.accent)} />
+        <span className="text-sm font-semibold text-gray-900 dark:text-white">
           {changeType === "downgrade" ? "Downgrade" : "Upgrade"} scheduled
         </span>
       </div>
 
       {/* Countdown Timer */}
-      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-3">
+      <div className="mb-4 flex items-center justify-center gap-2 sm:gap-4">
         <div className="text-center">
-          <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>{timeLeft.days}</div>
-          <div className="text-xs text-gray-600">days</div>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>{timeLeft.days}</div>
+          <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">days</div>
         </div>
-        <div className="text-gray-400">:</div>
+        <div className="text-lg font-bold text-gray-400 dark:text-neutral-500">:</div>
         <div className="text-center">
-          <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>
             {timeLeft.hours.toString().padStart(2, "0")}
           </div>
-          <div className="text-xs text-gray-600">hours</div>
+          <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">hours</div>
         </div>
-        <div className="text-gray-400">:</div>
+        <div className="text-lg font-bold text-gray-400 dark:text-neutral-500">:</div>
         <div className="text-center">
-          <div className={`text-lg sm:text-xl font-bold ${getUrgencyColor()}`}>
+          <div className={cn("text-xl font-bold tabular-nums sm:text-2xl", urgency.accent)}>
             {timeLeft.minutes.toString().padStart(2, "0")}
           </div>
-          <div className="text-xs text-gray-600">min</div>
+          <div className="text-xs font-medium text-gray-600 dark:text-neutral-300">min</div>
         </div>
       </div>
 
       {/* Current Benefits */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-3 h-3 text-orange-500" />
-          <span className="text-xs text-gray-700">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="text-xs font-medium leading-snug text-gray-800 dark:text-neutral-100 sm:text-sm">
             Use your current {currentBenefits.packageName} benefits before they expire:
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="bg-white/50 rounded p-2 text-center">
-            <div className="font-medium text-gray-900">{currentBenefits.entriesPerMonth}</div>
-            <div className="text-gray-600">entries</div>
+        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
+            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+              {currentBenefits.accumulatedEntries.toLocaleString()}
+            </div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
           </div>
-          <div className="bg-white/50 rounded p-2 text-center">
-            <div className="font-medium text-gray-900">{currentBenefits.shopDiscountPercent}%</div>
-            <div className="text-gray-600">discount</div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
+            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+              {currentBenefits.partnerDiscountAccessPercent}%
+            </div>
+            <div className="text-2xs font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-2xs">
+              Partner offers access %
+            </div>
           </div>
-          <div className="bg-white/50 rounded p-2 text-center">
-            <div className="font-medium text-gray-900">{currentBenefits.partnerDiscountDays}</div>
-            <div className="text-gray-600">partner days</div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/80">
+            <div className="text-lg font-bold text-gray-900 dark:text-white">{getPartnerAccessDurationLabel({ isSubscription: true })!.short}</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner access</div>
           </div>
         </div>
       </div>
 
       {/* Next Benefits Preview */}
-      <div className="mt-3 pt-3 border-t border-gray-200">
-        <div className="text-xs text-gray-600 mb-2">Then you&apos;ll get {newBenefits.packageName} benefits:</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.entriesPerMonth}</div>
-            <div className="text-gray-500">entries</div>
+      <div className="mt-4 border-t border-gray-200 pt-4 dark:border-neutral-600">
+        <div className="mb-2 text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">
+          Then you&apos;ll get {newBenefits.packageName} benefits:
+        </div>
+        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
+            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+              {newBenefits.accumulatedEntries.toLocaleString()}
+            </div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">accumulated entries</div>
           </div>
-          <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.shopDiscountPercent}%</div>
-            <div className="text-gray-500">discount</div>
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
+            <div className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">
+              {newBenefits.partnerDiscountAccessPercent}%
+            </div>
+            <div className="text-2xs font-medium leading-tight text-gray-600 dark:text-neutral-400 sm:text-2xs">
+              Partner offers access %
+            </div>
           </div>
-          <div className="bg-white/30 rounded p-2 text-center">
-            <div className="font-medium text-gray-700">{newBenefits.partnerDiscountDays}</div>
-            <div className="text-gray-500">partner days</div>
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-2.5 text-center dark:border-neutral-600 dark:bg-neutral-900/50">
+            <div className="text-lg font-bold text-gray-900 dark:text-white">{getPartnerAccessDurationLabel({ isSubscription: true })!.short}</div>
+            <div className="text-2xs font-medium text-gray-600 dark:text-neutral-400">partner access</div>
           </div>
         </div>
       </div>

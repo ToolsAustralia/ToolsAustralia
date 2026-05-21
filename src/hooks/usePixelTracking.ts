@@ -21,7 +21,10 @@ import {
   trackTikTokSubscribe,
   trackTikTokContact,
 } from "@/components/TikTokPixel";
-import { fireMetaHybridEvent } from "@/utils/tracking/meta-hybrid";
+// Note: funnel events (ViewContent, AddToCart, InitiateCheckout, AddPaymentInfo, Lead) fire
+// Meta Pixel only. The hybrid Pixel+CAPI dispatch lives in `src/lib/tracking/dispatch.ts` and
+// is currently wired for Purchase + tier-change events. Wiring it for funnel events requires
+// a server endpoint mirror — tracked as follow-up work.
 
 export interface PixelEventParams {
   value?: number;
@@ -89,53 +92,46 @@ export function usePixelTracking() {
     };
   };
 
-  // Add to cart tracking — Meta side fires hybrid Pixel + CAPI for ad-blocker recovery
+  // Add to cart — Meta Pixel only (hostname-gated, 4-arg fbq dedup-ready inside trackFacebookEvent)
   const trackAddToCart = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fireMetaHybridEvent({
-          eventName: "AddToCart",
-          customData: buildMetaCustomData(params, { content_type: "product" }),
-        });
+        trackFacebookEvent("AddToCart", buildMetaCustomData(params, { content_type: "product" }));
       } else if (platform === "tiktok") {
         trackTikTokAddToCart(params.value || 0, params.currency || "AUD", params.productId);
       }
     });
   }, []);
 
-  // Initiate checkout tracking — hybrid Pixel + CAPI on Meta side
+  // Initiate checkout — Meta Pixel only
   const trackInitiateCheckout = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fireMetaHybridEvent({
-          eventName: "InitiateCheckout",
-          customData: buildMetaCustomData(params, { content_type: "product" }),
-        });
+        trackFacebookEvent("InitiateCheckout", buildMetaCustomData(params, { content_type: "product" }));
       } else if (platform === "tiktok") {
         trackTikTokInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
       }
     });
   }, []);
 
-  // View content tracking — hybrid Pixel + CAPI on Meta side. Custom params
-  // (content_category, content_name, brand, page_type, user_type) flow through
-  // unchanged to support catalog matching and dynamic product ads.
+  // View content — Meta Pixel only. Custom params (content_category, content_name, brand,
+  // page_type, user_type) flow through unchanged to support catalog matching and DPAs.
   const trackViewContent = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fireMetaHybridEvent({
-          eventName: "ViewContent",
-          customData: buildMetaCustomData(params, {
+        trackFacebookEvent(
+          "ViewContent",
+          buildMetaCustomData(params, {
             content_type: "product",
             platform: "tools-australia-website",
           }),
-        });
+        );
       } else if (platform === "tiktok") {
         trackTikTokViewContent(params.value || 0, params.currency || "AUD", params.productId);
       }
@@ -183,18 +179,13 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Lead tracking — hybrid Pixel + CAPI on Meta side. Lead conversions don't
-  // have a natural primary key (no orderId/paymentIntentId), so the helper
-  // generates a per-fire UUID — both Pixel and CAPI use the same value for dedup.
+  // Lead tracking — Meta Pixel only
   const trackLead = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fireMetaHybridEvent({
-          eventName: "Lead",
-          customData: buildMetaCustomData(params, { content_type: "lead" }),
-        });
+        trackFacebookEvent("Lead", buildMetaCustomData(params, { content_type: "lead" }));
       } else if (platform === "tiktok") {
         trackTikTokLead(params.value, params.currency || "AUD");
       }
@@ -227,19 +218,15 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Add payment info tracking — hybrid Pixel + CAPI on Meta side.
-  // Currently no caller (mock /checkout was removed in Phase 4). When the real
-  // shop ships, fire this once on the Pay button hover/focus or on payment
-  // form completion.
+  // Add payment info tracking — Meta Pixel only.
+  // Currently no caller (mock /checkout was removed). When the real shop ships,
+  // fire this once on payment-form completion.
   const trackAddPaymentInfo = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fireMetaHybridEvent({
-          eventName: "AddPaymentInfo",
-          customData: buildMetaCustomData(params, { content_type: "product" }),
-        });
+        trackFacebookEvent("AddPaymentInfo", buildMetaCustomData(params, { content_type: "product" }));
       } else if (platform === "tiktok") {
         // TikTok doesn't have a specific AddPaymentInfo event, use custom event
         trackTikTokEvent("AddPaymentInfo", {

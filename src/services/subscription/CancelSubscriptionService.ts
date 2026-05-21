@@ -12,15 +12,24 @@
 
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
-import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
-import { createSubscriptionCancelledEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import { handleSubscriptionQueueUpdate } from "@/utils/partner-discounts/partner-discount-queue";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import type { IUser } from "@/models/User";
+import { recordCancellationAnalytics } from "@/services/admin/membershipAnalyticsPersistence";
+import {
+  isSubscriptionReferenceError,
+  resolveCancellableStripeSubscription,
+  SUBSCRIPTION_REFERENCE_ERROR_CODES,
+} from "@/services/subscription/SubscriptionReferenceService";
 
 export interface CancelSubscriptionOptions {
   cancelAtPeriodEnd?: boolean;
+  /** Optional analytics metadata for membership dashboard history */
+  analytics?: {
+    actor: "user" | "admin";
+    adminUserId?: string;
+  };
 }
 
 export interface CancelSubscriptionResult {
@@ -52,15 +61,33 @@ export async function cancelSubscription(
   user: IUser,
   options: CancelSubscriptionOptions = {}
 ): Promise<CancelSubscriptionResult> {
-  const { cancelAtPeriodEnd = true } = options;
+  const { cancelAtPeriodEnd = true, analytics } = options;
 
-  const subscriptionId = user.stripeSubscriptionId;
-  if (!subscriptionId) {
-    throw new Error("No active subscription found");
+  let resolvedStripeSub: Stripe.Subscription;
+  try {
+    const resolved = await resolveCancellableStripeSubscription(user);
+    resolvedStripeSub = resolved.subscription;
+    if (resolved.repairedCanonicalId) {
+      user.markModified("subscription");
+      await user.save();
+    }
+  } catch (e) {
+    if (isSubscriptionReferenceError(e) && e.code === SUBSCRIPTION_REFERENCE_ERROR_CODES.NO_ACTIVE_SUBSCRIPTION) {
+      if (user.isModified("stripeSubscriptionId")) {
+        user.markModified("subscription");
+        await user.save().catch((saveErr) => {
+          console.warn("[CANCEL SUBSCRIPTION] Could not persist cleared stripeSubscriptionId:", saveErr);
+        });
+      }
+    }
+    throw e;
   }
 
+  const subscriptionId = resolvedStripeSub.id;
+
   // For past_due subscriptions, cancel immediately (no period to preserve)
-  const isPastDue = user.subscription?.status === "past_due";
+  const isPastDue =
+    resolvedStripeSub.status === "past_due" || user.subscription?.status === "past_due";
   const shouldCancelImmediately = isPastDue || !cancelAtPeriodEnd;
 
   let canceledSubscription: Stripe.Subscription;
@@ -130,18 +157,8 @@ export async function cancelSubscription(
     }, autoRenew: ${user.subscription?.autoRenew}`
   );
 
-  // Klaviyo (non-blocking)
-  try {
-    klaviyo.trackEventBackground(
-      createSubscriptionCancelledEvent(user, {
-        packageId: user.subscription?.packageId || "unknown",
-        packageName: "Subscription",
-        tier: user.subscription?.packageId || "unknown",
-      })
-    );
-  } catch (klaviyoError) {
-    console.error("❌ Klaviyo subscription cancellation event tracking failed:", klaviyoError);
-  }
+  // Cancellation event tracking is handled in Stripe webhook (customer.subscription.deleted)
+  // to avoid duplicate "Subscription Cancelled" events from both API + webhook paths.
 
   try {
     ensureUserProfileSynced(user);
@@ -151,6 +168,24 @@ export async function cancelSubscription(
 
   const responseEndDate =
     cancelAtPeriodEnd && stripeEndDate ? stripeEndDate : user.subscription?.endDate ?? null;
+
+  try {
+    await recordCancellationAnalytics(
+      user as IUser,
+      {
+        cancelledImmediately: shouldCancelImmediately,
+        subscriptionId: canceledSubscription.id,
+        status: canceledSubscription.status,
+        cancelAtPeriodEnd: canceledSubscription.cancel_at_period_end,
+        currentPeriodEnd: responseEndDate ? responseEndDate.toISOString() : null,
+        endDate: user.subscription?.endDate ? user.subscription.endDate.toISOString() : null,
+        isPastDue,
+      },
+      analytics
+    );
+  } catch (analyticsErr) {
+    console.error("⚠️ [CANCEL SUBSCRIPTION] Membership analytics history failed (non-blocking):", analyticsErr);
+  }
 
   return {
     cancelledImmediately: shouldCancelImmediately,

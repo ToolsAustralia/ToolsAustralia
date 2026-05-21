@@ -225,7 +225,7 @@ export default function KlaviyoSyncButton() {
     <>
       <button
         onClick={handleOpen}
-        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all text-xs sm:text-sm font-medium shadow-sm"
+        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all text-xs sm:text-sm font-medium shadow-sm"
         title="Sync Klaviyo Profiles"
       >
         <RefreshCw className="w-4 h-4" />
@@ -261,8 +261,8 @@ export default function KlaviyoSyncButton() {
               <div className="space-y-4">
                 {isLoadingPreview ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 text-[#ee0000] animate-spin mb-4" />
-                    <p className="text-gray-600">Loading preview...</p>
+                    <Loader2 className="w-8 h-8 text-red-600 animate-spin mb-4" />
+                    <p className="text-gray-600 dark:text-neutral-400">Loading preview...</p>
                   </div>
                 ) : previewError ? (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -307,12 +307,12 @@ export default function KlaviyoSyncButton() {
                       <h3 className="font-semibold text-gray-900 mb-3">Users to Sync</h3>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm text-gray-600">Total Participants</p>
+                          <p className="text-sm text-gray-600 dark:text-neutral-400">Total Participants</p>
                           <p className="text-2xl font-bold text-gray-900">{previewData.totalParticipants.toLocaleString()}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600">Total Users</p>
-                          <p className="text-2xl font-bold text-gray-700">{previewData.totalUsers.toLocaleString()}</p>
+                          <p className="text-sm text-gray-600 dark:text-neutral-400">Total Users</p>
+                          <p className="text-2xl font-bold text-gray-700 dark:text-neutral-200">{previewData.totalUsers.toLocaleString()}</p>
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-2">
@@ -333,15 +333,15 @@ export default function KlaviyoSyncButton() {
                           <table className="w-full text-sm">
                             <thead className="bg-gray-50 sticky top-0">
                               <tr>
-                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Email</th>
-                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Name</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200">Email</th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-neutral-200">Name</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                               {previewData.sampleUsers.map((user) => (
                                 <tr key={user.userId} className="hover:bg-gray-50">
                                   <td className="px-4 py-2 text-gray-900">{user.email}</td>
-                                  <td className="px-4 py-2 text-gray-600">{user.name || "-"}</td>
+                                  <td className="px-4 py-2 text-gray-600 dark:text-neutral-400">{user.name || "-"}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -354,14 +354,14 @@ export default function KlaviyoSyncButton() {
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={handleClose}
-                        className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                        className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleExecute}
                         disabled={isExecuting}
-                        className="flex-1 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Continue to Sync
                       </button>
@@ -374,7 +374,7 @@ export default function KlaviyoSyncButton() {
             {/* Executing Step */}
             {step === "executing" && (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <Loader2 className="w-12 h-12 text-[#ee0000] animate-spin mb-4" />
+                <Loader2 className="w-12 h-12 text-red-600 animate-spin mb-4" />
                 <p className="text-lg font-semibold text-gray-900 mb-2">Syncing profiles to Klaviyo...</p>
                 
                 {progress && (
@@ -382,7 +382,7 @@ export default function KlaviyoSyncButton() {
                     {/* Progress Bar */}
                     <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                       <div
-                        className="bg-gradient-to-r from-[#ee0000] to-[#ff4444] h-3 rounded-full transition-all duration-300"
+                        className="bg-gradient-to-r from-red-600 to-red-400 h-3 rounded-full transition-all duration-300"
                         style={{
                           width: `${progress.total > 0 ? (progress.processed / progress.total) * 100 : 0}%`,
                         }}
@@ -395,11 +395,11 @@ export default function KlaviyoSyncButton() {
                         Processing: {progress.processed.toLocaleString()} / {progress.total.toLocaleString()} users
                       </p>
                       {progress.currentUserEmail && (
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-gray-600 dark:text-neutral-400">
                           Current: {progress.currentUserEmail}
                         </p>
                       )}
-                      <div className="flex items-center justify-center gap-4 text-xs text-gray-600 mt-2">
+                      <div className="flex items-center justify-center gap-4 text-xs text-gray-600 dark:text-neutral-400 mt-2">
                         <span className="text-green-600">✓ Synced: {progress.synced.toLocaleString()}</span>
                         {progress.errors > 0 && (
                           <span className="text-red-600">✗ Errors: {progress.errors.toLocaleString()}</span>
@@ -410,7 +410,7 @@ export default function KlaviyoSyncButton() {
                 )}
                 
                 {!progress && (
-                  <p className="text-sm text-gray-600">Initializing sync... Please wait.</p>
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">Initializing sync... Please wait.</p>
                 )}
                 
                 <p className="text-xs text-gray-500 mt-4">This may take a few minutes. Please do not close this window.</p>
@@ -487,7 +487,7 @@ export default function KlaviyoSyncButton() {
                 <div className="pt-4">
                   <button
                     onClick={handleClose}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all font-medium"
+                    className="w-full px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-700 hover:to-red-650 transition-all font-medium"
                   >
                     Close
                   </button>

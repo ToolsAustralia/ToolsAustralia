@@ -1,54 +1,168 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
-import { motion } from "framer-motion";
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { motion, animate, useMotionValue, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePromoByType, useEffectiveForBanner } from "@/hooks/queries/usePromoQueries";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useMajorDrawCountdown, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 import { useActivePromoBannerText } from "@/hooks/queries/usePromoBannerTextQueries";
 import { useCurrentAlternatingMultipliers } from "@/hooks/queries/useAlternatingMultiplierQueries";
-import { getNextMidnightAEST, convertUTCToAEST, formatDateInAEST } from "@/utils/common/timezone";
-import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-
-// AEST/AEDT timezone identifier (matches timezone.ts)
-const AEST_TIMEZONE = "Australia/Sydney";
+import { getNextMidnightAEST, convertUTCToAEST } from "@/utils/common/timezone";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
-import { calculateFontSize } from "@/utils/promo-banner/font-size-calculator";
-import { getAlternatingDefaultText } from "@/utils/promo-banner/default-text-manager";
-import { resolveBadgeText } from "@/utils/promo-banner/resolve-badge-text";
 import { resolveCountdownDisplay, formatTimeLeft, MS_24H } from "@/utils/promo-banner/countdown-mode";
-import { NO_PROMO_BADGE, NO_PROMO_MAIN_LINE, NO_PROMO_RIGHT_LABEL, GAP_PERIOD_BADGE_TEXT, GAP_PERIOD_MAIN_LINE } from "@/constants/promo-banner";
+import { resolvePromoBannerLeftVisual } from "@/utils/promo-banner/resolve-promo-banner-left-visual";
+import type { HolidayPromoSlot } from "@/utils/promo-banner/holiday-promo-banner";
+import { readInitialHolidayDevSlotForClient } from "@/utils/promo-banner/holiday-promo-banner";
+import { PromoHolidayDevToolbar } from "./PromoHolidayDevToolbar";
+import { NO_PROMO_RIGHT_LABEL } from "@/constants/promo-banner";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import { UrgencyClockIcon } from "@/components/ui";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import Image from "next/image";
+import { hasBundledMultiplierAssets, isPromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
+import { addThrottledResize } from "@/utils/dom/listenerHelpers";
 
-// Helper function to get current timezone abbreviation (AEST or AEDT)
-const getTimezoneAbbr = (): string => {
-  try {
-    const now = new Date();
-    const AEST_TIMEZONE = "Australia/Sydney";
-    const formatter = new Intl.DateTimeFormat("en-AU", {
-      timeZone: AEST_TIMEZONE,
-      timeZoneName: "short",
-    });
-    const parts = formatter.formatToParts(now);
-    const tzPart = parts.find((part) => part.type === "timeZoneName");
-    return tzPart?.value || "AEDT"; // Default to AEDT if not found
-  } catch {
-    // Fallback: check offset to determine AEST (UTC+10) vs AEDT (UTC+11)
-    const now = new Date();
-    const AEST_TIMEZONE = "Australia/Sydney";
-    const zonedDate = toZonedTime(now, AEST_TIMEZONE);
-    const utcTime = now.getTime();
-    const zonedTime = zonedDate.getTime();
-    const offsetHours = (utcTime - zonedTime) / (1000 * 60 * 60);
-    return offsetHours === -10 ? "AEST" : "AEDT";
+/**
+ * X2 / X10 multiplier badge — only used here. Anchored to the countdown cluster’s
+ * `relative inline-flex flex-col items-end` wrapper (`items-end` = top-right of that box).
+ * Tweak size/offset here; Tailwind must see full class strings (no dynamic assembly).
+ */
+const PROMO_BANNER_MULTIPLIER_BADGE = {
+  root: "absolute z-30 pointer-events-none select-none object-contain origin-top-right max-w-none",
+  /** Floating pill after scroll — max-[360px] mirrors left-art tighten (see img max-[360px]:h-*) */
+  layoutScrolled:
+    "-top-5 -right-4 h-[calc(3rem+2px)] w-[calc(3rem+2px)] max-[400px]:-top-3 max-[360px]:-right-1.5 max-[360px]:h-[calc(2rem+2px)] max-[360px]:w-[calc(2rem+2px)] min-[361px]:max-[500px]:-top-3.5 min-[361px]:max-[500px]:-right-2 min-[361px]:max-[500px]:h-[calc(2.25rem+2px)] min-[361px]:max-[500px]:w-[calc(2.25rem+2px)] sm:-top-7 sm:-right-7 sm:h-[calc(4rem+2px)] sm:w-[calc(4rem+2px)] lg:-top-8 lg:-right-8 lg:h-[calc(4.5rem+2px)] lg:w-[calc(4.5rem+2px)]",
+  /** Full-width bar (not yet sticky) — mobile: keep badge inside safe area */
+  layoutBar:
+    "-top-3.5 -right-2 h-[calc(3rem+2px)] w-[calc(3rem+2px)] max-[400px]:-top-3 max-[360px]:-right-1.5 max-[360px]:h-[calc(2rem+2px)] max-[360px]:w-[calc(2rem+2px)] min-[361px]:max-[500px]:-top-3.5 min-[361px]:max-[500px]:-right-2 min-[361px]:max-[500px]:h-[calc(2.25rem+2px)] min-[361px]:max-[500px]:w-[calc(2.25rem+2px)] sm:-top-7 sm:-right-7 sm:h-[calc(3.5rem+2px)] sm:w-[calc(3.5rem+2px)] lg:-top-8 lg:-right-8 lg:h-[calc(4rem+2px)] lg:w-[calc(4rem+2px)]",
+  dropShadow: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))",
+} as const;
+
+type PromoBannerCountdownSegment = { value: string; label: string };
+
+/**
+ * Single timer strip: hairline dividers (reliable on all fonts — avoids “=” glyph bugs from Unicode colons).
+ */
+function PromoBannerUnifiedCountdown({
+  segments,
+  textClassName,
+  labelClassName,
+  surfaceStyle,
+  size = "default",
+}: {
+  segments: PromoBannerCountdownSegment[];
+  textClassName: string;
+  labelClassName: string;
+  surfaceStyle: CSSProperties;
+  size?: "compact" | "default";
+}) {
+  const isCompact = size === "compact";
+  /* Left promo art uses max-[360px]:h-* ~0.87× the base mobile h-* — mirror that on typography + padding below */
+  const numCn = isCompact
+    ? `${textClassName} font-black font-sans tracking-tight tabular-nums text-[13px] leading-none max-[360px]:text-2xs sm:text-sm md:text-base lg:text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`
+    : `${textClassName} font-black font-sans tracking-tight tabular-nums text-[15px] leading-none max-[360px]:text-[13px] sm:text-xl md:text-2xl lg:text-3xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]`;
+  const labelCn = isCompact
+    ? `${labelClassName} font-semibold uppercase tracking-[0.12em] text-3xs max-[360px]:text-[7px] sm:text-3xs md:text-3xs lg:text-2xs mt-0.5 opacity-95`
+    : `${labelClassName} font-semibold uppercase tracking-[0.12em] text-[7.5px] max-[360px]:text-[6.5px] sm:text-3xs md:text-2xs lg:text-xs mt-0.5 sm:mt-1 opacity-95`;
+
+  const segmentCount = segments.length;
+  /* Timer: slightly wider cap on mobile than before; ≤360px tighter cap (tracks left column %) */
+  const panelWidthClasses = isCompact
+    ? "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,20rem)] md:min-w-[11.5rem] lg:min-w-[12rem] xl:min-w-[13rem]"
+    : segmentCount >= 4
+      ? "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,24rem)] md:min-w-[15rem] lg:min-w-[19rem] xl:min-w-[22rem]"
+      : "mx-1.5 min-w-0 w-auto max-w-[min(100%,calc(100vw-8.25rem))] max-[360px]:max-w-[min(100%,calc(100vw-9.25rem))] sm:max-w-[min(100%,22rem)] md:min-w-[13rem] lg:min-w-[17rem] xl:min-w-[21rem]";
+
+  const segmentShell = isCompact
+    ? "flex min-w-0 flex-1 flex-col items-center justify-center px-1.5 py-0 max-[360px]:px-1 sm:px-2.5 md:px-3 lg:px-4"
+    : "flex min-w-0 flex-1 flex-col items-center justify-center px-2 py-0 max-[360px]:px-1.5 sm:px-2.5 md:px-3 lg:px-4";
+
+  return (
+    <div
+      className={[
+        "relative isolate overflow-hidden rounded-lg border border-white/25 sm:rounded-xl md:rounded-2xl",
+        panelWidthClasses,
+        isCompact
+          ? "px-3 py-1 max-[360px]:px-2 max-[360px]:py-0.5 sm:px-5 sm:py-1.5 md:px-6 md:py-2 lg:px-8 lg:py-2.5"
+          : "px-3.5 py-2 max-[360px]:px-2.5 max-[360px]:py-1.5 sm:px-5 sm:py-1.5 md:px-6 md:py-2 lg:px-8 lg:py-2.5",
+        "shadow-[0_1px_0_rgba(255,255,255,0.14)_inset,0_-2px_0_rgba(0,0,0,0.18)_inset,0_8px_24px_rgba(0,0,0,0.4),0_2px_8px_rgba(0,0,0,0.25)]",
+        "ring-1 ring-white/10",
+      ].join(" ")}
+      style={surfaceStyle}
+      role="timer"
+      aria-live="polite"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.15] via-transparent to-black/15"
+        aria-hidden
+      />
+      <div className="relative flex items-stretch justify-center">
+        {segments.map((seg, i) => (
+          <Fragment key={`${seg.label}-${i}`}>
+            {i > 0 ? (
+              <div
+                className="w-px flex-shrink-0 bg-gradient-to-b from-transparent via-white/35 to-transparent sm:w-px sm:via-white/30"
+                aria-hidden
+              />
+            ) : null}
+            <div className={segmentShell}>
+              <span className={numCn}>{seg.value}</span>
+              <span className={labelCn}>{seg.label}</span>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Leaf component owning the 1s tick for the right-side countdown surfaces.
+ * Lives in PromoBanner so the parent does not re-render every second; only this
+ * leaf does. The render prop receives `now` (ms) and returns the JSX (typically
+ * a <PromoBannerUnifiedCountdown>).
+ */
+function PromoBannerCountdownTickLeaf({
+  render,
+}: {
+  render: (now: number) => ReactNode;
+}) {
+  const now = useLeafTimer(1000);
+  return <>{render(now)}</>;
+}
+
+/** Easing for bar ↔ floating pill morph (scroll state). */
+const SCROLL_STATE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
+
+/** FLIP: match Tailwind `top-4` + responsive horizontal insets (`left-2` / `sm:left-8` / `lg:left-16`). */
+function getFloatTargetRects() {
+  if (typeof window === "undefined") {
+    return { top: 16, left: 8, width: 400 };
   }
-};
+  const fs = parseFloat(getComputedStyle(document.documentElement).fontSize || "16");
+  const rem = (n: number) => n * fs;
+  const vw = window.innerWidth;
+  let leftInset = rem(0.5);
+  if (vw >= 1024) leftInset = rem(4);
+  else if (vw >= 640) leftInset = rem(2);
+  return {
+    top: rem(1),
+    left: leftInset,
+    width: Math.max(0, vw - leftInset * 2),
+  };
+}
+
+const BANNER_SHADOW_REST =
+  "0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.3)";
+const BANNER_SHADOW_FLOAT =
+  "0 14px 44px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.32)";
 
 /**
  * PromoBanner Component
@@ -67,9 +181,12 @@ interface PromoBannerProps {
 
 export default function PromoBanner({ initialMembershipPromo, initialOneTimePromo }: PromoBannerProps) {
   const theme = usePromoTheme();
+  const slug = usePromoThemeStore((s) => s.slug);
+  const toolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
   const preferDark = theme.preferDarkBackground ?? false;
   const rightSectionTextClass = preferDark ? "text-black" : "text-white";
-  const rightSectionLabelClass = preferDark ? "text-gray-800" : "text-red-100";
+  /** Bright gradient tile (e.g. Ryobi lime): keep labels dark in light + dark site theme — `dark:text-neutral-100` was near-white on lime and unreadable. */
+  const rightSectionLabelClass = preferDark ? "text-black" : "text-red-100";
   const pathname = usePathname();
   const { isAnySidebarOpen } = useSidebar();
   const { targetDateMs, currentDraw } = useMajorDrawCountdown();
@@ -80,6 +197,10 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const isGapPeriod = currentDraw?.status !== "active";
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
 
+  const [holidayDevPreview, setHolidayDevPreview] = useState<HolidayPromoSlot | null>(() =>
+    readInitialHolidayDevSlotForClient()
+  );
+
   // User context for member+one-time tab multiplier resolution (align with MembershipSection)
   const { userData } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
@@ -88,68 +209,32 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   // Get variant config from context (wait for variant to resolve so we know countdown mode etc.)
   const { variantConfig, isLoading: isVariantLoading } = useVariantContext();
 
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  const [freezeTimeLeft, setFreezeTimeLeft] = useState({
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  const [scheduledEndTimeLeft, setScheduledEndTimeLeft] = useState<{
-    days?: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
-  }>({ hours: 0, minutes: 0, seconds: 0 });
-
-  const [gapPeriodTimeLeft, setGapPeriodTimeLeft] = useState({
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
+  /** Kept in sync via a low-frequency tick so static left art can switch at the 48h boundary. */
+  const [within48HoursOfFreeze, setWithin48HoursOfFreeze] = useState(false);
 
   const [isScrolled, setIsScrolled] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+  /** Pixel layout for fixed pill (FLIP enter/resize); unused when not scrolled. */
+  const floatTop = useMotionValue(0);
+  const floatLeft = useMotionValue(0);
+  const floatWidth = useMotionValue(0);
+  const shouldAnimateFloatEnter = useRef(false);
+  /** Active FLIP / resize animations — must stop when leaving fixed mode or Motion can leave stale inline geometry. */
+  const floatLayoutAnimRef = useRef<Array<{ stop: () => void }>>([]);
   const bannerRef = useRef<HTMLDivElement>(null);
   const [bannerHeight, setBannerHeight] = useState<number | null>(null);
-  const [timezoneAbbr, setTimezoneAbbr] = useState<string>("AEDT");
-  const [isMobile, setIsMobile] = useState(false);
-  const [isNarrow, setIsNarrow] = useState(false); // 360px and below
   const [isContentReady, setIsContentReady] = useState(false);
 
   // Fetch active scheduled banner text
   const { data: activeBannerTextData } = useActivePromoBannerText();
-  const activeScheduledText = activeBannerTextData?.data?.text;
+  const activeBannerSchedule = activeBannerTextData?.data ?? null;
 
   // Fetch current alternating multipliers
   const { data: currentAlternatingMultipliers } = useCurrentAlternatingMultipliers();
 
-  // Store alternating default text in state - only updates once per day (AEST)
-  // Always calculate correctly - getAlternatingDefaultText() works on both server and client
-  const [alternatingDefault, setAlternatingDefault] = useState<string>(() => {
-    return getAlternatingDefaultText();
-  });
-
   // Store alternating multiplier in state - only updates once per day (AEST)
   // Initialize to null to avoid hydration mismatch (will be set in useEffect)
   const [alternatingMultiplier, setAlternatingMultiplier] = useState<number | null>(null);
-
-  // Detect mobile and narrow viewport for font sizing and padding
-  useEffect(() => {
-    const checkViewport = () => {
-      const w = window.innerWidth;
-      setIsMobile(w < 640); // sm breakpoint
-      setIsNarrow(w <= 360);
-    };
-    checkViewport();
-    window.addEventListener("resize", checkViewport);
-    return () => window.removeEventListener("resize", checkViewport);
-  }, []);
 
   // Effective-for-banner: multiplier, source, scheduled meta (for countdown mode and badge)
   // When member toggles to one-time tab, they see additional packages which use membership promo
@@ -158,6 +243,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const effectivePromoTypeForBanner =
     activeTab === "one-time" && hasAccessToAdditionalPackages ? "membership-packages" : baseType;
   const effectiveEntry = effectiveForBanner?.[effectivePromoTypeForBanner];
+  // Right-side countdown: when one-time tab is selected, use membership's entry so it behaves the same (e.g. 24hr countdown)
+  const effectiveEntryForCountdown =
+    activeTab === "one-time"
+      ? (effectiveForBanner?.["membership-packages"] ?? effectiveEntry)
+      : effectiveEntry;
 
   // Promo "fully resolved" = we know for sure whether there is an active promo or no-promo state
   const isPromoResolved =
@@ -168,87 +258,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
   const { data: oneTimePromoClient } = usePromoByType("one-time-packages");
   const membershipPromo = initialMembershipPromo || membershipPromoClient;
   const oneTimePromo = initialOneTimePromo || oneTimePromoClient;
-
-  // Get timezone abbreviation on mount and update periodically
-  useEffect(() => {
-    setTimezoneAbbr(getTimezoneAbbr());
-    // Update timezone every hour in case DST changes
-    const interval = setInterval(() => {
-      setTimezoneAbbr(getTimezoneAbbr());
-    }, 60 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Helper function to get current date string in AEST (YYYY-MM-DD format)
-  // Uses formatInTimeZone to ensure we get the correct AEST date, not local timezone
-  const getCurrentDateStringAEST = (): string => {
-    const now = new Date();
-    return formatInTimeZone(now, AEST_TIMEZONE, "yyyy-MM-dd");
-  };
-
-
-  // Updates alternating default text when date changes
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let lastDateStr = getCurrentDateStringAEST();
-
-    const checkDateChange = () => {
-      const currentDateStr = getCurrentDateStringAEST();
-      if (currentDateStr !== lastDateStr) {
-        // Date changed - update alternating default text
-        lastDateStr = currentDateStr;
-        setAlternatingDefault(getAlternatingDefaultText());
-      }
-    };
-
-    // Check immediately on mount and update state
-    checkDateChange();
-    
-    // Also force an immediate update on mount to ensure correct text is shown
-    // This handles cases where the page was loaded before date change
-    setAlternatingDefault(getAlternatingDefaultText());
-
-    // Set up interval to check for date changes (every minute is sufficient)
-    // This ensures the text updates at midnight AEST
-    const interval = setInterval(checkDateChange, 60 * 1000); // Check every minute
-
-    // Development helper: Expose testing function to window
-    if (process.env.NODE_ENV === "development") {
-      type WindowWithTest = Window & {
-        testPromoBannerDateChange?: () => { date: string; text: string };
-      };
-      (window as WindowWithTest).testPromoBannerDateChange = () => {
-        const currentDateStr = getCurrentDateStringAEST();
-        const currentText = getAlternatingDefaultText();
-        setAlternatingDefault(currentText);
-        console.log("✅ Manually triggered promo banner date change check");
-        console.log("📅 Current AEST date:", currentDateStr);
-        console.log("📝 Current alternating text:", currentText);
-        console.log("🔄 Component state will update...");
-        return {
-          date: currentDateStr,
-          text: currentText,
-        };
-      };
-    }
-
-    // Cleanup on unmount
-    return () => {
-      clearInterval(interval);
-      
-      // Remove test function in development mode
-      if (process.env.NODE_ENV === "development") {
-        type WindowWithTest = Window & {
-          testPromoBannerDateChange?: () => { date: string; text: string };
-        };
-        const windowWithTest = window as WindowWithTest;
-        if (windowWithTest.testPromoBannerDateChange) {
-          delete windowWithTest.testPromoBannerDateChange;
-        }
-      }
-    };
-  }, []);
 
   // Determine which promo to display based on effective promo type (aligns with multiplier resolution)
   const getActivePromo = () => {
@@ -301,100 +310,6 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     }
   }, [currentAlternatingMultipliers, effectivePromoTypeForBanner, activePromo]); // eslint-disable-line react-hooks/exhaustive-deps -- activeTab only used in dev log; effectivePromoTypeForBanner captures tab
 
-  // Countdown strategy:
-  // - If within 48h of freeze/draw, show precise countdown to freeze (24h tiles but hours can run >24).
-  // - Otherwise keep the 24h business-day loop to next midnight AEST.
-  useEffect(() => {
-    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
-    const updateCountdown = () => {
-      const now = Date.now();
-      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
-
-      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
-        // Business-day loop to next midnight AEST
-        const nextMidnight = getNextMidnightAEST();
-        const diffMs = Math.max(0, nextMidnight.getTime() - now);
-        const totalSeconds = Math.floor(diffMs / 1000);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-
-        setTimeLeft((prev) =>
-          prev.hours === h && prev.minutes === m && prev.seconds === s
-            ? prev
-            : { days: 0, hours: h, minutes: m, seconds: s }
-        );
-        return;
-      }
-
-      // Within 48h: precise freeze countdown (aggregate hours for clarity)
-      const totalSeconds = Math.floor(freezeMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s
-          ? prev
-          : { days: 0, hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateCountdown();
-    const timer = setInterval(updateCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [targetDateMs]);
-
-  // Countdown to next draw activation during gap period (gates closed)
-  useEffect(() => {
-    if (!nextDraw?.activationDate) return;
-
-    const updateGapCountdown = () => {
-      const now = Date.now();
-      const activationMs = new Date(nextDraw.activationDate!).getTime();
-      const remainingMs = Math.max(0, activationMs - now);
-      const totalSeconds = Math.floor(remainingMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setGapPeriodTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s ? prev : { hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateGapCountdown();
-    const timer = setInterval(updateGapCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [nextDraw?.activationDate]);
-
-  // Separate countdown for freeze time when draw is tonight
-  useEffect(() => {
-    if (!currentDraw?.freezeEntriesAt) return;
-
-    const updateFreezeCountdown = () => {
-      const now = Date.now();
-      const freezeDate = new Date(currentDraw.freezeEntriesAt!).getTime();
-      const freezeMs = Math.max(0, freezeDate - now);
-
-      const totalSeconds = Math.floor(freezeMs / 1000);
-      const h = Math.floor(totalSeconds / 3600);
-      const m = Math.floor((totalSeconds % 3600) / 60);
-      const s = totalSeconds % 60;
-
-      setFreezeTimeLeft((prev) =>
-        prev.hours === h && prev.minutes === m && prev.seconds === s
-          ? prev
-          : { hours: h, minutes: m, seconds: s }
-      );
-    };
-
-    updateFreezeCountdown();
-    const timer = setInterval(updateFreezeCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [currentDraw?.freezeEntriesAt]);
-
   // Listen for tab changes from MembershipSection
   useEffect(() => {
     const handleTabChange = (event: CustomEvent<{ activeTab: "membership" | "one-time" }>) => {
@@ -408,34 +323,132 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
     };
   }, []);
 
+  const applyScrollThreshold = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const scrollY = window.scrollY;
+    const isMobile = window.innerWidth < 1024;
+    const scrollThreshold = isMobile ? 100 : 200;
+    const nextScrolled = scrollY > scrollThreshold;
+
+    setIsScrolled((prev) => {
+      // FLIP: capture in-flow rect before switching to fixed so we can animate (no teleport to top-4).
+      if (nextScrolled && !prev && bannerRef.current) {
+        const r = bannerRef.current.getBoundingClientRect();
+        floatTop.set(r.top);
+        floatLeft.set(r.left);
+        floatWidth.set(r.width);
+        shouldAnimateFloatEnter.current = true;
+      }
+      return nextScrolled;
+    });
+  }, [floatTop, floatLeft, floatWidth]);
+
   // Handle scroll detection - show fixed banner when user scrolls past threshold, revert when back to top
   useEffect(() => {
     let ticking = false;
 
     const handleScroll = () => {
       if (!ticking) {
+        ticking = true;
         window.requestAnimationFrame(() => {
-          const scrollY = window.scrollY;
-          // Trigger fixed position with minimal scroll on mobile, more on desktop
-          const isMobile = window.innerWidth < 1024;
-          const scrollThreshold = isMobile ? 100 : 200;
-
-          // Toggle based on scroll position - can go back and forth
-          setIsScrolled(scrollY > scrollThreshold);
-
+          applyScrollThreshold();
           ticking = false;
         });
-        ticking = true;
       }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll(); // Initial check
+    handleScroll();
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
     };
-  }, []);
+  }, [applyScrollThreshold]);
+
+  // After paint / route change: re-sync scroll state so bar mode geometry isn’t wrong for one frame (full-bleed + sticky FLIP).
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) applyScrollThreshold();
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [pathname, applyScrollThreshold]);
+
+  // Leaving fixed mode: stop all FLIP/resize animations and reset motion values so nothing stays "inset" on the bar.
+  useLayoutEffect(() => {
+    if (isScrolled) return;
+    floatLayoutAnimRef.current.forEach((a) => a.stop());
+    floatLayoutAnimRef.current = [];
+    floatTop.set(0);
+    floatLeft.set(0);
+    floatWidth.set(0);
+  }, [isScrolled, floatTop, floatLeft, floatWidth]);
+
+  // After switching to fixed, animate top/left/width from measured rect → floating pill (FLIP).
+  // useLayoutEffect avoids one frame at wrong position; handles prefers-reduced-motion + fallback snap.
+  useLayoutEffect(() => {
+    if (!isScrolled) return;
+
+    const tgt = getFloatTargetRects();
+
+    if (prefersReducedMotion) {
+      floatTop.set(tgt.top);
+      floatLeft.set(tgt.left);
+      floatWidth.set(tgt.width);
+      return;
+    }
+
+    if (floatWidth.get() < 8) {
+      floatTop.set(tgt.top);
+      floatLeft.set(tgt.left);
+      floatWidth.set(tgt.width);
+      return;
+    }
+
+    if (!shouldAnimateFloatEnter.current) return;
+    shouldAnimateFloatEnter.current = false;
+
+    const transition = { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const };
+    const c1 = animate(floatTop, tgt.top, transition);
+    const c2 = animate(floatLeft, tgt.left, transition);
+    const c3 = animate(floatWidth, tgt.width, transition);
+    floatLayoutAnimRef.current = [c1, c2, c3];
+    return () => {
+      c1.stop();
+      c2.stop();
+      c3.stop();
+      floatLayoutAnimRef.current = [];
+    };
+  }, [isScrolled, prefersReducedMotion, floatTop, floatLeft, floatWidth]);
+
+  // Keep pill aligned with viewport when resized while floating.
+  useEffect(() => {
+    if (!isScrolled) return;
+
+    const syncFloatLayout = () => {
+      const tgt = getFloatTargetRects();
+      floatLayoutAnimRef.current.forEach((a) => a.stop());
+      floatLayoutAnimRef.current = [];
+      if (prefersReducedMotion) {
+        floatTop.set(tgt.top);
+        floatLeft.set(tgt.left);
+        floatWidth.set(tgt.width);
+        return;
+      }
+      const c1 = animate(floatTop, tgt.top, { duration: 0.2, ease: "easeOut" });
+      const c2 = animate(floatLeft, tgt.left, { duration: 0.2, ease: "easeOut" });
+      const c3 = animate(floatWidth, tgt.width, { duration: 0.2, ease: "easeOut" });
+      floatLayoutAnimRef.current = [c1, c2, c3];
+    };
+
+    return addThrottledResize(syncFloatLayout);
+  }, [isScrolled, prefersReducedMotion, floatTop, floatLeft, floatWidth]);
 
   // Resolve multiplier: Variant config > Effective-for-banner for current tab
   const multiplier = useMemo(() => {
@@ -449,187 +462,165 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
 
   const isNoPromo = multiplier === null && variantConfig?.banner?.multiplier === undefined;
 
-  // Helper function to determine if draw is today or tomorrow (in AEST)
-  const getDrawDateStatus = (): "today" | "tomorrow" | null => {
+  // Helper: draw is today or tomorrow (in AEST)
+  const getDrawDateStatus = useCallback((): "today" | "tomorrow" | null => {
     if (!currentDraw?.drawDate) return null;
 
     const drawDateUTC = new Date(currentDraw.drawDate);
     const drawDateAEST = convertUTCToAEST(drawDateUTC);
     const nowAEST = convertUTCToAEST(new Date());
 
-    // Compare calendar days (YYYY-MM-DD)
     const drawDateStr = `${drawDateAEST.getFullYear()}-${String(drawDateAEST.getMonth() + 1).padStart(2, "0")}-${String(drawDateAEST.getDate()).padStart(2, "0")}`;
     const todayStr = `${nowAEST.getFullYear()}-${String(nowAEST.getMonth() + 1).padStart(2, "0")}-${String(nowAEST.getDate()).padStart(2, "0")}`;
 
-    // Calculate tomorrow's date string
     const tomorrowAEST = new Date(nowAEST);
     tomorrowAEST.setDate(tomorrowAEST.getDate() + 1);
     const tomorrowStr = `${tomorrowAEST.getFullYear()}-${String(tomorrowAEST.getMonth() + 1).padStart(2, "0")}-${String(tomorrowAEST.getDate()).padStart(2, "0")}`;
 
     if (drawDateStr === todayStr) {
       return "today";
-    } else if (drawDateStr === tomorrowStr) {
+    }
+    if (drawDateStr === tomorrowStr) {
       return "tomorrow";
     }
 
     return null;
-  };
+  }, [currentDraw?.drawDate]);
 
-  // Scheduled promo state: badge "LAST CHANCE"/"ENDS TONIGHT" + right "PROMO ENDING"/countdown (split-test winner default)
+  // Scheduled promo state: badge (e.g. ends-tonight family) + right "PROMO ENDING"/countdown (split-test winner default)
+  // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
   const scheduledPromoState = useMemo(() => {
-    const hasScheduledPromo = effectiveEntry?.source === "scheduled" && effectiveEntry?.scheduledEndDate;
+    const hasScheduledPromo = effectiveEntryForCountdown?.source === "scheduled" && effectiveEntryForCountdown?.scheduledEndDate;
     if (!hasScheduledPromo) return { hasScheduledPromo: false as const, isUrgent: false };
-    const endMs = new Date(effectiveEntry!.scheduledEndDate!).getTime();
+    const endMs = new Date(effectiveEntryForCountdown!.scheduledEndDate!).getTime();
     const timeLeftMs = endMs - Date.now();
     const isUrgent = timeLeftMs > 0 && timeLeftMs <= MS_24H;
     return { hasScheduledPromo: true, isUrgent };
-  }, [effectiveEntry?.source, effectiveEntry?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntry object identity unstable; source/scheduledEndDate sufficient
+  }, [effectiveEntryForCountdown?.source, effectiveEntryForCountdown?.scheduledEndDate]); // eslint-disable-line react-hooks/exhaustive-deps -- effectiveEntryForCountdown object identity unstable; source/scheduledEndDate sufficient
 
-  // Badge text (gold pill): gap period → no-promo → draw status → variant override → scheduled promo default → 10x → scheduled text → alternating default
-  const badgeText = useMemo(() => {
-    if (isGapPeriod) return GAP_PERIOD_BADGE_TEXT;
-    if (isNoPromo) return NO_PROMO_BADGE;
+  const leftVisual = useMemo(() => {
     const drawStatus = getDrawDateStatus();
-    // Draw status takes priority (DRAWN TONIGHT / DRAWN TOMORROW)
-    if (drawStatus === "today") return "DRAWN TONIGHT";
-    if (drawStatus === "tomorrow") return "DRAWN TOMORROW";
-    // Variant override (split test) — must run before scheduled promo default so split tests can override
-    if (variantConfig?.banner?.badgeText?.trim()) {
-      return variantConfig.banner.badgeText.trim();
-    }
-    // One-time: when there is no scheduled promo configured, keep the winning urgency copy
-    // instead of falling back to the alternating default text.
-    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo) {
-      return "LAST CHANCE";
-    }
-    // Scheduled promo default: LAST CHANCE (>=24h) or ENDS TONIGHT (<24h) — AB test winner
-    if (scheduledPromoState.hasScheduledPromo) {
-      return scheduledPromoState.isUrgent ? "ENDS TONIGHT" : "LAST CHANCE";
-    }
-    return resolveBadgeText({
-      variantBadgeText: undefined, // Already checked above
-      drawStatus,
-      activeScheduledText: activeScheduledText ?? undefined,
-      alternatingDefault,
+    return resolvePromoBannerLeftVisual({
+      variantLeftImageUrl: variantConfig?.banner?.leftImageUrl,
+      scheduledImageUrl: activeBannerSchedule?.imageUrl,
+      scheduledAltText: activeBannerSchedule?.altText,
+      slug,
+      toolsetSlug,
+      drawIsToday: drawStatus === "today",
+      within48HoursOfFreeze,
+      scheduledPromoUrgent: scheduledPromoState.hasScheduledPromo && scheduledPromoState.isUrgent,
+      hasScheduledPromo: scheduledPromoState.hasScheduledPromo,
       multiplier,
+      holidayDevPreview: process.env.NODE_ENV === "development" ? holidayDevPreview : null,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; avoid fn-in-deps
   }, [
-    isGapPeriod,
-    isNoPromo,
-    activeTab,
-    scheduledPromoState,
-    variantConfig?.banner?.badgeText,
-    currentDraw?.drawDate,
-    activeScheduledText,
-    alternatingDefault,
+    variantConfig?.banner?.leftImageUrl,
+    activeBannerSchedule?.imageUrl,
+    activeBannerSchedule?.altText,
+    slug,
+    toolsetSlug,
+    within48HoursOfFreeze,
+    scheduledPromoState.hasScheduledPromo,
+    scheduledPromoState.isUrgent,
     multiplier,
+    getDrawDateStatus,
+    holidayDevPreview,
   ]);
 
+  const isDrawnTomorrowLeftArt = leftVisual.staticFamily === "drawn-tomorrow";
+  const isHolidayLeftArt = leftVisual.isHolidayVisual === true;
+
+  const leftVisualStaticUrls = useMemo(() => {
+    if (leftVisual.srcFallbacks?.length) {
+      return [leftVisual.src, ...leftVisual.srcFallbacks];
+    }
+    return [leftVisual.src];
+  }, [leftVisual.src, leftVisual.srcFallbacks]);
+
+  const [leftImageUrlIndex, setLeftImageUrlIndex] = useState(0);
+
+  const leftVisualStaticUrlsKey = leftVisualStaticUrls.join("\0");
+  useEffect(() => {
+    setLeftImageUrlIndex(0);
+  }, [leftVisualStaticUrlsKey]);
+
+  const displayLeftSrc =
+    leftVisualStaticUrls[Math.min(leftImageUrlIndex, leftVisualStaticUrls.length - 1)] ?? leftVisual.src;
+
+  const handleLeftImageError = () => {
+    setLeftImageUrlIndex((i) => (i < leftVisualStaticUrls.length - 1 ? i + 1 : i));
+  };
+
   // Countdown display: variant config drives behaviour; default is limited_time_only
+  // Uses effectiveEntryForCountdown so one-time tab shows same as membership (e.g. 24hr countdown)
   const countdownDisplay = useMemo(() => {
     const drawStatus = getDrawDateStatus();
-    const resolved = resolveCountdownDisplay({
+    return resolveCountdownDisplay({
       countdownMode: variantConfig?.banner?.countdownMode ?? "limited_time_only",
       showCountdown: variantConfig?.banner?.showCountdown !== false,
-      source: effectiveEntry?.source ?? "none",
-      scheduledEndDate: effectiveEntry?.scheduledEndDate ?? undefined,
-      durationMs: effectiveEntry?.durationMs ?? undefined,
+      source: effectiveEntryForCountdown?.source ?? "none",
+      scheduledEndDate: effectiveEntryForCountdown?.scheduledEndDate ?? undefined,
+      durationMs: effectiveEntryForCountdown?.durationMs ?? undefined,
       drawStatus,
       countdownLabel: variantConfig?.banner?.countdownLabel ?? undefined,
     });
-    
-    // One-time: when there is no scheduled promo configured, ensure the right-side label
-    // uses the winning copy instead of the legacy "LIMITED TIME ONLY" default.
-    if (activeTab === "one-time" && !scheduledPromoState.hasScheduledPromo && resolved.type === "static_urgency") {
-      return { ...resolved, label: "PROMO ENDING" };
-    }
-
-    return resolved;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getDrawDateStatus stable; effectiveEntry via source/dates
   }, [
+    getDrawDateStatus,
     variantConfig?.banner?.countdownMode,
     variantConfig?.banner?.showCountdown,
     variantConfig?.banner?.countdownLabel,
-    effectiveEntry?.source,
-    effectiveEntry?.scheduledEndDate,
-    effectiveEntry?.durationMs,
-    currentDraw?.drawDate,
-    activeTab,
-    scheduledPromoState.hasScheduledPromo,
+    effectiveEntryForCountdown?.source,
+    effectiveEntryForCountdown?.scheduledEndDate,
+    effectiveEntryForCountdown?.durationMs,
   ]);
 
-  // Scheduled-end countdown ticker (when countdownDisplay.type === "scheduled_end")
+  // Low-frequency parent tick — only updates the 48h-boundary boolean used by
+  // `leftVisual` (the per-second countdown surfaces are rendered by leaf
+  // components below so they don't re-render this parent on tick).
   useEffect(() => {
-    if (countdownDisplay.type !== "scheduled_end" || countdownDisplay.endMs == null) return;
-    const update = () => {
+    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+    const recompute = () => {
       const now = Date.now();
-      const remainingMs = Math.max(0, countdownDisplay.endMs! - now);
-      const useDays = countdownDisplay.useDays ?? false;
-      setScheduledEndTimeLeft(formatTimeLeft(remainingMs, useDays));
+      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
+      const next = !!(targetDateMs && freezeMs > 0 && freezeMs <= fortyEightHoursMs);
+      setWithin48HoursOfFreeze((prev) => (prev === next ? prev : next));
     };
-    update();
-    const timer = setInterval(update, 1000);
+    recompute();
+    const timer = setInterval(recompute, 30 * 1000);
     return () => clearInterval(timer);
-  }, [countdownDisplay.type, countdownDisplay.endMs, countdownDisplay.useDays]);
+  }, [targetDateMs]);
 
-  // Memoize font size calculation (smaller badge only when narrow AND scrolled/rounded)
-  const fontSize = useMemo(
-    () => calculateFontSize(badgeText, isMobile, isNarrow && isScrolled),
-    [badgeText, isMobile, isNarrow, isScrolled]
-  );
-
-  // Mark content as ready once all data is loaded and font size is calculated
-  // Reset when data changes to ensure we always show correct data with animation
   useEffect(() => {
-    // Reset content ready state when data changes (badgeText, multiplier, or draw data)
-    setIsContentReady(false);
-    
-    // Content is ready when:
-    // 1. Badge text is available
-    // 2. Font size is calculated
-    // 3. Mobile detection is done
-    // 4. Draw data has finished loading (to prevent showing fallback text before draw status is checked)
-    if (badgeText && fontSize && typeof isMobile === "boolean" && !isDrawLoading) {
-      // Small delay to ensure styles are applied
-      const timer = setTimeout(() => {
-        setIsContentReady(true);
-      }, 50);
-      return () => clearTimeout(timer);
+    if (isDrawLoading) {
+      setIsContentReady(false);
+      return;
     }
-  }, [badgeText, fontSize, isMobile, isDrawLoading, multiplier]);
+    const timer = setTimeout(() => setIsContentReady(true), 50);
+    return () => clearTimeout(timer);
+  }, [isDrawLoading]);
 
-  // Get formatted draw time for display
-  const getDrawTimeText = (): string | null => {
-    if (!currentDraw?.drawDate) return null;
-    return formatDateInAEST(new Date(currentDraw.drawDate), "h:mm a");
-  };
+  // Reserve document flow height for the spacer using the **in-flow (relative)** banner only.
+  // Measuring after `position: fixed` captures the shorter pill and shrinks the spacer → content jumps.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
 
-  // Measure banner height to prevent layout shift when it becomes fixed
-  useEffect(() => {
-    const measureBanner = () => {
-      if (bannerRef.current) {
-        const height = bannerRef.current.offsetHeight;
-        setBannerHeight(height);
-      }
+    const measureInFlowOnly = () => {
+      if (!bannerRef.current || isScrolled) return;
+      const height = bannerRef.current.getBoundingClientRect().height;
+      setBannerHeight((prev) => (Math.abs((prev ?? 0) - height) < 0.5 ? prev : height));
     };
 
-    // Measure on mount and when scrolled state changes
-    measureBanner();
+    measureInFlowOnly();
+    return addThrottledResize(measureInFlowOnly);
+  }, [isScrolled, activePromo, multiplier, isGapPeriod, displayLeftSrc, leftVisual.staticFamily, isHolidayLeftArt]);
 
-    // Also measure on resize to handle responsive changes
-    window.addEventListener("resize", measureBanner);
-    return () => window.removeEventListener("resize", measureBanner);
-  }, [isScrolled, activePromo, multiplier, isGapPeriod]);
-
-  // Don't render if: 404, sidebar open, promo not yet resolved, or (not no-promo and no badge and no multiplier and not gap period)
   if (pathname === "/not-found" || isAnySidebarOpen) return null;
-  if (!isPromoResolved) return null; // Hide until we know active promo vs no-promo
-  if (!isGapPeriod && !isNoPromo && !badgeText && !multiplier) return null;
+  if (!isPromoResolved) return null;
 
   // Keep the banner below the header by default; only float it once scrolled for visibility.
   // Use wrapper to prevent layout shift when banner becomes fixed
   const bgColorClass = "bg-black";
+  const showPromoCountdownStrip = countdownDisplay.type !== "hidden" || isGapPeriod;
 
   // Scroll to membership section on click (same pattern as FloatingGetEntriesButton → packages)
   const handleBannerClick = () => {
@@ -666,198 +657,195 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
         aria-label="Scroll to membership and packages"
         onClick={handleBannerClick}
         onKeyDown={handleBannerKeyDown}
-        layout
         initial={{ opacity: 0 }}
+        // When flow mode, pass explicit geometry (not `undefined`) so Framer never keeps fixed-era inline top/left/width.
+        style={
+          isScrolled
+            ? {
+                position: "fixed",
+                top: floatTop,
+                left: floatLeft,
+                width: floatWidth,
+                maxWidth: "100vw",
+              }
+             : {
+                position: "relative",
+                top: 0,
+                left: "auto",
+                right: "auto",
+                width: "100vw",
+                maxWidth: "100vw",
+                marginLeft: "calc(50% - 50vw)",
+                marginRight: "calc(50% - 50vw)",
+              }
+        }
         animate={{
-          borderRadius: isScrolled ? "9999px" : "0px",
           opacity: 1,
         }}
         className={`cursor-pointer select-none ${
-          isScrolled
-            ? "fixed top-4 left-2 right-2 sm:left-8 sm:right-8 lg:left-16 lg:right-16 z-50"
-            : "relative w-full mt-0 z-30"
-        } ${bgColorClass}`}
-        style={{
-          boxShadow: `
-            0 10px 40px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.3)
-          `,
-          ...(isScrolled
-            ? { border: `2px solid ${theme.borderRgba}` }
-            : { borderBottom: `2px solid ${theme.borderRgba}` }),
-        } as React.CSSProperties}
+          isScrolled ? "fixed z-50" : "relative top-0 z-30 mt-0 w-full max-w-none shrink-0"
+        }`}
         transition={{
-          duration: 0.5,
-          ease: "easeInOut",
-          layout: { duration: 0.5, ease: "easeInOut" },
           opacity: { duration: 0.35, ease: "easeOut" },
         }}
       >
-        <motion.div
-          className={`min-h-16 sm:min-h-20 pt-2 pb-1.5 sm:py-2.5 flex items-center justify-center px-4 sm:px-6 lg:px-8 relative overflow-hidden ${isScrolled ? "max-[360px]:px-3 max-[360px]:pt-2 max-[360px]:pb-1.5" : ""}`}
-        >
-          {/* Main Content */}
-          <div className="relative z-10 flex items-center justify-between w-full">
-            {/* Left Side - Vertical Stack Layout */}
-            <div className="flex flex-col items-start">
-              {/* Wrapper to match widths */}
-              <div className="flex flex-col items-start w-fit gap-0 ">
-                {/* First Line - Badge (default: BONUS ENTRIES) - Matches width of second line */}
-                <div className="relative w-full">
-                  {/* Outer glow effect - pulsing animation */}
-                  {isContentReady && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                      className="absolute inset-0 rounded-full animate-pulse"
-                      style={{
-                        background: `radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.3) 40%, rgba(217, 119, 6, 0.15) 70%, transparent 100%)`,
-                        filter: "blur(5px)",
-                        transform: "scale(1.08)",
-                        zIndex: 0,
-                      }}
-                    />
-                  )}
-
-                  {/* Main badge container - Gold gradient with depth - Matches second line width */}
-                  {isContentReady ? (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                      className={`relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden ${isScrolled ? "max-[360px]:px-2 max-[360px]:py-0.5" : ""}`}
-                      style={{
-                        background: `linear-gradient(135deg, 
-                        #ffd700 0%, 
-                        #ffed4e 20%, 
-                        #fbbf24 40%, 
-                        #f59e0b 60%, 
-                        #d97706 80%, 
-                        #b45309 100%
-                      )`,
-                        boxShadow: `
-                        0 0 15px rgba(251, 191, 36, 0.6),
-                        0 0 30px rgba(245, 158, 11, 0.3),
-                        0 4px 16px rgba(0, 0, 0, 0.4),
-                        inset 0 1px 4px rgba(255, 255, 255, 0.4),
-                        inset 0 -1px 4px rgba(0, 0, 0, 0.3)
-                      `,
-                        border: "1.5px solid rgba(255, 255, 255, 0.3)",
-                        zIndex: 1,
-                      }}
-                    >
-                    {/* Metallic shine effect - matching BestChanceBadge style */}
-                    <div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent transform -skew-x-12 rounded-full"
-                      style={{
-                        background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.4) 25%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 100%)`,
-                        animation: "shimmer 2s infinite",
-                        zIndex: 2,
-                      }}
-                    />
-
-                    {/* Hot edge highlight - top and left edges */}
-                    <div
-                      className="absolute inset-0 rounded-full"
-                      style={{
-                        background: `linear-gradient(135deg, 
-                        rgba(255, 255, 255, 0.7) 0%, 
-                        rgba(255, 240, 180, 0.6) 15%, 
-                        transparent 30%, 
-                        transparent 100%
-                      )`,
-                        zIndex: 2,
-                      }}
-                    />
-
-                      {/* Text content - centered with dynamic font size */}
-                      <span
-                        className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
-                        style={{
-                          fontSize: fontSize,
-                          textShadow: `
-                          0 0 6px rgba(255, 255, 255, 0.8),
-                          0 0 12px rgba(255, 240, 180, 0.6),
-                          0 1px 3px rgba(0, 0, 0, 0.8),
-                          0 2px 6px rgba(0, 0, 0, 0.6)
-                        `,
-                          filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))",
-                        }}
-                        suppressHydrationWarning
-                      >
-                        {badgeText}
-                      </span>
-                    </motion.div>
-                  ) : (
-                    // Placeholder to maintain layout - invisible but maintains space
-                    <div
-                      className={`relative w-full px-2 py-0.5 sm:px-2.5 sm:py-1 lg:px-3 lg:py-1.5 rounded-full flex items-center justify-center overflow-hidden opacity-0 ${isScrolled ? "max-[360px]:px-2 max-[360px]:py-0.5" : ""}`}
-                      style={{ fontSize: fontSize }}
-                      aria-hidden="true"
-                    >
-                      <span
-                        className="relative z-10 text-white font-black tracking-wider uppercase whitespace-nowrap"
-                        style={{ fontSize: fontSize }}
-                      >
-                        {badgeText || "BONUS ENTRIES"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Second Line - "GET X ENTRIES" or no-promo main line */}
+        {/* Outer stays overflow-visible so the multiplier badge (absolute) is not clipped; pill rounding + clip only on the bg/flame layer. */}
+        <div className="relative w-full min-w-0 overflow-visible">
+          <div
+            className={`pointer-events-none absolute inset-0 z-0 min-h-full ${
+              isScrolled ? "overflow-hidden rounded-[9999px]" : ""
+            } ${bgColorClass}`}
+            style={
+              {
+                borderRadius: isScrolled ? 9999 : 0,
+                boxShadow: isScrolled ? BANNER_SHADOW_FLOAT : BANNER_SHADOW_REST,
+                ...(prefersReducedMotion
+                  ? {}
+                  : {
+                      transitionProperty: "border-radius, box-shadow",
+                      transitionDuration: `${SCROLL_STATE_TRANSITION.duration}s`,
+                      transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+                    }),
+                ...(isScrolled
+                  ? { border: `2px solid ${theme.borderRgba}` }
+                  : { borderBottom: `2px solid ${theme.borderRgba}` }),
+              } as React.CSSProperties
+            }
+            aria-hidden
+          >
+            <div className="fire pointer-events-none absolute inset-0 min-h-full w-full" />
+          </div>
+          <div
+            className={`relative z-10 w-full overflow-visible ${
+              isScrolled
+                ? "min-h-[4rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem] max-[360px]:py-0.5"
+                : "min-h-[4.5rem] sm:min-h-[7rem] lg:min-h-[6.75rem]"
+            }`}
+          >
+            <div
+              className={`relative z-10 flex w-full min-w-0 flex-row items-center py-0 sm:py-0.5 pl-1 pr-2.5 max-[500px]:px-2 sm:pl-3 sm:pr-4 lg:pl-3 lg:pr-7 ${
+                showPromoCountdownStrip ? "justify-between gap-2 sm:gap-3 md:gap-4" : "justify-start"
+              } ${
+                isScrolled
+                  ? "min-h-[3.75rem] sm:min-h-[6.25rem] lg:min-h-[6.25rem]"
+                  : "min-h-[4rem] sm:min-h-[6.5rem] lg:min-h-[6.75rem]"
+              }`}
+            >
+              {/* Left art: intrinsic width, capped — middle stays empty (same logic as desktop space-between) */}
+              <div
+                className={`relative flex min-h-0 min-w-0 flex-col items-start justify-center ${
+                  showPromoCountdownStrip
+                    ? "w-auto max-w-[min(58%,19rem)] shrink-0 sm:max-w-[min(52%,22rem)] md:max-w-[min(48%,24rem)] lg:flex-1 lg:max-w-[min(52%,520px)] xl:max-w-[min(50%,560px)]"
+                    : "flex-1"
+                } ${isScrolled ? "max-sm:min-h-[3.5rem]" : ""}`}
+              >
                 {isContentReady ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.1 }}
-                    className="w-full"
-                    suppressHydrationWarning
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="relative flex w-auto min-w-0 max-w-full shrink justify-start"
                   >
-                    <span
-                      className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
-                    >
-                      {isGapPeriod ? (
-                        <span className="text-white">{GAP_PERIOD_MAIN_LINE}</span>
-                      ) : isNoPromo ? (
-                        <span className="text-white">{NO_PROMO_MAIN_LINE}</span>
-                      ) : (
-                        <>
-                          <span className="text-white">GET </span>
-                          <span suppressHydrationWarning style={{ color: theme.primary }}>{multiplier}X</span>
-                          <span className="text-white"> ENTRIES</span>
-                        </>
-                      )}
-                    </span>
+                    <Image
+                      src={displayLeftSrc}
+                      alt={leftVisual.alt}
+                      width={640}
+                      height={280}
+                      sizes="(max-width: 360px) 90vw, (max-width: 640px) 58vw, 520px"
+                      className={`w-auto max-w-full object-contain object-left drop-shadow-md ${
+                        isHolidayLeftArt
+                          ? isScrolled
+                            ? showPromoCountdownStrip
+                              ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-lg:max-w-full lg:max-w-[min(94vw,640px)] max-[360px]:h-[4rem]"
+                              : "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] max-w-[min(94vw,600px)] sm:max-w-[min(96vw,640px)] max-[360px]:h-[4rem] max-[360px]:max-w-[min(90vw,380px)]"
+                            : showPromoCountdownStrip
+                              ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-lg:max-w-full lg:max-w-[min(96vw,680px)] max-[360px]:h-[4.25rem]"
+                              : "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] max-w-[min(96vw,680px)]"
+                          : isDrawnTomorrowLeftArt
+                            ? isScrolled
+                              ? showPromoCountdownStrip
+                                ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-lg:max-w-full lg:max-w-[min(92vw,310px)] max-[360px]:h-[2.125rem]"
+                                : "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] max-w-[min(92vw,295px)] sm:max-w-[min(94vw,315px)] max-[360px]:h-[2.125rem] max-[360px]:max-w-[min(88vw,200px)]"
+                              : showPromoCountdownStrip
+                                ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-lg:max-w-full lg:max-w-[min(95vw,400px)]"
+                                : "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] max-w-[min(95vw,400px)]"
+                            : isScrolled
+                              ? showPromoCountdownStrip
+                                ? "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-lg:max-w-full lg:max-w-[min(92vw,520px)] max-[360px]:h-[3.5rem]"
+                                : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] max-w-[min(92vw,500px)] sm:max-w-[min(94vw,520px)] max-[360px]:h-[3.5rem] max-[360px]:max-w-[min(88vw,340px)]"
+                              : showPromoCountdownStrip
+                                ? "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-lg:max-w-full lg:max-w-[min(95vw,580px)]"
+                                : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] max-w-[min(95vw,580px)]"
+                      }`}
+                      onError={handleLeftImageError}
+                      priority
+                    />
                   </motion.div>
                 ) : (
-                  <div className="w-full opacity-0" aria-hidden="true">
-                    <span
-                      className={`font-black uppercase text-[16px] sm:text-[18px] tracking-wide ps-1.5 ${isScrolled ? "max-[360px]:text-[14px] max-[360px]:ps-1 whitespace-nowrap" : ""}`}
-                    >
-                      <span className="text-white">GET </span>
-                      <span style={{ color: theme.primary }}>10X</span>
-                      <span className="text-white"> ENTRIES</span>
-                    </span>
-                  </div>
+                  <div
+                    className={`${
+                      isScrolled
+                        ? isHolidayLeftArt
+                          ? "h-[4.75rem] sm:h-[7.5rem] lg:h-[7.5rem] w-[11.5rem] sm:w-[16rem]"
+                          : isDrawnTomorrowLeftArt
+                            ? "h-[2.375rem] sm:h-[3.875rem] lg:h-[3.875rem] w-[6.25rem] sm:w-[9.25rem]"
+                            : "h-[4rem] sm:h-[6.25rem] lg:h-[6.25rem] w-[10rem] sm:w-[14rem]"
+                        : isHolidayLeftArt
+                          ? "h-[5.25rem] sm:h-[8rem] lg:h-[7.75rem] w-[12.5rem] sm:w-[17rem]"
+                          : isDrawnTomorrowLeftArt
+                            ? "h-[3.125rem] sm:h-[4.875rem] lg:h-[4.75rem] w-[7.75rem] sm:w-[11rem]"
+                            : "h-[4.5rem] sm:h-[7rem] lg:h-[6.75rem] w-[11rem] sm:w-[15rem]"
+                    } shrink-0 rounded bg-white/10 animate-pulse max-lg:w-full max-lg:max-w-full`}
+                    aria-hidden="true"
+                  />
                 )}
               </div>
-            </div>
 
-            {/* Right Side - Draw Date Text or Countdown (uses simpler gradient) */}
-            {(countdownDisplay.type !== "hidden" || isGapPeriod) && (
-            <div className="relative flex items-center justify-center">
-            {(() => {
-
-              const drawTime = getDrawTimeText();
-              const rightSectionTileStyle = { background: theme.gradientSolid, boxShadow: `0 0 12px ${theme.shadowRgba}` };
+              {showPromoCountdownStrip && (
+                <div className="pointer-events-auto relative z-[15] flex min-w-0 w-auto shrink flex-col items-end justify-center overflow-visible pt-0.5 [filter:drop-shadow(0_4px_14px_rgba(0,0,0,0.45))]">
+                  <div className="relative inline-flex w-auto min-w-0 max-w-full flex-col items-end overflow-visible">
+                    {!isGapPeriod &&
+                      countdownDisplay.type !== "hidden" &&
+                      !isNoPromo &&
+                      multiplier &&
+                      isPromoMultiplier(multiplier) &&
+                      (hasBundledMultiplierAssets(multiplier) ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={`/images/badge/X${multiplier}.webp`}
+                          loading="lazy"
+                          alt={`${multiplier}X entries`}
+                          className={`${PROMO_BANNER_MULTIPLIER_BADGE.root} ${
+                            isScrolled
+                              ? PROMO_BANNER_MULTIPLIER_BADGE.layoutScrolled
+                              : PROMO_BANNER_MULTIPLIER_BADGE.layoutBar
+                          }`}
+                          style={{ filter: PROMO_BANNER_MULTIPLIER_BADGE.dropShadow }}
+                        />
+                      ) : (
+                        <span
+                          className={`${PROMO_BANNER_MULTIPLIER_BADGE.root} flex items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-xs sm:text-sm font-black text-white border-2 border-amber-300/70 ${
+                            isScrolled
+                              ? PROMO_BANNER_MULTIPLIER_BADGE.layoutScrolled
+                              : PROMO_BANNER_MULTIPLIER_BADGE.layoutBar
+                          }`}
+                          style={{ filter: PROMO_BANNER_MULTIPLIER_BADGE.dropShadow }}
+                        >
+                          {multiplier}x
+                        </span>
+                      ))}
+                    {(() => {
+                const rightSectionTileStyle = {
+                  background: theme.gradientSolid,
+                  boxShadow: `0 0 12px ${theme.shadowRgba}`,
+                };
 
               // Gap period: "NEXT DRAW IN" label + countdown timer (compact padding to align with left height)
               if (isGapPeriod) {
-                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-11 sm:w-12 lg:w-16 px-1.5 sm:px-2 lg:px-2 py-0.5 sm:py-0.5 lg:py-1.5";
-                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
+                const activationMs = nextDraw?.activationDate
+                  ? new Date(nextDraw.activationDate).getTime()
+                  : null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -865,29 +853,37 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center"
                   >
-                    <div className={`${rightSectionLabelClass} font-semibold text-[9px] sm:text-[10px] uppercase tracking-wider`}>
+                    <div
+                      className="font-semibold text-2xs max-[360px]:text-3xs sm:text-2xs uppercase tracking-wider"
+                      style={{
+                        color: theme.primary,
+                        textShadow: "0 1px 3px rgba(0,0,0,0.65)",
+                      }}
+                    >
                       NEXT DRAW IN
                     </div>
-                    <div className="flex items-center justify-center gap-1 sm:gap-1.5 lg:gap-2">
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>HRS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>MINS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base`}>
-                          {gapPeriodTimeLeft.seconds.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>SECS</div>
-                      </div>
-                    </div>
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = activationMs ? Math.max(0, activationMs - now) : 0;
+                        const totalSeconds = Math.floor(remainingMs / 1000);
+                        const h = Math.floor(totalSeconds / 3600);
+                        const m = Math.floor((totalSeconds % 3600) / 60);
+                        const s = totalSeconds % 60;
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={[
+                              { value: h.toString().padStart(2, "0"), label: "HRS" },
+                              { value: m.toString().padStart(2, "0"), label: "MINS" },
+                              { value: s.toString().padStart(2, "0"), label: "SECS" },
+                            ]}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={labelClass}
+                            surfaceStyle={rightSectionTileStyle}
+                            size="compact"
+                          />
+                        );
+                      }}
+                    />
                   </motion.div>
                 );
               }
@@ -897,11 +893,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={cn("rounded-lg shadow-lg ring-2 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3", isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : "")}
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={cn(rightSectionTextClass, "font-black font-sans drop-shadow-md text-xs sm:text-sm lg:text-base whitespace-nowrap", isScrolled ? "max-[360px]:text-sm" : "")}
                       >
                         {NO_PROMO_RIGHT_LABEL}
                       </div>
@@ -914,11 +910,11 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 return (
                   <div className="flex items-center justify-center">
                     <div
-                      className={`rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 ${isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : ""}`}
+                      className={cn("rounded-lg shadow-lg ring-2 text-center px-3 py-2.5 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3", isScrolled ? "max-[360px]:px-2.5 max-[360px]:py-2" : "")}
                     style={rightSectionTileStyle}
                     >
                       <div
-                        className={`flex items-center justify-center gap-1.5 ${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap ${isScrolled ? "max-[360px]:text-sm" : ""}`}
+                        className={cn("flex items-center justify-center gap-1.5", rightSectionTextClass, "font-black font-sans drop-shadow-md text-sm sm:text-sm lg:text-base whitespace-nowrap", isScrolled ? "max-[360px]:text-sm" : "")}
                       >
                         {countdownDisplay.label}
                         <UrgencyClockIcon className={rightSectionTextClass} size="md" />
@@ -931,8 +927,8 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               // Scheduled end countdown (DAYS HRS MINS or HRS MINS SECS)
               if (countdownDisplay.type === "scheduled_end") {
                 const useDays = countdownDisplay.useDays ?? false;
-                const tileClass = "rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3";
-                const labelClass = `${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`;
+                const labelClass = `${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`;
+                const endMs = countdownDisplay.endMs ?? null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -940,36 +936,37 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      {useDays && scheduledEndTimeLeft.days != null && (
-                        <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                            {scheduledEndTimeLeft.days.toString().padStart(2, "0")}
-                          </div>
-                          <div className={labelClass}>DAYS</div>
-                        </div>
-                      )}
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {scheduledEndTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>HRS</div>
-                      </div>
-                      <div className={tileClass} style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {scheduledEndTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={labelClass}>MINS</div>
-                      </div>
-                      {!useDays && (
-                        <div className={tileClass} style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                            {scheduledEndTimeLeft.seconds.toString().padStart(2, "0")}
-                          </div>
-                          <div className={labelClass}>SECS</div>
-                        </div>
-                      )}
-                    </div>
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = endMs != null ? Math.max(0, endMs - now) : 0;
+                        const tl = formatTimeLeft(remainingMs, useDays);
+                        const scheduledSegments: PromoBannerCountdownSegment[] = [];
+                        if (useDays && tl.days != null) {
+                          scheduledSegments.push({
+                            value: tl.days.toString().padStart(2, "0"),
+                            label: "DAYS",
+                          });
+                        }
+                        scheduledSegments.push(
+                          { value: tl.hours.toString().padStart(2, "0"), label: "HRS" },
+                          { value: tl.minutes.toString().padStart(2, "0"), label: "MINS" }
+                        );
+                        if (!useDays) {
+                          scheduledSegments.push({
+                            value: tl.seconds.toString().padStart(2, "0"),
+                            label: "SECS",
+                          });
+                        }
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={scheduledSegments}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={labelClass}
+                            surfaceStyle={rightSectionTileStyle}
+                          />
+                        );
+                      }}
+                    />
                   </motion.div>
                 );
               }
@@ -980,24 +977,23 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                 if (!isContentReady || isDrawLoading) {
                   return (
                     <div className="flex flex-col items-center justify-center gap-1">
-                      <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                        </div>
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                        </div>
-                        <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                          <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                          <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                        </div>
-                      </div>
+                      <PromoBannerUnifiedCountdown
+                        segments={[
+                          { value: "00", label: "HRS" },
+                          { value: "00", label: "MINS" },
+                          { value: "00", label: "SECS" },
+                        ]}
+                        textClassName={rightSectionTextClass}
+                        labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                        surfaceStyle={rightSectionTileStyle}
+                      />
                     </div>
                   );
                 }
-                
+
+                const freezeMs = currentDraw?.freezeEntriesAt
+                  ? new Date(currentDraw.freezeEntriesAt).getTime()
+                  : null;
                 return (
                   <motion.div
                     initial={{ opacity: 0 }}
@@ -1005,69 +1001,27 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                     transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                     className="flex flex-col items-center justify-center gap-1"
                   >
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      {/* Countdown to freeze time */}
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.hours.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.minutes.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                          {freezeTimeLeft.seconds.toString().padStart(2, "0")}
-                        </div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              }
-
-              // Draw tomorrow: show text with time
-              if (countdownDisplay.type === "draw_tomorrow" && drawTime) {
-                // Only show when content is ready, otherwise show placeholder
-                if (!isContentReady || isDrawLoading) {
-                  return (
-                    <div className="flex items-center justify-center">
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3 opacity-0" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md`}>
-                          <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                            <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">DRAWN TOMORROW</div>
-                            <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">12:00 AM AEDT</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-                
-                return (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
-                    className="flex items-center justify-center"
-                  >
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2.5 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md`}>
-                        {/* Always stack vertically in 2 rows */}
-                        <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                          <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
-                            DRAWN TOMORROW
-                          </div>
-                          <div className="text-xs sm:text-sm lg:text-base whitespace-nowrap">
-                            {drawTime} {timezoneAbbr}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PromoBannerCountdownTickLeaf
+                      render={(now) => {
+                        const remainingMs = freezeMs ? Math.max(0, freezeMs - now) : 0;
+                        const totalSeconds = Math.floor(remainingMs / 1000);
+                        const h = Math.floor(totalSeconds / 3600);
+                        const m = Math.floor((totalSeconds % 3600) / 60);
+                        const s = totalSeconds % 60;
+                        return (
+                          <PromoBannerUnifiedCountdown
+                            segments={[
+                              { value: h.toString().padStart(2, "0"), label: "HRS" },
+                              { value: m.toString().padStart(2, "0"), label: "MINS" },
+                              { value: s.toString().padStart(2, "0"), label: "SECS" },
+                            ]}
+                            textClassName={rightSectionTextClass}
+                            labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                            surfaceStyle={rightSectionTileStyle}
+                          />
+                        );
+                      }}
+                    />
                   </motion.div>
                 );
               }
@@ -1076,24 +1030,20 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
               if (!isContentReady || isDrawLoading) {
                 return (
                   <div className="flex flex-col items-center justify-center gap-1">
-                    <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                      </div>
-                      <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                        <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>00</div>
-                        <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                      </div>
-                    </div>
+                    <PromoBannerUnifiedCountdown
+                      segments={[
+                        { value: "00", label: "HRS" },
+                        { value: "00", label: "MINS" },
+                        { value: "00", label: "SECS" },
+                      ]}
+                      textClassName={rightSectionTextClass}
+                      labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                      surfaceStyle={rightSectionTileStyle}
+                    />
                   </div>
                 );
               }
-              
+
               return (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -1101,48 +1051,51 @@ export default function PromoBanner({ initialMembershipPromo, initialOneTimeProm
                   transition={{ duration: 0.3, ease: "easeOut", delay: 0.15 }}
                   className="flex flex-col items-center justify-center gap-1"
                 >
-                  <div className="flex items-center justify-center gap-1 sm:gap-2 lg:gap-3">
-                    {/* 24-hour countdown only shows hours, minutes, seconds (no days) */}
-                    {/* Fixed width classes to prevent size changes on load */}
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.hours.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>HRS</div>
-                    </div>
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.minutes.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>MINS</div>
-                    </div>
-                    <div className="rounded-lg shadow-lg ring-2 ring-white/20 text-center w-12 sm:w-12 lg:w-20 px-2 sm:px-2 lg:px-4 py-1 sm:py-1 lg:py-3" style={rightSectionTileStyle}>
-                      <div className={`${rightSectionTextClass} font-black font-['Poppins'] drop-shadow-md text-sm sm:text-sm lg:text-xl`}>
-                        {timeLeft.seconds.toString().padStart(2, "0")}
-                      </div>
-                      <div className={`${rightSectionLabelClass} font-medium text-[10px] sm:text-[10px] lg:text-sm`}>SECS</div>
-                    </div>
-                  </div>
+                  <PromoBannerCountdownTickLeaf
+                    render={(now) => {
+                      const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+                      const freezeMs = targetDateMs ? Math.max(0, targetDateMs - now) : 0;
+                      let h = 0;
+                      let m = 0;
+                      let s = 0;
+                      if (!targetDateMs || freezeMs > fortyEightHoursMs) {
+                        const nextMidnight = getNextMidnightAEST();
+                        const diffMs = Math.max(0, nextMidnight.getTime() - now);
+                        const totalSeconds = Math.floor(diffMs / 1000);
+                        h = Math.floor(totalSeconds / 3600);
+                        m = Math.floor((totalSeconds % 3600) / 60);
+                        s = totalSeconds % 60;
+                      } else {
+                        const totalSeconds = Math.floor(freezeMs / 1000);
+                        h = Math.floor(totalSeconds / 3600);
+                        m = Math.floor((totalSeconds % 3600) / 60);
+                        s = totalSeconds % 60;
+                      }
+                      return (
+                        <PromoBannerUnifiedCountdown
+                          segments={[
+                            { value: h.toString().padStart(2, "0"), label: "HRS" },
+                            { value: m.toString().padStart(2, "0"), label: "MINS" },
+                            { value: s.toString().padStart(2, "0"), label: "SECS" },
+                          ]}
+                          textClassName={rightSectionTextClass}
+                          labelClassName={`${rightSectionLabelClass} font-medium text-2xs sm:text-2xs lg:text-sm`}
+                          surfaceStyle={rightSectionTileStyle}
+                        />
+                      );
+                    }}
+                  />
                 </motion.div>
               );
-            })()}
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
-            )}
           </div>
-
-        </motion.div>
-
-        {/* Badge image - outside overflow-hidden so -top-3 when sticky won't be clipped */}
-        {!isGapPeriod && countdownDisplay.type !== "hidden" && !isNoPromo && multiplier && [2, 3, 5, 10].includes(multiplier) && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={`/images/badge/X${multiplier}.png`}
-            alt={`${multiplier}X entries`}
-            className={`absolute ${isScrolled ? "-top-3 sm:-top-6 -right-2 sm:-right-4" : "top-0 sm:-top-2 right-0 sm:right-2"} ${isScrolled ? "w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20" : "w-9 h-9 sm:w-11 sm:h-11 lg:w-14 lg:h-14"} object-contain z-20 pointer-events-none select-none`}
-            style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.5))" }}
-          />
-        )}
+        </div>
       </motion.div>
+      <PromoHolidayDevToolbar forcedSlot={holidayDevPreview} onForcedSlotChange={setHolidayDevPreview} />
     </>
   );
 }

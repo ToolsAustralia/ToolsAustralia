@@ -23,6 +23,7 @@ import type {
   AlternatingPromoMultiplierType,
 } from "@/types/admin";
 import { getAlternatingMultiplier } from "@/utils/promo-banner/alternating-multiplier-manager";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 interface AdminAlternatingMultiplierModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ interface AlternatingMultiplierFormData {
   description: string;
 }
 
-const VALID_MULTIPLIERS = [2, 3, 5, 10] as const;
+const VALID_MULTIPLIERS = PROMO_MULTIPLIERS;
 const PACKAGE_TYPES: { value: AlternatingPromoMultiplierType; label: string }[] = [
   { value: "membership-packages", label: "Membership Packages" },
   { value: "one-time-packages", label: "One-Time Packages" },
@@ -186,8 +187,6 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg">
       <ModalHeader
@@ -226,7 +225,7 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
           {/* Multiplier Selection */}
           <FormSection title="Select Two Multipliers">
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 Select exactly 2 multipliers that will alternate daily. The system will automatically switch between
                 them at midnight AEST.
               </p>
@@ -291,7 +290,7 @@ const AdminAlternatingMultiplierModal: React.FC<AdminAlternatingMultiplierModalP
                 }
                 disabled={isSubmitting}
               />
-              <label htmlFor="isEnabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+              <label htmlFor="isEnabled" className="text-sm font-medium text-gray-700 dark:text-neutral-200 cursor-pointer">
                 Enable alternating multiplier
               </label>
             </div>

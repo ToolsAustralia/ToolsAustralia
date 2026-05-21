@@ -2,30 +2,43 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import MembershipModal from "@/components/modals/MembershipModal";
+import dynamic from "next/dynamic";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useMemberships } from "@/hooks/useMemberships";
+import { useMembershipThemeExperiment } from "@/hooks/ab-testing/useMembershipThemeExperiment";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import PromoMultiplierBadge from "@/components/ui/PromoMultiplierBadge";
-import BestChanceBadge from "@/components/ui/BestChanceBadge";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import {
+  isOneTimeBestValuePlanId,
+} from "@/utils/membership/member-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
-import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
-import { getPackageIcon } from "@/utils/images/package-icons";
 import { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
 import {
-  getPackageColorSchemeForPromo,
-  getMembershipSectionGlowColor,
-  getCardBorderStyle,
+  getMembershipSectionColorScheme,
 } from "@/utils/package-colors/packageColorScheme";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
+import { useThemeStore } from "@/stores/useThemeStore";
+import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { hasMultiplierBanner } from "@/utils/promo/multiplier-banner";
+import MultiplierBannerImage from "@/components/ui/MultiplierBannerImage";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface MembershipSectionProps {
   title?: string;
@@ -43,13 +56,19 @@ export default function MembershipSection({
   variantConfig,
 }: MembershipSectionProps) {
   const router = useRouter();
+  const { forceLight } = useMembershipThemeExperiment();
+  const isDark = useThemeStore((s) => s.theme === "dark") && !forceLight;
   const theme = usePromoTheme();
+  const promoThemeSlug = usePromoThemeStore((s) => s.slug);
+  const promoToolsetSlug = usePromoThemeStore((s) => s.toolsetSlug);
 
   // Get variant config from context for A/B testing (membershipModal config)
   const { variantConfig: contextVariantConfig } = useVariantContext();
   const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
+  /** Must be top-level — image onError fallback for multiplier banner */
+  const [multiplierBannerLoadFailed, setMultiplierBannerLoadFailed] = useState(false);
 
   // Handle client-side mounting to prevent hydration mismatch
   useEffect(() => {
@@ -62,9 +81,7 @@ export default function MembershipSection({
   // Fetch user data to check membership status
   const { userData, loading: userLoading } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
-  const { requestModal } = useModalPriorityStore();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   // Use the centralized membership modal hook
   const membershipModal = useMembershipModal();
@@ -77,22 +94,15 @@ export default function MembershipSection({
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
       console.log("🎯 MembershipSection received openMembershipModal event:", event.detail);
-      const { plan } = event.detail;
-      if (plan) {
-        // Check if gates are closed (freeze period or gap period)
-        const gatesClosed = currentMajorDraw?.status !== "active";
-        if (gatesClosed) {
-          // Show gate-closed modal instead of opening payment modals
-          requestModal("gate-closed", true, {
-            nextActivationDate: nextDraw?.activationDate ?? null,
-            nextDrawName: nextDraw?.name,
-          });
-          return;
-        }
+      const detail = event.detail ?? {};
+      const plan = detail.plan as LocalMembershipPlan | undefined;
 
-        membershipModal.setSelectedPlan(plan);
+      whenGatesOpenElseGateModal(() => {
+        if (plan) {
+          membershipModal.setSelectedPlan(plan);
+        }
         membershipModal.openModal();
-      }
+      });
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
@@ -100,7 +110,7 @@ export default function MembershipSection({
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal, currentMajorDraw, nextDraw, requestModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal]);
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
@@ -112,6 +122,17 @@ export default function MembershipSection({
 
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+
+  const effectivePromoMultiplier =
+    activeTab === "membership"
+      ? resolvedMembershipMultiplier
+      : hasAccessToAdditionalPackages && hasActiveSubscription
+        ? resolvedMembershipMultiplier
+        : resolvedOneTimeMultiplier;
+
+  useEffect(() => {
+    setMultiplierBannerLoadFailed(false);
+  }, [effectivePromoMultiplier, activeTab, promoThemeSlug, promoToolsetSlug]);
 
   // Update default tab: no active subscription → membership tab; with subscription and access → one-time
   useEffect(() => {
@@ -196,50 +217,41 @@ export default function MembershipSection({
 
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
-    // Check if gates are closed (freeze period or gap period)
-    const gatesClosed = currentMajorDraw?.status !== "active";
-    if (gatesClosed) {
-      // Show gate-closed modal instead of opening payment modals
-      requestModal("gate-closed", true, {
-        nextActivationDate: nextDraw?.activationDate ?? null,
-        nextDrawName: nextDraw?.name,
-      });
-      return;
-    }
+    whenGatesOpenElseGateModal(() => {
+      const hierarchy = getPlanHierarchy(plan);
 
-    const hierarchy = getPlanHierarchy(plan);
+      // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
+      if (hasBlockingSub && isPastDue) {
+        router.push("/my-account");
+        return;
+      }
 
-    // past_due users must resolve payment first - route to my-account (pay-failed-invoice flow)
-    if (hasBlockingSub && isPastDue) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is a downgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isDowngrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is a downgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isDowngrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is an upgrade, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isUpgrade) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is an upgrade, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isUpgrade) {
-      router.push("/my-account");
-      return;
-    }
+      // If user has active subscription and this is the current plan, navigate to my-account
+      if (hasActiveSubscription && hierarchy.isCurrent) {
+        router.push("/my-account");
+        return;
+      }
 
-    // If user has active subscription and this is the current plan, navigate to my-account
-    if (hasActiveSubscription && hierarchy.isCurrent) {
-      router.push("/my-account");
-      return;
-    }
+      // For new subscriptions (no active subscription), use the modal
+      membershipModal.openModal(plan);
 
-    // For new subscriptions (no active subscription), use the modal
-    membershipModal.openModal(plan);
-
-    // Call the original onPlanSelect if provided
-    if (onPlanSelect) {
-      onPlanSelect(plan);
-    }
+      // Call the original onPlanSelect if provided
+      if (onPlanSelect) {
+        onPlanSelect(plan);
+      }
+    });
   };
 
   // Get membership plans from API data and convert to local format
@@ -395,34 +407,77 @@ export default function MembershipSection({
     return variantAdjustedPlans;
   })();
   
-  // Check if a plan should be highlighted (from variant config)
-  const isHighlighted = (planId: string): boolean => {
-    return variantConfig?.highlightPackage === planId;
+  const showPromoHeaderBanner =
+    effectivePromoMultiplier !== null &&
+    effectivePromoMultiplier > 1 &&
+    hasMultiplierBanner(effectivePromoMultiplier);
+
+  /** Single source of truth for a package card — used by both the mobile and desktop grids. */
+  const renderPlanCard = (plan: LocalMembershipPlan) => {
+    const colorScheme =
+      activeTab === "membership"
+        ? getMembershipSectionColorScheme(plan.id, true)
+        : getElectricPackageColorScheme(plan.id);
+    const discount = activeTab === "one-time" ? getAdditionalPackDiscount(plan.id) : null;
+    const locked = !hasAccessToAdditionalPackages && !!plan.isMemberOnly;
+    const current = isCurrentSubscription(plan);
+    const hierarchy = getPlanHierarchy(plan);
+    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
+    let ctaLabel = "Enter Now";
+    if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
+    else if (hasActiveSubscription && activeTab === "membership") {
+      if (hierarchy.isCurrent) ctaLabel = "Current Plan";
+      else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
+      else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
+    }
+    const showBestValueRibbon =
+      (activeTab === "membership" && plan.id === "boss-subscription") ||
+      (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
+    const ribbon = plan.isPopular ? "MOST POPULAR" : null;
+    return (
+      <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
+        <ElectricPackageCard
+          plan={plan}
+          colorScheme={colorScheme}
+          state={{ locked, lockReason: "Subscription or Entries Required", isCurrent: current }}
+          discount={discount ? { regularPrice: discount.regularPrice, percentOff: discount.percentOff } : null}
+          onSelect={handlePlanSelect}
+          showBestValue={showBestValueRibbon}
+          ribbon={showBestValueRibbon ? null : ribbon}
+          ctaLabel={ctaLabel}
+          theme={isDark ? "dark" : "light"}
+        />
+      </div>
+    );
   };
 
   return (
-    <section id="membership" className={`${padding} w-full overflow-visible relative z-10`}>
+    <section id="membership" className={cn(padding, "w-full px-4 sm:px-6 lg:px-8 overflow-visible relative z-10")}>
   
-        {/* Section Header - Promo-based: only show title when active promo */}
-        {(() => {
-          const effectiveMultiplier =
-            activeTab === "membership"
-              ? resolvedMembershipMultiplier
-              : hasAccessToAdditionalPackages && hasActiveSubscription
-                ? resolvedMembershipMultiplier
-                : resolvedOneTimeMultiplier;
-          const hasActivePromo = effectiveMultiplier !== null && effectiveMultiplier > 1;
-          if (!hasActivePromo) return null;
-          return (
-            <div className="text-center">
+        {/* Section Header - Promo-based: show banner image when active promo */}
+        {effectivePromoMultiplier !== null && effectivePromoMultiplier > 1 && (
+          <div className="text-center mb-2 sm:mb-3 lg:mb-4">
+            {showPromoHeaderBanner && !multiplierBannerLoadFailed ? (
+              <div className="flex justify-center">
+                <MultiplierBannerImage
+                  multiplier={effectivePromoMultiplier}
+                  slug={promoThemeSlug}
+                  toolsetSlug={promoToolsetSlug}
+                  alt={`${effectivePromoMultiplier}X Promo Activated`}
+                  className="w-full max-w-2xl lg:max-w-md h-auto object-contain"
+                  priority
+                  onExhausted={() => setMultiplierBannerLoadFailed(true)}
+                />
+              </div>
+            ) : (
               <h2
-                className={`font-agency font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight ${titleColor} dark:text-white mb-2 sm:mb-3 lg:mb-4`}
+                className={cn("font-sans font-extrabold font-black uppercase text-[22px] sm:text-[24px] lg:text-agency-title leading-tight", titleColor, "dark:text-white")}
               >
-                <span style={{ color: theme.primary }}>{effectiveMultiplier}X PROMO</span> ACTIVATED
+                <span style={{ color: theme.primary }}>{effectivePromoMultiplier}X PROMO</span> ACTIVATED
               </h2>
-            </div>
-          );
-        })()}
+            )}
+          </div>
+        )}
 
         {/* Toggle - Always show One-Time and Membership Packs so user can switch between both */}
         <div className="flex justify-center mb-4 ">
@@ -441,10 +496,10 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-[colors] duration-[var(--ta-transition-dur)]"
                   }`}
                 >
                   One-Time
@@ -452,10 +507,10 @@ export default function MembershipSection({
                   {isMounted && activeTab === "one-time" &&
                     (hasAccessToAdditionalPackages && hasActiveSubscription
                       ? resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
-                          <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                          <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as PromoMultiplier} />
                         )
                       : resolvedOneTimeMultiplier !== null && resolvedOneTimeMultiplier > 1 && (
-                          <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as 2 | 3 | 5 | 10} />
+                          <PromoMultiplierBadge multiplier={resolvedOneTimeMultiplier as PromoMultiplier} />
                         ))}
                 </button>
                 <button
@@ -471,17 +526,17 @@ export default function MembershipSection({
                     }
                   }}
                   suppressHydrationWarning
-                  className={`font-agency font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none relative ${
+                  className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
                       ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                      : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-[colors] duration-[var(--ta-transition-dur)]"
                   }`}
                 >
                   Membership Packs
                   {/* Multiplier Badge - Upper right, fiery metallic red (mobile and desktop) */}
                   {/* Show badge if there's an active promo OR an alternating multiplier */}
                   {isMounted && activeTab === "membership" && resolvedMembershipMultiplier !== null && resolvedMembershipMultiplier > 1 && (
-                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as 2 | 3 | 5 | 10} />
+                    <PromoMultiplierBadge multiplier={resolvedMembershipMultiplier as PromoMultiplier} />
                   )}
                 </button>
               </div>
@@ -492,356 +547,7 @@ export default function MembershipSection({
         {!loading && !error && (
           <div className="lg:hidden overflow-visible ">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 max-w-md mx-auto overflow-visible">
-              {membershipPlans.map((plan, index) => {
-                const colorScheme = getPackageColorSchemeForPromo(plan.id, activeTab === "membership", contextVariantConfig);
-                const highlighted = isHighlighted(plan.id);
-                const isAdditionalPackage =
-                  plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-                return (
-                  <div
-                    key={plan.id}
-                    className={`relative w-full ${
-                      isAdditionalPackage ? "h-[300px] sm:h-[370px]" : "h-[275px] sm:h-[355px]"
-                    } rounded-3xl transition-all duration-300 lg:hover:scale-105 overflow-visible ${highlighted ? "scale-105" : ""}`}
-                    style={
-                      highlighted
-                        ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
-                        : isCurrentSubscription(plan)
-                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                        : plan.isPopular
-                        ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                        : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
-                    }
-                      >
-                        {/* Promo Badge - Pin overlay at top-right, outside card */}
-                        {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
-                          <div className="absolute -top-6 -right-8 z-30">
-                            <Image
-                              src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
-                              alt={`${plan.metadata.promoMultiplier}x entries`}
-                              width={96}
-                              height={96}
-                              className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
-                            />
-                          </div>
-                        )}
-                        {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
-                        {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
-                        {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                          <div className="absolute top-1.5 left-1.5 z-20">
-                            <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
-                          </div>
-                        )}
-
-                        {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
-                        {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                          <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
-                            {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
-                            {isCurrentSubscription(plan) && (
-                              <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
-                                style={colorScheme.badgeStyle}
-                              >
-                                {/* Subtle static highlight - no shimmer */}
-                                <div
-                                  className="absolute inset-0 pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                                  }}
-                                />
-                                {/* Content - white text for contrast */}
-                                <div className="relative z-10 flex items-center text-white">
-                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                    CURRENT
-                                  </span>
-                                </div>
-                                <div
-                                  className="absolute inset-0 rounded-full pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                    border: "1px solid rgba(255, 255, 255, 0.4)",
-                                  }}
-                                />
-                              </div>
-                            )}
-                            {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                            {plan.isPopular && !isCurrentSubscription(plan) && (
-                              <div
-                                className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-[11px]"
-                                style={colorScheme.badgeStyle}
-                              >
-                                {/* Subtle static highlight - no shimmer */}
-                                <div
-                                  className="absolute inset-0 pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                                  }}
-                                />
-                                {/* Content - white text for contrast on package-themed gradient */}
-                                <div className="relative z-10 flex items-center text-white">
-                                  <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                                    POPULAR
-                                  </span>
-                                </div>
-                                <div
-                                  className="absolute inset-0 rounded-full pointer-events-none"
-                                  style={{
-                                    background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                                    border: "1px solid rgba(255, 255, 255, 0.4)",
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Card Background - Brand gradient */}
-                        <div
-                          className={`h-full rounded-3xl p-4 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
-                          style={
-                            {
-                              "--membership-card-bg": colorScheme.bgGradient,
-                              ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
-                            } as React.CSSProperties
-                          }
-                        >
-                          {/* Inside Glow - Whole Card with Margin */}
-                          <div
-                            className={`absolute inset-2 sm:inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
-                              plan.id,
-                              activeTab === "membership"
-                            )} pointer-events-none rounded-2xl z-0`}
-                          ></div>
-
-                          {/* Package Icon - Centered at top */}
-                          {getPackageIcon(plan.id) && (
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 z-20">
-                              <div
-                                className={`w-20 h-20 sm:w-24 sm:h-24 relative ${plan.id.includes("boss") ? "scale-110 sm:scale-110" : ""}`}
-                              >
-                                <Image
-                                  src={getPackageIcon(plan.id)!}
-                                  alt={`${plan.name} icon`}
-                                  fill
-                                  sizes="(max-width: 640px) 56px, (max-width: 1024px) 64px, 96px"
-                                  priority={index === 0}
-                                  className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
-                                />
-                                {/* Promo Badge removed from mobile view - now shown on toggle instead */}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="h-full flex flex-col pt-6 px-4 py-1.5">
-                            {/* Plan Header - Centered */}
-                            <div className="text-center mb-0.5">
-                              {(() => {
-                                const isAdditionalPackage =
-                                  plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-                                const cleanedPlanName = isAdditionalPackage
-                                  ? plan.name.replace(/Additional\s*/i, "").trim()
-                                  : plan.name;
-
-                                return (
-                                  <h3
-                                    className={`font-poppins text-[19px] sm:text-[20px] font-bold mb-0 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
-                                    style={colorScheme.textGradientStyle}
-                                  >
-                                    {isAdditionalPackage ? (
-                                      <>
-                                        <span className="block">Additional</span>
-                                        <span className="block">{cleanedPlanName}</span>
-                                      </>
-                                    ) : (
-                                      plan.name
-                                    )}
-                                  </h3>
-                                );
-                              })()}
-                              {plan.subtitle && (
-                                <p
-                                  className={`font-poppins text-[14px] sm:text-[16px] font-medium mb-0.5 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                >
-                                  {plan.subtitle}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Entries - Centered */}
-                            <div className="mb-0.5">
-                              {(() => {
-                                const entriesFeature = plan.features.find(
-                                  (f) => f.text.includes("Entries") || f.text.includes("entries")
-                                );
-                                if (entriesFeature) {
-                                  const entriesNumber = entriesFeature.text.match(/(\d+)/)?.[1] || "0";
-                                  const promoMultiplier = typeof plan.metadata?.promoMultiplier === "number" ? plan.metadata.promoMultiplier : 0;
-                                  const hasMultiplier = promoMultiplier > 1;
-                                  const originalEntries = hasMultiplier ? plan.metadata?.originalEntries || parseInt(entriesNumber) : parseInt(entriesNumber);
-                                  const displayEntries = hasMultiplier ? plan.metadata?.entriesCount || parseInt(entriesNumber) : parseInt(entriesNumber);
-
-                                  return (
-                                    <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text} text-center`}>
-                                      {hasMultiplier ? (
-                                        <div className="flex items-center justify-center gap-1.5">
-                                          <span className={`text-[22px] sm:text-[24px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
-                                            {originalEntries}
-                                          </span>
-                                          <span
-                                            className={`text-[19px] sm:text-[18px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                            style={colorScheme.textGradientStyle}
-                                          >
-                                            →
-                                          </span>
-                                          <span
-                                            className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                            style={colorScheme.textGradientStyle}
-                                          >
-                                            {displayEntries}
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <span
-                                          className={`text-[34px] sm:text-[36px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                          style={colorScheme.textGradientStyle}
-                                        >
-                                          {entriesNumber}
-                                        </span>
-                                      )}
-                                      <div
-                                        className={`text-[17px] sm:text-[18px] font-semibold mt-0 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                      >
-                                        Free Entries
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-
-                            {/* Horizontal Divider */}
-                            <div className="w-full p-[0.25px] bg-white/80 dark:bg-neutral-600/50 mb-2"></div>
-
-                            {/* Price Badge - CTA style (distinct from prize badges) */}
-                            <div className="flex-1 min-h-0 overflow-visible flex justify-center my-2">
-                              <div className="pb-0.5">
-                                <div className="w-fit backdrop-blur-sm px-2.5 py-1 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
-                                  <div className="flex items-baseline gap-1 justify-center">
-                                    <div
-                                      className={`font-poppins font-bold text-[20px] sm:text-lg ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
-                                      style={colorScheme.textGradientStyle}
-                                    >
-                                      ${plan.price}
-                                    </div>
-                                    {plan.period !== "one-time" ? (
-                                      <div
-                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                      >
-                                        Per Giveaway
-                                      </div>
-                                    ) : (
-                                      <div
-                                        className={`font-poppins font-semibold text-[14px] sm:text-[10px] ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                        style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                      >
-                                        One Time Payment
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            {/* Tickmarks hidden on mobile - see "Click here to see full package inclusion" below */}
-
-                            {/* Action Button - In flow, no overlay */}
-                            <div className="flex-shrink-0 mt-auto pt-1">
-                              {isCurrentSubscription(plan) ? (
-                                <button
-                                  disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`}
-                                  style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
-                                >
-                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                    Current Plan
-                                  </span>
-                                </button>
-                              ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
-                                <button
-                                  disabled
-                                  className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center text-[14px] sm:text-[18px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
-                                >
-                                  Subscription or Entries Required
-                                </button>
-                              ) : (
-                                (() => {
-                                  const hierarchy = getPlanHierarchy(plan);
-                                  const isSubscriptionPlan =
-                                    plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-                                  let buttonText = "Enter Now";
-                                  const buttonHeight = "h-[44px] sm:h-[48px]";
-                                  const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[17px] transition-all duration-300 transform`;
-                                  let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
-                                  let buttonStyle: React.CSSProperties | undefined;
-                                  const isEnterNow = (t: string) => t === "Enter Now";
-                                  const usesBadgeStyle = (t: string) =>
-                                    t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
-
-                                  // past_due: show "Update payment" for subscription plans - route to my-account
-                                  if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
-                                    buttonText = "Update payment";
-                                    buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
-                                  } else if (hasActiveSubscription && activeTab === "membership") {
-                                    if (hierarchy.isCurrent) {
-                                      buttonText = "Current Plan";
-                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed lg:hover:scale-100 lg:hover:shadow-none opacity-90`;
-                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                    } else if (hierarchy.isDowngrade) {
-                                      buttonText = `Downgrade to ${plan.name}`;
-                                      const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                      buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                      buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                    } else if (hierarchy.isUpgrade) {
-                                      buttonText = `Upgrade to ${plan.name}`;
-                                      buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
-                                    }
-                                  } else if (isEnterNow(buttonText)) {
-                                    const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                    buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                    buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                                  } else {
-                                    buttonClass += ` ${colorScheme.borderGlow}`;
-                                  }
-
-                                  return (
-                                    <button
-                                      className={buttonClass}
-                                      style={buttonStyle}
-                                      onClick={() => handlePlanSelect(plan)}
-                                      disabled={hasActiveSubscription && hierarchy.isCurrent}
-                                      suppressHydrationWarning
-                                    >
-                                      {usesBadgeStyle(buttonText) ? (
-                                        <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                          {buttonText}
-                                        </span>
-                                      ) : (
-                                        buttonText
-                                      )}
-                                    </button>
-                                  );
-                                })()
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              {membershipPlans.map(renderPlanCard)}
             </div>
           </div>
         )}
@@ -850,367 +556,12 @@ export default function MembershipSection({
       {!loading && !error && (
         <div className="hidden lg:block overflow-visible">
           <div
-            className={`grid gap-3 sm:gap-4 overflow-visible pt-8 ${
-              activeTab === "membership"
-                ? "max-w-7xl mx-auto grid-cols-3 w-full"
-                : "max-w-[96rem] mx-auto grid-cols-1 md:grid-cols-3 xl:grid-cols-5"
+            className={`grid gap-3 sm:gap-4 overflow-visible max-w-7xl mx-auto grid-cols-1 w-full ${
+              membershipPlans.length === 5 ? "lg:grid-cols-5" : "md:grid-cols-3"
             }`}
           >
             {membershipPlans.length > 0 ? (
-              membershipPlans.map((plan) => {
-              const colorScheme = getPackageColorSchemeForPromo(plan.id, activeTab === "membership", contextVariantConfig);
-              const highlighted = isHighlighted(plan.id);
-              const isAdditionalPackage =
-                plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-              return (
-                <div
-                  key={plan.id}
-                  className={`relative ${isAdditionalPackage ? "h-[350px]" : "h-[320px]"} rounded-3xl transition-all duration-300 overflow-visible isolate ${
-                    activeTab === "membership"
-                      ? "w-full min-w-0"
-                      : "w-full min-w-0 max-w-[320px] justify-self-center"
-                  } ${highlighted ? "scale-105" : ""}`}
-                  style={
-                    highlighted
-                      ? { boxShadow: `0 0 0 2px rgba(255,255,255,0.7), 0 0 28px ${colorScheme.accentHex}35, 0 8px 36px ${colorScheme.accentHex}20` }
-                      : isCurrentSubscription(plan)
-                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.6), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                      : plan.isPopular
-                      ? { boxShadow: `0 0 0 1px rgba(255,255,255,0.5), 0 0 24px ${colorScheme.accentHex}25, 0 6px 28px ${colorScheme.accentHex}15` }
-                      : { boxShadow: `0 0 24px ${colorScheme.accentHex}30, 0 8px 32px ${colorScheme.accentHex}18` }
-                  }
-                >
-                  {/* Best Chance, Popular and Current Badges - Top Left (inside card) */}
-                  {/* Best Chance Badge - Top Left (for boss/power packages) - Theme matches package */}
-                  {(plan.id.includes("boss") || plan.id.includes("power")) && (
-                    <div className="absolute top-2 left-2 z-10 scale-90 origin-top-left">
-                      <BestChanceBadge size="medium" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
-                    </div>
-                  )}
-
-                  {/* Popular and Current Plan Badges - Top Left - Only show if not boss/power */}
-                  {!(plan.id.includes("boss") || plan.id.includes("power")) && (
-                    <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
-                      {/* Current Plan Badge - Highest Priority - Same styling as Popular */}
-                      {isCurrentSubscription(plan) && (
-                        <div
-                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
-                          style={colorScheme.badgeStyle}
-                        >
-                          {/* Subtle static highlight - no shimmer */}
-                          <div
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                            }}
-                          />
-                          <div className="relative z-10 flex items-center gap-1 text-white">
-                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                              CURRENT
-                            </span>
-                          </div>
-                          <div
-                            className="absolute inset-0 rounded-full pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                              border: "1px solid rgba(255, 255, 255, 0.4)",
-                            }}
-                          />
-                        </div>
-                      )}
-                      {/* Popular Badge - Show only if not current plan - Theme matches package */}
-                      {plan.isPopular && !isCurrentSubscription(plan) && (
-                        <div
-                          className="relative overflow-hidden rounded-full font-bold shadow-lg px-2.5 py-1 text-xs"
-                          style={colorScheme.badgeStyle}
-                        >
-                          {/* Subtle static highlight - no shimmer */}
-                          <div
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%)`,
-                            }}
-                          />
-                          <div className="relative z-10 flex items-center gap-1 text-white">
-                            <span className="font-black whitespace-nowrap" style={{ textShadow: "0 1px 3px rgba(0, 0, 0, 0.4)" }}>
-                              POPULAR
-                            </span>
-                          </div>
-                          <div
-                            className="absolute inset-0 rounded-full pointer-events-none"
-                            style={{
-                              background: `linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 50%, rgba(255, 255, 255, 0.15) 100%)`,
-                              border: "1px solid rgba(255, 255, 255, 0.4)",
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Promo Badge - Pin overlay at top-right, outside card */}
-                  {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
-                    <div className="absolute -top-10 -right-8 z-30">
-                      <Image
-                        src={`/images/badge/X${plan.metadata.promoMultiplier}.png`}
-                        alt={`${plan.metadata.promoMultiplier}x entries`}
-                        width={120}
-                        height={120}
-                        className="w-24 h-24 object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
-                      />
-                    </div>
-                  )}
-                  {/* Package Icon - Centered at top */}
-                  {getPackageIcon(plan.id) && (
-                    <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 z-20">
-                      <div className={`w-24 h-24 relative ${activeTab === "one-time" ? "scale-[0.8]" : plan.id.includes("boss") ? "scale-110" : ""}`}>
-                        <Image
-                          src={getPackageIcon(plan.id)!}
-                          alt={`${plan.name} icon`}
-                          className={`w-full h-full object-contain ${colorScheme.glow} opacity-90`}
-                        />
-                        {/* Promo Badge positioned on top of the image icon */}
-                        {/* Promo badge on icon removed - now shown as hexagonal badge on card top-right */}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card Background - Brand gradient */}
-                  <div
-                    className={`h-full rounded-3xl p-4 sm:p-2 transition-all duration-300 hover:${colorScheme.hoverShadow} relative membership-card-gradient`}
-                    style={
-                      {
-                        "--membership-card-bg": colorScheme.bgGradient,
-                        ...getCardBorderStyle(colorScheme, colorScheme.bgGradient),
-                      } as React.CSSProperties
-                    }
-                  >
-                    <div className="h-full flex flex-col pt-10 relative px-4 py-2">
-                      {/* Inside Glow - Whole Card with Margin */}
-                      <div
-                        className={`absolute inset-0.5 bg-gradient-to-t ${getMembershipSectionGlowColor(
-                          plan.id,
-                          activeTab === "membership"
-                        )} pointer-events-none rounded-2xl z-0`}
-                      ></div>
-                      {/* Plan Header - Centered */}
-                      <div className="text-center ">
-                        {(() => {
-                          const isAdditionalPackage =
-                            plan.isMemberOnly && plan.name.toLowerCase().includes("additional");
-                          const cleanedPlanName = isAdditionalPackage
-                            ? plan.name.replace(/Additional\s*/i, "").trim()
-                            : plan.name;
-
-                          return (
-                            <h3
-                              className={`font-poppins font-bold text-[16px] sm:text-[20px] mb-2 ${colorScheme.textGradientStyle ? "" : colorScheme.text} leading-tight`}
-                              style={colorScheme.textGradientStyle}
-                            >
-                              {isAdditionalPackage ? (
-                                <>
-                                  <span className="block">Additional</span>
-                                  <span className="block">{cleanedPlanName}</span>
-                                </>
-                              ) : (
-                                plan.name
-                              )}
-                            </h3>
-                          );
-                        })()}
-                        {plan.subtitle && (
-                          <p
-                            className={`font-poppins text-[12px] sm:text-[14px] font-medium mb-4 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                            style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                          >
-                            {plan.subtitle}
-                          </p>
-                        )}
-
-                        {/* Entries - Main Focus */}
-                        <div className="mb-4 lg:mb-2">
-                          {(() => {
-                            // Extract entries from features
-                            const entriesFeature = plan.features.find(
-                              (feature) => feature.text.includes("Entries") || feature.text.includes("entries")
-                            );
-                            if (entriesFeature) {
-                              const entriesText = entriesFeature.text;
-                              const entriesNumber = entriesText.match(/(\d+)/)?.[1] || "0";
-
-                              // Check if multiplier is being applied (active promo OR alternating multiplier)
-                              // Show original → multiplied format when multiplier > 1
-                              const promoMultiplier = typeof plan.metadata?.promoMultiplier === 'number' ? plan.metadata.promoMultiplier : 0;
-                              const hasMultiplier = promoMultiplier > 1;
-                              const originalEntries = hasMultiplier
-                                ? plan.metadata?.originalEntries || parseInt(entriesNumber)
-                                : parseInt(entriesNumber);
-                              const displayEntries = hasMultiplier
-                                ? plan.metadata?.entriesCount || parseInt(entriesNumber)
-                                : parseInt(entriesNumber);
-
-                              return (
-                                <div className={`font-poppins ${colorScheme.textGradientStyle ? "" : colorScheme.text}`}>
-                                  {hasMultiplier ? (
-                                    <div className="flex items-center justify-center gap-2">
-                                      <span className={`text-[16px] sm:text-[18px] font-bold line-through opacity-40 ${colorScheme.textMuted}`}>
-                                        {originalEntries}
-                                      </span>
-                                      <span
-                                        className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                        style={colorScheme.textGradientStyle}
-                                      >
-                                        →
-                                      </span>
-                                      <span
-                                        className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                        style={colorScheme.textGradientStyle}
-                                      >
-                                        {displayEntries}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span
-                                      className={`text-[28px] sm:text-[34px] font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.entriesText}`}
-                                      style={colorScheme.textGradientStyle}
-                                    >
-                                      {entriesNumber}
-                                    </span>
-                                  )}
-                                  <div
-                                    className={`text-[17px] sm:text-[18px] font-semibold mt-1 ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                    style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                  >
-                                    Free Entries
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Horizontal Divider */}
-                      <div className="w-full p-[0.5px] bg-white dark:bg-neutral-600/50 mb-4 lg:mb-2 rounded-full"></div>
-
-                      {/* Features List - Tick marks hidden on desktop (see "View package inclusions" below) */}
-                      <div className="flex-1 lg:flex-initial overflow-visible space-y-3 sm:space-y-3 mb-4 sm:mb-0 lg:mb-2">
-                        {/* Price Badge - Inside Features Section, CTA style (distinct from prize badges) */}
-                        <div className="pb-4 sm:pb-0 flex justify-center">
-                          <div className="font-poppins w-fit backdrop-blur-sm px-3 py-2 rounded-2xl overflow-hidden" style={colorScheme.badgeStyle}>
-                            <div className="flex flex-row items-baseline gap-1 justify-center lg:flex-col lg:items-center lg:gap-0">
-                              <div
-                                className={`text-base sm:text-lg lg:text-xl font-bold ${colorScheme.textGradientStyle ? "" : colorScheme.priceText}`}
-                                style={colorScheme.textGradientStyle}
-                              >
-                                ${plan.price}
-                              </div>
-                              {plan.period !== "one-time" ? (
-                                <div
-                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                >
-                                  Per Giveaway
-                                </div>
-                              ) : (
-                                <div
-                                  className={`text-xs lg:text-sm font-semibold ${colorScheme.textGradientStyle ? "" : colorScheme.textMuted}`}
-                                  style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : undefined}
-                                >
-                                  One Time Payment
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {/* Tick marks hidden on desktop - see "Click here to see full package inclusion" below */}
-                      </div>
-
-                      {/* Action Button - Inside card at bottom */}
-                      <div className="flex-shrink-0 pt-2 lg:pt-0">
-                        {isCurrentSubscription(plan) ? (
-                          <button
-                            disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform ${colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white")} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`}
-                            style={colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle}
-                          >
-                            <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                              Current Plan
-                            </span>
-                          </button>
-                        ) : !hasAdditionalPackageAccess(userData, userMajorDrawStats) && plan.isMemberOnly ? (
-                          <button
-                            disabled
-                            className={`font-agency font-black uppercase w-full h-[44px] sm:h-[48px] rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] bg-gray-500 text-white cursor-not-allowed opacity-75 ${colorScheme.borderGlow}`}
-                          >
-                            Subscription or Entries Required
-                          </button>
-                        ) : (
-                          (() => {
-                            const hierarchy = getPlanHierarchy(plan);
-                            const isSubscriptionPlan =
-                              plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-                            let buttonText = "Enter Now";
-                            const buttonHeight = "h-[44px] sm:h-[48px]";
-                            const baseLayout = `font-agency font-black uppercase w-full ${buttonHeight} rounded-2xl flex items-center justify-center px-5 text-[14px] sm:text-[16px] transition-all duration-300 transform`;
-                            let buttonClass = `${baseLayout} ${colorScheme.buttonBg} ${colorScheme.buttonShadow} ${colorScheme.buttonHoverShadow} ${colorScheme.buttonText}`;
-                            let buttonStyle: React.CSSProperties | undefined;
-                            const isEnterNow = (t: string) => t === "Enter Now";
-                            const usesBadgeStyle = (t: string) =>
-                              t === "Enter Now" || t === "Current Plan" || t.startsWith("Downgrade to ");
-
-                            if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
-                              buttonText = "Update payment";
-                              buttonClass += " bg-amber-600 text-white hover:bg-amber-700";
-                            } else if (hasActiveSubscription && activeTab === "membership") {
-                              if (hierarchy.isCurrent) {
-                                buttonText = "Current Plan";
-                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation cursor-not-allowed hover:scale-100 hover:shadow-none opacity-90`;
-                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                              } else if (hierarchy.isDowngrade) {
-                                buttonText = `Downgrade to ${plan.name}`;
-                                const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                                buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                                buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                              } else if (hierarchy.isUpgrade) {
-                                buttonText = `Upgrade to ${plan.name}`;
-                                buttonClass += ` bg-gradient-to-r ${colorScheme.gradient} text-white hover:opacity-90`;
-                              }
-                            } else if (isEnterNow(buttonText)) {
-                              const textClass = colorScheme.enterNowButtonTextClass ?? (colorScheme.textGradientStyle ? "" : "text-white");
-                              buttonClass = `${baseLayout} ${textClass} ${colorScheme.borderGlow} membership-enter-cta-animation`;
-                              buttonStyle = colorScheme.enterNowButtonStyle ?? colorScheme.badgeStyle;
-                            } else {
-                              buttonClass += ` ${colorScheme.borderGlow}`;
-                            }
-
-                            return (
-                              <button
-                                className={buttonClass}
-                                style={buttonStyle}
-                                onClick={() => handlePlanSelect(plan)}
-                                disabled={hasActiveSubscription && hierarchy.isCurrent}
-                                suppressHydrationWarning
-                              >
-                                {usesBadgeStyle(buttonText) ? (
-                                  <span className="relative z-10" style={colorScheme.textGradientStyle ?? undefined}>
-                                    {buttonText}
-                                  </span>
-                                ) : (
-                                  buttonText
-                                )}
-                              </button>
-                            );
-                          })()
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+              membershipPlans.map(renderPlanCard)
           ) : (
             <div className="col-span-full text-center py-12">
               <p className="text-gray-600 dark:text-neutral-400">No membership packages available</p>
@@ -1234,7 +585,7 @@ export default function MembershipSection({
             <button
               suppressHydrationWarning
               onClick={() => setIsInclusionsExpanded(!isInclusionsExpanded)}
-              className={`font-poppins w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-all duration-300 hover:scale-[1.02] border flex items-center justify-center ${
+              className={`font-sans w-full py-3 px-4 rounded-2xl text-white font-semibold text-[15px] sm:text-base shadow-lg transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] hover:scale-[1.02] border flex items-center justify-center ${
                 isInclusionsExpanded
                   ? "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-600 border-slate-500 hover:shadow-xl"
                   : "bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 border-slate-700 hover:shadow-xl"

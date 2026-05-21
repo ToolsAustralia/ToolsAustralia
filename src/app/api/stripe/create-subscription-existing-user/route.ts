@@ -11,11 +11,21 @@ import { authOptions } from "@/lib/auth";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
-import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import {
+  checkCanCreateSubscription,
+  EXISTING_SUBSCRIPTION_CODE,
+  EXISTING_SUBSCRIPTION_MESSAGE,
+} from "@/utils/payment/subscription-creation-guard";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
+import { createSubscriptionWithIdempotencyRetry } from "@/utils/payment/stripe/createSubscriptionWithIdempotencyRetry";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -31,6 +41,7 @@ const createSubscriptionExistingUserSchema = z.object({
   cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -76,9 +87,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // console.log(`🚀 Creating subscription for existing user: ${session.user.id}`);
 
@@ -98,6 +110,9 @@ export async function POST(request: NextRequest) {
     if (!membershipPackage || !membershipPackage.isActive) {
       return NextResponse.json({ error: "Invalid or inactive package" }, { status: 400 });
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
@@ -124,6 +139,13 @@ export async function POST(request: NextRequest) {
           const subCustomerId = typeof prevSub.customer === "string" ? prevSub.customer : prevSub.customer?.id;
           if (subCustomerId === stripeCustomerId) {
             await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+            if (existingUser.subscription?.pendingStripeSubscriptionId === validatedData.cancelPreviousSubscriptionId) {
+              existingUser.subscription.pendingStripeSubscriptionId = undefined;
+              existingUser.subscription.pendingStripeSubscriptionRequestId = undefined;
+              existingUser.subscription.pendingStripeSubscriptionCreatedAt = undefined;
+              existingUser.markModified("subscription");
+              await existingUser.save();
+            }
             if (correlationId) {
               console.log("[create-subscription-existing-user] cancelled previous incomplete subscription (plan switch)", {
                 correlationId,
@@ -212,6 +234,12 @@ export async function POST(request: NextRequest) {
     const hasAnchor = Object.keys(anchorParams).length > 0;
     const next24Date = hasAnchor ? new Date(getNextAnchorTimestamp(new Date()) * 1000) : null;
 
+    // Compute resubscribe before creating subscription so webhook can use metadata (API may set isActive before webhook runs)
+    const isResubscribeForMetadata =
+      existingUser.subscription &&
+      !existingUser.subscription.isActive &&
+      existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
+
     const userIdForMetadata = existingUser._id?.toString() ?? "";
     const baseMetadata = {
       packageId: validatedData.packageId,
@@ -222,6 +250,7 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+      ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
       ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
       ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
@@ -229,6 +258,7 @@ export async function POST(request: NextRequest) {
       ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...buildAttributionMetadata(validatedData.attribution),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
+      ...(isResubscribeForMetadata && { [STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE]: "true" }),
     };
 
     const createPayload: Stripe.SubscriptionCreateParams = {
@@ -270,10 +300,29 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const subscription = await stripe.subscriptions.create(
-      createPayload,
-      { idempotencyKey }
-    );
+    if (stripeCustomerId) {
+      const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(stripeCustomerId);
+      if (hasLiveStripeSubscription) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: EXISTING_SUBSCRIPTION_MESSAGE,
+            code: EXISTING_SUBSCRIPTION_CODE,
+            ...(correlationId && { correlationId }),
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    const subscription = await createSubscriptionWithIdempotencyRetry({
+      stripe,
+      payload: createPayload,
+      idempotencyKey,
+      customerId: stripeCustomerId,
+      packageId: validatedData.packageId,
+      correlationId,
+    });
 
     if (correlationId) {
       console.log("[create-subscription-existing-user] subscription created", {
@@ -292,15 +341,8 @@ export async function POST(request: NextRequest) {
     const subscriptionEndDate =
       subscriptionPeriodEnd != null ? new Date(subscriptionPeriodEnd * 1000) : undefined;
 
-    // ✅ CRITICAL: Preserve lastMonthAccumulatedEntries when resubscribing
-    // Check if this is a resubscription (user had subscription before but it's not active)
-    const isResubscribe =
-      existingUser.subscription &&
-      !existingUser.subscription.isActive &&
-      existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
-
-    // Preserve lastMonthAccumulatedEntries if this is a resubscription
-    const preservedLastMonthAccumulatedEntries = isResubscribe
+    // Preserve lastMonthAccumulatedEntries if this is a resubscription (already computed for metadata above)
+    const preservedLastMonthAccumulatedEntries = isResubscribeForMetadata
       ? existingUser.subscription!.lastMonthAccumulatedEntries
       : undefined;
 
@@ -312,17 +354,27 @@ export async function POST(request: NextRequest) {
       endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
       autoRenew: true,
       status: subscription.status, // Track subscription status
+      pendingStripeSubscriptionId: subscription.id,
+      pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+      pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
       lastMonthAccumulatedEntries: preservedLastMonthAccumulatedEntries,
     };
 
     // Log resubscription detection
-    if (isResubscribe) {
+    if (isResubscribeForMetadata) {
       console.log(
         `✅ [RESUBSCRIBE] Preserved lastMonthAccumulatedEntries: ${preservedLastMonthAccumulatedEntries} for user ${existingUser.email}`
       );
     }
 
-    existingUser.stripeSubscriptionId = subscription.id;
+    if (shouldWriteCanonicalStripeSubscriptionId(subscription.status)) {
+      existingUser.stripeSubscriptionId = subscription.id;
+    }
+
+    if (isResubscribeForMetadata && existingUser.subscription) {
+      existingUser.subscription.lastResubscribedAt = new Date();
+      existingUser.markModified("subscription");
+    }
 
     // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
     // Subscription status updates are handled by webhook after payment succeeds
@@ -367,7 +419,21 @@ export async function POST(request: NextRequest) {
         if (endDate !== undefined) {
           updatePayload["subscription.endDate"] = endDate;
         }
-        await User.updateOne({ _id: existingUser._id }, { $set: updatePayload }).catch((err) => {
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          updatePayload["stripeSubscriptionId"] = subscription.id;
+        }
+        const updateOperation: {
+          $set: Record<string, unknown>;
+          $unset?: Record<string, "">;
+        } = { $set: updatePayload };
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          updateOperation.$unset = {
+            "subscription.pendingStripeSubscriptionId": "",
+            "subscription.pendingStripeSubscriptionRequestId": "",
+            "subscription.pendingStripeSubscriptionCreatedAt": "",
+          };
+        }
+        await User.updateOne({ _id: existingUser._id }, updateOperation).catch((err) => {
           console.warn("Non-critical user update after invoice pay failed (webhook will handle):", err);
         });
 
@@ -376,6 +442,12 @@ export async function POST(request: NextRequest) {
         existingUser.subscription!.status = newStatus;
         if (endDate !== undefined) {
           existingUser.subscription!.endDate = endDate;
+        }
+        if (shouldWriteCanonicalStripeSubscriptionId(subscriptionUpdated.status)) {
+          existingUser.stripeSubscriptionId = subscription.id;
+          existingUser.subscription!.pendingStripeSubscriptionId = undefined;
+          existingUser.subscription!.pendingStripeSubscriptionRequestId = undefined;
+          existingUser.subscription!.pendingStripeSubscriptionCreatedAt = undefined;
         }
 
         return NextResponse.json({
@@ -453,6 +525,8 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        const excessiveRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, payError);
+
         return NextResponse.json(
           {
             success: false,
@@ -462,6 +536,10 @@ export async function POST(request: NextRequest) {
             ...(declineCode && { decline_code: declineCode }),
             ...(errorType && { type: errorType }),
             ...(correlationId && { correlationId }),
+            ...(excessiveRetry.requiresDifferentPaymentMethod && {
+              requiresDifferentPaymentMethod: true,
+              ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+            }),
           },
           { status: 400 }
         );

@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
 import Order from "@/models/Order";
 import ReferralEvent from "@/models/ReferralEvent";
@@ -19,7 +20,8 @@ export interface RecentActivity {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -27,13 +29,16 @@ export interface RecentActivity {
   status: "success" | "info" | "warning" | "error";
   amount?: number;
   timestamp: Date;
+  /** For mini-draw purchases: link to /mini-draws/[id] */
+  miniDrawId?: string;
 }
 
 /**
  * GET /api/admin/dashboard/recent-activities
- * Get recent activities for admin dashboard
+ * Get recent activities for admin dashboard with pagination
+ * Query params: page (default 1), limit (default 20)
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await connectDB();
 
@@ -43,21 +48,24 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log("📊 Fetching recent activities...");
+    // Parse pagination params
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
+    const skip = (page - 1) * limit;
+
+    console.log(`📊 Fetching recent activities (page ${page}, limit ${limit})...`);
 
     const activities: RecentActivity[] = [];
-    const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // ========================================
     // RECENT USER SIGNUPS
     // ========================================
     const recentSignups = await User.find({
-      createdAt: { $gte: oneWeekAgo },
       isActive: true,
     })
       .sort({ createdAt: -1 })
-      .limit(10)
+      .limit(50)
       .select("firstName lastName email createdAt _id affiliateReferral");
 
     // Batch query referral events for all signups to check if they were referred by someone else
@@ -116,10 +124,9 @@ export async function GET() {
     // .lean() returns plain JavaScript objects where Mixed types are directly accessible
     const recentPayments = await PaymentEvent.find({
       eventType: "BenefitsGranted",
-      timestamp: { $gte: oneWeekAgo },
     })
       .sort({ timestamp: -1 })
-      .limit(15)
+      .limit(100)
       .lean(); // ✅ Use .lean() to get plain objects - Mixed types are now properly accessible
 
     // ✅ Populate users separately in batch for better performance
@@ -129,6 +136,27 @@ export async function GET() {
       .lean();
 
     const userMap = new Map(paymentUsers.map((u) => [u._id.toString(), u]));
+
+    // Batch fetch MiniDraw titles for mini-draw payments (for "Entered in [title] with X entries")
+    const rawMiniDrawIds = [
+      ...new Set(
+        recentPayments
+          .filter((p) => p.packageType === "mini-draw")
+          .map((p) => (p.data as Record<string, unknown>)?.miniDrawId as string)
+          .filter(Boolean)
+      ),
+    ];
+    const validMiniDrawIds = rawMiniDrawIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const miniDraws =
+      validMiniDrawIds.length > 0
+        ? await MiniDraw.find({ _id: { $in: validMiniDrawIds } })
+            .select("_id name")
+            .lean()
+        : [];
+    type MiniDrawLean = { _id: mongoose.Types.ObjectId; name: string };
+    const miniDrawMap = new Map<string, string>(
+      (miniDraws as unknown as MiniDrawLean[]).map((d) => [d._id.toString(), d.name])
+    );
 
     recentPayments.forEach((payment) => {
       // ✅ Get user from map (plain object from .lean())
@@ -199,7 +227,14 @@ export async function GET() {
         action = `Purchased ${packageName}`;
         type = "one_time_purchase";
       } else if (payment.packageType === "mini-draw") {
-        action = `Purchased ${packageName}`;
+        const miniDrawId = paymentData?.miniDrawId as string | undefined;
+        const entries = (paymentData?.entries as number | undefined) ?? 0;
+        const miniDrawTitle = miniDrawId ? miniDrawMap.get(miniDrawId) : null;
+        if (miniDrawId && miniDrawTitle) {
+          action = `Entered in "${miniDrawTitle}" with ${entries} ${entries === 1 ? "entry" : "entries"}`;
+        } else {
+          action = `Purchased ${packageName}`;
+        }
         type = "one_time_purchase";
       }
 
@@ -209,7 +244,7 @@ export async function GET() {
         action = `High-value purchase: ${action} - $${amount}`;
       }
 
-      activities.push({
+      const activityPayload: RecentActivity = {
         id: `payment-${payment._id}`,
         type,
         user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
@@ -219,30 +254,43 @@ export async function GET() {
         status: "success",
         amount,
         timestamp: payment.timestamp,
-      });
+      };
+      if (payment.packageType === "mini-draw") {
+        const miniDrawId = (payment.data as Record<string, unknown>)?.miniDrawId as string | undefined;
+        if (miniDrawId && miniDrawMap.has(miniDrawId)) {
+          activityPayload.miniDrawId = miniDrawId;
+        }
+      }
+      activities.push(activityPayload);
     });
 
     // ========================================
     // SUBSCRIPTION CHANGES (Upgrades, Downgrades, Cancellations)
     // ========================================
-    // Find users with recent subscription changes
+    // Find users with subscription changes
     const usersWithSubscriptionChanges = await User.find({
       $or: [
-        { "subscription.lastUpgradeDate": { $gte: oneWeekAgo } },
-        { "subscription.lastDowngradeDate": { $gte: oneWeekAgo } },
-        { "subscription.cancelledAt": { $gte: oneWeekAgo } },
+        { "subscription.lastUpgradeDate": { $exists: true } },
+        { "subscription.lastDowngradeDate": { $exists: true } },
+        { "subscription.cancelledAt": { $exists: true } },
+        { "subscription.pastDueAt": { $exists: true } },
       ],
       isActive: true,
     })
-      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.cancelledAt": -1 })
-      .limit(10)
+      .sort({
+        "subscription.lastUpgradeDate": -1,
+        "subscription.lastDowngradeDate": -1,
+        "subscription.cancelledAt": -1,
+        "subscription.pastDueAt": -1,
+      })
+      .limit(50)
       .select("firstName lastName email subscription");
 
     usersWithSubscriptionChanges.forEach((user) => {
       if (!user.subscription) return;
 
       // Check for upgrades
-      if (user.subscription.lastUpgradeDate && user.subscription.lastUpgradeDate >= oneWeekAgo) {
+      if (user.subscription.lastUpgradeDate) {
         const timeAgo = getTimeAgo(user.subscription.lastUpgradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
@@ -265,7 +313,7 @@ export async function GET() {
       }
 
       // Check for downgrades
-      if (user.subscription.lastDowngradeDate && user.subscription.lastDowngradeDate >= oneWeekAgo) {
+      if (user.subscription.lastDowngradeDate) {
         const timeAgo = getTimeAgo(user.subscription.lastDowngradeDate);
         const currentPackage = user.subscription.packageId || "Unknown";
         const previousPackage = user.subscription.previousSubscription?.packageId || "Unknown";
@@ -289,7 +337,6 @@ export async function GET() {
       // Check for cancellations - use cancelledAt (when cancellation was triggered) instead of endDate (future period end)
       if (
         user.subscription.cancelledAt &&
-        user.subscription.cancelledAt >= oneWeekAgo &&
         (!user.subscription.lastDowngradeDate ||
           user.subscription.cancelledAt.getTime() !== user.subscription.lastDowngradeDate.getTime())
       ) {
@@ -307,6 +354,22 @@ export async function GET() {
           timestamp: user.subscription.cancelledAt,
         });
       }
+
+      if (user.subscription.pastDueAt) {
+        const timeAgo = getTimeAgo(user.subscription.pastDueAt);
+        const packageName = getPackageName(user.subscription.packageId || "Unknown");
+
+        activities.push({
+          id: `past-due-${user._id}-${user.subscription.pastDueAt.getTime()}`,
+          type: "subscription_past_due",
+          user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
+          action: `Membership renewal failed — ${packageName} account past due`,
+          time: timeAgo,
+          status: "error",
+          timestamp: user.subscription.pastDueAt,
+        });
+      }
     });
 
     // ========================================
@@ -314,10 +377,9 @@ export async function GET() {
     // ========================================
     const recentCompletedDraws = await MajorDraw.find({
       status: "completed",
-      updatedAt: { $gte: oneWeekAgo },
     })
       .sort({ updatedAt: -1 })
-      .limit(5)
+      .limit(20)
       .select("name updatedAt _id")
       .lean();
 
@@ -357,11 +419,10 @@ export async function GET() {
     // RECENT HIGH-VALUE ORDERS
     // ========================================
     const recentOrders = await Order.find({
-      createdAt: { $gte: oneWeekAgo },
       totalAmount: { $gte: 200 },
     })
       .sort({ createdAt: -1 })
-      .limit(5)
+      .limit(30)
       .populate("user", "firstName lastName");
 
     recentOrders.forEach((order) => {
@@ -394,14 +455,22 @@ export async function GET() {
     // Sort all activities by timestamp (most recent first)
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    // Return top 20 most recent activities
-    const recentActivities = activities.slice(0, 20);
+    // Apply pagination
+    const totalActivities = activities.length;
+    const paginatedActivities = activities.slice(skip, skip + limit);
+    const hasMore = skip + limit < totalActivities;
 
-    console.log(`✅ Found ${recentActivities.length} recent activities`);
+    console.log(`✅ Found ${paginatedActivities.length} activities (page ${page}/${Math.ceil(totalActivities / limit)})`);
 
     return NextResponse.json({
       success: true,
-      data: recentActivities,
+      data: paginatedActivities,
+      pagination: {
+        page,
+        limit,
+        total: totalActivities,
+        hasMore,
+      },
     });
   } catch (error) {
     console.error("❌ Error fetching recent activities:", error);

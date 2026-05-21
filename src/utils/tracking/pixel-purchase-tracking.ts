@@ -1,20 +1,22 @@
 /**
  * Pixel Purchase Tracking Utilities
  *
- * Provides server-side pixel tracking for all purchase events via Conversions API only.
- * This ensures pixel events are fired for every purchase type.
- * Uses Conversions API (CAPI) for accurate revenue tracking - browser pixel removed.
+ * Provider-agnostic Purchase / Subscribe / Unsubscribe / Renewal tracking.
  *
- * @version 2.1.0
+ * Each function builds a CanonicalEvent once and dispatches via:
+ * - `sendConversion(...)`     — server side (CAPI fan-out to FB + TikTok + Snap)
+ * - browser-side Purchase pixel fires from the success-page clients themselves
+ *   (see PurchaseSuccessClient etc.) — this file is server-side only for purchases.
+ *
+ * Klaviyo events stay as a direct call (Klaviyo is marketing automation, not a CAPI provider).
  */
 
+import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
 import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 import {
   sendFacebookEvent,
   FacebookEvent,
-  buildFacebookPurchaseEventDev,
-  sendFacebookPurchaseEventDev,
   getFacebookTestEventCode,
 } from "@/lib/facebook";
 import {
@@ -24,6 +26,8 @@ import {
   getFBPFromCookie,
   getEventSourceURL,
 } from "./facebook-helpers";
+import { sendConversion } from "@/lib/tracking/dispatch";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 
 export interface PixelPurchaseParams {
   value: number;
@@ -41,6 +45,7 @@ export interface PixelPurchaseParams {
   userState?: string;
   userZipCode?: string;
   userCountry?: string;
+  userBirthdate?: string | Date;
   entriesAdded?: number;
   pointsEarned?: number;
   subscriptionId?: string;
@@ -66,10 +71,12 @@ export interface PixelPurchaseParams {
   experimentId?: string;
   variantId?: string;
   anonymousId?: string; // Anonymous ID for A/B testing tracking (for users who visited before logging in)
+  /** When true, sets CAPI custom_data.content_category to "resubscribe" for segmentation. */
+  isResubscribe?: boolean;
   /**
-   * "website" (default) for browser-initiated checkouts.
-   * "system_generated" for Stripe webhook-initiated payments — no live browser session,
-   * no real event_source_url. Meta accepts this and treats it as backend-attributed.
+   * "website" (default) for browser-initiated checkouts. "system_generated" for
+   * Stripe webhook-initiated payments — no live browser session, no real
+   * event_source_url. Meta accepts this and treats it as backend-attributed.
    */
   actionSource?: "website" | "system_generated";
 }
@@ -105,14 +112,9 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       userPhone,
       userFirstName,
       userLastName,
-      userCity: _userCity,
       userState,
-      userZipCode: _userZipCode,
       userCountry,
-      entriesAdded,
-      pointsEarned,
-      subscriptionId,
-      paymentIntentId,
+      userBirthdate,
       content_type,
       content_ids,
       num_items,
@@ -125,160 +127,80 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       experimentId,
       variantId,
       anonymousId,
+      isResubscribe,
+      paymentIntentId,
+      subscriptionId,
+      entriesAdded,
+      pointsEarned,
       actionSource,
     } = params;
 
-    // Use orderId as event_id for Purchase (deterministic; enables Pixel+CAPI deduplication if Pixel is added later)
-    const eventID = orderId;
+    if (!orderId?.trim()) {
+      console.error("Conversion Purchase skipped: missing orderId (eventId)");
+      return false;
+    }
 
-    // Track Conversions API (server-side) - CRITICAL for accurate revenue tracking
-    // Browser pixel removed - using CAPI-only approach per documentation
-    let capiSuccess = false;
+    const eventId = orderId.trim();
 
-    // Prepare common parameters for TikTok/Klaviyo tracking (client-side only)
-    const commonParams = {
-      eventID, // Include eventID for TikTok tracking
+    // Resolve fbc/fbp the legacy way — requestContext, then provided, then client-side cookies.
+    let fbc = requestContext?.fbc ?? providedFbc;
+    let fbp = requestContext?.fbp ?? providedFbp;
+    if (!fbc && typeof window !== "undefined") fbc = getFBCFromURL();
+    if (!fbp && typeof window !== "undefined") fbp = getFBPFromCookie();
+
+    const resolvedClientIp = requestContext?.client_ip_address ?? clientIpAddress;
+    const resolvedUserAgent = requestContext?.client_user_agent ?? clientUserAgent;
+
+    const event = buildPurchaseEvent({
       value,
       currency,
-      order_id: orderId, // Use order_id (not orderId) for TikTok
-      content_type: content_type || getContentType(packageType),
-      content_ids: content_ids || (packageId ? [packageId] : []),
-      num_items: num_items || 1,
-      // Custom parameters for Tools Australia
-      package_type: packageType,
-      package_id: packageId,
-      package_name: packageName,
-      entries_added: entriesAdded,
-      points_earned: pointsEarned,
-      subscription_id: subscriptionId,
-      payment_intent_id: paymentIntentId,
-      user_id: userId,
-      user_email: userEmail,
-      platform: "tools-australia",
-      // A/B Testing metadata (if provided)
-      ...(experimentId && { experiment_id: experimentId }),
-      ...(variantId && { variant_id: variantId }),
-    };
-    
-    try {
-      // Prepare user data with hashing (include externalId for Meta matching)
-      // Country defaults to "AU" for Tools Australia when not provided
-      const userData = prepareUserData({
+      eventId,
+      // Webhook-initiated payments should pass `actionSource: "system_generated"`
+      // so Meta's spec is honored (no live browser session, no real event_source_url).
+      actionSource,
+      userData: {
         email: userEmail,
         phone: userPhone,
         firstName: userFirstName,
         lastName: userLastName,
         state: userState,
-        country: userCountry || "AU",
-        ...(userId && { externalId: userId }),
-      });
-
-      // Get fbc and fbp - prioritize requestContext, then provided values, then try to extract
-      // For server-side tracking, these should be passed as parameters or extracted from request
-      let fbc = requestContext?.fbc || providedFbc;
-      let fbp = requestContext?.fbp || providedFbp;
-
-      // If not provided, try to extract from browser (client-side) or request (server-side)
-      if (!fbc) {
-        if (typeof window !== "undefined") {
-          fbc = getFBCFromURL();
-        }
-        // Note: For server-side, fbc should be passed as parameter or extracted from request
-        // using extractFBCFromRequest() helper
-      }
-
-      if (!fbp) {
-        if (typeof window !== "undefined") {
-          fbp = getFBPFromCookie();
-        }
-        // Note: For server-side, fbp should be passed as parameter or extracted from request
-        // using extractFBPFromRequest() helper
-      }
-
-      // Extract IP address and user agent - CRITICAL for Event Match Quality
-      // Prioritize requestContext, then direct parameters
-      const clientIp = requestContext?.client_ip_address || clientIpAddress;
-      let userAgent = requestContext?.client_user_agent || clientUserAgent;
-
-      // Meta requires client_user_agent for website events. When sending from server (e.g. webhook)
-      // without request context, use a placeholder so the event is accepted (match quality may be lower).
-      if (!userAgent && typeof window === "undefined") {
-        userAgent = "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)";
-      }
-
-      // Add IP address and user agent to user data (required by Meta for optimal match quality)
-      if (clientIp) {
-        userData.client_ip_address = clientIp;
-      }
-      if (userAgent) {
-        userData.client_user_agent = userAgent;
-      }
-
-      // Add fbc and fbp to user data if available
-      if (fbc) userData.fbc = fbc;
-      if (fbp) userData.fbp = fbp;
-
-      // Meta requires event_source_url for action_source "website"
-      // buildFacebookPurchaseEventDev uses fallback (https://example.com/dev-checkout) when localhost
-      const resolvedEventSourceUrl =
+        country: userCountry ?? "AU",
+        externalId: userId,
+        birthdate: userBirthdate,
+        clientIpAddress: resolvedClientIp,
+        clientUserAgent: resolvedUserAgent,
+        fbc,
+        fbp,
+      },
+      customData: {
+        orderId,
+        contentType: content_type ?? "product",
+        contentIds: content_ids ?? (packageId ? [packageId] : undefined),
+        ...(isResubscribe && { contentCategory: "resubscribe" }),
+        numItems: num_items ?? 1,
+        packageType,
+      },
+      eventSourceUrl:
         requestContext?.event_source_url ??
         eventSourceUrl ??
         (typeof window !== "undefined" ? getEventSourceURL() : undefined) ??
-        getServerEventSourceUrlFallback();
+        getServerEventSourceUrlFallback(),
+    });
 
-      // Build validated Purchase event (handles localhost fallback, value/currency validation)
-      const facebookEvent = buildFacebookPurchaseEventDev({
-        value,
-        currency,
-        eventId: eventID,
-        actionSource,
-        userData: {
-          ...(userData as Record<string, string>),
-          client_ip_address: clientIp,
-          client_user_agent: userAgent || "Mozilla/5.0 (compatible; Server-Side-CAPI/1.0)",
-          ...(fbc && { fbc }),
-          ...(fbp && { fbp }),
-        },
-        eventSourceUrl: resolvedEventSourceUrl ?? undefined,
-        customData: {
-          value,
-          currency,
-          order_id: orderId,
-          content_ids: content_ids || (packageId ? [packageId] : []),
-          content_type: content_type || getContentType(packageType),
-          num_items: num_items ?? 1,
-        },
-      });
+    const results = await sendConversion(event, {
+      clientIpAddress: event.userData?.clientIpAddress,
+      clientUserAgent: event.userData?.clientUserAgent,
+      eventSourceUrl: event.eventSourceUrl,
+    });
 
-      if (facebookEvent) {
-        // Uses test_event_code in dev, never throws
-        capiSuccess = await sendFacebookPurchaseEventDev(facebookEvent);
-      } else {
-        if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
-          console.warn(
-            `⚠️ [Facebook CAPI] Skipping Purchase event: validation failed (value/currency). OrderId: ${orderId}, value: ${value}, currency: ${currency}`
-          );
-        }
-      }
-    } catch (apiError) {
-      if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
-        console.error("❌ [Facebook CAPI] Error sending Purchase event:", apiError);
-      }
-    }
-
-    // ✅ Track purchase as experiment event (for A/B testing analytics)
-    // This ensures purchases are counted in conversion rates and analytics
-    // ✅ DEDUPLICATION: Uses orderId to prevent duplicate tracking
+    // ✅ A/B experiment tracking — preserved legacy client/server branching.
+    // Client-side bundles can't import @/lib/mongodb or repositories, so the browser path
+    // posts to /api/ab-testing/track instead.
     if (experimentId && variantId) {
       try {
-        // Track both "purchase" and "conversion" events
-        // Purchase = specific purchase event
-        // Conversion = any conversion (includes purchases)
-        // ✅ Both events use the same orderId for deduplication
         if (typeof window !== "undefined") {
           // Client-side: Use fetch API
-          // Use Promise.allSettled to ensure both events are attempted even if one fails
-          const results = await Promise.allSettled([
+          const abResults = await Promise.allSettled([
             fetch("/api/ab-testing/track", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -287,7 +209,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
                 variantId,
                 eventType: "purchase",
                 metadata: {
-                  orderId, // ✅ Critical for deduplication
+                  orderId,
                   value,
                   currency,
                   packageType,
@@ -304,7 +226,7 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
                 variantId,
                 eventType: "conversion",
                 metadata: {
-                  orderId, // ✅ Critical for deduplication
+                  orderId,
                   value,
                   currency,
                   packageType,
@@ -314,13 +236,11 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
             }),
           ]);
 
-          // Log any failures (but don't throw - tracking should not block purchase flow)
-          results.forEach((result, index) => {
+          abResults.forEach((result, index) => {
             if (result.status === "rejected") {
               console.error(`Error tracking ${index === 0 ? "purchase" : "conversion"} event:`, result.reason);
             } else if (!result.value.ok) {
               const eventType = index === 0 ? "purchase" : "conversion";
-              // Check if it's a duplicate (which is OK)
               result.value.json().then((data: { duplicate?: boolean }) => {
                 if (!data.duplicate) {
                   console.warn(`Failed to track ${eventType} event:`, result.value.status);
@@ -334,89 +254,41 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
           // Server-side: Call repository directly (for webhook/server-side purchases)
           const { default: ExperimentEventRepository } = await import("@/repositories/ab-testing/ExperimentEventRepository");
           const { default: connectDB } = await import("@/lib/mongodb");
-          
+
           await connectDB();
-          
-          console.log(`📊 [A/B Testing] Tracking server-side purchase/conversion:`, {
-            experimentId,
-            variantId,
-            orderId,
-            userId: userId || "anonymous",
-            anonymousId: anonymousId || "none",
-            value,
-            currency,
-          });
-          
-          // Track purchase event
+
           await ExperimentEventRepository.createEvent({
             experimentId,
             variantId,
             eventType: "purchase",
             userId: userId || undefined,
-            anonymousId: anonymousId || undefined, // ✅ ADD: Pass anonymousId if available
-            metadata: {
-              orderId, // ✅ Critical for deduplication
-              value,
-              currency,
-              packageType,
-              packageId,
-              packageName,
-            },
+            anonymousId: anonymousId || undefined,
+            metadata: { orderId, value, currency, packageType, packageId, packageName },
           });
-          
-          // Track conversion event
           await ExperimentEventRepository.createEvent({
             experimentId,
             variantId,
             eventType: "conversion",
             userId: userId || undefined,
-            anonymousId: anonymousId || undefined, // ✅ ADD: Pass anonymousId if available
-            metadata: {
-              orderId, // ✅ Critical for deduplication
-              value,
-              currency,
-              packageType,
-              source: "purchase",
-            },
+            anonymousId: anonymousId || undefined,
+            metadata: { orderId, value, currency, packageType, source: "purchase" },
           });
-          
-          console.log(`✅ [A/B Testing] Server-side purchase/conversion tracked successfully for experiment ${experimentId}, variant ${variantId}, order ${orderId}`);
         }
-      } catch (error) {
-        // Silently fail - experiment tracking should not block purchase flow
-        console.error("Error tracking experiment events for purchase:", error);
+      } catch (err) {
+        console.error("A/B experiment tracking failed (non-fatal):", err);
       }
     }
 
-    // 3. Track TikTok Pixel Purchase (client-side only)
-    // ✅ FIX: Skip TikTok tracking on server-side - it's a client component function
-    if (typeof window !== "undefined") {
-      try {
-        await trackTikTokEvent("CompletePayment", commonParams);
-        // console.log(`📱 TikTok Pixel: Purchase tracked for ${packageType} - $${value} ${currency}`);
-      } catch {
-        // Silently fail - TikTok tracking is optional and client-side only
-        console.warn("⚠️ TikTok Pixel tracking skipped (server-side execution)");
-      }
-    }
-
-    // 4. Track Klaviyo Purchase (client-side only)
+    // Klaviyo (marketing automation, NOT a CAPI provider — stays as a direct client-side call).
     if (typeof window !== "undefined") {
       try {
         trackKlaviyoEvent("Placed Order", {
           value,
           currency,
           order_id: orderId,
-          item_count: num_items || 1,
+          item_count: num_items ?? 1,
           items: packageId
-            ? [
-                {
-                  product_id: packageId,
-                  product_name: packageName,
-                  value,
-                  quantity: num_items || 1,
-                },
-              ]
+            ? [{ product_id: packageId, product_name: packageName, value, quantity: num_items ?? 1 }]
             : [],
           package_type: packageType,
           package_id: packageId,
@@ -424,31 +296,190 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
           user_id: userId,
           user_email: userEmail,
         });
-        // console.log(`📧 Klaviyo: Purchase tracked for ${packageType} - $${value} ${currency}`);
-      } catch (klaviyoError) {
-        // Silently fail - Klaviyo tracking is optional and client-side only
+      } catch (err) {
         if (process.env.NODE_ENV === "development") {
-          console.warn("⚠️ Klaviyo tracking error:", klaviyoError);
+          console.warn("Klaviyo tracking error (non-fatal):", err);
         }
       }
     }
 
-    return capiSuccess;
+    // Reference unused params to satisfy noUnusedLocals (renewal-specific fields kept on PixelPurchaseParams type).
+    void paymentIntentId;
+    void subscriptionId;
+    void entriesAdded;
+    void pointsEarned;
+
+    return Object.values(results).some(Boolean);
   } catch (error) {
-    console.error("❌ Error tracking pixel purchase:", error);
-    // Don't throw - pixel tracking should not break purchase flow
+    console.error("Error tracking pixel purchase:", error);
     return false;
   }
 }
 
 /**
- * Shared interface for subscription tier-change events (upgrade/downgrade).
- * Tier changes are tracked as Meta CUSTOM events (`MembershipUpgrade` /
- * `MembershipDowngrade`), NOT as the standard `Subscribe` event — `Subscribe`
- * per Meta's spec is reserved for the *initial* paid subscription start, and
- * firing it on every tier change pollutes the Subscribe optimization signal.
+ * Track subscription events (Subscribe/Unsubscribe)
+ * Now includes Conversions API integration with EventID deduplication
  */
-interface SubscriptionTierChangeParams {
+export async function trackPixelSubscription(
+  action: "Subscribe" | "Unsubscribe",
+  params: {
+    value: number;
+    currency: string;
+    packageId: string;
+    packageName: string;
+    subscriptionId: string;
+    userId?: string;
+    userEmail?: string;
+    userPhone?: string;
+    userFirstName?: string;
+    userLastName?: string;
+    userState?: string;
+    userBirthdate?: string | Date;
+    userZipCode?: string;
+    entriesPerMonth?: number;
+    paymentIntentId?: string;
+    eventSourceUrl?: string;
+    // NEW: Optional request context for improved match quality (backward compatible)
+    requestContext?: {
+      client_ip_address?: string;
+      client_user_agent?: string;
+      fbc?: string;
+      fbp?: string;
+      event_source_url?: string;
+    };
+    clientIpAddress?: string;
+    clientUserAgent?: string;
+  }
+): Promise<void> {
+  try {
+    const {
+      value,
+      currency,
+      packageId,
+      packageName,
+      subscriptionId,
+      userId,
+      userEmail,
+      userPhone,
+      userFirstName,
+      userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
+      entriesPerMonth,
+      paymentIntentId,
+      eventSourceUrl,
+      requestContext,
+      clientIpAddress,
+      clientUserAgent,
+    } = params;
+
+    // Generate unique event ID for deduplication
+    const eventID = generateEventID(action.toLowerCase(), subscriptionId);
+    const eventTime = Math.floor(Date.now() / 1000);
+
+    const commonParams = {
+      eventID, // Include eventID for browser pixel deduplication
+      value,
+      currency,
+      content_type: "subscription",
+      content_ids: [packageId],
+      subscription_id: subscriptionId,
+      package_id: packageId,
+      package_name: packageName,
+      entries_per_month: entriesPerMonth,
+      payment_intent_id: paymentIntentId,
+      user_id: userId,
+      user_email: userEmail,
+      platform: "tools-australia",
+    };
+
+    // 1. Track Browser Pixel (if in browser context)
+    if (typeof window !== "undefined") {
+      trackFacebookEvent(action, commonParams);
+      // console.log(`📘 Facebook Pixel (Browser): ${action} tracked - ${packageName} - $${value} ${currency}`);
+    }
+
+    // 2. Track Conversions API (server-side)
+    try {
+      const userData = prepareUserData({
+        email: userEmail,
+        phone: userPhone,
+        firstName: userFirstName,
+        lastName: userLastName,
+        state: userState,
+        birthdate: userBirthdate,
+        zipCode: userZipCode,
+      });
+
+      // Get fbc and fbp - prioritize requestContext, then try to extract
+      let fbc = requestContext?.fbc;
+      let fbp = requestContext?.fbp;
+
+      if (typeof window !== "undefined") {
+        if (!fbc) fbc = getFBCFromURL();
+        if (!fbp) fbp = getFBPFromCookie();
+      }
+
+      // Extract IP address and user agent - CRITICAL for Event Match Quality
+      const clientIp = requestContext?.client_ip_address || clientIpAddress;
+      const userAgent = requestContext?.client_user_agent || clientUserAgent;
+
+      // Add IP address and user agent to user data (required by Meta for optimal match quality)
+      if (clientIp) {
+        userData.client_ip_address = clientIp;
+      }
+      if (userAgent) {
+        userData.client_user_agent = userAgent;
+      }
+
+      if (fbc) userData.fbc = fbc;
+      if (fbp) userData.fbp = fbp;
+
+      const facebookEvent: FacebookEvent = {
+        event_name: action,
+        event_time: eventTime,
+        event_id: eventID,
+        action_source: "website",
+        user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
+        custom_data: {
+          currency,
+          value,
+          content_type: "subscription",
+          content_ids: [packageId],
+          content_name: packageName,
+        },
+        event_source_url:
+          requestContext?.event_source_url ??
+          eventSourceUrl ??
+          (typeof window !== "undefined" ? getEventSourceURL() : undefined),
+      };
+
+      const testEventCode = getFacebookTestEventCode();
+      const apiSuccess = await sendFacebookEvent(facebookEvent, testEventCode);
+      if (apiSuccess) {
+        // console.log(
+        //   `📘 Facebook Conversions API: ${action} tracked - ${packageName} - $${value} ${currency} (EventID: ${eventID})`
+        // );
+      } else {
+        // console.warn(`⚠️ Facebook Conversions API: Failed to send ${action} event (EventID: ${eventID})`);
+      }
+    } catch {
+      // console.error(`❌ Error sending ${action} to Facebook Conversions API:`, apiError);
+    }
+
+    // 3. Track TikTok Pixel
+    await trackTikTokEvent(action, commonParams);
+    // console.log(`📱 TikTok Pixel: ${action} tracked - ${packageName} - $${value} ${currency}`);
+  } catch {
+    // console.error(`❌ Error tracking pixel ${action}:`, error);
+  }
+}
+
+/**
+ * Track subscription upgrade events (subscription change, not purchase)
+ */
+export async function trackPixelSubscriptionUpgrade(params: {
   oldValue: number;
   newValue: number;
   currency: string;
@@ -462,14 +493,12 @@ interface SubscriptionTierChangeParams {
   userPhone?: string;
   userFirstName?: string;
   userLastName?: string;
+  userState?: string;
+  userBirthdate?: string | Date;
+  userZipCode?: string;
   paymentIntentId?: string;
   prorationAmount?: number;
   entriesAdded?: number;
-  entriesRemoved?: number;
-  /**
-   * Pass `extractRequestContext(request)` from the API route for proper EMQ
-   * (IP, user agent, fbc, fbp, event_source_url). Optional but recommended.
-   */
   requestContext?: {
     client_ip_address?: string;
     client_user_agent?: string;
@@ -477,125 +506,221 @@ interface SubscriptionTierChangeParams {
     fbp?: string;
     event_source_url?: string;
   };
-}
-
-/**
- * Internal: build and send the Meta CAPI Custom Event for a subscription tier change.
- * Returns true on Meta acknowledgement, false otherwise. Never throws.
- */
-async function sendMembershipTierChangeEvent(
-  eventName: "MembershipUpgrade" | "MembershipDowngrade",
-  params: SubscriptionTierChangeParams,
-  reportedValue: number
-): Promise<boolean> {
-  const {
-    currency,
-    newPackageId,
-    newPackageName,
-    subscriptionId,
-    userId,
-    userEmail,
-    userPhone,
-    userFirstName,
-    userLastName,
-    paymentIntentId,
-    requestContext,
-  } = params;
-
-  // Deterministic event_id so repeated webhook deliveries / client retries dedupe.
-  // Prefer paymentIntentId (upgrades have one), fall back to subscriptionId + epoch second
-  // (downgrades have no payment — but we still want repeated calls within the same second to dedupe).
-  const eventID = paymentIntentId
-    ? `${eventName.toLowerCase()}_${paymentIntentId}`
-    : `${eventName.toLowerCase()}_${subscriptionId}_${Math.floor(Date.now() / 1000)}`;
-
-  const userData = prepareUserData({
-    email: userEmail,
-    phone: userPhone,
-    firstName: userFirstName,
-    lastName: userLastName,
-    country: "AU",
-    ...(userId && { externalId: userId }),
-  });
-
-  if (requestContext?.client_ip_address) userData.client_ip_address = requestContext.client_ip_address;
-  if (requestContext?.client_user_agent) userData.client_user_agent = requestContext.client_user_agent;
-  if (requestContext?.fbc) userData.fbc = requestContext.fbc;
-  if (requestContext?.fbp) userData.fbp = requestContext.fbp;
-
-  const facebookEvent: FacebookEvent = {
-    event_name: eventName,
-    event_time: Math.floor(Date.now() / 1000),
-    event_id: eventID,
-    // Tier changes happen via an authenticated API route the user just hit from
-    // the dashboard — there IS a live browser session, so "website" is correct.
-    action_source: "website",
-    user_data: Object.keys(userData).length > 0 ? (userData as FacebookEvent["user_data"]) : {},
-    custom_data: {
-      currency,
-      value: reportedValue,
-      content_type: "subscription",
-      content_ids: [newPackageId],
-      content_name: newPackageName,
-    },
-    ...(requestContext?.event_source_url && { event_source_url: requestContext.event_source_url }),
-  };
-
+}): Promise<void> {
   try {
-    return await sendFacebookEvent(facebookEvent, getFacebookTestEventCode());
-  } catch (err) {
-    console.error(`❌ [${eventName}] CAPI send failed:`, err instanceof Error ? err.message : err);
-    return false;
+    const {
+      oldValue,
+      newValue,
+      currency,
+      oldPackageId,
+      newPackageId,
+      oldPackageName,
+      newPackageName,
+      subscriptionId,
+      userId,
+      userEmail,
+      userPhone,
+      userFirstName,
+      userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
+      paymentIntentId,
+      prorationAmount,
+      entriesAdded,
+      requestContext,
+    } = params;
+
+    const commonParams = {
+      value: Math.abs(newValue - oldValue), // Change amount
+      currency,
+      content_type: "subscription",
+      content_ids: [newPackageId], // Focus on new package
+      subscription_id: subscriptionId,
+      old_package_id: oldPackageId,
+      old_package_name: oldPackageName,
+      old_value: oldValue,
+      new_package_id: newPackageId,
+      new_package_name: newPackageName,
+      new_value: newValue,
+      proration_amount: prorationAmount,
+      entries_added: entriesAdded,
+      payment_intent_id: paymentIntentId,
+      user_id: userId,
+      user_email: userEmail,
+      platform: "tools-australia",
+    };
+
+    const capiEventId = paymentIntentId
+      ? `upgrade-${subscriptionId}-${paymentIntentId}`
+      : `upgrade-${subscriptionId}-${Date.now()}`;
+    const hashed = prepareUserData({
+      email: userEmail,
+      phone: userPhone,
+      firstName: userFirstName,
+      lastName: userLastName,
+      state: userState,
+      birthdate: userBirthdate,
+      zipCode: userZipCode,
+      country: "AU",
+      ...(userId && { externalId: userId }),
+    });
+    if (requestContext?.client_ip_address) hashed.client_ip_address = requestContext.client_ip_address;
+    if (requestContext?.client_user_agent) hashed.client_user_agent = requestContext.client_user_agent;
+    if (requestContext?.fbc) hashed.fbc = requestContext.fbc;
+    if (requestContext?.fbp) hashed.fbp = requestContext.fbp;
+
+    // Custom event — Meta's `Subscribe` standard event is reserved for the *initial*
+    // paid subscription start. Firing it on tier changes pollutes the Subscribe
+    // optimization signal. See https://www.facebook.com/business/help/402791146561655
+    const upgradeFacebookEvent: FacebookEvent = {
+      event_name: "MembershipUpgrade",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: capiEventId,
+      action_source: "website",
+      user_data: hashed,
+      custom_data: {
+        currency,
+        value: Math.abs(newValue - oldValue),
+        content_type: "product",
+        content_ids: [newPackageId],
+        content_name: newPackageName,
+        package_type: "subscription_upgrade",
+        ...(paymentIntentId && { order_id: paymentIntentId }),
+      },
+      event_source_url: requestContext?.event_source_url ?? getServerEventSourceUrlFallback(),
+    };
+
+    await sendFacebookEvent(upgradeFacebookEvent);
+
+    // Track TikTok Pixel - Use Subscribe event for upgrade
+    await trackTikTokEvent("Subscribe", commonParams);
+    // console.log(`📱 TikTok Pixel: Subscription Upgrade tracked - ${oldPackageName} → ${newPackageName}`);
+  } catch {
+    // console.error(`❌ Error tracking pixel subscription upgrade:`, error);
   }
 }
 
 /**
- * Track subscription upgrade events.
- * Fires Meta Custom Event `MembershipUpgrade` via CAPI with the proration amount
- * as `value` (the actual $ charged today for the upgrade). Does not currently fire
- * to TikTok — `trackTikTokEvent` is client-side only and this runs from a server-side
- * API route. Wire up TikTok Events API when that integration ships.
+ * Track subscription downgrade events (subscription change, not purchase)
  */
-export async function trackPixelSubscriptionUpgrade(params: SubscriptionTierChangeParams): Promise<void> {
-  // value = proration amount actually charged for the upgrade (real money today),
-  // not the new monthly recurring price.
-  const reportedValue = params.prorationAmount ?? Math.abs(params.newValue - params.oldValue);
-  await sendMembershipTierChangeEvent("MembershipUpgrade", params, reportedValue);
-}
+export async function trackPixelSubscriptionDowngrade(params: {
+  oldValue: number;
+  newValue: number;
+  currency: string;
+  oldPackageId: string;
+  newPackageId: string;
+  oldPackageName: string;
+  newPackageName: string;
+  subscriptionId: string;
+  userId?: string;
+  userEmail?: string;
+  userPhone?: string;
+  userFirstName?: string;
+  userLastName?: string;
+  userState?: string;
+  userBirthdate?: string | Date;
+  userZipCode?: string;
+  paymentIntentId?: string;
+  prorationAmount?: number;
+  entriesRemoved?: number;
+  requestContext?: {
+    client_ip_address?: string;
+    client_user_agent?: string;
+    fbc?: string;
+    fbp?: string;
+    event_source_url?: string;
+  };
+}): Promise<void> {
+  try {
+    const {
+      oldValue,
+      newValue,
+      currency,
+      oldPackageId,
+      newPackageId,
+      oldPackageName,
+      newPackageName,
+      subscriptionId,
+      userId,
+      userEmail,
+      userPhone,
+      userFirstName,
+      userLastName,
+      userState,
+      userBirthdate,
+      userZipCode,
+      paymentIntentId,
+      prorationAmount,
+      entriesRemoved,
+      requestContext,
+    } = params;
 
-/**
- * Track subscription downgrade events.
- * Fires Meta Custom Event `MembershipDowngrade` via CAPI with `value: 0` (no money
- * changes hands on a downgrade — the lower price applies at next renewal). The event
- * is still useful for retention audience building and tier-flow analytics.
- */
-export async function trackPixelSubscriptionDowngrade(params: SubscriptionTierChangeParams): Promise<void> {
-  // No immediate charge on downgrade — Meta requires `value` to be a number, so use 0.
-  await sendMembershipTierChangeEvent("MembershipDowngrade", params, 0);
-}
+    const commonParams = {
+      value: Math.abs(newValue - oldValue), // Change amount
+      currency,
+      content_type: "subscription",
+      content_ids: [newPackageId], // Focus on new package
+      subscription_id: subscriptionId,
+      old_package_id: oldPackageId,
+      old_package_name: oldPackageName,
+      old_value: oldValue,
+      new_package_id: newPackageId,
+      new_package_name: newPackageName,
+      new_value: newValue,
+      proration_amount: prorationAmount,
+      entries_removed: entriesRemoved,
+      payment_intent_id: paymentIntentId,
+      user_id: userId,
+      user_email: userEmail,
+      platform: "tools-australia",
+    };
 
-/**
- * Get content type based on package type
- */
-function getContentType(packageType: string): string {
-  switch (packageType) {
-    case "subscription":
-      return "subscription";
-    case "one-time":
-      return "membership_package";
-    case "mini-draw":
-      return "mini_draw_package";
-    case "upsell":
-      return "upsell_package";
-    default:
-      return "product";
+    const capiEventId = `downgrade-${subscriptionId}-${Date.now()}`;
+    const hashedDown = prepareUserData({
+      email: userEmail,
+      phone: userPhone,
+      firstName: userFirstName,
+      lastName: userLastName,
+      state: userState,
+      birthdate: userBirthdate,
+      zipCode: userZipCode,
+      country: "AU",
+      ...(userId && { externalId: userId }),
+    });
+    if (requestContext?.client_ip_address) hashedDown.client_ip_address = requestContext.client_ip_address;
+    if (requestContext?.client_user_agent) hashedDown.client_user_agent = requestContext.client_user_agent;
+    if (requestContext?.fbc) hashedDown.fbc = requestContext.fbc;
+    if (requestContext?.fbp) hashedDown.fbp = requestContext.fbp;
+
+    // Custom event — see MembershipUpgrade comment above for rationale.
+    const downgradeFacebookEvent: FacebookEvent = {
+      event_name: "MembershipDowngrade",
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: capiEventId,
+      action_source: "website",
+      user_data: hashedDown,
+      custom_data: {
+        currency,
+        value: Math.abs(newValue - oldValue),
+        content_type: "product",
+        content_ids: [newPackageId],
+        content_name: newPackageName,
+        package_type: "subscription_downgrade",
+        ...(paymentIntentId && { order_id: paymentIntentId }),
+      },
+      event_source_url: requestContext?.event_source_url ?? getServerEventSourceUrlFallback(),
+    };
+
+    await sendFacebookEvent(downgradeFacebookEvent);
+
+    // Track TikTok Pixel - Use Subscribe event for downgrade (still a subscription)
+    await trackTikTokEvent("Subscribe", commonParams);
+    // console.log(`📱 TikTok Pixel: Subscription Downgrade tracked - ${oldPackageName} → ${newPackageName}`);
+  } catch {
+    // console.error(`❌ Error tracking pixel subscription downgrade:`, error);
   }
 }
-
-// `trackPixelCancellation` removed: zero callers and the previous implementation
-// used `Unsubscribe`, which is NOT a Meta standard event. If you need cancellation
-// tracking later, build a Custom Event (e.g. `MembershipCancellation`) following
-// the same pattern as `sendMembershipTierChangeEvent` above.
 
 /**
  * Track subscription renewal events

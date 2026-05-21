@@ -59,7 +59,7 @@ const SubscriptionRenewalPreview: React.FC = () => {
     <div class="wrapper">
       <div class="card">
         <div class="header">
-          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia Logo" class="header-logo" />
+          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia Logo" class="header-logo" />
           <h1>Membership Renewed</h1>
           <p>Payment received and confirmed</p>
         </div>
@@ -158,10 +158,10 @@ const SubscriptionRenewalPreview: React.FC = () => {
     const entriesBox = data.entries_granted
       ? `
           <div class="entries-box">
-            <div class="entries-label">🎟️ New Entries Added This Renewal</div>
+            <div class="entries-label">🎟️ NEW FREE ENTRIES ADDED THIS RENEWAL</div>
             <div class="entries-value">${data.entries_granted}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
-              Entries have been added to your account
+              Free entries have been added to your account
             </div>
           </div>`
       : "";
@@ -177,7 +177,7 @@ const SubscriptionRenewalPreview: React.FC = () => {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-xl font-bold text-gray-800">Subscription Renewal Email</h3>
+        <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Subscription Renewal Email</h3>
         <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
           Renewal Confirmation
         </span>

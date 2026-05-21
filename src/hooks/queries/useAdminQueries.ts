@@ -1,7 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
   AdminUserDetail,
   AdminUserDetailResponse,
+  AdminUserPaymentEventsPage,
   AdminUserUpdatePayload,
   AdminUsersResponse,
   UserActionRequest,
@@ -9,6 +10,7 @@ import {
   UserFilters,
 } from "@/types/admin";
 import type { TrendData } from "@/types/admin/trend-types";
+import { appendUserFiltersToSearchParams } from "@/utils/admin/appendUserFiltersToSearchParams";
 
 // Types for recent activities
 export interface RecentActivity {
@@ -20,7 +22,8 @@ export interface RecentActivity {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -28,6 +31,8 @@ export interface RecentActivity {
   status: "success" | "info" | "warning" | "error";
   amount?: number;
   timestamp: Date;
+  /** For mini-draw purchases: link to /mini-draws/[id] */
+  miniDrawId?: string;
 }
 
 // Types for revenue breakdown
@@ -77,6 +82,16 @@ export interface AdminDashboardStats {
     dropOffRate: number;
     dropOffRateTrend?: TrendData;
     periodChurnRate?: number;
+    membershipRenewals?: {
+      expectedInRange: number;
+      succeededInRange: number;
+      succeededDistinctMembers: number;
+      failedInvoicesInRange: number;
+      becamePastDueInRange: number;
+    };
+    cancellationImpact?: {
+      estimatedMonthlyRevenue: number;
+    };
   };
   revenue: {
     total: number;
@@ -149,11 +164,18 @@ export interface MembershipByPackageSummary {
   totalPastDueCount: number;
   totalActiveRevenue: number;
   totalPastDueRevenue: number;
+  snapshotPartial?: boolean;
+  /** Set when caller asked for a snapshot date but no snapshot row existed; live data returned instead. */
+  snapshotMissing?: boolean;
 }
 
 export interface MembershipByPackageData {
   packages: MembershipByPackageItem[];
   summary: MembershipByPackageSummary;
+  meta?: {
+    membershipAsOfMode: "live" | "snapshot";
+    asOf: string | null;
+  };
 }
 
 // Types for projected income
@@ -299,13 +321,114 @@ export function useAdminDashboardStats(
 }
 
 /**
- * Hook to fetch recent activities for admin dashboard
+ * Hook to fetch recent activities for admin dashboard with infinite scroll
+ */
+export function useRecentActivitiesInfinite(limit = 20) {
+  return useInfiniteQuery<
+    { data: RecentActivity[]; pagination: { page: number; limit: number; total: number; hasMore: boolean } },
+    Error
+  >({
+    queryKey: ["admin", "dashboard", "recent-activities-infinite", limit],
+    queryFn: async ({ pageParam = 1 }): Promise<{ data: RecentActivity[]; pagination: { page: number; limit: number; total: number; hasMore: boolean } }> => {
+      const response = await fetch(`/api/admin/dashboard/recent-activities?page=${pageParam}&limit=${limit}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch recent activities: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch recent activities");
+      }
+
+      return { data: result.data, pagination: result.pagination };
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.pagination.hasMore ? lastPage.pagination.page + 1 : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch activity log (paginated, infinite scroll)
+ */
+export interface ActivityLogItem {
+  id: string;
+  type:
+    | "user_signup"
+    | "membership_purchase"
+    | "one_time_purchase"
+    | "draw_complete"
+    | "high_value_order"
+    | "system_alert"
+    | "membership_upgrade"
+    | "subscription_past_due";
+  user: string;
+  userId?: string;
+  action: string;
+  time: string;
+  status: "success" | "info" | "warning" | "error";
+  amount?: number;
+  timestamp: Date;
+  miniDrawId?: string;
+}
+
+export function useActivityLogInfinite(limit = 25, typeFilter?: string, searchTerm?: string) {
+  return useInfiniteQuery<
+    {
+      activities: ActivityLogItem[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    },
+    Error
+  >({
+    queryKey: ["admin", "activity-log-infinite", limit, typeFilter, searchTerm],
+    queryFn: async ({ pageParam = 1 }) => {
+      const params = new URLSearchParams({
+        page: String(pageParam),
+        limit: String(limit),
+      });
+      if (typeFilter) params.append("type", typeFilter);
+      if (searchTerm) params.append("search", searchTerm);
+
+      const response = await fetch(`/api/admin/activity-log?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch activity log: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch activity log");
+      }
+
+      return result.data;
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.pagination.page < lastPage.pagination.totalPages
+        ? lastPage.pagination.page + 1
+        : undefined;
+    },
+    initialPageParam: 1,
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch recent activities for admin dashboard (legacy - non-paginated)
  */
 export function useRecentActivities() {
   return useQuery<RecentActivity[]>({
     queryKey: ["admin", "dashboard", "recent-activities"],
     queryFn: async (): Promise<RecentActivity[]> => {
-      const response = await fetch("/api/admin/dashboard/recent-activities");
+      const response = await fetch("/api/admin/dashboard/recent-activities?limit=20");
 
       if (!response.ok) {
         throw new Error(`Failed to fetch recent activities: ${response.statusText}`);
@@ -319,9 +442,9 @@ export function useRecentActivities() {
 
       return result.data;
     },
-    staleTime: 1 * 60 * 1000, // 1 minute - activities should be fresh
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 2 * 60 * 1000, // Auto-refresh every 2 minutes
+    staleTime: 1 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
     retry: 2,
   });
 }
@@ -478,11 +601,26 @@ export function useProjectedIncome() {
   });
 }
 
-export function useMembershipByPackage() {
+export function useMembershipByPackage(
+  dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
+  startDate?: string,
+  endDate?: string
+) {
   return useQuery<MembershipByPackageData>({
-    queryKey: ["admin", "membership-by-package"],
+    queryKey: ["admin", "membership-by-package", dateRange, startDate, endDate],
     queryFn: async (): Promise<MembershipByPackageData> => {
-      const response = await fetch("/api/admin/dashboard/membership-by-package");
+      const params = new URLSearchParams();
+      params.set("dateRange", dateRange);
+      if (
+        (dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw") &&
+        startDate &&
+        endDate
+      ) {
+        params.set("startDate", startDate);
+        params.set("endDate", endDate);
+      }
+
+      const response = await fetch(`/api/admin/dashboard/membership-by-package?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch membership by package");
@@ -494,7 +632,10 @@ export function useMembershipByPackage() {
         throw new Error("Failed to fetch membership by package");
       }
 
-      return result.data;
+      return {
+        ...result.data,
+        ...(result.meta ? { meta: result.meta } : {}),
+      };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -505,9 +646,15 @@ export function useMembershipByPackage() {
 /**
  * Hook to fetch upcoming subscription renewals (DB-first, paginated)
  */
-export function useUpcomingRenewals(range: UpcomingRenewalsRange = 7, page: number = 1, limit: number = 50) {
+export function useUpcomingRenewals(
+  range: UpcomingRenewalsRange = 7,
+  page: number = 1,
+  limit: number = 50,
+  enabled: boolean = true
+) {
   return useQuery<UpcomingRenewalsData>({
     queryKey: ["admin", "upcoming-renewals", range, page, limit],
+    enabled,
     queryFn: async (): Promise<UpcomingRenewalsData> => {
       const params = new URLSearchParams({ range: String(range), page: String(page), limit: String(limit) });
       const response = await fetch(`/api/admin/dashboard/upcoming-renewals?${params.toString()}`);
@@ -604,13 +751,7 @@ export function useAdminUsers(
     queryKey: ["admin", "users", "list", filters],
     queryFn: async (): Promise<AdminUsersResponse["data"]> => {
       const searchParams = new URLSearchParams();
-
-      // Add filters to search params
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          searchParams.append(key, value.toString());
-        }
-      });
+      appendUserFiltersToSearchParams(searchParams, filters);
 
       const response = await fetch(`/api/admin/users?${searchParams.toString()}`);
 
@@ -629,6 +770,44 @@ export function useAdminUsers(
     enabled: options?.enabled !== false,
     staleTime: 2 * 60 * 1000, // 2 minutes - user list can be slightly stale
     gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: 2,
+  });
+}
+
+/**
+ * Hook to fetch detailed user profile
+ */
+export const ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE = 25;
+
+/**
+ * Paginated payment events for admin user detail Activity tab (infinite scroll).
+ */
+export function useAdminUserPaymentEventsInfinite(userId: string | null, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["admin", "users", userId, "payment-events", ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE],
+    queryFn: async ({ pageParam }): Promise<AdminUserPaymentEventsPage> => {
+      const page = typeof pageParam === "number" ? pageParam : 1;
+      const response = await fetch(
+        `/api/admin/users/${userId}/payment-events?page=${page}&limit=${ADMIN_USER_PAYMENT_EVENTS_PAGE_SIZE}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payment events: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to fetch payment events");
+      }
+
+      return result.data as AdminUserPaymentEventsPage;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.page + 1 : undefined),
+    enabled: !!userId && enabled,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     retry: 2,
   });
 }
@@ -715,13 +894,15 @@ export function useAdminUserActions() {
   });
 }
 
+export type AdminUpdateUserResult = { data: AdminUserDetail; warning?: string };
+
 /**
  * Hook to update a user's profile from the admin dashboard
  */
 export function useAdminUpdateUser() {
   const queryClient = useQueryClient();
 
-  return useMutation<AdminUserDetail, Error, { userId: string; payload: AdminUserUpdatePayload }>({
+  return useMutation<AdminUpdateUserResult, Error, { userId: string; payload: AdminUserUpdatePayload }>({
     mutationFn: async ({ userId, payload }) => {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
@@ -752,12 +933,16 @@ export function useAdminUpdateUser() {
         throw new Error(result.error || "Failed to update user");
       }
 
-      return result.data;
+      return { data: result.data, warning: result.warning };
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (_result, variables) => {
       // Refresh the detail view with the latest data
       queryClient.invalidateQueries({
         queryKey: ["admin", "users", "detail", variables.userId],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "users", variables.userId, "payment-events"],
       });
 
       // Update the list so summary information stays in sync

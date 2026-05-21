@@ -2,20 +2,25 @@
 
 import { useEffect } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import MetallicButton from "@/components/ui/MetallicButton";
 import MetallicDivider from "@/components/ui/MetallicDivider";
 import BrandScroller from "@/components/ui/BrandScroller";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
+import PartnerBenefitsPromoSectionClient from "@/components/sections/promo/PartnerBenefitsPromoSectionClient";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
 import MembershipSection from "@/components/sections/MembershipSection";
-import FlowChartSection from "@/components/sections/FlowChartSection";
 import MembershipPackagesChart from "@/components/sections/MembershipPackagesChart";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useUserContext } from "@/contexts/UserContext";
 import { SectionContainer } from "@/components/ui";
-import MembershipModal from "@/components/modals/MembershipModal";
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -23,6 +28,7 @@ import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership
 export default function MembershipPageClient() {
   // Use the unified hook for consistent package selection across all entry points
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const membershipModal = useMembershipModal();
   const { userData } = useUserContext();
   const hasActiveSubscription = userData?.subscription?.isActive === true;
@@ -76,11 +82,11 @@ export default function MembershipPageClient() {
         period: "mo",
         features: [
           {
-            text: `${promoEntries} Free Accumulated Entries${
+            text: `${promoEntries} free accumulated entries${
               membershipPromoMultiplier > 1 ? ` (${membershipPromoMultiplier}X PROMO!)` : ""
             }`,
           },
-          { text: "100% Access to Partner Discounts" },
+          { text: "50% Access to Partner Discounts" },
           { text: "Mini Draws" },
         ],
         buttonText: "Get Started",
@@ -153,7 +159,7 @@ export default function MembershipPageClient() {
   return (
     <>
       {/* Hero + brand scroller */}
-      <section className="relative pt-[86px] sm:pt-[106px] pb-12 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden min-h-[100svh]">
+      <section className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-12 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden min-h-[100svh]">
         <div className="absolute inset-0 z-0">
           <Image
             src="/images/background/memebership.webp"
@@ -161,7 +167,7 @@ export default function MembershipPageClient() {
             fill
             className="object-cover opacity-20"
             priority
-            unoptimized
+            sizes="100vw"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/30" />
         </div>
@@ -169,11 +175,11 @@ export default function MembershipPageClient() {
           <div className="py-10 sm:py-14 text-center">
             <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
               <span className="text-white">U</span>
-              <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">n</span>
+              <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">n</span>
               <span className="text-white">lock Exclusive</span>
               <br />
               <span className="text-white">M</span>
-              <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">e</span>
+              <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">e</span>
               <span className="text-white">mbership Benefits</span>
             </h1>
             <p className="text-[16px] text-gray-200 mb-4 font-['Poppins']">
@@ -188,12 +194,12 @@ export default function MembershipPageClient() {
                 className="w-full sm:w-auto text-sm sm:text-base px-4 py-2 sm:px-6 sm:py-3"
                 onClick={() => {
                   if (!hasActiveSubscription) {
-                    // Get Tradie package directly (for non-subscribers, regardless of entries)
-                    const tradiePlan = getTradiePackage();
-                    membershipModal.setSelectedPlan(tradiePlan);
-                    membershipModal.openModal();
+                    whenGatesOpenElseGateModal(() => {
+                      const tradiePlan = getTradiePackage();
+                      membershipModal.setSelectedPlan(tradiePlan);
+                      membershipModal.openModal();
+                    });
                   } else {
-                    // User has subscription - show additional packages
                     openEntryFlow({ openLocalModal: false });
                   }
                 }}
@@ -214,16 +220,23 @@ export default function MembershipPageClient() {
           </div>
         </div>
         <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 w-full z-10 px-4">
+          <p className="text-center text-white/90 font-['Inter'] font-semibold text-sm sm:text-base lg:text-lg tracking-wide mb-3 sm:mb-4 drop-shadow-md">
+            WIN AUSTRALIA&apos;S TOP TOOL BRANDS
+          </p>
           <BrandScroller speed={800} speedMobile={400} />
         </div>
         <MetallicDivider className="absolute bottom-10 left-0 right-0" />
       </section>
 
+      {/* Partner Benefits promo — shown to non-members, scrolls to #membership */}
+      <div className="px-4 sm:px-6 lg:px-8">
+        <PartnerBenefitsPromoSectionClient scrollToId="membership" />
+      </div>
+
       {/* Membership Sections */}
       <SectionContainer>
         <MembershipSection title="Ready to Join?" padding="py-16 sm:py-20" />
       </SectionContainer>
-      <FlowChartSection />
       <MembershipPackagesChart />
 
       {/* Unlock Discounts at the bottom */}

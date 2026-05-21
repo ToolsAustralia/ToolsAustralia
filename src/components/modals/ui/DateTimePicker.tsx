@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { AlertCircle, Calendar, Clock, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   resolveLocalDisplayTimeZone,
@@ -8,6 +8,7 @@ import {
   convertLocalToUTC,
   formatDateInLocal,
 } from "@/utils/common/timezone";
+import { cn } from "@/utils/cn";
 
 interface DateTimePickerProps {
   id?: string;
@@ -43,11 +44,35 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const localTimeZone = resolveLocalDisplayTimeZone();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [selectedUtcDate, setSelectedUtcDate] = useState<Date | null>(null);
   const [viewDate, setViewDate] = useState<Date>(() => new Date());
   const [timeValue, setTimeValue] = useState({ hours: "8", minutes: "30", period: "PM" });
   const containerRef = useRef<HTMLDivElement>(null);
   const isInternalUpdate = useRef(false);
+
+  /** Parse controlled `value`: `YYYY-MM-DD` is always local calendar midnights (not UTC date strings). */
+  const parseValueToUtcInstant = useCallback(
+    (raw: string): Date | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+
+      const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+      if (ymd && type === "date") {
+        const y = Number(ymd[1]);
+        const mo = Number(ymd[2]);
+        const d = Number(ymd[3]);
+        const localMidnight = new Date(y, mo - 1, d, 0, 0, 0, 0);
+        if (Number.isNaN(localMidnight.getTime())) return null;
+        return convertLocalToUTC(localMidnight, localTimeZone);
+      }
+
+      const parsedUtc = new Date(trimmed);
+      if (Number.isNaN(parsedUtc.getTime())) return null;
+      return parsedUtc;
+    },
+    [type, localTimeZone]
+  );
 
   // Sync internal state with external value changes
   useEffect(() => {
@@ -61,8 +86,8 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
       return;
     }
 
-    const parsedUtc = new Date(value);
-    if (Number.isNaN(parsedUtc.getTime())) {
+    const parsedUtc = parseValueToUtcInstant(value);
+    if (!parsedUtc) {
       setSelectedUtcDate(null);
       return;
     }
@@ -76,7 +101,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
       minutes: localDate.getMinutes().toString().padStart(2, "0"),
       period: localDate.getHours() >= 12 ? "PM" : "AM",
     });
-  }, [value, localTimeZone]);
+  }, [value, localTimeZone, parseValueToUtcInstant]);
 
   // Validate and fix timeValue if it becomes invalid
   useEffect(() => {
@@ -113,6 +138,49 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
     }
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  // Open upward only when NOT inside a modal (e.g. on a page). Inside modals, always open downward.
+  useLayoutEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const updatePosition = () => {
+      const el = containerRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
+      let isInsideModal = false;
+      let parent: HTMLElement | null = el.parentElement;
+
+      while (parent && parent !== document.body) {
+        const styles = window.getComputedStyle(parent);
+        if (styles.display === "flex" && styles.flexDirection === "column") {
+          isInsideModal = true;
+          const footer = Array.from(parent.children).find((child) => {
+            const s = window.getComputedStyle(child);
+            return s.borderTopWidth !== "0px" || child.querySelector('button, [role="button"]');
+          }) as HTMLElement | undefined;
+          if (footer) {
+            contentBottom = footer.getBoundingClientRect().top - 10;
+          } else {
+            contentBottom = parent.getBoundingClientRect().bottom;
+          }
+          contentTop = parent.getBoundingClientRect().top;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
+      setOpenUpward(!isInsideModal && spaceBelow < spaceAbove);
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
   }, [isOpen]);
 
   const getIcon = () => {
@@ -258,6 +326,8 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
         target: { name: name || "", value: isoString },
       } as React.ChangeEvent<HTMLInputElement>;
 
+      setSelectedUtcDate(utcMidnight);
+      setViewDate(localMidnight);
       isInternalUpdate.current = true;
       onChange(syntheticEvent);
       setIsOpen(false);
@@ -352,18 +422,17 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const localSelectedDate = selectedUtcDate ? convertUTCToLocal(selectedUtcDate, localTimeZone) : null;
 
   return (
-    <div className={`space-y-2 ${className}`} ref={containerRef}>
+    <div className={cn("space-y-2", className)} ref={containerRef}>
       {/* Label */}
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
 
-      {/* Input Container */}
-      <div className="relative">
+      <div className={cn("relative", isOpen ? "z-[100]" : "")}>
         {/* Icon */}
-        <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />
+        <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-neutral-500 pointer-events-none z-10" />
 
         {/* Display Button */}
         <button
@@ -371,28 +440,40 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
           className={`w-full pl-10 pr-10 py-3 border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-            error ? "border-red-500 bg-red-50" : isOpen ? "border-red-500 ring-2 ring-red-500/20" : "border-gray-300"
+            error
+              ? "border-red-500 bg-red-50 dark:bg-red-950/40 dark:border-red-500"
+              : isOpen
+                ? "border-red-500 ring-2 ring-red-500/20 dark:border-red-500"
+                : "border-gray-300 dark:border-neutral-600"
           } ${
             disabled
-              ? "bg-gray-100 cursor-not-allowed text-gray-500"
-              : "hover:border-red-400 hover:shadow-sm cursor-pointer bg-white"
+              ? "bg-gray-100 dark:!bg-neutral-900 cursor-not-allowed text-gray-500 dark:text-neutral-500"
+              : "hover:border-red-400 hover:shadow-sm cursor-pointer bg-[#ffffff] dark:!bg-neutral-900"
           } ${isOpen ? "shadow-sm" : ""}`}
         >
-          <span className={formatDisplayValue() ? "text-gray-900" : "text-gray-500"}>
+          <span
+            className={
+              formatDisplayValue()
+                ? "text-gray-900 dark:text-neutral-100"
+                : "text-gray-500 dark:text-neutral-400"
+            }
+          >
             {formatDisplayValue() || getPlaceholder()}
           </span>
         </button>
 
         {/* Dropdown Arrow */}
         <ChevronDown
-          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none transition-transform duration-200 ${
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-neutral-500 pointer-events-none transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
           }`}
         />
 
         {/* Custom Picker Dropdown */}
         {isOpen && !disabled && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden">
+          <div
+            className={cn("absolute z-50 w-full", openUpward ? "bottom-full mb-1" : "mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg dark:shadow-black/50 overflow-hidden dark:[color-scheme:dark]")}
+          >
             {/* Calendar Section */}
             {(type === "date" || type === "datetime-local") && (
               <div className="p-4">
@@ -401,17 +482,17 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   <button
                     type="button"
                     onClick={() => navigateMonth("prev")}
-                    className="p-2 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                    className="p-2 hover:bg-red-50 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-200"
                   >
-                    <ChevronLeft className="w-4 h-4 text-gray-600" />
+                    <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
                   </button>
 
                   <div className="text-center">
                     <h3
                       className={`text-lg font-semibold ${
                         isMonthRestricted(viewDate.getFullYear(), viewDate.getMonth())
-                          ? "text-red-600"
-                          : "text-gray-900"
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-gray-900 dark:text-neutral-50"
                       }`}
                     >
                       {monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}
@@ -424,16 +505,19 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   <button
                     type="button"
                     onClick={() => navigateMonth("next")}
-                    className="p-2 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                    className="p-2 hover:bg-red-50 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-200"
                   >
-                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                    <ChevronRight className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
                   </button>
                 </div>
 
                 {/* Day Headers */}
                 <div className="grid grid-cols-7 gap-1 mb-2">
                   {dayNames.map((day) => (
-                    <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
+                    <div
+                      key={day}
+                      className="text-center text-xs font-medium text-gray-600 dark:text-neutral-400 py-2"
+                    >
                       {day}
                     </div>
                   ))}
@@ -471,18 +555,22 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                     if (isSelected) {
                       dayClassName += "bg-red-600 text-white shadow-md font-bold";
                     } else if (isCurrentDayDrawDate) {
-                      dayClassName += "bg-blue-500 text-white font-bold shadow-md";
+                      dayClassName += "bg-blue-500 dark:bg-blue-600 text-white font-bold shadow-md";
                       dayTitle = `Draw: ${drawInfo?.name} (${drawInfo?.status})`;
                     } else if (isToday) {
-                      dayClassName += "bg-red-100 text-red-600 font-medium";
+                      dayClassName +=
+                        "bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-300 font-medium";
                     } else if (isCurrentDayPast) {
-                      dayClassName += "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50";
+                      dayClassName +=
+                        "bg-gray-100 dark:bg-neutral-900 text-gray-400 dark:text-neutral-600 cursor-not-allowed opacity-50";
                       dayTitle = "Past date - not selectable";
                     } else if (isCurrentMonthRestricted) {
-                      dayClassName += "bg-red-100 text-red-400 cursor-not-allowed opacity-50";
+                      dayClassName +=
+                        "bg-red-100 dark:bg-red-950/40 text-red-400 dark:text-red-300/80 cursor-not-allowed opacity-50";
                       dayTitle = "Draw already scheduled for this month";
                     } else {
-                      dayClassName += "hover:bg-red-50 text-gray-700";
+                      dayClassName +=
+                        "hover:bg-red-50 dark:hover:bg-neutral-800 text-gray-800 dark:text-neutral-100";
                     }
 
                     return (
@@ -504,9 +592,9 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
             {/* Time Section */}
             {(type === "time" || type === "datetime-local") && (
-              <div className="border-t border-gray-200 p-4">
+              <div className="border-t border-gray-200 dark:border-neutral-700 p-4">
                 <div className="text-center mb-4">
-                  <div className="text-sm font-medium text-gray-700">Select Time</div>
+                  <div className="text-sm font-medium text-gray-700 dark:text-neutral-200">Select Time</div>
                 </div>
 
                 {/* Editable Time Display */}
@@ -523,16 +611,16 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                         handleTimeChange("hours", val);
                       }}
                       onFocus={(e) => e.target.select()}
-                      className="w-16 h-12 text-2xl font-mono font-bold text-center bg-white border-2 border-gray-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200 hover:border-red-300"
+                      className="w-16 h-12 text-2xl font-mono font-bold text-center bg-[#ffffff] dark:!bg-neutral-950 text-gray-900 dark:text-neutral-100 border-2 border-gray-200 dark:border-neutral-600 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200 hover:border-red-300 dark:hover:border-red-500/60"
                       placeholder="12"
                       maxLength={2}
                     />
-                    <div className="text-xs text-gray-500 mt-1">Hours</div>
+                    <div className="text-xs text-gray-500 dark:text-neutral-500 mt-1">Hours</div>
                   </div>
 
                   {/* Separator */}
                   <div className="flex items-center h-12">
-                    <div className="text-3xl font-mono text-gray-400 font-bold">:</div>
+                    <div className="text-3xl font-mono text-gray-400 dark:text-neutral-500 font-bold">:</div>
                   </div>
 
                   {/* Minutes Input */}
@@ -547,11 +635,11 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                         handleTimeChange("minutes", val);
                       }}
                       onFocus={(e) => e.target.select()}
-                      className="w-16 h-12 text-2xl font-mono font-bold text-center bg-white border-2 border-gray-200 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200 hover:border-red-300"
+                      className="w-16 h-12 text-2xl font-mono font-bold text-center bg-[#ffffff] dark:!bg-neutral-950 text-gray-900 dark:text-neutral-100 border-2 border-gray-200 dark:border-neutral-600 rounded-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200 hover:border-red-300 dark:hover:border-red-500/60"
                       placeholder="00"
                       maxLength={2}
                     />
-                    <div className="text-xs text-gray-500 mt-1">Minutes</div>
+                    <div className="text-xs text-gray-500 dark:text-neutral-500 mt-1">Minutes</div>
                   </div>
 
                   {/* AM/PM Toggle */}
@@ -567,7 +655,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                             className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium ${
                               isSelected
                                 ? "bg-red-600 text-white shadow-sm"
-                                : "bg-gray-100 border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-700"
+                                : "bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 hover:bg-red-50 dark:hover:bg-neutral-700 hover:border-red-300 dark:hover:border-red-500/50 text-gray-700 dark:text-neutral-200"
                             }`}
                           >
                             {period}
@@ -575,18 +663,18 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                         );
                       })}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">Period</div>
+                    <div className="text-xs text-gray-500 dark:text-neutral-500 mt-1">Period</div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="border-t border-gray-200 p-3 flex justify-end space-x-2">
+            <div className="border-t border-gray-200 dark:border-neutral-700 p-3 flex justify-end space-x-2">
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                className="px-4 py-2 text-sm text-gray-600 dark:text-neutral-400 hover:text-gray-800 dark:text-neutral-100 dark:hover:text-neutral-100 transition-colors duration-200"
               >
                 Cancel
               </button>
@@ -607,13 +695,13 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
       {/* Helper Text */}
       {!error && type === "datetime-local" && (
-        <p className="text-xs text-gray-500">Select both date and time for the event</p>
+        <p className="text-xs text-gray-500 dark:text-neutral-400">Select both date and time for the event</p>
       )}
 
       {/* Error Message */}
       {error && (
-        <p className="text-red-500 text-sm flex items-center gap-1">
-          <AlertCircle className="w-4 h-4" />
+        <p className="text-red-600 dark:text-red-400 text-sm flex items-center gap-1">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           {error}
         </p>
       )}

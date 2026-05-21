@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import ProductCard from "../ui/ProductCard";
+import { cn } from "@/utils/cn";
 
 // Use the same types as ProductCard to avoid conflicts
 interface ProductItem {
@@ -53,23 +54,23 @@ export default function ProductSection({
   className = "",
 }: ProductSectionProps) {
   return (
-    <section className={`py-12 sm:py-16 lg:py-20 bg-white w-full overflow-hidden ${className}`}>
+    <section className={cn("py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden", className)}>
       <div className="w-full px-2 sm:px-3 lg:px-8 lg:max-w-7xl lg:mx-auto">
         {/* Section Header - Mobile/Tablet: Title only */}
         <div className="lg:hidden text-center mb-6 sm:mb-8">
-          <h2 className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins'] leading-tight">
+          <h2 className="text-[20px] sm:text-[24px] font-bold text-black dark:text-white mb-2 sm:mb-3 font-['Poppins'] leading-tight">
             {title}
           </h2>
         </div>
 
         {/* Section Header - Desktop: Title and View All button */}
         <div className="hidden lg:flex flex-row items-center justify-between mb-16">
-          <h2 className="text-[32px] font-bold text-black font-['Poppins'] leading-tight">{title}</h2>
+          <h2 className="text-[32px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">{title}</h2>
 
           {showViewAll && (
             <Link
               href={viewAllLink}
-              className="inline-flex items-center justify-center px-[54px] py-4 border-2 border-black text-black font-medium text-[16px] rounded-[62px] hover:bg-black hover:text-white transition-colors duration-200 w-[218px] h-[52px] font-['Inter:Medium',_sans-serif]"
+              className="inline-flex items-center justify-center px-[54px] py-4 border-2 border-black dark:border-white text-black dark:text-white font-medium text-[16px] rounded-[62px] hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-colors duration-200 w-[218px] h-[52px] font-['Inter:Medium',_sans-serif]"
             >
               View All
             </Link>
@@ -95,7 +96,7 @@ export default function ProductSection({
           <div className="lg:hidden flex justify-center mt-4 sm:mt-6">
             <Link
               href={viewAllLink}
-              className="inline-flex items-center justify-center px-8 sm:px-12 py-3 sm:py-4 border-2 border-black text-black font-medium text-[14px] sm:text-[16px] rounded-[62px] hover:bg-black hover:text-white transition-colors duration-200 w-auto h-[44px] sm:h-[48px] font-['Inter:Medium',_sans-serif]"
+              className="inline-flex items-center justify-center px-8 sm:px-12 py-3 sm:py-4 border-2 border-black dark:border-white text-black dark:text-white font-medium text-[14px] sm:text-[16px] rounded-[62px] hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-colors duration-200 w-auto h-[44px] sm:h-[48px] font-['Inter:Medium',_sans-serif]"
             >
               View All
             </Link>

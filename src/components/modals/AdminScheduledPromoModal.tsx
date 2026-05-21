@@ -21,6 +21,7 @@ import {
   convertLocalToUTC,
   resolveLocalDisplayTimeZone,
 } from "@/utils/common/timezone";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 interface AdminScheduledPromoModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ interface ScheduledPromoFormData {
   description: string;
 }
 
-const MULTIPLIER_OPTIONS: ScheduledPromoMultiplier[] = [2, 3, 5, 10];
+const MULTIPLIER_OPTIONS: ScheduledPromoMultiplier[] = [...PROMO_MULTIPLIERS];
 
 const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
   isOpen,
@@ -201,8 +202,6 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader
@@ -266,7 +265,7 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
           <FormSection title="Promo Period">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Start Date & Time</label>
                 <DateTimePicker
                   id="startDate"
                   name="startDate"
@@ -280,7 +279,7 @@ const AdminScheduledPromoModal: React.FC<AdminScheduledPromoModalProps> = ({
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">End Date & Time</label>
                 <DateTimePicker
                   id="endDate"
                   name="endDate"

@@ -36,12 +36,11 @@ export const getEnvironment = (): "production" | "development" | "test" => {
  */
 export const environmentFlags = {
   /**
-   * Whether email verification should be mandatory
-   * - Production: true (mandatory)
-   * - Development: false (optional for testing)
+   * Whether email verification should be mandatory.
+   * Currently disabled — verification is always optional but available via SendGrid.
    */
   emailVerificationMandatory: (): boolean => {
-    return isProduction();
+    return false;
   },
 
   /**

@@ -32,6 +32,12 @@ import {
 } from "@/utils/payment/failed-invoice-handler";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
+import { analyzePaymentIntentForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
+import {
+  dropNonConfirmableInvoicePaymentIntent,
+  isPaymentIntentClientConfirmable,
+} from "@/utils/payment/stripe/payment-intent-payable";
+import { classifyStripeInvoicePayInitFailure } from "@/utils/payment/stripe/stripe-invoice-pay-errors";
 
 export async function POST(_request: NextRequest) {
   try {
@@ -59,8 +65,10 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "No Stripe subscription ID found" }, { status: 400 });
     }
 
-    // Check if subscription status is past_due (failed renewal)
-    if (user.subscription.status !== "past_due" || user.subscription.isActive) {
+    // Failed renewal: Stripe uses past_due (most common) or unpaid — Mongo isActive may still be true or false
+    const renewalStatus = (user.subscription.status ?? "").toLowerCase();
+    const isFailedRenewalState = renewalStatus === "past_due" || renewalStatus === "unpaid";
+    if (!isFailedRenewalState) {
       return NextResponse.json(
         { error: "Subscription is not in a failed renewal state" },
         { status: 400 }
@@ -129,6 +137,8 @@ export async function POST(_request: NextRequest) {
         }
       }
     }
+
+    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
 
     // ✅ STRIPE BEST PRACTICE: Reuse existing PaymentIntent from invoice
     // If no PaymentIntent found, we need to get Stripe to create/reuse one via invoice operations
@@ -212,6 +222,8 @@ export async function POST(_request: NextRequest) {
         );
       }
     }
+
+    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
 
     // ✅ STRIPE BEST PRACTICE: If invoice is open but has no PaymentIntent,
     // use stripe.invoices.pay() to create/attach the correct PaymentIntent
@@ -305,16 +317,103 @@ export async function POST(_request: NextRequest) {
                 paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
                   expand: ["payment_method"],
                 });
+
+                const excessiveRetry = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+                if (excessiveRetry.requiresDifferentPaymentMethod) {
+                  return NextResponse.json(
+                    {
+                      success: false,
+                      error: "Payment blocked",
+                      details:
+                        "This card can't be charged right now because it was declined too many times. Add or use a different card, or try again later.",
+                      requiresDifferentPaymentMethod: true,
+                      ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+                    },
+                    { status: 400 }
+                  );
+                }
+
+                paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, paymentIntent);
               } catch (retrieveError) {
                 console.error("Error retrieving PaymentIntent from error:", retrieveError);
               }
             }
 
+            // invoices.pay() can fail when the Customer has no default payment method — the open invoice may still reference a PaymentIntent
+            if (!paymentIntent && invoiceData.invoice.id) {
+              const msg = isStripeError(payError) ? String(payError.message || "") : "";
+              const likelyMissingDefault =
+                msg.includes("default_payment_method") ||
+                msg.includes("Default payment method") ||
+                msg.toLowerCase().includes("no default payment method");
+
+              if (likelyMissingDefault) {
+                try {
+                  const refreshed = await stripe.invoices.retrieve(invoiceData.invoice.id, {
+                    expand: ["payment_intent"],
+                  });
+                  let pi = extractPaymentIntentFromInvoice(refreshed);
+                  if (!pi) {
+                    const inv = refreshed as Stripe.Invoice & {
+                      latest_payment_intent?: string | Stripe.PaymentIntent;
+                      payment_intent?: string | Stripe.PaymentIntent;
+                    };
+                    const piIdStr =
+                      typeof inv.latest_payment_intent === "string"
+                        ? inv.latest_payment_intent
+                        : typeof inv.payment_intent === "string"
+                          ? inv.payment_intent
+                          : null;
+                    if (piIdStr) {
+                      pi = await stripe.paymentIntents.retrieve(piIdStr, { expand: ["payment_method"] });
+                    }
+                  }
+                  if (pi) {
+                    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, pi);
+                  }
+                } catch (refreshErr) {
+                  console.error("Invoice refresh after invoices.pay default PM error:", refreshErr);
+                }
+              }
+            }
+
             // If we still don't have a PaymentIntent, return error
             if (!paymentIntent) {
-              const errorMessage = isStripeError(payError) ? payError.message : "Unable to process payment. Please contact support.";
+              const classified = classifyStripeInvoicePayInitFailure(payError);
+              if (classified) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    error: classified.error,
+                    details: classified.details,
+                    failureCode: classified.failureCode,
+                  },
+                  { status: classified.httpStatus }
+                );
+              }
+              const errorMessage = isStripeError(payError)
+                ? payError.message
+                : "Unable to process payment. Please contact support.";
+              const msgLower = String(errorMessage).toLowerCase();
+              const noDefaultPm =
+                msgLower.includes("default_payment_method") || msgLower.includes("default payment method");
+
+              if (noDefaultPm) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    requiresNewCardPreflight: true,
+                    error: "Payment method required",
+                    details:
+                      "No saved card is on file for this renewal. Add a new card in this window, then try again — or add a card below and we will retry automatically.",
+                  },
+                  { status: 400 }
+                );
+              }
+
               return NextResponse.json(
                 {
+                  success: false,
                   error: "Failed to initialize payment",
                   details: errorMessage || "Unable to process payment. Please contact support.",
                 },
@@ -343,8 +442,41 @@ export async function POST(_request: NextRequest) {
     // 3. See clear error messages if payment fails
     if (!paymentIntent?.client_secret) {
       return NextResponse.json(
-        { error: "PaymentIntent does not have a client secret" },
-        { status: 500 }
+        {
+          success: false,
+          error: "Payment setup error",
+          details: "Unable to start payment for this invoice. Please contact support.",
+          failureCode: "payment_intent_not_payable",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isPaymentIntentClientConfirmable(paymentIntent)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment setup error",
+          details:
+            "This payment session is no longer valid. Please try again, or contact support if the problem continues.",
+          failureCode: "payment_intent_not_payable",
+        },
+        { status: 400 }
+      );
+    }
+
+    const excessiveRetryFinal = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+    if (excessiveRetryFinal.requiresDifferentPaymentMethod) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Payment blocked",
+          details:
+            "This card can't be charged right now because it was declined too many times. Add or use a different card, or try again later.",
+          requiresDifferentPaymentMethod: true,
+          ...(excessiveRetryFinal.failureReason && { failureReason: excessiveRetryFinal.failureReason }),
+        },
+        { status: 400 }
       );
     }
 

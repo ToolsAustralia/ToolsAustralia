@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { Building, Mail, User, Target, Send, CheckCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface PartnershipFormSectionProps {
   className?: string;
@@ -81,7 +82,7 @@ const Textarea = ({
     onChange={onChange}
     placeholder={placeholder}
     rows={rows}
-    className={`w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 font-['Inter'] text-gray-900 placeholder-gray-500 resize-none ${className}`}
+    className={cn("w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 font-['Inter'] text-gray-900 placeholder-gray-500 resize-none", className)}
   />
 );
 
@@ -109,14 +110,14 @@ const Button = ({
   const variantClasses =
     variant === "primary"
       ? "bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 shadow-lg hover:shadow-xl transform hover:scale-105"
-      : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300";
+      : "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 border border-gray-300";
 
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={loading}
-      className={`${baseClasses} ${variantClasses} ${loading ? "opacity-50 cursor-not-allowed" : ""} ${className}`}
+      className={cn(baseClasses, variantClasses, loading ? "opacity-50 cursor-not-allowed" : "", className)}
     >
       {Icon && iconPosition === "left" && <Icon className="w-4 h-4 mr-2" />}
       {loading ? "Submitting..." : children}
@@ -266,7 +267,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
 
   if (isSubmitted) {
     return (
-      <section className={`py-16 sm:py-20 pb-32 sm:pb-40 bg-gradient-to-br from-green-50 to-white ${className}`}>
+      <section className={cn("py-16 sm:py-20 pb-32 sm:pb-40 bg-gradient-to-br from-green-50 to-white", className)}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
@@ -275,7 +276,7 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
               Application Submitted!
             </h2>
-            <p className="text-lg text-gray-600 font-['Inter'] mb-8">
+            <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] mb-8">
               Thank you for your interest in partnering with us. We&apos;ll be in touch within 24 hours.
             </p>
             <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 max-w-md mx-auto">
@@ -290,14 +291,14 @@ const PartnershipFormSection: React.FC<PartnershipFormSectionProps> = ({ classNa
   }
 
   return (
-    <section className={`py-16 sm:py-20 bg-gradient-to-br from-gray-50 to-white mb-16${className}`}>
+    <section className={cn("py-16 sm:py-20 bg-gradient-to-br from-gray-50 to-white mb-16", className)}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-['Poppins'] mb-4">
             Ready to Partner with Us?
           </h2>
-          <p className="text-lg text-gray-600 font-['Inter'] max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">
             Fill out the form below and our team will get back to you within 24 hours to discuss your partnership
             opportunities.
           </p>

@@ -4,7 +4,7 @@
  * Displays the user's current partner discount access status and queued future benefits.
  * Shows:
  * - Active discount period with countdown
- * - List of upcoming queued discount periods (FIFO order)
+ * - List of upcoming queued discount periods (highest partner tier first, then FIFO)
  * - Total days of access remaining
  * - Visual timeline of benefits
  *
@@ -23,6 +23,8 @@ import {
   derivePlanIdFromPackage,
   getCardBorderStyle,
 } from "@/utils/package-colors/packageColorScheme";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -30,7 +32,7 @@ type StaticImageData = PackageIconData;
 // Interface for active period data from API
 interface ActivePeriod {
   isActive: boolean;
-  source: "subscription" | "one-time" | "mini-draw" | "upsell" | null;
+  source: "membership" | "one-time" | "mini-draw" | "upsell" | null;
   packageName: string | null;
   endsAt: Date | null;
   daysRemaining: number;
@@ -66,6 +68,25 @@ interface QueueSummary {
       subscriptionType: string;
     };
   };
+}
+
+function partnerCatalogPercentForQueueDisplay(
+  summary: QueueSummary["summary"],
+  activePeriod: ActivePeriod
+): number {
+  if (summary.isActiveSubscription && summary.subscriptionBenefits?.packageName) {
+    const planId = derivePlanIdFromPackage(
+      { name: summary.subscriptionBenefits.packageName, type: "subscription" },
+      "subscription"
+    );
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  if (activePeriod.isActive && activePeriod.packageName) {
+    const membershipType = activePeriod.source === "membership" ? "subscription" : "one-time";
+    const planId = derivePlanIdFromPackage({ name: activePeriod.packageName }, membershipType);
+    return getPartnerCatalogAccessPercentForPlanId(planId);
+  }
+  return 100;
 }
 
 // Export the component and optimistic update function for external use
@@ -298,7 +319,7 @@ export default function PartnerDiscountQueue({
       case "upsell":
         return <Gift className="w-5 h-5 text-orange-600" />;
       default:
-        return <Package className="w-5 h-5 text-gray-600" />;
+        return <Package className="w-5 h-5 text-gray-600 dark:text-neutral-400" />;
     }
   };
 
@@ -324,7 +345,7 @@ export default function PartnerDiscountQueue({
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
 
@@ -351,10 +372,16 @@ export default function PartnerDiscountQueue({
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
   };
+
+  // Drop the internal "Additional " prefix for display (e.g. "Additional Foreman
+  // Pack (Mini Draw)" → "Foreman Pack (Mini Draw)"). Icon/theme resolution uses
+  // substring tier matching, so stripping the prefix is display-only and safe.
+  const cleanPackageName = (name: string | null | undefined) =>
+    (name ?? "").replace(/^additional\s+/i, "").trim();
 
   // Format date for display
   const formatDate = (date: Date) => {
@@ -410,13 +437,26 @@ export default function PartnerDiscountQueue({
 
   const { activePeriod, queuedItems, totalQueuedDays, totalQueuedItems, summary } = queueData;
 
+  const partnerCatalogPct = partnerCatalogPercentForQueueDisplay(summary, activePeriod);
+
+  const displayQueuedDaysTotal = Math.max(0, Math.round(totalQueuedDays));
+
+  // Active package's OWN remaining window (NOT the active+queued sum). Mini packs
+  // can be sub-day, so prefer hours when under a day.
+  const activeDaysRemaining = Math.max(0, Math.round(activePeriod.daysRemaining));
+  const activeHoursRemaining = Math.max(0, Math.round(activePeriod.hoursRemaining));
+  const activeAccessLabel =
+    activeHoursRemaining > 0 && activeHoursRemaining < 24
+      ? `${activeHoursRemaining} ${activeHoursRemaining === 1 ? "hour" : "hours"} of access`
+      : `${activeDaysRemaining} ${activeDaysRemaining === 1 ? "day" : "days"} of access`;
+
   const queueHeading = titleOverride ?? "Partner Discounts";
   const queueSubtitle =
     subtitleOverride ??
     (summary.isActiveSubscription && summary.subscriptionBenefits
-      ? `100% partner discount • Active subscription`
-      : summary.totalDaysOfAccessRemaining > 0
-      ? `${summary.totalDaysOfAccessRemaining} days of access `
+      ? "Active subscription"
+      : activePeriod.isActive
+      ? activeAccessLabel
       : "You have no partner access yet");
 
   const handleToggle = () => {
@@ -426,18 +466,55 @@ export default function PartnerDiscountQueue({
     setIsExpanded((prev) => !prev);
   };
 
-  // Package theme for icon and card border (subscription uses membership tab colors, e.g. Boss → black/gold)
-  const packageTheme =
-    summary.isActiveSubscription && summary.subscriptionBenefits
-      ? (() => {
-          const packageData = {
-            name: summary.subscriptionBenefits.packageName,
-            type: "subscription" as const,
-          };
-          const planId = derivePlanIdFromPackage(packageData, "subscription");
-          return getMembershipSectionColorScheme(planId, true);
-        })()
-      : null;
+  // Visual identity (icon + theme) for the active partner-discount badge.
+  // Always uses the production MembershipSection scheme — NOT the dev/electric
+  // scheme — so the badge stays consistent with the membership cards:
+  // membership active period → membership tab colours (e.g. Boss → black/gold),
+  // one-time active period → one-time tab colours (e.g. Tradie → ryobi-green).
+  const activePackageVisual = (() => {
+    if (summary.isActiveSubscription && summary.subscriptionBenefits) {
+      const packageName = summary.subscriptionBenefits.packageName;
+      const planId = derivePlanIdFromPackage(
+        { name: packageName, type: "subscription" },
+        "subscription"
+      );
+      return {
+        packageName,
+        membershipType: "subscription" as const,
+        theme: getMembershipSectionColorScheme(planId, true),
+      };
+    }
+    if (activePeriod.isActive && activePeriod.packageName) {
+      const isMembership = activePeriod.source === "membership";
+      const membershipType = isMembership
+        ? ("subscription" as const)
+        : ("one-time" as const);
+      const planId = derivePlanIdFromPackage(
+        { name: activePeriod.packageName },
+        membershipType
+      );
+      return {
+        packageName: activePeriod.packageName,
+        membershipType,
+        theme: getMembershipSectionColorScheme(planId, isMembership),
+      };
+    }
+    return null;
+  })();
+
+  const packageTheme = activePackageVisual?.theme ?? null;
+
+  // Tier accent used to theme the whole bar (glow, wash, chips, subtitle).
+  // Falls back to the neutral amber/orange the card used before any active tier.
+  const accentHex = packageTheme?.accentHex ?? "#f97316";
+  const accentText = packageTheme?.accentHexLight ?? packageTheme?.accentHex ?? "#fbbf24";
+  // Shop discount is not properly live on the site yet — keep the chip hidden.
+  // Flip this to true once the shop discount is actually honoured at checkout.
+  const SHOW_SHOP_DISCOUNT_CHIP = false;
+  const shopDiscountPercent =
+    SHOW_SHOP_DISCOUNT_CHIP && summary.isActiveSubscription
+      ? summary.subscriptionBenefits?.shopDiscountPercent ?? 0
+      : 0;
 
   const cardBorderStyle = packageTheme
     ? packageTheme.cardBorderGradient
@@ -447,14 +524,24 @@ export default function PartnerDiscountQueue({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white ${className}`}
+      className={cn("relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[#050607] via-[#0f1117] to-[#030304] border border-white/10 shadow-[0_20px_45px_rgba(0,0,0,0.65)] text-white", className)}
       style={cardBorderStyle}
     >
-      {/* Premium Background Effects */}
+      {/* Premium Background Effects — tinted to the active membership tier */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 opacity-40"></div>
       <div className="absolute inset-0 opacity-[0.08] pattern-radial-grid"></div>
-      <div className="absolute top-[-40px] right-[-60px] w-72 h-72 bg-gradient-to-br from-red-500/20 via-yellow-400/10 to-transparent rounded-full blur-3xl"></div>
-      <div className="absolute bottom-[-60px] left-[-40px] w-72 h-72 bg-gradient-to-tr from-white/10 via-red-500/10 to-transparent rounded-full blur-3xl"></div>
+      <div
+        className="absolute inset-0 opacity-[0.12] pointer-events-none"
+        style={{ background: `radial-gradient(circle at 85% 0%, ${accentHex}, transparent 60%)` }}
+      ></div>
+      <div
+        className="absolute top-[-40px] right-[-60px] w-72 h-72 rounded-full blur-3xl pointer-events-none"
+        style={{ background: `radial-gradient(circle, ${accentHex}55, transparent 70%)` }}
+      ></div>
+      <div
+        className="absolute bottom-[-60px] left-[-40px] w-72 h-72 rounded-full blur-3xl pointer-events-none"
+        style={{ background: `radial-gradient(circle, ${accentHex}33, transparent 70%)` }}
+      ></div>
 
       {/* Collapsible Header - Always Visible */}
       <button
@@ -466,68 +553,42 @@ export default function PartnerDiscountQueue({
             <h2 className="text-base sm:text-lg lg:text-2xl font-bold text-white font-['Poppins'] truncate drop-shadow-lg">
               {queueHeading}
             </h2>
-            <p className="text-xs sm:text-sm text-white/70">{queueSubtitle}</p>
+            <p
+              className="text-xs sm:text-sm font-medium text-white/70"
+              style={packageTheme ? { color: accentText } : undefined}
+            >
+              {queueSubtitle}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {summary.isActiveSubscription && summary.subscriptionBenefits && packageTheme ? (
-            (() => {
-              const packageName = summary.subscriptionBenefits.packageName;
-              const packageIcon = getPackageIconImage(packageName, "subscription");
-              const badgeStyle = packageTheme.badgeStyle ?? {};
-              const isPremiumPackage =
-                packageName.toLowerCase().includes("boss") || packageName.toLowerCase().includes("power");
-
-              if (!packageIcon) return null;
-
-              const iconStyle = packageTheme.cardBorderGradient
-                ? {
-                    ...getCardBorderStyle(packageTheme, badgeStyle.background ?? "#0a0a0a"),
-                    padding: "8px",
-                    minWidth: "48px",
-                    minHeight: "48px",
-                    boxShadow: badgeStyle.boxShadow ?? `0 0 12px rgba(212,175,55,0.4)`,
-                  }
-                : badgeStyle.background
-                ? { ...badgeStyle, padding: "8px", minWidth: "48px", minHeight: "48px" }
-                : {
-                    border: `2px solid ${packageTheme.accentHex}`,
-                    boxShadow: `0 0 12px ${packageTheme.accentHex}66`,
-                    padding: "8px",
-                    minWidth: "48px",
-                    minHeight: "48px",
-                  };
-
-              return (
-                <span
-                  className={`inline-flex items-center justify-center rounded-full shadow-lg relative overflow-hidden ${
-                    isOptimisticUpdate ? "animate-pulse" : ""
-                  } ${isPremiumPackage ? "animate-pulse" : ""}`}
-                  style={iconStyle}
-                >
-                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex-shrink-0">
-                    <Image
-                      src={packageIcon}
-                      alt={`${packageName} icon`}
-                      className="w-full h-full object-contain"
-                      width={40}
-                      height={40}
-                    />
-                  </div>
-                </span>
-              );
-            })()
-          ) : summary.totalDaysOfAccessRemaining > 0 ? (
-            <div
-              className={`bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 border-2 border-yellow-300 shadow-sm ${
+        {/* Discount benefits — themed to the active membership tier */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {summary.hasActiveAccess && partnerCatalogPct > 0 && (
+            <span
+              className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-2xs sm:text-xs font-bold whitespace-nowrap shadow-sm ${
                 isOptimisticUpdate ? "animate-pulse" : ""
               }`}
+              style={
+                packageTheme?.badgeStyle?.background
+                  ? {
+                      background: packageTheme.badgeStyle.background,
+                      color: "#fff",
+                      boxShadow: packageTheme.badgeStyle.boxShadow,
+                    }
+                  : { background: "linear-gradient(135deg,#facc15,#f97316)", color: "#1a1205" }
+              }
             >
-              <p className="text-sm sm:text-2xl font-bold bg-gradient-to-r from-yellow-700 to-orange-600 bg-clip-text text-transparent leading-none">
-                {summary.totalDaysOfAccessRemaining}
-              </p>
-            </div>
-          ) : null}
+              {partnerCatalogPct}% partner catalog
+            </span>
+          )}
+          {shopDiscountPercent > 0 && (
+            <span
+              className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-2xs sm:text-xs font-bold whitespace-nowrap border bg-white/5 backdrop-blur"
+              style={{ color: accentText, borderColor: `${accentHex}66` }}
+            >
+              {shopDiscountPercent}% shop
+            </span>
+          )}
         </div>
       </button>
 
@@ -543,7 +604,7 @@ export default function PartnerDiscountQueue({
               },
               {
                 label: "Queued Days",
-                value: totalQueuedDays,
+                value: displayQueuedDaysTotal,
                 hint: "Auto-activates when current period ends.",
                 accent: "from-yellow-400/40 to-orange-500/10 border-yellow-400/30",
               },
@@ -556,9 +617,9 @@ export default function PartnerDiscountQueue({
             ].map((card) => (
               <div
                 key={card.label}
-                className={`p-4 rounded-2xl bg-gradient-to-br ${card.accent} backdrop-blur border text-white shadow-inner`}
+                className={cn("p-4 rounded-2xl bg-gradient-to-br", card.accent, "backdrop-blur border text-white shadow-inner")}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/70">{card.label}</p>
+                <p className="text-2xs font-semibold uppercase tracking-[0.3em] text-white/70">{card.label}</p>
                 <p className="text-2xl font-bold mt-1 drop-shadow">{card.value}</p>
                 <p className="text-sm text-white/70 mt-1">{card.hint}</p>
               </div>
@@ -588,7 +649,7 @@ export default function PartnerDiscountQueue({
                           ✅ {summary.isActiveSubscription ? "Active Subscription" : "Active Period"}
                         </h3>
                         <span
-                          className={`px-2 py-0.5 text-[10px] sm:text-xs font-bold rounded-full border uppercase tracking-wide bg-white/10 text-white ${getPackageBadgeColor(
+                          className={`px-2 py-0.5 text-2xs sm:text-xs font-bold rounded-full border uppercase tracking-wide bg-white/10 text-white ${getPackageBadgeColor(
                             activePeriod.source || "",
                             activePeriod.packageName || undefined
                           )}`}
@@ -597,11 +658,11 @@ export default function PartnerDiscountQueue({
                         </span>
                       </div>
                       <p className="text-white/90 font-semibold text-xs sm:text-sm lg:text-lg truncate">
-                        {activePeriod.packageName}
+                        {cleanPackageName(activePeriod.packageName)}
                       </p>
                       {summary.isActiveSubscription && summary.subscriptionBenefits && (
                         <p className="text-emerald-200 font-bold text-xs sm:text-sm mt-1">
-                          100% partner discount on all purchases
+                          {partnerCatalogPct}% of partner offers included with your subscription
                         </p>
                       )}
                     </div>
@@ -617,7 +678,7 @@ export default function PartnerDiscountQueue({
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                        <span className="font-medium text-[11px] sm:text-sm">{formatDate(activePeriod.endsAt!)}</span>
+                        <span className="font-medium text-2xs sm:text-sm">{formatDate(activePeriod.endsAt!)}</span>
                       </div>
                     </div>
                   )}
@@ -637,7 +698,7 @@ export default function PartnerDiscountQueue({
                         }}
                       ></div>
                     </div>
-                    <p className="text-[10px] sm:text-xs text-emerald-200 mt-1 sm:mt-2 font-medium">
+                    <p className="text-2xs sm:text-xs text-emerald-200 mt-1 sm:mt-2 font-medium">
                       {activePeriod.daysRemaining} days until next benefit
                     </p>
                   </div>
@@ -671,7 +732,7 @@ export default function PartnerDiscountQueue({
                   <Package className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-red-400 flex-shrink-0" />
                   <span className="truncate">Upcoming</span>
                 </h3>
-                <span className="px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-white border border-yellow-400/30 rounded-full text-[10px] sm:text-xs lg:text-sm font-bold shadow-sm whitespace-nowrap">
+                <span className="px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-white border border-yellow-400/30 rounded-full text-2xs sm:text-xs lg:text-sm font-bold shadow-sm whitespace-nowrap">
                   {totalQueuedItems} queued
                 </span>
               </div>
@@ -687,26 +748,70 @@ export default function PartnerDiscountQueue({
 
                     <div className="relative z-10 flex items-center justify-between gap-2 sm:gap-4">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-md ring-1 ring-yellow-300/30">
-                          {getPackageIcon(item.packageType)}
-                        </div>
+                        {(() => {
+                          const isMembership = item.packageType === "membership";
+                          const itemType = isMembership
+                            ? ("subscription" as const)
+                            : ("one-time" as const);
+                          const itemIcon = getPackageIconImage(item.packageName, itemType);
+                          const itemPlanId = derivePlanIdFromPackage(
+                            { name: item.packageName },
+                            itemType
+                          );
+                          const itemTheme = getMembershipSectionColorScheme(
+                            itemPlanId,
+                            isMembership
+                          );
+                          const tileBg = itemTheme.badgeStyle?.background;
+                          return (
+                            <div
+                              className={`w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden ${
+                                tileBg
+                                  ? ""
+                                  : "bg-gradient-to-br from-yellow-500 to-orange-500 ring-1 ring-yellow-300/30"
+                              }`}
+                              style={
+                                tileBg
+                                  ? {
+                                      background: tileBg,
+                                      boxShadow: itemTheme.badgeStyle?.boxShadow,
+                                      border: `1px solid ${itemTheme.accentHex}66`,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {itemIcon ? (
+                                <Image
+                                  src={itemIcon}
+                                  alt={`${cleanPackageName(item.packageName)} icon`}
+                                  width={28}
+                                  height={28}
+                                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
+                                  sizes="28px"
+                                />
+                              ) : (
+                                getPackageIcon(item.packageType)
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-white text-xs sm:text-sm lg:text-lg truncate">
-                            {item.packageName}
+                            {cleanPackageName(item.packageName)}
                           </h4>
-                          <p className="text-[10px] sm:text-xs lg:text-sm text-white/70 font-medium truncate">
-                            <span className="text-orange-300 font-bold">{item.daysOfAccess}</span> day
-                            {item.daysOfAccess !== 1 ? "s" : ""} access
+                          <p className="text-2xs sm:text-xs lg:text-sm text-white/70 font-medium truncate">
+                            <span className="text-orange-300 font-bold">{Math.round(item.daysOfAccess)}</span> day
+                            {Math.round(item.daysOfAccess) !== 1 ? "s" : ""} access
                           </p>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="inline-block px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-400/30 rounded-md sm:rounded-lg">
-                          <span className="text-[10px] sm:text-xs lg:text-sm font-bold text-white whitespace-nowrap">
+                          <span className="text-2xs sm:text-xs lg:text-sm font-bold text-white whitespace-nowrap">
                             #{item.queuePosition}
                           </span>
                         </div>
-                        <p className="text-[9px] sm:text-[10px] lg:text-xs text-white/50 font-medium mt-0.5 sm:mt-1">
+                        <p className="text-3xs sm:text-2xs lg:text-xs text-white/50 font-medium mt-0.5 sm:mt-1">
                           {formatDate(item.purchaseDate)}
                         </p>
                       </div>
@@ -730,10 +835,10 @@ export default function PartnerDiscountQueue({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm text-white font-semibold mb-0.5 sm:mb-1">
-                      <strong className="text-sm sm:text-base">Total:</strong> {totalQueuedDays} day
-                      {totalQueuedDays !== 1 ? "s" : ""}
+                      <strong className="text-sm sm:text-base">Total:</strong> {displayQueuedDaysTotal} day
+                      {displayQueuedDaysTotal !== 1 ? "s" : ""}
                     </p>
-                    <p className="text-[10px] sm:text-xs text-white/70">
+                    <p className="text-2xs sm:text-xs text-white/70">
                       Activates automatically when current period ends
                     </p>
                   </div>

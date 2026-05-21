@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 export interface IAlternatingPromoMultiplier extends Document {
   type: "membership-packages" | "one-time-packages" | "mini-packages";
@@ -25,11 +26,9 @@ const AlternatingPromoMultiplierSchema = new Schema<IAlternatingPromoMultiplier>
         validator: function (multipliers: number[]) {
           // Must have exactly 2 multipliers
           if (multipliers.length !== 2) return false;
-          // Each multiplier must be a valid value (2, 3, 5, or 10)
-          const validMultipliers = [2, 3, 5, 10];
-          return multipliers.every((m) => validMultipliers.includes(m));
+          return multipliers.every((m) => (PROMO_MULTIPLIERS as readonly number[]).includes(m));
         },
-        message: "Must have exactly 2 multipliers, each must be 2, 3, 5, or 10",
+        message: "Must have exactly 2 multipliers, each must be a valid promo multiplier",
       },
     },
     isEnabled: {

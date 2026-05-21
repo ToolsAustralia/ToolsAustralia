@@ -5,7 +5,15 @@
  */
 
 import type { PrizeSlug } from "./prizes";
-import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import type { LandingHeroUrgency, ExtendedPromoImagePaths } from "@/utils/promo/promo-hero-types";
+import {
+  resolveLandingHeroImages,
+  resolveLandingHeroImagesWithUrgency,
+  resolveEvergreenHeroImages,
+  resolveEvergreenHeroImagesWithUrgency,
+  landingToolboxSuffixFromPrizeSlug,
+} from "@/utils/promo/landing-image-resolver";
+import { slugToBrandKey } from "@/config/brand-theme";
 
 export const TOOLSET_LANDING_SLUGS = [
   "ryobi",
@@ -16,36 +24,38 @@ export const TOOLSET_LANDING_SLUGS = [
 
 export type ToolsetLandingSlug = (typeof TOOLSET_LANDING_SLUGS)[number];
 
-/** Map toolset slug to both prize slugs (Sidchrome first, Milwaukee second) */
-const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug]> = {
-  ryobi: ["ryobi-sidchrome", "ryobi-milwaukee"],
-  milwaukee: ["milwaukee-sidchrome", "milwaukee-milwaukee"],
-  dewalt: ["dewalt-sidchrome", "dewalt-milwaukee"],
-  makita: ["makita-sidchrome", "makita-milwaukee"],
+/** Map toolset slug to prize slugs: Sidchrome, Kincrome (centre), Milwaukee */
+const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, PrizeSlug]> = {
+  ryobi: ["ryobi-sidchrome", "ryobi-kincrome", "ryobi-milwaukee"],
+  milwaukee: ["milwaukee-sidchrome", "milwaukee-kincrome", "milwaukee-milwaukee"],
+  dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee"],
+  makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee"],
 };
 
-const LANDING_IMAGE_BASE = "/images/background/promo/landing";
+/**
+ * Prize slug -> landing hero image paths with light/dark support.
+ * Uses the new .webp assets with brand-specific folders.
+ * null = use standard promo hero.
+ */
+const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
+  /** Collage hero under `all-prizes/` (shared light/dark paths per viewport). */
+  "cash-prize": resolveEvergreenHeroImages(),
 
-/** Prize slug -> landing hero image paths. null = use standard promo hero. */
-const LANDING_HERO_MAP: Partial<Record<PrizeSlug, PromoImagePaths>> = {
-  // Ryobi: Sidchrome TB images (default for ryobi)
-  "ryobi-sidchrome": {
-    desktop: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/sidchromeTb-ryobiSet-mobile.webp`,
-  },
-  // Milwaukee, DeWalt, Makita: Milwaukee TB images (default until Sidchrome TB variants are ready)
-  "milwaukee-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-milwaukeeSet-mobile.webp`,
-  },
-  "dewalt-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-dewaltSet-mobile.webp`,
-  },
-  "makita-milwaukee": {
-    desktop: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet.webp`,
-    mobile: `${LANDING_IMAGE_BASE}/milwaukeeTb-makitaSet-mobile.webp`,
-  },
+  // Ryobi prizes — `sidTB` / `milTB` / `kinTB` resolved via `landingToolboxSuffixFromPrizeSlug`
+  "ryobi-sidchrome": resolveLandingHeroImages("ryobi", "sidTB"),
+  "ryobi-milwaukee": resolveLandingHeroImages("ryobi", "milTB"),
+
+  // Milwaukee prizes
+  "milwaukee-sidchrome": resolveLandingHeroImages("milwaukee", "sidTB"),
+  "milwaukee-milwaukee": resolveLandingHeroImages("milwaukee", "milTB"),
+
+  // DeWalt prizes
+  "dewalt-sidchrome": resolveLandingHeroImages("dewalt", "sidTB"),
+  "dewalt-milwaukee": resolveLandingHeroImages("dewalt", "milTB"),
+
+  // Makita prizes
+  "makita-sidchrome": resolveLandingHeroImages("makita", "sidTB"),
+  "makita-milwaukee": resolveLandingHeroImages("makita", "milTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
@@ -53,30 +63,43 @@ export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
 }
 
 /**
- * Returns both prize slugs for a toolset landing page (Sidchrome first, Milwaukee second).
+ * Returns prize slugs for a toolset landing page: Sidchrome, Kincrome, Milwaukee.
  */
-export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, PrizeSlug] {
+export function getPrizesForToolsetSlug(slug: ToolsetLandingSlug): [PrizeSlug, PrizeSlug, PrizeSlug] {
   return TOOLSET_TO_PRIZE_SLUGS[slug];
 }
 
 /**
  * Default prize slug for a toolset page.
- * Uses prize variant that has landing hero images available:
- * - Ryobi: Sidchrome TB (sidchromeTb-ryobiSet)
- * - Milwaukee, DeWalt, Makita: Milwaukee TB (milwaukeeTb-{toolset}Set) until Sidchrome TB variants are ready
+ * Prefers Milwaukee toolbox first (Milwaukee stack + power toolset).
  */
 export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSlug {
-  const [sidchrome, milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
+  const [sidchrome, , milwaukee] = TOOLSET_TO_PRIZE_SLUGS[slug];
   const hasMilwaukeeHero = LANDING_HERO_MAP[milwaukee] != null;
   const hasSidchromeHero = LANDING_HERO_MAP[sidchrome] != null;
   if (hasMilwaukeeHero) return milwaukee;
   if (hasSidchromeHero) return sidchrome;
-  return sidchrome; // fallback to Sidchrome variant
+  return milwaukee;
 }
+
+const CASH_PRIZE_SLUG = "cash-prize";
 
 /**
  * Returns landing hero image paths for a prize slug, or null to use standard promo hero.
+ * When `urgency` is set, paths include `-final-hours` / `-drawn-tomorrow` / `-drawn-tonight` suffixes.
  */
-export function getLandingHeroImagePaths(prizeSlug: string): PromoImagePaths | null {
-  return LANDING_HERO_MAP[prizeSlug as PrizeSlug] ?? null;
+export function getLandingHeroImagePaths(
+  prizeSlug: string,
+  urgency: LandingHeroUrgency | null = null
+): ExtendedPromoImagePaths | null {
+  if (prizeSlug === CASH_PRIZE_SLUG) {
+    return resolveEvergreenHeroImagesWithUrgency(urgency);
+  }
+
+  const brand = slugToBrandKey(prizeSlug);
+  if (!brand) return null;
+
+  return resolveLandingHeroImagesWithUrgency(brand, landingToolboxSuffixFromPrizeSlug(prizeSlug), urgency);
 }
+
+export type { LandingHeroUrgency } from "@/utils/promo/promo-hero-types";

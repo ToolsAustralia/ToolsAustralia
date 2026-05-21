@@ -7,6 +7,7 @@ import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
+import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
 
 import {
   getDefaultPrizeForToolsetSlug,
@@ -18,7 +19,7 @@ import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-s
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
-import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
+import { getMajorDrawHeroUrgencyFromMajorDraw, getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
 import mongoose from "mongoose";
 
@@ -37,6 +38,11 @@ const GiveawayDetails = dynamic(() => import("@/components/sections/promo/Giveaw
 const PromoFAQs = dynamic(() => import("@/components/sections/promo/PromoFAQs"), {
   ssr: true,
 });
+
+const PartnerBenefitsPromoSectionClient = dynamic(
+  () => import("@/components/sections/promo/PartnerBenefitsPromoSectionClient"),
+  { ssr: true }
+);
 
 const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/UnlockDiscounts"), {
   ssr: true,
@@ -67,8 +73,12 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
+  const landingUrgency = getMajorDrawHeroUrgencyFromMajorDraw(majorDraw);
   const landingHero = getLandingHeroImagePaths(defaultPrizeSlug);
-  const standardHero = getPromoImagePaths({ multiplier: membershipPromo?.multiplier ?? null });
+  const standardHero = getPromoImagePaths({
+    multiplier: membershipPromo?.multiplier ?? null,
+    majorDrawUrgency: landingUrgency,
+  });
   const heroImagePaths: PromoImagePaths = landingHero ?? standardHero;
 
   const experimentId = activeExperiment?._id
@@ -105,7 +115,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={defaultPrizeSlug} toolsetSlug={toolsetSlug} />
-        <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
+        <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
           <main className="w-full overflow-hidden ">
@@ -113,9 +123,11 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               <PromoHero
                 initialPromo={membershipPromo}
                 initialMajorDraw={majorDraw}
-                isToolsetLandingPage
+                prizeSlug={defaultPrizeSlug}
               />
             </div>
+
+            <PromoTrustBar initialMajorDraw={majorDraw} />
 
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />
@@ -129,6 +141,10 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               />
             </Suspense>
 
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <GiveawayDetails />
+            </Suspense>
+
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
             </Suspense>
@@ -137,8 +153,8 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               <WinnerTestimoniesClientLazy />
             </Suspense>
 
-            <Suspense fallback={<div className="min-h-[300px]" />}>
-              <GiveawayDetails />
+            <Suspense fallback={null}>
+              <PartnerBenefitsPromoSectionClient />
             </Suspense>
 
             <Suspense fallback={<div className="min-h-[400px]" />}>

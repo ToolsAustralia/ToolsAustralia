@@ -4,6 +4,12 @@ import mongoose, { Document, Schema } from 'mongoose';
  * Contact Submission Model
  * Stores contact form submissions from the contact page
  */
+export interface ISubmissionReply {
+  body: string;
+  sentAt: Date;
+  sentBy: mongoose.Types.ObjectId;
+}
+
 export interface IContactSubmission extends Document {
   // Basic Information
   firstName: string;
@@ -24,6 +30,9 @@ export interface IContactSubmission extends Document {
   response?: string;
   respondedAt?: Date;
   respondedBy?: mongoose.Types.ObjectId;
+
+  // Conversation thread
+  replies: ISubmissionReply[];
   
   // Metadata
   submittedAt: Date;
@@ -32,6 +41,12 @@ export interface IContactSubmission extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ReplySchema = new Schema({
+  body: { type: String, required: true, trim: true, maxlength: 15000 },
+  sentAt: { type: Date, default: Date.now },
+  sentBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+}, { _id: true });
 
 const ContactSubmissionSchema = new Schema<IContactSubmission>({
   // Basic Information
@@ -110,6 +125,9 @@ const ContactSubmissionSchema = new Schema<IContactSubmission>({
     type: Schema.Types.ObjectId,
     ref: 'User',
   },
+
+  // Conversation thread
+  replies: [ReplySchema],
   
   // Metadata
   submittedAt: {

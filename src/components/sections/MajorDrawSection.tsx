@@ -1,22 +1,25 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Users, Zap, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination, Thumbs, FreeMode } from "swiper/modules";
-import type { Swiper as SwiperType } from "swiper";
-import "swiper/css";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
-import "swiper/css/thumbs";
-import "swiper/css/free-mode";
-import MembershipModal from "@/components/modals/MembershipModal";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
+import useEmblaCarousel from "embla-carousel-react";
+import ClassNames from "embla-carousel-class-names";
+import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
+import { EmblaCarouselButton } from "@/components/ui/embla/EmblaCarouselButton";
+// Lazy-loaded: MembershipModal pulls in Stripe + payment forms; only ship its
+// JS once the user opens the membership flow.
+const MembershipModal = dynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 import { useUserContext } from "@/contexts/UserContext";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useCurrentMajorDraw, useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsModal";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
@@ -28,9 +31,281 @@ import {
 } from "@/utils/prize-brand-colors";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import type { PrizeCatalogEntry, PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface MajorDrawSectionProps {
   className?: string;
+}
+
+interface MajorDrawCountdownValues {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+// Leaf component owning the 1s tick so the parent (MajorDrawSection) does not
+// re-render every second. Computes Days/Hours/Mins/Secs from `targetMs` and
+// passes them to the render prop.
+function MajorDrawCountdownLeaf({
+  targetMs,
+  render,
+}: {
+  targetMs: number;
+  render: (values: MajorDrawCountdownValues) => React.ReactNode;
+}) {
+  const now = useLeafTimer(1000);
+  const difference = targetMs - now;
+  const values: MajorDrawCountdownValues =
+    difference > 0
+      ? {
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((difference % (1000 * 60)) / 1000),
+        }
+      : { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  return <>{render(values)}</>;
+}
+
+// Pagination dots component for Embla main carousel — replaces Swiper [Pagination]
+function EmblaPaginationDots({
+  api,
+  active,
+  className,
+}: {
+  api: EmblaCarouselType | null;
+  active: number;
+  className?: string;
+}) {
+  const [snapCount, setSnapCount] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => setSnapCount(api.scrollSnapList().length);
+    update();
+    api.on("reInit", update);
+    return () => {
+      api.off("reInit", update);
+    };
+  }, [api]);
+
+  if (snapCount <= 1) return null;
+
+  return (
+    <div
+      className={cn(
+        "absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-1.5",
+        className
+      )}
+    >
+      {Array.from({ length: snapCount }).map((_, i) => {
+        const isActive = i === active;
+        return (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Go to image ${i + 1}`}
+            aria-current={isActive}
+            onClick={() => api?.scrollTo(i)}
+            className={`h-1.5 rounded-full transition-[width,background-color] duration-[var(--ta-transition-dur)] ${
+              isActive ? "w-5 bg-white" : "w-1.5 bg-white/55 hover:bg-white/80"
+            }`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// Inline two-Embla prize gallery used by both mobile and desktop layouts.
+// See docs/shared-ui/patterns.md "Inline two-Embla pattern" — siblings (e.g. the
+// VIEW SPECS button overlay) live next to the main viewport, so the
+// EmblaThumbsGallery wrapper (which renders thumbs as a fixed sibling under one
+// root) isn't a fit. Renders the bordered main card and the (sibling) thumbs
+// strip together so a single Embla pair drives both.
+function PrizeImageGallery({
+  images,
+  cardBorderColor,
+  cardGlowColor,
+  cardClassName,
+  cardStyle,
+  specsButton,
+  thumbsRowClassName,
+  thumbSizeClassName,
+  thumbContainerGap,
+  thumbsSizesAttr,
+  mainSizesAttr,
+  mainAspectClassName,
+  fallbackImage,
+}: {
+  images: { src: string; alt?: string }[];
+  cardBorderColor: string;
+  cardGlowColor: string;
+  cardClassName: string;
+  cardStyle?: React.CSSProperties;
+  specsButton?: React.ReactNode;
+  thumbsRowClassName?: string;
+  thumbSizeClassName: string;
+  thumbContainerGap: string;
+  thumbsSizesAttr: string;
+  mainSizesAttr: string;
+  mainAspectClassName: string;
+  fallbackImage: { src: string; alt: string };
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  const mainOptions = useMemo<EmblaOptionsType>(
+    () => ({ loop: false, duration: 25 }),
+    []
+  );
+  const mainPlugins = useMemo(() => [ClassNames()], []);
+  const [mainRef, mainApi] = useEmblaCarousel(mainOptions, mainPlugins);
+
+  const thumbsOptions = useMemo<EmblaOptionsType>(
+    () => ({ containScroll: "keepSnaps", dragFree: true }),
+    []
+  );
+  const thumbsPlugins = useMemo(() => [ClassNames()], []);
+  const [thumbsRef, thumbsApi] = useEmblaCarousel(thumbsOptions, thumbsPlugins);
+
+  const onSelect = useCallback(() => {
+    if (!mainApi) return;
+    const i = mainApi.selectedScrollSnap();
+    setActiveIndex(i);
+    setCanScrollPrev(mainApi.canScrollPrev());
+    setCanScrollNext(mainApi.canScrollNext());
+    thumbsApi?.scrollTo(i);
+  }, [mainApi, thumbsApi]);
+
+  useEffect(() => {
+    if (!mainApi) return;
+    onSelect();
+    mainApi.on("select", onSelect);
+    mainApi.on("reInit", onSelect);
+    return () => {
+      mainApi.off("select", onSelect);
+      mainApi.off("reInit", onSelect);
+    };
+  }, [mainApi, onSelect]);
+
+  const onThumbClick = useCallback(
+    (i: number) => mainApi?.scrollTo(i),
+    [mainApi]
+  );
+
+  const hasMultiple = images.length > 1;
+
+  return (
+    <>
+      {/* Bordered main card containing main image + VIEW SPECS overlay */}
+      <div className={cardClassName} style={cardStyle}>
+        {specsButton}
+        {hasMultiple ? (
+          <>
+            <div
+              ref={mainRef}
+              data-carousel="true"
+              style={{ touchAction: "pan-y pinch-zoom" }}
+              className="overflow-hidden"
+            >
+              <div className="flex">
+                {images.map((image, index) => (
+                  <div
+                    key={`${image.src}-${index}`}
+                    className="embla__slide flex-[0_0_100%] min-w-0"
+                  >
+                    <div className={mainAspectClassName}>
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Prize image ${index + 1}`}
+                        fill
+                        className="object-contain"
+                        priority={index === 0}
+                        sizes={mainSizesAttr}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <EmblaCarouselButton
+              direction="prev"
+              disabled={!canScrollPrev}
+              onClick={() => mainApi?.scrollPrev()}
+              className="absolute left-2 top-1/2 z-20 -translate-y-1/2 border-white/40"
+            />
+            <EmblaCarouselButton
+              direction="next"
+              disabled={!canScrollNext}
+              onClick={() => mainApi?.scrollNext()}
+              className="absolute right-2 top-1/2 z-20 -translate-y-1/2 border-white/40"
+            />
+            <EmblaPaginationDots api={mainApi ?? null} active={activeIndex} />
+          </>
+        ) : (
+          <div className={mainAspectClassName}>
+            <Image
+              src={images[0]?.src || fallbackImage.src}
+              alt={images[0]?.alt || fallbackImage.alt}
+              fill
+              className="object-contain"
+              priority
+              sizes={mainSizesAttr}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Thumbs strip — sibling of the bordered card */}
+      {hasMultiple ? (
+        <div className={thumbsRowClassName}>
+          <div
+            ref={thumbsRef}
+            data-carousel="true"
+            style={{ touchAction: "pan-y pinch-zoom" }}
+            className="overflow-hidden"
+          >
+            <div className={cn("flex", thumbContainerGap)}>
+              {images.map((image, index) => {
+                const isActive = activeIndex === index;
+                return (
+                  <button
+                    key={`thumb-${image.src}-${index}`}
+                    type="button"
+                    onClick={() => onThumbClick(index)}
+                    aria-label={`Show image ${index + 1}`}
+                    aria-current={isActive}
+                    className={cn(
+                      "embla__thumb flex-[0_0_auto]",
+                      thumbSizeClassName
+                    )}
+                  >
+                    <div
+                      className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] cursor-pointer bg-white dark:bg-neutral-900"
+                      style={{
+                        borderColor: isActive ? cardBorderColor : cardGlowColor,
+                      }}
+                    >
+                      <Image
+                        src={image.src}
+                        alt={image.alt || `Prize thumbnail ${index + 1}`}
+                        fill
+                        className="object-contain"
+                        sizes={thumbsSizesAttr}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 // Helper function to get ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
@@ -60,24 +335,15 @@ const formatTimeWithoutPeriod = (date: Date): string => {
 
 export default function MajorDrawSection({ className = "" }: MajorDrawSectionProps) {
   const searchParams = useSearchParams();
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
-  const [mobileMainSwiper, setMobileMainSwiper] = useState<SwiperType | null>(null);
-  const [desktopMainSwiper, setDesktopMainSwiper] = useState<SwiperType | null>(null);
-  const [desktopThumbsSwiper, setDesktopThumbsSwiper] = useState<SwiperType | null>(null);
   const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
   const [selectedPrizeSlug, setSelectedPrizeSlug] = useState<string | null>(null);
-  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "cash">("milwaukee");
+  const [toolboxType, setToolboxType] = useState<"sidchrome" | "milwaukee" | "kincrome" | "cash">("milwaukee");
   const [mobilePrizeIndex, setMobilePrizeIndex] = useState(0);
   const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const { userData: user } = useUserContext();
   const { membershipModal, openEntryFlow, getHeavyDutyPack, oneTimePackages } = useMajorDrawEntryCta();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   // The shared CTA hook keeps modal behaviour consistent with Promo pages.
 
   // Use React Query hooks for real-time data
@@ -94,11 +360,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
       setToolboxType(
         slug === "cash-prize"
           ? "cash"
-          : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
-            ? "milwaukee"
-            : slug.includes("sidchrome")
-              ? "sidchrome"
-              : "sidchrome"
+          : slug.endsWith("-sidchrome")
+            ? "sidchrome"
+            : slug.endsWith("-kincrome")
+              ? "kincrome"
+              : slug.endsWith("-milwaukee")
+                ? "milwaukee"
+                : "milwaukee"
       );
     }
   }, [activeSlug, defaultSlug, selectedPrizeSlug]);
@@ -150,23 +418,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return fallbackIcon;
   };
 
-  const handleMobileThumbnailClick = (index: number) => {
-    if (mobileMainSwiper && !mobileMainSwiper.destroyed) {
-      mobileMainSwiper.slideTo(index);
-    }
-  };
-
-  const handleDesktopThumbnailClick = (index: number) => {
-    if (desktopMainSwiper && !desktopMainSwiper.destroyed) {
-      desktopMainSwiper.slideTo(index);
-    }
-  };
-
-  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "cash") => {
+  const handleToolboxTypeChange = (type: "sidchrome" | "milwaukee" | "kincrome" | "cash") => {
     if (toolboxType === type) return;
     setToolboxType(type);
     const defaultSlugForType =
-      type === "cash" ? "cash-prize" : type === "sidchrome" ? "milwaukee-sidchrome" : "milwaukee-milwaukee";
+      type === "cash"
+        ? "cash-prize"
+        : type === "sidchrome"
+          ? "milwaukee-sidchrome"
+          : type === "kincrome"
+            ? "milwaukee-kincrome"
+            : "milwaukee-milwaukee";
     setSelectedPrizeSlug(defaultSlugForType);
   };
 
@@ -176,11 +438,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     setToolboxType(
       slug === "cash-prize"
         ? "cash"
-        : (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) && !slug.includes("sidchrome")
-          ? "milwaukee"
-          : slug.includes("sidchrome")
-            ? "sidchrome"
-            : "sidchrome"
+        : slug.endsWith("-sidchrome")
+          ? "sidchrome"
+          : slug.endsWith("-kincrome")
+            ? "kincrome"
+            : slug.endsWith("-milwaukee")
+              ? "milwaukee"
+              : "milwaukee"
     );
   };
 
@@ -215,34 +479,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   //   note: "Now showing only current major draw entries (not accumulated total)",
   // });
 
-  // Update countdown timer
-  useEffect(() => {
-    // Show countdown for active, frozen, or any draw with a valid date
-    if (!currentMajorDraw || !currentMajorDraw?.drawDate) return;
-
-    const updateTimer = () => {
-      const now = new Date().getTime();
-      // Use drawDate for countdown
-      const endTime = new Date(currentMajorDraw.drawDate || "").getTime();
-      const difference = endTime - now;
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-          minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-          seconds: Math.floor((difference % (1000 * 60)) / 1000),
-        });
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      }
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-
-    return () => clearInterval(timer);
-  }, [currentMajorDraw]);
+  // Countdown target — the actual ticking happens inside <MajorDrawCountdownLeaf>
+  // below so this parent component does not re-render every second.
+  const drawTargetMs = currentMajorDraw?.drawDate
+    ? new Date(currentMajorDraw.drawDate).getTime()
+    : null;
 
   // Set the default plan when component mounts or when user/package data changes
   useEffect(() => {
@@ -256,12 +497,15 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   // Listen for upsell modal requests
   useEffect(() => {
     const handleOpenMembershipModal = (event: CustomEvent) => {
-      // console.log("🎯 Received openMembershipModal event:", event.detail);
-      const { plan } = event.detail;
-      if (plan) {
-        membershipModal.setSelectedPlan(plan);
+      const detail = event.detail ?? {};
+      const plan = detail.plan;
+
+      whenGatesOpenElseGateModal(() => {
+        if (plan) {
+          membershipModal.setSelectedPlan(plan);
+        }
         membershipModal.openModal();
-      }
+      });
     };
 
     window.addEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
@@ -269,7 +513,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal]);
 
   // Use data if available, otherwise use defaults for static content
   const majorDraw = currentMajorDraw;
@@ -312,16 +556,20 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
-        return "/images/brands/milwaukee.png";
+      case "milwaukee-kincrome":
+        return "/images/brands/milwaukee.webp";
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
-        return "/images/brands/dewalt-black.png";
+      case "dewalt-kincrome":
+        return "/images/brands/dewalt-black.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
-        return "/images/brands/Makita-red.png";
+      case "makita-kincrome":
+        return "/images/brands/Makita-red.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
-        return "/images/brands/name/ryobiText.png";
+      case "ryobi-kincrome":
+        return "/images/brands/name/ryobiText.webp";
       case "cash-prize":
         return null;
       default:
@@ -334,19 +582,23 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     switch (slug) {
       case "dewalt-sidchrome":
       case "dewalt-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-dewalt.png";
+      case "dewalt-kincrome":
+        return "/images/promotion/FirstPrizeText/1stprice-dewalt.webp";
       case "makita-sidchrome":
       case "makita-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-makita.png";
+      case "makita-kincrome":
+        return "/images/promotion/FirstPrizeText/1stprice-makita.webp";
       case "ryobi-sidchrome":
       case "ryobi-milwaukee":
-        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png"; // Fallback until 1stprice-ryobi.png exists
+      case "ryobi-kincrome":
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp"; // Fallback until 1stprice-ryobi.webp exists
       case "cash-prize":
-        return "/images/promotion/FirstPrizeText/1stprice-cash.png";
+        return "/images/promotion/FirstPrizeText/1stprice-cash.webp";
       case "milwaukee-sidchrome":
       case "milwaukee-milwaukee":
+      case "milwaukee-kincrome":
       default:
-        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.png";
+        return "/images/promotion/FirstPrizeText/1stprice-milwaukee.webp";
     }
   };
 
@@ -414,6 +666,34 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
           line3: "$5000 Cash Prize",
         };
       }
+      if (slug === "milwaukee-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Milwaukee Powertools" : "Milwaukee",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "dewalt-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "DeWalt Powertools" : "DeWalt",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "makita-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Makita Powertools" : "Makita",
+          line3: "$5000 Cash Prize",
+        };
+      }
+      if (slug === "ryobi-kincrome") {
+        return {
+          line1: isMobile ? "Kincrome Toolbox" : "Kincrome",
+          line2: isMobile ? "Ryobi Powertools" : "Ryobi",
+          line3: "$5000 Cash Prize",
+        };
+      }
       if (slug === "cash-prize") {
         return { line1: "$10,000 Tax Free Cash", line2: null, line3: null };
       }
@@ -424,32 +704,30 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
     return { line1: label, line2: null, line3: null };
   };
 
-  const _getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "cash" => {
+  const _getToolboxTypeFromSlug = (slug: string): "sidchrome" | "milwaukee" | "kincrome" | "cash" => {
     if (slug === "cash-prize") return "cash";
-    if (
-      (slug.startsWith("milwaukee-") || slug.endsWith("-milwaukee")) &&
-      !slug.includes("sidchrome")
-    ) {
-      return "milwaukee";
-    }
-    if (slug.includes("sidchrome")) return "sidchrome";
+    const lower = slug.toLowerCase();
+    if (lower.endsWith("-sidchrome")) return "sidchrome";
+    if (lower.endsWith("-kincrome")) return "kincrome";
+    if (lower.endsWith("-milwaukee")) return "milwaukee";
     return "sidchrome";
   };
 
   const filterPrizesByToolboxType = (
     prizeList: PrizeCatalogEntry[],
-    toolboxType: "sidchrome" | "milwaukee" | "cash"
+    toolboxType: "sidchrome" | "milwaukee" | "kincrome" | "cash"
   ): PrizeCatalogEntry[] => {
     if (toolboxType === "cash") {
       return prizeList.filter((p) => p.slug === "cash-prize");
     }
     if (toolboxType === "sidchrome") {
-      return prizeList.filter((p) => p.slug.includes("sidchrome"));
+      return prizeList.filter((p) => p.slug.endsWith("-sidchrome"));
+    }
+    if (toolboxType === "kincrome") {
+      return prizeList.filter((p) => p.slug.endsWith("-kincrome"));
     }
     if (toolboxType === "milwaukee") {
-      return prizeList.filter(
-        (p) => p.slug.includes("milwaukee") && !p.slug.includes("sidchrome")
-      );
+      return prizeList.filter((p) => p.slug.endsWith("-milwaukee"));
     }
     return prizeList;
   };
@@ -485,27 +763,33 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
     return (
       <div className={layout === "desktop" ? "mt-4 sm:mt-6 max-w-5xl mx-auto" : "mt-4 sm:mt-6"}>
-        <p className="text-lg sm:text-xl font-bold text-black font-['Poppins'] mb-2 sm:mb-3 text-center">
+        <p className="text-lg sm:text-xl font-bold text-black dark:text-white font-['Poppins'] mb-2 sm:mb-3 text-center">
           Pick Your Toolset
         </p>
         {/* Toolbox type toggle - clickable, updates content only (no URL nav) */}
-        <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-          {(["sidchrome", "milwaukee", "cash"] as const).map((type) => {
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          {(["milwaukee", "kincrome", "sidchrome", "cash"] as const).map((type) => {
             const isActive = toolboxType === type;
             const label =
-              type === "sidchrome" ? "Sidchrome Toolbox" : type === "milwaukee" ? "Milwaukee Toolbox" : "$10,000 Cash";
+              type === "sidchrome"
+                ? "Sidchrome Toolbox"
+                : type === "milwaukee"
+                  ? "Milwaukee Toolbox"
+                  : type === "kincrome"
+                    ? "Kincrome Toolbox"
+                    : "$10,000 Cash";
             return (
               <button
                 key={type}
                 type="button"
                 onClick={() => handleToolboxTypeChange(type)}
                 suppressHydrationWarning
-                className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 border-2 ${
+                className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] border-2 ${
                   isActive && type !== "cash"
                     ? "bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white border-red-500 shadow-lg shadow-red-500/40"
                     : isActive && type === "cash"
                       ? "bg-gradient-to-br from-green-500 via-green-600 to-green-700 text-white border-green-500 shadow-lg shadow-green-500/40"
-                      : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
+                      : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-gray-300 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-500"
                 }`}
               >
                 {label}
@@ -544,10 +828,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                               borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
                             }
                       }
-                      className={`relative w-full p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                      className={`relative w-full p-5 rounded-2xl border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
-                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                          : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
                       }`}
                     >
                       {isActive && brandLogoPath && (
@@ -562,14 +846,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         </div>
                       )}
                       {isActive && (
-                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
-                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
+                          <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
                           className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
-                            isActive ? "text-white" : "text-gray-900"
+                            isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
                           <div className="block">{formattedLabel.line1}</div>
@@ -586,19 +870,19 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       type="button"
                       onClick={handlePreviousPrize}
                       suppressHydrationWarning
-                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-[colors,transform] duration-[var(--ta-transition-dur)]"
                       aria-label="Previous prize"
                     >
-                      <ChevronLeft className="w-6 h-6 text-gray-700" />
+                      <ChevronLeft className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextPrize}
                       suppressHydrationWarning
-                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 transition-all duration-200"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/90 hover:bg-white dark:bg-neutral-800/95 dark:hover:bg-neutral-800 rounded-full shadow-lg flex items-center justify-center border-2 border-gray-300 hover:border-gray-400 dark:border-neutral-600 dark:hover:border-neutral-500 transition-[colors,transform] duration-[var(--ta-transition-dur)]"
                       aria-label="Next prize"
                     >
-                      <ChevronRight className="w-6 h-6 text-gray-700" />
+                      <ChevronRight className="w-6 h-6 text-gray-700 dark:text-neutral-200" />
                     </button>
                   </>
                 )}
@@ -607,7 +891,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Desktop: grid */}
             {layout === "desktop" && (
               <div
-                className={`grid ${filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-4 max-w-5xl mx-auto overflow-visible`}
+                className={cn("grid", filteredPrizes.length === 3 ? "grid-cols-3" : "grid-cols-2", "gap-4 max-w-5xl mx-auto overflow-visible")}
               >
                 {filteredPrizes.map((prizeOption) => {
                   const isActive = prizeOption.slug === displaySlug;
@@ -635,10 +919,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                               borderColor: getBrandBorderColor(prizeOption.slug as PrizeSlug),
                             }
                       }
-                      className={`relative p-5 rounded-2xl border-2 transition-all duration-300 text-center overflow-visible min-h-[110px] cursor-pointer ${
+                      className={`relative p-5 rounded-2xl border-2 transition-[transform,box-shadow,colors] duration-[var(--ta-transition-dur)] text-center overflow-visible min-h-[110px] cursor-pointer ${
                         isActive
-                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                          : "bg-white text-gray-700 border-opacity-100 hover:scale-[1.02]"
+                          ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                          : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border-opacity-100 hover:scale-[1.02]"
                       }`}
                     >
                       {isActive && brandLogoPath && (
@@ -653,14 +937,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         </div>
                       )}
                       {isActive && (
-                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
-                          <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                        <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
+                          <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                         </div>
                       )}
                       <div className="relative z-10 w-full overflow-visible">
                         <div
                           className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${
-                            isActive ? "text-white" : "text-gray-900"
+                            isActive ? "text-white" : "text-gray-900 dark:text-neutral-100"
                           }`}
                         >
                           <div className="block">{formattedLabel.line1}</div>
@@ -693,17 +977,17 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               }}
               className={`relative p-5 rounded-2xl border-2 text-center overflow-visible min-h-[110px] max-w-md mx-auto block w-full cursor-pointer ${
                 isActive
-                  ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white ring-opacity-50`
-                  : "bg-white text-gray-700 hover:scale-[1.02]"
+                  ? `bg-gradient-to-br ${pc.gradient} ${pc.textColor} shadow-xl ${pc.shadowColor} scale-[1.02] ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950 ring-opacity-50`
+                  : "bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:scale-[1.02]"
               }`}
             >
               {isActive && (
-                <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50">
-                  <Check className={`w-4 h-4 ${pc.checkmarkColor}`} />
+                <div className="absolute -top-2.5 -right-2.5 w-7 h-7 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-xl z-10 ring-2 ring-white/50 dark:ring-neutral-600/50">
+                  <Check className={cn("w-4 h-4", pc.checkmarkColor)} />
                 </div>
               )}
               <div className="relative z-10">
-                <div className={`text-base font-bold font-['Poppins'] leading-tight break-words text-center ${isActive ? "text-white" : "text-gray-900"}`}>
+                <div className={cn("text-base font-bold font-['Poppins'] leading-tight break-words text-center", isActive ? "text-white" : "text-gray-900 dark:text-neutral-100")}>
                   <div className="block">{formattedLabel.line1}</div>
                   {formattedLabel.line2 && <div className="block">{formattedLabel.line2}</div>}
                   {formattedLabel.line3 && <div className="block">{formattedLabel.line3}</div>}
@@ -717,13 +1001,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
   };
 
   const renderHighlights = (gridClasses: string) => (
-    <div className={`${gridClasses} overflow-hidden`}>
+    <div className={cn(gridClasses, "overflow-hidden")}>
       {resolvedHighlights.map((highlight, index) => {
         const Icon = resolveHighlightIcon(highlight.icon);
         return (
           <div
             key={`${highlight.title}-${index}`}
-            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+            className="relative flex items-start gap-2 sm:gap-4 p-2.5 sm:p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-[var(--ta-blur)] rounded-xl sm:rounded-2xl border border-gray-700 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
           >
             <div
               className={`relative w-7 h-7 sm:w-12 sm:h-12 flex-shrink-0 bg-gradient-to-br ${
@@ -732,13 +1016,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 .replace("border-", "border-")
                 .replace("-500", "-400/30")} shadow-lg z-10`}
             >
-              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${brandColors.textColor}`} />
+              <Icon className={cn("w-3.5 h-3.5 sm:w-5 sm:h-5", brandColors.textColor)} />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
               <h3 className="text-xs sm:text-lg font-bold text-white font-['Poppins'] mb-0.5 sm:mb-1 drop-shadow-md leading-tight line-clamp-2 sm:line-clamp-none">
                 {highlight.title}
               </h3>
-              <p className="text-[10px] sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
+              <p className="text-2xs sm:text-sm text-gray-300 font-['Inter'] leading-tight sm:leading-relaxed hidden lg:block">
                 {highlight.description}
               </p>
             </div>
@@ -772,7 +1056,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
   return (
     <>
-      <section className={`relative py-8 sm:py-12   w-full overflow-visible ${className}`}>
+      <section className={cn("relative py-8 sm:py-12 w-full overflow-visible", className)}>
         <div className="relative w-full max-w-7xl mx-auto overflow-visible">
           <div className="text-center mb-0 sm:mb-8">
             <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold tracking-[0.35em] text-red-600 uppercase">
@@ -786,7 +1070,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="text-center space-y-2 px-4">
               {/* Mobile: Main Title */}
               <div className="flex items-center justify-center gap-2">
-                <h2 className="hidden lg:block text-[24px] font-bold text-black font-['Poppins'] leading-tight">
+                <h2 className="hidden lg:block text-[24px] font-bold text-black dark:text-white font-['Poppins'] leading-tight">
                   {prizeHeroHeading}
                 </h2>
               </div>
@@ -796,7 +1080,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </p>
               )}
               {prizeSubheading && (
-                <p className="hidden sm:block text-xs text-gray-600 font-medium">{prizeSubheading}</p>
+                <p className="hidden sm:block text-xs text-gray-600 dark:text-neutral-400 font-medium">{prizeSubheading}</p>
               )}
             </div>
 
@@ -811,124 +1095,63 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   height={200}
                   className="w-full max-w-4xl h-auto object-contain"
                   priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
                 />
               </div>
               {renderPickYourToolset()}
-              <div
-                className="relative w-full max-w-sm mx-auto rounded-2xl border-2 overflow-hidden bg-white"
-                style={{
+              <PrizeImageGallery
+                images={prizeImages}
+                cardBorderColor={getBrandBorderColor(activePrizeSlug as PrizeSlug)}
+                cardGlowColor={getBrandGlowColor(activePrizeSlug as PrizeSlug)}
+                cardClassName="relative w-full max-w-sm mx-auto rounded-2xl border-2 overflow-hidden bg-white dark:bg-neutral-900"
+                cardStyle={{
                   borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
                   boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
                 }}
-              >
-                <div className="absolute top-3 right-3 z-20">
-                  <button
-                    onClick={() => setIsSpecsModalOpen(true)}
-                    className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
-                  >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                    <div
-                      className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
-                        "/40",
-                        "/25"
-                      )} blur-xl animate-ping`}
-                    />
-                    <div
-                      className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
-                        "/40",
-                        "/20"
-                      )} blur-xl`}
-                    />
-                    <div
-                      className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 border-2 ${brandColors.borderColor
-                        .replace("border-", "border-")
-                        .replace("-500", "-400/30")} rounded-full`}
+                specsButton={
+                  <div className="absolute top-3 right-3 z-20">
+                    <button
+                      onClick={() => setIsSpecsModalOpen(true)}
+                      className="relative overflow-hidden rounded-full transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:scale-105 group"
                     >
-                      <span className={`font-bold text-xs ${brandColors.textColor} drop-shadow-lg`}>VIEW SPECS</span>
-                    </div>
-                  </button>
-                </div>
-                {prizeImages.length > 1 ? (
-                  <Swiper
-                    modules={[Navigation, Pagination, Thumbs]}
-                    thumbs={{ swiper: thumbsSwiper && !thumbsSwiper.destroyed ? thumbsSwiper : null }}
-                    navigation
-                    pagination={{ clickable: true }}
-                    className="main-swiper"
-                    spaceBetween={0}
-                    slidesPerView={1}
-                    onSwiper={setMobileMainSwiper}
-                  >
-                    {prizeImages.map((image, index) => (
-                      <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
-                          <Image
-                            src={image.src}
-                            alt={image.alt || `Prize image ${index + 1}`}
-                            fill
-                            className="object-contain"
-                            priority={index === 0}
-                            sizes="(max-width: 640px) 100vw, 400px"
-                          />
-                        </div>
-                      </SwiperSlide>
-                    ))}
-                  </Swiper>
-                ) : (
-                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
-                    <Image
-                      src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
-                      alt={prizeImages[0]?.alt || "Prize image"}
-                      fill
-                      className="object-contain"
-                      priority
-                      sizes="(max-width: 640px) 100vw, 400px"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {prizeImages.length > 1 && (
-                <Swiper
-                  modules={[FreeMode, Thumbs]}
-                  onSwiper={setThumbsSwiper}
-                  spaceBetween={8}
-                  slidesPerView="auto"
-                  freeMode
-                  watchSlidesProgress
-                  slideToClickedSlide
-                  className="thumbs-swiper"
-                >
-                  {prizeImages.map((image, index) => (
-                    <SwiperSlide
-                      key={`mobile-thumb-${image.src}-${index}`}
-                      className="!w-16 !h-16 sm:!w-20 sm:!h-20"
-                      onClick={() => handleMobileThumbnailClick(index)}
-                    >
+                      <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
                       <div
-                        className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer bg-white"
-                        style={{
-                          borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
-                        }}
+                        className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
+                          "/40",
+                          "/25"
+                        )} blur-xl animate-ping`}
+                      />
+                      <div
+                        className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
+                          "/40",
+                          "/20"
+                        )} blur-xl`}
+                      />
+                      <div
+                        className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 border-2 ${brandColors.borderColor
+                          .replace("border-", "border-")
+                          .replace("-500", "-400/30")} rounded-full`}
                       >
-                        <Image
-                          src={image.src}
-                          alt={image.alt || `Prize thumbnail ${index + 1}`}
-                          fill
-                          className="object-contain"
-                          sizes="64px"
-                        />
+                        <span className={cn("font-bold text-xs", brandColors.textColor, "drop-shadow-lg")}>
+                          VIEW SPECS
+                        </span>
                       </div>
-                    </SwiperSlide>
-                  ))}
-                </Swiper>
-              )}
+                    </button>
+                  </div>
+                }
+                mainAspectClassName="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900"
+                mainSizesAttr="(max-width: 640px) 100vw, 400px"
+                thumbSizeClassName="!w-16 !h-16 sm:!w-20 sm:!h-20"
+                thumbContainerGap="gap-2"
+                thumbsSizesAttr="(max-width: 640px) 64px, 80px"
+                fallbackImage={{ src: "/images/grand-draw.jpg", alt: "Prize image" }}
+              />
 
               {resolvedHighlights.length > 0 && renderHighlights("grid grid-cols-2 gap-2 sm:gap-4")}
 
               <div className="px-3 sm:px-4">
-                <p className="text-xs sm:text-base text-gray-700 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left mb-4">
+                <p className="text-xs sm:text-base text-gray-700 dark:text-neutral-300 leading-tight sm:leading-relaxed font-['Inter'] text-center sm:text-left mb-4">
                   {prizeSummary}
                 </p>
               </div>
@@ -937,12 +1160,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Mobile: Countdown Timer or Draw Ended */}
             {majorDrawLoading || !currentMajorDraw ? (
               // Skeleton loader for countdown
-              <div className="rounded-3xl p-6 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-200 to-gray-300">
+              <div className="rounded-3xl p-6 shadow-2xl border-2 border-white/20 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-800 dark:to-neutral-900">
                 <div className="grid grid-cols-4 gap-3">
                   {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className="bg-white/20 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/30"
+                      className="bg-white/20 backdrop-blur-[var(--ta-blur)] rounded-2xl p-3 text-center border border-white/30"
                     >
                       <Skeleton height={24} className="w-full mb-2 bg-white/40" />
                       <Skeleton height={12} className="w-12 mx-auto bg-white/40" />
@@ -964,11 +1187,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 {/* Frozen Draw Notice */}
                 {currentMajorDraw?.status === "frozen" && (
                   <div className="mb-3 text-center">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                    <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-xl p-2 sm:p-3 border border-white/20">
                       <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                         Entry Period Closed
                       </div>
-                      <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                      <div className="text-white/80 text-2xs sm:text-xs mt-1">
                         {nextDrawName
                           ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                           : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -977,32 +1200,39 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 )}
 
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.days).padStart(2, "0")}
-                    </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Days</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.hours).padStart(2, "0")}
-                    </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Hours</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.minutes).padStart(2, "0")}
-                    </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Mins</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20">
-                    <div className="text-lg sm:text-2xl font-bold text-white">
-                      {String(timeLeft.seconds).padStart(2, "0")}
-                    </div>
-                    <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">Secs</div>
-                  </div>
-                </div>
+                {drawTargetMs !== null && (
+                  <MajorDrawCountdownLeaf
+                    targetMs={drawTargetMs}
+                    render={(timeLeft) => (
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.days).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Days</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.hours).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Hours</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.minutes).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Mins</div>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20">
+                          <div className="text-lg sm:text-2xl font-bold text-white">
+                            {String(timeLeft.seconds).padStart(2, "0")}
+                          </div>
+                          <div className="text-2xs sm:text-[12px] text-white/80 font-medium">Secs</div>
+                        </div>
+                      </div>
+                    )}
+                  />
+                )}
 
               </div>
             ) : !isCompleted ? (
@@ -1015,13 +1245,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {/* Mobile: Draw Ended Section */}
             {isCompleted && (
               <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border-2 border-white/20">
-                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/20 space-y-4">
+                <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 text-center border border-white/20 space-y-4">
                   <div className="text-[24px] font-bold text-white uppercase tracking-wide">Draw Ended</div>
                   <a
                     href="https://www.facebook.com/toolsaust"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-all duration-200 shadow-lg hover:shadow-xl w-full"
+                    className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-[14px] transition-[colors,box-shadow] duration-[var(--ta-transition-dur)] shadow-lg hover:shadow-xl w-full"
                   >
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -1036,7 +1266,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             {user ? (
               userStatsLoading ? (
                 // Skeleton loader for user entries
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
+                <div className="bg-white/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1046,10 +1276,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   </div>
                 </div>
               ) : (
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-red-200">
+                <div className="bg-white/80 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 border border-red-200 dark:bg-neutral-900/90 dark:border-red-900/50">
                   <button
                     onClick={() => setShowBreakdown(!showBreakdown)}
-                    className="w-full text-left hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                    className="w-full text-left hover:bg-gray-50 dark:hover:bg-neutral-800/60 rounded-lg p-2 -m-2 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1061,11 +1291,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                         {Boolean(isProcessing) && pendingEntries > 0 && (
                           <div className="flex items-center gap-1">
                             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="text-[10px] text-green-600 font-medium">+{String(pendingEntries)}</span>
+                            <span className="text-2xs text-green-600 font-medium">+{String(pendingEntries)}</span>
                           </div>
                         )}
                         <svg
-                          className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                          className={`w-4 h-4 text-gray-500 dark:text-neutral-400 transition-transform duration-200 ${
                             showBreakdown ? "rotate-180" : ""
                           }`}
                           fill="none"
@@ -1081,14 +1311,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   {showBreakdown && (
                     <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                       <div className="flex justify-between items-center">
-                        <span className="text-[12px] text-gray-700">From Membership:</span>
-                        <span className="text-[12px] font-medium text-gray-600">
+                        <span className="text-[12px] text-gray-700 dark:text-neutral-300">From Membership:</span>
+                        <span className="text-[12px] font-medium text-gray-600 dark:text-neutral-400">
                           {enhancedUserStats.membershipEntries || 0}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[12px] text-gray-700">From Packages:</span>
-                        <span className="text-[12px] font-medium text-gray-600">
+                        <span className="text-[12px] text-gray-700 dark:text-neutral-300">From Packages:</span>
+                        <span className="text-[12px] font-medium text-gray-600 dark:text-neutral-400">
                           {enhancedUserStats.oneTimeEntries || 0}
                         </span>
                       </div>
@@ -1102,11 +1332,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => openEntryFlow()}
-                className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                className={cn("promo-hero-cta-button relative w-full overflow-visible rounded-full group", ctaColorScheme.borderGlow, "membership-enter-cta-animation")}
                 style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
               >
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                <div className={cn("relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full", ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white"))}>
                   <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
                   <span className="font-bold text-base drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
                     {primaryCtaLabel}
@@ -1116,11 +1346,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
               <div className="w-full">
                 <Image
-                  src="/images/safe-checkout-stripe.png"
+                  src="/images/safe-checkout-stripe.webp"
                   alt="Guaranteed safe & secure checkout powered by Stripe"
                   width={600}
                   height={160}
                   className="w-full h-auto"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                 />
               </div>
             </div>
@@ -1138,142 +1369,79 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                   height={200}
                   className="w-full max-w-4xl h-auto object-contain"
                   priority
+                  sizes="(max-width: 768px) 100vw, 1024px"
                 />
               </div>
               {renderPickYourToolset("desktop")}
             </div>
             {/* Left Column - Gallery & Countdown */}
             <div className="flex flex-col space-y-6">
-              <div
-                className="relative rounded-2xl border-2 overflow-hidden bg-white"
-                style={{
+              <PrizeImageGallery
+                images={prizeImages}
+                cardBorderColor={getBrandBorderColor(activePrizeSlug as PrizeSlug)}
+                cardGlowColor={getBrandGlowColor(activePrizeSlug as PrizeSlug)}
+                cardClassName="relative rounded-2xl border-2 overflow-hidden bg-white dark:bg-neutral-900"
+                cardStyle={{
                   borderColor: getBrandBorderColor(activePrizeSlug as PrizeSlug),
                   boxShadow: `0 0 20px ${getBrandGlowColor(activePrizeSlug as PrizeSlug)}, 0 8px 32px rgba(0,0,0,0.4)`,
                 }}
-              >
-                <div className="absolute top-4 right-4 z-20">
-                  <button
-                    onClick={() => setIsSpecsModalOpen(true)}
-                    className="relative overflow-hidden rounded-full transition-all duration-300 hover:scale-105 group"
-                    suppressHydrationWarning
-                  >
-                    <div className={`absolute inset-0 bg-gradient-to-br ${brandColors.gradient}`} />
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                    <div
-                      className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
-                        "/40",
-                        "/25"
-                      )} blur-xl animate-ping`}
-                    />
-                    <div
-                      className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
-                        "/40",
-                        "/20"
-                      )} blur-xl`}
-                    />
-                    <div
-                      className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 border-2 ${brandColors.borderColor
-                        .replace("border-", "border-")
-                        .replace("-500", "-400/30")} rounded-full`}
+                specsButton={
+                  <div className="absolute top-4 right-4 z-20">
+                    <button
+                      onClick={() => setIsSpecsModalOpen(true)}
+                      className="relative overflow-hidden rounded-full transition-[transform,box-shadow] duration-[var(--ta-transition-dur)] hover:scale-105 group"
+                      suppressHydrationWarning
                     >
-                      <span
-                        className={`font-bold text-xs sm:text-sm ${brandColors.textColor} drop-shadow-lg whitespace-nowrap`}
+                      <div className={cn("absolute inset-0 bg-gradient-to-br", brandColors.gradient)} />
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent" />
+                      <div
+                        className={`pointer-events-none absolute inset-0 rounded-full ${brandColors.shadowColor.replace(
+                          "/40",
+                          "/25"
+                        )} blur-xl animate-ping`}
+                      />
+                      <div
+                        className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${brandColors.shadowColor.replace(
+                          "/40",
+                          "/20"
+                        )} blur-xl`}
+                      />
+                      <div
+                        className={`relative z-10 flex items-center justify-center gap-2 px-4 py-2 border-2 ${brandColors.borderColor
+                          .replace("border-", "border-")
+                          .replace("-500", "-400/30")} rounded-full`}
                       >
-                        VIEW SPECS
-                      </span>
-                    </div>
-                  </button>
-                </div>
-                {prizeImages.length > 1 ? (
-                  <Swiper
-                    modules={[Navigation, Pagination, Thumbs]}
-                    navigation
-                    pagination={{ clickable: true }}
-                    thumbs={{
-                      swiper: desktopThumbsSwiper && !desktopThumbsSwiper.destroyed ? desktopThumbsSwiper : null,
-                    }}
-                    className="main-swiper"
-                    spaceBetween={0}
-                    slidesPerView={1}
-                    onSwiper={setDesktopMainSwiper}
-                  >
-                    {prizeImages.map((image, index) => (
-                      <SwiperSlide key={`${image.src}-${index}`}>
-                        <div className="relative aspect-square lg:aspect-[4/3] bg-white">
-                          <Image
-                            src={image.src}
-                            alt={image.alt || `Prize image ${index + 1}`}
-                            fill
-                            className="object-contain"
-                            priority={index === 0}
-                            sizes="(min-width: 1024px) 50vw, 100vw"
-                          />
-                        </div>
-                      </SwiperSlide>
-                    ))}
-                  </Swiper>
-                ) : (
-                  <div className="relative aspect-square lg:aspect-[4/3] bg-white">
-                    <Image
-                      src={prizeImages[0]?.src || "/images/grand-draw.jpg"}
-                      alt={prizeImages[0]?.alt || "Prize image"}
-                      fill
-                      className="object-contain"
-                      priority
-                      sizes="(min-width: 1024px) 50vw, 100vw"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* The thumbnail rail now lives inside an overflow-hidden container so long galleries stay tidy. */}
-              {prizeImages.length > 1 && (
-                <div className="overflow-hidden">
-                  <Swiper
-                    modules={[FreeMode, Thumbs]}
-                    onSwiper={setDesktopThumbsSwiper}
-                    spaceBetween={12}
-                    slidesPerView="auto"
-                    freeMode
-                    watchSlidesProgress
-                    slideToClickedSlide
-                    className="thumbs-swiper"
-                  >
-                    {prizeImages.map((image, index) => (
-                      <SwiperSlide
-                        key={`thumb-${image.src}-${index}`}
-                        className="!w-20 !h-20 xl:!w-24 xl:!h-24 flex items-center justify-center cursor-pointer"
-                        onClick={() => handleDesktopThumbnailClick(index)}
-                      >
-                        <div
-                          className="relative w-full h-full rounded-xl overflow-hidden border-2 transition-all duration-300 bg-white cursor-pointer"
-                          style={{
-                            borderColor: getBrandGlowColor(activePrizeSlug as PrizeSlug),
-                          }}
+                        <span
+                          className={cn(
+                            "font-bold text-xs sm:text-sm",
+                            brandColors.textColor,
+                            "drop-shadow-lg whitespace-nowrap"
+                          )}
                         >
-                          <Image
-                            src={image.src}
-                            alt={image.alt || `Prize thumbnail ${index + 1}`}
-                            fill
-                            className="object-contain"
-                            sizes="96px"
-                          />
-                        </div>
-                      </SwiperSlide>
-                    ))}
-                  </Swiper>
-                </div>
-              )}
+                          VIEW SPECS
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                }
+                mainAspectClassName="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-900"
+                mainSizesAttr="(min-width: 1024px) 50vw, 100vw"
+                thumbsRowClassName="overflow-hidden"
+                thumbSizeClassName="!w-20 !h-20 xl:!w-24 xl:!h-24"
+                thumbContainerGap="gap-3"
+                thumbsSizesAttr="(min-width: 1280px) 96px, 80px"
+                fallbackImage={{ src: "/images/grand-draw.jpg", alt: "Prize image" }}
+              />
 
               {/* Countdown / Draw Ended Notice */}
               {majorDrawLoading || !currentMajorDraw ? (
                 // Skeleton loader for countdown (desktop)
-                <div className="rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br from-gray-200 to-gray-300">
+                <div className="rounded-3xl p-6 shadow-2xl border border-white/10 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-neutral-800 dark:to-neutral-900">
                   <div className="grid grid-cols-4 gap-3">
                     {[1, 2, 3, 4].map((i) => (
                       <div
                         key={i}
-                        className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 text-center border border-white/30"
+                        className="bg-white/20 backdrop-blur-[var(--ta-blur)] rounded-2xl p-4 text-center border border-white/30"
                       >
                         <Skeleton height={36} className="w-full mb-2 bg-white/40" />
                         <Skeleton height={14} className="w-16 mx-auto bg-white/40" />
@@ -1294,11 +1462,11 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 >
                   {currentMajorDraw?.status === "frozen" && (
                     <div className="mb-3 text-center">
-                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-2 sm:p-3 border border-white/20">
+                      <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-xl p-2 sm:p-3 border border-white/20">
                         <div className="text-white font-semibold text-xs sm:text-sm uppercase tracking-wide">
                           Entry Period Closed
                         </div>
-                        <div className="text-white/80 text-[10px] sm:text-xs mt-1">
+                        <div className="text-white/80 text-2xs sm:text-xs mt-1">
                           {nextDrawName
                             ? `No new entries accepted for this draw. Entries will go to the next draw: ${nextDrawName}`
                             : "No new entries accepted for this draw. Entries will go to the next draw."}
@@ -1307,24 +1475,31 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   )}
 
-                  <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                    {[
-                      { label: "Days", value: timeLeft.days },
-                      { label: "Hours", value: timeLeft.hours },
-                      { label: "Mins", value: timeLeft.minutes },
-                      { label: "Secs", value: timeLeft.seconds },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="bg-white/10 backdrop-blur-sm rounded-2xl p-2 sm:p-3 text-center border border-white/20"
-                      >
-                        <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
-                          {String(item.value).padStart(2, "0")}
+                  {drawTargetMs !== null && (
+                    <MajorDrawCountdownLeaf
+                      targetMs={drawTargetMs}
+                      render={(timeLeft) => (
+                        <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                          {[
+                            { label: "Days", value: timeLeft.days },
+                            { label: "Hours", value: timeLeft.hours },
+                            { label: "Mins", value: timeLeft.minutes },
+                            { label: "Secs", value: timeLeft.seconds },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-2 sm:p-3 text-center border border-white/20"
+                            >
+                              <div className="text-lg sm:text-2xl font-bold text-white font-['Poppins']">
+                                {String(item.value).padStart(2, "0")}
+                              </div>
+                              <div className="text-2xs sm:text-[12px] text-white/80 font-medium">{item.label}</div>
+                            </div>
+                          ))}
                         </div>
-                        <div className="text-[10px] sm:text-[12px] text-white/80 font-medium">{item.label}</div>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    />
+                  )}
 
                 </div>
               ) : !isCompleted ? (
@@ -1334,13 +1509,13 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 </div>
               ) : (
                 <div className="w-full bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl p-6 shadow-2xl border border-white/10">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/20 space-y-4">
+                  <div className="bg-white/10 backdrop-blur-[var(--ta-blur)] rounded-2xl p-6 text-center border border-white/20 space-y-4">
                     <div className="text-3xl font-bold text-white uppercase tracking-wide">Draw Ended</div>
                     <a
                       href="https://www.facebook.com/toolsaust"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-all duration-200 shadow-lg hover:shadow-xl w-full"
+                      className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-semibold text-base transition-[colors,box-shadow] duration-[var(--ta-transition-dur)] shadow-lg hover:shadow-xl w-full"
                     >
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -1364,7 +1539,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                       .replace("-500", "-400/30")} mb-2`}
                   >
                     <h2
-                      className={`text-4xl font-bold ${brandColors.textColor} font-['Poppins'] leading-tight drop-shadow-lg`}
+                      className={cn("text-4xl font-bold", brandColors.textColor, "font-['Poppins'] leading-tight drop-shadow-lg")}
                     >
                       {majorDraw?.name || activePrize?.heroHeading || "Major Draw"}
                     </h2>
@@ -1376,11 +1551,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
                 <div className="w-full">
                   <Image
-                    src="/images/safe-checkout-stripe.png"
+                    src="/images/safe-checkout-stripe.webp"
                     alt="Guaranteed safe & secure checkout powered by Stripe"
                     width={600}
                     height={160}
                     className="w-full h-auto"
+                    sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 </div>
               </div>
@@ -1388,7 +1564,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
               {user ? (
                 userStatsLoading ? (
                   // Skeleton loader for user entries (desktop)
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
+                  <div className="bg-white/90 backdrop-blur-[var(--ta-blur)] rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Skeleton width={16} height={16} className="bg-gray-300" rounded />
@@ -1398,10 +1574,10 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 border border-red-100 shadow-inner">
+                  <div className="bg-white/90 backdrop-blur-[var(--ta-blur)] rounded-2xl p-5 border border-red-100 shadow-inner dark:bg-neutral-900/90 dark:border-red-900/45">
                     <button
                       onClick={() => setShowBreakdown(!showBreakdown)}
-                      className="w-full text-left hover:bg-red-50/40 rounded-lg px-3 py-2 transition-colors"
+                      className="w-full text-left hover:bg-red-50/40 dark:hover:bg-red-950/25 rounded-lg px-3 py-2 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -1417,7 +1593,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                             </div>
                           )}
                           <svg
-                            className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                            className={`w-4 h-4 text-gray-500 dark:text-neutral-400 transition-transform duration-200 ${
                               showBreakdown ? "rotate-180" : ""
                             }`}
                             fill="none"
@@ -1431,7 +1607,7 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                     </button>
 
                     {showBreakdown && (
-                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                      <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-neutral-300">
                         <div className="flex justify-between">
                           <span>From Membership</span>
                           <span className="font-semibold">{enhancedUserStats.membershipEntries}</span>
@@ -1446,14 +1622,14 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
                 )
               ) : null}
 
-              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
+              <div className="flex flex-col gap-3 border-t border-gray-200 dark:border-neutral-700 pt-4">
                 <button
                   onClick={() => openEntryFlow()}
-                  className={`promo-hero-cta-button relative w-full overflow-visible rounded-full group ${ctaColorScheme.borderGlow} membership-enter-cta-animation`}
+                  className={cn("promo-hero-cta-button relative w-full overflow-visible rounded-full group", ctaColorScheme.borderGlow, "membership-enter-cta-animation")}
                   style={ctaColorScheme.enterNowButtonStyle ?? ctaColorScheme.badgeStyle}
                 >
                   <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
-                  <div className={`relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full ${ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white")}`}>
+                  <div className={cn("relative z-10 flex items-center justify-center gap-2 px-6 py-3 rounded-full", ctaColorScheme.enterNowButtonTextClass ?? (ctaColorScheme.textGradientStyle ? "" : "text-white"))}>
                     <Zap className="w-5 h-5" style={ctaColorScheme.textGradientStyle ? undefined : { color: "white" }} />
                     <span className="font-bold text-lg drop-shadow-lg" style={ctaColorScheme.textGradientStyle ?? undefined}>
                       {primaryCtaLabel}
@@ -1463,11 +1639,12 @@ export default function MajorDrawSection({ className = "" }: MajorDrawSectionPro
 
                 <div className="w-full">
                   <Image
-                    src="/images/safe-checkout-stripe.png"
+                    src="/images/safe-checkout-stripe.webp"
                     alt="Guaranteed safe & secure checkout powered by Stripe"
                     width={600}
                     height={160}
                     className="w-full h-auto"
+                    sizes="(max-width: 1024px) 100vw, 50vw"
                   />
                 </div>
               </div>

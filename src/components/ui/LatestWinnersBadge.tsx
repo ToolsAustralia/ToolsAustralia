@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Trophy } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface LatestWinnersBadgeProps {
   /** Major draw name (e.g. "January Draw", "Draw 3") - displayed as "{drawName} Winner" */
@@ -13,7 +14,7 @@ interface LatestWinnersBadgeProps {
 /**
  * LatestWinnersBadge Component (Major Draw Winner badge)
  * Displays major draw name + "Winner" (e.g. "January Draw Winner")
- * Red theme with animating gradient/glow, similar to BestChanceBadge
+ * Red theme with animating gradient/glow, similar to BestValueBadge
  */
 const LatestWinnersBadge: React.FC<LatestWinnersBadgeProps> = ({
   drawName,
@@ -28,13 +29,13 @@ const LatestWinnersBadge: React.FC<LatestWinnersBadgeProps> = ({
       icon: "w-2 h-2",
     },
     small: {
-      container: "px-2 py-1 text-[8px]",
-      text: "text-[8px]",
+      container: "px-2 py-1 text-3xs",
+      text: "text-3xs",
       icon: "w-2.5 h-2.5",
     },
     medium: {
-      container: "px-2.5 py-1 text-[10px]",
-      text: "text-[10px]",
+      container: "px-2.5 py-1 text-2xs",
+      text: "text-2xs",
       icon: "w-3 h-3",
     },
     large: {
@@ -80,9 +81,9 @@ const LatestWinnersBadge: React.FC<LatestWinnersBadgeProps> = ({
       />
 
       {/* Content */}
-      <div className={`relative z-10 flex items-center ${size === "xs" ? "gap-0.5" : "gap-1"}`}>
+      <div className={cn("relative z-10 flex items-center", size === "xs" ? "gap-0.5" : "gap-1")}>
         <Trophy
-          className={`${config.icon} text-white fill-white drop-shadow-sm flex-shrink-0 hidden sm:block`}
+          className={cn(config.icon, "text-white fill-white drop-shadow-sm flex-shrink-0 hidden sm:block")}
           style={{
             filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))",
           }}

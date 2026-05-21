@@ -1,5 +1,7 @@
 // Admin Dashboard Types for Tools Australia
 
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+
 export interface AdminUser {
   id: string;
   name: string;
@@ -183,11 +185,15 @@ export interface AdminUserDetail {
   mobile?: string;
   state?: string;
   profession?: string;
+  /** ISO date string (YYYY-MM-DD) when set */
+  birthdate?: string;
   role: "user" | "admin";
   isActive: boolean;
   isEmailVerified: boolean;
   isMobileVerified?: boolean;
   profileSetupCompleted?: boolean;
+  /** false = opted out of Klaviyo marketing email; omitted/undefined treated as opted in */
+  acceptsPromotionalEmail?: boolean;
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
@@ -302,6 +308,8 @@ export interface AdminUserDetail {
     packageName?: string;
     price?: number;
     status?: string;
+    /** Stripe invoice `billing_reason` when stored (e.g. subscription_cycle, subscription_create) */
+    billingReason?: string;
   }>;
   oneTimePackageHistory: Array<Record<string, unknown>>;
   miniDrawHistory: Array<Record<string, unknown>>;
@@ -311,6 +319,17 @@ export interface AdminUserDetail {
     status?: string;
     endDate?: string;
     totalEntries?: number;
+    entries?: Array<{
+      totalEntries?: number;
+      entriesBySource?: {
+        membership?: number;
+        "one-time-package"?: number;
+        upsell?: number;
+        "mini-draw"?: number;
+        referral?: number;
+        "bonus-entry-promo"?: number;
+      };
+    }>;
   }>;
   miniDrawParticipation: Array<{
     miniDrawId?: string;
@@ -327,12 +346,31 @@ export interface AdminUserDetail {
     totalAmount?: number;
     status?: string;
   }>;
+  /** Preview of recent events; full history via GET .../payment-events (paginated) */
   paymentEvents: Array<{
+    _id?: string;
     eventType?: string;
+    paymentIntentId?: string;
+    hasRefundProcessed?: boolean;
+    /** ISO timestamp of matching RefundProcessed (same paymentIntentId), when refunded */
+    refundProcessedAt?: string;
     timestamp?: string;
     packageType?: string;
+    packageId?: string;
+    packageName?: string;
     data?: Record<string, unknown>;
   }>;
+  /** Total count of payment events for this user (matches paginated API total) */
+  paymentEventsTotal: number;
+}
+
+/** Paginated payment events response for admin user activity */
+export interface AdminUserPaymentEventsPage {
+  events: AdminUserDetail["paymentEvents"];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 }
 
 export interface UserFilters {
@@ -345,6 +383,10 @@ export interface UserFilters {
   role?: "user" | "admin";
   dateFrom?: string;
   dateTo?: string;
+  /** Australian state codes (e.g. NSW, VIC); OR semantics when multiple */
+  states?: string[];
+  /** Active major draw with entries: yes | no */
+  inActiveMajorDraw?: "yes" | "no" | "";
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
   sortOrder?: "asc" | "desc";
 }
@@ -401,6 +443,8 @@ export interface AdminUserDetailResponse {
   success: boolean;
   data: AdminUserDetail;
   error?: string;
+  /** Present when DB saved but Klaviyo marketing preference sync failed */
+  warning?: string;
 }
 
 export interface AdminUserUpdatePayload {
@@ -411,11 +455,15 @@ export interface AdminUserUpdatePayload {
     mobile?: string;
     state?: string;
     profession?: string;
+    /** YYYY-MM-DD or empty string to clear */
+    birthdate?: string;
     role?: "user" | "admin";
     isActive?: boolean;
     isEmailVerified?: boolean;
     isMobileVerified?: boolean;
     profileSetupCompleted?: boolean;
+    /** Klaviyo marketing/promotional email (not transactional) */
+    acceptsPromotionalEmail?: boolean;
   };
   subscription?: {
     packageId?: string | null;
@@ -546,7 +594,7 @@ export interface BonusEntryPromoConflict {
 // ========================================
 
 export type ScheduledPromoType = "membership-packages" | "one-time-packages" | "mini-packages";
-export type ScheduledPromoMultiplier = 2 | 3 | 5 | 10;
+export type ScheduledPromoMultiplier = PromoMultiplier;
 
 export interface ScheduledPromo {
   id: string;
@@ -609,6 +657,27 @@ export interface ScheduledPromoConflict {
   message: string;
 }
 
+export type ScheduledPromoCalendarDayClient = {
+  dateKey: string;
+  multiplier: ScheduledPromoMultiplier | null;
+};
+
+export interface ApplyScheduledPromoMonthPayload {
+  type: ScheduledPromoType;
+  year: number;
+  month: number;
+  days: ScheduledPromoCalendarDayClient[];
+  name?: string;
+  description?: string;
+}
+
+export interface ApplyScheduledPromoMonthResponse {
+  success: boolean;
+  createdPromoIds: string[];
+  softDeletedCount: number;
+  adjustedCount: number;
+}
+
 // ========================================
 // PROMO LINK TYPES
 // ========================================
@@ -622,6 +691,12 @@ export interface PromoLink {
   isActive: boolean;
   appliesToMembership: boolean; // Whether this promo applies to membership/subscription packages
   appliesToOneTime: boolean; // Whether this promo applies to one-time packages
+  campaignType: "general" | "cancelled-membership-comeback";
+  eligibilityAudience: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
   isExpired?: boolean;
   description?: string;
   usageCount: number;
@@ -637,12 +712,19 @@ export interface PromoLink {
 }
 
 export interface CreatePromoLinkPayload {
+  customCode?: string;
   bonusEntries?: number;
   expiresAt?: string | null;
   description?: string;
   isActive?: boolean;
   appliesToMembership?: boolean;
   appliesToOneTime?: boolean;
+  campaignType?: "general" | "cancelled-membership-comeback";
+  eligibilityAudience?: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
 }
 
 export interface UpdatePromoLinkPayload {
@@ -652,6 +734,12 @@ export interface UpdatePromoLinkPayload {
   isActive?: boolean;
   appliesToMembership?: boolean;
   appliesToOneTime?: boolean;
+  campaignType?: "general" | "cancelled-membership-comeback";
+  eligibilityAudience?: "all" | "cancelled-members";
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
 }
 
 export interface PromoLinkListResponse {
@@ -683,7 +771,8 @@ export type PromoBannerTextRecurrencePattern =
 
 export interface PromoBannerText {
   id: string;
-  text: string;
+  imageUrl: string;
+  altText?: string;
   scheduleType: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST
   endDate?: string; // ISO date string in AEST
@@ -701,7 +790,8 @@ export interface PromoBannerText {
 }
 
 export interface CreatePromoBannerTextPayload {
-  text: string;
+  imageUrl: string;
+  altText?: string;
   scheduleType: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST (required for one-time)
   endDate?: string; // ISO date string in AEST (required for one-time)
@@ -711,7 +801,8 @@ export interface CreatePromoBannerTextPayload {
 }
 
 export interface UpdatePromoBannerTextPayload {
-  text?: string;
+  imageUrl?: string;
+  altText?: string;
   scheduleType?: PromoBannerTextScheduleType;
   startDate?: string; // ISO date string in AEST
   endDate?: string; // ISO date string in AEST
@@ -784,7 +875,7 @@ export interface CurrentAlternatingMultipliersResponse {
 }
 
 /** Source of effective multiplier for banner display */
-export type EffectiveForBannerSource = "scheduled" | "toggle" | "alternating" | "none";
+export type EffectiveForBannerSource = "scheduled" | "toggle" | "alternating" | "derived-from-membership" | "none";
 
 /** Per-type entry for effective-for-banner API (includes scheduled meta when source is scheduled) */
 export interface EffectiveForBannerEntry {

@@ -25,7 +25,6 @@ export type CountdownDisplayType =
   | "hidden"
   | "static_urgency"
   | "draw_tonight"
-  | "draw_tomorrow"
   | "midnight"
   | "scheduled_end";
 
@@ -43,7 +42,7 @@ export type CountdownMode = "default" | "limited_time_only" | "scheduled_end" | 
 export interface ResolveCountdownDisplayParams {
   countdownMode: CountdownMode;
   showCountdown: boolean;
-  source: "scheduled" | "toggle" | "alternating" | "none";
+  source: "scheduled" | "toggle" | "alternating" | "derived-from-membership" | "none";
   scheduledEndDate?: string | null;
   durationMs?: number | null;
   drawStatus: "today" | "tomorrow" | null;
@@ -69,9 +68,8 @@ export function resolveCountdownDisplay(params: ResolveCountdownDisplayParams): 
     return { type: "hidden" };
   }
 
-  // Draw status takes priority: when draw is today or tomorrow, always show draw countdown/text
+  // Draw today: countdown to freeze. Draw tomorrow is no longer a special case (falls through like other days).
   if (drawStatus === "today") return { type: "draw_tonight" };
-  if (drawStatus === "tomorrow") return { type: "draw_tomorrow" };
 
   const now = Date.now();
   const endMs = scheduledEndDate ? new Date(scheduledEndDate).getTime() : undefined;

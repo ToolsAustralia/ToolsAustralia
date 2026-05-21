@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { getNextQueuedDraw } from "@/utils/draws/major-draw-helpers";
 
-// Next.js ISR configuration
-export const revalidate = 60; // Revalidate every 60 seconds (ISR)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /**
  * GET /api/major-draw/next
@@ -23,7 +23,10 @@ export async function GET() {
         },
         {
           headers: {
-            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60", // Cache 30s, serve stale up to 1min
+            "Cache-Control":
+              process.env.NODE_ENV === "development"
+                ? "no-store, must-revalidate"
+                : "public, s-maxage=30, stale-while-revalidate=60",
           },
         }
       );
@@ -46,7 +49,10 @@ export async function GET() {
       },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60", // Cache 30s, serve stale up to 1min
+          "Cache-Control":
+            process.env.NODE_ENV === "development"
+              ? "no-store, must-revalidate"
+              : "public, s-maxage=30, stale-while-revalidate=60",
         },
       }
     );

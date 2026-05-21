@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // --- Standard filtered export ---
+      const stateList = searchParams.getAll("state").map((s) => s.trim()).filter(Boolean);
       const filters = {
         search: searchParams.get("search") || "",
         subscriptionStatus: searchParams.get("subscriptionStatus") || "",
@@ -128,6 +129,8 @@ export async function GET(request: NextRequest) {
         role: searchParams.get("role") || "",
         dateFrom: searchParams.get("dateFrom") || "",
         dateTo: searchParams.get("dateTo") || "",
+        states: stateList,
+        inActiveMajorDraw: searchParams.get("inActiveMajorDraw") || "",
       };
       const filter = await buildUserFilter(filters);
       const rawUsers = await User.find(filter)
@@ -154,9 +157,13 @@ export async function GET(request: NextRequest) {
       const sub = searchParams.get("subscriptionStatus") || "";
       const pkg = searchParams.get("membershipPackage") || "";
       const role = searchParams.get("role") || "";
+      const stList = searchParams.getAll("state").map((s) => s.trim()).filter(Boolean);
+      const inDraw = searchParams.get("inActiveMajorDraw") || "";
       if (sub) filterSummary.push(sub);
       if (pkg) filterSummary.push(pkg.replace(/[^a-zA-Z0-9]/g, "-"));
       if (role) filterSummary.push(role);
+      if (stList.length) filterSummary.push(stList.map((s) => s.toLowerCase()).join("-"));
+      if (inDraw) filterSummary.push(inDraw === "yes" ? "in-draw" : "not-in-draw");
     }
     const filterSuffix = filterSummary.length > 0 ? `-${filterSummary.join("-")}` : "";
     const baseFilename = `users-export-${dateStr}-${timeStr}${filterSuffix}`;

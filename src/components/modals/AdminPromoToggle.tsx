@@ -3,8 +3,10 @@
 import React, { useState } from "react";
 import { useTogglePromo, useAdminActivePromos, type TogglePromoData } from "@/hooks/queries/usePromoQueries";
 import { ModalContainer, ModalHeader, ModalContent, Button } from "./ui";
-import PromoBadge from "@/components/ui/PromoBadge";
+import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
+import { PromoPurchaseEntriesPreview } from "@/components/admin/PromoPurchaseEntriesPreview";
 import { Loader2, Zap } from "lucide-react";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 interface AdminPromoToggleProps {
   isOpen: boolean;
@@ -16,12 +18,17 @@ interface AdminPromoToggleProps {
  * Simple toggle interface for managing promos (3x, 5x, 10x, or OFF)
  * Replaces the old date-based promo creation system
  */
-const promoMultipliers: (2 | 3 | 5 | 10)[] = [10, 5, 3, 2];
+const promoMultipliers: PromoMultiplier[] = [20, 15, 12, 10, 5, 3, 2];
 
 const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) => {
   const { data: activePromos = [], isLoading, refetch } = useAdminActivePromos();
   const togglePromoMutation = useTogglePromo();
   const [togglingPromo, setTogglingPromo] = useState<string | null>(null);
+
+  // Hover preview state — null means "no hover, fall back to active multiplier"
+  const [hoverMembership, setHoverMembership] = useState<number | null>(null);
+  const [hoverOneTime, setHoverOneTime] = useState<number | null>(null);
+  const [hoverMini, setHoverMini] = useState<number | null>(null);
 
   // Get active promo for each type
   const membershipPromo = activePromos.find((p) => p.type === "membership-packages");
@@ -30,7 +37,7 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
 
   const handleToggle = async (
     type: "membership-packages" | "one-time-packages" | "mini-packages",
-    multiplier: 2 | 3 | 5 | 10 | null
+    multiplier: PromoMultiplier | null
   ) => {
     const toggleKey = `${type}-${multiplier}`;
     setTogglingPromo(toggleKey);
@@ -49,25 +56,26 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
   const renderToggleSection = (
     type: "membership-packages" | "one-time-packages" | "mini-packages",
     currentPromo: typeof membershipPromo | typeof oneTimePromo | typeof miniPromo,
-    typeLabel: string
+    typeLabel: string,
+    onHover: (mult: number | null) => void
   ) => {
     const currentMultiplier = currentPromo?.multiplier || null;
     const isToggling = togglingPromo?.startsWith(type);
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">{typeLabel}</h3>
+      <div className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-neutral-100">{typeLabel}</h3>
           {currentPromo && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Current:</span>
-              <PromoBadge multiplier={currentPromo.multiplier} size="small" />
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Current:</span>
+              <PromoBadgeImage multiplier={currentPromo.multiplier as PromoMultiplier} size="small" />
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-5 gap-3">
-          {/* Toggle buttons: 10x, 5x, 3x, 2x, OFF */}
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 sm:gap-3">
+          {/* Toggle buttons: 20x–2x, then OFF */}
           {promoMultipliers.map((multiplier) => {
             const isActive = currentMultiplier === multiplier;
             const toggleKey = `${type}-${multiplier}`;
@@ -77,13 +85,15 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
               <button
                 key={multiplier}
                 onClick={() => handleToggle(type, multiplier)}
+                onMouseEnter={() => onHover(multiplier)}
+                onMouseLeave={() => onHover(null)}
                 disabled={isToggling || togglePromoMutation.isPending}
                 className={`
-                  relative px-4 py-3 rounded-lg font-bold text-sm transition-all duration-200
+                  relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
                   ${
                     isActive
                       ? "bg-gradient-to-r from-yellow-400 via-yellow-500 to-amber-600 text-black shadow-lg scale-105 ring-2 ring-yellow-300"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-700 hover:scale-105"
                   }
                   disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
                 `}
@@ -108,13 +118,15 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
           {/* OFF button */}
           <button
             onClick={() => handleToggle(type, null)}
+            onMouseEnter={() => onHover(1)}
+            onMouseLeave={() => onHover(null)}
             disabled={isToggling || togglePromoMutation.isPending || !currentPromo}
             className={`
-              relative px-4 py-3 rounded-lg font-bold text-sm transition-all duration-200
+              relative px-2 py-2 sm:px-4 sm:py-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200
               ${
                 !currentPromo
                   ? "bg-gradient-to-r from-red-500 via-red-600 to-red-700 text-white shadow-lg scale-105 ring-2 ring-red-300"
-                  : "bg-gray-100 text-gray-700 hover:bg-red-100 hover:text-red-700 hover:scale-105"
+                  : "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-red-100 hover:text-red-700 hover:scale-105"
               }
               disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100
             `}
@@ -130,7 +142,12 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
     );
   };
 
-  if (!isOpen) return null;
+  // Resolve the effective multiplier for the preview: hover > active > 1 (no promo)
+  const previewSnapshot = {
+    membershipPackages: hoverMembership ?? membershipPromo?.multiplier ?? 1,
+    oneTimePackages: hoverOneTime ?? oneTimePromo?.multiplier ?? 1,
+    miniPackages: hoverMini ?? miniPromo?.multiplier ?? 1,
+  };
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
@@ -142,12 +159,14 @@ const AdminPromoToggle: React.FC<AdminPromoToggleProps> = ({ isOpen, onClose }) 
             <Loader2 className="w-8 h-8 animate-spin text-red-600" />
           </div>
         ) : (
-          <div className="space-y-8">
-            {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo")}
+          <div className="space-y-6 sm:space-y-8">
+            {renderToggleSection("membership-packages", membershipPromo, "Membership Subscription Promo", setHoverMembership)}
             <div className="border-t border-gray-200"></div>
-            {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages")}
+            {renderToggleSection("one-time-packages", oneTimePromo, "One-Time Packages", setHoverOneTime)}
             <div className="border-t border-gray-200"></div>
-            {renderToggleSection("mini-packages", miniPromo, "Mini Packages")}
+            {renderToggleSection("mini-packages", miniPromo, "Mini Packages", setHoverMini)}
+            <div className="border-t border-gray-200"></div>
+            <PromoPurchaseEntriesPreview snapshot={previewSnapshot} />
           </div>
         )}
       </ModalContent>

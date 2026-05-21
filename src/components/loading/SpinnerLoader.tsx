@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/utils/cn";
 
 /**
  * Spinner Loader Components
@@ -28,12 +29,12 @@ export const Spinner: React.FC<SpinnerProps> = ({ size = "md", color = "red", cl
   const colorClasses = {
     red: "text-red-600",
     white: "text-white",
-    gray: "text-gray-600",
+    gray: "text-gray-600 dark:text-neutral-400",
     blue: "text-blue-600",
   };
 
   return (
-    <div className={`animate-spin ${sizeClasses[size]} ${colorClasses[color]} ${className}`}>
+    <div className={cn("animate-spin", sizeClasses[size], colorClasses[color], className)}>
       <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path
@@ -92,7 +93,7 @@ export const ButtonSpinner: React.FC<ButtonSpinnerProps> = ({
  * For inline loading states
  */
 export const InlineSpinner: React.FC<{ text?: string }> = ({ text = "Loading..." }) => (
-  <div className="flex items-center space-x-2 text-gray-600">
+  <div className="flex items-center space-x-2 text-gray-600 dark:text-neutral-400">
     <Spinner size="sm" color="gray" />
     <span className="text-sm">{text}</span>
   </div>
@@ -106,7 +107,7 @@ export const PageSpinner: React.FC<{ text?: string }> = ({ text = "Loading..." }
   <div className="min-h-screen flex items-center justify-center bg-gray-50">
     <div className="text-center space-y-4">
       <Spinner size="xl" color="red" />
-      <p className="text-lg text-gray-600">{text}</p>
+      <p className="text-lg text-gray-600 dark:text-neutral-400">{text}</p>
     </div>
   </div>
 );
@@ -119,7 +120,7 @@ export const CardSpinner: React.FC<{ text?: string }> = ({ text = "Loading conte
   <div className="bg-white rounded-lg border border-gray-200 p-8">
     <div className="flex flex-col items-center space-y-4">
       <Spinner size="lg" color="red" />
-      <p className="text-gray-600">{text}</p>
+      <p className="text-gray-600 dark:text-neutral-400">{text}</p>
     </div>
   </div>
 );

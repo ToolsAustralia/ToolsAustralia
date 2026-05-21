@@ -12,6 +12,7 @@ import PromoAnalyticsRepository, {
 } from "@/repositories/PromoAnalyticsRepository";
 import { isValidPromoSlug, getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
+import type { PageDetailResult, ChannelDetailResult } from "@/types/promo-analytics";
 
 export class PromoAnalyticsService {
   /**
@@ -21,6 +22,7 @@ export class PromoAnalyticsService {
   async recordVisit(data: {
     pageType: PromoPageType;
     slug: string;
+    referrerSlug?: string;
     anonymousId?: string;
     referrer?: string;
     utmSource?: string;
@@ -31,10 +33,15 @@ export class PromoAnalyticsService {
       return { success: false, error: "Invalid promotion slug" };
     }
     const pageType = getPageTypeFromSlug(data.slug);
+    const referrerSlug =
+      data.referrerSlug && isValidPromoSlug(data.referrerSlug)
+        ? data.referrerSlug.toLowerCase().trim()
+        : undefined;
     await PromoAnalyticsRepository.createVisit({
       ...data,
       pageType,
       slug: data.slug.toLowerCase().trim(),
+      referrerSlug,
     });
     return { success: true };
   }
@@ -64,6 +71,34 @@ export class PromoAnalyticsService {
     endDate: Date
   ): Promise<PromoAnalyticsByUTMSummary> {
     return PromoAnalyticsRepository.getAggregatedByUTMSource(startDate, endDate);
+  }
+
+  /**
+   * Get per-page detail: breakdown by (utmSource, utmMedium, utmCampaign).
+   * Answers "which ads/emails drove traffic to this page?"
+   */
+  async getPageDetailMetrics(
+    pageType: PromoPageType,
+    slug: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<PageDetailResult> {
+    if (!isValidPromoSlug(slug)) {
+      throw new Error(`Invalid promotion slug: ${slug}`);
+    }
+    return PromoAnalyticsRepository.getPageDetailByUTMCampaign(pageType, slug, startDate, endDate);
+  }
+
+  /**
+   * Get channel detail: which pages received traffic from this channel
+   * plus breakdown by campaign within the channel.
+   */
+  async getChannelDetailMetrics(
+    utmSource: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<ChannelDetailResult> {
+    return PromoAnalyticsRepository.getChannelDetail(utmSource, startDate, endDate);
   }
 
   /**

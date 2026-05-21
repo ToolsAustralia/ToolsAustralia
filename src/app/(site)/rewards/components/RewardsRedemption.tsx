@@ -3,7 +3,7 @@
 import { Package, Star, Check, Loader2 } from "lucide-react";
 import { UserData } from "@/hooks/queries/useUserQueries";
 import { getOneTimePackages, applyPromoToPackage } from "@/data/membershipPackages";
-import { getMiniDrawPackages, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
+import { getMiniDrawPackagesForViewer, getMiniPackagesWithPromo } from "@/data/miniDrawPackages";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -12,6 +12,7 @@ import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { isPromoMultiplier, type PromoMultiplier } from "@/types/promo-multiplier";
 
 interface RewardsRedemptionProps {
   user: UserData;
@@ -49,30 +50,19 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
-  const isValidMultiplier = (n: number): n is 2 | 3 | 5 | 10 =>
-    n === 2 || n === 3 || n === 5 || n === 10;
-
   // Apply correct promo per package: membership multiplier for member-only, one-time for regular
   const allOneTimePackages = useMemo(() => {
     const packages = getOneTimePackages();
     return packages.map((pkg) => {
-      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isValidMultiplier(resolvedMembershipMultiplier)) {
+      if (pkg.isMemberOnly && resolvedMembershipMultiplier != null && isPromoMultiplier(resolvedMembershipMultiplier)) {
         return applyPromoToPackage(pkg, resolvedMembershipMultiplier);
       }
-      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isValidMultiplier(resolvedOneTimeMultiplier)) {
+      if (!pkg.isMemberOnly && resolvedOneTimeMultiplier != null && isPromoMultiplier(resolvedOneTimeMultiplier)) {
         return applyPromoToPackage(pkg, resolvedOneTimeMultiplier);
       }
       return pkg;
     });
   }, [resolvedOneTimeMultiplier, resolvedMembershipMultiplier]);
-
-  const miniDrawPackages = useMemo(() => {
-    const packages = getMiniDrawPackages();
-    if (resolvedMiniMultiplier != null && isValidMultiplier(resolvedMiniMultiplier)) {
-      return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
-    }
-    return packages;
-  }, [resolvedMiniMultiplier]);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -87,9 +77,17 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
 
   // Get user's major draw stats to check for current draw entries
   const { data: userMajorDrawStats } = useUserMajorDrawStats(user._id);
-  
+
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccess = hasAdditionalPackageAccess(user, userMajorDrawStats);
+
+  const miniDrawPackages = useMemo(() => {
+    const packages = getMiniDrawPackagesForViewer(hasAccess);
+    if (resolvedMiniMultiplier != null && isPromoMultiplier(resolvedMiniMultiplier)) {
+      return getMiniPackagesWithPromo(packages, resolvedMiniMultiplier);
+    }
+    return packages;
+  }, [hasAccess, resolvedMiniMultiplier]);
 
   // Create package redemption options (5x multiplier) - memoized for performance
   const redemptionOptions: RedemptionOption[] = useMemo(
@@ -330,19 +328,19 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
       <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200/50">
         <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-100">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-[#ee0000]/10 rounded-lg">
-              <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#ee0000]" />
+            <div className="p-1.5 sm:p-2 bg-red-600/10 rounded-lg">
+              <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
             </div>
             <div>
               <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
                 Rewards Redemption Paused
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{pauseMessage}</p>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">{pauseMessage}</p>
             </div>
           </div>
         </div>
         <div className="p-4 sm:p-6 md:p-8">
-          <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 leading-relaxed">
             We&apos;re temporarily disabling redemptions while we upgrade the rewards programme. If you need help with
             an existing request, reach out to support and we&apos;ll get you sorted.
           </p>
@@ -355,14 +353,14 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
     <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200/50">
       <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-gray-100">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-[#ee0000]/10 rounded-lg">
-            <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-[#ee0000]" />
+          <div className="p-1.5 sm:p-2 bg-red-600/10 rounded-lg">
+            <Package className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
           </div>
           <div>
             <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 font-['Poppins']">
               Claim Packages with Points
             </h2>
-            <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 hidden sm:block">
               Use your {currentUserPoints.toLocaleString()} points to claim packages for free
             </p>
           </div>
@@ -385,11 +383,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
       <div className="p-4 sm:p-6 md:p-8">
         <div
           ref={scrollContainerRef}
-          className="h-[500px] sm:h-[600px] md:h-[700px] lg:h-[800px] overflow-y-auto pr-2 custom-scrollbar"
-          style={{
-            scrollbarWidth: "thin",
-            scrollbarColor: "#ee0000 #f3f4f6",
-          }}
+          className="h-[500px] sm:h-[600px] md:h-[700px] lg:h-[800px] overflow-y-auto pr-2 brand-scrollbar"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {redemptionOptions.slice(0, visibleCount).map((option) => (
@@ -397,7 +391,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 key={option.id}
                 className={`relative overflow-hidden border-2 rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-colors duration-200 flex flex-col h-[240px] sm:h-[320px] ${
                   option.isAvailable
-                    ? "border-gray-200 hover:border-[#ee0000]/40 cursor-pointer bg-white"
+                    ? "border-gray-200 hover:border-red-600/40 cursor-pointer bg-white"
                     : "border-gray-100 bg-gray-50/50"
                 }`}
               >
@@ -407,7 +401,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                     className={`absolute top-2 right-2 sm:top-3 sm:right-3 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-semibold ${
                       option.isMemberOnly
                         ? "bg-gradient-to-r from-amber-500 to-yellow-600 text-white"
-                        : "bg-gradient-to-r from-[#ee0000] to-red-600 text-white"
+                        : "bg-gradient-to-r from-red-600 to-red-600 text-white"
                     }`}
                   >
                     {option.isMemberOnly ? "MEMBER" : "PACKAGE"}
@@ -417,19 +411,19 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                 {/* Header Section */}
                 <div className="mb-3 sm:mb-4 min-h-[60px] sm:min-h-[80px]">
                   <div className="flex items-start gap-2 mb-2">
-                    <div className="p-1 sm:p-1.5 bg-[#ee0000]/10 rounded-lg flex-shrink-0">{getIcon(option.type)}</div>
+                    <div className="p-1 sm:p-1.5 bg-red-600/10 rounded-lg flex-shrink-0">{getIcon(option.type)}</div>
                     <div className="flex-1 min-h-0">
                       <div className="flex items-center gap-2 mb-1 sm:mb-2">
                         <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 font-['Poppins'] line-clamp-2">
                           {option.name}
                         </h3>
                         {option.isPromoActive && option.promoMultiplier && (
-                          <PromoBadge multiplier={option.promoMultiplier as 2 | 3 | 5 | 10} size="small" />
+                          <PromoBadge multiplier={option.promoMultiplier as PromoMultiplier} size="small" />
                         )}
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed line-clamp-2 sm:line-clamp-3">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 leading-relaxed line-clamp-2 sm:line-clamp-3">
                     {option.description}
                   </p>
                 </div>
@@ -455,7 +449,7 @@ export default function RewardsRedemption({ user, onPointsUpdate }: RewardsRedem
                     <button
                       onClick={() => handleRedeem(option)}
                       disabled={isRedeeming === option.id}
-                      className="w-full bg-gradient-to-r from-[#ee0000] to-red-600 text-white px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold flex items-center justify-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl group-hover:scale-105 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-red-600 to-red-600 text-white px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg sm:rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold flex items-center justify-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl group-hover:scale-105 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isRedeeming === option.id ? (
                         <>

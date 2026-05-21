@@ -3,7 +3,14 @@
 import { Check, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import SubscriptionManagementModal from "@/components/modals/SubscriptionManagementModal";
+import dynamic from "next/dynamic";
+
+// Lazy-loaded: bundles Stripe + payment forms; only opens on user action.
+const SubscriptionManagementModal = dynamic(
+  () => import("@/components/modals/SubscriptionManagementModal"),
+  { ssr: false },
+);
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 
 interface User {
   _id: string;
@@ -105,22 +112,11 @@ export default function MembershipStatus({ user }: MembershipStatusProps) {
   // Default to false (show "Per Giveaway") during SSR to match client-side behavior on non-home pages
   const isHomeOrMembershipPage = isMounted && (pathname === "/" || pathname === "/membership");
 
-  // Check for active subscription or one-time package
   const activeSubscription = user.subscription?.isActive ? user.subscription : null;
   const activeOneTimePackage = user.oneTimePackages?.find((pkg) => pkg.isActive);
+  const activeOneTimeData = user.enrichedOneTimePackages?.find((pkg) => pkg.isActive);
 
-  // Handle the new data structure:
-  // For subscriptions: use subscriptionPackageData (full package detail)
-  // For one-time: enrichedOneTimePackages contains full packageData
-  let membershipPackage;
-  if (activeSubscription && user.subscriptionPackageData) {
-    membershipPackage = user.subscriptionPackageData;
-  } else {
-    const activeOneTimeData = user.enrichedOneTimePackages?.find((pkg) => pkg.isActive);
-    membershipPackage = activeOneTimeData?.packageData;
-  }
-
-  const isActive = !!(activeSubscription || activeOneTimePackage);
+  const { packageData: membershipPackage, isActive } = getActivePackage(user as ActivePackageUserInput);
 
   // Get membership color scheme based on package name
   const getMembershipColorScheme = (packageName?: string) => {
@@ -236,7 +232,10 @@ export default function MembershipStatus({ user }: MembershipStatusProps) {
                     <span>{activeSubscription ? "Started:" : "Purchased:"}</span>
                     <span>
                       {new Date(
-                        activeSubscription?.startDate || activeOneTimePackage?.purchaseDate || ""
+                        activeSubscription?.startDate ||
+                          activeOneTimeData?.purchaseDate ||
+                          activeOneTimePackage?.purchaseDate ||
+                          ""
                       ).toLocaleDateString("en-US", {
                         year: "numeric",
                         month: "long",

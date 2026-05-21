@@ -6,6 +6,7 @@ import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
 import { useMajorDrawWinners } from "@/hooks/queries/useWinnersQueries";
+import { cn } from "@/utils/cn";
 
 interface WinnersShowcaseProps {
   className?: string;
@@ -29,7 +30,7 @@ export default function WinnersShowcase({
   return (
     <section
       ref={winnersRef}
-      className={`py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative ${className}`}
+      className={cn("py-12 sm:py-16 lg:py-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative", className)}
       style={{ ["--winner-card-hover-shadow" as string]: `0 16px 48px ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.3)")}` }}
     >
       {/* Background Pattern Overlay */}
@@ -44,7 +45,7 @@ export default function WinnersShowcase({
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             {title && (
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-['Poppins'] drop-shadow-lg">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white font-sans drop-shadow-lg">
                 {title}
               </h2>
             )}
@@ -79,14 +80,14 @@ export default function WinnersShowcase({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {displayWinners.map((winner) => {
               const displayImage =
-                winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+                winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
               const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
               const wonOnDate = new Date(winner.drawDate ?? winner.selectedDate);
 
               return (
                 <div
                   key={winner.id}
-                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/40 shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:[box-shadow:var(--winner-card-hover-shadow)] transition-all duration-300 hover:-translate-y-1"
+                  className="group relative bg-gradient-to-br from-slate-700/90 via-slate-600/90 to-slate-700/90 backdrop-blur-[var(--ta-blur)] rounded-2xl overflow-hidden border border-slate-500/40 shadow-[var(--ta-shadow-card)] hover:shadow-[var(--ta-shadow-card-hover)] transition-[transform,opacity,box-shadow] duration-[var(--ta-transition-dur)] hover:translate-y-[var(--ta-card-hover-y)]"
                 >
                   {/* Shine Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10"></div>
@@ -114,8 +115,8 @@ export default function WinnersShowcase({
 
                     {/* Winner Badge - Name and Location Same Row */}
                     <div className="absolute bottom-3 left-3 right-3 z-20">
-                      <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-white font-bold text-sm font-['Poppins']">{formattedName}</p>
+                      <div className="bg-black/60 backdrop-blur-[var(--ta-blur)] rounded-lg px-3 py-2 border border-white/20 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-white font-bold text-sm font-sans">{formattedName}</p>
                         {winner.winnerState && (
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-slate-300 flex-shrink-0" />
@@ -130,7 +131,7 @@ export default function WinnersShowcase({
                   <div className="p-4 sm:p-5 relative z-10 bg-gradient-to-b from-slate-800/95 to-slate-900/95">
                     {/* Prize Name */}
                     <div className="mb-3">
-                      <h3 className="text-sm sm:text-base font-bold text-white font-['Poppins'] mb-2 line-clamp-2">
+                      <h3 className="text-sm sm:text-base font-bold text-white font-sans mb-2 line-clamp-2">
                         {winner.prize.name}
                       </h3>
                     </div>
@@ -151,7 +152,7 @@ export default function WinnersShowcase({
                     <div className="rounded-lg p-2" style={{ background: `linear-gradient(to right, ${theme.primary}20, ${theme.primaryDark}20)`, border: `1px solid ${theme.borderRgba}` }}>
                       <div className="flex items-center gap-2">
                         <Award className="w-4 h-4 flex-shrink-0" style={{ color: theme.primary }} />
-                        <span className="text-xs font-semibold text-white font-['Poppins'] line-clamp-1">
+                        <span className="text-xs font-semibold text-white font-sans line-clamp-1">
                           {winner.drawName}
                         </span>
                       </div>
@@ -166,7 +167,7 @@ export default function WinnersShowcase({
         {/* Empty State */}
         {!loading && !hasWinners && (
           <div className="flex justify-center items-center py-12">
-            <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm rounded-2xl overflow-hidden border border-slate-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4)] max-w-md w-full">
+            <div className="relative group bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-[var(--ta-blur)] rounded-2xl overflow-hidden border border-slate-500/30 shadow-[var(--ta-shadow-card)] max-w-md w-full">
               <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10"></div>
 
               <div className="p-8 sm:p-10 relative z-10 text-center">
@@ -176,13 +177,13 @@ export default function WinnersShowcase({
                   </div>
                 </div>
 
-                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-['Poppins'] mb-4">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white font-sans mb-4">
                   Are you our next lucky winner?
                 </h3>
 
                 <p className="text-sm sm:text-base text-slate-300 font-['Inter'] leading-relaxed">
-                  Join thousands of members who are already in the draw. The more entries you have, the better your
-                  chances of winning incredible prizes!
+                  Join thousands of members who are already in the draw. The more entries you have, the more
+                  representation you carry into each draw for incredible prizes!
                 </p>
               </div>
             </div>

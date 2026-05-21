@@ -125,7 +125,11 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
     const oneTimeEntries =
       (userEntry.entriesBySource["one-time-package"] || 0) +
       (userEntry.entriesBySource.upsell || 0) +
-      (userEntry.entriesBySource["mini-draw"] || 0);
+      (userEntry.entriesBySource["mini-draw"] || 0) +
+      (userEntry.entriesBySource.referral || 0) +
+      (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
+      (userEntry.entriesBySource["cancellation-upsell"] || 0) +
+      (userEntry.entriesBySource["promo-link"] || 0);
 
     // Create entriesByPackage array from aggregated data
     const entriesByPackage = Object.entries(userEntry.entriesBySource)
@@ -221,7 +225,11 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
     const oneTimeEntries =
       (userEntry.entriesBySource["one-time-package"] || 0) +
       (userEntry.entriesBySource.upsell || 0) +
-      (userEntry.entriesBySource["mini-draw"] || 0);
+      (userEntry.entriesBySource["mini-draw"] || 0) +
+      (userEntry.entriesBySource.referral || 0) +
+      (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
+      (userEntry.entriesBySource["cancellation-upsell"] || 0) +
+      (userEntry.entriesBySource["promo-link"] || 0);
 
     // Create entriesByPackage array from aggregated data
     const entriesByPackage = Object.entries(userEntry.entriesBySource)

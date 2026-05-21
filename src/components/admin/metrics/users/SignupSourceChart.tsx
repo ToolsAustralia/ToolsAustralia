@@ -21,9 +21,9 @@ interface TooltipProps {
 const CustomTooltip = ({ active, payload }: TooltipProps) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3">
-        <p className="font-semibold text-gray-900">{payload[0].name}</p>
-        <p className="text-sm text-gray-600">
+      <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg dark:shadow-none p-3">
+        <p className="font-semibold text-gray-900 dark:text-white">{payload[0].name}</p>
+        <p className="text-sm text-gray-600 dark:text-neutral-400">
           Users: {payload[0].value.toLocaleString()}
         </p>
       </div>
@@ -44,8 +44,8 @@ export function SignupSourceChart({ data }: SignupSourceChartProps) {
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Signup Sources</h3>
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-3 sm:p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Signup Sources</h3>
       <div className="w-full">
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
@@ -68,7 +68,7 @@ export function SignupSourceChart({ data }: SignupSourceChartProps) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-4 text-center text-sm text-gray-600">
+      <div className="mt-4 text-center text-sm text-gray-600 dark:text-neutral-400">
         Total Users: {total.toLocaleString()}
       </div>
     </div>

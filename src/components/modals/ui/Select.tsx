@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { AlertCircle, ChevronDown, Search, Check } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface SelectOption {
   value: string;
@@ -41,6 +42,7 @@ const Select: React.FC<SelectProps> = ({
   onOpenChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const selectRef = useRef<HTMLDivElement>(null);
@@ -133,27 +135,24 @@ const Select: React.FC<SelectProps> = ({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
-  // Calculate available space and constrain dropdown height
-  useEffect(() => {
+  // Calculate available space, open direction (up/down), and constrain dropdown height
+  useLayoutEffect(() => {
     if (!isOpen || !selectRef.current || !optionsListRef.current) return;
 
-    const calculateMaxHeight = () => {
+    const calculatePositionAndHeight = () => {
       const selectElement = selectRef.current;
       if (!selectElement) return;
 
       const rect = selectElement.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
       
-      // Find the modal container and footer to calculate available space
-      let modalContentBottom = viewportHeight;
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
       
-      // Find the modal container (look for flex container with modal structure)
       let parent = selectElement.parentElement;
       let modalContainer: HTMLElement | null = null;
       
       while (parent && parent !== document.body) {
         const styles = window.getComputedStyle(parent);
-        // Check if this is a flex container (modal structure)
         if (styles.display === "flex" && styles.flexDirection === "column") {
           modalContainer = parent;
           break;
@@ -161,72 +160,70 @@ const Select: React.FC<SelectProps> = ({
         parent = parent.parentElement;
       }
       
-      // If we found the modal container, look for the footer within it
+      const isInsideModal = !!modalContainer;
+      
       if (modalContainer) {
-        // Find footer - look for element with border-t (footer border) in the same container
         const footer = Array.from(modalContainer.children).find((child) => {
           const childStyles = window.getComputedStyle(child);
           return childStyles.borderTopWidth !== "0px" || 
                  child.classList.toString().includes("border-t") ||
-                 child.querySelector('button, [role="button"]'); // Has buttons (action buttons)
+                 child.querySelector('button, [role="button"]');
         }) as HTMLElement | undefined;
         
         if (footer) {
-          const footerRect = footer.getBoundingClientRect();
-          // Use footer top as the bottom boundary (with some padding)
-          modalContentBottom = footerRect.top - 10; // 10px padding above footer
+          contentBottom = footer.getBoundingClientRect().top - 10;
         } else {
-          // Fallback: use modal container bottom
-          const containerRect = modalContainer.getBoundingClientRect();
-          modalContentBottom = containerRect.bottom;
+          contentBottom = modalContainer.getBoundingClientRect().bottom;
         }
+        contentTop = modalContainer.getBoundingClientRect().top;
       }
       
-      const spaceBelow = modalContentBottom - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
       
-      // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Dropdown (400px) for longer dropdown
-      const maxHeight = Math.min(
-        spaceBelow - 20, // 20px padding from bottom/footer
-        spaceAbove - 20, // 20px padding from top
-        400
-      );
+      const shouldOpenUpward = !isInsideModal && spaceBelow < spaceAbove;
+      setOpenUpward(shouldOpenUpward);
+      
+      const availableSpace = shouldOpenUpward ? Math.min(spaceAbove, 400) : spaceBelow;
+      const maxHeight = Math.min(Math.max(availableSpace, 180), 400);
 
       if (optionsListRef.current) {
-        optionsListRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
+        optionsListRef.current.style.maxHeight = `${maxHeight}px`;
       }
     };
 
-    // Calculate on open
-    calculateMaxHeight();
+    calculatePositionAndHeight();
 
-    // Use a more efficient scroll handler with throttling
-    let scrollTimeout: NodeJS.Timeout;
+    // rAF-coalesced, passive, capture-phase scroll listener: capture is required so that
+    // scroll events from any nested scrollable ancestor (e.g. a modal body) reposition the popover.
+    let scrollRaf = 0;
     const handleScroll = () => {
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(calculateMaxHeight, 50);
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        calculatePositionAndHeight();
+      });
     };
-    
-    // Listen to scroll on document and modal containers
-    document.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", calculateMaxHeight);
 
-    // Ensure wheel events work for desktop scrolling
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    window.addEventListener("resize", calculatePositionAndHeight);
+
+    // NOTE: non-passive wheel listener — we call e.stopPropagation() (and rely on the default scroll
+    // not propagating past the popover list) to keep the page behind from scrolling while a wheel
+    // event lands on the open list. Capture-phase intercepts the event before any parent handlers.
     const handleWheel = (e: WheelEvent) => {
       if (optionsListRef.current && optionsListRef.current.contains(e.target as Node)) {
-        // Allow scrolling within dropdown, prevent modal scroll
         e.stopPropagation();
       }
     };
-    
+
     document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
-      window.removeEventListener("resize", calculateMaxHeight);
-      document.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", calculatePositionAndHeight);
+      document.removeEventListener("scroll", handleScroll, { capture: true });
       document.removeEventListener("wheel", handleWheel, { capture: true });
-      if (scrollTimeout) clearTimeout(scrollTimeout);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
     };
   }, [isOpen]);
 
@@ -241,10 +238,10 @@ const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div className={`space-y-1.5 sm:space-y-2 ${className}`} ref={selectRef}>
+    <div className={cn("space-y-1.5 sm:space-y-2", className)} ref={selectRef}>
       {/* Label */}
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label} {required && <span className="text-red-500 ml-1">*</span>}
         </label>
       )}
@@ -274,19 +271,19 @@ const Select: React.FC<SelectProps> = ({
           type="button"
           onClick={toggleDropdown}
           disabled={disabled}
-          className={`w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm border rounded-lg text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
-            error ? "border-red-500 bg-red-50" : "border-gray-300"
+          className={`w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm border rounded-xl text-left focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200 ${
+            error ? "border-red-500 bg-red-50 dark:bg-red-950/30 dark:border-red-500" : "border-gray-300 dark:border-neutral-700"
           } ${
             disabled
-              ? "bg-gray-100 cursor-not-allowed text-gray-500"
-              : "hover:border-red-400 hover:shadow-sm cursor-pointer bg-white"
-          } ${isOpen ? "border-red-500 ring-2 ring-red-500/20" : ""}`}
+              ? "bg-gray-100 dark:!bg-neutral-800 cursor-not-allowed text-gray-500 dark:text-neutral-500"
+              : "hover:border-red-400 dark:hover:border-neutral-600 hover:shadow-sm cursor-pointer bg-[#ffffff] dark:!bg-neutral-900"
+          } ${isOpen ? "border-red-500 ring-2 ring-red-500/20 dark:border-red-500" : ""}`}
         >
-          <span className={selectedOption ? "text-gray-900" : "text-gray-500"}>
+          <span className={selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
           <ChevronDown
-            className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 transition-transform duration-200"
+            className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
             style={{ transform: `translateY(-50%) ${isOpen ? "rotate(180deg)" : "rotate(0deg)"}` }}
           />
         </button>
@@ -296,7 +293,7 @@ const Select: React.FC<SelectProps> = ({
           <div
             ref={optionsListRef}
             data-dropdown-list
-            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+            className={cn("absolute z-50 w-full", openUpward ? "bottom-full mb-1" : "mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-300 dark:border-neutral-700 rounded-xl shadow-lg overflow-y-scroll overflow-x-hidden")}
             style={{
               touchAction: "pan-y",
               WebkitOverflowScrolling: "touch",
@@ -308,7 +305,7 @@ const Select: React.FC<SelectProps> = ({
           >
             {/* Search Input */}
             {searchable && (
-              <div className="p-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="p-3 border-b border-gray-100 dark:border-neutral-700 sticky top-0 bg-white dark:bg-neutral-900 z-10">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -320,7 +317,7 @@ const Select: React.FC<SelectProps> = ({
                       setSearchTerm(e.target.value);
                       setHighlightedIndex(-1);
                     }}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-neutral-600 rounded-md bg-[#ffffff] dark:!bg-neutral-900 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:shadow-sm transition-all duration-200"
                   />
                 </div>
               </div>
@@ -334,25 +331,25 @@ const Select: React.FC<SelectProps> = ({
                   type="button"
                   onClick={() => handleOptionSelect(option)}
                   style={{ touchAction: "pan-y" }}
-                  className={`w-full px-4 py-3 text-sm text-left hover:bg-red-50 focus:bg-red-50 focus:outline-none transition-colors duration-150 ${
+                  className={`w-full px-4 py-3 text-sm text-left hover:bg-red-50 dark:hover:bg-red-950/30 focus:bg-red-50 dark:focus:bg-red-950/30 focus:outline-none transition-colors duration-150 ${
                     value === option.value
-                      ? "bg-red-100 text-red-900"
+                      ? "bg-red-100 dark:bg-red-950/40 text-red-900 dark:text-red-400"
                       : highlightedIndex === index
-                      ? "bg-red-50"
-                      : "text-gray-900"
+                      ? "bg-red-50 dark:bg-red-950/30"
+                      : "text-gray-900 dark:text-white"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="font-medium">{option.label}</div>
-                      {option.description && <div className="text-xs text-gray-500 mt-1">{option.description}</div>}
+                      {option.description && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{option.description}</div>}
                     </div>
-                    {value === option.value && <Check className="w-4 h-4 text-red-600 ml-2" />}
+                    {value === option.value && <Check className="w-4 h-4 text-red-600 dark:text-red-400 ml-2" />}
                   </div>
                 </button>
               ))
             ) : (
-              <div className="px-4 py-6 text-center text-gray-500 text-sm">
+              <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
                 {searchTerm ? "No options match your search" : "No options available"}
               </div>
             )}
@@ -362,7 +359,7 @@ const Select: React.FC<SelectProps> = ({
 
       {/* Error Message */}
       {error && (
-        <p className="text-red-500 text-xs sm:text-sm flex items-center gap-1">
+        <p className="text-red-500 dark:text-red-400 text-xs sm:text-sm flex items-center gap-1">
           <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           {error}
         </p>

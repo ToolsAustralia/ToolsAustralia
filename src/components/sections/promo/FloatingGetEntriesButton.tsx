@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
+import { addRAFScrollListener } from "@/utils/dom/listenerHelpers";
 
 export default function FloatingGetEntriesButton() {
   const [isVisible, setIsVisible] = useState(false);
@@ -10,8 +11,7 @@ export default function FloatingGetEntriesButton() {
 
   // Handle scroll detection for visibility + animate when Winners or How it Works in view
   useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
+    const handleScroll = (scrollY: number) => {
       const heroSectionHeight = window.innerHeight;
       const viewportHeight = window.innerHeight;
 
@@ -45,13 +45,14 @@ export default function FloatingGetEntriesButton() {
       setIsInWinnersOrHowItWorks(checkInView(winners) || checkInView(howItWorks));
     };
 
-    handleScroll();
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    handleScroll(window.scrollY);
+    return addRAFScrollListener(window, handleScroll);
   }, []);
 
   const theme = usePromoTheme();
+  const currentSlug = usePromoThemeStore((s) => s.slug);
   const preferDark = theme.preferDarkBackground ?? false;
+  const shouldUseBlackText = preferDark || (currentSlug ?? "").startsWith("dewalt-");
   const handleGetEntries = () => {
     const packagesSection = document.getElementById("packages");
     if (packagesSection) {
@@ -63,6 +64,7 @@ export default function FloatingGetEntriesButton() {
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          data-floating-widget="true"
           initial={{ opacity: 0, scale: 0, y: 100 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0, y: 100 }}
@@ -72,13 +74,13 @@ export default function FloatingGetEntriesButton() {
             damping: 20,
             duration: 0.5,
           }}
-          className="fixed bottom-12 sm:bottom-14 left-0 right-0 flex justify-center z-50"
+          className="fixed bottom-4 left-0 right-0 flex justify-center z-50 pointer-events-none"
         >
           <motion.button
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`group relative inline-flex items-center justify-center px-6 py-2 sm:px-10 sm:py-2.5 rounded-full font-extrabold text-sm sm:text-lg tracking-wide ${preferDark ? "text-black" : "text-white"} 
+            className={`group relative pointer-events-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 sm:px-8 sm:py-3 md:px-10 md:py-3 rounded-full font-extrabold text-sm sm:text-base md:text-lg tracking-wide ${shouldUseBlackText ? "text-black" : "text-white"}
                        border border-white/20 backdrop-blur-lg transition-all duration-300
                        ${isInWinnersOrHowItWorks ? "promo-hero-cta-button shimmer-once overflow-hidden" : ""}`}
             style={
@@ -90,7 +92,10 @@ export default function FloatingGetEntriesButton() {
                   }
             }
           >
-            <span className="relative z-10">GET ENTRIES</span>
+            <span className="relative z-10">Enter Now</span>
+            <svg className="relative z-10 w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
 
             {!isInWinnersOrHowItWorks && (
               <span

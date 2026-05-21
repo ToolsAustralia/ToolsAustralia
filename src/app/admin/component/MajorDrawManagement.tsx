@@ -13,9 +13,7 @@ import {
   Users,
   Calendar,
   Clock,
-  Download,
   FileSpreadsheet,
-  Award,
   Lock,
   AlertCircle,
   CheckCircle,
@@ -23,6 +21,7 @@ import {
   RefreshCw,
   UserPlus,
 } from "lucide-react";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 export default function MajorDrawManagement() {
   const { showToast } = useToast();
@@ -44,6 +43,7 @@ export default function MajorDrawManagement() {
     selectedPrize?: string | null;
     winnerId?: string;
     winnerName?: string;
+    drawResultUrl?: string | null;
   } | null>(null);
   const [_isLoadingWinner, setIsLoadingWinner] = useState(false);
   const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
@@ -90,6 +90,8 @@ export default function MajorDrawManagement() {
                         selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
                         winnerId: winnerDetailsData.winner.id,
                         winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
+                        drawResultUrl:
+                          winnerDetailsData.winner.drawResultUrl ?? data.winner.drawResultUrl ?? null,
                       });
                     } else {
                       // Fallback
@@ -102,6 +104,7 @@ export default function MajorDrawManagement() {
                         testimony: winnerForDraw.testimony,
                         selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
                         winnerId: winnerForDraw.id,
+                        drawResultUrl: winnerForDraw.drawResultUrl ?? data.winner.drawResultUrl ?? null,
                       });
                     }
                   } else {
@@ -115,6 +118,7 @@ export default function MajorDrawManagement() {
                       testimony: winnerForDraw.testimony,
                       selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
                       winnerId: winnerForDraw.id,
+                      drawResultUrl: winnerForDraw.drawResultUrl ?? data.winner.drawResultUrl ?? null,
                     });
                   }
                 } else {
@@ -127,6 +131,7 @@ export default function MajorDrawManagement() {
                     imageUrl: data.winner.imageUrl,
                     testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: data.winner.drawResultUrl ?? null,
                   });
                 }
               } else {
@@ -139,6 +144,7 @@ export default function MajorDrawManagement() {
                   imageUrl: data.winner.imageUrl,
                   testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: data.winner.drawResultUrl ?? null,
                 });
               }
             } else {
@@ -151,6 +157,7 @@ export default function MajorDrawManagement() {
                 imageUrl: data.winner.imageUrl,
                 testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: data.winner.drawResultUrl ?? null,
               });
             }
           } catch (detailError) {
@@ -164,6 +171,7 @@ export default function MajorDrawManagement() {
               imageUrl: data.winner.imageUrl,
               testimony: data.winner.testimony,
                     selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+                    drawResultUrl: data.winner.drawResultUrl ?? null,
             });
           }
         } else {
@@ -182,20 +190,36 @@ export default function MajorDrawManagement() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600"></div>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
+            Major Draw
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4 animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded mb-2 w-1/2"></div>
+              <div className="h-8 bg-gray-200 dark:bg-neutral-700 rounded mb-2 w-3/4"></div>
+              <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error || !currentMajorDraw) {
     return (
-      <div className="bg-red-100 border-2 border-red-400 text-red-700 px-4 py-3 rounded-xl">
-        <div className="flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
-          <p className="font-bold">Error Loading Major Draw</p>
+      <div className="space-y-4 sm:space-y-6">
+        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white">Major Draw</h2>
+        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-bold">Error Loading Major Draw</p>
+            <p className="text-sm mt-1 text-red-800 dark:text-red-200">Failed to load major draw data. Please try again.</p>
+          </div>
         </div>
-        <p className="text-sm mt-1">Failed to load major draw data. Please try again.</p>
       </div>
     );
   }
@@ -212,44 +236,45 @@ export default function MajorDrawManagement() {
     ? Math.max(0, new Date(majorDraw.drawDate).getTime() - new Date().getTime())
     : 0;
 
-  // Get status badge
   const getStatusBadge = () => {
     switch (majorDraw.status) {
       case "active":
         return (
-          <div className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1.5 rounded-lg">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Active</span>
-          </div>
+          <AdminBadge
+            variant="success"
+            icon={CheckCircle}
+            iconClassName="text-emerald-600 dark:text-emerald-400"
+            className="text-sm py-1.5 px-3"
+          >
+            Active
+          </AdminBadge>
         );
       case "frozen":
         return (
-          <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1.5 rounded-lg">
-            <Lock className="w-4 h-4" />
-            <span className="text-sm font-semibold">Frozen</span>
-          </div>
+          <AdminBadge variant="info" icon={Lock} iconClassName="text-sky-600 dark:text-sky-300" className="text-sm py-1.5 px-3">
+            Frozen
+          </AdminBadge>
         );
       case "completed":
         return (
-          <div className="flex items-center gap-2 bg-gray-100 text-gray-800 px-3 py-1.5 rounded-lg">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Completed</span>
-          </div>
+          <AdminBadge variant="neutral" icon={CheckCircle} className="text-sm py-1.5 px-3">
+            Completed
+          </AdminBadge>
         );
       case "queued":
         return (
-          <div className="flex items-center gap-2 bg-yellow-100 text-yellow-800 px-3 py-1.5 rounded-lg">
-            <Clock className="w-4 h-4" />
-            <span className="text-sm font-semibold">Queued</span>
-          </div>
+          <AdminBadge variant="warning" icon={Clock} className="text-sm py-1.5 px-3">
+            Queued
+          </AdminBadge>
         );
       case "cancelled":
         return (
-          <div className="flex items-center gap-2 bg-red-100 text-red-800 px-3 py-1.5 rounded-lg">
-            <XCircle className="w-4 h-4" />
-            <span className="text-sm font-semibold">Cancelled</span>
-          </div>
+          <AdminBadge variant="danger" icon={XCircle} className="text-sm py-1.5 px-3">
+            Cancelled
+          </AdminBadge>
         );
+      default:
+        return null;
     }
   };
 
@@ -325,6 +350,7 @@ export default function MajorDrawManagement() {
         imageUrl?: string;
         testimony?: string;
         selectedPrize?: string;
+        drawResultUrl?: string | null;
       } = {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
@@ -348,6 +374,10 @@ export default function MajorDrawManagement() {
       }
       if (winnerData.selectedPrize !== undefined) {
         requestBody.selectedPrize = winnerData.selectedPrize;
+      }
+
+      if (winnerData.drawResultUrl !== undefined) {
+        requestBody.drawResultUrl = winnerData.drawResultUrl;
       }
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
@@ -390,275 +420,246 @@ export default function MajorDrawManagement() {
   };
 
   return (
-    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 ">
-      <div className="w-full mx-auto space-y-8">
-        {/* Header Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 font-['Poppins']">Major Draw Management</h1>
-          <p className="text-lg text-gray-600 font-['Poppins']">Monitor and manage the current major draw</p>
-        </div>
-
-        {/* Message Display */}
-        {message && (
-          <div
-            className={`px-6 py-4 rounded-2xl border-2 flex items-center gap-3 shadow-lg ${
-              message.type === "success"
-                ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 text-green-800"
-                : "bg-gradient-to-r from-red-50 to-rose-50 border-red-200 text-red-800"
-            }`}
+    <div className="space-y-4 sm:space-y-6">
+   
+      {/* Message Display */}
+      {message && (
+        <div
+          className={`px-4 sm:px-6 py-3 sm:py-4 rounded-xl border-2 flex items-center gap-3 ${
+            message.type === "success"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+              : "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          )}
+          <span className="text-sm font-medium flex-1">{message.text}</span>
+          <button
+            onClick={() => setMessage(null)}
+            className="text-current hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-white/50 dark:hover:bg-neutral-800/60"
+            aria-label="Dismiss"
           >
-            {message.type === "success" ? (
-              <CheckCircle className="w-6 h-6 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-6 h-6 flex-shrink-0" />
-            )}
-            <span className="text-sm font-medium">{message.text}</span>
-            <button
-              onClick={() => setMessage(null)}
-              className="ml-auto text-current hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-white/50"
-            >
-              ×
-            </button>
-          </div>
-        )}
+            ×
+          </button>
+        </div>
+      )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Main Draw Card */}
-          <div className="bg-gradient-to-br from-red-600 via-red-700 to-red-800 rounded-2xl shadow-2xl p-6 text-white relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-4">
-                <Trophy className="w-10 h-10 text-yellow-300" />
-                {getStatusBadge()}
-              </div>
-              <h3 className="text-2xl font-bold mb-2 font-['Poppins']">{majorDraw.name}</h3>
-              <div
-                className="text-red-100 text-sm [&_p]:my-0 [&_p]:text-red-100"
-                dangerouslySetInnerHTML={{ __html: majorDraw.description || "Monthly Major Draw" }}
-              />
+      {/* Main Draw Card */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="w-6 h-6 text-red-600" />
+              {getStatusBadge()}
             </div>
-          </div>
-
-          {/* Participants Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Participants</span>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-1 font-['Poppins']">
-              {majorDraw.totalParticipants || 0}
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">{majorDraw.totalEntries || 0} total entries</p>
-            <button
-              onClick={() => setIsParticipantsModalOpen(true)}
-              className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg font-medium text-sm flex items-center justify-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              View Participants
-            </button>
-          </div>
-
-          {/* Draw Date Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl">
-                <Calendar className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Draw Date</span>
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-1 font-['Poppins']">
-              {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "MMM dd, yyyy") : "Not set"}
-            </h3>
-            <p className="text-sm text-gray-600">
-              {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "h:mm a") : "Time TBD"}
-            </p>
-          </div>
-
-          {/* Countdown Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-gray-100">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl">
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Time Until Draw</span>
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-1 font-['Poppins']">
-              {timeUntilDraw > 0 ? formatCountdown(timeUntilDraw) : "Completed"}
-            </h3>
-            <p className="text-sm text-gray-600">{isFrozen ? "Entries frozen" : "Entries active"}</p>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-1">{majorDraw.name}</h3>
+            <div
+              className="text-gray-600 dark:text-neutral-400 text-sm [&_p]:my-0 line-clamp-2"
+              dangerouslySetInnerHTML={{ __html: majorDraw.description || "Monthly Major Draw" }}
+            />
           </div>
         </div>
+      </div>
 
-        {/* Prize Information */}
-        {activePrize && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 font-['Poppins']">Prize Information</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-4">
-                <p className="text-sm font-medium text-gray-600 mb-2">Prize Name</p>
-                <p className="text-lg font-bold text-gray-900 font-['Poppins']">{activePrize.label}</p>
-              </div>
-              <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-4">
-                <p className="text-sm font-medium text-gray-600 mb-2">Value</p>
-                <p className="text-xl font-bold text-green-700 font-['Poppins']">
-                  {activePrize.prizeValueLabel ?? "See Prize Options"}
-                </p>
-              </div>
-              {activePrize.detailedDescription && (
-                <div className="md:col-span-2 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-4">
-                  <p className="text-sm font-medium text-gray-600 mb-2">Description</p>
-                  <p className="text-gray-700 leading-relaxed">{activePrize.detailedDescription}</p>
-                </div>
-              )}
-            </div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {/* Participants Card */}
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Participants</span>
+            <Users className="w-4 h-4 text-blue-600" />
           </div>
-        )}
+          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{majorDraw.totalParticipants || 0}</p>
+          <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{majorDraw.totalEntries || 0} total entries</p>
+          <button
+            onClick={() => setIsParticipantsModalOpen(true)}
+            className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+          >
+            <Users className="w-4 h-4" />
+            View Participants
+          </button>
+        </div>
 
-        {/* Export Actions */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl">
-              <Download className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 font-['Poppins']">Export Participants</h3>
+        {/* Draw Date Card */}
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Draw Date</span>
+            <Calendar className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-gray-600 mb-6 leading-relaxed">
-            Export all participants and their entry counts for the current draw in your preferred format.
+          <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+            {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "MMM dd, yyyy") : "Not set"}
           </p>
-          <div className="flex flex-wrap gap-4">
-            <button
-              onClick={() => handleExport("csv")}
-              disabled={isExporting || !canExport}
-              className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 font-medium"
-            >
-              <FileSpreadsheet className="w-5 h-5" />
-              {isExporting ? "Exporting..." : "Export CSV"}
-            </button>
-            <button
-              onClick={() => handleExport("excel")}
-              disabled={isExporting || !canExport}
-              className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 font-medium"
-            >
-              <FileSpreadsheet className="w-5 h-5" />
-              {isExporting ? "Exporting..." : "Export Excel"}
-            </button>
-            <button
-              onClick={() => refetch()}
-              className="flex items-center gap-3 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 font-medium"
-            >
-              <RefreshCw className="w-5 h-5" />
-              Refresh Data
-            </button>
-          </div>
+          <p className="text-xs text-gray-500 dark:text-neutral-400">
+            {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "h:mm a") : "Time TBD"}
+          </p>
         </div>
 
-        {/* Winner Selection */}
-        {canSelectWinner && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 font-['Poppins']">Record Winner</h3>
-            </div>
-            <p className="text-gray-600 mb-6 leading-relaxed">
-              Select the winner using our enhanced user search and selection system.
-            </p>
-            <button
-              onClick={() => setIsWinnerModalOpen(true)}
-              disabled={isSubmitting}
-              className="w-full px-6 py-4 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-xl hover:from-yellow-700 hover:to-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 font-semibold flex items-center justify-center gap-3 text-lg"
-            >
-              <UserPlus className="w-6 h-6" />
-              {isSubmitting ? "Processing..." : "Select Winner"}
-            </button>
+        {/* Countdown Card */}
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Time Until Draw</span>
+            <Clock className="w-4 h-4 text-purple-600" />
           </div>
-        )}
+          <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+            {timeUntilDraw > 0 ? formatCountdown(timeUntilDraw) : "Completed"}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-neutral-400">{isFrozen ? "Entries frozen" : "Entries active"}</p>
+        </div>
+      </div>
 
-        {/* Winner Display */}
-        {currentWinner && (
-          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-xl shadow-lg border-2 border-yellow-400 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-600" />
+      {/* Prize Information */}
+      {activePrize && (
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Prize Information</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="bg-gray-50 dark:bg-neutral-800/50 rounded-lg p-3 sm:p-4 border border-gray-100 dark:border-neutral-700">
+              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Prize Name</p>
+              <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{activePrize.label}</p>
+            </div>
+            <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-lg p-3 sm:p-4 border border-emerald-100 dark:border-emerald-800/60">
+              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Value</p>
+              <p className="text-base sm:text-lg font-bold text-emerald-700 dark:text-emerald-400">
+                {activePrize.prizeValueLabel ?? "See Prize Options"}
+              </p>
+            </div>
+            {activePrize.detailedDescription && (
+              <div className="sm:col-span-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg p-3 sm:p-4 border border-blue-100 dark:border-blue-800/60">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Description</p>
+                <p className="text-sm text-gray-600 dark:text-neutral-300 leading-relaxed">{activePrize.detailedDescription}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Export Actions */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2">Export Participants</h3>
+        <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
+          Export all participants and their entry counts for the current draw in your preferred format.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => handleExport("csv")}
+            disabled={isExporting || !canExport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {isExporting ? "Exporting..." : "Export CSV"}
+          </button>
+          <button
+            onClick={() => handleExport("excel")}
+            disabled={isExporting || !canExport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {isExporting ? "Exporting..." : "Export Excel"}
+          </button>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Winner Selection */}
+      {canSelectWinner && (
+        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2">Record Winner</h3>
+          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
+            Select the winner using our enhanced user search and selection system.
+          </p>
+          <button
+            onClick={() => setIsWinnerModalOpen(true)}
+            disabled={isSubmitting}
+            className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center gap-2"
+          >
+            <UserPlus className="w-5 h-5" />
+            {isSubmitting ? "Processing..." : "Select Winner"}
+          </button>
+        </div>
+      )}
+
+      {/* Winner Display */}
+      {currentWinner && (
+        <div className="bg-amber-50 dark:bg-amber-950/35 rounded-xl shadow-sm dark:shadow-none border border-amber-200 dark:border-amber-800/60 p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-amber-600" />
                 Winner Selected
               </h3>
               {currentWinner.winnerId && (
                 <button
                   onClick={() => setIsEditWinnerModalOpen(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-red-700 text-white rounded-lg hover:from-red-700 hover:to-[#ee0000] transition-all duration-200 shadow-md hover:shadow-lg font-medium text-sm flex items-center gap-2"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 w-full sm:w-auto transition-colors"
                 >
                   <UserPlus className="w-4 h-4" />
                   Edit Winner
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
               <div>
-                <p className="text-sm text-gray-600">Winner User ID</p>
-                <p className="font-semibold text-gray-900">{currentWinner.userId}</p>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Winner User ID</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">{currentWinner.userId}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Entry Number</p>
-                <p className="font-semibold text-gray-900">{currentWinner.entryNumber || "N/A"}</p>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Entry Number</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">{currentWinner.entryNumber || "N/A"}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Selection Method</p>
-                <p className="font-semibold text-gray-900 capitalize">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Selection Method</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base capitalize">
                   {currentWinner.selectionMethod || "N/A"}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Selected At</p>
-                <p className="font-semibold text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Selected At</p>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
                   {currentWinner.selectedDate
                     ? formatDateInAEST(currentWinner.selectedDate, "MMM dd, yyyy h:mm a")
                     : "N/A"}
                 </p>
               </div>
             </div>
-            {/* Display selected prize if available */}
-            {currentWinner.selectedPrize && (
-              <div className="mt-4 p-3 bg-white rounded-lg border border-yellow-300">
-                <p className="text-sm text-gray-600 mb-1">Selected Prize</p>
-                <p className="font-semibold text-gray-900">{currentWinner.selectedPrize}</p>
-              </div>
-            )}
-            {/* Display testimony preview if available */}
-            {currentWinner.testimony && (
-              <div className="mt-4 p-3 bg-white rounded-lg border border-yellow-300">
-                <p className="text-sm text-gray-600 mb-1">Testimony Preview</p>
-                <p className="text-sm text-gray-700 line-clamp-3">{currentWinner.testimony}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Configuration Lock Warning */}
-        {majorDraw.configurationLocked && (
-          <div className="bg-blue-50 border-2 border-blue-400 text-blue-700 px-4 py-3 rounded-xl flex items-center gap-2">
-            <Lock className="w-5 h-5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold">Configuration Locked</p>
-              <p className="text-sm">
-                This draw&apos;s configuration is locked and cannot be modified until after the draw is completed.
-              </p>
+          {currentWinner.selectedPrize && (
+            <div className="mt-4 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-amber-200 dark:border-amber-800/60">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Selected Prize</p>
+              <p className="font-semibold text-gray-900 dark:text-white">{currentWinner.selectedPrize}</p>
             </div>
-          </div>
-        )}
+          )}
+          {currentWinner.testimony && (
+            <div className="mt-4 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-amber-200 dark:border-amber-800/60">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Testimony Preview</p>
+              <p className="text-sm text-gray-600 dark:text-neutral-300 line-clamp-3">{currentWinner.testimony}</p>
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Instructions */}
-        <div className="bg-gray-50 rounded-xl border-2 border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-gray-900 mb-2">Admin Instructions</h3>
-          <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
+      {/* Configuration Lock Warning */}
+      {majorDraw.configurationLocked && (
+        <div className="bg-blue-50 dark:bg-blue-950/40 border-2 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-xl flex items-center gap-2">
+          <Lock className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-sm sm:text-base">Configuration Locked</p>
+            <p className="text-xs sm:text-sm text-blue-800 dark:text-blue-200">
+              This draw&apos;s configuration is locked and cannot be modified until after the draw is completed.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Instructions */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Admin Instructions</h3>
+        <ul className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 space-y-1 list-disc list-inside">
             <li>Export buttons are available anytime to download participant data</li>
             <li>Entries freeze automatically 30 minutes before the draw date</li>
             <li>Winner selection is only available after the draw has been frozen or completed</li>
@@ -667,53 +668,55 @@ export default function MajorDrawManagement() {
           </ul>
         </div>
 
-        {/* Winner Selection Modal */}
-        <WinnerSelectionModal
-          isOpen={isWinnerModalOpen}
-          onClose={() => setIsWinnerModalOpen(false)}
-          onWinnerSelected={handleWinnerSelected}
-          drawId={majorDraw._id || ""}
+      {/* Winner Selection Modal */}
+      <WinnerSelectionModal
+        isOpen={isWinnerModalOpen}
+        onClose={() => setIsWinnerModalOpen(false)}
+        onWinnerSelected={handleWinnerSelected}
+        drawId={majorDraw._id || ""}
+        drawName={majorDraw.name || ""}
+        drawType="major"
+        totalEntries={majorDraw.totalEntries}
+        enableImageField={true}
+        currentWinner={
+          currentWinner
+            ? {
+                userId: currentWinner.userId,
+                imageUrl: currentWinner.imageUrl,
+                testimony: currentWinner.testimony ?? undefined,
+                selectedPrize: currentWinner.selectedPrize ?? undefined,
+                drawResultUrl: currentWinner.drawResultUrl ?? undefined,
+              }
+            : undefined
+        }
+      />
+
+      {/* Winner Edit Modal */}
+      {currentWinner && currentWinner.winnerId && (
+        <WinnerEditModal
+          isOpen={isEditWinnerModalOpen}
+          onClose={() => setIsEditWinnerModalOpen(false)}
+          winnerId={currentWinner.winnerId}
+          winnerName={currentWinner.winnerName || "Winner"}
           drawName={majorDraw.name || ""}
           drawType="major"
-          totalEntries={majorDraw.totalEntries}
-          enableImageField={true}
-          currentWinner={
-            currentWinner
-              ? {
-                  userId: currentWinner.userId,
-                  imageUrl: currentWinner.imageUrl,
-                }
-              : undefined
-          }
+          currentTestimony={currentWinner.testimony}
+          currentSelectedPrize={currentWinner.selectedPrize}
+          currentImageUrl={currentWinner.imageUrl}
+          currentDrawResultUrl={currentWinner.drawResultUrl}
+          onUpdate={async () => {
+            refetch();
+          }}
         />
+      )}
 
-        {/* Winner Edit Modal */}
-        {currentWinner && currentWinner.winnerId && (
-          <WinnerEditModal
-            isOpen={isEditWinnerModalOpen}
-            onClose={() => setIsEditWinnerModalOpen(false)}
-            winnerId={currentWinner.winnerId}
-            winnerName={currentWinner.winnerName || "Winner"}
-            drawName={majorDraw.name || ""}
-            drawType="major"
-            currentTestimony={currentWinner.testimony}
-            currentSelectedPrize={currentWinner.selectedPrize}
-            currentImageUrl={currentWinner.imageUrl}
-            onUpdate={async () => {
-              // Refetch winner data after update
-              refetch();
-            }}
-          />
-        )}
-
-        {/* Participants Modal */}
-        <ParticipantsModal
-          isOpen={isParticipantsModalOpen}
-          onClose={() => setIsParticipantsModalOpen(false)}
-          majorDrawId={majorDraw._id || ""}
-          majorDrawName={majorDraw.name || ""}
-        />
-      </div>
+      {/* Participants Modal */}
+      <ParticipantsModal
+        isOpen={isParticipantsModalOpen}
+        onClose={() => setIsParticipantsModalOpen(false)}
+        majorDrawId={majorDraw._id || ""}
+        majorDrawName={majorDraw.name || ""}
+      />
     </div>
   );
 }

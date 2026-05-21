@@ -1,50 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import ProductCard from "@/components/ui/ProductCard";
+import { ChevronRight, Trophy } from "lucide-react";
+import MiniDrawCard, { type MiniDrawCardData } from "@/components/features/MiniDrawCard";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
 import { SectionContainer } from "@/components/ui";
 
-// Mini draw type for ProductCard compatibility (entry-based system)
-interface MiniDrawForCard {
-  _id: string;
-  name: string;
-  status: "active" | "completed" | "cancelled";
-  totalEntries: number;
-  minimumEntries: number;
-  entriesRemaining?: number;
-  requiresMembership: boolean;
-  hasActiveMembership?: boolean;
-  brandId?: string;
-  prize: {
-    name: string;
-    value: number;
-    images: string[];
-  };
-}
-
 export default function HomeMiniDraws() {
-  // Fetch active mini draws using React Query hook
   const {
     data: miniDrawsData,
     isLoading,
     error,
   } = useMiniDraws({
     page: 1,
-    limit: 4, // Show 4 mini draws on home page
-    status: "active", // Only show active mini draws
+    limit: 4,
+    status: "active",
     sortBy: "displayOrder",
     sortOrder: "asc",
   });
 
-  // Transform React Query mini draws to match ProductCard's MiniDrawType interface
-  const transformedMiniDraws: MiniDrawForCard[] =
+  const transformedMiniDraws: MiniDrawCardData[] =
     miniDrawsData?.miniDraws?.map(
       (
         miniDraw: ReactQueryMiniDraw & {
-          requiresMembership?: boolean;
-          hasActiveMembership?: boolean;
           entriesRemaining?: number;
         }
       ) => {
@@ -62,8 +41,6 @@ export default function HomeMiniDraws() {
           totalEntries,
           minimumEntries,
           entriesRemaining,
-          requiresMembership: miniDraw.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Default to false
-          hasActiveMembership: miniDraw.hasActiveMembership ?? false,
           brandId: miniDraw.brandId,
           prize: {
             name: miniDraw.prize.name,
@@ -74,50 +51,63 @@ export default function HomeMiniDraws() {
       }
     ) || [];
 
-  // Show loading state
   if (isLoading) {
     return (
-      <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
+      <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
         <SectionContainer>
-          <div className="text-center">
-            <div className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">
-              MINI DRAWS
-            </div>
-            <div className="text-gray-500">Loading mini draws...</div>
+          <div className="flex items-center justify-center gap-3 mb-6 sm:mb-8">
+            <div className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+            <div className="h-7 w-32 bg-gray-100 dark:bg-neutral-800 rounded-lg animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 overflow-hidden animate-pulse">
+                <div className="aspect-[4/3] bg-gray-200 dark:bg-neutral-800" />
+                <div className="p-3 sm:p-4 space-y-2">
+                  <div className="h-3 bg-gray-200 dark:bg-neutral-800 rounded w-16" />
+                  <div className="h-4 bg-gray-200 dark:bg-neutral-800 rounded w-3/4" />
+                  <div className="h-1.5 bg-gray-200 dark:bg-neutral-800 rounded-full w-full" />
+                  <div className="h-9 bg-gray-200 dark:bg-neutral-800 rounded-full w-full mt-2" />
+                </div>
+              </div>
+            ))}
           </div>
         </SectionContainer>
       </section>
     );
   }
 
-  // Hide section if there's an error or no mini draws
   if (error || transformedMiniDraws.length === 0) {
     return null;
   }
 
   return (
-    <section className="pb-12 sm:pb-16 lg:pb-20 bg-white w-full overflow-hidden">
+    <section className="py-12 sm:py-16 lg:py-20 bg-white dark:bg-neutral-950 w-full overflow-hidden">
       <SectionContainer>
         {/* Section Header */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h2 className="text-[20px] sm:text-[24px] font-bold text-black mb-2 sm:mb-3 font-['Poppins']">MINI DRAWS</h2>
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center shadow-lg shadow-red-600/20">
+              <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+              Mini Draws
+            </h2>
+          </div>
+          <Link
+            href="/mini-draws"
+            className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-675 transition-colors"
+          >
+            View All
+            <ChevronRight className="w-4 h-4" />
+          </Link>
         </div>
 
         {/* Mini Draws Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {transformedMiniDraws.map((miniDraw) => (
-            <ProductCard key={miniDraw._id} product={miniDraw} width="w-full" viewMode="grid" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+          {transformedMiniDraws.map((miniDraw, i) => (
+            <MiniDrawCard key={miniDraw._id} miniDraw={miniDraw} index={i} />
           ))}
-        </div>
-
-        {/* View All Link */}
-        <div className="text-center mt-6 sm:mt-8">
-          <Link
-            href="/mini-draws"
-            className="inline-block text-red-600 hover:text-red-700 font-semibold text-sm sm:text-base transition-colors underline-offset-2 hover:underline"
-          >
-            View All Mini Draws →
-          </Link>
         </div>
       </SectionContainer>
     </section>

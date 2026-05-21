@@ -23,6 +23,10 @@ import {
   formatTimestampForKlaviyo,
 } from "./klaviyo-helpers";
 import { buildRevenueProperties, buildRevenueItem, buildSubscriptionProperties } from "./klaviyo-revenue-schema";
+import {
+  getPartnerCatalogAccessPercentForPlanId,
+  getPartnerDiscountCatalogSummaryForPackageId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
 
 // ============================================================
 // ONBOARDING EVENTS
@@ -637,6 +641,8 @@ export function createPlacedOrderEvent(
   // Build subscription-specific properties for membership purchases
   const subscriptionProperties = orderData.packageType === "membership" ? buildSubscriptionProperties("monthly") : {};
 
+  const partnerDiscountCatalogPercent = getPartnerCatalogAccessPercentForPlanId(orderData.packageId);
+
   return {
     event: "Placed Order",
     customer_properties: getCustomerProperties(user),
@@ -662,6 +668,8 @@ export function createPlacedOrderEvent(
       entries_granted: orderData.entriesGranted,
       points_earned: orderData.pointsEarned,
       payment_intent_id: orderData.paymentIntentId,
+      partner_discount_catalog_percent: partnerDiscountCatalogPercent,
+      partner_discount_catalog_summary: getPartnerDiscountCatalogSummaryForPackageId(orderData.packageId),
       purchase_date: formatDateForKlaviyo(),
       timestamp: formatTimestampForKlaviyo(),
     },
@@ -744,6 +752,7 @@ export function createInvoiceGeneratedEvent(
     packageId: string;
     packageName: string;
     packageTier?: string;
+    partnerDiscountCatalogPercent?: number;
     totalAmount: number;
     paymentIntentId: string;
     billingReason?: string;

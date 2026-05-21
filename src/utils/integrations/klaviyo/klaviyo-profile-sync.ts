@@ -19,7 +19,7 @@ import type { IMajorDraw } from "@/models/MajorDraw";
  * This ensures users who manually unsubscribe via Klaviyo links won't be resubscribed
  *
  * Subscribes to:
- * - Email marketing (always)
+ * - Email marketing (unless User.acceptsPromotionalEmail === false)
  * - SMS marketing (if phone number exists)
  * - SMS transactional (if phone number exists) - subscribed immediately, no purchase required
  *
@@ -30,8 +30,8 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
   try {
     const profile = await userToKlaviyoProfile(user);
 
-    // ✅ Subscribe to email marketing (always)
-    if (user.email) {
+    // ✅ Subscribe to email marketing when not opted out via app flag
+    if (user.email && user.acceptsPromotionalEmail !== false) {
       try {
         const emailResult = await klaviyo.subscribeToEmailList(profileId, user.email);
         if (emailResult.success) {
@@ -42,6 +42,10 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
       } catch (emailError) {
         console.error(`❌ Error subscribing user to email on registration: ${emailError}`);
       }
+    } else if (user.email && user.acceptsPromotionalEmail === false) {
+      console.log(
+        `ℹ️ Skipping Klaviyo email marketing subscribe on registration (acceptsPromotionalEmail=false): ${user.email}`
+      );
     }
 
     // ✅ Subscribe to SMS marketing AND transactional (if phone number exists)
@@ -66,6 +70,78 @@ export async function subscribeUserToKlaviyoOnRegistration(user: IUser, profileI
     }
   } catch (error) {
     console.error(`❌ Error in initial Klaviyo subscription for ${user.email}:`, error);
+  }
+}
+
+/**
+ * Apply Klaviyo marketing (email + SMS marketing) after an admin changes User.acceptsPromotionalEmail.
+ * SMS uses the E.164 number from the same shape as profile sync. Transactional SMS is not changed here.
+ * Does not run when KLAVIYO_ENABLED is false.
+ */
+export async function syncKlaviyoEmailMarketingFromAdminPreference(
+  user: IUser,
+  wantsPromotionalEmail: boolean
+): Promise<{ success: boolean; error?: string }> {
+  if (process.env.KLAVIYO_ENABLED === "false") {
+    return { success: true };
+  }
+
+  if (!user.email?.trim()) {
+    return { success: false, error: "User has no email" };
+  }
+
+  try {
+    const profile = await userToKlaviyoProfile(user);
+    const upsert = await klaviyo.upsertProfile(profile);
+
+    if (!upsert.success || !upsert.profile_id) {
+      return {
+        success: false,
+        error: upsert.error || "Klaviyo profile upsert failed",
+      };
+    }
+
+    const profileId = upsert.profile_id;
+    const phoneE164 = profile.phone_number?.trim();
+    const errors: string[] = [];
+
+    if (wantsPromotionalEmail) {
+      const emailRes = await klaviyo.subscribeToEmailList(profileId, user.email);
+      if (!emailRes.success) errors.push(emailRes.error || "Email subscribe failed");
+
+      if (phoneE164) {
+        const smsRes = await klaviyo.subscribeToSMSList(profileId, phoneE164, ["sms_marketing"]);
+        if (!smsRes.success) errors.push(smsRes.error || "SMS marketing subscribe failed");
+      }
+    } else {
+      const emailRes = await klaviyo.unsubscribeFromEmailList(profileId, user.email);
+      if (!emailRes.success) errors.push(emailRes.error || "Email unsubscribe failed");
+
+      // Resolve the phone number: prefer the locally-stored mobile, fall back to the
+      // phone Klaviyo holds on the profile. This handles members who provided their
+      // phone number during Klaviyo-side subscription flows but never stored it in
+      // User.mobile (pre-existing bug: SMS unsubscribe silently no-oped without a
+      // local mobile).
+      let resolvedPhone = phoneE164;
+      if (!resolvedPhone) {
+        resolvedPhone = await klaviyo.findProfilePhoneByEmail(user.email) ?? undefined;
+      }
+
+      if (resolvedPhone) {
+        const smsRes = await klaviyo.unsubscribeFromSMSList(profileId, resolvedPhone);
+        if (!smsRes.success) errors.push(smsRes.error || "SMS marketing unsubscribe failed");
+      } else {
+        // No phone anywhere — genuine no-op for SMS; email unsubscribe already completed above.
+        console.error(
+          `[klaviyo-profile-sync] No phone number found (local or Klaviyo-held) for ${user.email} — SMS marketing unsubscribe skipped`
+        );
+      }
+    }
+
+    return errors.length ? { success: false, error: errors.join(" ") } : { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
   }
 }
 
@@ -247,5 +323,53 @@ export function ensureUserProfileSynced(user: IUser, brandInterestFromSignup?: s
     syncUserProfileToKlaviyoBackground(user, brandInterestFromSignup);
   } else {
     // console.log(`📊 Klaviyo is disabled, skipping profile sync for: ${user.email}`);
+  }
+}
+
+/**
+ * Merge the Klaviyo profile for `previousEmail` into the profile for `user.email` (after an email change).
+ * Upserts the current user first so the destination profile exists. Non-throwing.
+ */
+export async function mergeKlaviyoProfilesAfterEmailChange(
+  user: IUser,
+  previousEmail: string | null | undefined
+): Promise<{ merged: boolean; error?: string }> {
+  if (process.env.KLAVIYO_ENABLED === "false") {
+    return { merged: false };
+  }
+
+  const prev = previousEmail?.trim().toLowerCase();
+  const next = user.email?.trim().toLowerCase();
+  if (!prev || !next || prev === next) {
+    return { merged: false };
+  }
+
+  try {
+    await syncUserProfileToKlaviyo(user);
+
+    const destId = await klaviyo.findProfileByEmail(next);
+    const sourceId = await klaviyo.findProfileByEmail(prev);
+
+    if (!sourceId) {
+      return { merged: false };
+    }
+
+    if (!destId) {
+      return { merged: false, error: "Destination Klaviyo profile not found after sync" };
+    }
+
+    if (sourceId === destId) {
+      return { merged: true };
+    }
+
+    const result = await klaviyo.mergeProfiles(destId, sourceId);
+    if (!result.success) {
+      return { merged: false, error: result.error };
+    }
+
+    return { merged: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { merged: false, error: message };
   }
 }

@@ -3,17 +3,25 @@
 import { useState } from "react";
 import Image from "next/image";
 import MetallicDivider from "@/components/ui/MetallicDivider";
-import { Check } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
-import { apprentice, tradie, foreman, boss, power, type PackageIconData } from "@/utils/images/package-icons";
+import {
+  apprentice,
+  tradie,
+  foreman,
+  boss,
+  power,
+  vip,
+  getPackageIconWrapperScaleClass,
+  type PackageIconData,
+} from "@/utils/images/package-icons";
 import { SectionContainer } from "@/components/ui";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
-// Type alias for consistency
 type StaticImageData = PackageIconData;
 
-// Package data interfaces
 interface PackageBenefit {
   text: string;
 }
@@ -23,15 +31,13 @@ interface PackageData {
   name: string;
   price: number;
   entries: number;
-  entriesUnit: string; // "month" for subscriptions, "" for one-time
-  shopDiscount?: string;
+  entriesUnit: string;
   partnerDiscounts: string;
   benefits: PackageBenefit[];
   icon: StaticImageData;
   description?: string;
 }
 
-// Package data - Subscriptions
 const subscriptionPackages: PackageData[] = [
   {
     id: "tradie-subscription",
@@ -39,14 +45,12 @@ const subscriptionPackages: PackageData[] = [
     price: 20,
     entries: 15,
     entriesUnit: "mo",
-    // shopDiscount: "5% off",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: tradie,
     description: "For tradies getting started",
     benefits: [
-      { text: "15 free entries/month" },
-      // { text: "5% off shop purchases" },
-      { text: "100% access to partner discounts" },
+      { text: "50% access to partner discounts" },
+      { text: "15 free entries Major Giveaway/month that accumulate" },
     ],
   },
   {
@@ -55,14 +59,12 @@ const subscriptionPackages: PackageData[] = [
     price: 40,
     entries: 40,
     entriesUnit: "mo",
-    // shopDiscount: "10% off",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: foreman,
     description: "Popular with serious tool enthusiasts",
     benefits: [
-      { text: "40 free entries/month" },
-      // { text: "10% off shop purchases" },
-      { text: "100% access to partner discounts" },
+      { text: "75% access to partner discounts" },
+      { text: "40 free entries Major Giveaway/month that accumulate" },
     ],
   },
   {
@@ -71,146 +73,66 @@ const subscriptionPackages: PackageData[] = [
     price: 80,
     entries: 100,
     entriesUnit: "mo",
-    // shopDiscount: "20% off",
-    partnerDiscounts: "30 days",
+    partnerDiscounts: "ongoing",
     icon: boss,
-    description: "Premium for tool professionals",
+    description: "Maximum entries, maximum value",
     benefits: [
-      { text: "100 free entries/month" },
-      // { text: "20% off shop purchases" },
       { text: "100% access to partner discounts" },
+      { text: "100 free entries Major Giveaway/month that accumulate" },
     ],
   },
 ];
 
-// Package data - One-Time Non-Member
 const oneTimeNonMemberPackages: PackageData[] = [
+  { id: "apprentice-pack", name: "Apprentice Pack", price: 25, entries: 3, entriesUnit: "", partnerDiscounts: "1 day", icon: apprentice, benefits: [{ text: "25% of partner offers" }, { text: "1 day partner discounts" }, { text: "3 free entries Major Giveaway" }] },
+  { id: "tradie-pack", name: "Tradie Pack", price: 50, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "15 free entries Major Giveaway" }] },
+  { id: "foreman-pack", name: "Foreman Pack", price: 100, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "30 free entries Major Giveaway" }] },
+  { id: "boss-pack", name: "Boss Pack", price: 250, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "150 free entries Major Giveaway" }] },
+  { id: "power-pack", name: "Power Pack", price: 500, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "85% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 free entries Major Giveaway" }] },
   {
-    id: "apprentice-pack",
-    name: "Apprentice Pack",
-    price: 25,
-    entries: 3,
+    id: "vip-pack",
+    name: "VIP Pack",
+    price: 1000,
+    entries: 1500,
     entriesUnit: "",
-    partnerDiscounts: "1 day",
-    icon: apprentice,
-    benefits: [{ text: "3 free entries" }, { text: "1 day partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "tradie-pack",
-    name: "Tradie Pack",
-    price: 50,
-    entries: 15,
-    entriesUnit: "",
-    partnerDiscounts: "2 days",
-    icon: tradie,
-    benefits: [{ text: "15 free entries" }, { text: "2 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "foreman-pack",
-    name: "Foreman Pack",
-    price: 100,
-    entries: 30,
-    entriesUnit: "",
-    partnerDiscounts: "4 days",
-    icon: foreman,
-    benefits: [{ text: "30 free entries" }, { text: "4 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "boss-pack",
-    name: "Boss Pack",
-    price: 250,
-    entries: 150,
-    entriesUnit: "",
-    partnerDiscounts: "10 days",
-    icon: boss,
-    benefits: [{ text: "150 free entries" }, { text: "10 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "power-pack",
-    name: "Power Pack",
-    price: 500,
-    entries: 600,
-    entriesUnit: "",
-    partnerDiscounts: "20 days",
-    icon: power,
-    benefits: [{ text: "600 free entries" }, { text: "20 days partner discounts" }, { text: "No shop discount" }],
+    partnerDiscounts: "30 days",
+    icon: vip,
+    benefits: [
+      { text: "100% of partner offers" },
+      { text: "30 days partner discounts" },
+      { text: "1,500 free entries Major Giveaway" },
+    ],
   },
 ];
 
-// Package data - One-Time Member Only
 const oneTimeMemberPackages: PackageData[] = [
+  { id: "additional-tradie-pack-member", name: "Additional Tradie", price: 25, entries: 15, entriesUnit: "", partnerDiscounts: "2 days", icon: tradie, benefits: [{ text: "40% of partner offers" }, { text: "2 days partner discounts" }, { text: "15 free entries Major Giveaway" }] },
+  { id: "additional-foreman-pack-member", name: "Additional Foreman", price: 50, entries: 30, entriesUnit: "", partnerDiscounts: "4 days", icon: foreman, benefits: [{ text: "55% of partner offers" }, { text: "4 days partner discounts" }, { text: "30 free entries Major Giveaway" }] },
+  { id: "additional-boss-pack-member", name: "Additional Boss", price: 125, entries: 150, entriesUnit: "", partnerDiscounts: "10 days", icon: boss, benefits: [{ text: "70% of partner offers" }, { text: "10 days partner discounts" }, { text: "150 free entries Major Giveaway" }] },
+  { id: "additional-power-pack-member", name: "Additional Power", price: 250, entries: 600, entriesUnit: "", partnerDiscounts: "20 days", icon: power, benefits: [{ text: "85% of partner offers" }, { text: "20 days partner discounts" }, { text: "600 free entries Major Giveaway" }] },
   {
-    id: "additional-apprentice-pack-member",
-    name: "Additional Apprentice Pack",
-    price: 25,
-    entries: 10,
-    entriesUnit: "",
-    partnerDiscounts: "1 day",
-    icon: apprentice,
-    benefits: [{ text: "10 free entries" }, { text: "1 day partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "additional-tradie-pack-member",
-    name: "Additional Tradie Pack",
-    price: 50,
-    entries: 30,
-    entriesUnit: "",
-    partnerDiscounts: "2 days",
-    icon: tradie,
-    benefits: [{ text: "30 free entries" }, { text: "2 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "additional-foreman-pack-member",
-    name: "Additional Foreman Pack",
-    price: 100,
-    entries: 100,
-    entriesUnit: "",
-    partnerDiscounts: "4 days",
-    icon: foreman,
-    benefits: [{ text: "100 free entries" }, { text: "4 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "additional-boss-pack-member",
-    name: "Additional Boss Pack",
-    price: 250,
-    entries: 400,
-    entriesUnit: "",
-    partnerDiscounts: "10 days",
-    icon: boss,
-    benefits: [{ text: "400 free entries" }, { text: "10 days partner discounts" }, { text: "No shop discount" }],
-  },
-  {
-    id: "additional-power-pack-member",
-    name: "Additional Power Pack",
+    id: "additional-vip-pack-member",
+    name: "Additional VIP",
     price: 500,
-    entries: 1200,
+    entries: 1500,
     entriesUnit: "",
-    partnerDiscounts: "20 days",
-    icon: power,
-    benefits: [{ text: "1,200 free entries" }, { text: "20 days partner discounts" }, { text: "No shop discount" }],
+    partnerDiscounts: "30 days",
+    icon: vip,
+    benefits: [
+      { text: "100% of partner offers" },
+      { text: "30 days partner discounts" },
+      { text: "1,500 free entries Major Giveaway" },
+    ],
   },
 ];
 
-/**
- * MembershipPackagesChart component displays a comparison chart of all membership packages
- * with visual bar charts showing entries per package. Uses metallic design matching MembershipSection.
- */
-// Time period type
 type TimePeriod = 3 | 6 | 12;
 
-// Accumulation calculation result
 interface AccumulationResult {
-  monthlyActiveEntries: number[]; // Entries active each month
-  totalAccumulatedEntries: number[]; // Total accumulated entries up to each month
+  monthlyActiveEntries: number[];
+  totalAccumulatedEntries: number[];
 }
 
-/**
- * Calculate accumulated entries for subscription packages
- * @param baseEntries - Base entries per month
- * @param promoMultiplier - Active promo multiplier (defaults to 1)
- * @param months - Number of months to calculate
- * @returns Object with monthly active entries and total accumulated entries arrays
- */
 function calculateAccumulatedEntries(
   baseEntries: number,
   promoMultiplier: number = 1,
@@ -222,25 +144,16 @@ function calculateAccumulatedEntries(
 
   for (let month = 1; month <= months; month++) {
     let monthlyActive: number;
-
     if (month === 1) {
-      // Month 1: Apply promo multiplier if active
       monthlyActive = baseEntries * promoMultiplier;
     } else {
-      // Month 2+: Previous month's accumulated + base entries
-      const previousAccumulated = monthlyActiveEntries[month - 2]; // Previous month's active entries
-      monthlyActive = previousAccumulated + baseEntries;
+      monthlyActive = monthlyActiveEntries[month - 2] + baseEntries;
     }
-
     monthlyActiveEntries.push(monthlyActive);
     totalAccumulated += monthlyActive;
     totalAccumulatedEntries.push(totalAccumulated);
   }
-
-  return {
-    monthlyActiveEntries,
-    totalAccumulatedEntries,
-  };
+  return { monthlyActiveEntries, totalAccumulatedEntries };
 }
 
 export default function MembershipPackagesChart() {
@@ -250,26 +163,21 @@ export default function MembershipPackagesChart() {
   const [hoveredPackageId, setHoveredPackageId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
 
-  // Use resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
-
   const membershipPromoMultiplier = resolvedMembershipMultiplier ?? 1;
   const oneTimePromoMultiplier = resolvedOneTimeMultiplier ?? 1;
 
-  // Get current package list based on active tab
+  // Member-only one-time packs use membership multiplier (per getEffectivePromoType); standard one-time packs use one-time multiplier
+  const oneTimeEffectiveMultiplier = showMemberExclusive ? membershipPromoMultiplier : oneTimePromoMultiplier;
+
   const getCurrentPackages = (): PackageData[] => {
-    if (activeTab === "membership") {
-      return subscriptionPackages;
-    } else {
-      // One-time packages
-      return showMemberExclusive ? oneTimeMemberPackages : oneTimeNonMemberPackages;
-    }
+    if (activeTab === "membership") return subscriptionPackages;
+    return showMemberExclusive ? oneTimeMemberPackages : oneTimeNonMemberPackages;
   };
 
   const currentPackages = getCurrentPackages();
 
-  // Calculate accumulated entries for subscription packages
   const getPackageAccumulation = (pkg: PackageData): AccumulationResult | null => {
     if (activeTab === "membership" && pkg.entriesUnit === "mo") {
       return calculateAccumulatedEntries(pkg.entries, membershipPromoMultiplier, timePeriod);
@@ -277,450 +185,297 @@ export default function MembershipPackagesChart() {
     return null;
   };
 
-  // Calculate max entries for chart scaling
-  // For subscriptions: consider both monthly active and total accumulated
-  // For one-time: use entries with promo multiplier
   const maxEntries = Math.max(
     ...currentPackages.flatMap((pkg) => {
       if (activeTab === "membership" && pkg.entriesUnit === "mo") {
-        const accumulation = getPackageAccumulation(pkg);
-        if (accumulation) {
-          const lastMonthActive = accumulation.monthlyActiveEntries[accumulation.monthlyActiveEntries.length - 1];
-          const lastTotalAccumulated =
-            accumulation.totalAccumulatedEntries[accumulation.totalAccumulatedEntries.length - 1];
-          return [lastMonthActive, lastTotalAccumulated];
+        const acc = getPackageAccumulation(pkg);
+        if (acc) {
+          return [
+            acc.monthlyActiveEntries[acc.monthlyActiveEntries.length - 1],
+            acc.totalAccumulatedEntries[acc.totalAccumulatedEntries.length - 1],
+          ];
         }
       }
-      // One-time packages: apply promo multiplier
-      return [pkg.entries * (activeTab === "one-time" ? oneTimePromoMultiplier : 1)];
+      return [pkg.entries * (activeTab === "one-time" ? oneTimeEffectiveMultiplier : 1)];
     })
   );
 
+  const handleScrollToPackages = () => {
+    const el = document.getElementById("membership");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <section className="bg-gradient-to-b from-black via-slate-900 to-black relative overflow-hidden">
-      {/* Metallic Divider at the top */}
       <MetallicDivider height="h-[2px]" className="absolute top-0 left-0 right-0" />
 
-      {/* Content Container */}
-      <SectionContainer className="relative z-10 py-4 sm:py-8 lg:py-12">
-        {/* Section Title */}
-        <div className="text-center mb-4 sm:mb-6 lg:mb-8">
-          <h2 className="text-[20px] sm:text-[28px] lg:text-[32px] font-bold text-white mb-1 sm:mb-2 font-['Poppins']">
-            Package Comparison Chart
+      <SectionContainer className="relative z-10 py-6 sm:py-10 lg:py-14">
+        {/* Header */}
+        <div className="text-center mb-6 sm:mb-8 lg:mb-10">
+          <p className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em] text-amber-400/80 mb-2 font-poppins">
+            Side-by-Side Breakdown
+          </p>
+          <h2 className="text-xl sm:text-3xl lg:text-4xl font-extrabold text-white font-poppins leading-tight">
+            Compare Every Package
           </h2>
-          <p className="text-[12px] sm:text-[16px] text-gray-300 font-['Poppins']">
-            Compare all packages side-by-side to find the best value for your needs
+          <p className="text-xs sm:text-sm text-gray-400 font-poppins mt-2 max-w-lg mx-auto">
+            See exactly what you get — entries, accumulation, and partner discounts at a glance.
           </p>
         </div>
 
-        {/* Main Toggle - Metallic design matching MembershipSection */}
-        <div className="flex justify-center mb-4 sm:mb-6 lg:mb-8">
-          <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
-            <div className="flex flex-row items-center justify-center w-full">
+        {/* Main Toggle */}
+        <div className="flex justify-center mb-6 sm:mb-8">
+          <div className="bg-slate-800/80 rounded-2xl p-1 shadow-lg border border-slate-700/50 inline-flex">
+            {(["membership", "one-time"] as const).map((tab) => (
               <button
-                onClick={() => {
-                  setActiveTab("membership");
-                  setShowMemberExclusive(false);
-                }}
-                className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none ${
-                  activeTab === "membership"
-                    ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
+                key={tab}
+                onClick={() => { setActiveTab(tab); if (tab === "membership") setShowMemberExclusive(false); }}
+                className={`px-5 sm:px-8 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 font-poppins ${
+                  activeTab === tab
+                    ? "bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-black shadow-[0_0_20px_rgba(251,191,36,0.4)]"
+                    : "text-gray-400 hover:text-white"
                 }`}
               >
-                Membership Packages
+                {tab === "membership" ? "Subscriptions" : "One-Time Packs"}
               </button>
-              <button
-                onClick={() => setActiveTab("one-time")}
-                className={`flex-1 px-4 py-2.5 rounded-[16px] font-bold text-[12px] sm:text-[14px] transition-all duration-300 whitespace-nowrap focus:outline-none ${
-                  activeTab === "one-time"
-                    ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_15px_rgba(251,191,36,0.6)]"
-                    : "text-slate-300 hover:text-white hover:bg-slate-700/50 transition-all duration-200"
-                }`}
-              >
-                One-Time Packages
-              </button>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Chart Container */}
-        <div className="bg-gradient-to-br from-slate-800/50 via-slate-900/50 to-slate-800/50 backdrop-blur-sm rounded-2xl p-3 sm:p-6 lg:p-8 border border-slate-600/30 shadow-[0_0_20px_rgba(0,0,0,0.6)] overflow-visible">
-          {/* Horizontal Bar Chart - Visual Comparison */}
-          <div className="mb-4 sm:mb-6 lg:mb-8 overflow-visible">
-            {/* Title and Toggle Row */}
-            <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2 sm:gap-4">
-              <h3 className="text-[16px] sm:text-[20px] font-bold text-white font-['Poppins'] flex-shrink-0">
-                Entries Comparison
-              </h3>
-
-              <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                {/* Time Period Toggle for Subscription Packages */}
-                {activeTab === "membership" && (
-                  <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0">
-                    <div className="flex items-center gap-1 sm:gap-2">
-                      {([3, 6, 12] as TimePeriod[]).map((period) => (
-                        <button
-                          key={period}
-                          onClick={() => setTimePeriod(period)}
-                          className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-[11px] text-[10px] sm:text-[12px] font-bold transition-all duration-300 whitespace-nowrap focus:outline-none ${
-                            timePeriod === period
-                              ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 text-black shadow-[0_0_10px_rgba(251,191,36,0.5)]"
-                              : "text-slate-300 hover:text-white hover:bg-slate-700/50"
-                          }`}
-                        >
-                          <span className="sm:hidden">{period === 12 ? "1Y" : `${period}M`}</span>
-                          <span className="hidden sm:inline">{period === 12 ? "1 Year" : `${period} Months`}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sub-toggle for One-Time Packages - Same level as title */}
-                {activeTab === "one-time" && (
-                  <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[15px] p-[4px] shadow-[0_0_15px_rgba(0,0,0,0.4)] border border-slate-600/30 flex-shrink-0">
-                    <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 sm:py-2">
-                      <span className="text-[10px] sm:text-[12px] text-gray-300 font-medium font-['Poppins'] whitespace-nowrap">
-                        {showMemberExclusive ? "Member Only" : "Non-Member"}
-                      </span>
-                      <button
-                        onClick={() => setShowMemberExclusive(!showMemberExclusive)}
-                        className={`relative inline-flex h-5 w-9 sm:h-6 sm:w-11 items-center rounded-full transition-all duration-300 ${
-                          showMemberExclusive
-                            ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 shadow-[0_0_10px_rgba(251,191,36,0.5)]"
-                            : "bg-slate-700"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-3 w-3 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                            showMemberExclusive ? "translate-x-5 sm:translate-x-6" : "translate-x-0.5 sm:translate-x-1"
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                )}
+        {/* Controls Row */}
+        <div className="flex items-center justify-between mb-5 sm:mb-6 gap-3">
+          <h3 className="text-sm sm:text-lg font-bold text-white font-poppins">
+            Entries Breakdown
+          </h3>
+          <div className="flex items-center gap-3">
+            {activeTab === "membership" && (
+              <div className="bg-slate-800/60 rounded-xl p-0.5 border border-slate-700/40 inline-flex">
+                {([3, 6, 12] as TimePeriod[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setTimePeriod(p)}
+                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-2xs sm:text-xs font-bold transition-all font-poppins ${
+                      timePeriod === p
+                        ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-sm"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {p === 12 ? "1 Year" : `${p} Mo`}
+                  </button>
+                ))}
               </div>
-            </div>
-
-            {/* Chart Container with Axes */}
-            <div className="relative overflow-visible chart-container" style={{ zIndex: 0 }}>
-              {/* Y-Axis (Package Names) */}
-              <div className="grid gap-3 sm:gap-5 mb-4 sm:mb-6">
-                {currentPackages.map((pkg, index) => {
-                  const colorScheme = getPackageColorScheme(pkg.id);
-                  const accumulation = getPackageAccumulation(pkg);
-                  const isSubscription = activeTab === "membership" && pkg.entriesUnit === "mo";
-
-                  // For subscriptions: show dual bars
-                  // For one-time: show single bar with promo multiplier
-                  let displayEntries: number;
-                  let totalAccumulated: number | null = null;
-
-                  if (isSubscription && accumulation) {
-                    displayEntries = accumulation.monthlyActiveEntries[accumulation.monthlyActiveEntries.length - 1];
-                    totalAccumulated =
-                      accumulation.totalAccumulatedEntries[accumulation.totalAccumulatedEntries.length - 1];
-                  } else {
-                    displayEntries = pkg.entries * (activeTab === "one-time" ? oneTimePromoMultiplier : 1);
-                  }
-
-                  const monthlyBarWidth = maxEntries > 0 ? (displayEntries / maxEntries) * 100 : 0;
-                  const totalBarWidth =
-                    totalAccumulated !== null && maxEntries > 0 ? (totalAccumulated / maxEntries) * 100 : 0;
-
-                  return (
-                    <div
-                      key={pkg.id}
-                      className="flex items-center gap-2 sm:gap-4 group"
-                      style={{ position: "relative", zIndex: 1 }}
-                    >
-                      {/* Y-Axis: Package Info (Left Side) */}
-                      <div className="flex items-center gap-1.5 sm:gap-3 min-w-[100px] sm:min-w-[180px] lg:min-w-[220px] max-w-[100px] sm:max-w-[180px] lg:max-w-[220px]">
-                        {/* Package Icon */}
-                        <div
-                          className={`w-8 h-8 sm:w-12 sm:h-12 relative flex-shrink-0 ${
-                            pkg.id.includes("boss") ? "scale-110 sm:scale-110" : ""
-                          }`}
-                        >
-                          <Image
-                            src={pkg.icon}
-                            alt={`${pkg.name} icon`}
-                            fill
-                            sizes="(max-width: 640px) 32px, 48px"
-                            className="w-full h-full object-contain opacity-90"
-                          />
-                        </div>
-
-                        {/* Package Name & Price */}
-                        <div className="flex-1 min-w-0 max-w-full overflow-hidden">
-                          <h4
-                            className={`text-[10px] sm:text-[14px] font-bold ${colorScheme.text} font-['Poppins'] truncate leading-tight`}
-                          >
-                            {pkg.name}
-                          </h4>
-                          <div className="text-[9px] sm:text-[12px] text-yellow-400 font-semibold font-['Poppins'] truncate">
-                            ${pkg.price}
-                            {pkg.entriesUnit && <span className="text-gray-400">/{pkg.entriesUnit}</span>}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* X-Axis: Bar Chart Area */}
-                      <div className="flex-1 relative overflow-visible" style={{ zIndex: 0 }}>
-                        {/* X-Axis Vertical Grid Lines */}
-                        <div className="absolute inset-0 flex justify-between items-center pointer-events-none">
-                          <div className="w-px h-full bg-slate-600/20"></div>
-                          <div className="w-px h-full bg-slate-600/20"></div>
-                          <div className="w-px h-full bg-slate-600/20"></div>
-                          <div className="w-px h-full bg-slate-600/20"></div>
-                          <div className="w-px h-full bg-slate-600/20"></div>
-                        </div>
-
-                        {/* Horizontal Grid Line */}
-                        <div className="absolute inset-0 flex items-center pointer-events-none">
-                          <div className="w-full h-px bg-slate-600/30"></div>
-                        </div>
-
-                        {/* Dual Bars for Subscriptions, Single Bar for One-Time */}
-                        <div className="relative flex flex-col gap-1 sm:gap-1.5">
-                          {/* Monthly Active Entries Bar (or Single Bar for One-Time) */}
-                          <div className="relative h-5 sm:h-8 lg:h-10 flex items-center">
-                            <div
-                              className={`h-full ${colorScheme.barColorLight} rounded-r-lg transition-all duration-300 hover:shadow-lg relative group flex items-start justify-end pr-1 sm:pr-2 min-w-[30px] sm:min-w-[40px]`}
-                              style={{
-                                width: `${monthlyBarWidth}%`,
-                              }}
-                              onMouseEnter={(e) => {
-                                if (isSubscription && accumulation) {
-                                  setHoveredPackageId(pkg.id);
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  const chartContainer = e.currentTarget.closest(".chart-container") as HTMLElement;
-                                  if (chartContainer) {
-                                    const containerRect = chartContainer.getBoundingClientRect();
-                                    setTooltipPosition({
-                                      top: rect.top - containerRect.top + rect.height / 2,
-                                      left: rect.right - containerRect.left + 8,
-                                    });
-                                  }
-                                }
-                              }}
-                              onMouseLeave={() => {
-                                setHoveredPackageId(null);
-                                setTooltipPosition(null);
-                              }}
-                            >
-                              {/* Entries Label on Bar - Positioned at top */}
-                              <span className="text-[8px] sm:text-[11px] lg:text-[13px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] absolute top-0 right-1 sm:right-2">
-                                {isSubscription
-                                  ? `${displayEntries.toLocaleString()} active`
-                                  : `${displayEntries.toLocaleString()}${
-                                      pkg.entriesUnit ? ` / ${pkg.entriesUnit}` : ""
-                                    }`}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Total Accumulated Entries Bar (Only for Subscriptions) */}
-                          {isSubscription && totalAccumulated !== null && (
-                            <div className="relative h-5 sm:h-8 lg:h-10 flex items-center" style={{ zIndex: 1 }}>
-                              <div
-                                className={`h-full ${colorScheme.barColor} border-2 ${colorScheme.border} rounded-r-lg transition-all duration-300 hover:shadow-lg relative flex items-start justify-end pr-1 sm:pr-2 min-w-[30px] sm:min-w-[40px]`}
-                                style={{
-                                  width: `${totalBarWidth}%`,
-                                }}
-                              >
-                                {/* Entries Label on Bar - Positioned at top */}
-                                <span className="text-[8px] sm:text-[11px] lg:text-[13px] font-bold text-white font-['Poppins'] whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] absolute top-0 right-1 sm:right-2">
-                                  {totalAccumulated.toLocaleString()} total
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* X-Axis Scale Markers (shown on all items for grid lines) */}
-                        <div className="absolute -top-3 sm:-top-5 left-0 right-0 mt-0.5 sm:mt-1 text-[8px] sm:text-[11px] text-gray-500 font-['Poppins'] opacity-60">
-                          {index === 0 && (
-                            <>
-                              <span
-                                className="hidden sm:inline absolute"
-                                style={{ left: "0%", transform: "translateX(-50%)" }}
-                              >
-                                0
-                              </span>
-                              <span
-                                className="hidden sm:inline absolute"
-                                style={{ left: "25%", transform: "translateX(-50%)" }}
-                              >
-                                {Math.round(maxEntries * 0.25).toLocaleString()}
-                              </span>
-                              <span className="absolute" style={{ left: "50%", transform: "translateX(-50%)" }}>
-                                {Math.round(maxEntries * 0.5).toLocaleString()}
-                              </span>
-                              <span
-                                className="hidden sm:inline absolute"
-                                style={{ left: "75%", transform: "translateX(-50%)" }}
-                              >
-                                {Math.round(maxEntries * 0.75).toLocaleString()}
-                              </span>
-                              <span className="absolute" style={{ left: "100%", transform: "translateX(-50%)" }}>
-                                {maxEntries.toLocaleString()}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* X-Axis Label */}
-              <div className="text-center mt-2 sm:mt-4 lg:mt-6">
-                <div className="text-[10px] sm:text-[14px] font-semibold text-gray-300 font-['Poppins']">
-                  {activeTab === "membership"
-                    ? `Entries (Month ${timePeriod} Active / Total Accumulated) →`
-                    : "Number of Free Entries →"}
-                </div>
-                {activeTab === "membership" && (
-                  <div className="text-[9px] sm:text-[12px] text-gray-400 font-['Poppins'] mt-1">
-                    Top bar: Active entries | Bottom bar: Total accumulated
-                  </div>
-                )}
-              </div>
-
-              {/* Tooltip Container - Positioned outside package rows to appear above all bars */}
-              {(() => {
-                if (!hoveredPackageId || !tooltipPosition) return null;
-
-                const hoveredPackage = currentPackages.find((pkg) => pkg.id === hoveredPackageId);
-                if (!hoveredPackage) return null;
-
-                const isSubscription = activeTab === "membership" && hoveredPackage.entriesUnit === "mo";
-                const accumulation = isSubscription ? getPackageAccumulation(hoveredPackage) : null;
-                if (!isSubscription || !accumulation) return null;
-
-                // Calculate current, nextMonth, and month3 from accumulation data
-                const current = accumulation.monthlyActiveEntries[0] || 0;
-                const nextMonth = accumulation.monthlyActiveEntries[1] || accumulation.monthlyActiveEntries[0] || 0;
-                const month3 =
-                  accumulation.monthlyActiveEntries[2] ||
-                  accumulation.monthlyActiveEntries[1] ||
-                  accumulation.monthlyActiveEntries[0] ||
-                  0;
-
-                return (
-                  <MonthProjectionTooltip
-                    isVisible={true}
-                    position={tooltipPosition}
-                    current={current}
-                    nextMonth={nextMonth}
-                    month3={month3}
-                    promoMultiplier={membershipPromoMultiplier > 1 ? membershipPromoMultiplier : undefined}
-                  />
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Comparison Table - Features & Benefits */}
-          <div className="mt-4 sm:mt-6 lg:mt-8">
-            <h3 className="text-[16px] sm:text-[20px] font-bold text-white mb-3 sm:mb-4 font-['Poppins'] text-center">
-              Features Comparison
-            </h3>
-            <div className="overflow-x-auto">
-              <div className="min-w-full inline-block">
-                {/* Table Header - Responsive grid based on active tab */}
-                <div
-                  className={`grid gap-3 sm:gap-4 mb-4 ${
-                    activeTab === "membership"
-                      ? "grid-cols-1 sm:grid-cols-3"
-                      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+            )}
+            {activeTab === "one-time" && (
+              <div className="bg-slate-800/60 rounded-xl px-3 py-2 border border-slate-700/40 flex items-center gap-2">
+                <span className="text-2xs sm:text-xs text-gray-400 font-poppins font-medium">
+                  {showMemberExclusive ? "Member Packs" : "Standard"}
+                </span>
+                <button
+                  onClick={() => setShowMemberExclusive(!showMemberExclusive)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-all duration-300 ${
+                    showMemberExclusive
+                      ? "bg-gradient-to-r from-amber-400 to-yellow-500 shadow-[0_0_8px_rgba(251,191,36,0.4)]"
+                      : "bg-slate-700"
                   }`}
                 >
-                  {currentPackages.map((pkg) => {
-                    const colorScheme = getPackageColorScheme(pkg.id);
-                    return (
-                      <div
-                        key={pkg.id}
-                        className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-xl p-3 sm:p-4 border border-slate-600/30"
+                  <span className={cn("inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-300", showMemberExclusive ? "translate-x-[18px]" : "translate-x-0.5")} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Chart */}
+        <div className="relative chart-container space-y-2 sm:space-y-3">
+          {currentPackages.map((pkg) => {
+            const colorScheme = getPackageColorScheme(pkg.id);
+            const accumulation = getPackageAccumulation(pkg);
+            const isSubscription = activeTab === "membership" && pkg.entriesUnit === "mo";
+
+            let displayEntries: number;
+            let totalAccumulated: number | null = null;
+
+            if (isSubscription && accumulation) {
+              displayEntries = accumulation.monthlyActiveEntries[accumulation.monthlyActiveEntries.length - 1];
+              totalAccumulated = accumulation.totalAccumulatedEntries[accumulation.totalAccumulatedEntries.length - 1];
+            } else {
+              displayEntries = pkg.entries * (activeTab === "one-time" ? oneTimeEffectiveMultiplier : 1);
+            }
+
+            // Use 1% minimum so small values (15, 75, 150) scale visibly different; no pixel min so bars are proportional
+            const monthlyBarWidth = maxEntries > 0 ? Math.max(1, (displayEntries / maxEntries) * 100) : 0;
+            const totalBarWidth = totalAccumulated !== null && maxEntries > 0 ? Math.max(1, (totalAccumulated / maxEntries) * 100) : 0;
+
+            return (
+              <div
+                key={pkg.id}
+                className="bg-slate-800/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-700/20 hover:border-slate-600/40 transition-all duration-300 group"
+              >
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {/* Package icon + info: fixed width on mobile so bar column aligns for all rows */}
+                  <div className="flex items-center gap-2 sm:gap-3 w-[90px] flex-shrink-0 sm:w-auto sm:min-w-[160px] lg:min-w-[200px]">
+                    <div
+                      className={`w-9 h-9 sm:w-12 sm:h-12 relative flex-shrink-0 ${getPackageIconWrapperScaleClass(pkg.id, "chart-row")}`}
+                    >
+                      <Image
+                        src={pkg.icon}
+                        alt={`${pkg.name} icon`}
+                        fill
+                        sizes="(max-width: 640px) 36px, 48px"
+                        className="object-contain opacity-90"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h4
+                        className="text-xs sm:text-sm font-bold font-poppins truncate"
+                        style={colorScheme.textGradientStyle ?? { color: colorScheme.accentHex }}
                       >
-                        <div className="text-center">
-                          <h5
-                            className={`text-[14px] sm:text-[16px] font-bold ${colorScheme.text} mb-1.5 sm:mb-2 font-['Poppins']`}
-                          >
-                            {pkg.name}
-                          </h5>
-                          {pkg.description && (
-                            <p className="text-[11px] sm:text-[12px] text-gray-400 mb-2 sm:mb-3 font-['Poppins']">
-                              {pkg.description}
-                            </p>
-                          )}
-                        </div>
+                        {pkg.name}
+                      </h4>
+                      <div className="text-2xs sm:text-xs font-poppins">
+                        <span className="text-white font-semibold">${pkg.price}</span>
+                        {pkg.entriesUnit && <span className="text-gray-500">/{pkg.entriesUnit}</span>}
+                      </div>
+                    </div>
+                  </div>
 
-                        {/* Benefits List */}
-                        <div className="space-y-1.5 sm:space-y-2">
-                          {pkg.benefits.map((benefit, index) => {
-                            // Check if this is an entries benefit and if promo is active
-                            const isEntriesBenefit = benefit.text.toLowerCase().includes("entries");
-                            const isPromoActive =
-                              (activeTab === "membership" && membershipPromoMultiplier > 1) ||
-                              (activeTab === "one-time" && oneTimePromoMultiplier > 1);
-                            const shouldShowStrikeThrough = isEntriesBenefit && isPromoActive;
-
-                            // Extract original entries number
-                            let originalText = benefit.text;
-                            let promoText = benefit.text;
-                            if (shouldShowStrikeThrough) {
-                              const match = benefit.text.match(/(\d+)\s+free\s+entries/i);
-                              if (match) {
-                                const originalEntries = parseInt(match[1]);
-                                const promoMultiplier =
-                                  activeTab === "membership" ? membershipPromoMultiplier : oneTimePromoMultiplier;
-                                const promoEntries = originalEntries * promoMultiplier;
-                                // For one-time packages, remove "/month" suffix
-                                const suffix = activeTab === "membership" ? "/month" : "";
-                                originalText = `${originalEntries} free entries${suffix}`;
-                                promoText = `${promoEntries} free entries${suffix}`;
+                  {/* Bars */}
+                  <div className="flex-1 relative flex items-center gap-2 sm:gap-3" style={{ zIndex: 0 }}>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {/* Active entries bar */}
+                      <div className="relative h-6 sm:h-8 flex items-center gap-2">
+                        <div
+                          className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 relative overflow-hidden flex-shrink-0"
+                          style={{
+                            width: `${monthlyBarWidth}%`,
+                            background: colorScheme.barGradientCss ?? `linear-gradient(90deg, ${colorScheme.accentHex}cc, ${colorScheme.accentHex})`,
+                          }}
+                          onMouseEnter={(e) => {
+                            if (isSubscription && accumulation) {
+                              setHoveredPackageId(pkg.id);
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const container = e.currentTarget.closest(".chart-container") as HTMLElement;
+                              if (container) {
+                                const cr = container.getBoundingClientRect();
+                                setTooltipPosition({ top: rect.top - cr.top + rect.height / 2, left: rect.right - cr.left + 8 });
                               }
                             }
-
-                            return (
-                              <div key={index} className="flex items-start gap-1.5 sm:gap-2">
-                                <Check
-                                  className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${colorScheme.text} flex-shrink-0 mt-0.5`}
-                                />
-                                {shouldShowStrikeThrough ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[11px] sm:text-[13px] font-['Poppins'] leading-tight line-through opacity-40 text-slate-400">
-                                      {originalText}
-                                    </span>
-                                    <span className="text-[11px] sm:text-[13px] text-yellow-400 font-bold font-['Poppins'] leading-tight">
-                                      {promoText}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] sm:text-[13px] text-gray-300 font-['Poppins'] leading-tight">
-                                    {benefit.text}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                          }}
+                          onMouseLeave={() => { setHoveredPackageId(null); setTooltipPosition(null); }}
+                        >
+                          {/* Shine effect */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         </div>
+                        {/* Value label - always visible outside bar so it never clips */}
+                        <span className="text-2xs sm:text-[13px] font-bold text-white font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                          {isSubscription
+                            ? `${displayEntries.toLocaleString()} active`
+                            : displayEntries.toLocaleString()}
+                        </span>
                       </div>
+
+                      {/* Accumulated total bar (subscriptions only) */}
+                      {isSubscription && totalAccumulated !== null && (
+                        <div className="relative h-5 sm:h-6 flex items-center gap-2">
+                          <div
+                            className="h-full rounded-md sm:rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-2 sm:pr-3 border border-white/10 flex-shrink-0"
+                            style={{
+                              width: `${totalBarWidth}%`,
+                              background: `${colorScheme.accentHex}33`,
+                            }}
+                          />
+                          <span className="text-2xs sm:text-[12px] font-semibold text-gray-300 font-poppins whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                            {totalAccumulated.toLocaleString()} total
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inline benefits (visible on hover / always on mobile) */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 sm:mt-2.5 pl-11 sm:pl-[76px] lg:pl-[104px]">
+                  {pkg.benefits.map((b, i) => {
+                    const isEntries = b.text.toLowerCase().includes("entries");
+                    const promoActive =
+                      (activeTab === "membership" && membershipPromoMultiplier > 1) ||
+                      (activeTab === "one-time" && oneTimeEffectiveMultiplier > 1);
+                    const showPromo = isEntries && promoActive;
+
+                    let promoText = b.text;
+                    if (showPromo) {
+                      const m = b.text.match(/(\d[\d,]*)/);
+                      if (m) {
+                        const orig = parseInt(m[1].replace(/,/g, ""));
+                        const mult = activeTab === "membership" ? membershipPromoMultiplier : oneTimeEffectiveMultiplier;
+                        promoText = b.text.replace(m[1], (orig * mult).toLocaleString());
+                      }
+                    }
+
+                    return (
+                      <span key={i} className="flex items-center gap-1 text-2xs sm:text-2xs text-gray-400 font-poppins">
+                        <Check className="w-3 h-3 flex-shrink-0" style={{ color: colorScheme.accentHex }} />
+                        {showPromo ? (
+                          <span className="text-amber-400 font-semibold">{promoText}</span>
+                        ) : (
+                          <span>{b.text}</span>
+                        )}
+                      </span>
                     );
                   })}
+                  <span className="flex items-center gap-1 text-2xs sm:text-2xs text-gray-400 font-poppins">
+                    <Check className="w-3 h-3 flex-shrink-0" style={{ color: colorScheme.accentHex }} />
+                    {pkg.partnerDiscounts} discounts
+                  </span>
                 </div>
               </div>
+            );
+          })}
+
+          {/* Legend */}
+          {activeTab === "membership" && (
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-3 sm:pt-4 text-2xs sm:text-xs text-gray-500 font-poppins">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-2 rounded-sm bg-amber-500 inline-block" /> Active entries in month {timePeriod}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-2 rounded-sm bg-amber-500/25 border border-white/10 inline-block" /> Total accumulated over {timePeriod} months
+              </span>
             </div>
-          </div>
+          )}
+
+          {/* Tooltip */}
+          {(() => {
+            if (!hoveredPackageId || !tooltipPosition) return null;
+            const hPkg = currentPackages.find((p) => p.id === hoveredPackageId);
+            if (!hPkg) return null;
+            const isSub = activeTab === "membership" && hPkg.entriesUnit === "mo";
+            const acc = isSub ? getPackageAccumulation(hPkg) : null;
+            if (!isSub || !acc) return null;
+            return (
+              <MonthProjectionTooltip
+                isVisible
+                position={tooltipPosition}
+                current={acc.monthlyActiveEntries[0] || 0}
+                nextMonth={acc.monthlyActiveEntries[1] || acc.monthlyActiveEntries[0] || 0}
+                month3={acc.monthlyActiveEntries[2] || acc.monthlyActiveEntries[1] || acc.monthlyActiveEntries[0] || 0}
+                promoMultiplier={membershipPromoMultiplier > 1 ? membershipPromoMultiplier : undefined}
+              />
+            );
+          })()}
+        </div>
+
+        {/* CTA */}
+        <div className="text-center mt-6 sm:mt-8">
+          <button
+            onClick={handleScrollToPackages}
+            className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-black font-bold text-sm sm:text-base font-poppins shadow-[0_0_24px_rgba(251,191,36,0.35)] hover:shadow-[0_0_32px_rgba(251,191,36,0.5)] hover:scale-[1.03] active:scale-[0.98] transition-all duration-200"
+          >
+            Choose Your Package <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </SectionContainer>
 
-      {/* Metallic Divider at the bottom */}
       <MetallicDivider height="h-[2px]" className="absolute bottom-0 left-0 right-0" />
     </section>
   );

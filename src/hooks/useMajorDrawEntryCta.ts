@@ -5,8 +5,10 @@ import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import { useUserMajorDrawStats, useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
+import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 
 interface UseMajorDrawEntryCtaResult {
   membershipModal: ReturnType<typeof useMembershipModal>;
@@ -15,7 +17,9 @@ interface UseMajorDrawEntryCtaResult {
   membershipPromoMultiplier: number;
   oneTimePromoMultiplier: number;
   getHeavyDutyPack: () => LocalMembershipPlan;
+  getOneTimePlan: () => LocalMembershipPlan | null;
   openEntryFlow: (options?: { openLocalModal?: boolean }) => void;
+  openWithOneTimePlan: () => void;
 }
 
 /**
@@ -24,13 +28,12 @@ interface UseMajorDrawEntryCtaResult {
  *
  * Package Selection Logic:
  * - Non-members: Returns Tradie subscription package (15 entries/month, with promo support)
- * - Members: Returns additional-apprentice-pack one-time package (10 entries, $25, with promo support) - lowest member package
+ * - Members: Returns additional-tradie-pack one-time package (lowest active additional tier; with promo support)
  */
 export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const { hasActiveSubscription, userData } = useUserContext();
   const { data: userMajorDrawStats } = useUserMajorDrawStats(userData?._id);
-  const { data: currentMajorDraw } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const membershipModal = useMembershipModal();
   const { requestModal, clearModalFromSession } = useModalPriorityStore();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
@@ -48,26 +51,29 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 
     // For users without access: Use Tradie subscription package
-    // For users with access: Use additional-apprentice-pack (member-only one-time) — use membership promo
+    // For users with access: Use additional-tradie-pack (lowest active additional one-time)
+    // Membership multiplier only for active members; one-time multiplier for non-members with entries
     if (hasAccess) {
-      const promoMultiplier = membershipPromoMultiplier;
-      // Member path: Use additional-apprentice-pack one-time package (lowest price/entry option)
-      const targetPackageId = "additional-apprentice-pack";
+      const targetPackageId = "additional-tradie-pack";
+      const promoMultiplier =
+        getEffectivePromoType(targetPackageId, "one-time", hasActiveSubscription) === "membership-packages"
+          ? membershipPromoMultiplier
+          : oneTimePromoMultiplier;
 
       if (safeOneTimePackages.length === 0) {
         // Fallback if packages aren't loaded yet
-        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
+        const baseEntries = 15;
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Apprentice Pack",
+          name: "Additional Tradie Pack",
           price: 25,
           period: "one-time",
           features: [
+            { text: "40% of Partner Discounts Available" },
+            { text: "2 Days Access to Partner Discounts" },
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
-            { text: "1 Days Access to Partner Discounts" },
-            { text: "100% of Partner Discounts Available" },
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
@@ -85,18 +91,18 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
       if (!packageData) {
         // Fallback if package not found
-        const baseEntries = 10; // Additional Apprentice Pack has 10 entries
+        const baseEntries = 15;
         const promoEntries = baseEntries * promoMultiplier;
 
         return {
           id: targetPackageId,
-          name: "Additional Apprentice Pack",
+          name: "Additional Tradie Pack",
           price: 25,
           period: "one-time",
           features: [
+            { text: "40% of Partner Discounts Available" },
+            { text: "2 Days Access to Partner Discounts" },
             { text: `${promoEntries} Free Entries${promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""}` },
-            { text: "1 Days Access to Partner Discounts" },
-            { text: "100% of Partner Discounts Available" },
           ],
           buttonText: "Get Started",
           buttonStyle: "secondary",
@@ -161,7 +167,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               }`,
             },
             // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "100% Access to Partner Discounts" },
+            { text: "50% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
           buttonText: "Get Started",
@@ -195,7 +201,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               }`,
             },
             // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-            { text: "100% Access to Partner Discounts" },
+            { text: "50% Access to Partner Discounts" },
             { text: "Mini Draws" },
           ],
           buttonText: "Get Started",
@@ -240,6 +246,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- oneTimePromoMultiplier required for isMember path plan recalculation
   }, [
     safeOneTimePackages,
     safeSubscriptionPackages,
@@ -249,56 +256,94 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
     userMajorDrawStats,
   ]);
 
+  const getOneTimePlan = useCallback((): LocalMembershipPlan | null => {
+    const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+    if (hasAccess) {
+      return getHeavyDutyPack();
+    }
+    const promoMultiplier = oneTimePromoMultiplier;
+    const nonMemberOneTime = safeOneTimePackages.find(
+      (pkg) => (pkg.period === "one-time" || pkg.period === "once") && !pkg.isMemberOnly
+    );
+    if (!nonMemberOneTime) return null;
+    const localPlan = convertToLocalPlan(nonMemberOneTime);
+    if (promoMultiplier <= 1) return localPlan;
+    const originalEntries = localPlan.metadata?.entriesCount ?? 0;
+    const promoEntries = originalEntries * promoMultiplier;
+    return {
+      ...localPlan,
+      features: localPlan.features.map((feature) => {
+        if (feature.text.toLowerCase().includes("entries")) {
+          return { ...feature, text: feature.text.replace(/\d+/, promoEntries.toString()) };
+        }
+        return feature;
+      }),
+      metadata: {
+        ...localPlan.metadata,
+        entriesCount: promoEntries,
+        originalEntries,
+        promoMultiplier,
+        isPromoActive: true,
+      },
+    };
+  }, [
+    userData,
+    userMajorDrawStats,
+    getHeavyDutyPack,
+    safeOneTimePackages,
+    oneTimePromoMultiplier,
+  ]);
+
+  const openWithOneTimePlan = useCallback(() => {
+    whenGatesOpenElseGateModal(() => {
+      const oneTimePlan = getOneTimePlan();
+      if (oneTimePlan) {
+        membershipModal.setSelectedPlan(oneTimePlan);
+        membershipModal.openModal();
+      } else {
+        membershipModal.openModalWithPackageSelectionFirst();
+      }
+    });
+  }, [getOneTimePlan, membershipModal, whenGatesOpenElseGateModal]);
+
   const openEntryFlow = useCallback(
     ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
-      // Check if gates are closed (freeze period or gap period)
-      const gatesClosed = currentMajorDraw?.status !== "active";
-      
-      if (gatesClosed) {
-        // Show gate-closed modal instead of opening payment modals
-        requestModal("gate-closed", true, {
-          nextActivationDate: nextDraw?.activationDate ?? null,
-          nextDrawName: nextDraw?.name,
-        });
-        return;
-      }
-
-      // Check if user has access (subscription OR current draw entries)
-      const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
-      if (hasAccess) {
-        clearModalFromSession("special-packages");
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("specialPackagesModalShown");
+      whenGatesOpenElseGateModal(() => {
+        const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
+        if (hasAccess) {
+          clearModalFromSession("special-packages");
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("specialPackagesModalShown");
+          }
+          requestModal("special-packages", true);
+          return;
         }
-        requestModal("special-packages", true);
-        return;
-      }
 
-      const correctPlan = getHeavyDutyPack();
+        const correctPlan = getHeavyDutyPack();
 
-      if (openLocalModal) {
-        membershipModal.setSelectedPlan(correctPlan);
-        membershipModal.openModal();
-        return;
-      }
+        if (openLocalModal) {
+          membershipModal.setSelectedPlan(correctPlan);
+          membershipModal.openModal();
+          return;
+        }
 
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(
-          new CustomEvent("openMembershipModal", {
-            detail: { plan: correctPlan },
-          })
-        );
-      }
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("openMembershipModal", {
+              detail: { plan: correctPlan },
+            })
+          );
+        }
+      });
     },
     [
+      whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
       userData,
       userMajorDrawStats,
       membershipModal,
       requestModal,
-      currentMajorDraw,
-      nextDraw,
     ]
   );
 
@@ -310,7 +355,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getOneTimePlan,
       openEntryFlow,
+      openWithOneTimePlan,
     }),
     [
       membershipModal,
@@ -319,7 +366,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
+      getOneTimePlan,
       openEntryFlow,
+      openWithOneTimePlan,
     ]
   );
 }

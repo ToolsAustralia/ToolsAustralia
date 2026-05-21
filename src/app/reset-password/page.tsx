@@ -47,29 +47,42 @@ function ResetPasswordContent() {
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        // Set inline error for email field if email doesn't exist
+        const errorMessage = data.error || "Could not send reset email. Please try again.";
+
+        // Rate limited: 1 attempt every 5 minutes
+        if (res.status === 429) {
+          setEmailError(errorMessage);
+          showToast({
+            type: "error",
+            title: "Please wait before trying again",
+            message: errorMessage,
+            duration: 6000,
+          });
+          return;
+        }
+
+        // Email not found
         const isEmailNotFound =
           res.status === 404 ||
           data.error?.toLowerCase().includes("no account") ||
           data.error?.toLowerCase().includes("not found");
 
         if (isEmailNotFound) {
-          setEmailError(data.error || "No account found with this email address.");
-          // Also show toast for visibility
+          setEmailError(errorMessage);
           showToast({
             type: "error",
             title: "Email not found",
-            message: data.error || "No account found with this email address.",
+            message: errorMessage,
           });
         } else {
-          // Show toast for other errors
+          setEmailError(errorMessage);
           showToast({
             type: "error",
             title: "Request failed",
-            message: data.error || "Could not send reset email. Please try again.",
+            message: errorMessage,
           });
         }
-        return; // Exit early, don't throw
+        return;
       }
 
       // Clear email field and error on success
@@ -148,16 +161,17 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-svh flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-width-[420px] max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
         {/* Brand Header */}
         <div className="mb-4 flex items-center gap-3">
           <div className="w-[40px] h-[42px] sm:w-[50px] sm:h-[52px] relative">
             <Image
-              src="/images/Tools Australia Logo/Social Media Profile_Primary.png"
+              src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
               alt="Tools Australia Logo"
               fill
               className="object-contain"
+              sizes="(max-width: 640px) 40px, 50px"
               priority
             />
           </div>
@@ -167,7 +181,7 @@ function ResetPasswordContent() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
           {hasToken ? "Set a new password" : "Forgot your password?"}
         </h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-sm text-gray-600 dark:text-neutral-400 mb-6">
           {hasToken
             ? "Enter a new password for your Tools Australia account. Make sure it’s something secure and easy to remember."
             : "Enter your email address and we’ll send you a secure link to reset your password."}
@@ -176,7 +190,7 @@ function ResetPasswordContent() {
         {!hasToken ? (
           <form onSubmit={handleRequestReset} className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="email">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="email">
                 Email address
               </label>
               <input
@@ -199,7 +213,7 @@ function ResetPasswordContent() {
             <button
               type="submit"
               disabled={isRequesting}
-              className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isRequesting ? "Sending link..." : "Send reset link"}
             </button>
@@ -207,7 +221,7 @@ function ResetPasswordContent() {
         ) : (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="new-password">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="new-password">
                 New password
               </label>
               <input
@@ -222,7 +236,7 @@ function ResetPasswordContent() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-700" htmlFor="confirm-password">
+              <label className="text-sm font-medium text-gray-700 dark:text-neutral-200" htmlFor="confirm-password">
                 Confirm new password
               </label>
               <input
@@ -239,16 +253,16 @@ function ResetPasswordContent() {
             <button
               type="submit"
               disabled={isResetting}
-              className="w-full rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isResetting ? "Updating password..." : "Update password"}
             </button>
           </form>
         )}
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-gray-600 dark:text-neutral-400">
           <span>Remembered your password? </span>
-          <Link href="/login" className="font-semibold text-[#ee0000] hover:underline">
+          <Link href="/login" className="font-semibold text-red-600 hover:underline">
             Back to sign in
           </Link>
         </div>

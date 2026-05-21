@@ -6,7 +6,7 @@
  * with their complete configuration and targeting rules.
  *
  * ⚠️ IMPORTANT: entriesCount is now a FALLBACK value
- * - Upsell entries are dynamically calculated as: 2 × (packageBaseEntries × activePromoMultiplier)
+ * - Upsell entries are dynamically calculated as: upsellCategoryMultiplier × packageBaseEntries
  * - The entriesCount field here is only used as a fallback when:
  *   1. OriginalPurchaseContext is not available
  *   2. Package lookup fails
@@ -16,9 +16,16 @@
 
 export interface StaticUpsellPackage {
   id: string;
+  /** Distinct id used for analytics/tracking. By convention equals `id`. */
+  trackingId: string;
   name: string;
   description: string;
-  category: "subscription-plus" | "one-time-plus" | "additional-upgrade";
+  /** Distinct category for analytics + per-category multiplier resolution. */
+  upsellCategory: "membership" | "one-time" | "additional" | "mini";
+  /** Internal id of the base pack whose inclusions this upsell mirrors. */
+  baseTemplatePackageId: string;
+  /** Stripe Product description (used at payment-intent creation). */
+  stripeDescription: string;
   originalPrice: number;
   discountedPrice: number;
   discountPercentage: number;
@@ -51,29 +58,210 @@ export interface StaticUpsellPackage {
   showAfterDelay?: number; // Delay in seconds before showing
 }
 
+// ---------------------------------------------------------------------------
+// Tier tables + builder functions
+// ---------------------------------------------------------------------------
+
+type UpsellTier = {
+  tierSuffix: "apprentice" | "tradie" | "foreman" | "boss" | "power" | "vip";
+  basePackId: string;
+  originalPrice: number;
+  upsellPrice: number;
+  entries2x: number;
+  partnerPercent: number;
+  partnerDays: number;
+};
+
+const ONE_TIME_TIERS: UpsellTier[] = [
+  { tierSuffix: "apprentice", basePackId: "apprentice-pack", originalPrice: 25,   upsellPrice: 12.5,   entries2x: 6,    partnerPercent: 25,  partnerDays: 1 },
+  { tierSuffix: "tradie",     basePackId: "tradie-pack",     originalPrice: 50,   upsellPrice: 24.99,  entries2x: 30,   partnerPercent: 40,  partnerDays: 2 },
+  { tierSuffix: "foreman",    basePackId: "foreman-pack",    originalPrice: 100,  upsellPrice: 49.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4 },
+  { tierSuffix: "boss",       basePackId: "boss-pack",       originalPrice: 250,  upsellPrice: 124.99, entries2x: 300,  partnerPercent: 70,  partnerDays: 10 },
+  { tierSuffix: "power",      basePackId: "power-pack",      originalPrice: 500,  upsellPrice: 249.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20 },
+  { tierSuffix: "vip",        basePackId: "vip-pack",        originalPrice: 1000, upsellPrice: 499.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30 },
+];
+
+const ADDITIONAL_TIERS: UpsellTier[] = [
+  { tierSuffix: "tradie",  basePackId: "additional-tradie-pack",  originalPrice: 25,   upsellPrice: 12.5,   entries2x: 30,   partnerPercent: 40,  partnerDays: 2 },
+  { tierSuffix: "foreman", basePackId: "additional-foreman-pack", originalPrice: 50,   upsellPrice: 24.99,  entries2x: 60,   partnerPercent: 55,  partnerDays: 4 },
+  { tierSuffix: "boss",    basePackId: "additional-boss-pack",    originalPrice: 125,  upsellPrice: 62.5,   entries2x: 300,  partnerPercent: 70,  partnerDays: 10 },
+  { tierSuffix: "power",   basePackId: "additional-power-pack",   originalPrice: 250,  upsellPrice: 124.99, entries2x: 1200, partnerPercent: 85,  partnerDays: 20 },
+  { tierSuffix: "vip",     basePackId: "additional-vip-pack",     originalPrice: 500,  upsellPrice: 249.99, entries2x: 3000, partnerPercent: 100, partnerDays: 30 },
+];
+
+function titleCaseTier(t: UpsellTier["tierSuffix"]): string {
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function buildOneTimeUpsellRecords(): StaticUpsellPackage[] {
+  return ONE_TIME_TIERS.map((t) => {
+    const display = `${titleCaseTier(t.tierSuffix)} Pack`;
+    return {
+      id: `onetime-upsell-${t.tierSuffix}`,
+      trackingId: `onetime-upsell-${t.tierSuffix}`,
+      upsellCategory: "one-time" as const,
+      baseTemplatePackageId: t.basePackId,
+      name: display,
+      description: `${display} at 50% off — same benefits, double entries.`,
+      stripeDescription: `${display} — Upsell`,
+      originalPrice: t.originalPrice,
+      discountedPrice: t.upsellPrice,
+      discountPercentage: 50,
+      entriesCount: t.entries2x,
+      shopDiscountPercent: 0,
+      partnerDiscountDays: t.partnerDays,
+      buttonText: `Add ${display} - $${t.upsellPrice}`,
+      conditions: [
+        `$${t.upsellPrice} One Time Payment`,
+        `${t.partnerPercent}% Access to Partner Discounts`,
+        `${t.partnerDays} Day${t.partnerDays === 1 ? "" : "s"} Access to Partner Discounts`,
+        `${t.entries2x} free entries`,
+      ],
+      urgencyText: "Limited time offer!",
+      priority: 8,
+      isActive: true,
+      targetAudience: ["one-time-purchase"],
+      userSegments: ["new-user", "returning-user"],
+      maxShowsPerUser: 3,
+      cooldownHours: 12,
+      triggersOnPackageIds: [t.basePackId],
+      triggersOnPackageTypes: ["one-time"],
+      showAfterPurchase: true,
+      showAfterDelay: 2,
+    };
+  });
+}
+
+function buildAdditionalUpsellRecords(): StaticUpsellPackage[] {
+  return ADDITIONAL_TIERS.map((t) => {
+    const display = `${titleCaseTier(t.tierSuffix)} Pack`;
+    return {
+      id: `additional-upsell-${t.tierSuffix}`,
+      trackingId: `additional-upsell-${t.tierSuffix}`,
+      upsellCategory: "additional" as const,
+      baseTemplatePackageId: t.basePackId,
+      name: display,
+      description: `${display} at 50% off — same benefits, double entries.`,
+      stripeDescription: `Additional ${display} — Upsell`,
+      originalPrice: t.originalPrice,
+      discountedPrice: t.upsellPrice,
+      discountPercentage: 50,
+      entriesCount: t.entries2x,
+      shopDiscountPercent: 0,
+      partnerDiscountDays: t.partnerDays,
+      buttonText: `Add ${display} - $${t.upsellPrice}`,
+      conditions: [
+        `$${t.upsellPrice} One Time Payment`,
+        `${t.partnerPercent}% Access to Partner Discounts`,
+        `${t.partnerDays} Day${t.partnerDays === 1 ? "" : "s"} Access to Partner Discounts`,
+        `${t.entries2x} free entries`,
+      ],
+      urgencyText: "Member upgrade available!",
+      priority: 6,
+      isActive: true,
+      targetAudience: ["one-time-purchase"],
+      userSegments: ["new-user", "returning-user", "special-package-buyer"],
+      maxShowsPerUser: 2,
+      cooldownHours: 24,
+      triggersOnPackageIds: [t.basePackId],
+      triggersOnPackageTypes: ["one-time"],
+      showAfterPurchase: true,
+      showAfterDelay: 3,
+    };
+  });
+}
+
+type MiniTier = {
+  triggerId: string;
+  upsellId: string;
+  displayName: string;
+  stripeDescription: string;
+  triggerPrice: number;
+  upsellPrice: number;
+  entries: number;
+  partnerPercent: number;
+  partnerHours: number;
+  partnerDays: number;
+};
+
+const MINI_TIERS: MiniTier[] = [
+  { triggerId: "mini-pack-1",                  upsellId: "mini-upsell-1",                  displayName: "Mini Pack 1",  stripeDescription: "Mini Pack 1 — Upsell",            triggerPrice: 1,    upsellPrice: 0.5,  entries: 1,   partnerPercent: 5,   partnerHours: 1,   partnerDays: 1/24 },
+  { triggerId: "mini-pack-2",                  upsellId: "mini-upsell-2",                  displayName: "Mini Pack 2",  stripeDescription: "Mini Pack 2 — Upsell",            triggerPrice: 5,    upsellPrice: 2.5,  entries: 5,   partnerPercent: 10,  partnerHours: 6,   partnerDays: 0.25 },
+  { triggerId: "mini-pack-3",                  upsellId: "mini-upsell-3",                  displayName: "Mini Pack 3",  stripeDescription: "Mini Pack 3 — Upsell",            triggerPrice: 10,   upsellPrice: 5,    entries: 10,  partnerPercent: 15,  partnerHours: 12,  partnerDays: 0.5 },
+  { triggerId: "additional-tradie-pack-mini",  upsellId: "mini-upsell-additional-tradie",  displayName: "Tradie Pack",  stripeDescription: "Tradie Pack — Mini Draw Upsell",  triggerPrice: 25,   upsellPrice: 12.5, entries: 25,  partnerPercent: 40,  partnerHours: 48,  partnerDays: 2 },
+  { triggerId: "additional-foreman-pack-mini", upsellId: "mini-upsell-additional-foreman", displayName: "Foreman Pack", stripeDescription: "Foreman Pack — Mini Draw Upsell", triggerPrice: 50,   upsellPrice: 25,   entries: 50,  partnerPercent: 55,  partnerHours: 96,  partnerDays: 4 },
+  { triggerId: "additional-boss-pack-mini",    upsellId: "mini-upsell-additional-boss",    displayName: "Boss Pack",    stripeDescription: "Boss Pack — Mini Draw Upsell",    triggerPrice: 125,  upsellPrice: 62.5, entries: 125, partnerPercent: 70,  partnerHours: 240, partnerDays: 10 },
+  { triggerId: "additional-power-pack-mini",   upsellId: "mini-upsell-additional-power",   displayName: "Power Pack",   stripeDescription: "Power Pack — Mini Draw Upsell",   triggerPrice: 250,  upsellPrice: 125,  entries: 250, partnerPercent: 85,  partnerHours: 480, partnerDays: 20 },
+  { triggerId: "additional-vip-pack-mini",     upsellId: "mini-upsell-additional-vip",     displayName: "VIP Pack",     stripeDescription: "VIP Pack — Mini Draw Upsell",     triggerPrice: 500,  upsellPrice: 250,  entries: 500, partnerPercent: 100, partnerHours: 720, partnerDays: 30 },
+];
+
+function buildMiniUpsellRecords(): StaticUpsellPackage[] {
+  return MINI_TIERS.map((t) => ({
+    id: t.upsellId,
+    trackingId: t.upsellId,
+    upsellCategory: "mini" as const,
+    baseTemplatePackageId: t.triggerId,
+    name: t.displayName,
+    description: `${t.displayName} at 50% off — same entries, same partner benefits.`,
+    stripeDescription: t.stripeDescription,
+    originalPrice: t.triggerPrice,
+    discountedPrice: t.upsellPrice,
+    discountPercentage: 50,
+    entriesCount: t.entries,
+    shopDiscountPercent: 0,
+    partnerDiscountDays: t.partnerDays,
+    buttonText: `Upgrade Now - $${t.upsellPrice}`,
+    conditions: [
+      `$${t.upsellPrice} One Time Payment`,
+      `${t.partnerPercent}% Access to Partner Discounts`,
+      t.partnerHours < 24
+        ? `${t.partnerHours} Hour${t.partnerHours === 1 ? "" : "s"} Access to Partner Discounts`
+        : `${t.partnerDays} Day${t.partnerDays === 1 ? "" : "s"} Access to Partner Discounts`,
+      `${t.entries} free entries`,
+    ],
+    urgencyText: "Limited time offer!",
+    priority: 10,
+    isActive: true,
+    targetAudience: ["mini-draw-customers"],
+    userSegments: ["mini-draw-buyer"],
+    triggersOnPackageIds: [t.triggerId],
+    triggersOnPackageTypes: ["one-time"],
+    showAfterPurchase: true,
+    showAfterDelay: 2,
+    maxShowsPerUser: 1,
+    cooldownHours: 0,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Main array — 22 records: 3 membership + 6 one-time + 5 additional + 8 mini
+// ---------------------------------------------------------------------------
+
 /**
  * All upsell packages based on the provided specifications
  */
 export const upsellPackages: StaticUpsellPackage[] = [
-  // === SUBSCRIPTION PLUS PACKAGES ===
+  // === MEMBERSHIP UPSELLS ===
   {
-    id: "tradie-plus-package",
-    name: "Tradie Plus Package",
-    description: "Enhance your Tradie membership with bonus entries and extended benefits",
-    category: "subscription-plus",
-    originalPrice: 20,
+    id: "membership-upsell-tradie",
+    trackingId: "membership-upsell-tradie",
+    upsellCategory: "membership",
+    baseTemplatePackageId: "apprentice-pack",
+    name: "Apprentice Pack",
+    description: "Membership bonus — Apprentice Pack at 60% off.",
+    stripeDescription: "Apprentice Pack — Membership Upsell",
+    originalPrice: 25,
     discountedPrice: 9.99,
-    discountPercentage: 50,
-    entriesCount: 30,
+    discountPercentage: 60,
+    entriesCount: 30, // 10× of apprentice base (3); admin multiplier may change at calculation time
     shopDiscountPercent: 5,
-    partnerDiscountDays: 30,
+    partnerDiscountDays: 1,
     accessAfterExpiry: 1,
-    buttonText: "Add Tradie Plus - $9.99",
+    buttonText: "Add Apprentice Pack - $9.99",
     conditions: [
-      "30 One-time Entries",
-      // "5% Off Shop", // Temporarily disabled - Shop coming soon
-      "100% Access to Partner Discounts",
-      "1 Day access after membership expires",
+      "25% Access to Partner Discounts",
+      "1 Day Access to Partner Discounts",
+      "30 free entries",
     ],
     urgencyText: "Limited time offer!",
     priority: 10,
@@ -82,29 +270,31 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["tradie-subscription"], // Tradie subscription
+    triggersOnPackageIds: ["tradie-subscription"],
     triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
   {
-    id: "foreman-plus-package",
-    name: "Foreman Plus Package",
-    description: "Supercharge your Foreman membership with extra entries and premium benefits",
-    category: "subscription-plus",
-    originalPrice: 40,
+    id: "membership-upsell-foreman",
+    trackingId: "membership-upsell-foreman",
+    upsellCategory: "membership",
+    baseTemplatePackageId: "tradie-pack",
+    name: "Tradie Pack",
+    description: "Membership bonus — Tradie Pack at 60% off.",
+    stripeDescription: "Tradie Pack — Membership Upsell",
+    originalPrice: 50,
     discountedPrice: 19.99,
-    discountPercentage: 50,
-    entriesCount: 80,
+    discountPercentage: 60,
+    entriesCount: 150,
     shopDiscountPercent: 10,
-    partnerDiscountDays: 30,
+    partnerDiscountDays: 2,
     accessAfterExpiry: 2,
-    buttonText: "Add Foreman Plus - $19.99",
+    buttonText: "Add Tradie Pack - $19.99",
     conditions: [
-      "80 Free One-Time Entries",
-      // "10% Off Shop", // Temporarily disabled - Shop coming soon
-      "100% Access to Partner Discounts",
-      "2 Days access after membership expires",
+      "40% Access to Partner Discounts",
+      "2 Days Access to Partner Discounts",
+      "150 free entries",
     ],
     urgencyText: "Exclusive Foreman offer!",
     priority: 10,
@@ -113,29 +303,31 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["foreman-subscription"], // Foreman subscription
+    triggersOnPackageIds: ["foreman-subscription"],
     triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
   {
-    id: "boss-plus-package",
-    name: "Boss Plus Package",
-    description: "Ultimate Boss enhancement with maximum entries and exclusive benefits",
-    category: "subscription-plus",
-    originalPrice: 80,
+    id: "membership-upsell-boss",
+    trackingId: "membership-upsell-boss",
+    upsellCategory: "membership",
+    baseTemplatePackageId: "foreman-pack",
+    name: "Foreman Pack",
+    description: "Membership bonus — Foreman Pack at 60% off.",
+    stripeDescription: "Foreman Pack — Membership Upsell",
+    originalPrice: 100,
     discountedPrice: 39.99,
-    discountPercentage: 50,
-    entriesCount: 200,
+    discountPercentage: 60,
+    entriesCount: 300,
     shopDiscountPercent: 20,
-    partnerDiscountDays: 30,
+    partnerDiscountDays: 4,
     accessAfterExpiry: 3,
-    buttonText: "Add Boss Plus - $39.99",
+    buttonText: "Add Foreman Pack - $39.99",
     conditions: [
-      "200 Free One-Time Entries",
-      // "20% Off Shop", // Temporarily disabled - Shop coming soon
-      "100% Access to Partner Discounts",
-      "3 Days access after membership expires",
+      "55% Access to Partner Discounts",
+      "4 Days Access to Partner Discounts",
+      "300 free entries",
     ],
     urgencyText: "Boss Exclusive!",
     priority: 10,
@@ -144,531 +336,20 @@ export const upsellPackages: StaticUpsellPackage[] = [
     userSegments: ["new-user", "returning-user"],
     maxShowsPerUser: 2,
     cooldownHours: 24,
-    triggersOnPackageIds: ["boss-subscription"], // Boss subscription
+    triggersOnPackageIds: ["boss-subscription"],
     triggersOnPackageTypes: ["membership"],
     showAfterPurchase: true,
     showAfterDelay: 2,
   },
 
-  // === ONE-TIME PLUS PACKAGES ===
-  {
-    id: "apprentice-plus-pack",
-    name: "Apprentice Plus Pack",
-    description: "Boost your Apprentice Pack with additional entries and extended benefits",
-    category: "one-time-plus",
-    originalPrice: 25,
-    discountedPrice: 12.5,
-    discountPercentage: 50,
-    entriesCount: 6,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 1,
-    buttonText: "Add Apprentice Plus - $12.50",
-    conditions: [
-      "$9.99 One Time Payment",
-      "6 Free One Time Entries",
-      "1 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Quick boost available!",
-    priority: 8,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user"],
-    maxShowsPerUser: 3,
-    cooldownHours: 12,
-    triggersOnPackageIds: ["apprentice-pack"], // Apprentice Pack (non-member)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-  },
-  {
-    id: "tradie-plus-pack",
-    name: "Tradie Plus Pack",
-    description: "Enhance your Tradie Pack with bonus entries and extended access",
-    category: "one-time-plus",
-    originalPrice: 50,
-    discountedPrice: 24.99,
-    discountPercentage: 50,
-    entriesCount: 30,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 2,
-    buttonText: "Add Tradie Plus - $24.99",
-    conditions: [
-      "$24.99 One Time Payment",
-      "30 Free One Time Entries",
-      "2 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Tradie boost available!",
-    priority: 8,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user"],
-    maxShowsPerUser: 3,
-    cooldownHours: 12,
-    triggersOnPackageIds: ["tradie-pack"], // Tradie Pack (non-member)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-  },
-  {
-    id: "foreman-plus-pack",
-    name: "Foreman Plus Pack",
-    description: "Power up your Foreman Pack with maximum entries and premium benefits",
-    category: "one-time-plus",
-    originalPrice: 100,
-    discountedPrice: 49.99,
-    discountPercentage: 0,
-    entriesCount: 60,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 4,
-    buttonText: "Add Foreman Plus - $49.99",
-    conditions: [
-      "$49.99 One Time Payment",
-      "60 Free One Time Entries",
-      "4 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Foreman boost!",
-    priority: 8,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user"],
-    maxShowsPerUser: 3,
-    cooldownHours: 12,
-    triggersOnPackageIds: ["foreman-pack"], // Foreman Pack (non-member) - FIXED: Use package ID instead of MongoDB ObjectID
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-  },
-  {
-    id: "boss-plus-pack",
-    name: "Boss Plus Pack",
-    description: "Ultimate enhancement for your Boss Pack with massive entries",
-    category: "one-time-plus",
-    originalPrice: 250,
-    discountedPrice: 124.99,
-    discountPercentage: 50,
-    entriesCount: 300,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 10,
-    buttonText: "Add Boss Plus - $124.99",
-    conditions: [
-      "$124.99 One Time Payment",
-      "300 Free One Time Entries",
-      "10 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Boss boost!",
-    priority: 8,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user"],
-    maxShowsPerUser: 3,
-    cooldownHours: 12,
-    triggersOnPackageIds: ["boss-pack"], // Boss Pack (non-member) - FIXED: Use package ID instead of MongoDB ObjectID
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-  },
-  {
-    id: "power-plus-pack",
-    name: "Power Plus Pack",
-    description: "Maximum power enhancement for your Power Pack with elite entries",
-    category: "one-time-plus",
-    originalPrice: 500,
-    discountedPrice: 249.99,
-    discountPercentage: 50,
-    entriesCount: 1200,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 20,
-    buttonText: "Add Power Plus - $249.99",
-    conditions: [
-      "$249.99 One Time Payment",
-      "1200 Free One Time Entries",
-      "20 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Power boost available!",
-    priority: 8,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user"],
-    maxShowsPerUser: 3,
-    cooldownHours: 12,
-    triggersOnPackageIds: ["power-pack"], // Power Pack (non-member) - FIXED: Use package ID instead of MongoDB ObjectID
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-  },
+  // === ONE-TIME UPSELLS ===
+  ...buildOneTimeUpsellRecords(),
 
-  // === ADDITIONAL UPGRADE PACKAGES ===
-  {
-    id: "additional-apprentice-pack-upgrade",
-    name: "Additional Apprentice Pack Upgrade",
-    description: "Get additional entries with your Apprentice Pack purchase",
-    category: "additional-upgrade",
-    originalPrice: 25,
-    discountedPrice: 12.5,
-    discountPercentage: 50,
-    entriesCount: 20,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 1,
-    buttonText: "Add Apprentice Upgrade - $12.50",
-    conditions: [
-      "$12.50 One Time Payment",
-      "20 Free One Time Entries",
-      "1 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Upgrade available!",
-    priority: 6,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user", "special-package-buyer"],
-    maxShowsPerUser: 2,
-    cooldownHours: 24,
-    triggersOnPackageIds: ["apprentice-pack", "additional-apprentice-pack"], // Apprentice Pack (both non-member and member-only)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 3,
-  },
-  {
-    id: "additional-tradie-pack-upgrade",
-    name: "Additional Tradie Pack Upgrade",
-    description: "Enhance your Tradie Pack with additional entries",
-    category: "additional-upgrade",
-    originalPrice: 50,
-    discountedPrice: 24.99,
-    discountPercentage: 50,
-    entriesCount: 60,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 2,
-    buttonText: "Add Tradie Upgrade - $24.99",
-    conditions: [
-      "$24.99 One Time Payment",
-      "60 Free One Time Entries",
-      "2 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Tradie upgrade available!",
-    priority: 6,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user", "special-package-buyer"],
-    maxShowsPerUser: 2,
-    cooldownHours: 24,
-    triggersOnPackageIds: ["tradie-pack", "additional-tradie-pack"], // Tradie Pack (both non-member and member-only)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 3,
-  },
-  {
-    id: "additional-foreman-pack-upgrade",
-    name: "Additional Foreman Pack Upgrade",
-    description: "Power up your Foreman Pack with bonus entries",
-    category: "additional-upgrade",
-    originalPrice: 100,
-    discountedPrice: 49.99,
-    discountPercentage: 50,
-    entriesCount: 200,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 4,
-    buttonText: "Add Foreman Upgrade - $49.99",
-    conditions: [
-      "$49.99 One Time Payment",
-      "200 Free One Time Entries",
-      "4 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Foreman upgrade available!",
-    priority: 6,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user", "special-package-buyer"],
-    maxShowsPerUser: 2,
-    cooldownHours: 24,
-    triggersOnPackageIds: ["foreman-pack", "additional-foreman-pack"], // Foreman Pack (both non-member and member-only)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 3,
-  },
-  {
-    id: "additional-boss-pack-upgrade",
-    name: "Additional Boss Pack Upgrade",
-    description: "Ultimate enhancement for your Boss Pack",
-    category: "additional-upgrade",
-    originalPrice: 250,
-    discountedPrice: 124.99,
-    discountPercentage: 50,
-    entriesCount: 800,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 10,
-    buttonText: "Add Boss Upgrade - $124.99",
-    conditions: [
-      "$124.99 One Time Payment",
-      "800 Free One Time Entries",
-      "10 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Boss upgrade available!",
-    priority: 6,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user", "special-package-buyer"],
-    maxShowsPerUser: 2,
-    cooldownHours: 24,
-    triggersOnPackageIds: ["boss-pack", "additional-boss-pack"], // Boss Pack (both non-member and member-only)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 3,
-  },
-  {
-    id: "additional-power-pack-upgrade",
-    name: "Additional Power Pack Upgrade",
-    description: "Maximum power enhancement for your Power Pack",
-    category: "additional-upgrade",
-    originalPrice: 500,
-    discountedPrice: 249.99,
-    discountPercentage: 50,
-    entriesCount: 2400,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 20,
-    buttonText: "Add Power Upgrade - $249.99",
-    conditions: [
-      "$249.99 One Time Payment",
-      "2400 Free One Time Entries",
-      "20 Days Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Power upgrade available!",
-    priority: 6,
-    isActive: true,
-    targetAudience: ["one-time-purchase"],
-    userSegments: ["new-user", "returning-user", "special-package-buyer"],
-    maxShowsPerUser: 2,
-    cooldownHours: 24,
-    triggersOnPackageIds: ["power-pack", "additional-power-pack"], // Power Pack (both non-member and member-only)
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 3,
-  },
-  // Mini Draw Upsells
-  {
-    id: "mini-pack-1-upgrade",
-    name: "Mini Pack 1 Upgrade",
-    description: "Get 10 Free Entries with 12 Hours Access to Partner Discounts!",
-    category: "one-time-plus",
-    originalPrice: 1.0,
-    discountedPrice: 0.5,
-    discountPercentage: 10,
-    entriesCount: 10,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 0.5, // 12 hours = 12/24 day
-    buttonText: "Upgrade Now - $0.5",
-    conditions: [
-      "$0.5 One Time Payment",
-      "10 Free Entries",
-      "12 Hours Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-1"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-2-upgrade",
-    name: "Mini Pack 2 Upgrade",
-    description: "Get 10 Free Entries with 6 Hours Access to Partner Discounts!",
-    category: "one-time-plus",
-    originalPrice: 5.0,
-    discountedPrice: 2.5,
-    discountPercentage: 50,
-    entriesCount: 10,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 0.25, // 6 hours = 6/24 day
-    buttonText: "Upgrade Now - $2.50",
-    conditions: [
-      "$2.50 One Time Payment",
-      "10 Free Entries",
-      "6 Hours Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-2"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-3-upgrade",
-    name: "Mini Pack 3 Upgrade",
-    description: "Get 20 Free Entries with 12 Hours Access to Partner Discounts!",
-    category: "one-time-plus",
-    originalPrice: 10.0,
-    discountedPrice: 5.0,
-    discountPercentage: 50,
-    entriesCount: 20,
-    shopDiscountPercent: 0,
-    partnerDiscountDays: 0.5, // 12 hours = 12/24 day
-    buttonText: "Upgrade Now - $5.00",
-    conditions: [
-      "$5.00 One Time Payment",
-      "20 Free Entries",
-      "12 Hours Access to Partner Discounts",
-      "100% of Partner Discounts Available",
-    ],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-3"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-4-upgrade",
-    name: "Mini Pack 4 Upgrade",
-    description: "Double your entries with this exclusive upgrade!",
-    category: "one-time-plus",
-    originalPrice: 25,
-    discountedPrice: 12.5,
-    discountPercentage: 60,
-    entriesCount: 50,
-    shopDiscountPercent: 5,
-    partnerDiscountDays: 1,
-    buttonText: "Upgrade Now - $12.50",
-    conditions: ["Available only after Mini Pack 4 purchase", "One-time payment", "Instant activation"],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-4"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-5-upgrade",
-    name: "Mini Pack 5 Upgrade",
-    description: "Double your entries with this exclusive upgrade!",
-    category: "one-time-plus",
-    originalPrice: 50,
-    discountedPrice: 19.99,
-    discountPercentage: 60,
-    entriesCount: 100,
-    shopDiscountPercent: 5,
-    partnerDiscountDays: 20,
-    buttonText: "Upgrade Now - $19.99",
-    conditions: ["Available only after Mini Pack 5 purchase", "One-time payment", "Instant activation"],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-5"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-6-upgrade",
-    name: "Mini Pack 6 Upgrade",
-    description: "Double your entries with this exclusive upgrade!",
-    category: "one-time-plus",
-    originalPrice: 100,
-    discountedPrice: 49.99,
-    discountPercentage: 50,
-    entriesCount: 200,
-    shopDiscountPercent: 10,
-    partnerDiscountDays: 4,
-    buttonText: "Upgrade Now - $49.99",
-    conditions: ["Available only after Mini Pack 6 purchase", "One-time payment", "Instant activation"],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-6"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-7-upgrade",
-    name: "Mini Pack 7 Upgrade",
-    description: "Double your entries with this exclusive upgrade!",
-    category: "one-time-plus",
-    originalPrice: 250,
-    discountedPrice: 124.99,
-    discountPercentage: 50,
-    entriesCount: 500,
-    shopDiscountPercent: 10,
-    partnerDiscountDays: 10,
-    buttonText: "Upgrade Now - $124.99",
-    conditions: ["Available only after Mini Pack 7 purchase", "One-time payment", "Instant activation"],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-7"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
-  {
-    id: "mini-pack-8-upgrade",
-    name: "Mini Pack 8 Upgrade",
-    description: "Double your entries with this exclusive upgrade!",
-    category: "one-time-plus",
-    originalPrice: 1000,
-    discountedPrice: 249.99,
-    discountPercentage: 75,
-    entriesCount: 1000,
-    shopDiscountPercent: 20,
-    partnerDiscountDays: 20,
-    buttonText: "Upgrade Now - $249.99",
-    conditions: ["Available only after Mini Pack 8 purchase", "One-time payment", "Instant activation"],
-    urgencyText: "Limited time offer!",
-    priority: 10,
-    isActive: true,
-    targetAudience: ["mini-draw-customers"],
-    userSegments: ["mini-draw-buyer"],
-    triggersOnPackageIds: ["mini-pack-8"],
-    triggersOnPackageTypes: ["one-time"],
-    showAfterPurchase: true,
-    showAfterDelay: 2,
-    maxShowsPerUser: 1,
-    cooldownHours: 0,
-  },
+  // === ADDITIONAL UPSELLS ===
+  ...buildAdditionalUpsellRecords(),
+
+  // === MINI UPSELLS ===
+  ...buildMiniUpsellRecords(),
 ];
 
 /**
@@ -684,10 +365,10 @@ export const getActiveUpsellPackages = (): StaticUpsellPackage[] => {
 
 /**
  * Get upsell packages by category
- * @param category - Package category
+ * @param upsellCategory - Package upsell category
  */
-export const getUpsellPackagesByCategory = (category: StaticUpsellPackage["category"]): StaticUpsellPackage[] => {
-  return upsellPackages.filter((pkg) => pkg.category === category && pkg.isActive);
+export const getUpsellPackagesByCategory = (upsellCategory: StaticUpsellPackage["upsellCategory"]): StaticUpsellPackage[] => {
+  return upsellPackages.filter((pkg) => pkg.upsellCategory === upsellCategory && pkg.isActive);
 };
 
 /**
@@ -791,12 +472,12 @@ export const getBestUpsellOfferForUser = (
   if (packageType === "one-time") {
     // For one-time packages, filter based on membership status
     filteredPackages = filteredPackages.filter((pkg) => {
-      // Check if this is a member-only upsell (additional-upgrade category)
-      const isMemberOnlyUpsell = pkg.category === "additional-upgrade";
+      // Check if this is a member-only upsell (additional upsellCategory)
+      const isMemberOnlyUpsell = pkg.upsellCategory === "additional";
 
       // ✅ FIX: Use hasAccessToAdditionalPackages instead of just isMember
-      // Users with access (subscription OR major draw entries) should see additional-upgrade upsells
-      // Non-members without access should only see non-member upsells (one-time-plus category)
+      // Users with access (subscription OR major draw entries) should see additional upsells
+      // Non-members without access should only see non-member upsells (one-time upsellCategory)
       if (!hasAccessToAdditionalPackages && isMemberOnlyUpsell) {
         return false; // Users without access shouldn't see member-only upsells
       }

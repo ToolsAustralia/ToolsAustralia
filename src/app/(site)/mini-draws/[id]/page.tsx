@@ -1,14 +1,14 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import MembershipSection from "@/components/sections/MembershipSection";
-import ProductCard from "@/components/ui/ProductCard";
 import MiniDrawImageGallery from "./components/MiniDrawImageGallery";
 import MiniDrawInteractions from "./components/MiniDrawInteractions";
 import MiniDrawTabs from "./components/MiniDrawTabs";
-import ShareButton from "./components/ShareButton";
+import CollapsibleSection from "./components/CollapsibleSection";
 import MiniDrawViewTracking from "./components/MiniDrawViewTracking";
-import { Trophy, ArrowLeft } from "lucide-react";
+import ScrollToTopOnMount from "./components/ScrollToTopOnMount";
+import RelatedMiniDraws from "./components/RelatedMiniDraws";
+import DetailHeroBanner from "./components/DetailHeroBanner";
 import connectDB from "@/lib/mongodb";
 import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
 import Winner, { IWinner } from "@/models/Winner";
@@ -21,7 +21,6 @@ interface MiniDrawDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-// Cached function to fetch mini draw data - prevents duplicate queries between generateMetadata and page component
 const getMiniDraw = createCachedQuery(async (id: string): Promise<IMiniDraw | null> => {
   try {
     await connectDB();
@@ -33,14 +32,13 @@ const getMiniDraw = createCachedQuery(async (id: string): Promise<IMiniDraw | nu
   }
 });
 
-// Function to fetch related mini draws (no need for connectDB - already connected in parent)
 async function getRelatedMiniDraws(currentMiniDrawId: string): Promise<IMiniDraw[]> {
   try {
     const relatedMiniDraws = await MiniDraw.find({
       _id: { $ne: new mongoose.Types.ObjectId(currentMiniDrawId) },
       status: "active",
     })
-      .select("_id name status totalEntries minimumEntries prize")
+      .select("_id name status totalEntries minimumEntries prize brandId")
       .sort({ createdAt: -1 })
       .limit(4)
       .lean();
@@ -124,14 +122,9 @@ export async function generateMetadata({ params }: MiniDrawDetailPageProps): Pro
 
 export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageProps) {
   const { id } = await params;
-
-  // Connect to DB once
   await connectDB();
 
-  // Start session fetch in parallel (non-blocking)
   const sessionPromise = getCachedSession();
-
-  // Fetch mini draw (uses cache if called by generateMetadata)
   const miniDraw = await getMiniDraw(id);
 
   if (!miniDraw) {
@@ -140,8 +133,9 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
 
   const relatedMiniDrawsPromise = getRelatedMiniDraws(id);
   const latestWinnerDocPromise = Winner.findOne({ drawId: miniDraw._id, drawType: "mini" })
+    .populate("userId", "firstName lastName")
     .sort({ cycle: -1, createdAt: -1 })
-    .lean<IWinner | null>();
+    .lean<IWinner & { userId: { firstName?: string; lastName?: string } } | null>();
 
   const [session, relatedMiniDraws, latestWinnerDoc] = await Promise.all([
     sessionPromise,
@@ -149,10 +143,8 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     latestWinnerDocPromise,
   ]);
 
-  // Get user membership data (only if authenticated)
   const { hasActiveMembership } = await getUserMembershipData(session?.user?.id);
 
-  // Get user's entry count for this specific mini draw
   const userEntryCount = session?.user?.id
     ? miniDraw.entries.find((entry) => entry.userId.toString() === session.user.id)?.totalEntries || 0
     : 0;
@@ -160,19 +152,19 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const minimumEntries = miniDraw.minimumEntries ?? 0;
   const totalEntries = miniDraw.totalEntries ?? 0;
   const entriesRemaining = Math.max(minimumEntries - totalEntries, 0);
-  const _capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
 
-  // Convert to JSON-serializable format
   const latestWinnerData = latestWinnerDoc
-    ? {
-        _id: (latestWinnerDoc._id as mongoose.Types.ObjectId).toString(),
-        userId: (latestWinnerDoc.userId as mongoose.Types.ObjectId).toString(),
-        entryNumber: latestWinnerDoc.entryNumber ?? 0,
-        selectedDate: latestWinnerDoc.selectedDate.toISOString(),
-        selectionMethod: latestWinnerDoc.selectionMethod,
-        imageUrl: latestWinnerDoc.imageUrl,
-        cycle: latestWinnerDoc.cycle,
-      }
+    ? (() => {
+        const uid = latestWinnerDoc.userId;
+        const userObj = typeof uid === "object" && uid !== null && "firstName" in uid ? (uid as { firstName?: string; lastName?: string }) : null;
+        return {
+          _id: (latestWinnerDoc._id as mongoose.Types.ObjectId).toString(),
+          winnerFirstName: userObj?.firstName ?? "",
+          winnerLastName: userObj?.lastName ?? "",
+          selectedDate: latestWinnerDoc.selectedDate.toISOString(),
+          imageUrl: latestWinnerDoc.imageUrl,
+        };
+      })()
     : undefined;
 
   const miniDrawData = {
@@ -185,8 +177,8 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     totalEntries,
     minimumEntries,
     entriesRemaining,
-    requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
-    hasActiveMembership, // Kept for UI/analytics purposes
+    requiresMembership: false,
+    hasActiveMembership,
     userEntryCount,
     prize: miniDraw.prize,
     latestWinner: latestWinnerData,
@@ -194,7 +186,6 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     updatedAt: miniDraw.updatedAt.toISOString(),
   };
 
-  // Serialize related mini draws for ProductCard
   const serializedRelatedMiniDraws = relatedMiniDraws.map((draw) => {
     const drawId = (draw._id as mongoose.Types.ObjectId).toString();
     const drawMinEntries = draw.minimumEntries ?? 0;
@@ -202,14 +193,11 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
     return {
       _id: drawId,
       name: draw.name,
-      status: draw.status,
+      status: draw.status as "active" | "completed" | "cancelled",
       brandId: draw.brandId,
       totalEntries: drawTotalEntries,
       minimumEntries: drawMinEntries,
       entriesRemaining: Math.max(drawMinEntries - drawTotalEntries, 0),
-      isActive: draw.status === "active",
-      requiresMembership: false, // ✅ AUTHENTICATION-ONLY: Mini draws available to all authenticated users
-      hasActiveMembership,
       prize: {
         name: draw.prize.name,
         value: draw.prize.value,
@@ -224,114 +212,76 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const isSoldOut = miniDrawData.entriesRemaining <= 0 && miniDrawData.status === "active";
   const brandMeta = getBrandMeta(miniDraw.brandId);
   const brandLabel = brandMeta?.name ?? "Mini Draw";
-  const brandBadgeClass = brandMeta
-    ? `bg-gradient-to-r ${brandMeta.gradient} ${brandMeta.textClass ?? "text-white"}`
-    : "bg-gradient-to-r from-gray-800 to-gray-900 text-white";
 
   return (
-    <div className="min-h-screen-svh bg-white">
-      {/* Track ViewContent event for Facebook Pixel */}
+    <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950 w-full overflow-x-hidden">
+      <ScrollToTopOnMount miniDrawId={miniDrawData._id} />
       <MiniDrawViewTracking miniDraw={miniDrawData} />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+
+      {/* Hero Banner */}
+      <DetailHeroBanner
+        prizeName={miniDrawData.prize.name}
+        drawName={miniDrawData.name}
+        prizeImage={miniDrawData.prize.images[0]}
+        brandLabel={brandLabel}
+        brandGradient={brandMeta?.gradient}
+        brandTextClass={brandMeta?.textClass}
+        isActive={isActive}
+        isSoldOut={isSoldOut}
+        isCompleted={isCompleted}
+        isCancelled={isCancelled}
+        totalEntries={totalEntries}
+        minimumEntries={minimumEntries}
+        entriesRemaining={entriesRemaining}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
           {/* Left Column - Images */}
-          <div className="space-y-4">
+          <div>
             <MiniDrawImageGallery images={miniDrawData.prize.images} prizeName={miniDrawData.prize.name} />
           </div>
 
-          {/* Right Column - Details */}
-          <div className="space-y-6">
-            {/* Status Badge and Share Button */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span
-                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1 shadow-sm ${brandBadgeClass}`}
-                >
-                  <Trophy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                  {brandLabel}
-                </span>
-                {isActive && (
-                  <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
-                    Active
-                  </span>
-                )}
-                {isSoldOut && (
-                  <span className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
-                    Entries Closed
-                  </span>
-                )}
-                {isCompleted && (
-                  <span className="bg-gradient-to-r from-gray-500 to-gray-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
-                    Completed
-                  </span>
-                )}
-                {isCancelled && (
-                  <span className="bg-gradient-to-r from-red-500 to-red-600 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-bold">
-                    Cancelled
-                  </span>
-                )}
-              </div>
-              <ShareButton name={miniDrawData.name} />
+          {/* Right Column - Details (sticky on desktop) */}
+          <div className="lg:sticky lg:top-28 lg:self-start flex flex-col gap-5">
+            {/* Purchase Entries — shown first on mobile via order */}
+            <div className="order-first lg:order-2">
+              <MiniDrawInteractions miniDraw={miniDrawData} />
             </div>
 
-            {/* Title */}
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2 sm:mb-3 font-['Poppins']">
-              {miniDrawData.name}
-            </h1>
-
-            {/* Entry Information */}
-            <div className="w-full max-w-md">
-              <div className="flex items-center text-xs sm:text-sm font-semibold text-gray-700">
-                <span>
-                  {entriesRemaining.toLocaleString()} entries remaining
-                </span>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 sm:mb-2">Description</h3>
+            {/* Description - collapsible on mobile, always open on desktop */}
+            <CollapsibleSection
+              title="About This Prize"
+              className="order-2 lg:order-1 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 p-4 sm:p-5 shadow-sm dark:shadow-lg"
+            >
               <div
-                className="text-sm sm:text-base text-gray-600 leading-relaxed prose prose-sm sm:prose-base max-w-none"
+                className="text-sm text-gray-600 dark:text-neutral-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 last:[&>p]:mb-0"
                 dangerouslySetInnerHTML={{ __html: miniDrawData.description }}
               />
-            </div>
+            </CollapsibleSection>
           </div>
         </div>
 
-        {/* Purchase Entries */}
-        <div className="mt-10">
-          <div className="bg-white ">
-            <MiniDrawInteractions miniDraw={miniDrawData} />
-          </div>
+        {/* Mini Draw Tabs - collapsible on mobile */}
+        <div className="mt-10 sm:mt-14">
+          <CollapsibleSection
+            title="Winners & Draw Rules"
+            hideDesktopTitle
+            className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm dark:shadow-lg p-4 lg:bg-transparent lg:dark:bg-transparent lg:border-0 lg:dark:border-0 lg:shadow-none lg:dark:shadow-none lg:p-0"
+          >
+            <MiniDrawTabs miniDraw={miniDrawData} />
+          </CollapsibleSection>
         </div>
-
-        {/* Mini Draw Tabs */}
-        <MiniDrawTabs miniDraw={miniDrawData} />
 
         {/* Related Mini Draws */}
         {serializedRelatedMiniDraws.length > 0 && (
-          <section className="mt-16">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-base sm:text-xl font-bold text-gray-900">You May Also Like</h2>
-              <Link href="/mini-draws" className="text-red-600 hover:text-red-700 font-medium flex items-center gap-1 text-sm sm:text-base">
-                <span className="hidden sm:inline">View All Mini Draws</span>
-                <span className="sm:hidden">View All</span>
-                <ArrowLeft className="w-4 h-4 rotate-180" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-              {serializedRelatedMiniDraws.map((relatedDraw) => (
-                <ProductCard key={relatedDraw._id} product={relatedDraw} viewMode="grid" />
-              ))}
-            </div>
-          </section>
+          <RelatedMiniDraws draws={serializedRelatedMiniDraws} />
         )}
-         {/* Membership Section */}
-      <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="py-8 sm:py-12 lg:pb-16 mb-16 " />
-      </div>
 
-     
+        {/* Membership Section */}
+        <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="py-8 sm:py-12 lg:pb-16 mb-16" />
+      </div>
     </div>
   );
 }

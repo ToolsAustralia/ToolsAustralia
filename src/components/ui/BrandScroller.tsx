@@ -1,54 +1,35 @@
 "use client";
-
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import AutoScroll from "embla-carousel-auto-scroll";
 import { brandLogos, BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
+import { useInViewportAnimation } from "@/hooks/useInViewportAnimation";
+import { addThrottledResize } from "@/utils/dom/listenerHelpers";
+import { cn } from "@/utils/cn";
 
 interface BrandScrollerProps {
-  speed?: number; // seconds for one full brand set pass (desktop default)
-  speedPxPerSec?: number; // optional: direct pixel velocity override
-  speedMobile?: number; // <640px
-  speedSm?: number; // 640–1023px
-  speedLg?: number; // ≥1024px
+  speed?: number;
+  speedPxPerSec?: number;
+  speedMobile?: number;
+  speedSm?: number;
+  speedLg?: number;
   pauseOnHover?: boolean;
   className?: string;
 }
 
-/**
- * Custom hook to get viewport width with proper SSR handling
- * Uses best practices to prevent hydration mismatches and ensure correct
- * breakpoint calculation on first render
- */
 function useViewportWidth() {
-  // Initialize with actual window width if available (client-side)
-  // This ensures we start with the correct value on client, preventing
-  // incorrect calculations during the hydration phase
   const [w, setW] = useState<number>(() => {
     if (typeof window === "undefined") return 1024;
     return window.innerWidth;
   });
-
-  // Use useLayoutEffect to update width synchronously before paint
-  // This ensures correct breakpoint calculation on first render without flash
   useLayoutEffect(() => {
-    // Update width immediately before browser paint to ensure correct calculations
-    // This fixes the issue where first load shows incorrect behavior on mobile
-    setW((prevW) => {
-      const actualWidth = window.innerWidth;
-      // Only update if different to avoid unnecessary re-renders
-      return actualWidth !== prevW ? actualWidth : prevW;
+    setW((prev) => {
+      const actual = window.innerWidth;
+      return actual !== prev ? actual : prev;
     });
-  }, []); // Empty deps - only run once on mount to ensure correct initial width
-
-  // Set up resize listener
-  useEffect(() => {
-    const onResize = () => setW(window.innerWidth);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
   }, []);
-
+  useEffect(() => addThrottledResize(() => setW(window.innerWidth)), []);
   return w;
 }
 
@@ -62,6 +43,8 @@ export default function BrandScroller({
   className = "",
 }: BrandScrollerProps) {
   const width = useViewportWidth();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInViewportAnimation(rootRef);
 
   const currentSpeedSec =
     width < 640 && speedMobile !== undefined
@@ -72,41 +55,67 @@ export default function BrandScroller({
       ? speedLg
       : speed;
 
-  // Pixel velocity for AutoScroll:
-  // Prefer explicit override; otherwise map duration to viewport width per second.
-  // This keeps speed changes intuitive and prevents "bullet train" behavior.
   const derivedPxPerSecRaw = Math.round(width / Math.max(1, currentSpeedSec));
-  // Clamp to keep motion reasonable across extreme values (allow very slow speeds)
   const derivedPxPerSec = Math.max(2, Math.min(80, derivedPxPerSecRaw));
   const pxPerSec = speedPxPerSec !== undefined ? speedPxPerSec : derivedPxPerSec;
 
-  // Plugin-driven smooth auto scroll (no manual RAF)
-  const plugins = [
-    AutoScroll({
-      speed: pxPerSec,
-      startDelay: 50,
-      stopOnInteraction: false,
-      stopOnMouseEnter: pauseOnHover,
-      stopOnFocusIn: pauseOnHover,
-    }),
-  ];
+  // Capture initial pxPerSec at first render so the plugin starts at the *correct* speed.
+  // Live updates still happen via the useEffect below; recreating the plugin would reinit Embla.
+  const initialPxPerSecRef = useRef<number | null>(null);
+  if (initialPxPerSecRef.current === null) {
+    initialPxPerSecRef.current = pxPerSec;
+  }
 
-  const [emblaRef] = useEmblaCarousel({ loop: true, align: "start", dragFree: true, skipSnaps: true }, plugins);
+  const options = useMemo(
+    () => ({ loop: true, align: "start" as const, dragFree: true, skipSnaps: true }),
+    []
+  );
+  const plugins = useMemo(
+    () => [
+      AutoScroll({
+        speed: initialPxPerSecRef.current!,
+        startDelay: 50,
+        stopOnInteraction: false,
+        stopOnMouseEnter: pauseOnHover,
+        stopOnFocusIn: pauseOnHover,
+      }),
+    ],
+    [pauseOnHover]
+  );
+
+  const [emblaRef, emblaApi] = useEmblaCarousel(options, plugins);
+
+  // Update plugin speed live without recreating the plugin (avoids reinit storm).
+  useEffect(() => {
+    if (!emblaApi) return;
+    const auto = emblaApi.plugins().autoScroll;
+    if (!auto) return;
+    const opts = (auto as unknown as { options?: { speed: number } }).options;
+    if (opts) opts.speed = pxPerSec;
+    (auto as unknown as { reset?: () => void }).reset?.();
+  }, [emblaApi, pxPerSec]);
+
+  // Pause/play when off/on screen.
+  useEffect(() => {
+    if (!emblaApi) return;
+    const auto = emblaApi.plugins().autoScroll;
+    if (!auto) return;
+    if (inView) (auto as unknown as { play?: () => void }).play?.();
+    else (auto as unknown as { stop?: () => void }).stop?.();
+  }, [emblaApi, inView]);
 
   return (
-    <div className={`w-full overflow-hidden ${className}`} ref={emblaRef}>
-      <div className="flex items-center gap-4 sm:gap-6 lg:gap-8">
-        {/* Leading gap so the wrap from the last item back to the first has space */}
-        <div className="w-1 sm:w-2 flex-shrink-0"></div>
-        {/* First set of logos */}
-        {brandLogos.map((brand) => (
-          <BrandItem key={`first-${brand.id}`} brand={brand} />
-        ))}
-
-        {/* Second set of logos for seamless loop with proper gap */}
-        {brandLogos.map((brand) => (
-          <BrandItem key={`second-${brand.id}`} brand={brand} />
-        ))}
+    <div ref={rootRef} className={cn("w-full overflow-hidden", className)} data-carousel="true">
+      <div ref={emblaRef} style={{ touchAction: "pan-y pinch-zoom" }}>
+        <div className="flex items-center gap-4 sm:gap-6 lg:gap-8">
+          <div className="w-1 sm:w-2 flex-shrink-0" />
+          {brandLogos.map((brand) => (
+            <BrandItem key={`first-${brand.id}`} brand={brand} />
+          ))}
+          {brandLogos.map((brand) => (
+            <BrandItem key={`second-${brand.id}`} brand={brand} />
+          ))}
+        </div>
       </div>
     </div>
   );

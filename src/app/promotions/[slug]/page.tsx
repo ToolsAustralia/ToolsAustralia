@@ -9,6 +9,7 @@ import PromoHero from "@/components/sections/promo/PromoHero";
 import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
+import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
 
 // Lazy load below-fold components for better performance
 const PromoPackages = dynamic(() => import("@/components/sections/promo/PromoPackages"), {
@@ -26,6 +27,11 @@ const GiveawayDetails = dynamic(() => import("@/components/sections/promo/Giveaw
 const PromoFAQs = dynamic(() => import("@/components/sections/promo/PromoFAQs"), {
   ssr: true, // Keep SSR for SEO
 });
+
+const PartnerBenefitsPromoSectionClient = dynamic(
+  () => import("@/components/sections/promo/PartnerBenefitsPromoSectionClient"),
+  { ssr: true }
+);
 
 const UnlockDiscounts = dynamic(() => import("@/components/sections/promo/UnlockDiscounts"), {
   ssr: true, // Keep SSR for SEO
@@ -47,8 +53,9 @@ import mongoose from "mongoose";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import { VariantAssignmentWrapper } from "@/components/ab-testing/VariantAssignmentWrapper";
 import { getServerVariantAssignment } from "@/utils/ab-testing/get-server-variant-assignment";
-import { getPromoImagePaths } from "@/utils/promo/promo-hero-images";
 import type { PromoImagePaths } from "@/utils/promo/promo-hero-types";
+import { resolveEvergreenHeroImages } from "@/utils/promo/landing-image-resolver";
+import { getLandingHeroImagePaths } from "@/config/promo-landing-slugs";
 
 interface PromotionsPageProps {
   params: Promise<{ slug: string }>;
@@ -65,20 +72,6 @@ export function generateStaticParams() {
 const getCachedPrize = createCachedQuery(async (slug: string) => {
   return getPrizeBySlug(slug);
 });
-
-/**
- * Helper function to determine hero image paths based on promo multiplier
- * Used for preloading the correct hero images (responsive)
- * Note: Draw date status and variant config overrides are handled client-side
- * 
- * @param multiplier - Active promo multiplier
- * @returns PromoImagePaths object with desktop and mobile paths
- */
-function getHeroImagePaths(multiplier?: number): PromoImagePaths {
-  return getPromoImagePaths({
-    multiplier: multiplier ?? null,
-  });
-}
 
 export async function generateMetadata({ params }: PromotionsPageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -139,9 +132,12 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
   const membershipPromo = effectivePromos.find((p) => p.type === "membership-packages") || null;
   const oneTimePromo = effectivePromos.find((p) => p.type === "one-time-packages") || null;
 
-  // Determine hero image paths for preloading (will be overridden by variant config if present)
-  // Note: Draw date status is determined client-side, so we only use multiplier here
-  const heroImagePaths = getHeroImagePaths(membershipPromo?.multiplier);
+  // Preload: brand folder heroes per prize slug (`landing/{brand}/…`); cash-prize uses all-prizes collage
+  const landingForPrize = getLandingHeroImagePaths(prize.slug);
+  const fallbackAllPrizes = resolveEvergreenHeroImages();
+  const heroImagePaths: PromoImagePaths = landingForPrize
+    ? { desktop: landingForPrize.desktop, mobile: landingForPrize.mobile }
+    : { desktop: fallbackAllPrizes.desktop, mobile: fallbackAllPrizes.mobile };
 
   // Get experiment ID for variant assignment
   const experimentId = activeExperiment?._id 
@@ -179,47 +175,54 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
         initialAnonymousId={serverAssignment?.anonymousId}
       >
         <PromoThemeInitializer slug={prize.slug} />
-        <div className="min-h-screen bg-white dark:bg-neutral-950 w-full overflow-hidden">
+        <div className="min-h-svh bg-white dark:bg-neutral-950 w-full overflow-hidden">
           <PromoBanner initialMembershipPromo={membershipPromo} initialOneTimePromo={oneTimePromo} />
 
-          <main className="w-full overflow-hidden ">
-            {/* Ensure hero + brands share the first mobile viewport for better context */}
-            <div className="flex flex-col  lg:min-h-0 w-full ">
-              <PromoHero initialPromo={membershipPromo} initialMajorDraw={majorDraw} />
-           
+          <main className="w-full overflow-hidden">
+            <div className="flex flex-col lg:min-h-0 w-full">
+              <PromoHero
+                initialPromo={membershipPromo}
+                initialMajorDraw={majorDraw}
+                prizeSlug={prize.slug}
+              />
             </div>
 
-            {/* Lazy load below-fold components */}
+            <PromoTrustBar initialMajorDraw={majorDraw} />
+
             <Suspense fallback={<div className="min-h-[400px]" />}>
               <PromoPackages />
             </Suspense>
 
-          <Suspense fallback={<div className="min-h-[600px]" />}>
-            <PrizeShowcase slug={prize.slug} />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[600px]" />}>
+              <PrizeShowcase slug={prize.slug} />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[400px]" />}>
-            <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <GiveawayDetails />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[200px]" />}>
-            <WinnerTestimoniesClientLazy />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[400px]" />}>
+              <LatestWinnerHero contentWrapperClassName="w-full px-4 sm:px-0 max-w-7xl mx-auto relative z-10" />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[300px]" />}>
-            <GiveawayDetails />
-          </Suspense>
+            <Suspense fallback={<div className="min-h-[200px]" />}>
+              <WinnerTestimoniesClientLazy />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[400px]" />}>
-            <PromoFAQs />
-          </Suspense>
+            <Suspense fallback={null}>
+              <PartnerBenefitsPromoSectionClient />
+            </Suspense>
 
-          <BrandsShowcase />
+            <Suspense fallback={<div className="min-h-[400px]" />}>
+              <PromoFAQs />
+            </Suspense>
 
-          <Suspense fallback={<div className="min-h-[300px]" />}>
-            <UnlockDiscounts />
-          </Suspense>
-        </main>
+            <BrandsShowcase />
+
+            <Suspense fallback={<div className="min-h-[300px]" />}>
+              <UnlockDiscounts />
+            </Suspense>
+          </main>
 
         <FloatingGetEntriesButton />
         <Suspense fallback={null}>

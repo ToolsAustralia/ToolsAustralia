@@ -59,7 +59,7 @@ const InvoicePreview: React.FC = () => {
     <div class="wrapper">
       <div class="card">
         <div class="header">
-          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia Logo" class="header-logo" />
+          <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia Logo" class="header-logo" />
           <h1>Invoice</h1>
           <p>Invoice #: PLACEHOLDER_INVOICE_NUMBER</p>
         </div>
@@ -179,10 +179,10 @@ const InvoicePreview: React.FC = () => {
     const entriesBox = event.entries_gained
       ? `
           <div class="entries-box">
-            <div class="entries-label">🎟️ Free Entries Earned</div>
+            <div class="entries-label">🎟️ FREE ENTRIES EARNED</div>
             <div class="entries-value">${event.entries_gained}</div>
             <div style="font-size: 13px; color: #991b1b; margin-top: 8px; opacity: 0.9;">
-              Entries have been added to your account
+              Free entries have been added to your account
             </div>
           </div>`
       : "";
@@ -206,7 +206,7 @@ const InvoicePreview: React.FC = () => {
       {/* Paid Invoice Preview (Single Item) */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - Single Item</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Paid Invoice - Single Item</h3>
           <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Paid Status</span>
         </div>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -222,7 +222,7 @@ const InvoicePreview: React.FC = () => {
       {/* Paid Invoice Preview (With Upsell) */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">Paid Invoice - With Upsell</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">Paid Invoice - With Upsell</h3>
           <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">
             Combined Items
           </span>

@@ -5,7 +5,7 @@
  */
 
 import sgMail from '@sendgrid/mail';
-import { EmailResult, EmailErrorCode, SendGridConfig } from './types';
+import { EmailResult, EmailErrorCode, EmailSender, SendGridConfig } from './types';
 import { isDevelopment } from '@/lib/environment';
 
 class SendGridClient {
@@ -25,8 +25,8 @@ class SendGridClient {
   }
 
   /**
-   * Initialize SendGrid client
-   * Must be called before sending emails
+   * Initialize SendGrid client.
+   * Must be called before sending emails.
    */
   public initialize(): void {
     if (this.initialized) {
@@ -41,7 +41,6 @@ class SendGridClient {
     }
 
     if (!this.config.apiKey) {
-      // Don't throw during build - just log a warning
       if (process.env.NODE_ENV === 'production' && !process.env.SENDGRID_API_KEY) {
         console.warn('⚠️ SENDGRID_API_KEY is not configured. Email sending will be disabled.');
       }
@@ -57,19 +56,21 @@ class SendGridClient {
   }
 
   /**
-   * Send email using SendGrid
-   * Includes retry logic and comprehensive error handling
+   * Send email using SendGrid.
+   * The caller must provide a `from` sender for every email.
    */
   public async sendEmail(params: {
-    to: string;
+    to: string | string[];
+    from: EmailSender;
     subject: string;
     templateId?: string;
     dynamicTemplateData?: Record<string, unknown>;
     html?: string;
     text?: string;
     replyTo?: string;
+    /** Optional SendGrid / SMTP headers (e.g. Message-ID for thread isolation) */
+    headers?: Record<string, string>;
   }): Promise<EmailResult> {
-    // Check if email is enabled
     if (!this.config.enabled) {
       return {
         success: false,
@@ -78,13 +79,30 @@ class SendGridClient {
       };
     }
 
-    // Ensure client is initialized
+    if (!this.config.apiKey?.trim()) {
+      return {
+        success: false,
+        error: 'SENDGRID_API_KEY is required but not configured',
+        errorCode: EmailErrorCode.CONFIGURATION_ERROR,
+      };
+    }
+
     if (!this.initialized) {
       this.initialize();
     }
 
-    // Validate required fields
-    if (!params.to || !params.subject) {
+    if (!params.from?.email?.trim() || !params.from?.name?.trim()) {
+      return {
+        success: false,
+        error: 'Missing required from (email, name)',
+        errorCode: EmailErrorCode.VALIDATION_ERROR,
+      };
+    }
+
+    if (
+      (!params.to || (Array.isArray(params.to) && params.to.length === 0)) ||
+      !params.subject
+    ) {
       return {
         success: false,
         error: 'Missing required email fields (to, subject)',
@@ -92,49 +110,41 @@ class SendGridClient {
       };
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(params.to)) {
-      return {
-        success: false,
-        error: 'Invalid email address format',
-        errorCode: EmailErrorCode.VALIDATION_ERROR,
-      };
+    const toAddresses = Array.isArray(params.to) ? params.to : [params.to];
+    for (const addr of toAddresses) {
+      if (!addr || !emailRegex.test(addr)) {
+        return {
+          success: false,
+          error: `Invalid email address format: ${addr || '(empty)'}`,
+          errorCode: EmailErrorCode.VALIDATION_ERROR,
+        };
+      }
     }
+    const toParam = toAddresses.length === 1 ? toAddresses[0]! : toAddresses;
 
-    // Prepare message - SendGrid requires either templateId OR content (not both)
     let msg: Parameters<typeof sgMail.send>[0];
 
     if (params.templateId) {
-      // Use dynamic template
       msg = {
-        to: params.to,
-        from: {
-          email: this.config.fromEmail,
-          name: this.config.fromName,
-        },
+        to: toParam,
+        from: { email: params.from.email, name: params.from.name },
         subject: params.subject,
         templateId: params.templateId,
         dynamicTemplateData: params.dynamicTemplateData,
         replyTo: params.replyTo,
+        ...(params.headers && Object.keys(params.headers).length > 0 ? { headers: params.headers } : {}),
       } as Parameters<typeof sgMail.send>[0];
     } else {
-      // Use HTML/text content - must have at least one content item
       const content: Array<{ type: string; value: string }> = [];
-      if (params.html) {
-        content.push({
-          type: 'text/html',
-          value: params.html,
-        });
-      }
+      // SendGrid requires: text/plain first, then text/html
       if (params.text) {
-        content.push({
-          type: 'text/plain',
-          value: params.text,
-        });
+        content.push({ type: 'text/plain', value: params.text });
+      }
+      if (params.html) {
+        content.push({ type: 'text/html', value: params.html });
       }
 
-      // Ensure we have at least one content item
       if (content.length === 0) {
         return {
           success: false,
@@ -144,35 +154,36 @@ class SendGridClient {
       }
 
       msg = {
-        to: params.to,
-        from: {
-          email: this.config.fromEmail,
-          name: this.config.fromName,
-        },
+        to: toParam,
+        from: { email: params.from.email, name: params.from.name },
         subject: params.subject,
-        content: content,
+        content,
         replyTo: params.replyTo,
+        ...(params.headers && Object.keys(params.headers).length > 0 ? { headers: params.headers } : {}),
       } as unknown as Parameters<typeof sgMail.send>[0];
     }
 
-    // Retry logic
     let lastError: Error | null = null;
+    let lastRawError: unknown = null;
     for (let attempt = 1; attempt <= this.config.retryAttempts; attempt++) {
       try {
         const [response] = await sgMail.send(msg);
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
+          const raw = response.headers['x-message-id'];
+          const messageId = Array.isArray(raw) ? raw[0] : (raw as string | undefined);
           return {
             success: true,
-            messageId: response.headers['x-message-id'] as string | undefined,
+            messageId,
           };
         } else {
           throw new Error(`SendGrid returned status ${response.statusCode}`);
         }
       } catch (error) {
+        lastRawError = error;
         lastError = error instanceof Error ? error : new Error(String(error));
+        this.logSendGridError(error);
 
-        // Don't retry on validation errors
         if (this.isValidationError(error)) {
           return {
             success: false,
@@ -181,9 +192,16 @@ class SendGridClient {
           };
         }
 
-        // Log retry attempt
+        if (this.isRateLimitError(error)) {
+          return {
+            success: false,
+            error: 'SendGrid rate limit exceeded. Please try again later.',
+            errorCode: EmailErrorCode.RATE_LIMIT_EXCEEDED,
+          };
+        }
+
         if (attempt < this.config.retryAttempts) {
-          const delay = this.config.retryDelayMs * Math.pow(2, attempt - 1); // Exponential backoff
+          const delay = this.config.retryDelayMs * Math.pow(2, attempt - 1);
           console.warn(
             `⚠️ SendGrid send attempt ${attempt} failed. Retrying in ${delay}ms...`,
             lastError.message
@@ -193,8 +211,8 @@ class SendGridClient {
       }
     }
 
-    // All retries failed
     console.error('❌ SendGrid email send failed after all retries:', lastError);
+    this.logSendGridError(lastRawError ?? lastError);
     return {
       success: false,
       error: lastError?.message || 'Failed to send email after retries',
@@ -202,9 +220,6 @@ class SendGridClient {
     };
   }
 
-  /**
-   * Check if error is a validation error (should not retry)
-   */
   private isValidationError(error: unknown): boolean {
     if (error && typeof error === 'object' && 'response' in error) {
       const response = (error as { response: { body?: { errors?: unknown[] } } }).response;
@@ -216,34 +231,42 @@ class SendGridClient {
     return false;
   }
 
+  private isRateLimitError(error: unknown): boolean {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const response = (error as { response: { statusCode?: number } }).response;
+      return response?.statusCode === 429;
+    }
+    return false;
+  }
+
   /**
-   * Sleep utility for retry delays
+   * Log full SendGrid error details for debugging (400 Bad Request, etc.)
    */
+  private logSendGridError(error: unknown): void {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const res = (error as { response?: { body?: unknown; statusCode?: number } }).response;
+      if (res?.body) {
+        console.error('SendGrid error details:', JSON.stringify(res.body, null, 2));
+      }
+    }
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Load configuration from environment variables
-   */
   private loadConfig(): SendGridConfig {
     return {
       apiKey: process.env.SENDGRID_API_KEY || '',
-      fromEmail: process.env.SENDGRID_FROM_EMAIL || 'noreply@toolsaustralia.com.au',
-      fromName: process.env.SENDGRID_FROM_NAME || 'Tools Australia',
-      enabled: process.env.EMAIL_ENABLED !== 'false', // Default to true
+      enabled: process.env.EMAIL_ENABLED !== 'false',
       retryAttempts: parseInt(process.env.EMAIL_RETRY_ATTEMPTS || '3', 10),
       retryDelayMs: parseInt(process.env.EMAIL_RETRY_DELAY_MS || '1000', 10),
     };
   }
 
-  /**
-   * Get current configuration (for debugging)
-   */
   public getConfig(): Readonly<SendGridConfig> {
     return { ...this.config };
   }
 }
 
 export default SendGridClient;
-

@@ -3,14 +3,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import { cn } from "@/utils/cn";
 
 // Partner brands data with equal representation
 const partnerBrands = [
   {
     id: "milwaukee",
     name: "Milwaukee",
-    logo: "/images/brands/milwaukee.png",
-    productImage: "/images/brands/toolset/milwaukeetools.png",
+    logo: "/images/brands/milwaukee.webp",
+    productImage: "/images/brands/toolset/milwaukeetools.webp",
     description: "Professional-grade power tools and accessories",
     productCount: "View All Products",
     color: "bg-red-600",
@@ -21,8 +22,8 @@ const partnerBrands = [
   {
     id: "dewalt",
     name: "DeWalt",
-    logo: "/images/brands/dewalt-black.png",
-    productImage: "/images/brands/toolset/dewalttools.png",
+    logo: "/images/brands/dewalt-black.webp",
+    productImage: "/images/brands/toolset/dewalttools.webp",
     description: "Heavy-duty construction and woodworking tools",
     productCount: "View All Products",
     color: "bg-yellow-600",
@@ -33,7 +34,7 @@ const partnerBrands = [
   {
     id: "makita",
     name: "Makita",
-    logo: "/images/brands/Makita-red.png",
+    logo: "/images/brands/Makita-red.webp",
     productImage: "/images/brands/toolset/makitatools.jpg",
     description: "Innovative cordless and corded power tools",
     productCount: "View All Products",
@@ -45,7 +46,7 @@ const partnerBrands = [
   {
     id: "kincrome",
     name: "Kincrome",
-    logo: "/images/brands/kincrome.png",
+    logo: "/images/brands/kincrome.webp",
     productImage: "/images/brands/toolset/kincrometools.jpg",
     description: "Premium hand tools and tool storage solutions",
     productCount: "View All Products",
@@ -57,7 +58,7 @@ const partnerBrands = [
   {
     id: "sidchrome",
     name: "Sidchrome",
-    logo: "/images/brands/sidchrome.png",
+    logo: "/images/brands/sidchrome.webp",
     productImage: "/images/brands/toolset/sidchrometools.jpg",
     description: "Professional automotive and industrial tools",
     productCount: "View All Products",
@@ -69,7 +70,7 @@ const partnerBrands = [
   {
     id: "chicago-pneumatic",
     name: "Chicago Pneumatic",
-    logo: "/images/brands/chicagoPneumatic.png",
+    logo: "/images/brands/chicagoPneumatic.webp",
     productImage: "/images/brands/toolset/chicagopneumatictools.jpg",
     description: "Professional pneumatic tools and compressors",
     productCount: "View All Products",
@@ -81,7 +82,7 @@ const partnerBrands = [
   {
     id: "gearwrench",
     name: "GearWrench",
-    logo: "/images/brands/gearWrench.png",
+    logo: "/images/brands/gearWrench.webp",
     productImage: "/images/brands/toolset/gearWrenchtools.jpg",
     description: "Professional hand tools and tool sets",
     productCount: "View All Products",
@@ -93,7 +94,7 @@ const partnerBrands = [
   {
     id: "ingersoll-rand",
     name: "Ingersoll Rand",
-    logo: "/images/brands/Ingersoll-Rand.png",
+    logo: "/images/brands/Ingersoll-Rand.webp",
     productImage: "/images/brands/toolset/ingersollRandtools.jpg",
     description: "Industrial air compressors and tools",
     productCount: "View All Products",
@@ -105,7 +106,7 @@ const partnerBrands = [
   {
     id: "knipex",
     name: "Knipex",
-    logo: "/images/brands/knipex.png",
+    logo: "/images/brands/knipex.webp",
     productImage: "/images/brands/toolset/knipextools.jpg",
     description: "Premium pliers and cutting tools",
     productCount: "View All Products",
@@ -117,7 +118,7 @@ const partnerBrands = [
   {
     id: "koken",
     name: "Koken",
-    logo: "/images/brands/koken.png",
+    logo: "/images/brands/koken.webp",
     productImage: "/images/brands/toolset/kokentools.jpg",
     description: "Precision measuring and inspection tools",
     productCount: "View All Products",
@@ -130,7 +131,7 @@ const partnerBrands = [
     id: "mitutoyo",
     name: "Mitutoyo",
     logo: "/images/brands/mitutoyo.webp",
-    productImage: "/images/brands/toolset/mitutoyotools.png",
+    productImage: "/images/brands/toolset/mitutoyotools.webp",
     description: "Precision measuring instruments and tools",
     productCount: "View All Products",
     color: "bg-orange-600",
@@ -141,7 +142,7 @@ const partnerBrands = [
   {
     id: "stahlwille",
     name: "Stahlwille",
-    logo: "/images/brands/stahlwille.png",
+    logo: "/images/brands/stahlwille.webp",
     productImage: "/images/brands/toolset/stahlwilletools.jpg",
     description: "Professional wrenches and hand tools",
     productCount: "View All Products",
@@ -153,7 +154,7 @@ const partnerBrands = [
   {
     id: "warren-brown",
     name: "Warren & Brown",
-    logo: "/images/brands/warrenBrown.png",
+    logo: "/images/brands/warrenBrown.webp",
     productImage: "/images/brands/toolset/warrenBrowntools.jpg",
     description: "Professional torque wrenches and tools",
     productCount: "View All Products",
@@ -247,14 +248,14 @@ export default function ProductCategories({
         <div className="text-center mb-8 sm:mb-10 lg:mb-12">
           <h2
             className={`text-[20px] sm:text-[24px] lg:text-[48px] font-bold font-['Poppins'] mb-2 sm:mb-3 lg:mb-4 leading-tight ${
-              showBackground ? "text-white drop-shadow-lg" : "text-gray-900"
+              showBackground ? "text-white drop-shadow-lg" : "text-gray-900 dark:text-white"
             }`}
           >
             {title}
           </h2>
           <p
             className={`text-[14px] sm:text-[16px] lg:text-[18px] max-w-3xl mx-auto ${
-              showBackground ? "text-slate-200" : "text-gray-600"
+              showBackground ? "text-slate-200" : "text-gray-600 dark:text-neutral-400"
             }`}
           >
             {description}
@@ -265,7 +266,7 @@ export default function ProductCategories({
         <div className="lg:hidden brand-scroll-container">
           <div
             ref={scrollContainerRef}
-            className={`flex gap-4 w-max ${isPaused ? "" : "animate-scroll-right-to-left"}`}
+            className={cn("flex gap-4 w-max", isPaused ? "" : "animate-scroll-right-to-left")}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onTouchStart={handleTouchStart}
@@ -315,7 +316,7 @@ export default function ProductCategories({
                       {/* Metallic brand badge */}
                       <div className="relative inline-block">
                         <div
-                          className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-[10px] sm:text-[12px] font-semibold border-2 border-white/20`}
+                          className={cn("bg-gradient-to-br", brand.metallicGradient, "text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-2xs sm:text-[12px] font-semibold border-2 border-white/20")}
                         >
                           <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
                           <span className="relative z-10">{brand.productCount}</span>
@@ -371,7 +372,7 @@ export default function ProductCategories({
                     {/* Metallic brand badge */}
                     <div className="relative inline-block">
                       <div
-                        className={`bg-gradient-to-br ${brand.metallicGradient} text-white px-3 py-1 rounded-full text-[12px] font-semibold border-2 border-white/20`}
+                        className={cn("bg-gradient-to-br", brand.metallicGradient, "text-white px-3 py-1 rounded-full text-[12px] font-semibold border-2 border-white/20")}
                       >
                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent rounded-full"></div>
                         <span className="relative z-10">{brand.productCount}</span>

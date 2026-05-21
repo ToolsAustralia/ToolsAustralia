@@ -15,7 +15,11 @@ import { getPackageById } from "@/data/membershipPackages";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { REFERRAL_CONSTANTS } from "@/lib/referral";
 import type { UserFilters, AdminUserDetail } from "@/types/admin";
-import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
+import {
+  getActiveSubscriptionFilter,
+  getEverPaidUserFilter,
+  SUBSCRIBED_SUBSCRIPTION_STATUSES,
+} from "@/utils/admin/userFilterBuilder";
 
 /**
  * Calculate engagement score based on user activity
@@ -187,24 +191,33 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
   const subscriptionHistory = paymentEvents
     .filter((event) => event.packageType === "membership")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
+      const billingReason =
+        typeof event.data?.billingReason === "string" ? event.data.billingReason : undefined;
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         status: event.eventType,
+        billingReason,
       };
     });
 
   const oneTimePackageHistory = paymentEvents
     .filter((event) => event.packageType === "one-time")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -223,11 +236,14 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
   const miniDrawHistory = paymentEvents
     .filter((event) => event.packageType === "mini-draw")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMiniPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMiniPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -282,11 +298,19 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
     mobile: user.mobile,
     state: user.state,
     profession: user.profession,
+    birthdate: (() => {
+      if (!user.birthdate) return undefined;
+      const d =
+        user.birthdate instanceof Date ? user.birthdate : new Date(user.birthdate as string | number);
+      if (Number.isNaN(d.getTime())) return undefined;
+      return d.toISOString().split("T")[0];
+    })(),
     role: user.role,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,
     isMobileVerified: user.isMobileVerified,
     profileSetupCompleted: user.profileSetupCompleted,
+    acceptsPromotionalEmail: user.acceptsPromotionalEmail !== false,
     createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
     updatedAt: user.updatedAt instanceof Date ? user.updatedAt.toISOString() : user.updatedAt,
     lastLogin: user.lastLogin instanceof Date ? user.lastLogin.toISOString() : user.lastLogin,
@@ -381,6 +405,7 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
       packageName: sub.packageName ?? undefined,
       price: sub.price,
       status: sub.status,
+      billingReason: sub.billingReason,
     })),
     oneTimePackageHistory: oneTimePackageHistory.map((pkg) => ({
       timestamp: pkg.timestamp instanceof Date ? pkg.timestamp.toISOString() : pkg.timestamp,
@@ -422,10 +447,14 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
       totalAmount: order.totalAmount,
       status: order.status,
     })),
-    paymentEvents: paymentEvents.slice(0, 50).map((event) => ({
+    paymentEventsTotal: paymentEvents.length,
+    paymentEvents: paymentEvents.slice(0, 25).map((event) => ({
+      _id: event._id,
       eventType: event.eventType,
       timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
       packageType: event.packageType,
+      packageId: event.packageId != null ? String(event.packageId) : undefined,
+      packageName: typeof event.packageName === "string" ? event.packageName : undefined,
       data: event.data,
     })),
     referral: referralSummary,
@@ -501,7 +530,7 @@ export async function getUsers(filters: UserFilters) {
         // We DON'T filter by isActive because:
         //   - past_due users may have isActive = false (payment issue, not cancellation)
         //   - The key indicator of "will renew" is: autoRenew !== false + (endDate not set / null / in future) + has packageId + has accumulated entries
-        autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+        autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
         autoRenewFilter["subscription.autoRenew"] = { $ne: false };
         autoRenewFilter["subscription.packageId"] = { $exists: true, $ne: null };
         autoRenewFilter["subscription.lastMonthAccumulatedEntries"] = { $gt: 0 };
@@ -512,7 +541,7 @@ export async function getUsers(filters: UserFilters) {
       // - Status is "active" OR "past_due" (not cancelled status)
       // - autoRenew is false (cancelled at period end)
       // - Has endDate set (period end when access ends)
-      autoRenewFilter["subscription.status"] = { $in: ["active", "past_due"] };
+      autoRenewFilter["subscription.status"] = { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] };
       autoRenewFilter["subscription.autoRenew"] = false;
       autoRenewFilter["subscription.endDate"] = { $exists: true, $ne: null };
     }

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -21,7 +22,17 @@ import {
   TrendingUp,
   FlaskConical,
   Bug,
+  ScrollText,
+  ChevronDown,
+  ChevronRight,
+  LayoutDashboard,
+  LineChart,
+  Megaphone,
+  ClipboardList,
+  AlertCircle,
 } from "lucide-react";
+
+const ADMIN_CIRCULAR_LOGO = "/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 
 interface AdminSidebarProps {
   selectedTab: string;
@@ -36,119 +47,78 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
-const adminTabs = [
+type AdminTab = {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+const adminTabGroups: Array<{
+  id: string;
+  label: string;
+  groupIcon: React.ComponentType<{ className?: string }>;
+  tabs: AdminTab[];
+}> = [
   {
-    id: "overview",
-    label: "Overview",
-    icon: BarChart3,
+    id: "core",
+    label: "Core",
+    groupIcon: LayoutDashboard,
+    tabs: [
+      { id: "overview", label: "Overview", icon: BarChart3 },
+      { id: "users", label: "Users", icon: Users },
+      { id: "affiliates", label: "Affiliates", icon: UserCheck },
+    ],
   },
   {
-    id: "ab-testing",
-    label: "A/B Testing",
-    icon: FlaskConical,
-  },
-  {
-    id: "facebook-ads",
-    label: "Facebook Ads",
-    icon: TrendingUp,
-  },
-  {
-    id: "promo-analytics",
-    label: "Page Analytics",
-    icon: BarChart3,
-  },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "analytics",
-  //   label: "Analytics",
-  //   icon: TrendingUp,
-  // },
-  {
-    id: "users",
-    label: "Users",
-    icon: Users,
-  },
-  {
-    id: "mini-draws",
-    label: "Mini Draws",
-    icon: Trophy,
-  },
-  {
-    id: "major-draw",
-    label: "Current Draw",
-    icon: Gift,
-  },
-  {
-    id: "draw-results",
-    label: "Draw Results",
-    icon: Trophy,
-  },
-  {
-    id: "upcoming-draws",
-    label: "Upcoming Draws",
-    icon: Activity,
-  },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "products",
-  //   label: "Products",
-  //   icon: Package,
-  // },
-  // {
-  //   id: "orders",
-  //   label: "Orders",
-  //   icon: ShoppingCart,
-  // },
-  // {
-  //   id: "content",
-  //   label: "Content",
-  //   icon: FileText,
-  // },
-  // {
-  //   id: "communications",
-  //   label: "Communications",
-  //   icon: MessageSquare,
-  // },
-  {
-    id: "submissions",
-    label: "Submissions",
-    icon: FileTextIcon,
+    id: "analytics",
+    label: "Analytics",
+    groupIcon: LineChart,
+    tabs: [
+      { id: "facebook-ads", label: "Facebook Ads", icon: TrendingUp },
+      { id: "tiktok-ads", label: "TikTok Ads", icon: TrendingUp },
+      { id: "snapchat-ads", label: "Snapchat Ads", icon: TrendingUp },
+      { id: "promo-analytics", label: "Page Analytics", icon: BarChart3 },
+      { id: "cancellation-flow", label: "Cancellation Flow", icon: BarChart3 },
+      { id: "ab-testing", label: "A/B Testing", icon: FlaskConical },
+    ],
   },
   {
     id: "promos",
     label: "Promos",
-    icon: Zap,
+    groupIcon: Megaphone,
+    tabs: [{ id: "promos", label: "Promos", icon: Zap }],
   },
   {
-    id: "affiliates",
-    label: "Affiliates",
-    icon: UserCheck,
+    id: "draws",
+    label: "Draws",
+    groupIcon: Trophy,
+    tabs: [
+      { id: "major-draw", label: "Major Draw", icon: Gift },
+      { id: "mini-draws", label: "Mini Draws", icon: Trophy },
+      { id: "draw-results", label: "Draw Results", icon: Trophy },
+      { id: "upcoming-draws", label: "Upcoming Draws", icon: Activity },
+    ],
   },
   {
-    id: "error-reports",
-    label: "Error Reports",
-    icon: Bug,
+    id: "operations",
+    label: "Operations",
+    groupIcon: ClipboardList,
+    tabs: [
+      { id: "submissions", label: "Submissions", icon: FileTextIcon },
+      { id: "error-reports", label: "Error Reports", icon: Bug },
+      { id: "activity-log", label: "Activity Log", icon: ScrollText },
+      { id: "settings", label: "Settings", icon: Settings },
+    ],
   },
-  // Temporarily hidden - no content yet
-  // {
-  //   id: "system",
-  //   label: "System",
-  //   icon: Cpu,
-  // },
-  // {
-  //   id: "database",
-  //   label: "Database",
-  //   icon: Database,
-  // },
-  // {
-  //   id: "notifications",
-  //   label: "Notifications",
-  //   icon: Bell,
-  // },
   {
-    id: "settings",
-    label: "Settings",
-    icon: Settings,
+    id: "billing",
+    label: "Billing",
+    groupIcon: AlertCircle,
+    tabs: [
+      { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle },
+      { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText },
+      { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity },
+    ],
   },
 ];
 
@@ -162,6 +132,77 @@ export default function AdminSidebar({
   const router = useRouter();
   const pathname = usePathname();
   const [unviewedCount, setUnviewedCount] = useState(0);
+  const [fullCapacityCount, setFullCapacityCount] = useState(0);
+  const navScrollRef = useRef<HTMLDivElement>(null);
+  const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const activeTabId =
+    pathname === "/admin" || pathname === "/admin/"
+      ? "overview"
+      : pathname.replace("/admin/", "").split("?")[0].split("/")[0];
+  const activeGroupId = adminTabGroups.find((g) => g.tabs.some((t) => t.id === activeTabId))?.id ?? "core";
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set([activeGroupId]);
+    try {
+      const saved = sessionStorage.getItem("admin-sidebar-expanded");
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        return new Set(parsed.length > 0 ? parsed : [activeGroupId]);
+      }
+    } catch {
+      /* ignore */
+    }
+    return new Set([activeGroupId]);
+  });
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.has(activeGroupId)) next.add(activeGroupId);
+      return next;
+    });
+  }, [activeGroupId]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      try {
+        sessionStorage.setItem("admin-sidebar-expanded", JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const scrollContainer = navScrollRef.current;
+    if (!scrollContainer) return;
+
+    const savedScrollTop = sessionStorage.getItem("admin-sidebar-scroll-top");
+    if (savedScrollTop) {
+      scrollContainer.scrollTop = Number(savedScrollTop);
+    }
+
+    const handleScroll = () => {
+      sessionStorage.setItem("admin-sidebar-scroll-top", String(scrollContainer.scrollTop));
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll);
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const tabId =
+      pathname === "/admin" || pathname === "/admin/"
+        ? "overview"
+        : pathname.replace("/admin/", "").split("?")[0].split("/")[0];
+    const activeTabButton = tabButtonRefs.current[tabId];
+    activeTabButton?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [pathname]);
 
   useEffect(() => {
     const fetchUnviewed = async () => {
@@ -177,13 +218,34 @@ export default function AdminSidebar({
         // Ignore errors
       }
     };
+    const fetchFullCapacity = async () => {
+      try {
+        const res = await fetch("/api/admin/mini-draw/full-capacity-count");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) {
+            setFullCapacityCount(data.data.count ?? 0);
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+
     fetchUnviewed();
-    const interval = setInterval(fetchUnviewed, 60000); // Refresh every minute
+    fetchFullCapacity();
+    const interval = setInterval(() => {
+      fetchUnviewed();
+      fetchFullCapacity();
+    }, 60000); // Refresh every minute
     const onSubmissionsUpdated = () => fetchUnviewed();
+    const onMiniDrawsUpdated = () => fetchFullCapacity();
     window.addEventListener("admin-submissions-updated", onSubmissionsUpdated);
+    window.addEventListener("admin-mini-draws-updated", onMiniDrawsUpdated);
     return () => {
       clearInterval(interval);
       window.removeEventListener("admin-submissions-updated", onSubmissionsUpdated);
+      window.removeEventListener("admin-mini-draws-updated", onMiniDrawsUpdated);
     };
   }, []);
 
@@ -214,17 +276,17 @@ export default function AdminSidebar({
   };
 
   return (
-    <div className="w-full h-full bg-white border-r-2 border-red-100 flex flex-col shadow-lg">
+    <div className="w-full h-full bg-white dark:bg-neutral-900 border-r-2 border-red-100 dark:border-red-900/40 flex flex-col shadow-lg">
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-gray-200">
+      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-800">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-r from-red-600 to-red-400 rounded-xl flex items-center justify-center">
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
-              <p className="text-sm text-gray-600">Tools Australia</p>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Panel</h1>
+              <p className="text-sm text-gray-600 dark:text-neutral-400">Tools Australia</p>
             </div>
           </div>
 
@@ -232,7 +294,7 @@ export default function AdminSidebar({
           {isMobile && onClose && (
             <button
               onClick={onClose}
-              className="lg:hidden w-10 h-10 text-gray-500 hover:text-white hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 rounded-full transition-all duration-200 flex items-center justify-center"
+              className="lg:hidden w-10 h-10 text-gray-500 dark:text-neutral-400 hover:text-white hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 rounded-full transition-all duration-200 flex items-center justify-center"
               aria-label="Close sidebar"
             >
               <X className="w-5 h-5" />
@@ -240,76 +302,159 @@ export default function AdminSidebar({
           )}
         </div>
 
-        {/* Quick Actions - Side by side layout */}
-        <div className="flex justify-between gap-2">
-          <button
-            onClick={onNavigateToSite}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
-          >
-            <Home className="w-4 h-4" />
-            View Site
-          </button>
-          <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200">
-            <Activity className="w-4 h-4" />
-            Live Activity
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onNavigateToSite}
+          className="group w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-neutral-200 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50/80 dark:bg-neutral-800/80 hover:border-red-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white transition-all duration-200"
+        >
+          <Home className="w-3.5 h-3.5 shrink-0 text-red-600 group-hover:text-white transition-colors" />
+          <span className="group-hover:text-white">View Site</span>
+        </button>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto">
-        <nav className="p-4 space-y-1">
-          {adminTabs.map((tab) => {
-            const Icon = tab.icon;
-            // Check if this tab is active based on current pathname
-            const isActive =
-              (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
-              (tab.id !== "overview" && pathname === `/admin/${tab.id}`);
-
+      <div ref={navScrollRef} className="flex-1 overflow-y-auto admin-scrollbar">
+        <nav className="px-2 py-3 sm:px-3 space-y-4">
+          {adminTabGroups.map((group) => {
+            const isExpanded = expandedGroups.has(group.id);
+            const GroupIcon = group.groupIcon;
+            const operationsNeedsAttention = group.id === "operations" && unviewedCount > 0;
+            const drawsNeedsAttention = group.id === "draws" && fullCapacityCount > 0;
             return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 text-left rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white shadow-lg"
-                    : "text-gray-700 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white"
-                }`}
-              >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? "text-white" : "text-gray-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className={`font-medium ${isActive ? "text-white" : "text-gray-900"}`}>{tab.label}</div>
-                </div>
-                {tab.id === "submissions" && unviewedCount > 0 && (
-                  <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
-                    {unviewedCount > 99 ? "99+" : unviewedCount}
+              <div key={group.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  aria-expanded={isExpanded}
+                  title={
+                    operationsNeedsAttention
+                      ? `${unviewedCount} unviewed submission${unviewedCount === 1 ? "" : "s"}`
+                      : drawsNeedsAttention
+                        ? `${fullCapacityCount} mini draw${fullCapacityCount === 1 ? "" : "s"} at capacity — select winner`
+                        : undefined
+                  }
+                  aria-label={
+                    operationsNeedsAttention
+                      ? `Operations, ${unviewedCount} unviewed submission${unviewedCount === 1 ? "" : "s"}`
+                      : drawsNeedsAttention
+                        ? `Draws, ${fullCapacityCount} mini draw${fullCapacityCount === 1 ? "" : "s"} ready to complete`
+                        : `${group.label} section`
+                  }
+                  className="group w-full flex items-center justify-between gap-2 py-2 pl-1 pr-1 text-left rounded-md text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-red-50/70 dark:hover:bg-neutral-800 transition-colors"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <GroupIcon className="w-4 h-4 shrink-0 text-red-600" aria-hidden />
+                    <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-neutral-500 group-hover:text-gray-800 dark:text-neutral-100 dark:hover:text-neutral-100 dark:group-hover:text-white truncate">
+                      {group.label}
+                    </span>
                   </span>
-                )}
-              </button>
-            );
+                  <span className="flex items-center gap-1 shrink-0">
+                    {operationsNeedsAttention && (
+                      <AlertCircle
+                        className="w-4 h-4 text-red-600"
+                        aria-hidden
+                        strokeWidth={2.5}
+                      />
+                    )}
+                    {drawsNeedsAttention && (
+                      <AlertCircle
+                        className="w-4 h-4 text-amber-500"
+                        aria-hidden
+                        strokeWidth={2.5}
+                      />
+                    )}
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
+                    )}
+                  </span>
+                </button>
+                {isExpanded && (
+                  <div className="ml-1.5 pl-2.5 border-l border-red-100 dark:border-red-900/50 space-y-0.5">
+                    {group.tabs.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive =
+                        (tab.id === "overview" && (pathname === "/admin" || pathname === "/admin/")) ||
+                        (tab.id !== "overview" && (pathname === `/admin/${tab.id}` || pathname.startsWith(`/admin/${tab.id}?`)));
+
+                      return (
+                    <button
+                      key={tab.id}
+                      ref={(element) => {
+                        tabButtonRefs.current[tab.id] = element;
+                      }}
+                      onClick={() => handleTabChange(tab.id)}
+                      className={`group w-full flex items-center gap-2 px-2 py-2 text-left text-sm rounded-lg transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-red-600 to-red-400 text-white shadow-md"
+                          : "text-gray-700 dark:text-neutral-300 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                      }`}
+                    >
+                      <Icon
+                        className={`w-4 h-4 flex-shrink-0 ${
+                          isActive ? "text-white" : "text-gray-500 dark:text-neutral-400 group-hover:text-white"
+                        }`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={`font-medium leading-snug ${
+                            isActive ? "text-white" : "text-gray-900 dark:text-white group-hover:text-white"
+                          }`}
+                        >
+                          {tab.label}
+                        </div>
+                      </div>
+                      {tab.id === "submissions" && unviewedCount > 0 && (
+                        <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+                          {unviewedCount > 99 ? "99+" : unviewedCount}
+                        </span>
+                      )}
+                      {tab.id === "mini-draws" && fullCapacityCount > 0 && (
+                        <span
+                          className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold"
+                          title={`${fullCapacityCount} mini draw(s) at 100% - select winner`}
+                        >
+                          {fullCapacityCount > 99 ? "99+" : fullCapacityCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </div>
+          );
           })}
         </nav>
       </div>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-[#ee0000] to-[#ff4444] rounded-full flex items-center justify-center text-white font-bold">
-            {user.name.charAt(0).toUpperCase()}
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-red-100 dark:ring-red-900/50 shadow-sm">
+            <Image
+              src={ADMIN_CIRCULAR_LOGO}
+              alt="Tools Australia"
+              width={40}
+              height={40}
+              className="h-full w-full object-cover"
+              sizes="40px"
+            />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 truncate">{user.name}</div>
+          <div className="flex-1 min-w-0 text-gray-900 dark:text-neutral-100">
+            <div className="font-medium truncate">{user.name}</div>
 
             <div className="flex items-center gap-1 mt-1">
-              <Crown className="w-3 h-3 text-yellow-500" />
-              <span className="text-xs font-medium text-gray-600 capitalize">{user.role}</span>
+              <Crown className="w-3 h-3 text-yellow-500 shrink-0" />
+              <span className="text-xs font-medium text-gray-600 dark:text-neutral-400 capitalize">{user.role}</span>
             </div>
           </div>
         </div>
 
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700 hover:text-white rounded-lg transition-all duration-200"
         >
           <LogOut className="w-4 h-4" />
           Sign Out

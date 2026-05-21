@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import PromoBadge from "@/components/ui/PromoBadge";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 
 /**
  * FloatingPromoBanner Component
@@ -57,8 +58,8 @@ const FloatingPromoBanner: React.FC = () => {
   // Check if we're on a competition terms page
   const isCompetitionTermsPage = pathname === "/competition-term-majordraw";
 
-  // On my-account page: hide at top and bottom, only show when user has scrolled
-  const isMyAccountPage = pathname === "/my-account";
+  // On my-account: hide entirely (dashboard has its own layout and bottom nav)
+  const isMyAccountPage = pathname?.startsWith("/my-account");
 
   // Listen for tab changes from MembershipSection
   useEffect(() => {
@@ -140,6 +141,7 @@ const FloatingPromoBanner: React.FC = () => {
   // Don't render at all if:
   // - On 404 page
   // - Sidebar is open
+  // - On my-account (dashboard has its own layout and bottom nav - avoids conflict)
   // - On promotions page (landing has its own banner and CTA)
   // - On shop page (hide banner on all shop pages)
   // - On admin page (hide banner on all admin pages)
@@ -153,6 +155,7 @@ const FloatingPromoBanner: React.FC = () => {
   if (
     pathname === "/not-found" ||
     isAnySidebarOpen ||
+    isMyAccountPage ||
     isPromotionsPage ||
     isShopPage ||
     isAdminPage ||
@@ -196,6 +199,7 @@ const FloatingPromoBanner: React.FC = () => {
           aria-label="Scroll to membership and packages"
           onClick={handleBannerClick}
           onKeyDown={handleBannerKeyDown}
+          data-floating-widget="true"
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
@@ -210,7 +214,7 @@ const FloatingPromoBanner: React.FC = () => {
             {/* Centered badge only - no text */}
             <div className="flex items-center justify-center">
               <PromoBadge
-                multiplier={activeMultiplier as 2 | 3 | 5 | 10}
+                multiplier={activeMultiplier as PromoMultiplier}
                 size="small"
                 customText="ENTRY BOOST ENDING SOON"
               />

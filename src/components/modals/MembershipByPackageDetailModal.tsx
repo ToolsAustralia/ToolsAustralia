@@ -7,6 +7,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { useAdminUsers } from "@/hooks/queries/useAdminQueries";
 import type { UserFilters } from "@/types/admin";
 import { format } from "date-fns";
+import { formatDisplayName } from "@/utils/display-name";
 
 type StatusFilter = "active" | "cancelled" | "past_due";
 
@@ -104,7 +105,7 @@ export default function MembershipByPackageDetailModal({
       />
 
       {/* Toggle: Active | Cancelled | Past due */}
-      <div className="px-4 sm:px-6 pt-2 pb-4 border-b border-gray-200">
+      <div className="px-4 sm:px-6 pt-2 pb-4 border-b border-gray-200 dark:border-neutral-800 bg-gray-50/80 dark:bg-neutral-950/40">
         <div className="flex flex-wrap gap-2">
           {(["active", "cancelled", "past_due"] as const).map((status) => (
             <button
@@ -114,7 +115,7 @@ export default function MembershipByPackageDetailModal({
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                 statusFilter === status
                   ? "bg-red-600 text-white shadow"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 hover:bg-gray-200 dark:hover:bg-neutral-700 border border-transparent dark:border-neutral-600"
               }`}
             >
               {statusLabels[status]}
@@ -124,14 +125,14 @@ export default function MembershipByPackageDetailModal({
 
         {/* Search */}
         <div className="mt-4 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by name or email..."
             disabled={isLoading}
-            className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500"
+            className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </div>
       </div>
@@ -139,22 +140,22 @@ export default function MembershipByPackageDetailModal({
       <ModalContent padding="none">
         <div className="flex-1 overflow-y-auto">
           {error && (
-            <div className="p-4 m-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
-              <span className="text-red-700 text-sm">Failed to load members.</span>
+            <div className="p-4 m-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/45 rounded-lg flex items-center gap-2">
+              <span className="text-red-700 dark:text-red-300 text-sm">Failed to load members.</span>
             </div>
           )}
 
           {isLoading && !data && (
             <div className="p-8 text-center">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin" />
-              <p className="text-gray-600">Loading members...</p>
+              <p className="text-gray-600 dark:text-neutral-400">Loading members...</p>
             </div>
           )}
 
           {!isLoading && data && users.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
-              <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No members found</p>
+            <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
+              <Users className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-neutral-600" />
+              <p className="text-lg font-medium text-gray-900 dark:text-neutral-100">No members found</p>
               <p className="text-sm mt-1">
                 {searchQuery.trim() ? "Try a different search" : `No ${statusLabels[statusFilter].toLowerCase()} members for this package`}
               </p>
@@ -165,7 +166,7 @@ export default function MembershipByPackageDetailModal({
             <div className="p-4">
               {/* Results summary - same as users table */}
               {pagination && (
-                <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 mb-4">
+                <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-neutral-300 mb-4">
                   <p>
                     Showing {(pagination.currentPage - 1) * (pagination.limit ?? 10) + 1} to{" "}
                     {Math.min(pagination.currentPage * (pagination.limit ?? 10), totalCount)} of {totalCount} users
@@ -173,7 +174,7 @@ export default function MembershipByPackageDetailModal({
                 </div>
               )}
               {/* Table header */}
-              <div className="hidden sm:grid grid-cols-12 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 mb-4 text-sm font-semibold text-gray-700">
+              <div className="hidden sm:grid grid-cols-12 gap-4 p-4 bg-gray-50 dark:bg-neutral-800/80 rounded-lg border border-gray-200 dark:border-neutral-700 mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-200">
                 <div className="col-span-3">Name</div>
                 <div className="col-span-3">Email</div>
                 <div className="col-span-2">Status</div>
@@ -185,30 +186,30 @@ export default function MembershipByPackageDetailModal({
                 {users.map((user) => (
                   <div
                     key={user.id}
-                    className="border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all"
+                    className="border-2 border-gray-200 dark:border-neutral-600 rounded-lg hover:border-gray-300 dark:hover:border-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-800/40 transition-all"
                   >
                     <div className="p-4 flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
                       <div className="col-span-3 min-w-0">
-                        <p className="font-semibold text-gray-900">
-                          {user.firstName} {user.lastName}
+                        <p className="font-semibold text-gray-900 dark:text-neutral-100">
+                          {formatDisplayName(user.firstName, user.lastName)}
                         </p>
-                        {user.mobile && <p className="text-xs text-gray-500 sm:hidden">{user.mobile}</p>}
+                        {user.mobile && <p className="text-xs text-gray-500 dark:text-neutral-400 sm:hidden">{user.mobile}</p>}
                       </div>
-                      <div className="col-span-3 text-sm text-gray-600 truncate">{user.email}</div>
+                      <div className="col-span-3 text-sm text-gray-600 dark:text-neutral-400 truncate">{user.email}</div>
                       <div className="col-span-2">
                         <span
                           className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                             statusFilter === "past_due"
-                              ? "bg-amber-100 text-amber-800"
+                              ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200"
                               : statusFilter === "cancelled"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-green-100 text-green-800"
+                                ? "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200"
+                                : "bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-200"
                           }`}
                         >
                           {getStatusLabel()}
                         </span>
                       </div>
-                      <div className="col-span-2 text-sm text-gray-600">
+                      <div className="col-span-2 text-sm text-gray-600 dark:text-neutral-400">
                         {formatDate(user.subscription?.endDate)}
                       </div>
                       <div className="col-span-2 w-full sm:w-auto sm:text-right">
@@ -230,14 +231,14 @@ export default function MembershipByPackageDetailModal({
 
               {/* Pagination - same design as users table */}
               {pagination && pagination.totalPages > 1 && (
-                <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200 -mx-6 -mb-6 mt-6">
+                <div className="bg-gray-50/90 dark:bg-neutral-950/80 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200 dark:border-neutral-800 -mx-6 -mb-6 mt-6">
                   <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
                     <div className="flex items-center gap-1 sm:gap-2">
                       <button
                         type="button"
                         onClick={() => setPage(1)}
                         disabled={!pagination.hasPrevPage || isLoading}
-                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="First page"
                       >
                         <ChevronsLeft className="w-4 h-4" />
@@ -246,14 +247,14 @@ export default function MembershipByPackageDetailModal({
                         type="button"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={!pagination.hasPrevPage || isLoading}
-                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="Previous page"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                      <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
                         Page {pagination.currentPage} of {pagination.totalPages}
                       </span>
                     </div>
@@ -262,7 +263,7 @@ export default function MembershipByPackageDetailModal({
                         type="button"
                         onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
                         disabled={!pagination.hasNextPage || isLoading}
-                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="Next page"
                       >
                         <ChevronRight className="w-4 h-4" />
@@ -271,7 +272,7 @@ export default function MembershipByPackageDetailModal({
                         type="button"
                         onClick={() => setPage(pagination.totalPages)}
                         disabled={!pagination.hasNextPage || isLoading}
-                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         aria-label="Last page"
                       >
                         <ChevronsRight className="w-4 h-4" />

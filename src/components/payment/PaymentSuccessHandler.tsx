@@ -7,10 +7,9 @@
 
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React from "react";
 import { use3DSRedirectHandler, type PaymentStatus } from "@/hooks/use3DSRedirectHandler";
 import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { trackPurchaseWithEventId } from "@/components/FacebookPixel";
 
 export interface PaymentSuccessHandlerProps {
   /**
@@ -56,34 +55,6 @@ export function PaymentSuccessHandler({
   onStatusChange,
 }: PaymentSuccessHandlerProps) {
   const { paymentStatus, paymentIntent, isLoading, error } = use3DSRedirectHandler();
-  const pixelPurchaseFiredRef = useRef(false);
-
-  // Fire Pixel Purchase once when 3DS redirect success (same eventID as CAPI for deduplication)
-  useEffect(() => {
-    if (
-      paymentStatus === "succeeded" &&
-      paymentIntent?.id &&
-      !pixelPurchaseFiredRef.current
-    ) {
-      const amountCents = paymentIntent.amount ?? 0;
-      const value = amountCents / 100;
-      if (value > 0) {
-        pixelPurchaseFiredRef.current = true;
-        console.log("📘 [Meta Pixel] Purchase fired (3DS redirect success)", {
-          eventId: paymentIntent.id,
-          value,
-          currency: (paymentIntent.currency ?? "aud").toUpperCase(),
-          source: "PaymentSuccessHandler",
-        });
-        trackPurchaseWithEventId(
-          value,
-          (paymentIntent.currency ?? "aud").toUpperCase(),
-          paymentIntent.id,
-          paymentIntent.id
-        );
-      }
-    }
-  }, [paymentStatus, paymentIntent?.id, paymentIntent?.amount, paymentIntent?.currency]);
 
   // Notify parent of status changes
   React.useEffect(() => {
@@ -111,7 +82,7 @@ export function PaymentSuccessHandler({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-        <p className="text-gray-600 font-medium">Verifying your payment...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Verifying your payment...</p>
         <p className="text-sm text-gray-500">Please wait while we confirm your payment status.</p>
       </div>
     );
@@ -122,7 +93,7 @@ export function PaymentSuccessHandler({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <Loader2 className="w-12 h-12 text-yellow-600 animate-spin" />
-        <p className="text-gray-600 font-medium">Processing your payment...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Processing your payment...</p>
         <p className="text-sm text-gray-500">Your payment is being processed. This may take a few moments.</p>
       </div>
     );
@@ -134,7 +105,7 @@ export function PaymentSuccessHandler({
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <XCircle className="w-12 h-12 text-red-600" />
         <p className="text-gray-900 font-semibold text-lg">Payment Failed</p>
-        <p className="text-gray-600 text-center max-w-md">
+        <p className="text-gray-600 dark:text-neutral-400 text-center max-w-md">
           {errorMessage || error || "Your payment could not be processed. Please try again."}
         </p>
         {paymentIntent?.id && (
@@ -150,7 +121,7 @@ export function PaymentSuccessHandler({
       <div className="flex flex-col items-center justify-center gap-4 py-8">
         <AlertCircle className="w-12 h-12 text-yellow-600" />
         <p className="text-gray-900 font-semibold text-lg">Action Required</p>
-        <p className="text-gray-600 text-center max-w-md">
+        <p className="text-gray-600 dark:text-neutral-400 text-center max-w-md">
           Additional authentication is required. Please complete the verification process.
         </p>
       </div>

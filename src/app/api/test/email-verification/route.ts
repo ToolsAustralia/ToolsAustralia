@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmailVerificationCode, generateEmailVerificationCode } from "@/lib/email";
+import { emailService, generateEmailVerificationCode } from "@/lib/email/";
 
 /**
  * POST /api/test/email-verification
@@ -16,19 +16,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 });
     }
 
-    // Generate a test verification code
     const verificationCode = generateEmailVerificationCode();
     console.log(`📧 Generated test code: ${verificationCode}`);
 
-    // Send the email
-    const result = await sendEmailVerificationCode(email, verificationCode, userName || "Test User");
+    const result = await emailService.sendVerificationEmail(email, {
+      userName: userName || "Test User",
+      verificationCode,
+    });
 
     if (result.success) {
       console.log(`✅ Test email sent successfully to ${email}`);
       return NextResponse.json({
         success: true,
         message: "Test email sent successfully",
-        verificationCode, // Include in response for testing
+        verificationCode,
         messageId: result.messageId,
       });
     } else {

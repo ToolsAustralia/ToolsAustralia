@@ -6,6 +6,7 @@ import {
   getAvailableUpgrades,
   getAvailableDowngrades,
   getPendingChangeMessage,
+  getActiveStripeSubscriptionDiscount,
 } from "@/utils/membership/subscription-benefits";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -44,6 +45,11 @@ export async function GET(_request: NextRequest) {
     const isCancelled = !user.subscription?.autoRenew && user.subscription?.isActive;
     const endDate = user.subscription?.endDate;
 
+    // Best-effort: surface the live active Stripe discount (e.g. accepted
+    // retention 50%-off coupon). Only hits Stripe when a subscription id
+    // exists; never throws — null on any failure / no discount.
+    const discount = await getActiveStripeSubscriptionDiscount(user);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -57,6 +63,7 @@ export async function GET(_request: NextRequest) {
         nextBillingDate: user.subscription?.endDate,
         isCancelled,
         endDate,
+        ...(discount ? { discount } : {}),
       },
     });
   } catch (error) {

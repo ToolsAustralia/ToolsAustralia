@@ -1,7 +1,9 @@
 import mongoose, { Document, Schema } from "mongoose";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 export type ScheduledPromoType = "membership-packages" | "one-time-packages" | "mini-packages";
-export type ScheduledPromoMultiplier = 2 | 3 | 5 | 10;
+export type ScheduledPromoMultiplier = PromoMultiplier;
 
 /**
  * Scheduled Promo Model
@@ -32,7 +34,7 @@ const ScheduledPromoSchema = new Schema<IScheduledPromo>(
     },
     multiplier: {
       type: Number,
-      enum: [2, 3, 5, 10],
+      enum: [...PROMO_MULTIPLIERS],
       required: [true, "Multiplier is required"],
     },
     startDate: {

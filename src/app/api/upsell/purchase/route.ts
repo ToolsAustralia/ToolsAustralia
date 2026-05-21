@@ -8,15 +8,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUpsellPackageById, type StaticUpsellPackage } from "@/data/upsellPackages";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
-import {
-  calculateUpsellEntriesFromContext,
-  getPackageBaseEntries,
-} from "@/utils/payment/upsell-entries-calculator";
-import { isMemberOnlyPackageById } from "@/utils/promo/get-effective-promo-type";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
+import { calculateUpsellEntriesFromContext } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
+import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
  * Get resolved promo multiplier for a package type (payment context)
@@ -41,6 +41,7 @@ const upsellPurchaseSchema = z.object({
   offerId: z.string().min(1, "Offer ID is required"),
   useDefaultPayment: z.boolean().optional().default(false),
   paymentMethodId: z.string().optional(),
+  idempotencyKey: z.string().optional(),
       originalPurchaseContext: z
         .object({
           paymentIntentId: z.string().optional(),
@@ -109,11 +110,14 @@ async function getMiniDrawIdForUpsell(
     };
   }
 
-  // Fallback: Extract base package ID from upsell ID and lookup from user's purchase history
-  // Example: "mini-pack-1-upgrade" -> "mini-pack-1"
-  const basePackageId = offerId.replace(/-upgrade$/, "");
+  // Fallback: Resolve the triggering package id from the static upsell catalog,
+  // then look up the user's most recent purchase of that package.
+  // Legacy: "mini-pack-1-upgrade" -> "mini-pack-1" (old IDs); new IDs use triggersOnPackageIds.
+  const upsellRecord = getUpsellPackageById(offerId);
+  const basePackageId =
+    upsellRecord?.triggersOnPackageIds?.[0] ?? offerId.replace(/-upgrade$/, "");
 
-  if (!basePackageId.startsWith("mini-pack-")) {
+  if (!basePackageId.startsWith("mini-pack-") && !basePackageId.startsWith("additional-") ) {
     // Not a mini-draw upsell
     return {};
   }
@@ -161,9 +165,10 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // Get the authenticated user session
     const session = await getServerSession(authOptions);
@@ -228,6 +233,11 @@ export async function POST(request: NextRequest) {
       validatedData.originalPurchaseContext
     );
 
+    if (!miniDrawInfo.miniDrawId) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
+    }
+
     // ✅ Calculate dynamic upsell entries based on original package and active promo
     let calculatedEntriesCount = offer.entriesCount; // Fallback to static value
     
@@ -251,23 +261,38 @@ export async function POST(request: NextRequest) {
     
     if (validatedData.originalPurchaseContext?.packageId && validatedData.originalPurchaseContext?.packageType) {
       // Use originalPurchaseContext if available (most reliable)
-      inferredPackageType = validatedData.originalPurchaseContext.packageType;
       triggeringPackageId = validatedData.originalPurchaseContext.packageId;
+      inferredPackageType = validatedData.originalPurchaseContext.packageType;
+      // Older clients sent mini-pack purchases as "one-time", which skips miniDrawPackages lookup and falls back to static entriesCount.
+      if (triggeringPackageId.startsWith("mini-pack-") && inferredPackageType === "one-time") {
+        inferredPackageType = "mini-draw";
+      }
     } else {
       // ✅ FIX: Infer package type from upsell category when context is missing
       // This matches the logic used for image selection
-      if (offer.category === "subscription-plus") {
-        // Subscription-plus upsells are triggered by membership purchases
+      if (offer.upsellCategory === "membership") {
+        // Membership upsells are triggered by membership purchases
         inferredPackageType = "membership";
         // Try to get triggering package ID from offer configuration
         triggeringPackageId = offer.triggersOnPackageIds?.[0];
         console.log(
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
         );
-      } else if (offer.category === "one-time-plus" || offer.category === "additional-upgrade") {
-        // One-time-plus and additional-upgrade upsells are triggered by one-time purchases
+      } else if (offer.upsellCategory === "mini") {
+        // Mini upsells resolve entries from miniDrawPackages.
+        const triggerCandidate =
+          validatedData.originalPurchaseContext?.packageId ?? offer.triggersOnPackageIds?.[0];
+        inferredPackageType = "mini-draw";
+        triggeringPackageId = triggerCandidate ?? offer.triggersOnPackageIds?.[0];
+        console.log(
+          `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
+        );
+      } else if (offer.upsellCategory === "one-time" || offer.upsellCategory === "additional") {
+        // One-time / additional upsells resolve entries from one-time packages.
+        const triggerCandidate =
+          validatedData.originalPurchaseContext?.packageId ?? offer.triggersOnPackageIds?.[0];
         inferredPackageType = "one-time";
-        triggeringPackageId = offer.triggersOnPackageIds?.[0];
+        triggeringPackageId = triggerCandidate ?? offer.triggersOnPackageIds?.[0];
         console.log(
           `ℹ️ Inferred package type from upsell category: ${inferredPackageType}, triggeringPackageId: ${triggeringPackageId}`
         );
@@ -307,24 +332,28 @@ export async function POST(request: NextRequest) {
               `✅ Using stored promo multiplier from original purchase: ${promoMultiplier}x`
             );
           } else {
-            // Fall back to querying current active promo (for backward compatibility or when context is missing)
-            // ✅ CRITICAL: For additional-upgrade upsells, member-only packages (e.g. additional-power-pack)
-            // use membership promo (10x), not one-time promo (3x). Use effective promo type based on triggering package.
-            const effectivePromoType =
-              inferredPackageType === "one-time" &&
-              triggeringPackageId &&
-              isMemberOnlyPackageById(triggeringPackageId)
-                ? "membership"
-                : inferredPackageType;
-            promoMultiplier = await getActivePromoMultiplier(effectivePromoType);
+            // Fall back: resolve payment channel like checkout (membership vs one-time vs mini)
+            const isMember = Boolean(user.subscription?.isActive);
+            let paymentMultiplierKey: "membership" | "one-time" | "mini-draw";
+            if (inferredPackageType === "membership") {
+              paymentMultiplierKey = "membership";
+            } else if (inferredPackageType === "mini-draw") {
+              paymentMultiplierKey = "mini-draw";
+            } else if (inferredPackageType === "one-time" && triggeringPackageId) {
+              const channel = getEffectivePromoType(triggeringPackageId, "one-time", isMember);
+              paymentMultiplierKey = channel === "membership-packages" ? "membership" : "one-time";
+            } else {
+              paymentMultiplierKey = "one-time";
+            }
+            promoMultiplier = await getActivePromoMultiplier(paymentMultiplierKey);
             console.log(
-              `ℹ️ No stored multiplier found, using current active promo multiplier for ${effectivePromoType} (triggeringPackage: ${triggeringPackageId}, isMemberOnly: ${triggeringPackageId ? isMemberOnlyPackageById(triggeringPackageId) : "N/A"}): ${promoMultiplier}x`
+              `ℹ️ No stored multiplier found, using current active promo for ${paymentMultiplierKey} (triggeringPackage: ${triggeringPackageId}, isMember: ${isMember}): ${promoMultiplier}x`
             );
           }
 
-          // Calculate: 2 × (baseEntries × promoMultiplier)
+          // Calculate: categoryMultiplier × baseEntries (promo does not stack)
           if (triggeringPackageId) {
-            calculatedEntriesCount = calculateUpsellEntriesFromContext(
+            calculatedEntriesCount = await calculateUpsellEntriesFromContext(
               {
                 packageId: triggeringPackageId,
                 packageType: inferredPackageType,
@@ -333,20 +362,13 @@ export async function POST(request: NextRequest) {
               promoMultiplier
             );
           } else {
-            // Fallback calculation without packageId
-            const { calculateUpsellEntries } = await import("@/utils/payment/upsell-entries-calculator");
-            calculatedEntriesCount = calculateUpsellEntries({
-              baseEntries,
-              packageType: inferredPackageType,
-              promoMultiplier,
-            });
+            // Fallback: use the offer id directly when no triggering package id is known
+            const { calculateUpsellEntriesForOffer } = await import("@/utils/payment/upsell-entries-calculator");
+            calculatedEntriesCount = await calculateUpsellEntriesForOffer(offer.id);
           }
 
           console.log(
-            `🎯 Calculated upsell entries: ${baseEntries} base × ${promoMultiplier} promo × 2 = ${calculatedEntriesCount} (fallback: ${offer.entriesCount})`
-          );
-          console.log(
-            `📊 Calculation breakdown: baseEntries=${baseEntries}, promoMultiplier=${promoMultiplier}, packageType=${inferredPackageType}, formula=2 × (${baseEntries} × ${promoMultiplier}) = ${calculatedEntriesCount}`
+            `🎯 Calculated upsell entries: ${calculatedEntriesCount} (categoryMultiplier × base, promo not stacked; fallback: ${offer.entriesCount})`
           );
         } else {
           console.warn(
@@ -410,6 +432,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const stripeIdempotencyKey =
+      validatedData.idempotencyKey ??
+      `pi_upsell_${validatedData.offerId}_${session.user.id}_${Date.now()}`;
+
     if (validatedData.useDefaultPayment && validatedData.paymentMethodId) {
       // One-click purchase using the specific payment method provided
       return await handleOneClickPurchase(
@@ -421,7 +447,8 @@ export async function POST(request: NextRequest) {
         calculatedEntriesCount,
         validatedData.originalPurchaseContext,
         capiEventSourceUrl,
-        validatedData.attribution
+        validatedData.attribution,
+        stripeIdempotencyKey
       );
     } else {
       // Create payment intent for manual confirmation
@@ -435,7 +462,8 @@ export async function POST(request: NextRequest) {
         validatedData.originalPurchaseContext,
         request, // ✅ Pass request for error logging
         capiEventSourceUrl,
-        validatedData.attribution
+        validatedData.attribution,
+        stripeIdempotencyKey
       );
     }
   } catch (error) {
@@ -474,7 +502,8 @@ async function handleOneClickPurchase(
   calculatedEntriesCount: number,
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   capiEventSourceUrl?: string,
-  attribution?: Parameters<typeof buildAttributionMetadata>[0]
+  attribution?: Parameters<typeof buildAttributionMetadata>[0],
+  stripeIdempotencyKey?: string
 ) {
   try {
     if (!paymentMethodId) {
@@ -605,12 +634,14 @@ async function handleOneClickPurchase(
         paymentMethod: finalPaymentMethodId, // Use the SAFE validated payment method
         confirm: true,
         paymentType: "upsell",
-        description: offer.name,
+        description: offer.stripeDescription,
         setupFutureUsage: "off_session", // Store payment method for future use
         metadata: paymentMetadata,
       });
 
-      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig);
+      paymentIntent = await stripe.paymentIntents.create(paymentIntentConfig, {
+        idempotencyKey: stripeIdempotencyKey ?? `pi_upsell_oc_${offer.id}_${user._id}_${Date.now()}`,
+      });
     } catch (stripeError) {
       console.error("Stripe payment intent creation failed:", stripeError);
       return NextResponse.json(
@@ -711,16 +742,18 @@ async function handlePaymentIntentCreation(
   originalPurchaseContext?: { packageType?: "membership" | "one-time" | "mini-draw"; paymentIntentId?: string },
   request?: NextRequest, // ✅ Pass request for error logging
   capiEventSourceUrl?: string,
-  attribution?: Parameters<typeof buildAttributionMetadata>[0]
+  attribution?: Parameters<typeof buildAttributionMetadata>[0],
+  stripeIdempotencyKey?: string
 ) {
   try {
     // Derive event source URL for CAPI if not passed (e.g. from request)
-    const eventSourceUrl =
+    const eventSourceUrl = safeEventSourceUrl(
       capiEventSourceUrl ??
       (request
         ? request.headers.get("referer") ??
           (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
-        : undefined);
+        : undefined)
+    );
 
     // Prepare metadata with original package type
     const paymentMetadata = {
@@ -756,8 +789,8 @@ async function handlePaymentIntentCreation(
       entriesCount: paymentMetadata.entriesCount,
     });
 
-    // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-    const idempotencyKey = `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
+    const idempotencyKey =
+      stripeIdempotencyKey ?? `pi_upsell_${offer.id}_${user._id.toString()}_${Date.now()}`;
 
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
@@ -767,14 +800,14 @@ async function handlePaymentIntentCreation(
       paymentMethod: paymentMethodId,
       confirm: paymentMethodId ? true : false,
       paymentType: "upsell",
-      description: offer.name,
+      description: offer.stripeDescription,
       metadata: paymentMetadata,
     });
 
     const paymentIntent = await stripe.paymentIntents.create(
       paymentIntentConfig,
       {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+        idempotencyKey,
       }
     );
 

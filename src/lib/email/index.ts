@@ -6,6 +6,26 @@
 // Main service
 export { default as emailService } from './email-service';
 
+// Convenience function for mini draw 100% notification
+export async function sendMiniDrawFullCapacityNotification(payload: {
+  miniDrawName: string;
+  prizeName: string;
+  totalEntries: number;
+  minimumEntries: number;
+}) {
+  const { default: emailService } = await import('./email-service');
+  return emailService.sendMiniDrawFullCapacityNotification(payload);
+}
+
+// Sender identities - SendGrid source of truth for support/contact email
+export {
+  EmailCategory,
+  getSenderIdentity,
+  SUPPORT_EMAIL,
+  getContactEmail,
+} from './sender-identities';
+export type { SenderIdentity } from './sender-identities';
+
 // Rate limiting
 export {
   emailVerificationRateLimiter,
@@ -15,33 +35,19 @@ export {
 // Types
 export * from './types';
 
-// Legacy compatibility (during migration)
-// Re-export utility functions that are still used
+// Provider-agnostic utilities (rate limiting, code generation, expiry, HTML escaping)
 export {
+  checkEmailVerificationRateLimit,
+  checkPasswordResetRateLimit,
+  checkLoginCodeRateLimit,
   checkEmailRateLimit,
   generateEmailVerificationCode,
   getEmailVerificationExpiry,
+  getPasswordResetExpiry,
+  getPasswordResetExpiryMinutes,
+  getLoginCodeExpiry,
+  getLoginCodeExpiryMinutes,
   checkFormSubmissionRateLimit,
-} from '../email';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  escapeHtml,
+  escapeHtmlPreserveNewlines,
+} from './utils';

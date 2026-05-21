@@ -1,11 +1,12 @@
 import Image from "next/image";
 import { Star, Quote } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export default function ExistingPartners() {
   const partnerTestimonials = [
     {
       company: "PowerTool Pro",
-      logo: "/images/SampleProducts/dewalttools.png", // Using existing images
+      logo: "/images/SampleProducts/dewalttools.webp", // Using existing images
       representative: "Mark Thompson",
       position: "Sales Director",
       testimonial:
@@ -25,7 +26,7 @@ export default function ExistingPartners() {
     },
     {
       company: "TradeMax Equipment",
-      logo: "/images/SampleProducts/milwaukeetools.png",
+      logo: "/images/SampleProducts/milwaukeetools.webp",
       representative: "David Wilson",
       position: "Business Owner",
       testimonial:
@@ -36,11 +37,11 @@ export default function ExistingPartners() {
   ];
 
   const partnerBrands = [
-    { name: "DeWalt", logo: "/images/brands/dewalt.png", category: "Power Tools", color: "bg-yellow-600" },
-    { name: "Makita", logo: "/images/brands/Makita-red.png", category: "Professional Tools", color: "bg-makita-500" }, // Makita brand cyan
-    { name: "Milwaukee", logo: "/images/brands/milwaukee.png", category: "Heavy Duty", color: "bg-red-600" },
-    { name: "Sidchrome", logo: "/images/brands/sidchrome.png", category: "Hand Tools", color: "bg-red-700" },
-    { name: "Kincrome", logo: "/images/brands/kincrome.png", category: "Tool Storage", color: "bg-blue-700" },
+    { name: "DeWalt", logo: "/images/brands/dewalt.webp", category: "Power Tools", color: "bg-yellow-600" },
+    { name: "Makita", logo: "/images/brands/Makita-red.webp", category: "Professional Tools", color: "bg-makita-500" }, // Makita brand cyan
+    { name: "Milwaukee", logo: "/images/brands/milwaukee.webp", category: "Heavy Duty", color: "bg-red-600" },
+    { name: "Sidchrome", logo: "/images/brands/sidchrome.webp", category: "Hand Tools", color: "bg-red-700" },
+    { name: "Kincrome", logo: "/images/brands/kincrome.webp", category: "Tool Storage", color: "bg-blue-700" },
   ];
 
   return (
@@ -48,13 +49,13 @@ export default function ExistingPartners() {
       <div className="w-full px-4 sm:px-6 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white px-2 py-1 text-sm font-medium mb-3">
+          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-400 text-white px-2 py-1 text-sm font-medium mb-3">
             Our Partners
           </div>
 
           <h2 className="text-[28px] sm:text-[36px] lg:text-[48px] font-black leading-tight text-black font-['Poppins'] mb-6">
             Trusted by Australia&apos;s
-            <span className="block text-[#ee0000]">Leading Brands</span>
+            <span className="block text-red-600">Leading Brands</span>
           </h2>
 
           <p className="text-[16px] sm:text-[18px] lg:text-[20px] text-[rgba(0,0,0,0.7)] font-normal leading-relaxed max-w-3xl mx-auto font-['Inter']">
@@ -65,7 +66,7 @@ export default function ExistingPartners() {
 
         {/* Partner Logos Grid */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
             Featured Partners
           </h3>
 
@@ -74,7 +75,7 @@ export default function ExistingPartners() {
             {partnerBrands.map((brand, index) => (
               <div key={index} className="group">
                 <div
-                  className={`${brand.color} rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 w-full h-32 flex items-center justify-center`}
+                  className={cn(brand.color, "rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 w-full h-32 flex items-center justify-center")}
                 >
                   <Image
                     src={brand.logo}
@@ -82,10 +83,11 @@ export default function ExistingPartners() {
                     width={120}
                     height={64}
                     className="max-h-16 w-auto object-contain filter brightness-0 invert transition-all duration-300"
+                    sizes="120px"
                   />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="text-sm font-medium text-gray-800 font-['Poppins']">{brand.name}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
                   <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                 </div>
               </div>
@@ -93,12 +95,12 @@ export default function ExistingPartners() {
           </div>
 
           {/* Mobile Scroll */}
-          <div className="lg:hidden overflow-x-auto scrollbar-hide">
+          <div className="lg:hidden overflow-x-auto brand-scrollbar">
             <div className="flex gap-6 pb-4 w-max">
               {partnerBrands.map((brand, index) => (
                 <div key={index} className="flex-shrink-0 w-32">
                   <div
-                    className={`${brand.color} rounded-xl p-4 shadow-lg border border-gray-100 h-24 flex items-center justify-center`}
+                    className={cn(brand.color, "rounded-xl p-4 shadow-lg border border-gray-100 h-24 flex items-center justify-center")}
                   >
                     <Image
                       src={brand.logo}
@@ -106,10 +108,11 @@ export default function ExistingPartners() {
                       width={120}
                       height={48}
                       className="max-h-12 w-auto object-contain filter brightness-0 invert"
+                      sizes="120px"
                     />
                   </div>
                   <div className="text-center mt-2">
-                    <p className="text-sm font-medium text-gray-800 font-['Poppins']">{brand.name}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-neutral-100 font-['Poppins']">{brand.name}</p>
                     <p className="text-xs text-gray-500 font-['Inter']">{brand.category}</p>
                   </div>
                 </div>
@@ -120,7 +123,7 @@ export default function ExistingPartners() {
 
         {/* Partner Testimonials */}
         <div className="mb-16">
-          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 text-center mb-8 font-['Poppins']">
+          <h3 className="text-[20px] sm:text-[24px] font-bold text-gray-800 dark:text-neutral-100 text-center mb-8 font-['Poppins']">
             What Our Partners Say
           </h3>
 
@@ -128,8 +131,8 @@ export default function ExistingPartners() {
             {partnerTestimonials.map((testimonial, index) => (
               <div key={index} className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 relative">
                 {/* Quote Icon */}
-                <div className="absolute top-6 right-6 w-8 h-8 bg-[#ee0000]/10 rounded-full flex items-center justify-center">
-                  <Quote className="w-4 h-4 text-[#ee0000]" />
+                <div className="absolute top-6 right-6 w-8 h-8 bg-red-600/10 rounded-full flex items-center justify-center">
+                  <Quote className="w-4 h-4 text-red-600" />
                 </div>
 
                 {/* Company Logo */}
@@ -140,6 +143,7 @@ export default function ExistingPartners() {
                     width={120}
                     height={48}
                     className="max-h-12 w-auto object-contain"
+                    sizes="120px"
                   />
                 </div>
 
@@ -151,7 +155,7 @@ export default function ExistingPartners() {
                 </div>
 
                 {/* Testimonial */}
-                <p className="text-gray-600 font-['Inter'] mb-6 leading-relaxed">
+                <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] mb-6 leading-relaxed">
                   &quot;{testimonial.testimonial}&quot;
                 </p>
 
@@ -162,9 +166,9 @@ export default function ExistingPartners() {
 
                 {/* Author */}
                 <div className="border-t pt-4">
-                  <p className="font-bold text-gray-800 font-['Poppins']">{testimonial.representative}</p>
+                  <p className="font-bold text-gray-800 dark:text-neutral-100 font-['Poppins']">{testimonial.representative}</p>
                   <p className="text-sm text-gray-500 font-['Inter']">{testimonial.position}</p>
-                  <p className="text-sm font-medium text-[#ee0000] font-['Inter']">{testimonial.company}</p>
+                  <p className="text-sm font-medium text-red-600 font-['Inter']">{testimonial.company}</p>
                 </div>
               </div>
             ))}
@@ -174,49 +178,49 @@ export default function ExistingPartners() {
         {/* Partner Success Stats */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-3xl p-8 lg:p-12">
           <div className="text-center mb-10">
-            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 mb-4 font-['Poppins']">
+            <h3 className="text-[24px] sm:text-[28px] lg:text-[32px] font-bold text-gray-800 dark:text-neutral-100 mb-4 font-['Poppins']">
               Partnership Success by the Numbers
             </h3>
-            <p className="text-gray-600 font-['Inter'] max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">
               Our partners consistently achieve outstanding results through our platform
             </p>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">150%</div>
-              <div className="text-gray-600 font-['Inter']">Average Sales Increase</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">150%</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Sales Increase</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">12K</div>
-              <div className="text-gray-600 font-['Inter']">Avg New Customers</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">12K</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Avg New Customers</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">99%</div>
-              <div className="text-gray-600 font-['Inter']">Partner Satisfaction</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">99%</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Partner Satisfaction</div>
             </div>
 
             <div className="text-center">
-              <div className="text-3xl font-bold text-[#ee0000] mb-2 font-['Inter']">4.9</div>
-              <div className="text-gray-600 font-['Inter']">Average Rating</div>
+              <div className="text-3xl font-bold text-red-600 mb-2 font-['Inter']">4.9</div>
+              <div className="text-gray-600 dark:text-neutral-400 font-['Inter']">Average Rating</div>
             </div>
           </div>
 
           {/* Call to Action */}
           <div className="text-center mt-10 pt-8 border-t border-gray-200">
-            <p className="text-gray-600 font-['Inter'] mb-4">Ready to join these successful partners?</p>
+            <p className="text-gray-600 dark:text-neutral-400 font-['Inter'] mb-4">Ready to join these successful partners?</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>No setup fees</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span>Dedicated support</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-['Inter']">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400 font-['Inter']">
                 <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                 <span>Flexible terms</span>
               </div>

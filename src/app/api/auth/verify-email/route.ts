@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verification successful - mark email as verified
+    const mergeFromEmail = user.pendingKlaviyoMergeFromEmail;
     user.isEmailVerified = true;
     user.emailVerificationCode = undefined; // Clear the code
     user.emailVerificationExpires = undefined;
@@ -122,10 +123,18 @@ export async function POST(request: NextRequest) {
     user.lastLogin = new Date();
     await user.save();
 
-    // ✅ NEW: Update Klaviyo profile with email verification status
     try {
-      const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
-      // console.log(`📊 Updating Klaviyo profile after email verification`);
+      const { ensureUserProfileSynced, mergeKlaviyoProfilesAfterEmailChange } = await import(
+        "@/utils/integrations/klaviyo/klaviyo-profile-sync"
+      );
+      if (mergeFromEmail) {
+        const mergeResult = await mergeKlaviyoProfilesAfterEmailChange(user, mergeFromEmail);
+        if (!mergeResult.merged && mergeResult.error) {
+          console.warn("Klaviyo profile merge after email verification (non-critical):", mergeResult.error);
+        }
+        user.pendingKlaviyoMergeFromEmail = undefined;
+        await user.save();
+      }
       ensureUserProfileSynced(user);
     } catch (klaviyoError) {
       console.error("Klaviyo import/update error (non-critical):", klaviyoError);

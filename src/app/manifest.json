@@ -11,19 +11,19 @@
   "categories": ["shopping", "business", "productivity"],
   "icons": [
     {
-      "src": "/Social%20Media%20Profile_Primary.png",
+      "src": "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Primary.webp",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/webp"
     },
     {
-      "src": "/Social Media Profile_Black Background.png",
+      "src": "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/webp"
     },
     {
-      "src": "/Social Media Profile_Black Background.png",
+      "src": "/images/Tools%20Australia%20Logo/Social%20Media%20Profile_Black%20Background.webp",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/webp"
     }
   ]
 }

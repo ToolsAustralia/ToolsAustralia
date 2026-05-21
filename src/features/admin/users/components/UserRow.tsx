@@ -13,10 +13,13 @@ import {
   getPackageIconImage,
   getPackageColorScheme,
   getGradientColor,
-  getSubscriptionBadgeConfig,
-  getUserStatusBadgeConfig,
 } from "../utils/userHelpers";
-import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import { getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
+import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
+import { formatDisplayName } from "@/utils/display-name";
+import defaultLogo from "../../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
+import { cn } from "@/utils/cn";
 
 interface UserRowProps {
   user: AdminUserListItem;
@@ -29,15 +32,19 @@ interface UserRowProps {
  */
 export default function UserRow({ user, onUserClick, onQuickAction }: UserRowProps) {
   const packageIcon = getPackageIconImage(user.subscription?.packageName);
+  const packageIconScaleClass = getPackageIconWrapperScaleClass(
+    derivePlanIdFromPackage(
+      { name: user.subscription?.packageName ?? "", type: "subscription" },
+      "subscription"
+    ),
+    "badge"
+  );
   const colorScheme = getPackageColorScheme(user.subscription?.packageName);
   const hasActiveSubscription = user.subscription?.isActive;
   const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
   const isPremiumPackage =
     user.subscription?.packageName?.toLowerCase().includes("boss") ||
     user.subscription?.packageName?.toLowerCase().includes("power");
-
-  const subscriptionBadge = getSubscriptionBadgeConfig(user.subscription);
-  const statusBadge = getUserStatusBadgeConfig(user.isActive);
 
   return (
     <tr
@@ -60,13 +67,16 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
                 padding: "2px",
               }}
             >
-              <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+              <div
+                className={cn("relative w-full h-full flex-shrink-0 flex items-center justify-center", packageIconScaleClass)}
+              >
                 <Image
                   src={packageIcon}
                   alt={user.subscription?.packageName || "Package"}
                   className="w-5 h-5 sm:w-7 sm:h-7 lg:w-9 lg:h-9 object-contain"
                   width={36}
                   height={36}
+                  sizes="(max-width: 640px) 20px, (max-width: 1024px) 28px, 36px"
                 />
               </div>
             </span>
@@ -78,14 +88,15 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
                 className="w-full h-full object-cover"
                 width={48}
                 height={48}
+                sizes="(max-width: 640px) 32px, (max-width: 1024px) 40px, 48px"
               />
             </div>
           )}
           <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
-            <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
-              {user.firstName} {user.lastName}
+            <div className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
+              {formatDisplayName(user.firstName, user.lastName)}
             </div>
-            <div className="text-[9px] sm:text-xs lg:text-sm text-gray-500 truncate">{user.email}</div>
+            <div className="text-3xs sm:text-xs lg:text-sm text-gray-500 truncate">{user.email}</div>
             <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 mt-0.5 sm:mt-1">
               {user.isEmailVerified ? (
                 <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-green-500 flex-shrink-0" />
@@ -93,33 +104,35 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
                 <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
               )}
               {user.role === "admin" && (
-                <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 font-medium">Admin</span>
+                <span className="text-3xs sm:text-2xs lg:text-xs text-gray-500 font-medium">Admin</span>
               )}
             </div>
           </div>
         </div>
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
-        <span className={subscriptionBadge.className}>{subscriptionBadge.label}</span>
+        {renderAdminSubscriptionBadge(user)}
       </td>
-      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900">
+      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-2xs sm:text-xs lg:text-sm font-medium text-gray-900 dark:text-white tabular-nums">
         {formatCurrency(user.totalSpent)}
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden md:table-cell">
         <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
           <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
-          <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">{user.majorDrawEntries}</span>
+          <span className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
+            {user.majorDrawEntries}
+          </span>
         </div>
       </td>
       <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
         <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
           <Gift className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-purple-500 flex-shrink-0" />
-          <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">
+          <span className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
             {user.miniDrawCount || 0}
           </span>
         </div>
       </td>
-      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm text-gray-500">
+      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-2xs sm:text-xs lg:text-sm text-gray-500">
         {user.lastLogin ? (
           <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
             <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 flex-shrink-0" />
@@ -129,10 +142,7 @@ export default function UserRow({ user, onUserClick, onQuickAction }: UserRowPro
           <span className="text-gray-400">Never</span>
         )}
       </td>
-      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
-        <span className={statusBadge.className}>{statusBadge.label}</span>
-      </td>
-      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium">
+      <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-2xs sm:text-xs lg:text-sm font-medium">
         <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2">
           <button
             onClick={(e) => {

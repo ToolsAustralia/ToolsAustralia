@@ -12,12 +12,30 @@ import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
  */
 const createPromoLinkSchema = z
   .object({
+    customCode: z
+      .string()
+      .trim()
+      .min(6, "Promo code must be at least 6 characters")
+      .max(32, "Promo code must be at most 32 characters")
+      .regex(
+        /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/i,
+        "Promo code can only contain letters, numbers, and optional hyphen separators"
+      )
+      .optional(),
     bonusEntries: z.number().int().min(1, "Bonus entries must be at least 1").optional(),
     expiresAt: z.string().datetime("Invalid expiration date format").optional().nullable(),
     description: z.string().max(500, "Description cannot exceed 500 characters").optional(),
     isActive: z.boolean().optional(),
     appliesToMembership: z.boolean().optional(),
     appliesToOneTime: z.boolean().optional(),
+    campaignType: z.enum(["general", "cancelled-membership-comeback"]).optional(),
+    eligibilityAudience: z.enum(["all", "cancelled-members"]).optional(),
+    eligibilityRules: z
+      .object({
+        requireInactiveSubscription: z.boolean().optional(),
+        cancelledWithinDays: z.number().int().min(1, "cancelledWithinDays must be at least 1").optional(),
+      })
+      .optional(),
   })
   .refine(
     (data) => {
@@ -34,7 +52,7 @@ const createPromoLinkSchema = z
 
 /**
  * POST /api/admin/promo/link/create
- * Create a new promo link with auto-generated unique code
+ * Create a new promo link with auto-generated or custom code
  */
 export async function POST(request: NextRequest) {
   try {
@@ -57,8 +75,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = createPromoLinkSchema.parse(body);
 
-    // Generate unique promo code
-    const code = await generatePromoLinkCode();
+    // Use custom code when provided, otherwise generate unique code
+    const code = validatedData.customCode?.trim().toUpperCase() || (await generatePromoLinkCode());
+
+    if (validatedData.customCode) {
+      const existingCode = await PromoLink.findOne({ code });
+      if (existingCode) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Promo code already exists. Please choose a different code.",
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     // Parse expiration date if provided
     let expiresAt: Date | undefined;
@@ -70,6 +101,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Campaign defaults and safety rails
+    const campaignType = validatedData.campaignType || "general";
+    const eligibilityAudience =
+      validatedData.eligibilityAudience ||
+      (campaignType === "cancelled-membership-comeback" ? "cancelled-members" : "all");
+    const eligibilityRules =
+      validatedData.eligibilityRules ||
+      (campaignType === "cancelled-membership-comeback"
+        ? { requireInactiveSubscription: true }
+        : undefined);
+
+    if (campaignType === "cancelled-membership-comeback" && eligibilityAudience !== "cancelled-members") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Comeback campaign must target cancelled-members audience",
+        },
+        { status: 400 }
+      );
+    }
+
     // Create promo link
     const isActive = validatedData.isActive !== undefined ? validatedData.isActive : true;
     const newPromoLink = new PromoLink({
@@ -79,6 +131,9 @@ export async function POST(request: NextRequest) {
       isActive,
       appliesToMembership: validatedData.appliesToMembership || false,
       appliesToOneTime: validatedData.appliesToOneTime || false,
+      campaignType,
+      eligibilityAudience,
+      eligibilityRules,
       createdBy: user._id,
       description: validatedData.description || undefined,
       usageCount: 0,
@@ -100,6 +155,8 @@ export async function POST(request: NextRequest) {
       bonusEntries: newPromoLink.bonusEntries,
       appliesToMembership: newPromoLink.appliesToMembership,
       appliesToOneTime: newPromoLink.appliesToOneTime,
+      campaignType: newPromoLink.campaignType,
+      eligibilityAudience: newPromoLink.eligibilityAudience,
       createdBy: user.email,
     });
 
@@ -115,6 +172,9 @@ export async function POST(request: NextRequest) {
           isActive: newPromoLink.isActive,
           appliesToMembership: newPromoLink.appliesToMembership,
           appliesToOneTime: newPromoLink.appliesToOneTime,
+          campaignType: newPromoLink.campaignType,
+          eligibilityAudience: newPromoLink.eligibilityAudience,
+          eligibilityRules: newPromoLink.eligibilityRules,
           description: newPromoLink.description,
           usageCount: newPromoLink.usageCount,
           promoUrl,
@@ -142,6 +202,18 @@ export async function POST(request: NextRequest) {
           })),
         },
         { status: 400 }
+      );
+    }
+
+    const mongoErrorCode =
+      error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined;
+    if (mongoErrorCode === 11000) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Promo code already exists. Please choose a different code.",
+        },
+        { status: 409 }
       );
     }
 

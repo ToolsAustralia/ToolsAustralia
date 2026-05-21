@@ -55,6 +55,7 @@ export {
   usePaymentMethodPrefetch,
   type SavedPaymentMethod,
   type PaymentMethodResponse,
+  type PaymentMethodsQueryResult,
   type AddPaymentMethodData,
   type PaymentStatusResponse,
 } from "./usePaymentQueries";
@@ -128,7 +129,6 @@ export {
   useCreateOrder,
   useCancelOrder,
   useUpdateOrderStatus,
-  useRequestRefund,
   useOrderStats,
   useOrderPrefetch,
   type Order,
@@ -178,6 +178,15 @@ export { useMajorDrawWinners, type MajorDrawWinner } from "./useWinnersQueries";
 
 // Note: useMiniDrawPackages, usePurchaseMiniDraw and related types are not yet implemented
 
+// Redeemables hooks
+export {
+  useRedeemablesWallet,
+  useRedeemablesStatus,
+  useRedeemableRedemption,
+  type RedeemableWalletItem,
+  type RedeemablesStatusResponse,
+} from "./useRedeemablesQueries";
+
 // Subscription management hooks
 export {
   useUpgradeSubscription,
@@ -202,6 +211,7 @@ export {
   type UpdateAutoRenewResponse,
   type UpdateSubscriptionPaymentMethodResponse,
   type PayFailedInvoiceResponse,
+  type PayFailedInvoiceFailureCode,
 } from "./useSubscriptionQueries";
 
 // Query keys and utilities

@@ -1,13 +1,17 @@
 "use client";
 
-import { FAQSection, FAQItem } from "@/components/ui";
-import { faqCategories, getFaqEntries } from "@/data/faqs";
+import { FAQSection } from "@/components/ui";
+import { FaqEntry } from "@/data/faqs";
 
-export default function FAQContent() {
-  const faqs: FAQItem[] = getFaqEntries();
+interface FAQContentProps {
+  faqs: FaqEntry[];
+  categories: FaqEntry["category"][];
+}
+
+export default function FAQContent({ faqs, categories }: FAQContentProps) {
   return (
     <div className="">
-      <FAQSection faqs={faqs} categories={faqCategories} showCategoryFilter={true} variant="red" maxWidth="4xl" />
+      <FAQSection faqs={faqs} categories={categories} showCategoryFilter={true} variant="red" maxWidth="4xl" />
     </div>
   );
 }

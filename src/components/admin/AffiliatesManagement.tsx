@@ -12,10 +12,17 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import AffiliateDetailModal from "./AffiliateDetailModal";
+import { AccountActiveBadge } from "@/components/admin/ui/AdminBadge";
+import ModalContainer from "@/components/modals/ui/ModalContainer";
 
 interface Affiliate {
   id: string;
@@ -45,6 +52,16 @@ interface AffiliatesResponse {
   };
 }
 
+type AffiliateListSort =
+  | "name"
+  | "email"
+  | "affiliateCode"
+  | "totalSignups"
+  | "totalSales"
+  | "unpaidAmount"
+  | "isActive"
+  | "createdAt";
+
 /**
  * Main Affiliates Management component
  */
@@ -55,6 +72,8 @@ export default function AffiliatesManagement() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<AffiliateListSort>("createdAt");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -67,7 +86,7 @@ export default function AffiliatesManagement() {
   React.useEffect(() => {
     fetchAffiliates();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAffiliates is defined below, adding would cause circular dep
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, sortField, sortOrder]);
 
   const fetchAffiliates = async () => {
     setIsLoading(true);
@@ -76,6 +95,8 @@ export default function AffiliatesManagement() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: "25",
+        sort: sortField,
+        order: sortOrder,
         ...(debouncedSearch && { search: debouncedSearch }),
       });
       const response = await fetch(`/api/admin/affiliate/list?${params}`);
@@ -135,77 +156,103 @@ export default function AffiliatesManagement() {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
+  const handleSortHeaderClick = (field: AffiliateListSort) => {
+    setPage(1);
+    if (sortField === field) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder(
+        field === "name" || field === "email" || field === "affiliateCode" ? "asc" : "desc"
+      );
+    }
+  };
+
+  const SortHeaderIcon = ({ field }: { field: AffiliateListSort }) => {
+    const active = sortField === field;
+    if (!active) {
+      return <ArrowUpDown className="h-3.5 w-3.5 shrink-0 opacity-40" aria-hidden />;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
+    ) : (
+      <ArrowDown className="h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden />
+    );
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Affiliates Management</h1>
-          <p className="text-gray-600 mt-1">Manage affiliate accounts and track commissions</p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header — aligned with Users Management (compact on mobile) */}
+      <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white truncate">Affiliates Management</h1>
+          <p className="text-2xs sm:text-sm text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 line-clamp-2 sm:line-clamp-none">
+            Manage affiliate accounts and track commissions
+          </p>
         </div>
         <button
+          type="button"
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+          className="flex shrink-0 items-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-400 text-white text-xs sm:text-sm font-medium hover:from-red-675 hover:to-red-650 transition-all shadow-sm hover:shadow-md"
         >
-          <Plus className="w-4 h-4" />
-          Create Affiliate
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="sm:hidden">Create</span>
+          <span className="hidden sm:inline">Create Affiliate</span>
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
+      {/* Search — same density as Users Management filter bar */}
+      <div className="relative z-20 bg-gradient-to-br from-white via-gray-50 to-white dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2 sm:p-4 backdrop-blur-sm">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-neutral-500 w-4 h-4 sm:w-5 sm:h-5 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search affiliates by name, email, code, or username..."
+            placeholder="Search name, email, code, username…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+            className="w-full pl-8 sm:pl-10 pr-3 py-1.5 sm:py-2 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm shadow-sm hover:shadow-md transition-all placeholder:text-gray-400 dark:placeholder:text-neutral-500"
           />
         </div>
       </div>
 
       {/* Results Summary */}
       {affiliatesData && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           <p>
-            Showing {(affiliatesData.pagination.page - 1) * affiliatesData.pagination.limit + 1} to{" "}
+            Showing {(affiliatesData.pagination.page - 1) * affiliatesData.pagination.limit + 1}–
             {Math.min(
               affiliatesData.pagination.page * affiliatesData.pagination.limit,
               affiliatesData.pagination.total
             )}{" "}
-            of {affiliatesData.pagination.total} affiliates
+            of {affiliatesData.pagination.total}
           </p>
           <button
+            type="button"
             onClick={() => fetchAffiliates()}
-            className="text-[#ee0000] hover:text-[#cc0000] transition-colors flex items-center gap-1"
+            className="text-red-600 hover:text-red-675 transition-colors flex items-center gap-1 font-medium"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Refresh
           </button>
         </div>
       )}
 
-      {/* Affiliates Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+      {/* Affiliates list */}
+      <div className="relative z-10 bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
         {isLoading ? (
-          // Loading skeleton
-          <div className="p-6">
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4 animate-pulse">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+          <div className="p-3 sm:p-6">
+            <div className="space-y-3 sm:space-y-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-2 sm:gap-4 animate-pulse">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-200 dark:bg-neutral-700 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="h-3.5 bg-gray-200 dark:bg-neutral-700 rounded w-2/3" />
+                    <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/2" />
                   </div>
-                  <div className="h-6 bg-gray-200 rounded w-20"></div>
-                  <div className="h-6 bg-gray-200 rounded w-16"></div>
-                  <div className="h-8 bg-gray-200 rounded w-24"></div>
+                  <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-14 hidden sm:block" />
                 </div>
               ))}
             </div>
@@ -214,11 +261,11 @@ export default function AffiliatesManagement() {
           // Error state
           <div className="p-6 text-center">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Affiliates</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Error Loading Affiliates</h3>
+            <p className="text-gray-600 dark:text-neutral-400 mb-4">{error}</p>
             <button
               onClick={() => fetchAffiliates()}
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
             >
               Try Again
             </button>
@@ -227,140 +274,218 @@ export default function AffiliatesManagement() {
           // Empty state
           <div className="p-6 text-center">
             <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Affiliates Found</h3>
-            <p className="text-gray-600 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Affiliates Found</h3>
+            <p className="text-gray-600 dark:text-neutral-400 mb-4">
               {search ? "Try adjusting your search criteria" : "Get started by creating your first affiliate account"}
             </p>
             {!search && (
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+                className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
               >
                 Create Affiliate
               </button>
             )}
           </div>
         ) : (
-          // Affiliates Table
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Affiliate
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Stats
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Unpaid
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {affiliateList.map((affiliate) => (
-                  <tr
-                    key={affiliate.id}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleAffiliateClick(affiliate)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{affiliate.name}</div>
-                        <div className="text-sm text-gray-500">{affiliate.email}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-mono text-gray-900">{affiliate.affiliateCode}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        <div>Signups: {affiliate.totalSignups}</div>
-                        <div>Sales: {formatCurrency(affiliate.totalSales)}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm">
-                        <div className="font-semibold text-green-600">{formatCurrency(affiliate.unpaidAmount)}</div>
-                        <div className="text-gray-500">{affiliate.unpaidCommissions} commissions</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {affiliate.isActive ? (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleAffiliateClick(affiliate)}
-                          className="text-[#ee0000] hover:text-[#cc0000] flex items-center gap-1 transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                        <button
-                          onClick={() => copyLink(affiliate.affiliateLink)}
-                          className="text-gray-600 hover:text-gray-900 flex items-center gap-1 transition-colors"
-                          title="Copy affiliate link"
-                        >
-                          {copiedLink === affiliate.affiliateLink ? (
-                            <Check className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
+          <>
+            {/* Single responsive table — column layout on all breakpoints (like Users Management) */}
+            <div className="overflow-x-auto relative touch-pan-x">
+              <table className="w-full min-w-[640px]">
+                <thead>
+                  <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("name")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Affiliate
+                        <SortHeaderIcon field="name" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] hidden bg-gray-50 dark:bg-neutral-800 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] lg:table-cell">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("affiliateCode")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Code
+                        <SortHeaderIcon field="affiliateCode" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("totalSignups")}
+                        title="Sort by signups"
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Stats
+                        <SortHeaderIcon field="totalSignups" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] hidden bg-gray-50 dark:bg-neutral-800 p-0 text-right shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] md:table-cell">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("totalSales")}
+                        title="Sort by sales"
+                        className="flex w-full items-center justify-end gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Sales
+                        <SortHeaderIcon field="totalSales" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("unpaidAmount")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Unpaid
+                        <SortHeaderIcon field="unpaidAmount" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 p-0 text-left shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                      <button
+                        type="button"
+                        onClick={() => handleSortHeaderClick("isActive")}
+                        className="flex w-full items-center justify-start gap-1 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 hover:bg-gray-100/90 dark:hover:bg-neutral-800/80 transition-colors"
+                      >
+                        Status
+                        <SortHeaderIcon field="isActive" />
+                      </button>
+                    </th>
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 px-2 py-2 sm:px-3 lg:px-6 sm:py-2.5 text-left text-2xs sm:text-xs font-semibold uppercase tracking-wider text-gray-800 dark:text-neutral-100 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white dark:divide-neutral-800 dark:bg-neutral-950">
+                  {affiliateList.map((affiliate) => (
+                    <tr
+                      key={affiliate.id}
+                      className="cursor-pointer transition-colors hover:bg-gray-50 even:bg-gray-50/30 dark:hover:bg-neutral-800/70 even:dark:bg-neutral-900/35"
+                      onClick={() => handleAffiliateClick(affiliate)}
+                    >
+                      <td className="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 lg:px-6">
+                        <div>
+                          <div className="text-2xs font-semibold text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.name}</div>
+                          <div className="truncate text-3xs text-gray-500 dark:text-neutral-400 sm:text-xs">{affiliate.email}</div>
+                        </div>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 lg:table-cell lg:px-6">
+                        <div className="font-mono text-2xs text-gray-900 dark:text-neutral-100 sm:text-xs">{affiliate.affiliateCode}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-2.5 md:hidden lg:px-6">
+                        <div className="text-2xs text-gray-900 dark:text-neutral-100 sm:text-xs">
+                          <div>Signups: {affiliate.totalSignups}</div>
+                          <div>Sales: {formatCurrency(affiliate.totalSales)}</div>
+                        </div>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-gray-900 dark:text-white md:table-cell">
+                        <span className="text-2xs sm:text-xs">{affiliate.totalSignups}</span>
+                      </td>
+                      <td className="hidden whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-right text-gray-900 dark:text-white md:table-cell">
+                        <span className="text-2xs sm:text-xs">{formatCurrency(affiliate.totalSales)}</span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
+                        <div>
+                          <div className="text-2xs sm:text-xs font-semibold text-green-600 dark:text-green-400">
+                            {formatCurrency(affiliate.unpaidAmount)}
+                          </div>
+                          <div className="text-3xs sm:text-xs text-gray-500 dark:text-neutral-400">
+                            {affiliate.unpaidCommissions} comm.
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5">
+                        <AccountActiveBadge isActive={affiliate.isActive} />
+                      </td>
+                      <td className="whitespace-nowrap px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 text-2xs sm:text-xs font-medium">
+                        <div className="flex items-center gap-1.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => handleAffiliateClick(affiliate)}
+                            className="flex items-center gap-1 text-red-600 transition-colors hover:text-red-675"
+                          >
+                            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <span className="hidden lg:inline">View</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyLink(affiliate.affiliateLink)}
+                            className="text-gray-600 dark:text-neutral-400 transition-colors hover:text-gray-900 dark:hover:text-white"
+                            title="Copy affiliate link"
+                          >
+                            {copiedLink === affiliate.affiliateLink ? (
+                              <Check className="h-3.5 w-3.5 text-green-600 sm:h-4 sm:w-4" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {affiliatesData && affiliatesData.pagination.totalPages > 1 && (
+              <div className="border-t-2 border-gray-200 bg-gray-50 px-3 py-3 dark:border-neutral-700 dark:bg-neutral-950 sm:px-6 sm:py-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage(1)}
+                      disabled={page === 1}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
+                      aria-label="First page"
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <span className="text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">
+                    Page {affiliatesData.pagination.page} of {affiliatesData.pagination.totalPages}
+                  </span>
+
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(affiliatesData.pagination.totalPages, p + 1))}
+                      disabled={page === affiliatesData.pagination.totalPages}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage(affiliatesData.pagination.totalPages)}
+                      disabled={page === affiliatesData.pagination.totalPages}
+                      className="rounded-lg border-2 border-gray-300 p-1.5 text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-400 dark:hover:border-neutral-500 dark:hover:text-neutral-200 sm:p-2"
+                      aria-label="Last page"
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Pagination */}
-      {affiliatesData && affiliatesData.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Page {affiliatesData.pagination.page} of {affiliatesData.pagination.totalPages}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(affiliatesData.pagination.totalPages, p + 1))}
-              disabled={page === affiliatesData.pagination.totalPages}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Create Affiliate Modal */}
       {isCreateModalOpen && (
@@ -437,70 +562,79 @@ function CreateAffiliateModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900">Create Affiliate</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
+    <ModalContainer
+      isOpen
+      onClose={onClose}
+      size="md"
+      height="auto"
+      className="flex flex-col !max-w-md max-h-[90dvh] overflow-hidden !border-gray-100 dark:!border-neutral-700 shadow-lg dark:shadow-none !bg-white dark:!bg-neutral-900 rounded-xl"
+      preventBackButton={false}
+    >
+        <div className="flex-shrink-0 border-b border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Create Affiliate</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
-            {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+            {errors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.name}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Email *</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
-            {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            {errors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.email}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Phone</label>
             <input
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Username *</label>
             <input
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
-            {errors.username && <p className="text-red-600 text-xs mt-1">{errors.username}</p>}
+            {errors.username && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.username}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Password *</label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               required
             />
-            {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+            {errors.password && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Commission Rate (%) *</label>
+            <label className="mb-0.5 block text-xs font-medium text-gray-700 dark:text-neutral-200 sm:text-sm">Commission Rate (%) *</label>
             <input
               type="number"
               min="0"
@@ -508,30 +642,32 @@ function CreateAffiliateModal({
               step="0.1"
               value={formData.commissionRate}
               onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-red-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
               placeholder="30"
               required
             />
-            <p className="text-xs text-gray-500 mt-1">Enter commission rate as percentage (0-100%). Default: 30%</p>
-            {errors.commissionRate && <p className="text-red-600 text-xs mt-1">{errors.commissionRate}</p>}
+            <p className="mt-1 text-2xs text-gray-500 dark:text-neutral-400 sm:text-xs">
+              Enter commission rate as percentage (0-100%). Default: 30%
+            </p>
+            {errors.commissionRate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.commissionRate}</p>}
           </div>
-          <div className="flex gap-2 justify-end pt-4">
+          </div>
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 px-4 py-2.5 sm:px-5 sm:py-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700 sm:h-8 sm:min-h-8 sm:px-3.5"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="inline-flex h-9 min-h-9 items-center justify-center rounded-md bg-gradient-to-r from-red-600 to-red-400 px-3 text-sm font-semibold text-white transition-all hover:from-red-675 hover:to-red-650 sm:h-8 sm:min-h-8 sm:px-3.5"
             >
               Create
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalContainer>
   );
 }

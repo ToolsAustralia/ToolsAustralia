@@ -20,8 +20,8 @@ export type BrandId = (typeof brandLogos)[number]["id"];
 export const brandLogos: BrandLogo[] = [
   {
     id: "sidchrome",
-    name: "SIDCHROME",
-    logo: "/images/brands/sidchrome.png",
+    name: "Sidchrome",
+    logo: "/images/brands/sidchrome.webp",
     gradient: "from-red-800 via-red-700 to-red-900",
     imageScale: 1,
     imageScaleSm: 1.4,
@@ -32,7 +32,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "milwaukee",
     name: "Milwaukee",
-    logo: "/images/brands/milwaukee.png",
+    logo: "/images/brands/milwaukee.webp",
     gradient: "from-red-600 via-red-500 to-red-700",
     imageScale: 1.5,
     imageScaleSm: 1.5,
@@ -43,7 +43,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "makita",
     name: "Makita",
-    logo: "/images/brands/Makita-red.png",
+    logo: "/images/brands/Makita-red.webp",
     gradient: "from-makita-500 via-makita-600 to-makita-700", // Makita brand gradient
     imageScale: 1.0,
     imageScaleSm: 1.4,
@@ -54,7 +54,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "kincrome",
     name: "KINCROME",
-    logo: "/images/brands/kincrome.png",
+    logo: "/images/brands/kincrome.webp",
     gradient: "from-blue-700 via-blue-600 to-blue-800",
     imageScale: 0.9,
     imageScaleSm: 1.4,
@@ -65,7 +65,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "dewalt",
     name: "DEWALT",
-    logo: "/images/brands/dewalt-black.png",
+    logo: "/images/brands/dewalt-black.webp",
     gradient: "from-yellow-500 via-yellow-600 to-amber-600",
     imageScale: 1,
     imageScaleSm: 1.4,
@@ -77,7 +77,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "chicago-pneumatic",
     name: "Chicago Pneumatic",
-    logo: "/images/brands/chicagoPneumatic.png",
+    logo: "/images/brands/chicagoPneumatic.webp",
     gradient: "from-gray-900 via-gray-800 to-black",
     imageScale: 2.0,
     imageScaleSm: 2.5,
@@ -90,7 +90,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "gearwrench",
     name: "GearWrench",
-    logo: "/images/brands/gearWrench.png",
+    logo: "/images/brands/gearWrench.webp",
     gradient: "from-gray-900 via-gray-800 to-black",
     imageScale: 2.5,
     imageScaleSm: 3.0,
@@ -102,7 +102,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "ingersoll-rand",
     name: "Ingersoll Rand",
-    logo: "/images/brands/Ingersoll-Rand.png",
+    logo: "/images/brands/Ingersoll-Rand.webp",
     gradient: "from-gray-100 via-gray-200 to-gray-300",
     imageScale: 2.5,
     imageScaleSm: 3.1,
@@ -115,7 +115,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "knipex",
     name: "Knipex",
-    logo: "/images/brands/knipex.png",
+    logo: "/images/brands/knipex.webp",
     gradient: "from-gray-100 via-gray-200 to-gray-300",
     imageScale: 1.2,
     imageScaleSm: 1.5,
@@ -127,7 +127,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "koken",
     name: "Koken",
-    logo: "/images/brands/koken.png",
+    logo: "/images/brands/koken.webp",
     gradient: "from-gray-700 via-gray-600 to-gray-800",
     imageScale: 1.2,
     imageScaleSm: 1.2,
@@ -151,7 +151,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "stahlwille",
     name: "Stahlwille",
-    logo: "/images/brands/stahlwille.png",
+    logo: "/images/brands/stahlwille.webp",
     gradient: "bg-[linear-gradient(to_bottom,#111827_0%,#111827_55%,#064e3b_55%,#064e3b_100%)]",
     imageScale: 1,
     imageScaleSm: 1.4,
@@ -165,7 +165,7 @@ export const brandLogos: BrandLogo[] = [
   {
     id: "warren-brown",
     name: "Warren & Brown",
-    logo: "/images/brands/warrenBrown.png",
+    logo: "/images/brands/warrenBrown.webp",
     gradient: "from-gray-100 via-gray-200 to-gray-300",
     imageScale: 2.5,
     imageScaleSm: 3.1,

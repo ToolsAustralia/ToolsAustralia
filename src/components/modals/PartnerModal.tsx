@@ -179,12 +179,10 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" closeOnBackdrop={false}>
       {/* Custom Header for Partner Modal - Highly optimized for mobile */}
-      <div className="bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444] p-2 sm:p-6 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-red-600 via-[#ff3333] to-red-400 p-2 sm:p-6 text-white relative overflow-hidden">
         <button
           onClick={onClose}
           type="button"
@@ -196,7 +194,7 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
 
         <div className="relative z-10 flex items-center justify-center sm:justify-between">
           {/* <Image
-            src="/images/Tools Australia Logo/Primary Logo.png"
+            src="/images/Tools Australia Logo/Primary Logo.webp"
             alt="Tools Australia"
             width={120}
             height={120}
@@ -215,27 +213,30 @@ const PartnerModal: React.FC<PartnerModalProps> = ({ isOpen, onClose }) => {
         {isSubmitted ? (
           // Success State
           <div className="text-center py-4 sm:py-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full mb-4 sm:mb-6">
-              <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
+            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-green-100 dark:bg-green-950/40 rounded-full mb-4 sm:mb-6">
+              <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="text-lg sm:text-2xl font-bold text-gray-900 font-['Poppins'] mb-2 sm:mb-4">Thank You!</h3>
-            <p className="text-sm sm:text-base text-gray-600 font-['Inter'] mb-4 sm:mb-6">
+            <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-neutral-100 font-['Poppins'] mb-2 sm:mb-4">Thank You!</h3>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 font-['Inter'] mb-4 sm:mb-6">
               Your partnership application has been submitted successfully. We&apos;ll be in touch within 24 hours to
               discuss your partnership opportunities.
             </p>
-            <div className="bg-green-50 rounded-xl p-3 sm:p-4 border border-green-200 max-w-sm mx-auto">
-              <p className="text-xs sm:text-sm text-green-700 font-['Inter']">
+            <div className="bg-green-50 dark:bg-green-950/30 rounded-xl p-3 sm:p-4 border border-green-200 dark:border-green-900/50 max-w-sm mx-auto">
+              <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 font-['Inter']">
                 This modal will close automatically in a few seconds.
               </p>
             </div>
           </div>
         ) : (
-          // Form State
-          <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-6">
+          // Form State — card shell matches Settings / other modals in dark mode
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-2 sm:space-y-6 rounded-xl border border-gray-200 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/50 p-3 sm:p-5"
+          >
             {/* Error Message */}
             {submitError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 mb-4">
-                <p className="text-sm text-red-700 font-['Inter']">{submitError}</p>
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-xl p-3 sm:p-4 mb-4">
+                <p className="text-sm text-red-700 dark:text-red-300 font-['Inter']">{submitError}</p>
               </div>
             )}
             <FormSection title="Personal Information" icon={User}>

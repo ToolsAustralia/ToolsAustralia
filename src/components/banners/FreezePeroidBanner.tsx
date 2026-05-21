@@ -12,6 +12,8 @@
 
 import { useEffect, useState } from "react";
 import { formatCountdown } from "@/utils/common/timezone";
+import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { cn } from "@/utils/cn";
 
 interface FreezePeriodBannerProps {
   /** Name of the next draw entries will go to */
@@ -34,27 +36,21 @@ export default function FreezePeriodBanner({
   status: _status,
   className = "",
 }: FreezePeriodBannerProps) {
-  const [timeRemaining, setTimeRemaining] = useState(initialTimeUntilDraw);
-
-  // Update countdown every second
+  // Anchor target time at mount (or whenever the server-provided remaining
+  // ms changes). The leaf timer below ticks at 1s without re-rendering any parent.
+  const [targetMs, setTargetMs] = useState(() => Date.now() + initialTimeUntilDraw);
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => Math.max(0, prev - 1000));
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  // Sync with server-provided time when it changes
-  useEffect(() => {
-    setTimeRemaining(initialTimeUntilDraw);
+    setTargetMs(Date.now() + initialTimeUntilDraw);
   }, [initialTimeUntilDraw]);
+
+  const now = useLeafTimer(1000);
+  const timeRemaining = Math.max(0, targetMs - now);
 
   const countdown = formatCountdown(timeRemaining);
 
   return (
     <div
-      className={`w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-4 py-3 sm:px-6 sm:py-4 shadow-lg ${className}`}
+      className={cn("w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-4 py-3 sm:px-6 sm:py-4 shadow-lg", className)}
       role="alert"
       aria-live="polite"
     >

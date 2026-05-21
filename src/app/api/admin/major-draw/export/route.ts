@@ -215,10 +215,12 @@ function exportToCSV(
     row.totalEntries.toString(),
   ]);
 
-  // Generate CSV string
+  // Generate CSV string with BOM and CRLF for Excel compatibility on Windows
   const csv = stringify([headers, ...csvData], {
     quoted: true,
     quoted_empty: true,
+    bom: true,
+    record_delimiter: "windows",
   });
 
   // Return CSV response with proper headers

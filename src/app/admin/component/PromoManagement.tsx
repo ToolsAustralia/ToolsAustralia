@@ -7,6 +7,7 @@ import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
 import BonusEntryPromoList from "@/components/admin/BonusEntryPromoList";
 import AdminScheduledPromoModal from "@/components/modals/AdminScheduledPromoModal";
+import AdminScheduledPromoCalendarModal from "@/components/modals/AdminScheduledPromoCalendarModal";
 import ScheduledPromoList from "@/components/admin/ScheduledPromoList";
 import AdminPromoLinkModal from "@/components/modals/AdminPromoLinkModal";
 import PromoLinkList from "@/components/admin/PromoLinkList";
@@ -14,229 +15,297 @@ import AdminPromoBannerTextModal from "@/components/modals/AdminPromoBannerTextM
 import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
 import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
 import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
-import PromoBadge from "@/components/ui/PromoBadge";
+import MonthlyRedeemablesCampaignPanel from "@/components/admin/MonthlyRedeemablesCampaignPanel";
+import MilestoneRewardsPanel from "@/components/admin/MilestoneRewardsPanel";
+import { UpsellMultiplierPanel } from "@/components/admin/UpsellMultiplierPanel";
+import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
 import type { ScheduledPromo } from "@/types/admin";
-import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat } from "lucide-react";
+import { Zap, Loader2, RefreshCw, Settings, Gift, Plus, Link2, Calendar, Repeat, Medal, Layers } from "lucide-react";
+import { formatDisplayName } from "@/utils/display-name";
+import { cn } from "@/utils/cn";
 
 export default function PromoManagement() {
   const [isToggleModalOpen, setIsToggleModalOpen] = useState(false);
   const [isScheduledModalOpen, setIsScheduledModalOpen] = useState(false);
+  const [isScheduledCalendarModalOpen, setIsScheduledCalendarModalOpen] = useState(false);
   const [editingScheduledPromo, setEditingScheduledPromo] = useState<ScheduledPromo | null>(null);
   const [isBonusEntryModalOpen, setIsBonusEntryModalOpen] = useState(false);
   const [isPromoLinkModalOpen, setIsPromoLinkModalOpen] = useState(false);
   const [isBannerTextModalOpen, setIsBannerTextModalOpen] = useState(false);
   const [isAlternatingMultiplierModalOpen, setIsAlternatingMultiplierModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    | "redeemables"
+    | "milestones"
+    | "scheduled"
+    | "bonus-entry"
+    | "promo-links"
+    | "banner-text"
+    | "alternating"
+    | "upsell-multipliers"
+  >("scheduled");
 
   const queryClient = useQueryClient();
   const { data: activePromos = [], isLoading: activeLoading, refetch: refetchActive } = useAdminActivePromos();
 
+  const tabs = [
+    { id: "scheduled" as const, label: "Scheduled", icon: Calendar },
+    { id: "alternating" as const, label: "Alternating", icon: Repeat },
+    { id: "promo-links" as const, label: "Promo Links", icon: Link2 },
+    { id: "banner-text" as const, label: "Banner Image", icon: Calendar },
+    { id: "bonus-entry" as const, label: "Bonus Entry", icon: Gift },
+    { id: "redeemables" as const, label: "Redeemables", icon: Gift },
+    { id: "milestones" as const, label: "Milestones", icon: Medal },
+    { id: "upsell-multipliers" as const, label: "Upsell Multipliers", icon: Layers },
+  ];
+
+  const primaryActionButtonClass =
+    "inline-flex items-center gap-1.5 sm:gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg w-full sm:w-auto justify-center shrink-0";
+
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Promo Management</h2>
-          <p className="text-gray-600 mt-1">Manage promotional campaigns and entry multipliers</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Promo Management</h2>
+          <p className="text-gray-600 dark:text-neutral-400 text-sm sm:text-base mt-0.5 sm:mt-1">
+            Manage campaigns and entry multipliers
+          </p>
         </div>
-        <button
-          onClick={() => setIsToggleModalOpen(true)}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-        >
-          <Settings className="w-4 h-4" />
-          Toggle Promos
-        </button>
       </div>
 
-      {/* Active Promos */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
-              Active Promos
-            </h3>
-            <button
-              onClick={() => refetchActive()}
-              disabled={activeLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${activeLoading ? "animate-spin" : ""}`} />
-            </button>
+      {/* Promo Tabs */}
+      <div className="space-y-3 sm:space-y-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center justify-center gap-2 h-9 px-3 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors w-full sm:w-auto ${
+                    isActive
+                      ? "bg-gradient-to-r from-red-600 to-red-700 text-white"
+                      : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:hover:bg-neutral-700"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="p-4 sm:p-6">
-          {activeLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-red-600" />
-            </div>
-          ) : activePromos.length === 0 ? (
-            <div className="text-center py-8">
-              <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No active promos</p>
-              <p className="text-sm text-gray-400 mt-1">Create a new promo to boost package sales</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {activePromos.map((promo) => (
-                <div
-                  key={promo.id}
-                  className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-4 border border-red-200"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <PromoBadge multiplier={promo.multiplier} />
-                        <span className="text-sm font-medium text-gray-700 capitalize">
-                          {promo.type.replace("-", " ")}
-                        </span>
-                      </div>
-                      {promo.createdBy && (
-                        <div className="text-sm text-gray-600">
-                          Created by: {promo.createdBy.firstName} {promo.createdBy.lastName}
-                        </div>
-                      )}
+        <div className="space-y-3 sm:space-y-4">
+          {activeTab === "redeemables" && <MonthlyRedeemablesCampaignPanel />}
+
+          {activeTab === "milestones" && <MilestoneRewardsPanel />}
+
+          {activeTab === "upsell-multipliers" && <UpsellMultiplierPanel />}
+
+          {activeTab === "scheduled" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    Scheduled Promos
+                  </h3>
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                    Campaign phases with date ranges; apply automatically. Priority: Scheduled &gt; Toggle &gt; Alternating.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={() => setIsScheduledCalendarModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 border-2 border-red-600 dark:border-red-500 text-red-700 dark:text-red-300 bg-white dark:bg-neutral-900 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg font-semibold text-sm sm:text-base hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-200 w-full sm:w-auto"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Month grid
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingScheduledPromo(null);
+                      setIsScheduledModalOpen(true);
+                    }}
+                    className={primaryActionButtonClass}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Schedule Promo
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 mb-4">
+                <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-neutral-700">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-yellow-500" />
+                      Active Promos
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => refetchActive()}
+                        disabled={activeLoading}
+                        className="p-2 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition-colors"
+                      >
+                        <RefreshCw className={cn("w-4 h-4", activeLoading ? "animate-spin" : "")} />
+                      </button>
+                      <button
+                        onClick={() => setIsToggleModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 text-white px-3 py-1.5 rounded-lg font-semibold text-xs sm:text-sm hover:from-red-700 hover:to-red-800 transition-all duration-200"
+                      >
+                        <Settings className="w-3.5 h-3.5 shrink-0" />
+                        Toggle Promos
+                      </button>
                     </div>
-                    <div className="text-sm text-gray-500">Use toggle button above to change or turn off</div>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="p-3 sm:p-4">
+                  {activeLoading ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-red-600" />
+                    </div>
+                  ) : activePromos.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Zap className="w-10 h-10 text-gray-300 dark:text-neutral-600 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-neutral-400 text-sm">No active promos</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {activePromos.map((promo) => (
+                        <div
+                          key={promo.id}
+                          className="bg-gradient-to-r from-red-50 to-orange-50 rounded-lg p-3 border border-red-200"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2.5 mb-1">
+                                <PromoBadgeImage multiplier={promo.multiplier} size="small" className="shrink-0" />
+                                <span className="text-sm font-medium text-gray-700 dark:text-neutral-200 capitalize truncate">
+                                  {promo.type.replace("-", " ")}
+                                </span>
+                              </div>
+                              {promo.createdBy && (
+                                <div className="text-xs text-gray-600 dark:text-neutral-400 truncate">
+                                  Created by: {formatDisplayName(promo.createdBy.firstName, promo.createdBy.lastName)}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 shrink-0">Managed via Toggle Promos</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <ScheduledPromoList
+                onEditRequested={(promo) => {
+                  setEditingScheduledPromo(promo);
+                  setIsScheduledModalOpen(true);
+                }}
+              />
+            </>
+          )}
+
+          {activeTab === "bonus-entry" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    Bonus Entry Promos
+                  </h3>
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                    Date-based promos granting bonus entries during specific periods
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsBonusEntryModalOpen(true)}
+                  className={primaryActionButtonClass}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Bonus Entry Promo
+                </button>
+              </div>
+              <BonusEntryPromoList />
+            </>
+          )}
+
+          {activeTab === "promo-links" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    Promo Links
+                  </h3>
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                    Shareable promo links with unique codes for bonus entries on next purchase
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsPromoLinkModalOpen(true)}
+                  className={primaryActionButtonClass}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Promo Link
+                </button>
+              </div>
+              <PromoLinkList />
+            </>
+          )}
+
+          {activeTab === "banner-text" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    Promo Banner Image Schedule
+                  </h3>
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                    Scheduled left banner image for campaigns. One-time or recurring (weekdays/weekends). AEST timezone.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsBannerTextModalOpen(true)}
+                  className={primaryActionButtonClass}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create scheduled image
+                </button>
+              </div>
+              <PromoBannerTextList />
+            </>
+          )}
+
+          {activeTab === "alternating" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Repeat className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    Alternating Multiplier Settings
+                  </h3>
+                  <p className="text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1 text-xs sm:text-sm">
+                    Daily alternating multipliers at midnight AEST. Priority: Active &gt; Alternating &gt; Default
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsAlternatingMultiplierModalOpen(true)}
+                  className={primaryActionButtonClass}
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Configuration
+                </button>
+              </div>
+              <AlternatingMultiplierList />
+            </>
           )}
         </div>
-      </div>
-
-      {/* Scheduled Promos Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-red-600" />
-              Scheduled Promos
-            </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Define campaign phases with date ranges and multipliers; they apply automatically when the current time
-              falls within a phase. Priority: Scheduled &gt; Toggle Promo &gt; Alternating.
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              setEditingScheduledPromo(null);
-              setIsScheduledModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Schedule Promo
-          </button>
-        </div>
-
-        <ScheduledPromoList
-          onEditRequested={(promo) => {
-            setEditingScheduledPromo(promo);
-            setIsScheduledModalOpen(true);
-          }}
-        />
-      </div>
-
-      {/* Bonus Entry Promos Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Gift className="w-5 h-5 text-red-600" />
-              Bonus Entry Promos
-            </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Create date-based promos that grant bonus entries when users purchase packages during specific periods
-            </p>
-          </div>
-          <button
-            onClick={() => setIsBonusEntryModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Create Bonus Entry Promo
-          </button>
-        </div>
-
-        <BonusEntryPromoList />
-      </div>
-
-      {/* Promo Links Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Link2 className="w-5 h-5 text-red-600" />
-              Promo Links
-            </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Create shareable promo links with unique codes that grant bonus entries. Users click the link and the code
-              is saved for their next purchase.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsPromoLinkModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Create Promo Link
-          </button>
-        </div>
-
-        <PromoLinkList />
-      </div>
-
-      {/* Promo Banner Text Schedule Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-red-600" />
-              Promo Banner Text Schedule
-            </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Schedule custom banner text for holidays and special occasions. Supports one-time date ranges and
-              recurring patterns (weekdays, weekends, or specific days). All dates are in AEST timezone.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsBannerTextModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Create Scheduled Text
-          </button>
-        </div>
-
-        <PromoBannerTextList />
-      </div>
-
-      {/* Alternating Multiplier Settings Section */}
-      <div className="mt-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Repeat className="w-5 h-5 text-red-600" />
-              Alternating Multiplier Settings
-            </h3>
-            <p className="text-gray-600 mt-1 text-sm">
-              Configure multipliers that automatically alternate daily at midnight AEST. Only applies when no active
-              promo exists for the package type. Priority: Active Promo &gt; Alternating Multiplier &gt; Default (10x
-              display, 1x payment).
-            </p>
-          </div>
-          <button
-            onClick={() => setIsAlternatingMultiplierModalOpen(true)}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg font-semibold hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Create Configuration
-          </button>
-        </div>
-
-        <AlternatingMultiplierList />
       </div>
 
       {/* Toggle Promo Modal */}
@@ -258,6 +327,16 @@ export default function PromoManagement() {
         editingPromo={editingScheduledPromo}
       />
 
+      <AdminScheduledPromoCalendarModal
+        isOpen={isScheduledCalendarModalOpen}
+        onClose={() => setIsScheduledCalendarModalOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["promos", "scheduled"] });
+          queryClient.invalidateQueries({ queryKey: ["promos", "admin", "active"] });
+          setIsScheduledCalendarModalOpen(false);
+        }}
+      />
+
       {/* Bonus Entry Promo Modal */}
       <AdminBonusEntryPromoModal
         isOpen={isBonusEntryModalOpen}
@@ -276,7 +355,7 @@ export default function PromoManagement() {
         }}
       />
 
-      {/* Banner Text Modal */}
+      {/* Banner image schedule modal */}
       <AdminPromoBannerTextModal
         isOpen={isBannerTextModalOpen}
         onClose={() => setIsBannerTextModalOpen(false)}

@@ -53,10 +53,27 @@ export async function GET() {
         totalSales: 0,
         totalCommissions: 0,
       },
+      miniDrawPackage: {
+        count: 0,
+        totalSales: 0,
+        totalCommissions: 0,
+      },
+    };
+
+    const commissionTypeToBreakdownKey: Record<
+      IAffiliateCommission["commissionType"],
+      keyof typeof breakdown
+    > = {
+      "one-time-package": "oneTimePackage",
+      upsell: "upsell",
+      "membership-first": "membershipFirst",
+      "membership-recurring": "membershipRecurring",
+      "mini-draw-package": "miniDrawPackage",
     };
 
     unpaidCommissions.forEach((commission) => {
-      const stats = breakdown[commission.commissionType as keyof typeof breakdown];
+      const key = commissionTypeToBreakdownKey[commission.commissionType];
+      const stats = key ? breakdown[key] : undefined;
       if (stats) {
         stats.count++;
         stats.totalSales += commission.purchaseAmount;

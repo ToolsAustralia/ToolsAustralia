@@ -2,6 +2,7 @@
 
 import React from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -32,7 +33,7 @@ const Button: React.FC<ButtonProps> = ({
 }) => {
   // Base styles
   const baseStyles =
-    "inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ee0000]/40 overflow-hidden";
+    "inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600/40 overflow-hidden";
 
   // Size variants
   const sizeStyles = {
@@ -43,15 +44,16 @@ const Button: React.FC<ButtonProps> = ({
 
   // Color variants
   const variantStyles = {
-    primary: "bg-gradient-to-r from-[#ee0000] via-[#ff3333] to-[#ff4444] text-white hover:shadow-lg hover:scale-105",
-    secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
+    primary: "bg-gradient-to-r from-red-600 via-[#ff3333] to-red-400 text-white hover:shadow-lg hover:scale-105",
+    secondary: "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-neutral-700",
     danger: "bg-red-600 text-white hover:bg-red-700",
-    outline: "border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white",
-    ghost: "text-gray-700 hover:bg-gray-100",
+    outline:
+      "border-2 border-red-600 dark:border-red-500 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white dark:hover:bg-red-600 dark:hover:text-white",
+    ghost: "text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800",
     metallic:
       // Metallic primary inspired by components/ui/MetallicButton primary variant
-      "relative bg-gradient-to-r from-[#ee0000] to-[#cc0000] text-white shadow-lg shadow-[#ee0000]/40 " +
-      "hover:shadow-xl hover:shadow-[#ee0000]/50 transition-all duration-300 " +
+      "relative bg-gradient-to-r from-red-600 to-red-675 text-white shadow-lg shadow-red-600/40 " +
+      "hover:shadow-xl hover:shadow-red-600/50 transition-all duration-300 " +
       "before:absolute before:inset-0 before:rounded-lg before:bg-gradient-to-r " +
       "before:from-white/0 before:via-white/20 before:to-white/0 before:-translate-x-full hover:before:translate-x-full " +
       "before:transition-transform before:duration-700",
@@ -82,13 +84,13 @@ const Button: React.FC<ButtonProps> = ({
       {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />}
 
       {/* Left Icon */}
-      {Icon && iconPosition === "left" && !loading && <Icon className={`w-4 h-4 ${children ? "mr-2" : ""}`} />}
+      {Icon && iconPosition === "left" && !loading && <Icon className={cn("w-4 h-4", children ? "mr-2" : "")} />}
 
       {/* Button Text */}
       {children}
 
       {/* Right Icon */}
-      {Icon && iconPosition === "right" && !loading && <Icon className={`w-4 h-4 ${children ? "ml-2" : ""}`} />}
+      {Icon && iconPosition === "right" && !loading && <Icon className={cn("w-4 h-4", children ? "ml-2" : "")} />}
     </button>
   );
 };

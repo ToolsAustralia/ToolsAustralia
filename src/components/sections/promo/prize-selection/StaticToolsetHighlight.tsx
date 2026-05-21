@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { getBrandGlowColor } from "@/utils/prize-brand-colors";
-import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
+import { getPackageColorScheme, getToolsetBadgeStyle } from "@/utils/package-colors/packageColorScheme";
 import { POWERSET_IMAGES, POWERSET_LABELS, POWERSET_BRAND_TEXT } from "./constants";
 import type { PrizeSlug } from "@/config/prizes";
+import { cn } from "@/utils/cn";
 
 interface StaticToolsetHighlightProps {
   /** Toolset key: ryobi, milwaukee, dewalt, makita */
@@ -35,12 +36,13 @@ export function StaticToolsetHighlight({
   const label = POWERSET_LABELS[toolset];
   const brandTextSrc = POWERSET_BRAND_TEXT[toolset];
   const scheme = getPackageColorScheme(getToolsetColorKey(toolset));
+  const badgeStyle = getToolsetBadgeStyle(toolset);
   const glowColor = getBrandGlowColor(prizeSlug);
 
   if (!imgSrc) return null;
 
   return (
-    <div className={`flex flex-col items-center gap-2 sm:gap-3 ${className}`}>
+    <div className={cn("flex flex-col items-center gap-2 sm:gap-3", className)}>
       {brandTextSrc && (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
@@ -93,20 +95,20 @@ export function StaticToolsetHighlight({
             />
           </div>
         </motion.div>
-        {label && scheme && (
+        {label && scheme && badgeStyle && (
           <div className="relative z-10 w-full max-w-[480px] sm:max-w-[560px] px-2">
             <div
               className="rounded-xl backdrop-blur-md px-3 py-2 sm:px-5 sm:py-2.5 shadow-xl"
               style={{
-                background: scheme.badgeStyle.background,
-                boxShadow: scheme.badgeStyle.boxShadow,
-                border: scheme.badgeStyle.border,
+                background: badgeStyle.background,
+                boxShadow: badgeStyle.boxShadow,
+                border: badgeStyle.border,
               }}
             >
               <p
-                className={`font-agency font-bold text-[10px] sm:text-xs lg:text-sm leading-tight text-center ${scheme.buttonText}`}
+                className={cn("font-sans font-extrabold font-bold text-2xs sm:text-xs lg:text-sm leading-tight text-center", scheme.buttonText)}
               >
-                {label} · $5000 Cash
+                {label} + $5000 CASH
               </p>
             </div>
           </div>

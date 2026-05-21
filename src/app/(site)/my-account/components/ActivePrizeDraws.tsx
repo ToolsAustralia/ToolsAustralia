@@ -32,7 +32,7 @@ export default function ActiveMiniDraws({ miniDraws }: ActiveMiniDrawsProps) {
           </svg>
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Mini Draws</h3>
-        <p className="text-gray-600">Check back later for new mini draws!</p>
+        <p className="text-gray-600 dark:text-neutral-400">Check back later for new mini draws!</p>
       </div>
     );
   }
@@ -44,7 +44,7 @@ export default function ActiveMiniDraws({ miniDraws }: ActiveMiniDrawsProps) {
         {miniDraws.map((draw) => (
           <div key={draw._id} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-2">{draw.name}</h3>
-            <p className="text-sm text-gray-600 mb-3">{draw.description}</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-3">{draw.description}</p>
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-green-600">Prize: {draw.prize.name}</span>
               <span className="text-xs text-gray-500">
@@ -68,7 +68,7 @@ export default function ActiveMiniDraws({ miniDraws }: ActiveMiniDrawsProps) {
             className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow"
           >
             <h3 className="font-semibold text-gray-900 mb-3">{draw.name}</h3>
-            <p className="text-sm text-gray-600 mb-4">{draw.description}</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">{draw.description}</p>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-green-600">Prize:</span>

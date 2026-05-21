@@ -30,6 +30,7 @@ import {
   getDefaultFields,
   type FieldGroup,
 } from "@/services/admin/userExportFields";
+import { cn } from "@/utils/cn";
 
 interface UserExportModalProps {
   isOpen: boolean;
@@ -100,6 +101,14 @@ function getFilterSummary(filters: UserFilters): string {
   }
   if (filters.role) {
     parts.push(`Role: ${filters.role}`);
+  }
+  if (filters.states?.length) {
+    parts.push(`States: ${filters.states.join(", ")}`);
+  }
+  if (filters.inActiveMajorDraw) {
+    parts.push(
+      filters.inActiveMajorDraw === "yes" ? "In active major draw" : "Not in active major draw"
+    );
   }
 
   return parts.length > 0 ? parts.join(", ") : "All users";
@@ -231,6 +240,12 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       if (filters.role) params.set("role", filters.role);
       if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
+      if (filters.states?.length) {
+        for (const c of filters.states) {
+          params.append("state", c);
+        }
+      }
+      if (filters.inActiveMajorDraw) params.set("inActiveMajorDraw", filters.inActiveMajorDraw);
 
       const response = await fetch(`/api/admin/users/export?${params.toString()}`, {
         method: "GET",
@@ -303,8 +318,6 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl" height="fixed">
       <ModalHeader
@@ -320,7 +333,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
       <ModalContent padding="md" className="flex flex-col gap-4">
         {/* Segment Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-gray-700">Export Segment</label>
+          <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Export Segment</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {EXPORT_SEGMENTS.map((seg) => (
               <button
@@ -348,7 +361,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
 
         {/* Format Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-gray-700">Export Format</label>
+          <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Export Format</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {EXPORT_FORMATS.map((format) => (
               <button
@@ -362,7 +375,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                 } ${isExporting ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`${selectedFormat === format.value ? "text-red-600" : "text-gray-400"}`}>
+                  <div className={cn(selectedFormat === format.value ? "text-red-600" : "text-gray-400")}>
                     {format.icon}
                   </div>
                   <div className="flex-1 text-left">
@@ -381,7 +394,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
         {/* Field Selection */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-gray-700">Select Fields to Export</label>
+            <label className="text-sm font-semibold text-gray-700 dark:text-neutral-200">Select Fields to Export</label>
             <div className="flex gap-2">
               <button
                 onClick={selectAll}
@@ -430,7 +443,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                         toggleGroupExpansion(group);
                       }
                     }}
-                    className={`w-full flex items-center justify-between p-3 transition-colors cursor-pointer ${isExporting ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50"}`}
+                    className={cn("w-full flex items-center justify-between p-3 transition-colors cursor-pointer", isExporting ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50")}
                   >
                     <div className="flex items-center gap-2">
                       <button
@@ -473,7 +486,7 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
                             onChange={() => toggleField(field.key)}
                             disabled={isExporting}
                           />
-                          <span className="text-sm text-gray-700 flex-1">{field.displayName}</span>
+                          <span className="text-sm text-gray-700 dark:text-neutral-200 flex-1">{field.displayName}</span>
                           {field.isComputed && (
                             <span className="text-xs text-gray-500 italic">(calculated)</span>
                           )}

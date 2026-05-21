@@ -7,6 +7,11 @@
  * @module utils/integrations/klaviyo/klaviyo-invoice-helpers
  */
 
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getReceiptLabelByPackageId } from "@/utils/membership/getReceiptLabel";
+import { getPackageById } from "@/data/membershipPackages";
+import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+
 export type PackageType = "membership" | "one-time" | "mini-draw" | "upsell";
 
 /**
@@ -29,6 +34,8 @@ export interface InvoiceData {
   packageId: string;
   packageName: string;
   packageTier?: string;
+  /** Partner catalog access % for the primary line item (Klaviyo transactional templates). */
+  partnerDiscountCatalogPercent?: number;
   totalAmount: number;
   paymentIntentId: string;
   billingReason?: string;
@@ -132,13 +139,14 @@ export function buildInvoiceData(packageData: PackageData, paymentIntentId: stri
     packageId: packageData.packageId,
     packageName: packageData.packageName,
     packageTier,
+    partnerDiscountCatalogPercent: getPartnerCatalogAccessPercentForPlanId(packageData.packageId),
     totalAmount: packageData.price,
     paymentIntentId,
     billingReason: packageData.packageType === "membership" ? "subscription_create" : undefined,
     entries_gained: packageData.entries,
     items: [
       {
-        description: packageData.packageName,
+        description: getReceiptLabelByPackageId(packageData.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
         quantity: 1,
         unit_price: packageData.price,
         total_price: packageData.price,
@@ -167,7 +175,7 @@ export function buildCombinedInvoiceData(
   // Build items array starting with original purchase
   const items: InvoiceItem[] = [
     {
-      description: originalPurchase.packageName,
+      description: getReceiptLabelByPackageId(originalPurchase.packageId, { membership: getPackageById, mini: getMiniDrawPackageById }),
       quantity: 1,
       unit_price: originalPurchase.price,
       total_price: originalPurchase.price,
@@ -195,6 +203,7 @@ export function buildCombinedInvoiceData(
     packageId: originalPurchase.packageId,
     packageName: originalPurchase.packageName,
     packageTier,
+    partnerDiscountCatalogPercent: getPartnerCatalogAccessPercentForPlanId(originalPurchase.packageId),
     totalAmount,
     paymentIntentId: originalPurchase.paymentIntentId,
     billingReason: originalPurchase.packageType === "membership" ? "subscription_create" : undefined,

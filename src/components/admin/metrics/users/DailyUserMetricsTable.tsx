@@ -11,8 +11,8 @@ interface DailyUserMetricsTableProps {
 export function DailyUserMetricsTable({ metrics }: DailyUserMetricsTableProps) {
   if (metrics.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 text-center">
-        <p className="text-gray-600">No daily user metrics data available.</p>
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-6 text-center">
+        <p className="text-gray-600 dark:text-neutral-400">No daily user metrics data available.</p>
       </div>
     );
   }
@@ -44,33 +44,33 @@ export function DailyUserMetricsTable({ metrics }: DailyUserMetricsTableProps) {
   const averageOrderValue = totals.totalPurchases > 0 ? totals.totalRevenue / totals.totalPurchases : 0;
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-6">
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-3 sm:p-6">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-            <tr className="border-b-2 border-gray-200 bg-gray-50">
-              <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+          <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+            <tr className="border-b-2 border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800">
+              <th className="text-left py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Date
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 New Signups
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Active
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Renewed
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Cancelled
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Purchases
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 Revenue
               </th>
-              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700">
+              <th className="text-right py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-800 dark:text-neutral-100">
                 AOV
               </th>
             </tr>
@@ -84,28 +84,28 @@ export function DailyUserMetricsTable({ metrics }: DailyUserMetricsTableProps) {
                 <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 font-medium">
                   {format(new Date(day.date), "MMM d, yyyy")}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                   {day.newSignups.toLocaleString()}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                   {day.activeMemberships.toLocaleString()}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-emerald-600 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
                   {day.renewedMemberships.toLocaleString()}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-red-600 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-red-600 dark:text-red-400 font-semibold tabular-nums">
                   {day.cancelledMemberships.toLocaleString()}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                   {day.totalPurchases.toLocaleString()}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                   ${day.totalRevenue.toLocaleString("en-AU", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </td>
-                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 font-semibold">
+                <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white font-semibold tabular-nums">
                   ${day.averageOrderValue.toLocaleString("en-AU", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
@@ -114,30 +114,30 @@ export function DailyUserMetricsTable({ metrics }: DailyUserMetricsTableProps) {
               </tr>
             ))}
             {/* Totals Row */}
-            <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900">Total</td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+            <tr className="border-t-2 border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800 font-bold">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-gray-900 dark:text-white">Total</td>
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white tabular-nums">
                 {totals.newSignups.toLocaleString()}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white tabular-nums">
                 {totals.activeMemberships.toLocaleString()}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-emerald-600">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-emerald-600 dark:text-emerald-400 tabular-nums">
                 {totals.renewedMemberships.toLocaleString()}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-red-600">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-red-600 dark:text-red-400 tabular-nums">
                 {totals.cancelledMemberships.toLocaleString()}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white tabular-nums">
                 {totals.totalPurchases.toLocaleString()}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white tabular-nums">
                 ${totals.totalRevenue.toLocaleString("en-AU", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
               </td>
-              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900">
+              <td className="py-2 px-2 sm:py-3 sm:px-4 text-xs sm:text-sm text-right text-gray-900 dark:text-white tabular-nums">
                 ${averageOrderValue.toLocaleString("en-AU", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,

@@ -12,7 +12,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Beaker, ChevronDown, ChevronUp, ArrowLeft, RotateCcw } from "lucide-react";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface DrawPair {
   currentDrawId: string;
@@ -22,6 +25,8 @@ interface DrawPair {
 }
 
 export default function MajorDrawTestControls() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [lastResult, setLastResult] = useState<string>("");
@@ -81,7 +86,9 @@ export default function MajorDrawTestControls() {
       const data = await response.json();
 
       if (data.success) {
-        setLastResult(`✅ Scenario ${scenario} loaded successfully!`);
+        const klaviyoNote =
+          data.klaviyoReset?.note != null ? ` Klaviyo: ${data.klaviyoReset.note}` : "";
+        setLastResult(`✅ Scenario ${scenario} loaded.${klaviyoNote}`);
         setCurrentScenario(scenario);
         
         // Extract draw IDs from response
@@ -105,9 +112,16 @@ export default function MajorDrawTestControls() {
           localStorage.setItem("dev-scenario-history", JSON.stringify(trimmed));
           return trimmed;
         });
-        
-        // Refresh the page to show updated data
-        setTimeout(() => window.location.reload(), 1000);
+
+        // DB + routes update before this response; Klaviyo runs in background. Refresh all major-draw caches + RSC.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.all }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-stats"] }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-completed"] }),
+          queryClient.invalidateQueries({ queryKey: ["major-draw-next"] }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.winners.majorDraws }),
+        ]);
+        router.refresh();
       } else {
         setLastResult(`❌ Error: ${data.error}`);
       }
@@ -144,15 +158,12 @@ export default function MajorDrawTestControls() {
     runTestScenario(1, currentDrawPair !== null);
   };
 
-  // Only show in development (check after all hooks are called)
-  if (process.env.NODE_ENV !== "development") {
-    return null;
-  }
-
+  // Render only in dev — parent Providers also gates mount.
+  // Bottom-left so we do not stack on promotions guest theme FAB (bottom-right).
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
+    <div className="fixed bottom-6 left-6 z-[9998]">
       {/* Floating Button */}
-      <div className="flex flex-col items-end gap-3">
+      <div className="flex flex-col items-start gap-3">
         {/* Expanded Menu */}
         {isOpen && (
           <div className="bg-gray-900 rounded-2xl shadow-2xl border border-gray-700 p-4 w-80 animate-in slide-in-from-bottom-5 duration-200">

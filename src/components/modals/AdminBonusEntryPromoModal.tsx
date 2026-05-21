@@ -229,8 +229,6 @@ const AdminBonusEntryPromoModal: React.FC<AdminBonusEntryPromoModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader
@@ -324,7 +322,7 @@ const AdminBonusEntryPromoModal: React.FC<AdminBonusEntryPromoModalProps> = ({
           <FormSection title="Promo Period">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date & Time </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Start Date & Time </label>
                 <DateTimePicker
                   id="startDate"
                   name="startDate"
@@ -372,7 +370,7 @@ const AdminBonusEntryPromoModal: React.FC<AdminBonusEntryPromoModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">End Date & Time </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">End Date & Time </label>
                 <DateTimePicker
                   id="endDate"
                   name="endDate"

@@ -3,13 +3,15 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { shouldTrackRoute, EXCLUDED_TRACKING_PREFIXES } from "@/utils/tracking/should-track-route";
+import { tiktokProvider } from "@/lib/tracking/providers/tiktok";
+import { eventTimeNow } from "@/lib/tracking/canonical-event";
 
 declare global {
   interface Window {
     ttq: {
       load: (pixelId: string, options?: Record<string, unknown>) => void;
       page: () => void;
-      track: (eventName: string, parameters?: Record<string, unknown>) => void;
+      track: (eventName: string, parameters?: Record<string, unknown>, options?: { event_id?: string }) => void;
       identify: (user: Record<string, unknown>) => void;
       instances: (pixelId: string) => Record<string, unknown>;
       debug: (enable: boolean) => void;
@@ -70,28 +72,34 @@ export default function TikTokPixel({ pixelId, disabled = false }: TikTokPixelPr
   return null;
 }
 
-// Helper functions for tracking TikTok events.
-//
-// TikTok's Pixel + Events API dedup uses `event_id` (snake_case) per
-// https://ads.tiktok.com/help/article/event-deduplication — our internal callers
-// pass `eventID` (camelCase, matching Meta's CAPI naming). Normalise here so a
-// single conversion ID can flow unchanged through Meta Pixel + Meta CAPI + TikTok
-// Pixel + (future) TikTok Events API.
+// Helper functions for tracking TikTok events
+/**
+ * Track a TikTok-only event by name + params.
+ *
+ * Legacy callers (subscription helpers in pixel-purchase-tracking.ts, etc.) don't
+ * have a canonical eventId, so we synthesize one. This means dedup with TikTok
+ * Events API won't be effective — but legacy callers also didn't have CAPI fan-out,
+ * so this matches today's behavior. NEW code should use `trackConversion(...)`
+ * with a real eventId for proper Pixel↔CAPI dedup across all providers.
+ *
+ * Goes through `tiktokProvider.pixelTrack` so the production-hostname gate
+ * AND missing-credentials check (spec §3 invariants #2 and #4) are enforced.
+ */
 export const trackTikTokEvent = (eventName: string, parameters?: Record<string, unknown>) => {
-  if (typeof window === "undefined" || !window.ttq) {
-    return;
-  }
-  let payload = parameters;
-  if (parameters && parameters.eventID !== undefined) {
-    const { eventID, ...rest } = parameters;
-    payload = { ...rest, event_id: eventID };
-  }
+  if (typeof window === "undefined") return;
+  const en = tiktokProvider.enabled();
+  if (!en.pixel) return;
+  const allowed = tiktokProvider.productionHostnames();
+  if (!allowed.includes(window.location.hostname)) return;
   try {
-    window.ttq.track(eventName, payload);
-  } catch (err) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(`TikTok Pixel: ${eventName} send error`, err);
-    }
+    tiktokProvider.pixelTrack({
+      eventName,
+      eventId: `legacy-${eventName}-${Date.now()}`,
+      eventTime: eventTimeNow(),
+      providerData: { tiktok: parameters },
+    });
+  } catch {
+    // Silently fail — TikTok is not critical-path.
   }
 };
 

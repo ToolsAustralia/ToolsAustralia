@@ -18,6 +18,7 @@ export interface UserData {
   mobile?: string;
   state?: string;
   profession?: string;
+  birthdate?: string; // ISO date string
   profileSetupCompleted?: boolean;
   subscription?: {
     packageId: string;
@@ -65,9 +66,12 @@ export interface UserData {
   rewardsPoints: number;
   accumulatedEntries: number;
   isEmailVerified: boolean;
+  hasPassword?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   savedPaymentMethods?: Array<{
     paymentMethodId: string;
     isDefault: boolean;
@@ -116,6 +120,7 @@ export interface UpdateUserProfileData {
   mobile?: string;
   state?: string;
   profession?: string;
+  birthdate?: string;
   profileSetupCompleted?: boolean;
 }
 
@@ -142,12 +147,12 @@ export const useMyAccountData = (userId?: string) => {
       return response.data;
     },
     enabled: !!userId,
-    staleTime: 0, // Always consider data stale to ensure fresh data after login
-    gcTime: 3 * 60 * 1000, // 3 minutes - reduced for fresher data
+    staleTime: 2 * 60 * 1000, // 2 minutes - reuse cache across my-account pages
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes for real-time updates
-    refetchIntervalInBackground: true, // Allow refetch in background
-    refetchOnWindowFocus: true,
-    refetchOnMount: true, // Always refetch on mount for fresh data
+    refetchIntervalInBackground: false, // Pause polling on hidden tabs; user-visible refetch resumes when tab is focused (refetchOnWindowFocus is false here, but refetchInterval ticks resume)
+    refetchOnWindowFocus: false, // Avoid refetch on every tab switch when data is fresh
+    refetchOnMount: true, // Refetch on mount only when data is stale
   });
 };
 
@@ -174,16 +179,35 @@ export const useUpdateUserProfile = () => {
       const response = await apiPut<{ success: boolean; data: UserData }>(`/api/users/${userId}`, data);
       return response.data;
     },
-    onSuccess: (data, variables) => {
-      // Update user data in cache
-      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+    onMutate: async ({ userId, data }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.account(userId) });
 
-      // Invalidate related queries to refetch fresh data
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const previousAccount = queryClient.getQueryData<MyAccountData>(queryKeys.users.account(userId));
+
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...data } : old
+      );
+      queryClient.setQueryData(queryKeys.users.account(userId), (old: MyAccountData | undefined) =>
+        old ? { ...old, user: { ...old.user, ...data } } : old
+      );
+
+      return { previousDetail, previousAccount };
+    },
+    onError: (error, variables, context) => {
+      console.error("Failed to update user profile:", error);
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+      if (context?.previousAccount) {
+        queryClient.setQueryData(queryKeys.users.account(variables.userId), context.previousAccount);
+      }
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.account(variables.userId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.dashboard(variables.userId) });
-    },
-    onError: (error) => {
-      console.error("Failed to update user profile:", error);
     },
   });
 };
@@ -199,9 +223,25 @@ export const useUpdateUserPreferences = () => {
       );
       return response.data;
     },
+    onMutate: async ({ userId, preferences }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const patch = preferences as Partial<UserData>;
+
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...patch } : old
+      );
+
+      return { previousDetail };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+    },
     onSuccess: (data, variables) => {
-      // Update user data in cache
       queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(variables.userId) });
     },
   });
 };
@@ -214,11 +254,24 @@ export const useCompleteUserSetup = () => {
       const response = await apiPost<{ success: boolean; data: UserData }>(`/api/user/setup`, setupData);
       return response.data;
     },
-    onSuccess: (data, variables) => {
-      // Update user data in cache
-      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
+    onMutate: async ({ userId, setupData }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const patch = setupData as Partial<UserData>;
 
-      // Invalidate all user-related queries
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old ? { ...old, ...patch } : old
+      );
+
+      return { previousDetail };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(variables.userId), context.previousDetail);
+      }
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });

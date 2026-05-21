@@ -4,169 +4,32 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
-import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import ChargeJobLock from "@/models/ChargeJobLock";
+import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import Stripe from "stripe";
 import mongoose from "mongoose";
+import {
+  getCustomerDefaultPaymentMethodFromInvoice,
+  payOpenInvoiceAsPastDueAdmin,
+  resolveInvoicePaymentMethodId,
+  selectCurrentSubscriptionChargeable,
+} from "@/server/admin/chargePastDueShared";
+import ChargeJobRun from "@/models/ChargeJobRun";
+import {
+  ORPHAN_RUN_THRESHOLD_MS,
+  aggregateRunTotals,
+  type ChargeLogRowForAggregation,
+} from "@/server/admin/charge-past-due-totals";
 
-/**
- * Sanitize Stripe response to remove PCI-sensitive data
- */
-function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
-  if (!response || typeof response !== "object") {
-    return {};
-  }
-
-  const sanitized: Record<string, unknown> = {};
-  const obj = response as Record<string, unknown>;
-
-  for (const [key, value] of Object.entries(obj)) {
-    // Skip sensitive fields
-    if (
-      key.includes("card") ||
-      key.includes("payment_method") ||
-      key === "pan" ||
-      key === "number" ||
-      key === "cvc" ||
-      key === "exp_month" ||
-      key === "exp_year"
-    ) {
-      continue;
-    }
-
-    // Recursively sanitize nested objects
-    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
-      sanitized[key] = sanitizeStripeResponse(value);
-    } else {
-      sanitized[key] = value;
-    }
-  }
-
-  return sanitized;
-}
-
-/**
- * Fetch customer with retry logic for rate limit errors
- * Follows Stripe best practices for handling rate limits
- */
-async function fetchCustomerWithRetry(
-  customerId: string,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<Stripe.Customer | null> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const customer = await stripe.customers.retrieve(customerId);
-      if (customer.deleted) {
-        return null;
-      }
-      return customer;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      // Check if it's a rate limit error
-      const isRateLimitError =
-        (error as Stripe.errors.StripeError).code === "rate_limit" ||
-        (error as Stripe.errors.StripeError).statusCode === 429 ||
-        lastError.message.toLowerCase().includes("rate limit");
-
-      // Don't retry non-rate-limit errors (invalid customer, etc.)
-      if (!isRateLimitError) {
-        return null;
-      }
-
-      // If we've exhausted retries, return null
-      if (attempt >= maxRetries) {
-        console.error(`Failed to fetch customer ${customerId} after ${maxRetries} retries:`, lastError.message);
-        return null;
-      }
-
-      // Calculate delay with exponential backoff
-      // Check for Retry-After header if available
-      const stripeError = error as Stripe.errors.StripeError;
-      let waitTime = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 1s, 2s, 4s
-      
-      // If Stripe provides Retry-After, use it (in seconds, convert to ms)
-      if (stripeError.headers?.["retry-after"]) {
-        const retryAfterSeconds = parseInt(stripeError.headers["retry-after"], 10);
-        if (!isNaN(retryAfterSeconds)) {
-          waitTime = (retryAfterSeconds + 1) * 1000; // Add 1 second buffer
-        }
-      }
-
-      // Cap maximum wait time at 10 seconds
-      waitTime = Math.min(waitTime, 10000);
-
-      console.warn(
-        `⚠️ Rate limit error fetching customer ${customerId} - Retrying in ${Math.round(waitTime)}ms (attempt ${attempt}/${maxRetries})`
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-  }
-
-  return null;
-}
-
-/**
- * Batch fetch customers with throttling to respect Stripe rate limits
- * Processes in batches with delays between batches
- */
-async function batchFetchCustomers(
-  customerIds: string[],
-  batchSize: number = 15,
-  batchDelay: number = 200
-): Promise<Map<string, string | null>> {
-  const customerPaymentMethodMap = new Map<string, string | null>();
-  const uniqueCustomerIds = [...new Set(customerIds)];
-
-  // Process customers in batches
-  for (let i = 0; i < uniqueCustomerIds.length; i += batchSize) {
-    const batch = uniqueCustomerIds.slice(i, i + batchSize);
-
-    // Fetch batch in parallel (but batches are sequential)
-    const batchResults = await Promise.allSettled(
-      batch.map(async (customerId) => {
-        const customer = await fetchCustomerWithRetry(customerId);
-        if (!customer) {
-          return { customerId, paymentMethodId: null };
-        }
-
-        const customerWithSettings = customer as Stripe.Customer & {
-          invoice_settings?: { default_payment_method?: string | Stripe.PaymentMethod };
-        };
-
-        const defaultPaymentMethod = customerWithSettings.invoice_settings?.default_payment_method;
-        const paymentMethodId = defaultPaymentMethod
-          ? typeof defaultPaymentMethod === "string"
-            ? defaultPaymentMethod
-            : defaultPaymentMethod.id
-          : null;
-
-        return { customerId, paymentMethodId };
-      })
-    );
-
-    // Process batch results
-    for (const result of batchResults) {
-      if (result.status === "fulfilled") {
-        customerPaymentMethodMap.set(result.value.customerId, result.value.paymentMethodId);
-      } else {
-        console.error(`Failed to fetch customer in batch:`, result.reason);
-        // Don't set anything - will remain undefined, which is handled as null
-      }
-    }
-
-    // Delay between batches to respect rate limits (except for last batch)
-    if (i + batchSize < uniqueCustomerIds.length) {
-      await new Promise((resolve) => setTimeout(resolve, batchDelay));
-    }
-  }
-
-  return customerPaymentMethodMap;
-}
+type PastDueUserLean = {
+  _id: mongoose.Types.ObjectId;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscription?: { status?: string | null };
+};
 
 /**
  * GET /api/admin/invoices/charge-past-due
@@ -182,8 +45,11 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Fetch eligible invoices from Stripe with pagination
-    // Use explicit ordering for consistent results
+    // 2. Fetch eligible invoices from Stripe with pagination.
+    // `expand: ['data.customer']` returns each customer inline, so the
+    // payment-method fallback can be read off the invoice without a per-
+    // customer `customers.retrieve` round-trip — eliminates the N+1 that
+    // used to push this handler over Vercel's function timeout.
     const allInvoices: Stripe.Invoice[] = [];
     let hasMore = true;
     let startingAfter: string | undefined = undefined;
@@ -194,11 +60,12 @@ export async function GET(_request: NextRequest) {
         collection_method: "charge_automatically",
         limit: 100,
         starting_after: startingAfter,
+        expand: ["data.customer"],
       }) as Stripe.Response<Stripe.ApiList<Stripe.Invoice>>;
 
       allInvoices.push(...invoiceResponse.data);
       hasMore = invoiceResponse.has_more;
-      
+
       if (hasMore && invoiceResponse.data.length > 0) {
         startingAfter = invoiceResponse.data[invoiceResponse.data.length - 1].id;
       }
@@ -209,28 +76,24 @@ export async function GET(_request: NextRequest) {
       .map((inv) => (typeof inv.customer === "string" ? inv.customer : inv.customer?.id))
       .filter(Boolean) as string[];
 
-    // Get all users with these customer IDs (for debugging)
-    const allUsers = await User.find({
-      stripeCustomerId: { $in: customerIds },
-    })
-      .select("_id email firstName lastName stripeCustomerId subscription.status")
-      .lean();
-
-    // Get users with past_due status
-    const pastDueUsers = await User.find({
-      stripeCustomerId: { $in: customerIds },
-      "subscription.status": "past_due",
-    })
-      .select("_id email firstName lastName stripeCustomerId subscription.status")
-      .lean();
+    // Run the two user lookups in parallel — `allUsers` is purely diagnostic
+    // (drives the "Total Users Found" tile in the admin modal); `pastDueUsers`
+    // is what eligibility actually filters against.
+    const [allUsers, pastDueUsers] = await Promise.all([
+      User.find({ stripeCustomerId: { $in: customerIds } })
+        .select("_id stripeCustomerId")
+        .lean(),
+      User.find({
+        stripeCustomerId: { $in: customerIds },
+        "subscription.status": "past_due",
+      })
+        .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
+        .lean<PastDueUserLean[]>(),
+    ]);
 
     const userMap = new Map(pastDueUsers.map((u) => [u.stripeCustomerId, u]));
 
-    // 4. Batch fetch customers to get their default payment methods (fallback)
-    // Uses throttled batching with retry logic to respect Stripe rate limits
-    const customerPaymentMethodMap = await batchFetchCustomers(customerIds, 15, 200);
-
-    // 5. Filter invoices and build preview
+    // 4. Filter invoices and build preview
     const filterStats = {
       totalInvoices: allInvoices.length,
       wrongCollectionMethod: 0,
@@ -240,6 +103,7 @@ export async function GET(_request: NextRequest) {
       userNotFound: 0,
       notPastDue: 0,
       eligible: 0,
+      duplicateOrStaleCycle: 0,
     };
 
     const preview: Array<{
@@ -277,15 +141,8 @@ export async function GET(_request: NextRequest) {
         continue;
       }
 
-      // Check payment method: invoice first, then customer's default as fallback
-      const invoicePaymentMethod = invoice.default_payment_method
-        ? (typeof invoice.default_payment_method === "string"
-            ? invoice.default_payment_method
-            : invoice.default_payment_method?.id)
-        : null;
-      
-      const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-      const hasPaymentMethod = !!(invoicePaymentMethod || customerPaymentMethod);
+      const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+      const hasPaymentMethod = !!resolveInvoicePaymentMethodId(invoice, customerDefaultPm);
 
       if (!hasPaymentMethod) {
         filterStats.noPaymentMethod++;
@@ -322,10 +179,44 @@ export async function GET(_request: NextRequest) {
       });
     }
 
+    // Per-customer scoping: reduce preview to the single invoice per customer
+    // that is attached to their current subscription.
+    const previewToInvoiceGet = new Map<string, Stripe.Invoice>();
+    for (const inv of allInvoices) {
+      if (inv.id) previewToInvoiceGet.set(inv.id, inv);
+    }
+
+    // Group preview entries by customerId so we can scope per customer.
+    const previewByCustomer = new Map<string, typeof preview>();
+    for (const p of preview) {
+      if (!previewByCustomer.has(p.customerId)) previewByCustomer.set(p.customerId, []);
+      previewByCustomer.get(p.customerId)!.push(p);
+    }
+
+    const filteredPreviewGet: typeof preview = [];
+    let totalSkippedDuplicatesGet = 0;
+
+    for (const [cid, custPreview] of previewByCustomer) {
+      const custInvoices = custPreview
+        .map((p) => previewToInvoiceGet.get(p.invoiceId))
+        .filter((i): i is Stripe.Invoice => !!i);
+      const u = userMap.get(cid);
+      const userSubId = u?.stripeSubscriptionId;
+      const { target: custTarget, skipped: custSkipped } = selectCurrentSubscriptionChargeable(custInvoices, userSubId);
+      if (custTarget) {
+        const targetEntry = custPreview.find((p) => p.invoiceId === custTarget.id);
+        if (targetEntry) filteredPreviewGet.push(targetEntry);
+      }
+      totalSkippedDuplicatesGet += custSkipped.length;
+    }
+
+    filterStats.eligible = filteredPreviewGet.length;
+    filterStats.duplicateOrStaleCycle = totalSkippedDuplicatesGet;
+
     return NextResponse.json({
       success: true,
       preview: {
-        eligibleCount: preview.length,
+        eligibleCount: filteredPreviewGet.length,
         totalInvoices: filterStats.totalInvoices,
         filterStats: {
           wrongCollectionMethod: filterStats.wrongCollectionMethod,
@@ -334,13 +225,14 @@ export async function GET(_request: NextRequest) {
           noCustomerId: filterStats.noCustomerId,
           userNotFound: filterStats.userNotFound,
           notPastDue: filterStats.notPastDue,
+          duplicateOrStaleCycle: filterStats.duplicateOrStaleCycle,
         },
         debug: {
           totalCustomerIds: customerIds.length,
           totalUsersFound: allUsers.length,
           pastDueUsersFound: pastDueUsers.length,
         },
-        users: preview,
+        users: filteredPreviewGet,
       },
     });
   } catch (error) {
@@ -419,11 +311,31 @@ export async function POST(request: NextRequest) {
       await lock.save();
     }
 
+    // Orphan sweep: any prior ChargeJobRun stuck in "running" past the lock window
+    // was almost certainly killed by a process crash. Mark them aborted so the
+    // history view doesn't show indefinite "running" rows.
+    await ChargeJobRun.updateMany(
+      {
+        status: "running",
+        startedAt: { $lt: new Date(Date.now() - ORPHAN_RUN_THRESHOLD_MS) },
+      },
+      {
+        $set: {
+          status: "aborted",
+          finishedAt: new Date(),
+          error: "Aborted by orphan sweep — exceeded lock window without finalize",
+        },
+      }
+    );
+
     try {
       // 4. Fetch eligible invoices from Stripe with pagination
       // Note: Stripe invoices don't have "past_due" status - that's a subscription status
-      // We fetch "open" invoices and filter by database subscription status
-      // Use pagination to ensure we get all invoices consistently
+      // We fetch "open" invoices and filter by database subscription status.
+      // `expand: ['data.customer']` is mandatory here: it must mirror the GET
+      // preview's expansion so preview-vs-charge eligibility cannot diverge,
+      // and it removes the N+1 customer fetch that pushed POST over the
+      // Vercel function timeout for large past-due cohorts.
       const allInvoices: Stripe.Invoice[] = [];
       let hasMore = true;
       let startingAfter: string | undefined = undefined;
@@ -434,11 +346,12 @@ export async function POST(request: NextRequest) {
           collection_method: "charge_automatically",
           limit: 100,
           starting_after: startingAfter,
+          expand: ["data.customer"],
         }) as Stripe.Response<Stripe.ApiList<Stripe.Invoice>>;
 
         allInvoices.push(...invoiceResponse.data);
         hasMore = invoiceResponse.has_more;
-        
+
         if (hasMore && invoiceResponse.data.length > 0) {
           startingAfter = invoiceResponse.data[invoiceResponse.data.length - 1].id;
         }
@@ -472,17 +385,15 @@ export async function POST(request: NextRequest) {
         stripeCustomerId: { $in: customerIds },
         "subscription.status": "past_due",
       })
-        .select("_id email firstName lastName stripeCustomerId subscription.status")
-        .lean();
+        .select("_id email firstName lastName stripeCustomerId stripeSubscriptionId subscription.status")
+        .lean<PastDueUserLean[]>();
 
       const userMap = new Map(users.map((u) => [u.stripeCustomerId, u]));
 
-      // 6. Batch fetch customers to get their default payment methods (fallback)
-      // Uses throttled batching with retry logic to respect Stripe rate limits
-      const customerPaymentMethodMap = await batchFetchCustomers(customerIds, 15, 200);
-
-      // 7. Filter invoices based on all criteria
-      // Note: invoice.status is already "open" from the list call above
+      // 6. Filter invoices based on all criteria.
+      // Note: invoice.status is already "open" from the list call above.
+      // Customer default payment methods come off the expanded `invoice.customer`
+      // — no separate `customers.retrieve` round-trip needed.
       const eligibleInvoices = allInvoices.filter((invoice) => {
         // Check collection method
         if (invoice.collection_method !== "charge_automatically") {
@@ -500,17 +411,8 @@ export async function POST(request: NextRequest) {
           return false;
         }
 
-        // Check payment method: invoice first, then customer's default as fallback
-        const invoicePaymentMethod = invoice.default_payment_method
-          ? (typeof invoice.default_payment_method === "string"
-              ? invoice.default_payment_method
-              : invoice.default_payment_method?.id)
-          : null;
-        
-        const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-        const hasPaymentMethod = !!(invoicePaymentMethod || customerPaymentMethod);
-
-        if (!hasPaymentMethod) {
+        const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+        if (!resolveInvoicePaymentMethodId(invoice, customerDefaultPm)) {
           return false;
         }
 
@@ -521,6 +423,37 @@ export async function POST(request: NextRequest) {
 
         return true;
       });
+
+      // Scope each customer to the invoice attached to their current subscription only.
+      const invoicesByCustomer = new Map<string, Stripe.Invoice[]>();
+      for (const inv of eligibleInvoices) {
+        const cid = typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
+        if (!cid) continue;
+        if (!invoicesByCustomer.has(cid)) invoicesByCustomer.set(cid, []);
+        invoicesByCustomer.get(cid)!.push(inv);
+      }
+
+      const eligibleByUserSub: Stripe.Invoice[] = [];
+      const skippedDuplicates: Array<{ invoice: Stripe.Invoice; customerId: string; user: PastDueUserLean }> = [];
+
+      for (const [cid, custInvoices] of invoicesByCustomer) {
+        const u = userMap.get(cid);
+        if (!u) continue;
+        const userSubId = u.stripeSubscriptionId;
+        const { target, skipped: dups } = selectCurrentSubscriptionChargeable(custInvoices, userSubId);
+        if (target) eligibleByUserSub.push(target);
+        for (const d of dups) skippedDuplicates.push({ invoice: d, customerId: cid, user: u });
+      }
+
+      // Insert the run record — status="running" until finalize block runs.
+      // Captures eligible count even if no invoices end up attempted.
+      const chargeRun = await ChargeJobRun.create({
+        adminId: new mongoose.Types.ObjectId(adminId),
+        startedAt: new Date(),
+        status: "running",
+        totals: { eligibleCount: eligibleInvoices.length },
+      });
+      const chargeRunId = chargeRun._id as mongoose.Types.ObjectId;
 
       const results: Array<{
         invoiceId: string;
@@ -542,134 +475,39 @@ export async function POST(request: NextRequest) {
       const BATCH_SIZE = 15;
       const BATCH_DELAY = 500;
 
-      for (let i = 0; i < eligibleInvoices.length; i += BATCH_SIZE) {
-        const batch = eligibleInvoices.slice(i, i + BATCH_SIZE);
+      try {
+        for (let i = 0; i < eligibleByUserSub.length; i += BATCH_SIZE) {
+          const batch = eligibleByUserSub.slice(i, i + BATCH_SIZE);
 
-        const _batchResults = await Promise.allSettled(
-          batch.map(async (invoice) => {
-            const invoiceId = invoice.id;
-            if (!invoiceId) return;
-            
-            const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
-            if (!customerId) return;
+          const _batchResults = await Promise.allSettled(
+            batch.map(async (invoice) => {
+              const invoiceId = invoice.id;
+              if (!invoiceId) return;
 
-            // Get user first (needed for email in results)
-            const user = userMap.get(customerId);
-            const userEmail = user?.email || "N/A";
+              const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+              if (!customerId) return;
 
-            if (!user) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "User not found or not past_due",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
+              // Get user first (needed for email in results)
+              const user = userMap.get(customerId);
+              const userEmail = user?.email || "N/A";
 
-            // Extract payment method: invoice first, then customer's default as fallback
-            const invoicePaymentMethod = invoice.default_payment_method
-              ? (typeof invoice.default_payment_method === "string"
-                  ? invoice.default_payment_method
-                  : invoice.default_payment_method?.id)
-              : null;
-            
-            const customerPaymentMethod = customerPaymentMethodMap.get(customerId) || null;
-            const paymentMethodId = invoicePaymentMethod || customerPaymentMethod;
-
-            if (!paymentMethodId) {
-              skipped++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "skipped",
-                skipReason: "No payment method found on invoice or customer",
-                amount: invoice.amount_remaining || 0,
-              });
-              return;
-            }
-
-            try {
-              // Attempt charge with explicit payment method
-              // Note: Idempotency is handled at database level (time-based) rather than Stripe level
-              // This is safer for business retries and allows legitimate retries after card updates
-              // off_session: true indicates this is an admin-initiated automatic charge without customer interaction
-              const paidInvoice = await stripe.invoices.pay(invoiceId, {
-                payment_method: paymentMethodId,
-                off_session: true, // Admin-initiated automatic charge (customer not present)
-              });
-
-              // Check if already paid (race condition)
-              if (paidInvoice.status === "paid") {
-                processed++;
-                succeeded++;
+              if (!user) {
+                skipped++;
                 results.push({
                   invoiceId: invoiceId,
                   customerId: customerId,
-                  userId: user._id.toString(),
                   userEmail: userEmail,
-                  status: "success",
+                  status: "skipped",
+                  skipReason: "User not found or not past_due",
                   amount: invoice.amount_remaining || 0,
-                });
-
-                // Log as success
-                await InvoiceChargeLog.create({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: new mongoose.Types.ObjectId(user._id),
-                  adminId: new mongoose.Types.ObjectId(adminId),
-                  status: "success",
-                  amount: invoice.amount_remaining || 0,
-                  attemptedAt: new Date(),
-                  result: sanitizeStripeResponse(paidInvoice),
-                  nextPaymentAttempt: paidInvoice.next_payment_attempt
-                    ? new Date(paidInvoice.next_payment_attempt * 1000)
-                    : undefined,
                 });
                 return;
               }
 
-              // Success
-              processed++;
-              succeeded++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "success",
-                amount: invoice.amount_remaining || 0,
-              });
+              const customerDefaultPm = getCustomerDefaultPaymentMethodFromInvoice(invoice);
+              const paymentMethodId = resolveInvoicePaymentMethodId(invoice, customerDefaultPm);
 
-              // Log success
-              await InvoiceChargeLog.create({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: new mongoose.Types.ObjectId(user._id),
-                adminId: new mongoose.Types.ObjectId(adminId),
-                status: "success",
-                amount: invoice.amount_remaining || 0,
-                attemptedAt: new Date(),
-                result: sanitizeStripeResponse(paidInvoice),
-                nextPaymentAttempt: paidInvoice.next_payment_attempt
-                  ? new Date(paidInvoice.next_payment_attempt * 1000)
-                  : undefined,
-              });
-            } catch (error) {
-              const stripeError = error as Stripe.errors.StripeError;
-
-              // Check if already paid (race condition)
-              if (
-                stripeError.code === "resource_already_exists" ||
-                stripeError.message?.includes("already paid") ||
-                stripeError.message?.includes("already_paid")
-              ) {
-                processed++;
+              if (!paymentMethodId) {
                 skipped++;
                 results.push({
                   invoiceId: invoiceId,
@@ -677,59 +515,100 @@ export async function POST(request: NextRequest) {
                   userId: user._id.toString(),
                   userEmail: userEmail,
                   status: "skipped",
-                  skipReason: "already_paid",
+                  skipReason: "No payment method found on invoice or customer",
                   amount: invoice.amount_remaining || 0,
-                });
-
-                // Log as skipped
-                await InvoiceChargeLog.create({
-                  invoiceId: invoiceId,
-                  customerId: customerId,
-                  userId: new mongoose.Types.ObjectId(user._id),
-                  adminId: new mongoose.Types.ObjectId(adminId),
-                  status: "skipped",
-                  amount: invoice.amount_remaining || 0,
-                  attemptedAt: new Date(),
-                  errorCode: stripeError.code,
-                  errorMessage: "Invoice already paid",
-                  result: sanitizeStripeResponse(stripeError),
                 });
                 return;
               }
 
-              processed++;
-              failed++;
-              results.push({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: user._id.toString(),
-                userEmail: userEmail,
-                status: "failed",
-                error: stripeError.message || "Unknown error",
-                amount: invoice.amount_remaining || 0,
+              const row = await payOpenInvoiceAsPastDueAdmin({
+                invoice,
+                paymentMethodId,
+                customerId,
+                user: { _id: user._id, email: user.email },
+                adminId,
+                chargeRunId,
               });
 
-              // Log failure
-              await InvoiceChargeLog.create({
-                invoiceId: invoiceId,
-                customerId: customerId,
-                userId: new mongoose.Types.ObjectId(user._id),
-                adminId: new mongoose.Types.ObjectId(adminId),
-                status: "failed",
-                errorCode: stripeError.code,
-                errorMessage: stripeError.message,
-                amount: invoice.amount_remaining || 0,
-                attemptedAt: new Date(),
-                result: sanitizeStripeResponse(stripeError),
-              });
-            }
-          })
+              processed++;
+              if (row.status === "success") succeeded++;
+              else if (row.status === "failed") failed++;
+              else skipped++;
+
+              results.push(row);
+            })
+          );
+
+          // Delay between batches
+          if (i + BATCH_SIZE < eligibleByUserSub.length) {
+            await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
+          }
+        }
+
+        // Log skipped duplicates so audit stays honest about what we saw vs charged.
+        for (const { invoice, customerId: cid, user: u } of skippedDuplicates) {
+          if (!invoice.id) continue;
+          skipped++;
+          try {
+            await InvoiceChargeLog.create({
+              invoiceId: invoice.id,
+              customerId: cid,
+              userId: new mongoose.Types.ObjectId(String(u._id)),
+              adminId: new mongoose.Types.ObjectId(adminId),
+              status: "skipped",
+              amount: invoice.amount_remaining || 0,
+              attemptedAt: new Date(),
+              errorMessage: "Skipped: duplicate or stale cycle invoice not on current subscription",
+              chargeRunId,
+            });
+          } catch (logErr) {
+            console.error("[charge-past-due] Failed to write InvoiceChargeLog for skipped duplicate:", logErr);
+          }
+          results.push({
+            invoiceId: invoice.id,
+            customerId: cid,
+            userId: String(u._id),
+            userEmail: u.email || "N/A",
+            status: "skipped",
+            skipReason: "duplicate_or_stale_cycle_invoice",
+            amount: invoice.amount_remaining || 0,
+          });
+        }
+
+        // Aggregate authoritative totals from the in-memory `results` array.
+        const aggregationRows: ChargeLogRowForAggregation[] = results.map((r) => ({
+          status: r.status,
+          amount: r.amount ?? 0,
+          skipReason: r.skipReason,
+        }));
+        const finalTotals = aggregateRunTotals(
+          aggregationRows,
+          eligibleInvoices.length
         );
 
-        // Delay between batches
-        if (i + BATCH_SIZE < eligibleInvoices.length) {
-          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
-        }
+        await ChargeJobRun.updateOne(
+          { _id: chargeRunId },
+          {
+            $set: {
+              finishedAt: new Date(),
+              status: "completed",
+              totals: finalTotals,
+            },
+          }
+        );
+      } catch (runError) {
+        const message = runError instanceof Error ? runError.message : String(runError);
+        await ChargeJobRun.updateOne(
+          { _id: chargeRunId },
+          {
+            $set: {
+              finishedAt: new Date(),
+              status: "failed",
+              error: message,
+            },
+          }
+        );
+        throw runError;
       }
 
       // Release lock

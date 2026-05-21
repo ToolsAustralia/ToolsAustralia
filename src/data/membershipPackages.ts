@@ -1,3 +1,5 @@
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+
 /**
  * Static Membership Packages Data
  * Migrated from database to improve performance and reduce database load
@@ -72,13 +74,14 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 20,
     description: "Perfect for tradies getting started",
     features: [
-      "15 Free Accumulated Entries",
+      "50% Access to Partner Discounts",
       // "5% Off Shop purchases", // Temporarily disabled - Shop coming soon
-      "100% Access to Partner Discounts",
+      "15 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 15,
     shopDiscountPercent: 5,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("tradie-subscription"),
@@ -93,13 +96,14 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 40,
     description: "The most popular choice for serious tool enthusiasts",
     features: [
-      "40 Free Accumulated Entries",
+      "75% Access to Partner Discounts",
       // "10% Off Shop purchases", // Temporarily disabled - Shop coming soon
-      "100% Access to Partner Discounts",
+      "40 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 40,
     shopDiscountPercent: 10,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("foreman-subscription"),
@@ -114,13 +118,14 @@ export const membershipPackages: StaticMembershipPackage[] = [
     price: 80,
     description: "Premium membership for the ultimate tool professionals",
     features: [
-      "100 Free Accumulated Entries",
-      // "20% Off Shop purchases", // Temporarily disabled - Shop coming soon
       "100% Access to Partner Discounts",
+      // "20% Off Shop purchases", // Temporarily disabled - Shop coming soon
+      "100 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 100,
     shopDiscountPercent: 20,
-    partnerDiscountDays: 30,
+    // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
+    partnerDiscountDays: 0,
     isMemberOnly: false,
     isActive: true,
     stripeProductId: getStripeProductId("boss-subscription"),
@@ -136,7 +141,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 25,
     description: "Quick boost for your entry wallet",
-    features: ["3 Free Entries", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["25% of Partner Discounts Available", "1 Days Access to Partner Discounts", "3 Free Entries Major Giveaway"],
     totalEntries: 3,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
@@ -151,7 +156,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 50,
     description: "Great value entry boost",
-    features: ["15 Free Entries", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["40% of Partner Discounts Available", "2 Days Access to Partner Discounts", "15 Free Entries Major Giveaway"],
     totalEntries: 15,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
@@ -166,7 +171,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 100,
     description: "Maximum entries for serious players",
-    features: ["30 Free Entries", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["55% of Partner Discounts Available", "4 Days Access to Partner Discounts", "30 Free Entries Major Giveaway"],
     totalEntries: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
@@ -181,7 +186,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 250,
     description: "The ultimate entry package",
-    features: ["150 Free Entries", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["70% of Partner Discounts Available", "10 Days Access to Partner Discounts", "150 Free Entries Major Giveaway"],
     totalEntries: 150,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
@@ -196,7 +201,7 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 500,
     description: "Elite package for the ultimate professionals",
-    features: ["600 Free Entries", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["85% of Partner Discounts Available", "20 Days Access to Partner Discounts", "600 Free Entries Major Giveaway"],
     totalEntries: 600,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
@@ -204,6 +209,21 @@ export const membershipPackages: StaticMembershipPackage[] = [
     isActive: true,
     createdAt: "2025-09-23T00:14:00.247Z",
     updatedAt: "2025-09-23T00:14:00.247Z",
+  },
+  {
+    _id: "vip-pack",
+    name: "VIP Pack",
+    type: "one-time",
+    price: 1000,
+    description: "Premium VIP package — maximum entries and partner access",
+    features: ["100% of Partner Discounts Available", "30 Days Access to Partner Discounts", "1500 Free Entries Major Giveaway"],
+    totalEntries: 1500,
+    shopDiscountPercent: 0,
+    partnerDiscountDays: 30,
+    isMemberOnly: false,
+    isActive: true,
+    createdAt: "2025-09-23T00:14:00.300Z",
+    updatedAt: "2025-09-23T00:14:00.300Z",
   },
 
   // === ONE-TIME PACKAGES (MEMBERS ONLY) ===
@@ -213,12 +233,12 @@ export const membershipPackages: StaticMembershipPackage[] = [
     type: "one-time",
     price: 25,
     description: "Quick boost for your entry wallet - Member Exclusive",
-    features: ["10 Free Entries", "1 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
+    features: ["25% of Partner Discounts Available", "1 Days Access to Partner Discounts", "10 Free Entries"],
     totalEntries: 10,
     shopDiscountPercent: 0,
     partnerDiscountDays: 1,
     isMemberOnly: true,
-    isActive: true,
+    isActive: false,
     createdAt: "2025-09-23T00:12:43.671Z",
     updatedAt: "2025-09-23T00:14:00.355Z",
   },
@@ -226,10 +246,10 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-tradie-pack",
     name: "Additional Tradie Pack",
     type: "one-time",
-    price: 50,
+    price: 25,
     description: "Great value entry boost - Member Exclusive",
-    features: ["30 Free Entries", "2 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
-    totalEntries: 30,
+    features: ["40% of Partner Discounts Available", "2 Days Access to Partner Discounts", "15 Free Entries"],
+    totalEntries: 15,
     shopDiscountPercent: 0,
     partnerDiscountDays: 2,
     isMemberOnly: true,
@@ -241,10 +261,10 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-foreman-pack",
     name: "Additional Foreman Pack",
     type: "one-time",
-    price: 100,
+    price: 50,
     description: "Maximum entries for serious players - Member Exclusive",
-    features: ["100 Free Entries", "4 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
-    totalEntries: 100,
+    features: ["55% of Partner Discounts Available", "4 Days Access to Partner Discounts", "30 Free Entries"],
+    totalEntries: 30,
     shopDiscountPercent: 0,
     partnerDiscountDays: 4,
     isMemberOnly: true,
@@ -256,10 +276,10 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-boss-pack",
     name: "Additional Boss Pack",
     type: "one-time",
-    price: 250,
+    price: 125,
     description: "The ultimate entry package - Member Exclusive",
-    features: ["400 Free Entries", "10 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
-    totalEntries: 400,
+    features: ["70% of Partner Discounts Available", "10 Days Access to Partner Discounts", "150 Free Entries"],
+    totalEntries: 150,
     shopDiscountPercent: 0,
     partnerDiscountDays: 10,
     isMemberOnly: true,
@@ -271,16 +291,31 @@ export const membershipPackages: StaticMembershipPackage[] = [
     _id: "additional-power-pack",
     name: "Additional Power Pack",
     type: "one-time",
-    price: 500,
+    price: 250,
     description: "Elite package for the ultimate professionals - Member Exclusive",
-    features: ["1200 Free Entries", "20 Days Access to Partner Discounts", "100% of Partner Discounts Available"],
-    totalEntries: 1200,
+    features: ["85% of Partner Discounts Available", "20 Days Access to Partner Discounts", "600 Free Entries"],
+    totalEntries: 600,
     shopDiscountPercent: 0,
     partnerDiscountDays: 20,
     isMemberOnly: true,
     isActive: true,
     createdAt: "2025-09-23T00:12:43.918Z",
     updatedAt: "2025-09-23T00:14:00.765Z",
+  },
+  {
+    _id: "additional-vip-pack",
+    name: "Additional VIP Pack",
+    type: "one-time",
+    price: 500,
+    description: "Premium VIP package — Member Exclusive",
+    features: ["100% of Partner Discounts Available", "30 Days Access to Partner Discounts", "1500 Free Entries"],
+    totalEntries: 1500,
+    shopDiscountPercent: 0,
+    partnerDiscountDays: 30,
+    isMemberOnly: true,
+    isActive: true,
+    createdAt: "2025-09-23T00:14:00.820Z",
+    updatedAt: "2025-09-23T00:14:00.820Z",
   },
 ];
 
@@ -364,12 +399,12 @@ export const getPackagesByPriceRange = (minPrice: number, maxPrice: number): Sta
 /**
  * Apply promo multiplier to a package
  * @param pkg - Package to apply promo to
- * @param multiplier - Promo multiplier (2, 3, 5, 10)
+ * @param multiplier - Promo multiplier
  * @returns Package with updated entries and promo information
  */
 export const applyPromoToPackage = (
   pkg: StaticMembershipPackage,
-  multiplier: 2 | 3 | 5 | 10
+  multiplier: PromoMultiplier
 ): StaticMembershipPackage => {
   const originalEntries = pkg.type === "subscription" ? pkg.entriesPerMonth : pkg.totalEntries;
 
@@ -419,7 +454,7 @@ export const removePromoFromPackage = (pkg: StaticMembershipPackage): StaticMemb
  */
 export const getPackagesWithPromo = (
   packages: StaticMembershipPackage[],
-  promoMultiplier: 2 | 3 | 5 | 10,
+  promoMultiplier: PromoMultiplier,
   promoType: "one-time-packages" | "mini-packages"
 ): StaticMembershipPackage[] => {
   return packages.map((pkg) => {

@@ -12,7 +12,9 @@ const updateSubscriptionPaymentMethodSchema = z.object({
 
 /**
  * POST /api/stripe/subscription/update-payment-method
- * Updates the payment method for an active subscription
+ * Updates the default payment method on the Stripe subscription + customer.
+ * Allowed for fully active subscriptions and for failed-renewal states (past_due / unpaid) where the
+ * Stripe subscription still exists and needs a new card — not only when Mongo marks isActive true.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -33,8 +35,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check if user has an active subscription
-    if (!user.subscription?.isActive || !user.stripeSubscriptionId) {
+    if (!user.stripeSubscriptionId) {
+      return NextResponse.json(
+        { error: "No subscription found. Cannot update payment method." },
+        { status: 400 }
+      );
+    }
+
+    const subStatus = (user.subscription?.status ?? "").toLowerCase();
+    const isDelinquentRenewal = subStatus === "past_due" || subStatus === "unpaid";
+    const isCanceled = subStatus === "canceled" || subStatus === "cancelled";
+
+    if (isCanceled) {
+      return NextResponse.json(
+        { error: "This subscription is canceled. Add a card when you resubscribe." },
+        { status: 400 }
+      );
+    }
+
+    if (!user.subscription?.isActive && !isDelinquentRenewal) {
       return NextResponse.json(
         { error: "No active subscription found. Cannot update payment method." },
         { status: 400 }

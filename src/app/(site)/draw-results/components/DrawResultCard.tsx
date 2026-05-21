@@ -2,95 +2,123 @@
 
 import { WinnerSummary } from "@/types/winner";
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Calendar, ExternalLink, UserRound } from "lucide-react";
+import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import CompletedDrawRibbon from "@/components/ui/CompletedDrawRibbon";
+
+function getContrastText(hex: string) {
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? "#111827" : "#ffffff";
+}
 
 interface DrawResultCardProps {
   winner: WinnerSummary;
 }
 
+/** Compact card for completed mini draws (mixed aspect imagery — not the major landscape layout). */
 export default function DrawResultCard({ winner }: DrawResultCardProps) {
+  const theme = usePromoTheme();
+  const ctaColor = getContrastText(theme.primary);
   const selectedDate = new Date(winner.selectedDate);
-  const displayImage = winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+  const displayImage = winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
+  const winnerDisplayName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
+
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString("en-AU", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200">
-      {/* Prize Image */}
-      <div className="aspect-w-16 aspect-h-9 bg-gray-200 rounded-t-lg overflow-hidden relative">
-        <Image
-          src={displayImage}
-          alt={winner.prize.name}
-          width={400}
-          height={225}
-          className="w-full h-48 object-cover"
-        />
+    <article
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_rgba(15,23,42,0.12)] dark:border-slate-700/80 dark:bg-slate-900/60 dark:shadow-[0_8px_30px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_24px_56px_rgba(0,0,0,0.45)] sm:rounded-3xl"
+      style={{ borderColor: `${theme.borderRgba.replace("0.4)", "0.2)")}` }}
+    >
+      <div
+        className="h-1.5 w-full shrink-0 opacity-95 transition-opacity group-hover:opacity-100"
+        style={{ background: theme.gradient }}
+      />
 
-        {/* Winner Badge */}
-        <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-          🎉 Winner Selected
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(120% 80% at 100% 0%, ${theme.primaryLight}18, transparent 55%)`,
+        }}
+      />
+
+      <div className="relative z-10 flex flex-1 flex-col">
+        <div className="relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/11]">
+          <CompletedDrawRibbon kind="mini" placement="topLeft" />
+          <Image
+            src={displayImage}
+            alt={winner.prize.name}
+            fill
+            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+            sizes="(max-width: 640px) 50vw, 25vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/15 to-transparent" />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">
+          <h3 className="line-clamp-2 text-base font-bold leading-snug text-slate-950 font-['Poppins'] dark:text-white sm:text-lg">
+            {winner.drawName}
+          </h3>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+            <div className="flex gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-800/50">
+              <Calendar className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.primary }} />
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                  Drawn
+                </p>
+                <p className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">
+                  {formatDate(selectedDate)}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-800/50">
+              <UserRound className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.primary }} />
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                  Winner
+                </p>
+                <p className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100 break-words">
+                  {winnerDisplayName}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {winner.drawResultUrl ? (
+            <a
+              href={winner.drawResultUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-bold shadow-[0_10px_26px_rgba(15,23,42,0.12)] transition-[transform,box-shadow] duration-200 hover:scale-[1.01] hover:shadow-[0_14px_34px_rgba(15,23,42,0.16)] active:scale-[0.99] dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
+              style={{ background: theme.gradient, color: ctaColor }}
+            >
+              View draw result
+              <ExternalLink className="h-4 w-4 opacity-90" />
+            </a>
+          ) : (
+            <Link
+              href={`/mini-draws/${winner.drawId}`}
+              className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-bold shadow-[0_10px_26px_rgba(15,23,42,0.12)] transition-[transform,box-shadow] duration-200 hover:scale-[1.01] hover:shadow-[0_14px_34px_rgba(15,23,42,0.16)] active:scale-[0.99] dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
+              style={{ background: theme.gradient, color: ctaColor }}
+            >
+              View draw
+              <ArrowRight className="h-4 w-4 opacity-90" />
+            </Link>
+          )}
         </div>
       </div>
-
-      <div className="p-6">
-        {/* Prize Name and Value */}
-        <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">{winner.prize.name}</h3>
-        <p className="text-lg font-semibold text-green-600 mb-4">Value: ${winner.prize.value.toLocaleString()}</p>
-
-        {/* Draw Statistics */}
-        <div className="space-y-3 mb-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Winning Entry</span>
-            <span className="font-semibold text-gray-900">#{winner.entryNumber}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Cycle</span>
-            <span className="font-semibold text-gray-900">#{winner.cycle}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Draw Ended</span>
-            <span className="font-semibold text-gray-900">
-              {selectedDate.toLocaleDateString("en-AU", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
-            </span>
-          </div>
-        </div>
-
-        {/* Winner Information */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center mb-2">
-            <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <h4 className="font-semibold text-green-800">Winner Announced!</h4>
-          </div>
-          <p className="text-green-700 text-sm mb-1">Draw: {winner.drawName}</p>
-          <p className="text-green-700 text-sm mb-1">Winning Ticket: #{winner.entryNumber}</p>
-          <p className="text-green-600 text-xs">
-            Selected on{" "}
-            {selectedDate.toLocaleDateString("en-AU", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-
-        {/* Odds Information */}
-        <div className="text-center mb-4"></div>
-
-        {/* View Details Button */}
-        <a
-          className="block w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 text-center"
-          href={`/mini-draws/${winner.drawId}`}
-        >
-          View Draw
-        </a>
-      </div>
-    </div>
+    </article>
   );
 }

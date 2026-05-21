@@ -36,7 +36,7 @@ import { getPackageById } from "@/data/membershipPackages";
  *
  * Response includes:
  * - activePeriod: Currently active partner discount access (if any)
- * - queuedItems: List of upcoming partner discount periods (FIFO order)
+ * - queuedItems: List of upcoming partner discount periods (highest tier first, then FIFO)
  * - totalQueuedDays: Sum of all queued discount days
  * - totalQueuedItems: Count of items in queue
  */
@@ -73,9 +73,16 @@ export async function GET() {
     // Get detailed active period info
     const activePeriod = calculateActivePartnerDiscountPeriod(user);
 
-    // Calculate total queued days from ALL queued items (not just first 5)
-    const allQueuedItems = user.partnerDiscountQueue?.filter((item) => item.status === "queued") || [];
+    // Calculate total queued days from ALL queued items (not just first 5).
+    // Exclude membership: it is the ambient floor, not a finite queued window — its
+    // real remaining access is already in `activePeriod.daysRemaining` when it leads.
+    // Excluding it also neutralizes any legacy membership row that still stores 30.
+    const allQueuedItems =
+      user.partnerDiscountQueue?.filter(
+        (item) => item.status === "queued" && item.packageType !== "membership"
+      ) || [];
     const totalAllQueuedDays = allQueuedItems.reduce((sum, item) => sum + item.discountDays, 0);
+    const totalDaysOfAccessRemaining = Math.round(activePeriod.daysRemaining + totalAllQueuedDays);
 
     // Check if user has active subscription with partner discount benefits
     const isActiveSubscription = user.subscription?.isActive && activePeriod.source === "membership";
@@ -116,7 +123,7 @@ export async function GET() {
           hasActiveAccess: activePeriod.isActive,
           hasQueuedItems: queueSummary.totalQueuedItems > 0,
           nextActivationDate: queueSummary.queuedItems[0]?.purchaseDate || null,
-          totalDaysOfAccessRemaining: activePeriod.daysRemaining + totalAllQueuedDays,
+          totalDaysOfAccessRemaining,
           isActiveSubscription,
           subscriptionBenefits,
         },

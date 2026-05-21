@@ -232,8 +232,8 @@ export default function ContactForm() {
   if (isSubmitted) {
     return (
       <div className="p-6 sm:p-8 lg:p-12 flex items-center justify-center min-h-[300px] sm:min-h-[400px] relative overflow-hidden">
-        {/* White Background */}
-        <div className="absolute inset-0 bg-white"></div>
+        {/* Light/Dark Background */}
+        <div className="absolute inset-0 bg-white dark:bg-neutral-900" />
 
         <div className="text-center relative z-10">
           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -241,8 +241,8 @@ export default function ContactForm() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-lg sm:text-xl font-semibold text-black mb-2 font-['Poppins']">Message Sent!</h3>
-          <p className="text-sm sm:text-base text-gray-600 font-['Poppins']">
+          <h3 className="text-lg sm:text-xl font-semibold text-black dark:text-white mb-2 font-['Poppins']">Message Sent!</h3>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 font-['Poppins']">
             Thank you for contacting us. We&apos;ll get back to you soon.
           </p>
         </div>
@@ -252,23 +252,23 @@ export default function ContactForm() {
 
   return (
     <div className="p-6 sm:p-8 lg:p-12 relative overflow-hidden">
-      {/* White Background */}
-      <div className="absolute inset-0 bg-white"></div>
+      {/* Light/Dark Background */}
+      <div className="absolute inset-0 bg-white dark:bg-neutral-900" />
 
       {/* Content */}
       <div className="relative z-10">
         {/* Form Header */}
         <div className="mb-8">
-          <h3 className="text-[24px] font-semibold text-black mb-2 font-['Poppins']">Send us a message</h3>
-          <p className="text-[14px] text-gray-600 mb-4 font-['Poppins']">
+          <h3 className="text-[24px] font-semibold text-black dark:text-white mb-2 font-['Poppins']">Send us a message</h3>
+          <p className="text-[14px] text-gray-600 dark:text-gray-400 mb-4 font-['Poppins']">
             Fill out the form below and we&apos;ll get back to you as soon as possible.
           </p>
         </div>
 
         {/* Error Message */}
         {submitError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700 font-['Poppins']">{submitError}</p>
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-sm text-red-700 dark:text-red-300 font-['Poppins']">{submitError}</p>
           </div>
         )}
 
@@ -276,7 +276,7 @@ export default function ContactForm() {
           {/* First Name and Last Name Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div className="relative">
-              <label className="block text-[12px] font-medium text-gray-600 mb-2 font-['Poppins']">First Name</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">First Name</label>
               <div className="relative">
                 <input
                   type="text"
@@ -288,7 +288,7 @@ export default function ContactForm() {
                       ? "border-red-500"
                       : isFieldValid("firstName")
                       ? "border-green-500"
-                      : "border-gray-400 hover:border-[#ee0000]"
+                      : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                   }`}
                   placeholder="Enter your first name"
                 />
@@ -309,12 +309,12 @@ export default function ContactForm() {
                     ? "bg-red-500"
                     : isFieldValid("firstName")
                     ? "bg-green-500"
-                    : "bg-gray-400"
+                    : "bg-gray-400 dark:bg-neutral-500"
                 }`}
               ></div>
             </div>
             <div className="relative">
-              <label className="block text-[12px] font-medium text-gray-600 mb-2 font-['Poppins']">Last Name</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Last Name</label>
               <div className="relative">
                 <input
                   type="text"
@@ -326,7 +326,7 @@ export default function ContactForm() {
                       ? "border-red-500"
                       : isFieldValid("lastName")
                       ? "border-green-500"
-                      : "border-gray-400 hover:border-[#ee0000]"
+                      : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                   }`}
                   placeholder="Enter your last name"
                 />
@@ -343,7 +343,7 @@ export default function ContactForm() {
               </div>
               <div
                 className={`absolute bottom-0 left-0 w-full h-px ${
-                  isFieldInvalid("lastName") ? "bg-red-500" : isFieldValid("lastName") ? "bg-green-500" : "bg-gray-400"
+                  isFieldInvalid("lastName") ? "bg-red-500" : isFieldValid("lastName") ? "bg-green-500" : "bg-gray-400 dark:bg-neutral-500"
                 }`}
               ></div>
             </div>
@@ -351,7 +351,7 @@ export default function ContactForm() {
 
           {/* Email Row */}
           <div className="relative">
-            <label className="block text-[12px] font-medium text-gray-600 mb-2 font-['Poppins']">Email</label>
+            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Email</label>
             <div className="relative">
               <input
                 type="email"
@@ -363,7 +363,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("email")
                     ? "border-green-500"
-                    : "border-gray-400 hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Enter your email address"
               />
@@ -380,14 +380,14 @@ export default function ContactForm() {
             </div>
             <div
               className={`absolute bottom-0 left-0 w-full h-px ${
-                isFieldInvalid("email") ? "bg-red-500" : isFieldValid("email") ? "bg-green-500" : "bg-gray-400"
+                isFieldInvalid("email") ? "bg-red-500" : isFieldValid("email") ? "bg-green-500" : "bg-gray-400 dark:bg-neutral-500"
               }`}
             ></div>
           </div>
 
           {/* Phone Number Row */}
           <div className="relative">
-            <label className="block text-[12px] font-medium text-gray-600 mb-2 font-['Poppins']">Phone Number</label>
+            <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 mb-2 font-['Poppins']">Phone Number</label>
             <div className="relative">
               <input
                 type="tel"
@@ -399,7 +399,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("phone")
                     ? "border-green-500"
-                    : "border-gray-400 hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Enter your phone number"
               />
@@ -416,19 +416,19 @@ export default function ContactForm() {
             </div>
             <div
               className={`absolute bottom-0 left-0 w-full h-px ${
-                isFieldInvalid("phone") ? "bg-red-500" : isFieldValid("phone") ? "bg-green-500" : "bg-gray-400"
+                isFieldInvalid("phone") ? "bg-red-500" : isFieldValid("phone") ? "bg-green-500" : "bg-gray-400 dark:bg-neutral-500"
               }`}
             ></div>
           </div>
 
           {/* Subject Selection */}
           <div>
-            <label className="block text-[14px] font-semibold text-black mb-2 font-['Poppins']">Select Subject?</label>
+            <label className="block text-[14px] font-semibold text-black dark:text-white mb-2 font-['Poppins']">Select Subject?</label>
             <div className="flex flex-wrap gap-3 sm:gap-4">
               {subjects.map((subject) => (
                 <label
                   key={subject}
-                  className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 transition-all duration-200 focus-within:bg-gray-100"
+                  className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-all duration-200 focus-within:bg-gray-100 dark:focus-within:bg-neutral-800"
                 >
                   <input
                     type="radio"
@@ -436,9 +436,9 @@ export default function ContactForm() {
                     value={subject}
                     checked={formData.subject === subject}
                     onChange={handleInputChange}
-                    className="w-[16px] h-[16px] text-[#ee0000] border-gray-400 focus:ring-0 focus:ring-offset-0 rounded-full transition-all duration-300"
+                    className="w-[16px] h-[16px] text-red-600 border-gray-400 dark:border-neutral-500 focus:ring-0 focus:ring-offset-0 rounded-full transition-all duration-300"
                   />
-                  <span className="text-[12px] text-black font-['Poppins'] select-none">{subject}</span>
+                  <span className="text-[12px] text-black dark:text-white font-['Poppins'] select-none">{subject}</span>
                 </label>
               ))}
             </div>
@@ -447,9 +447,9 @@ export default function ContactForm() {
           {/* Message */}
           <div className="relative">
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-[12px] font-medium text-gray-600 font-['Poppins']">Message</label>
+              <label className="block text-[12px] font-medium text-gray-600 dark:text-gray-400 font-['Poppins']">Message</label>
               <span
-                className={`text-[10px] font-['Poppins'] ${
+                className={`text-2xs font-['Poppins'] ${
                   formData.message.length < 10
                     ? "text-red-500"
                     : formData.message.length > 500
@@ -472,7 +472,7 @@ export default function ContactForm() {
                     ? "border-red-500"
                     : isFieldValid("message")
                     ? "border-green-500"
-                    : "border-gray-400 hover:border-[#ee0000]"
+                    : "border-gray-400 dark:border-neutral-500 hover:border-red-600 dark:hover:border-red-600"
                 }`}
                 placeholder="Write your message (minimum 10 characters)..."
               />
@@ -489,7 +489,7 @@ export default function ContactForm() {
             </div>
             <div
               className={`absolute bottom-0 left-0 w-full h-px ${
-                isFieldInvalid("message") ? "bg-red-500" : isFieldValid("message") ? "bg-green-500" : "bg-gray-400"
+                isFieldInvalid("message") ? "bg-red-500" : isFieldValid("message") ? "bg-green-500" : "bg-gray-400 dark:bg-neutral-500"
               }`}
             ></div>
           </div>

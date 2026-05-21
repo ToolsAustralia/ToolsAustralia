@@ -12,6 +12,7 @@ import type { BrandLogo } from "@/data/brandLogos";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
+import { cn } from "@/utils/cn";
 
 // Types
 interface ProductItem {
@@ -391,7 +392,7 @@ export default function ProductCard({
   // Grid view
   if (viewMode === "grid") {
     return (
-      <div className="bg-white rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-visible group h-full flex flex-col">
+      <div className="bg-white dark:bg-neutral-900 rounded-[20px] sm:rounded-[25px] lg:rounded-[30px] border border-transparent dark:border-neutral-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-all duration-300 overflow-hidden group h-full flex flex-col">
         <div className="relative">
           {/* Product Image */}
           <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
@@ -422,8 +423,8 @@ export default function ProductCard({
 
           {/* Your Entries Badge - Top Center (only shows if user has entries) */}
           {productData.isPrize && isAuthenticated && getUserEntryCount() > 0 && (
-            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap group">
-              <div className="relative bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium shadow-lg shadow-green-500/50 overflow-hidden">
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-10 whitespace-nowrap">
+              <div className="relative bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-2xs sm:text-xs font-medium shadow-lg shadow-green-500/50 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent transform -skew-x-12 opacity-40"></div>
                 <span className="relative z-10 flex items-center gap-1">
                   <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -455,14 +456,14 @@ export default function ProductCard({
           <div className="flex-1 space-y-2">
             {/* Product Name */}
             <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 hover:text-blue-600 transition-colors line-clamp-2 min-h-[2.5rem]">
+              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2 min-h-[2.5rem]">
                 {productData.name}
               </h3>
             </Link>
 
             {/* Brand (products only) */}
             {!productData.isPrize && (
-              <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 tracking-[0.1px]">
+              <p className="text-[12px] sm:text-[14px] lg:text-[16px] text-gray-600 dark:text-neutral-400 tracking-[0.1px]">
                 {productData.brand}
               </p>
             )}
@@ -471,7 +472,7 @@ export default function ProductCard({
             {!productData.isPrize && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>
-                <span className="text-[12px] sm:text-[14px] text-gray-600 ml-1">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
                   ({getValidRating(productData.rating).toFixed(1)})
                 </span>
               </div>
@@ -480,8 +481,8 @@ export default function ProductCard({
             {/* Stock Status for Products */}
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>
               </div>
@@ -495,7 +496,7 @@ export default function ProductCard({
                     isPrizeCancelled ? "bg-red-500" : isPrizeClosed ? "bg-yellow-500" : "bg-green-500"
                   }`}
                 />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isPrizeCancelled ? "Cancelled" : isPrizeClosed ? "Closed" : "Active"}
                 </span>
               </div>
@@ -514,7 +515,7 @@ export default function ProductCard({
           <div className="mt-4 space-y-3">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
                 <span>${productData.price.toFixed(2)}</span>
               </div>
             )}
@@ -525,7 +526,7 @@ export default function ProductCard({
                 <div className="flex gap-2">
                   <button
                     onClick={handleRetry}
-                    className="flex-1 py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-red-600 hover:bg-red-700"
+                    className="flex-1 py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-2xs sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-red-600 hover:bg-red-700"
                   >
                     <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
                     <span className="hidden sm:inline">Retry</span>
@@ -534,7 +535,7 @@ export default function ProductCard({
                   {hasFailedOperations && (
                     <button
                       onClick={retryAllFailedOperations}
-                      className="px-3 py-2 sm:py-2.5 lg:py-3 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] bg-orange-600 hover:bg-orange-700 transition-all duration-200"
+                      className="px-3 py-2 sm:py-2.5 lg:py-3 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-2xs sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] bg-orange-600 hover:bg-orange-700 transition-all duration-200"
                       title="Retry all failed operations"
                     >
                       <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
@@ -545,9 +546,9 @@ export default function ProductCard({
                 // For mini draws, redirect to detail page
                 <Link
                   href={`/mini-draws/${productData.id}`}
-                  className="w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-black hover:bg-gray-800"
+                  className="w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-2xs sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 bg-black hover:bg-gray-800"
                 >
-                  <span className="text-[9px] sm:text-[10px] lg:text-xs font-semibold">$1</span>
+                  <span className="text-3xs sm:text-2xs lg:text-xs font-semibold">$1</span>
                   <div className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5">
                     <Ticket className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5" />
                   </div>
@@ -562,7 +563,7 @@ export default function ProductCard({
                 <button
                   onClick={handleAddToCart}
                   disabled={isOutOfStock || isInCart || isCurrentlyLoading}
-                  className={`w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-[10px] sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 ${
+                  className={`w-full py-2 sm:py-2.5 lg:py-3 px-3 sm:px-4 lg:px-6 rounded-[40px] sm:rounded-[45px] lg:rounded-[50px] font-bold text-2xs sm:text-[12px] lg:text-[14px] text-white tracking-[0.1px] flex items-center justify-center gap-1 sm:gap-2 lg:gap-[9px] transition-all duration-200 ${
                     isOutOfStock || isInCart || isCurrentlyLoading
                       ? isInCart
                         ? "bg-green-600 cursor-not-allowed"
@@ -604,7 +605,7 @@ export default function ProductCard({
 
   // List view (similar optimistic approach)
   return (
-    <div className="bg-white rounded-[20px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 overflow-hidden">
+    <div className="bg-white dark:bg-neutral-900 rounded-[20px] border border-transparent dark:border-neutral-800 shadow-[0_4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-all duration-300 overflow-hidden">
       <div className="flex">
         {/* Product Image */}
         <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
@@ -641,21 +642,21 @@ export default function ProductCard({
           <div className="space-y-2">
             {/* Product Name */}
             <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 hover:text-blue-600 transition-colors line-clamp-2">
+              <h3 className="text-[14px] sm:text-[16px] lg:text-[18px] font-bold text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2">
                 {productData.name}
               </h3>
             </Link>
 
             {/* Brand (products only) */}
             {!productData.isPrize && (
-              <p className="text-[14px] sm:text-[16px] text-gray-600 tracking-[0.1px]">{productData.brand}</p>
+              <p className="text-[14px] sm:text-[16px] text-gray-600 dark:text-neutral-400 tracking-[0.1px]">{productData.brand}</p>
             )}
 
             {/* Rating - Only show for products, not mini draws */}
             {!productData.isPrize && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>
-                <span className="text-[14px] text-gray-600 ml-1">
+                <span className="text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
                   ({getValidRating(productData.rating).toFixed(1)})
                 </span>
               </div>
@@ -664,8 +665,8 @@ export default function ProductCard({
             {/* Stock Status for Products */}
             {!productData.isPrize && (
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isOutOfStock ? "bg-red-500" : "bg-green-500"}`} />
-                <span className="text-[12px] sm:text-[14px] text-gray-600">
+                <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
+                <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
                   {isOutOfStock ? "Out of Stock" : "In Stock"}
                 </span>
               </div>
@@ -674,7 +675,7 @@ export default function ProductCard({
             {/* Mini Draw Progress Bar (Entry-based) - List View */}
             {productData.isPrize && productData.minimumEntries && (
               <div className="flex justify-center items-center text-xs">
-                <span className="text-gray-700">{productData.entriesRemaining || 0} entries remaining</span>
+                <span className="text-gray-700 dark:text-neutral-200">{productData.entriesRemaining || 0} entries remaining</span>
               </div>
             )}
 
@@ -690,7 +691,7 @@ export default function ProductCard({
           <div className="flex items-center justify-between mt-4">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900">
+              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
                 <span>${productData.price.toFixed(2)}</span>
               </div>
             )}
@@ -702,7 +703,7 @@ export default function ProductCard({
                 href={`/mini-draws/${productData.id}`}
                 className="px-4 sm:px-8 py-2 sm:py-3 rounded-[50px] font-bold text-[12px] sm:text-[14px] text-white tracking-[0.1px] flex items-center gap-[6px] sm:gap-[9px] transition-all duration-200 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
               >
-                <span className="text-[10px] sm:text-xs font-semibold">$1</span>
+                <span className="text-2xs sm:text-xs font-semibold">$1</span>
                 <div className="w-4 h-4 sm:w-5 sm:h-5">
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>

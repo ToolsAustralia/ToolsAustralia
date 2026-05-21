@@ -8,7 +8,6 @@ const configuredImageHosts = (process.env.NEXT_PUBLIC_IMAGE_HOSTS || "")
   .filter(Boolean);
 const allowedImageHosts = Array.from(new Set([...DEFAULT_IMAGE_HOSTS, ...configuredImageHosts]));
 
-const imageDomains = allowedImageHosts.filter((host) => !host.includes("*") && host.length > 0);
 const imageRemotePatterns = allowedImageHosts.map((hostname) => ({
   protocol: "https" as const,
   hostname,
@@ -40,10 +39,25 @@ const nextConfig: NextConfig = {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 
-  // Image optimization
+  // Image optimization (AVIF first, then WebP fallback; sharp recommended for runtime optimization)
   images: {
-    domains: ["localhost", ...imageDomains],
-    remotePatterns: imageRemotePatterns,
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 2_592_000, // 30 days — defaults are 60s which churns Image Optimization Cache
+    deviceSizes: [640, 750, 828, 1080, 1280, 1920, 2048], // dropped 1200, 3840 from defaults
+    imageSizes: [16, 32, 64, 128, 256, 384], // dropped 48, 96 from defaults
+    remotePatterns: [
+      { protocol: "http" as const, hostname: "localhost" }, // dev
+      ...imageRemotePatterns,
+    ],
+  },
+
+  // Tree-shake heavy barrel-imported libraries; restore client-side router cache windows
+  experimental: {
+    optimizePackageImports: ["lucide-react", "date-fns", "date-fns-tz"],
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
   },
 
   // Compiler options to remove console logs in production

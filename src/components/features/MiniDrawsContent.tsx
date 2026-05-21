@@ -2,48 +2,31 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import ProductCard from "@/components/ui/ProductCard";
+import MiniDrawCard, { type MiniDrawCardData } from "./MiniDrawCard";
 import MiniDrawsFilters from "./MiniDrawsFilters";
-import { Grid, List, Filter, X, Search } from "lucide-react";
+import { Grid, List, Filter, X, Search, Sparkles, ArrowUpDown } from "lucide-react";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
 import { SectionContainer } from "@/components/ui";
+import { AnimatePresence, motion } from "framer-motion";
+import { brandLogos } from "@/data/brandLogos";
+import Dropdown from "@/components/modals/ui/Dropdown";
 
-// Mini draw type for ProductCard compatibility (entry-based system)
-interface MiniDrawForCard {
-  _id: string;
-  name: string;
-  status: "active" | "completed" | "cancelled";
-  totalEntries: number;
-  minimumEntries: number;
-  entriesRemaining?: number;
-  requiresMembership: boolean;
-  hasActiveMembership?: boolean;
-  brandId?: string;
-  prize: {
-    name: string;
-    value: number;
-    images: string[];
-  };
-}
-
-// Filter state interface for mini draws
 interface MiniDrawFilterState {
   brands: string[];
 }
 
-// Sort options for mini draws - Updated to match API (entry-based system)
 const sortOptions = [
-  { value: "totalEntries-desc", label: "Most Sold" },
+  { value: "totalEntries-desc", label: "Most Entries" },
   { value: "name-asc", label: "Name (A-Z)" },
   { value: "name-desc", label: "Name (Z-A)" },
-  { value: "totalEntries-asc", label: "Entry Size (Low to High)" },
-  { value: "minimumEntries-asc", label: "Minimum Entries (Low to High)" },
-  { value: "minimumEntries-desc", label: "Minimum Entries (High to Low)" },
+  { value: "totalEntries-asc", label: "Fewest Entries" },
+  { value: "minimumEntries-asc", label: "Lowest Entry Target" },
+  { value: "minimumEntries-desc", label: "Highest Entry Target" },
 ];
 
 interface MiniDrawsContentProps {
-  initialMiniDraws: MiniDrawForCard[];
+  initialMiniDraws: MiniDrawCardData[];
   totalMiniDraws: number;
 }
 
@@ -53,21 +36,16 @@ export default function MiniDrawsContent({
 }: MiniDrawsContentProps) {
   const searchParams = useSearchParams();
 
-  // State management for mini draws page
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filters, setFilters] = useState<MiniDrawFilterState>({
-    brands: [],
-  });
+  const [filters, setFilters] = useState<MiniDrawFilterState>({ brands: [] });
   const [sortBy, setSortBy] = useState("totalEntries-desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
-  // Parse sort parameters
   const [sortField, sortOrder] = sortBy.split("-");
 
-  // Use React Query for data fetching
   const {
     data: miniDrawsData,
     isLoading,
@@ -82,14 +60,10 @@ export default function MiniDrawsContent({
     sortOrder: sortOrder as "asc" | "desc",
   });
 
-  // Transform React Query mini draws to match ProductCard's MiniDrawType interface (entry-based system)
-  // ✅ AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users (not just members)
-  const transformedMiniDraws: MiniDrawForCard[] =
+  const transformedMiniDraws: MiniDrawCardData[] =
     miniDrawsData?.miniDraws?.map(
       (
         miniDraw: ReactQueryMiniDraw & {
-          requiresMembership?: boolean;
-          hasActiveMembership?: boolean;
           entriesRemaining?: number;
         }
       ) => {
@@ -107,8 +81,6 @@ export default function MiniDrawsContent({
           totalEntries,
           minimumEntries,
           entriesRemaining,
-          requiresMembership: miniDraw.requiresMembership ?? false, // ✅ AUTHENTICATION-ONLY: Default to false
-          hasActiveMembership: miniDraw.hasActiveMembership ?? false,
           brandId: miniDraw.brandId,
           prize: {
             name: miniDraw.prize.name,
@@ -122,121 +94,305 @@ export default function MiniDrawsContent({
   const totalPages = miniDrawsData?.pagination?.totalPages || 1;
   const totalMiniDraws = miniDrawsData?.pagination?.totalCount || initialTotalMiniDraws;
 
-  // Debounced search effect
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Handle URL parameters on component mount
   useEffect(() => {
     const brandParam = searchParams.get("brandId");
     if (brandParam) {
-      setFilters((prev) => ({
-        ...prev,
-        brands: [brandParam],
-      }));
+      setFilters((prev) => ({ ...prev, brands: [brandParam] }));
     }
   }, [searchParams]);
 
-  // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    setCurrentPage(1); // Reset to first page when search changes
+    setCurrentPage(1);
   };
 
-  // Note: Mini draws now redirect to detail page via ProductCard, no handler needed
-
-  // Handle filter changes
   const handleFilterChange = (newFilters: Partial<MiniDrawFilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   };
 
-  // Handle closing mobile filters
   const handleCloseFilters = () => {
     setIsFiltersOpen(false);
   };
 
-  // Handle sort change
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
-    setCurrentPage(1); // Reset to first page when sort changes
+    setCurrentPage(1);
   };
 
-  // Handle page change
+  const handleClearAll = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setFilters({ brands: [] });
+    setSortBy("totalEntries-desc");
+    setCurrentPage(1);
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const activeFilterCount = filters.brands.length;
+  const hasControlsApplied = activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== "totalEntries-desc";
 
   return (
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
         <div className="hidden lg:block w-80 flex-shrink-0">
-          <MiniDrawsFilters onFilterChangeAction={handleFilterChange} isMobile={false} />
+          <MiniDrawsFilters
+            selectedBrands={filters.brands}
+            onFilterChangeAction={handleFilterChange}
+            isMobile={false}
+          />
         </div>
 
         {/* Mobile/Tablet Filter Overlay */}
-        {isFiltersOpen && (
-          <div className="fixed inset-0 z-[110] lg:hidden">
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
-              onClick={handleCloseFilters}
-            />
-
-            {/* Sidebar */}
-            <div className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white shadow-xl overflow-y-auto transform transition-transform duration-300 ease-in-out">
-              <div className="p-4 border-b border-gray-200 sticky top-0 bg-white z-10">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Filters</h3>
-                  <button
-                    onClick={handleCloseFilters}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                    aria-label="Close filters"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+        <AnimatePresence>
+          {isFiltersOpen && (
+            <div className="fixed inset-0 z-[110] lg:hidden">
+              <motion.div
+                className="absolute inset-0 bg-black/50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={handleCloseFilters}
+              />
+              <motion.div
+                className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
+                <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+                    <button
+                      type="button"
+                      onClick={handleCloseFilters}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 dark:hover:text-white rounded-full transition-colors text-gray-700 dark:text-neutral-400"
+                      aria-label="Close filters"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="p-4">
-                <MiniDrawsFilters
-                  onFilterChangeAction={handleFilterChange}
-                  isMobile={true}
-                  onClose={handleCloseFilters}
-                />
-              </div>
+                <div className="p-4">
+                  <MiniDrawsFilters
+                    selectedBrands={filters.brands}
+                    onFilterChangeAction={handleFilterChange}
+                    isMobile={true}
+                  />
+                </div>
+              </motion.div>
             </div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
 
         {/* Main Content */}
         <div className="flex-1">
-          {/* Search Bar */}
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search mini draws..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="w-full sm:w-[260px] lg:w-[320px] pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200"
-              />
+          <div className="mb-6 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-gradient-to-br from-white via-white to-gray-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950 p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white sm:text-lg">Browse Active Mini Draws</h2>
+                <p className="text-xs text-gray-500 dark:text-neutral-400 sm:text-sm">
+                  Fine-tune results by brand, sort order, and view mode.
+                </p>
+              </div>
+              {hasControlsApplied && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-red-200 dark:border-red-900/50 bg-white dark:bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Reset controls
+                </button>
+              )}
             </div>
+
+            <div className="space-y-3 md:hidden">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
+                  <input
+                    type="text"
+                    placeholder="Search mini draws or prize names..."
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("grid")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "grid"
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                    }`}
+                    aria-label="Grid view"
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                      viewMode === "list"
+                        ? "bg-black text-white dark:bg-white dark:text-black"
+                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                    }`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="relative min-w-0 flex-1">
+                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                  <Dropdown
+                    options={sortOptions}
+                    value={sortBy}
+                    onChange={handleSortChange}
+                    placeholder="Sort by"
+                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-red-600/10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="Search mini draws or prize names..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
+                />
+              </div>
+
+              <div className="lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="inline-flex items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "grid"
+                      ? "bg-black text-white dark:bg-white dark:text-black"
+                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                  }`}
+                  aria-label="Grid view"
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                    viewMode === "list"
+                      ? "bg-black text-white dark:bg-white dark:text-black"
+                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                  }`}
+                  aria-label="List view"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="relative min-w-[190px]">
+                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+                <Dropdown
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  placeholder="Sort by"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-red-600/10"
+                />
+              </div>
+            </div>
+
+            {(activeFilterCount > 0 || debouncedSearch.trim().length > 0) && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {debouncedSearch.trim().length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1 text-xs font-medium text-gray-700 dark:text-neutral-200">
+                    Search: &quot;{debouncedSearch}&quot;
+                  </span>
+                )}
+                {filters.brands.map((brandId) => {
+                  const brandName = brandLogos.find((brand) => brand.id === brandId)?.name ?? brandId;
+                  return (
+                    <button
+                      key={brandId}
+                      onClick={() =>
+                        handleFilterChange({
+                          brands: filters.brands.filter((id) => id !== brandId),
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-full border border-red-600/25 dark:border-red-900/40 bg-red-600/5 dark:bg-red-950/30 px-3 py-1 text-xs font-semibold text-[#c70000] dark:text-red-400 transition-colors hover:bg-red-600/10 dark:hover:bg-red-950/50"
+                    >
+                      {brandName}
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Results Header */}
-          <div className="flex flex-col gap-4 mb-8">
-            {/* Results count and loading */}
+          <div className="flex flex-col gap-4 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <p className="text-gray-600 text-sm sm:text-base">
+                <p className="text-gray-600 dark:text-neutral-400 text-sm sm:text-base">
                   {totalMiniDraws > 0 ? (
                     <>
                       Showing {(currentPage - 1) * 12 + 1}-{Math.min(currentPage * 12, totalMiniDraws)} of{" "}
@@ -247,153 +403,94 @@ export default function MiniDrawsContent({
                   )}
                 </p>
                 {isLoading && (
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-black rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-red-600 dark:border-t-white rounded-full animate-spin" />
                 )}
               </div>
             </div>
 
-            {/* Error message */}
             {isError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                <p className="text-red-600 text-sm">
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-3">
+                <p className="text-red-600 dark:text-red-400 text-sm">
                   {error instanceof Error ? error.message : "Failed to load mini draws. Please try again."}
                 </p>
               </div>
             )}
 
-            {/* Controls row */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Filters Button - Mobile/Tablet only */}
-              <div className="lg:hidden flex-shrink-0">
-                <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="flex items-center gap-1 px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors whitespace-nowrap"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span className="text-xs">Filters</span>
-                  <span className="text-xs text-gray-500">
-                    {(() => {
-                      const activeFiltersCount = filters.brands.length;
-                      return activeFiltersCount > 0 ? `(${activeFiltersCount})` : "";
-                    })()}
-                  </span>
-                </button>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden flex-shrink-0">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "grid" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="Grid view"
-                >
-                  <Grid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "list" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                  aria-label="List view"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Sort Dropdown */}
-              <div className="flex items-center gap-1 text-xs flex-shrink-0">
-                <span className="text-gray-500 whitespace-nowrap">Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => handleSortChange(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 text-[11px] sm:text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-red-500/15 focus:border-red-500 transition-all duration-200 w-auto min-w-[100px] max-w-[140px]"
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
           </div>
 
           {/* Mini Draws Grid/List */}
           {isLoading ? (
-            <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 mb-12">
-              {[...Array(8)].map((_, i) => (
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-12">
+              {[...Array(6)].map((_, i) => (
                 <div
                   key={i}
-                  className="bg-white rounded-[25px] shadow-[0px_4px_10px_0px_rgba(0,0,0,0.1)] p-4 sm:p-6 animate-pulse"
+                  className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] overflow-hidden animate-pulse"
                 >
-                  <div className="h-[150px] sm:h-[196px] bg-gray-200 rounded-[10px] mb-4"></div>
-                  <div className="space-y-2">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                  <div className="aspect-[4/3] bg-gray-200" />
+                  <div className="p-3 sm:p-4 space-y-2.5">
+                    <div className="h-3 bg-gray-200 rounded w-16" />
+                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                    <div className="h-1.5 bg-gray-200 rounded-full w-full" />
+                    <div className="h-9 bg-gray-200 rounded-full w-full mt-3" />
                   </div>
                 </div>
               ))}
             </div>
           ) : transformedMiniDraws.length > 0 ? (
             <div
-              className={`grid gap-2 sm:gap-4 lg:gap-6 mb-12 ${
+              className={`grid gap-3 sm:gap-4 lg:gap-6 mb-12 ${
                 viewMode === "grid"
                   ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
-                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-1"
+                  : "grid-cols-1 sm:grid-cols-1 lg:grid-cols-1"
               }`}
             >
-              {transformedMiniDraws.map((miniDraw) => (
-                <ProductCard key={miniDraw._id} product={miniDraw} width="w-full" viewMode={viewMode} />
+              {transformedMiniDraws.map((miniDraw, index) => (
+                <MiniDrawCard
+                  key={miniDraw._id}
+                  miniDraw={miniDraw}
+                  index={index}
+                  viewMode={viewMode}
+                />
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <div className="text-gray-400 mb-4">
-                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1}
-                    d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                  />
-                </svg>
+            <motion.div
+              className="text-center py-16"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-neutral-800 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-gray-400 dark:text-neutral-500" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 {debouncedSearch ? `No mini draws found for "${debouncedSearch}"` : "No mini draws found"}
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-600 dark:text-neutral-400 mb-4">
                 {debouncedSearch
                   ? "Try searching for something else or adjust your filters."
                   : "Try adjusting your filters to see more results."}
               </p>
               {debouncedSearch && (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-500">Suggestions:</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      onClick={() => setSearchQuery("")}
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
-                    >
-                      Clear search
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSearchQuery("");
-                        setFilters({
-                          brands: [],
-                        });
-                      }}
-                      className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
-                    >
-                      Clear all filters
-                    </button>
-                  </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium transition-colors"
+                  >
+                    Clear search
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setFilters({ brands: [] });
+                    }}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium transition-colors"
+                  >
+                    Clear all filters
+                  </button>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* Pagination */}
@@ -402,19 +499,21 @@ export default function MiniDrawsContent({
               {/* Mobile pagination */}
               <div className="flex sm:hidden items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Previous
                 </button>
-                <span className="px-3 py-2 text-sm text-gray-600">
+                <span className="px-3 py-2 text-sm text-gray-600 dark:text-neutral-400">
                   {currentPage} of {totalPages}
                 </span>
                 <button
+                  type="button"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Next
                 </button>
@@ -423,13 +522,13 @@ export default function MiniDrawsContent({
               {/* Desktop pagination */}
               <div className="hidden sm:flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
-
                 <div className="flex gap-1">
                   {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
                     let pageNum;
@@ -442,13 +541,15 @@ export default function MiniDrawsContent({
                     } else {
                       pageNum = currentPage - 3 + i;
                     }
-
                     return (
                       <button
+                        type="button"
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
-                        className={`w-10 h-10 rounded-lg transition-colors ${
-                          pageNum === currentPage ? "bg-black text-white" : "border border-gray-300 hover:bg-gray-50"
+                        className={`w-10 h-10 rounded-lg transition-colors text-sm font-medium ${
+                          pageNum === currentPage
+                            ? "bg-black text-white dark:bg-white dark:text-black"
+                            : "border border-gray-300 dark:border-neutral-600 text-gray-900 dark:text-neutral-100 hover:bg-gray-50 dark:hover:bg-neutral-800"
                         }`}
                       >
                         {pageNum}
@@ -456,11 +557,11 @@ export default function MiniDrawsContent({
                     );
                   })}
                 </div>
-
                 <button
+                  type="button"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 text-gray-900 dark:text-neutral-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>

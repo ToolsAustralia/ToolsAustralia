@@ -6,6 +6,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import Stripe from "stripe";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 // Extended Stripe subscription interface to include current_period_end
 interface StripeSubscriptionWithPeriodEnd extends Stripe.Subscription {
@@ -171,8 +172,8 @@ export async function POST(request: NextRequest) {
     //   }))
     // );
 
-    // Format description: (DOWNGRADE) PreviousPackage(Previous) to NewPackage(New)
-    const downgradeDescription = `(DOWNGRADE) ${currentPackage.name} to ${newPackage.name}`;
+    // Format description for Stripe transactions tab: "Boss to Foreman Downgrade"
+    const downgradeDescription = `${currentPackage.name} to ${newPackage.name} Downgrade`;
 
     // Create subscription update with item replacements
     const subscriptionUpdateParams: Stripe.SubscriptionUpdateParams = {
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
     // Track Meta CAPI Custom Event `MembershipDowngrade` (server-side — no live Pixel call).
     try {
       const { trackPixelSubscriptionDowngrade } = await import("@/utils/tracking/pixel-purchase-tracking");
-      const { extractRequestContext } = await import("@/utils/tracking/facebook-helpers");
+      const requestContext = extractRequestContext(request);
       await trackPixelSubscriptionDowngrade({
         oldValue: currentPackage.price,
         newValue: newPackage.price,
@@ -255,9 +256,11 @@ export async function POST(request: NextRequest) {
         userPhone: user.mobile,
         userFirstName: user.firstName,
         userLastName: user.lastName,
+        userState: user.state,
+        userBirthdate: user.birthdate,
         prorationAmount: 0, // No immediate charge for downgrade
         entriesRemoved: (currentPackage.entriesPerMonth || 0) - (newPackage.entriesPerMonth || 0),
-        requestContext: extractRequestContext(request),
+        requestContext,
       });
     } catch (pixelError) {
       console.error("❌ Pixel downgrade tracking failed (non-blocking):", pixelError);

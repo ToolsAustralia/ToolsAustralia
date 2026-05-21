@@ -15,6 +15,7 @@ import { Clock, Gift, Calendar, CheckCircle2, AlertCircle, Package } from "lucid
 import { usePartnerDiscountQueue } from "@/hooks/queries/usePartnerDiscountQueue";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import { cn } from "@/utils/cn";
 
 // Export the component and optimistic update function for external use
 export const usePartnerDiscountQueueOptimistic = () => {
@@ -186,7 +187,7 @@ export default function PartnerDiscounts() {
       case "upsell":
         return <Gift className="w-4 h-4 text-orange-600" />;
       default:
-        return <Package className="w-4 h-4 text-gray-600" />;
+        return <Package className="w-4 h-4 text-gray-600 dark:text-neutral-400" />;
     }
   };
 
@@ -203,7 +204,7 @@ export default function PartnerDiscounts() {
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
 
@@ -230,7 +231,7 @@ export default function PartnerDiscounts() {
         case "upsell":
           return "bg-orange-100 text-orange-800 border-orange-300";
         default:
-          return "bg-gray-100 text-gray-800 border-gray-300";
+          return "bg-gray-100 text-gray-800 dark:text-neutral-100 border-gray-300";
       }
     }
   };
@@ -297,7 +298,7 @@ export default function PartnerDiscounts() {
           </div>
           <div>
             <h3 className="text-lg font-bold text-gray-900 mb-1">Partner Discounts Unavailable</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">{pauseMessage}</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 leading-relaxed">{pauseMessage}</p>
           </div>
         </div>
       </div>
@@ -349,6 +350,9 @@ export default function PartnerDiscounts() {
 
   const { activePeriod, queuedItems, totalQueuedDays, totalQueuedItems, summary } = queueData;
 
+  const displayTotalDaysRemaining = Math.max(0, Math.round(summary.totalDaysOfAccessRemaining));
+  const displayQueuedDaysTotal = Math.max(0, Math.round(totalQueuedDays));
+
   return (
     <div className="bg-gradient-to-br from-white via-gray-50 to-white rounded-2xl shadow-lg border-2 border-gray-200 relative overflow-hidden">
       {/* Premium Background Effects */}
@@ -377,18 +381,18 @@ export default function PartnerDiscounts() {
                   : "text-green-600";
 
                 return (
-                  <p className="text-sm text-gray-600">
-                    <span className={`font-bold ${textColor}`}>
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">
+                    <span className={cn("font-bold", textColor)}>
                       {summary.subscriptionBenefits.shopDiscountPercent}% off
                     </span>{" "}
                     shop discounts
-                    <span className={`ml-2 ${textColor} font-semibold`}>• Active Subscription</span>
+                    <span className={cn("ml-2", textColor, "font-semibold")}>• Active Subscription</span>
                   </p>
                 );
               })()
-            ) : summary.totalDaysOfAccessRemaining > 0 ? (
-              <p className="text-sm text-gray-600">
-                <span className="font-bold text-orange-600">{summary.totalDaysOfAccessRemaining} days</span> total
+            ) : displayTotalDaysRemaining > 0 ? (
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
+                <span className="font-bold text-orange-600">{displayTotalDaysRemaining} days</span> total
                 access
                 {activePeriod.isActive && <span className="ml-2 text-green-600 font-semibold">• Active</span>}
               </p>
@@ -403,22 +407,22 @@ export default function PartnerDiscounts() {
               const colors = getSubscriptionBadgeColors(summary.subscriptionBenefits.packageName);
               return (
                 <div
-                  className={`bg-gradient-to-br ${colors.background} rounded-lg px-2.5 py-1.5 border-2 ${colors.border} shadow-sm`}
+                  className={cn("bg-gradient-to-br", colors.background, "rounded-lg px-2.5 py-1.5 border-2", colors.border, "shadow-sm")}
                 >
                   <p
-                    className={`text-lg font-bold bg-gradient-to-r ${colors.text} bg-clip-text text-transparent leading-none`}
+                    className={cn("text-lg font-bold bg-gradient-to-r", colors.text, "bg-clip-text text-transparent leading-none")}
                   >
                     {summary.subscriptionBenefits.shopDiscountPercent}%
                   </p>
                 </div>
               );
             })()
-          ) : summary.totalDaysOfAccessRemaining > 0 ? (
+          ) : displayTotalDaysRemaining > 0 ? (
             <div
               className={`bg-gradient-to-br from-yellow-100 to-orange-100 rounded-lg px-2.5 py-1.5 border-2 border-yellow-300 shadow-sm`}
             >
               <p className="text-lg font-bold bg-gradient-to-r from-yellow-700 to-orange-600 bg-clip-text text-transparent leading-none">
-                {summary.totalDaysOfAccessRemaining}
+                {displayTotalDaysRemaining}
               </p>
             </div>
           ) : null}
@@ -506,8 +510,8 @@ export default function PartnerDiscounts() {
                 <AlertCircle className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-base font-bold text-gray-800 mb-1">No Active Discount</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="text-base font-bold text-gray-800 dark:text-neutral-100 mb-1">No Active Discount</h3>
+                <p className="text-sm text-gray-600 dark:text-neutral-400">
                   {totalQueuedItems > 0
                     ? "Next period activates automatically."
                     : "Purchase a package to get discounts!"}
@@ -532,11 +536,7 @@ export default function PartnerDiscounts() {
 
             <div
               ref={scrollContainerRef}
-              className="h-[250px] overflow-y-auto pr-2 custom-scrollbar"
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "#ee0000 #f3f4f6",
-              }}
+              className="h-[250px] overflow-y-auto pr-2 brand-scrollbar"
             >
               <div className="space-y-2">
                 {queuedItems.slice(0, visibleQueuedCount).map((item, index) => (
@@ -554,9 +554,9 @@ export default function PartnerDiscounts() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-gray-900 text-sm truncate">{item.packageName}</h4>
-                          <p className="text-xs text-gray-600 font-medium truncate">
-                            <span className="text-orange-600 font-bold">{item.daysOfAccess}</span> day
-                            {item.daysOfAccess !== 1 ? "s" : ""} access
+                          <p className="text-xs text-gray-600 dark:text-neutral-400 font-medium truncate">
+                            <span className="text-orange-600 font-bold">{Math.round(item.daysOfAccess)}</span> day
+                            {Math.round(item.daysOfAccess) !== 1 ? "s" : ""} access
                           </p>
                         </div>
                       </div>
@@ -593,8 +593,8 @@ export default function PartnerDiscounts() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-orange-900 font-semibold mb-0.5">
-                    <strong>Total:</strong> {totalQueuedDays} day
-                    {totalQueuedDays !== 1 ? "s" : ""}
+                    <strong>Total:</strong> {displayQueuedDaysTotal} day
+                    {displayQueuedDaysTotal !== 1 ? "s" : ""}
                   </p>
                   <p className="text-xs text-orange-800">Activates automatically when current period ends</p>
                 </div>
@@ -607,8 +607,8 @@ export default function PartnerDiscounts() {
               <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-inner">
                 <Gift className="w-6 h-6 text-gray-500" />
               </div>
-              <h3 className="text-lg font-bold text-gray-800 mb-2">No Queued Discounts</h3>
-              <p className="text-sm text-gray-600 max-w-md mx-auto mb-4">
+              <h3 className="text-lg font-bold text-gray-800 dark:text-neutral-100 mb-2">No Queued Discounts</h3>
+              <p className="text-sm text-gray-600 dark:text-neutral-400 max-w-md mx-auto mb-4">
                 Purchase packages to stack partner discount access!
               </p>
               <div className="inline-block px-4 py-2 bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black rounded-lg font-bold text-sm uppercase tracking-wide shadow-lg">

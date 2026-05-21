@@ -1,17 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Package, Info } from "lucide-react";
-import { miniDrawPackages } from "@/data/miniDrawPackages";
+import { getMiniDrawPackages } from "@/data/miniDrawPackages";
 import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
 import { useUserContext } from "@/contexts/UserContext";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
 import type { PaymentStatusResponse } from "@/hooks/queries";
+import { trackConversion } from "@/lib/tracking/dispatch-client";
+import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import type { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
-import { getPackageBaseEntries } from "@/utils/payment/upsell-entries-calculator";
+import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
+import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
+import { getMiniDrawPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,8 +41,18 @@ export default function MiniDrawPackages({
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
   const attribution = useAttribution();
-  const { data: paymentMethods } = usePaymentMethods(userData?._id);
+  const { data: paymentMethodsData } = usePaymentMethods(userData?._id);
+  const paymentMethods = !paymentMethodsData
+    ? undefined
+    : Array.isArray(paymentMethodsData)
+      ? paymentMethodsData
+      : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
+
+  // Mini-draw catalog is intentionally NOT tier-gated: every visitor (signed-in or not,
+  // member or not, entrant or not) sees all 8 active packs (Mini Pack 1–3 + the five
+  // mini-scoped Additional packs). Login is enforced at purchase time via LoginPromptModal.
+  const viewerPackages = getMiniDrawPackages();
 
   /**
    * Calculate user's entry count for this specific minidraw
@@ -140,7 +155,7 @@ export default function MiniDrawPackages({
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Get selected package for modal
-  const selectedPackage = selectedPackageId ? miniDrawPackages.find((p) => p._id === selectedPackageId) : null;
+  const selectedPackage = selectedPackageId ? viewerPackages.find((p) => p._id === selectedPackageId) : null;
 
   // Remaining capacity guard for client-side disablement
   const entriesRemaining =
@@ -148,6 +163,19 @@ export default function MiniDrawPackages({
       ? Math.max(minimumEntries - totalEntries, 0)
       : undefined;
   const isSoldOut = entriesRemaining !== undefined && entriesRemaining <= 0;
+
+  // When navigating between mini draws, reset purchase/upsell state so nothing leaks across routes.
+  useEffect(() => {
+    setPurchasingPackageId(null);
+    setHoveredPackageId(null);
+    setSelectedPackageId(null);
+    setShowPaymentProcessing(false);
+    setPaymentIntentId(null);
+    setProcessingPackageName("");
+    setUpsellTriggered(false);
+    setOriginalPurchaseContext(null);
+    setSuccessToastShown(false);
+  }, [miniDrawId]);
 
   const handlePurchase = async (packageId: string) => {
     // ✅ AUTHENTICATION-ONLY: Check if user is authenticated (not membership)
@@ -157,7 +185,7 @@ export default function MiniDrawPackages({
     }
 
     // Get the package details
-    const pkg = miniDrawPackages.find((p) => p._id === packageId);
+    const pkg = viewerPackages.find((p) => p._id === packageId);
     if (!pkg) {
       showToast({
         type: "error",
@@ -210,6 +238,8 @@ export default function MiniDrawPackages({
 
     try {
       setPurchasingPackageId(packageId);
+      // Each new checkout can show the post-purchase upsell (same or different pack on this draw)
+      setUpsellTriggered(false);
 
       // Check if user has default payment method for automatic charging
       const hasDefaultPayment = !!defaultPaymentMethod?.paymentMethodId;
@@ -245,9 +275,44 @@ export default function MiniDrawPackages({
         throw new Error(errorMessage);
       }
 
+      // 3D Secure or bank auth — do not start webhook polling; payment is not complete yet
+      if (!data.success && data.requiresAction) {
+        if (previousMiniDraw) {
+          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
+        }
+        if (previousUserAccount) {
+          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
+        }
+        showToast({
+          type: "info",
+          title: "Complete authentication",
+          message:
+            "Your bank may require 3D Secure to authorise this payment. Please try again and complete any verification. If the issue continues, add or update your card in your account settings.",
+          duration: 8000,
+        });
+        return;
+      }
+
       // ✅ CRITICAL: Only show success if payment actually succeeded
       if (!data.success) {
         throw new Error(data.error || data.details || "Payment failed");
+      }
+
+      // Unconfirmed intent (no saved card): API returns a client_secret for future Elements flow; do not poll for BenefitsGranted
+      if (data.requiresPayment) {
+        if (previousMiniDraw) {
+          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
+        }
+        if (previousUserAccount) {
+          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
+        }
+        showToast({
+          type: "info",
+          title: "Payment method required",
+          message: "Add a default payment method in your account, then return here to complete your purchase.",
+          duration: 8000,
+        });
+        return;
       }
 
       // Extract paymentIntentId from response
@@ -267,7 +332,7 @@ export default function MiniDrawPackages({
         setSuccessToastShown(false);
 
         setPaymentIntentId(extractedPaymentIntentId);
-        setProcessingPackageName(pkg.name);
+        setProcessingPackageName(getReceiptLabel(pkg));
         setShowPaymentProcessing(true);
 
         // Store original purchase context for upsell (only after webhook confirms)
@@ -340,9 +405,29 @@ export default function MiniDrawPackages({
       // Mark toast as shown to prevent duplicates
       setSuccessToastShown(true);
 
-      // ✅ REMOVED: Client-side Facebook Pixel tracking
-      // Server-side tracking via grantBenefits → trackPixelPurchase is sufficient and more reliable
-      // This prevents duplicate tracking that causes inflated revenue in Facebook Ads
+      // Fire browser-side Purchase pixel via the provider registry, deduped against
+      // the server-side CAPI event (which the webhook fires with the same paymentIntentId
+      // as event_id). Meta's eventID dedup mechanism is DESIGNED for both sides to fire —
+      // skipping the browser side loses _fbc/_fbp cookies and tanks Event Match Quality.
+      const miniDrawPaymentIntentId = status.data?.paymentIntentId;
+      const miniDrawPrice = status.data?.price;
+      if (miniDrawPaymentIntentId && typeof miniDrawPrice === "number" && miniDrawPrice > 0) {
+        trackConversion(
+          buildPurchaseEvent({
+            value: miniDrawPrice,
+            currency: status.data?.currency ?? "AUD",
+            eventId: miniDrawPaymentIntentId,
+            customData: {
+              orderId: miniDrawPaymentIntentId,
+              contentType: "product",
+              contentIds: selectedPackageId ? [selectedPackageId] : undefined,
+              numItems: 1,
+              packageType: status.data?.packageType ?? "mini-draw",
+            },
+            eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
+          }),
+        );
+      }
 
       // Clear processing flags
       queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {
@@ -379,7 +464,7 @@ export default function MiniDrawPackages({
       showToast({
         type: "success",
         title: `Successfully purchased ${processingPackageName}!`,
-        message: "Your entries have been added to the mini draw.",
+        message: "Your free entries have been added to the mini draw.",
       });
 
       // Trigger upsell after successful payment processing (only after webhook confirms)
@@ -449,8 +534,11 @@ export default function MiniDrawPackages({
       if (packageId && packageType) {
         // console.log(`🎯 Triggering targeted upsell for package: ${packageId} (${packageType})`);
 
-        const isMiniDrawPackage = packageId.startsWith("mini-pack-");
-        const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
+        // This component exclusively sells mini-draw packs, so every buyer here is a
+        // "mini-draw-buyer" — the segment every mini upsell record requires. The old
+        // `startsWith("mini-pack-")` check silently dropped the upsell for the newer
+        // `additional-*-pack-mini` packs (Tradie→VIP), which don't carry that prefix.
+        const userType = packageType === "mini-draw" ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
 
         // Map mini-draw to one-time for upsell trigger API (it only accepts subscription or one-time)
         const upsellPackageType = packageType === "mini-draw" ? "one-time" : packageType;
@@ -530,121 +618,212 @@ export default function MiniDrawPackages({
     }
   };
 
+  const isExceedsCapacity = (entries: number) =>
+    entriesRemaining !== undefined && entries > entriesRemaining;
+
   return (
-    <div className="bg-white rounded-xl shadow-lg p-2 sm:p-4">
-      <div className="flex flex-row items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-4">
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <Package className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-red-600" />
-          <h3 className="text-sm sm:text-lg font-bold text-gray-900">Purchase Entries</h3>
+          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center">
+            <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
+          </div>
+          <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Choose Your Pack</h3>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
-          <span className="text-gray-600">Your Entries:</span>
-          <span className="font-semibold text-[#ee0000]">
-            {calculatedUserEntryCount.toLocaleString()} {calculatedUserEntryCount === 1 ? "entry" : "entries"}
-          </span>
-        </div>
+        {calculatedUserEntryCount > 0 && (
+          <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
+            <span className="text-2xs sm:text-xs font-bold text-green-700">
+              {calculatedUserEntryCount.toLocaleString()}{" "}
+              {calculatedUserEntryCount === 1 ? "free entry" : "free entries"}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Remaining / Sold Out */}
       {entriesRemaining !== undefined && (
         <div
-          className={`mb-2 sm:mb-4 text-[10px] sm:text-sm font-semibold ${
-            isSoldOut ? "text-red-600" : "text-gray-700"
-          } text-center`}
+          className={`mb-3 sm:mb-4 text-center text-2xs sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
+            isSoldOut
+              ? "bg-red-50 dark:bg-red-950/35 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40"
+              : "bg-gray-50 dark:bg-neutral-800/80 text-gray-600 dark:text-neutral-300 border border-gray-100 dark:border-neutral-700"
+          }`}
         >
-          {isSoldOut ? "Sold out — no more entries available." : `Only ${entriesRemaining} entries remaining.`}
+          {isSoldOut
+            ? "Sold out — no more free entries available."
+            : `Only ${entriesRemaining.toLocaleString()} free entries remaining`}
         </div>
       )}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
-        {miniDrawPackages.map((pkg) => (
-          <div key={pkg._id} className="relative group" data-package-id={pkg._id}>
-            {/* Compact Button with Info Icon */}
-            <div className="relative z-0">
-              <button
-                onMouseEnter={() => {
-                  // On desktop: hover shows quick tooltip
-                  setHoveredPackageId(pkg._id);
-                }}
-                onMouseLeave={() => {
-                  // On desktop: hide tooltip when mouse leaves (but not if modal is open)
-                  if (selectedPackageId !== pkg._id) {
-                    setHoveredPackageId(null);
-                  }
-                }}
-                onClick={() => {
-                  // On click (desktop & mobile): open modal
-                  setSelectedPackageId(pkg._id);
-                }}
-                disabled={
-                  purchasingPackageId === pkg._id ||
-                  isSoldOut ||
-                  (entriesRemaining !== undefined && pkg.entries > entriesRemaining)
-                }
-                className="w-full bg-gradient-to-r from-yellow-400 via-yellow-500 to-orange-500 text-black py-2 sm:py-3 px-2 sm:px-3 rounded-md sm:rounded-lg font-bold text-xs sm:text-sm hover:from-yellow-500 hover:via-orange-500 hover:to-red-500 transition-all duration-300 transform hover:scale-105 shadow-md hover:shadow-lg relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                suppressHydrationWarning
-              >
-                {purchasingPackageId === pkg._id ? (
-                  <div className="flex items-center justify-center gap-1">
-                    <div className="animate-spin rounded-full h-2.5 w-2.5 sm:h-4 sm:w-4 border-2 border-black border-t-transparent"></div>
-                    <span className="text-[9px] sm:text-xs">Processing...</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                    <div className="text-xs sm:text-base font-semibold leading-tight">${pkg.price}</div>
-                    <div className="text-[10px] sm:text-sm font-medium opacity-90 leading-tight">
-                      {pkg.entries} Entries
-                    </div>
-                    {entriesRemaining !== undefined && pkg.entries > entriesRemaining && (
-                      <span className="text-[9px] sm:text-xs font-semibold text-red-700 leading-tight">
-                        Only {entriesRemaining} left
-                      </span>
+
+      {/* Package Grid */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+        {viewerPackages.map((pkg) => {
+          const disabled =
+            purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
+          const isProcessing = purchasingPackageId === pkg._id;
+          const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(pkg._id);
+          // Per-pack electric scheme — same function + visual language as the
+          // MembershipSection one-time ElectricPackageCard (dark radial body, accent
+          // glow, premium gold double-rim for VIP) so the catalog reads identically.
+          const scheme = getMiniDrawPackageColorScheme(pkg._id);
+          const accent = scheme.accentHex;
+          const gradientText = scheme.textGradientStyle as React.CSSProperties | undefined;
+          const isPremium = !!gradientText; // VIP — champagne gold gradient tier
+          const dotInk = scheme.text.includes("black") ? "#0A0A0A" : "#FFFFFF";
+          const tileBg = isPremium
+            ? `radial-gradient(120% 95% at 50% 0%, ${accent}26 0%, transparent 58%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
+            : `radial-gradient(120% 95% at 50% 0%, ${accent}3D 0%, ${accent}14 34%, transparent 64%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
+          const tileBorder = isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`;
+          const tileShadow = disabled
+            ? "none"
+            : isPremium
+              ? `0 0 0 1px #FFFCEB, 0 0 0 2px ${accent}, 0 0 12px ${accent}99, 0 8px 22px rgba(0,0,0,0.6)`
+              : `0 0 0 1px ${accent}40, 0 0 16px ${accent}59, 0 0 34px ${accent}2E, 0 8px 22px rgba(0,0,0,0.5)`;
+          const priceStyle: React.CSSProperties = gradientText
+            ? { ...gradientText }
+            : { color: "#FFFFFF", textShadow: `0 0 12px ${accent}, 0 0 24px ${accent}80` };
+
+          return (
+            <div key={pkg._id} className="relative" data-package-id={pkg._id}>
+              <div className="relative">
+                <button
+                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
+                  onMouseLeave={() => {
+                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
+                  }}
+                  onClick={() => setSelectedPackageId(pkg._id)}
+                  disabled={disabled}
+                  title={`${partnerCatalogPct}% partner catalog · ${pkg.entries} free entries · $${pkg.price}`}
+                  className={`
+                    w-full relative overflow-hidden rounded-xl sm:rounded-2xl transition-all duration-300
+                    ${disabled
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:scale-105 hover:brightness-110 active:scale-[0.97]"
+                    }
+                  `}
+                  style={{
+                    background: tileBg,
+                    border: tileBorder,
+                    boxShadow: tileShadow,
+                  }}
+                  suppressHydrationWarning
+                >
+                  {/* Electric inner sheen — accent wash from the top, mirrors the card */}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      background: isPremium
+                        ? `linear-gradient(180deg, ${accent}2E 0%, transparent 14%), radial-gradient(120% 80% at 50% 0%, ${accent}1A 0%, transparent 55%)`
+                        : `radial-gradient(135% 95% at 50% 0%, ${accent}33 0%, ${accent}0D 32%, transparent 62%)`,
+                    }}
+                    aria-hidden
+                  />
+
+                  <div className="relative z-10 py-2.5 sm:py-3.5 px-1 sm:px-2">
+                    {isProcessing ? (
+                      <div className="flex flex-col items-center justify-center gap-1 py-1">
+                        <div
+                          className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2"
+                          style={{ borderColor: `${accent}40`, borderTopColor: accent }}
+                        />
+                        <span className="text-3xs sm:text-2xs font-semibold text-white/70">
+                          Processing
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5 sm:gap-1">
+                        {/* Price — glowing tier ink (VIP keeps its gold gradient) */}
+                        <span
+                          className="text-base sm:text-xl font-extrabold leading-none tracking-tight"
+                          style={priceStyle}
+                        >
+                          ${pkg.price}
+                        </span>
+
+                        {/* Free entries */}
+                        <span className="text-3xs sm:text-xs font-semibold leading-tight text-white/65">
+                          {pkg.entries} {pkg.entries === 1 ? "free entry" : "free entries"}
+                        </span>
+
+                        {/* Capacity warning */}
+                        {isExceedsCapacity(pkg.entries) && (
+                          <span className="text-3xs sm:text-2xs font-bold text-red-400 leading-tight mt-0.5">
+                            {entriesRemaining} left
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </button>
+                </button>
 
-              {/* Info Icon Button */}
-              <button
-                onMouseEnter={() => {
-                  // On desktop: hover shows quick tooltip
-                  setHoveredPackageId(pkg._id);
-                }}
-                onMouseLeave={() => {
-                  // On desktop: hide tooltip when mouse leaves (but not if modal is open)
-                  if (selectedPackageId !== pkg._id) {
-                    setHoveredPackageId(null);
-                  }
-                }}
-                className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 z-20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Open modal on click
-                  setSelectedPackageId(pkg._id);
-                }}
-                suppressHydrationWarning
-              >
-                <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[10px] sm:text-sm" />
-              </button>
+                {/* Info dot */}
+                <button
+                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
+                  onMouseLeave={() => {
+                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
+                  }}
+                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 z-20"
+                  style={{
+                    backgroundColor: accent,
+                    color: dotInk,
+                    boxShadow: `0 0 10px ${accent}99, 0 2px 6px rgba(0,0,0,0.5)`,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedPackageId(pkg._id);
+                  }}
+                  suppressHydrationWarning
+                >
+                  <Info className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+                </button>
 
-              {/* Small hover tooltip - appears on hover for quick info (desktop only) */}
-              {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 w-[200px] sm:w-64 bg-gray-900 text-white text-xs sm:text-sm rounded-lg p-2 sm:p-3 shadow-xl pointer-events-none">
-                  <div className="font-semibold text-yellow-400 mb-1">{pkg.name}</div>
-                  <div className="text-gray-300">
-                    ${pkg.price} • {pkg.entries} Entries
-                  </div>
-                  {pkg.partnerDiscountDays > 0 && (
-                    <div className="text-green-400 text-[10px] sm:text-xs mt-1">
-                      {pkg.partnerDiscountDays >= 1
-                        ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} discounts`
-                        : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} discounts`}
+                {/* Hover tooltip (desktop) */}
+                {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
+                  <div
+                    className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2.5 z-50 w-56 text-white text-sm rounded-2xl p-3 pointer-events-none"
+                    style={{
+                      background: `radial-gradient(120% 90% at 50% 0%, ${accent}26 0%, transparent 60%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
+                      border: isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`,
+                      boxShadow: `0 0 0 1px ${accent}33, 0 0 22px ${accent}40, 0 12px 30px rgba(0,0,0,0.6)`,
+                    }}
+                  >
+                    <div
+                      className="font-bold mb-1"
+                      style={
+                        gradientText
+                          ? { ...gradientText }
+                          : { color: accent, textShadow: `0 0 12px ${accent}80` }
+                      }
+                    >
+                      {pkg.displayName ?? pkg.name}
                     </div>
-                  )}
-                  {/* Arrow pointing down */}
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
-                </div>
-              )}
+                    <div className="text-white/65 text-xs">
+                      ${pkg.price} &middot; {pkg.entries}{" "}
+                      {pkg.entries === 1 ? "free entry" : "free entries"}
+                    </div>
+                    <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
+                      {partnerCatalogPct}% of partner catalog
+                    </div>
+                    {(pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0) && (
+                      <div className="text-green-400 text-xs mt-1.5 flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-green-400 inline-block shrink-0" />
+                        {pkg.partnerDiscountDays >= 1
+                          ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} partner access`
+                          : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner access`}
+                      </div>
+                    )}
+                    <div
+                      className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45"
+                      style={{ background: "#070708", borderRight: `1px solid ${accent}59`, borderBottom: `1px solid ${accent}59` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Package Details Modal */}
@@ -676,6 +855,7 @@ export default function MiniDrawPackages({
           onSuccess={handlePaymentProcessingSuccess}
           onError={handlePaymentProcessingError}
           onTimeout={handlePaymentProcessingTimeout}
+          onStillProcessingDismiss={handlePaymentProcessingTimeout}
         />
       )}
 

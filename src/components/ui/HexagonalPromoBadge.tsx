@@ -2,9 +2,11 @@
 
 import React from "react";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
+import { cn } from "@/utils/cn";
 
 interface HexagonalPromoBadgeProps {
-  multiplier: 2 | 3 | 5 | 10;
+  multiplier: PromoMultiplier;
   size?: "xs" | "small" | "medium" | "large" | "compact" | "tiny";
   className?: string;
 }
@@ -20,7 +22,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
   const sizeConfig = {
     xs: {
       container: "w-7 h-7",
-      text: "text-[8px]",
+      text: "text-3xs",
       clipPath: "polygon(29.3% 0%, 70.7% 0%, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0% 70.7%, 0% 29.3%)",
     },
     small: {
@@ -53,7 +55,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
   const config = sizeConfig[size];
 
   return (
-    <div className={`${config.container} ${className} relative`}>
+    <div className={cn(config.container, className, "relative")}>
       {/* Outer glowing burst effect - pulsing animation */}
       <div
         className="absolute inset-0 animate-pulse"
@@ -133,7 +135,7 @@ const HexagonalPromoBadge: React.FC<HexagonalPromoBadgeProps> = ({ multiplier, s
 
         {/* Multiplier text - White with strong shadow for contrast - Perfectly centered */}
         <span
-          className={`${config.text} font-black text-white relative z-10`}
+          className={cn(config.text, "font-black text-white relative z-10")}
           style={{
             textShadow: `
               0 0 10px rgba(255, 255, 255, 0.8),

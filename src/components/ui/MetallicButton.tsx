@@ -47,9 +47,9 @@ export default function MetallicButton({
   const variantClasses = {
     primary: `
       group relative
-      bg-gradient-to-r from-[#ee0000] to-[#cc0000]
-      text-white shadow-lg shadow-[#ee0000]/50
-      hover:bg-red-700 hover:shadow-xl hover:shadow-[#ee0000]/60
+      bg-gradient-to-r from-red-600 to-red-675
+      text-white shadow-lg shadow-red-600/50
+      hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/60
       transition-all duration-300
       before:absolute before:inset-0 before:${radiusClasses[borderRadius]}
       before:bg-gradient-to-r before:from-white/0 before:via-white/20 before:to-white/0
@@ -59,10 +59,10 @@ export default function MetallicButton({
     `,
     secondary: `
       group
-      ${borderColor === "white" ? "border-2 border-white" : "border-2 border-[#ee0000]/50"}
+      ${borderColor === "white" ? "border-2 border-white" : "border-2 border-red-600/50"}
       bg-white/10 backdrop-blur-sm
       text-white
-      ${borderColor === "white" ? "hover:bg-white hover:text-black" : "hover:bg-[#ee0000]/20 hover:border-[#ee0000]"}
+      ${borderColor === "white" ? "hover:bg-white hover:text-black" : "hover:bg-red-600/20 hover:border-red-600"}
       transition-all duration-300
       shadow-lg shadow-black/20
     `,
@@ -72,7 +72,7 @@ export default function MetallicButton({
     inline-flex items-center justify-center gap-2
     font-semibold
     disabled:opacity-50 disabled:cursor-not-allowed
-    focus:outline-none focus:ring-2 focus:ring-[#ee0000]/50 focus:ring-offset-2 focus:ring-offset-transparent
+    focus:outline-none focus:ring-2 focus:ring-red-600/50 focus:ring-offset-2 focus:ring-offset-transparent
     ${sizeClasses[size]}
     ${radiusClasses[borderRadius]}
     ${variantClasses[variant]}

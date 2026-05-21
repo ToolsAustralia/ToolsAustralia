@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import PromoLink from "@/models/PromoLink";
+import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+
+const validatePromoRateLimiter = createRateLimiter("promo-link-validate", {
+  windowMs: 60 * 1000,
+  maxRequests: 60,
+});
+
+const PROMO_CODE_REGEX = /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/;
 
 /**
  * GET /api/promo/link/validate
@@ -9,31 +17,48 @@ import PromoLink from "@/models/PromoLink";
  */
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
+    const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null;
+    const identifier = getClientIdentifier(clientIp, request.headers.get("x-forwarded-for"));
+    const rateLimitResult = validatePromoRateLimiter.check(identifier);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many requests",
+          retryAfterSeconds: rateLimitResult.retryAfterSeconds,
+        },
+        { status: 429, headers: { "Retry-After": String(rateLimitResult.retryAfterSeconds) } }
+      );
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get("code");
 
     if (!code) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Promo code is required",
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: true,
+        valid: false,
+        message: "Promo code is invalid",
+      });
     }
 
     const normalizedCode = code.trim().toUpperCase();
+    if (!PROMO_CODE_REGEX.test(normalizedCode)) {
+      return NextResponse.json({
+        success: true,
+        valid: false,
+        message: "Promo code is invalid",
+      });
+    }
 
-    // Find active promo link
+    await connectDB();
     const promoLink = await PromoLink.findActiveByCode(normalizedCode);
 
     if (!promoLink) {
       return NextResponse.json({
         success: true,
         valid: false,
-        message: "Promo code not found or inactive",
+        message: "Promo code is invalid",
       });
     }
 
@@ -42,8 +67,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         valid: false,
-        message: "Promo code has expired",
-        expiresAt: promoLink.expiresAt,
+        message: "Promo code is invalid",
       });
     }
 
@@ -52,6 +76,9 @@ export async function GET(request: NextRequest) {
       valid: true,
       data: {
         code: promoLink.code,
+        campaignType: promoLink.campaignType,
+        eligibilityAudience: promoLink.eligibilityAudience,
+        description: promoLink.description,
         bonusEntries: promoLink.bonusEntries,
         expiresAt: promoLink.expiresAt,
         appliesToMembership: promoLink.appliesToMembership,

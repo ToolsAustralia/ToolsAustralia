@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Calendar, AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, ImageIcon } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -13,6 +13,7 @@ import {
   Select,
   Checkbox,
 } from "./ui";
+import ImageUpload from "./ui/ImageUpload";
 import {
   useCreatePromoBannerText,
   useUpdatePromoBannerText,
@@ -31,17 +32,17 @@ interface AdminPromoBannerTextModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  editingText?: PromoBannerText | null; // If provided, modal is in edit mode
+  editingText?: PromoBannerText | null;
 }
 
 interface PromoBannerTextFormData {
-  text: string;
   scheduleType: PromoBannerTextScheduleType;
   startDate: Date | null;
   endDate: Date | null;
   recurrencePattern?: PromoBannerTextRecurrencePattern;
   description: string;
   isActive: boolean;
+  altText: string;
 }
 
 const RECURRENCE_PATTERNS: { value: PromoBannerTextRecurrencePattern; label: string }[] = [
@@ -56,6 +57,27 @@ const RECURRENCE_PATTERNS: { value: PromoBannerTextRecurrencePattern; label: str
   { value: "sunday", label: "Every Sunday" },
 ];
 
+const CLOUDINARY_FOLDER = "promo-banner";
+
+async function uploadPromoBannerImageToCloudinary(file: File): Promise<string> {
+  const uploadFormData = new FormData();
+  uploadFormData.append("file", file);
+  uploadFormData.append("folder", CLOUDINARY_FOLDER);
+
+  const response = await fetch("/api/upload/cloudinary", {
+    method: "POST",
+    body: uploadFormData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to upload image");
+  }
+
+  const data = await response.json();
+  return data.url as string;
+}
+
 const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
   isOpen,
   onClose,
@@ -66,61 +88,63 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
   const updateMutation = useUpdatePromoBannerText();
 
   const [formData, setFormData] = useState<PromoBannerTextFormData>({
-    text: "",
     scheduleType: "one-time",
     startDate: null,
     endDate: null,
     recurrencePattern: undefined,
     description: "",
     isActive: true,
+    altText: "",
   });
 
-  const [errors, setErrors] = useState<Partial<Record<keyof PromoBannerTextFormData, string>>>({});
+  const [bannerImages, setBannerImages] = useState<(File | string)[]>([]);
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof PromoBannerTextFormData | "bannerImage", string>>
+  >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form data when modal opens or editingText changes
   useEffect(() => {
     if (isOpen) {
       if (editingText) {
-        // Edit mode: populate form with existing data
-        // Convert AEST dates (from API) to Date objects
         setFormData({
-          text: editingText.text,
           scheduleType: editingText.scheduleType,
           startDate: editingText.startDate ? new Date(editingText.startDate) : null,
           endDate: editingText.endDate ? new Date(editingText.endDate) : null,
           recurrencePattern: editingText.recurrencePattern,
           description: editingText.description || "",
           isActive: editingText.isActive,
+          altText: editingText.altText || "",
         });
+        setBannerImages(editingText.imageUrl ? [editingText.imageUrl] : []);
       } else {
-        // Create mode: set defaults
         const now = new Date();
         const tomorrow = new Date(now);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
         setFormData({
-          text: "",
           scheduleType: "one-time",
           startDate: now,
           endDate: tomorrow,
           recurrencePattern: undefined,
           description: "",
           isActive: true,
+          altText: "",
         });
+        setBannerImages([]);
       }
       setErrors({});
     }
   }, [isOpen, editingText]);
 
-  // Validate form data
   const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof PromoBannerTextFormData, string>> = {};
+    const newErrors: Partial<Record<keyof PromoBannerTextFormData | "bannerImage", string>> = {};
 
-    if (!formData.text.trim()) {
-      newErrors.text = "Text is required";
-    } else if (formData.text.length > 100) {
-      newErrors.text = "Text cannot exceed 100 characters";
+    if (bannerImages.length === 0) {
+      newErrors.bannerImage = "Image is required";
+    }
+
+    if (formData.altText.length > 200) {
+      newErrors.altText = "Alt text cannot exceed 200 characters";
     }
 
     if (formData.scheduleType === "one-time") {
@@ -152,28 +176,29 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Helper function to convert Date object to AEST date string
-  // DateRangeCalendar creates dates using new Date(year, month, day) which creates
-  // dates in the browser's local timezone. We extract the date components the user
-  // selected (using local date methods) and treat them as AEST dates.
   const convertDateToAESTISO = (date: Date | null): string | undefined => {
     if (!date) return undefined;
 
-    // DateRangeCalendar creates dates in browser's local timezone using new Date(year, month, day)
-    // Extract date components using local methods (getFullYear, getMonth, getDate)
-    // These represent what the user actually selected
     const selectedYear = date.getFullYear();
-    const selectedMonth = date.getMonth() + 1; // getMonth() returns 0-11
+    const selectedMonth = date.getMonth() + 1;
     const selectedDay = date.getDate();
 
-    // Now treat these selected date components as if they were in AEST/AEDT
-    // and create the proper UTC date representing AEST midnight
     const aestDateUTC = createAESTDateAsUTC(selectedYear, selectedMonth, selectedDay, 0, 0);
 
     return aestDateUTC.toISOString();
   };
 
-  // Handle form submission
+  const resolveImageUrlForSubmit = async (): Promise<string> => {
+    const first = bannerImages[0];
+    if (typeof first === "string" && first.trim()) {
+      return first.trim();
+    }
+    if (first instanceof File) {
+      return uploadPromoBannerImageToCloudinary(first);
+    }
+    throw new Error("No image to save");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -184,10 +209,13 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      const imageUrl = await resolveImageUrlForSubmit();
+      const altTrim = formData.altText.trim();
+
       if (editingText) {
-        // Update existing text
         const updateData: UpdatePromoBannerTextPayload = {
-          text: formData.text.trim(),
+          imageUrl,
+          altText: altTrim || undefined,
           scheduleType: formData.scheduleType,
           startDate: convertDateToAESTISO(formData.startDate),
           endDate: convertDateToAESTISO(formData.endDate),
@@ -198,9 +226,9 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
 
         await updateMutation.mutateAsync({ id: editingText.id, data: updateData });
       } else {
-        // Create new text
         const createData: CreatePromoBannerTextPayload = {
-          text: formData.text.trim(),
+          imageUrl,
+          altText: altTrim || undefined,
           scheduleType: formData.scheduleType,
           startDate: convertDateToAESTISO(formData.startDate),
           endDate: convertDateToAESTISO(formData.endDate),
@@ -215,8 +243,11 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error("Failed to save banner text:", error);
-      // Error handling is done by the mutation
+      console.error("Failed to save scheduled banner image:", error);
+      setErrors((prev) => ({
+        ...prev,
+        bannerImage: error instanceof Error ? error.message : "Upload failed",
+      }));
     } finally {
       setIsSubmitting(false);
     }
@@ -228,43 +259,58 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="lg">
       <ModalHeader
-        title={editingText ? "Edit Promo Banner Text" : "Create Promo Banner Text"}
+        title={editingText ? "Edit Promo Banner Image" : "Schedule Promo Banner Image"}
         onClose={handleClose}
         showLogo={false}
       />
 
       <ModalContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Text Input */}
-          <FormSection title="Banner Text" icon={Calendar}>
-            <Input
-              id="text"
-              name="text"
-              value={formData.text}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  text: e.target.value,
-                }))
-              }
-              label="Text"
-              placeholder="e.g., Christmas Offer, Boxing Day Special"
-              required
-              maxLength={100}
-              error={errors.text}
+          <FormSection title="Banner image" icon={ImageIcon}>
+            <ImageUpload
+              images={bannerImages}
+              onImagesChange={(imgs) => {
+                setBannerImages(imgs);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.bannerImage;
+                  return next;
+                });
+              }}
+              maxImages={1}
+              maxFileSize={10}
+              label=""
+              uploadToCloudinary={false}
               disabled={isSubmitting}
             />
-            <p className="text-sm text-gray-500 mt-1">
-              {formData.text.length}/100 characters. Text will automatically adjust font size based on length.
+            {errors.bannerImage && <p className="text-sm text-red-600 mt-1">{errors.bannerImage}</p>}
+            <p className="text-sm text-gray-500 mt-2">
+              Image uploads to Cloudinary only when you save. Use PNG or WebP recommended for sharp text.
             </p>
           </FormSection>
 
-          {/* Schedule Type */}
+          <FormSection title="Accessibility">
+            <Input
+              id="altText"
+              name="altText"
+              value={formData.altText}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  altText: e.target.value,
+                }))
+              }
+              label="Alt text (optional)"
+              placeholder="Describe the banner for screen readers"
+              maxLength={200}
+              error={errors.altText}
+              disabled={isSubmitting}
+            />
+          </FormSection>
+
           <FormSection title="Schedule Type">
             <Select
               id="scheduleType"
@@ -275,7 +321,6 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
                 setFormData((prev) => ({
                   ...prev,
                   scheduleType: newType,
-                  // Reset dates when switching types
                   startDate: newType === "one-time" ? prev.startDate : null,
                   endDate: newType === "one-time" ? prev.endDate : null,
                   recurrencePattern: newType === "recurring" ? prev.recurrencePattern : undefined,
@@ -292,7 +337,6 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
             />
           </FormSection>
 
-          {/* One-time Schedule Fields */}
           {formData.scheduleType === "one-time" && (
             <FormSection title="Date Range">
               <div className="space-y-4">
@@ -312,13 +356,12 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
                 {errors.startDate && <p className="text-sm text-red-600">{errors.startDate}</p>}
                 {errors.endDate && <p className="text-sm text-red-600">{errors.endDate}</p>}
                 <p className="text-sm text-gray-500">
-                  All dates are in AEST timezone. Select the start and end dates for when this text should be displayed.
+                  All dates are in AEST. The left banner image shows when the schedule matches.
                 </p>
               </div>
             </FormSection>
           )}
 
-          {/* Recurring Schedule Fields */}
           {formData.scheduleType === "recurring" && (
             <>
               <FormSection title="Recurrence Pattern">
@@ -340,15 +383,14 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
                   disabled={isSubmitting}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Select when this text should repeat. Day-of-week matching is based on AEST timezone.
+                  Day-of-week matching uses AEST. Optionally bound the pattern with dates below.
                 </p>
               </FormSection>
 
               <FormSection title="Optional Date Boundaries">
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
-                    Optionally set start and end dates to limit when the recurring pattern applies. Leave empty for
-                    indefinite recurrence.
+                  <p className="text-sm text-gray-600 dark:text-neutral-400">
+                    Optionally limit when the recurring pattern applies. Leave empty for indefinite recurrence.
                   </p>
                   <DateRangeCalendar
                     startDate={formData.startDate}
@@ -366,7 +408,6 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
             </>
           )}
 
-          {/* Description */}
           <FormSection title="Description (Optional)">
             <Textarea
               id="description"
@@ -379,14 +420,13 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
                 }))
               }
               label="Admin Notes"
-              placeholder="Internal notes about this scheduled text..."
+              placeholder="Internal notes about this schedule..."
               rows={3}
               maxLength={500}
               disabled={isSubmitting}
             />
           </FormSection>
 
-          {/* Active Toggle */}
           <FormSection title="Status">
             <div className="flex items-center gap-3">
               <Checkbox
@@ -399,12 +439,11 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
                   }))
                 }
                 disabled={isSubmitting}
-                label="Active (text will be displayed when schedule matches)"
+                label="Active (image applies when schedule matches)"
               />
             </div>
           </FormSection>
 
-          {/* Error Display */}
           {Object.keys(errors).length > 0 && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
@@ -412,7 +451,6 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
             </div>
           )}
 
-          {/* Submit Buttons */}
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>
               Cancel
@@ -421,12 +459,12 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  {editingText ? "Updating..." : "Creating..."}
+                  {editingText ? "Saving..." : "Creating..."}
                 </>
               ) : editingText ? (
-                "Update Banner Text"
+                "Save changes"
               ) : (
-                "Create Banner Text"
+                "Create schedule"
               )}
             </Button>
           </div>
@@ -437,4 +475,3 @@ const AdminPromoBannerTextModal: React.FC<AdminPromoBannerTextModalProps> = ({
 };
 
 export default AdminPromoBannerTextModal;
-

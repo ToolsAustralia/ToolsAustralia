@@ -9,6 +9,7 @@ import RewardsOverview from "./RewardsOverview";
 import PartnerDiscounts from "./PartnerDiscounts";
 import RewardsHistory from "./RewardsHistory";
 import RewardsRedemption from "./RewardsRedemption";
+import RedeemablesWallet from "@/components/features/RedeemablesWallet";
 
 interface RewardsPageClientProps {
   user: UserData;
@@ -37,7 +38,7 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
           <div className="group relative">
             <Link
               href="/shop"
-              className="bg-[#ee0000] text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
+              className="bg-red-600 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 flex items-center justify-center"
             >
               <ShoppingCart className="w-5 h-5" />
             </Link>
@@ -76,7 +77,7 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
         </div>
       )}
 
-      <div className="bg-gray-50 pt-[86px] sm:pt-[106px]">
+      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
             {/* Left Column - Rewards Overview and Package Redemption */}
@@ -84,18 +85,15 @@ export default function RewardsPageClient({ user }: RewardsPageClientProps) {
               {/* Rewards Overview */}
               <RewardsOverview user={updatedUser} />
 
+              {/* Redeemables Wallet */}
+              <RedeemablesWallet userId={updatedUser._id} variant="rewards" />
+
               {/* Package Redemption */}
               <RewardsRedemption user={updatedUser} onPointsUpdate={handlePointsUpdate} />
             </div>
 
             {/* Right Column - Rewards History and Partner Discounts */}
-            <div
-              className="space-y-6 sm:space-y-8 "
-              style={{
-                scrollbarWidth: "thin",
-                scrollbarColor: "#ee0000 #f3f4f6",
-              }}
-            >
+            <div className="space-y-6 sm:space-y-8">
               {/* Rewards History */}
               <RewardsHistory user={updatedUser} />
 

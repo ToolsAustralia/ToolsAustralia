@@ -110,6 +110,15 @@ export const queryKeys = {
     redeem: (userId: string) => ["rewards", userId, "redeem"] as const,
   },
 
+  // Redeemables wallet queries
+  redeemables: {
+    wallet: (
+      userId: string,
+      params?: { page?: number; limit?: number; status?: "claimable" | "past" }
+    ) => ["redeemables", userId, "wallet", params?.page || 1, params?.limit || 10, params?.status || "all"] as const,
+    status: (userId: string) => ["redeemables", userId, "status"] as const,
+  },
+
   // Referral queries
   referrals: {
     profile: (userId: string) => ["referrals", "profile", userId] as const,
@@ -121,12 +130,21 @@ export const queryKeys = {
     orders: ["admin", "orders"] as const,
     analytics: ["admin", "analytics"] as const,
     promoAnalytics: (params: Record<string, string>) => ["admin", "promo-analytics", params] as const,
+    promoPageDetail: (pageType: string, slug: string, startDate: string, endDate: string) =>
+      ["admin", "promo-analytics", "page-detail", pageType, slug, startDate, endDate] as const,
+    promoChannelDetail: (utmSource: string, startDate: string, endDate: string) =>
+      ["admin", "promo-analytics", "channel-detail", utmSource, startDate, endDate] as const,
     products: ["admin", "products"] as const,
     miniDraws: ["admin", "mini-draws"] as const,
     metrics: {
-      daily: (params: Record<string, unknown>) => ["admin", "metrics", "daily", params] as const,
-      monthlyComparison: (month: string) => ["admin", "metrics", "monthly-comparison", month] as const,
       userMetrics: (startDate?: Date, endDate?: Date) => ["admin", "metrics", "users", startDate, endDate] as const,
+    },
+    allowlist: {
+      blockedCards: (filterKey: string) =>
+        ["admin", "allowlist", "blocked-cards", filterKey] as const,
+      actions: (action: string, limit: number) =>
+        ["admin", "allowlist", "actions", action, limit] as const,
+      stats: () => ["admin", "allowlist", "stats"] as const,
     },
   },
 } as const;
@@ -145,4 +163,5 @@ export type UpsellQueryKey = QueryKey["upsell"];
 
 export type GiveawayQueryKey = QueryKey["giveaways"];
 export type RewardsQueryKey = QueryKey["rewards"];
+export type RedeemablesQueryKey = QueryKey["redeemables"];
 export type AdminQueryKey = QueryKey["admin"];

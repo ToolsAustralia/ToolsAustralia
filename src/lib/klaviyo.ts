@@ -62,6 +62,12 @@ class KlaviyoClient {
   private readonly BASE_RETRY_DELAY_MS = 2000; // 2 seconds base delay
   private readonly GATEWAY_ERROR_DELAY_MULTIPLIER = 2; // Double delay for gateway errors (502/504)
 
+  /**
+   * Klaviyo `revision` header (API versioning). Override with KLAVIYO_API_REVISION.
+   * @see https://developers.klaviyo.com/en/docs/api_versioning_and_revision_history
+   */
+  private readonly apiRevision = process.env.KLAVIYO_API_REVISION?.trim() || "2025-10-15";
+
   constructor() {
     const config = getKlaviyoConfig();
     this.apiKey = config.apiKey;
@@ -181,7 +187,7 @@ class KlaviyoClient {
         headers: {
           Authorization: `Klaviyo-API-Key ${this.apiKey}`,
           "Content-Type": "application/json",
-          revision: "2024-10-15",
+          revision: this.apiRevision,
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -830,7 +836,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -865,7 +871,7 @@ class KlaviyoClient {
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                  revision: "2024-10-15",
+                  revision: this.apiRevision,
                 },
                 body: JSON.stringify(listPayload),
               }),
@@ -1017,7 +1023,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1071,7 +1077,7 @@ class KlaviyoClient {
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                  revision: "2024-10-15",
+                  revision: this.apiRevision,
                 },
                 body: JSON.stringify(listPayload),
               }),
@@ -1124,24 +1130,18 @@ class KlaviyoClient {
   }
 
   /**
-   * Unsubscribe user from email marketing list
+   * Unsubscribe user from email marketing (bulk delete job).
    *
-   * Sets email marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
-   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   * Per Klaviyo `ProfileSubscriptionDeleteQueryResourceObject`, each item is `type` + `attributes` only
+   * (email + subscriptions). Do not send JSON:API resource `id` on nested profiles — it is rejected.
    *
-   * @param profileId - Klaviyo profile ID
+   * @param _profileId - Reserved for backwards compatibility / logging (not sent in request body)
    * @param email - Email address (required)
-   * @returns Success status and any error message
+   * @see https://developers.klaviyo.com/en/reference/bulk_unsubscribe_profiles
    */
-  async unsubscribeFromEmailList(profileId: string, email: string): Promise<{ success: boolean; error?: string }> {
+  async unsubscribeFromEmailList(_profileId: string, email: string): Promise<{ success: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
-    }
-
-    // Validate profile ID
-    if (!profileId || profileId.trim() === "") {
-      console.error("❌ Invalid profile ID for email unsubscribe:", profileId);
-      return { success: false, error: "Profile ID is required" };
     }
 
     // Validate email
@@ -1162,12 +1162,13 @@ class KlaviyoClient {
               data: [
                 {
                   type: "profile",
-                  id: profileId,
                   attributes: {
-                    email: email,
+                    email: email.trim().toLowerCase(),
                     subscriptions: {
                       email: {
-                        marketing: {},
+                        marketing: {
+                          consent: "UNSUBSCRIBED",
+                        },
                       },
                     },
                   },
@@ -1183,9 +1184,10 @@ class KlaviyoClient {
           fetch(url, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/vnd.api+json",
+              Accept: "application/vnd.api+json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1200,7 +1202,7 @@ class KlaviyoClient {
       }
 
       if (this.mode === "development") {
-        console.log("✅ Email unsubscribe completed:", { profileId, email });
+        console.log("✅ Email unsubscribe job accepted:", { email });
       }
 
       return { success: true };
@@ -1214,24 +1216,20 @@ class KlaviyoClient {
   }
 
   /**
-   * Unsubscribe user from SMS marketing list
+   * Unsubscribe user from SMS marketing (bulk delete job).
    *
-   * Sets SMS marketing consent to unsubscribed using the profile-subscription-bulk-delete-jobs endpoint.
-   * This is the correct way to unsubscribe users per Klaviyo documentation.
+   * Nested profile objects must not include resource `id` — only `type` + `attributes` with E.164 `phone_number`.
    *
-   * @param profileId - Klaviyo profile ID
-   * @param phoneNumber - Phone number (required)
-   * @returns Success status and any error message
+   * @param _profileId - Reserved for backwards compatibility (not sent in request body)
+   * @param phoneNumber - E.164 phone (required)
+   * @see https://developers.klaviyo.com/en/reference/bulk_unsubscribe_profiles
    */
-  async unsubscribeFromSMSList(profileId: string, phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+  async unsubscribeFromSMSList(
+    _profileId: string,
+    phoneNumber: string
+  ): Promise<{ success: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
-    }
-
-    // Validate profile ID
-    if (!profileId || profileId.trim() === "") {
-      console.error("❌ Invalid profile ID for SMS unsubscribe:", profileId);
-      return { success: false, error: "Profile ID is required" };
     }
 
     // Validate phone number
@@ -1252,12 +1250,13 @@ class KlaviyoClient {
               data: [
                 {
                   type: "profile",
-                  id: profileId,
                   attributes: {
-                    phone_number: phoneNumber,
+                    phone_number: phoneNumber.trim(),
                     subscriptions: {
                       sms: {
-                        marketing: {},
+                        marketing: {
+                          consent: "UNSUBSCRIBED",
+                        },
                       },
                     },
                   },
@@ -1273,9 +1272,10 @@ class KlaviyoClient {
           fetch(url, {
             method: "POST",
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/vnd.api+json",
+              Accept: "application/vnd.api+json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1290,7 +1290,7 @@ class KlaviyoClient {
       }
 
       if (this.mode === "development") {
-        console.log("✅ SMS unsubscribe completed:", { profileId, phoneNumber });
+        console.log("✅ SMS unsubscribe job accepted:", { phoneNumber });
       }
 
       return { success: true };
@@ -1346,7 +1346,7 @@ class KlaviyoClient {
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                revision: "2024-10-15",
+                revision: this.apiRevision,
               },
               body: JSON.stringify(emailListPayload),
             }),
@@ -1392,7 +1392,7 @@ class KlaviyoClient {
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-                revision: "2024-10-15",
+                revision: this.apiRevision,
               },
               body: JSON.stringify(smsListPayload),
             }),
@@ -1494,7 +1494,7 @@ class KlaviyoClient {
             headers: {
               "Content-Type": "application/json",
               Authorization: `Klaviyo-API-Key ${this.apiKey}`,
-              revision: "2024-10-15",
+              revision: this.apiRevision,
             },
             body: JSON.stringify(payload),
           }),
@@ -1727,6 +1727,7 @@ class KlaviyoClient {
    *
    * @param email - Email address to search for
    * @returns Profile ID if found, null otherwise
+   * @see findProfilePhoneByEmail — sibling sharing this lookup; keep request/retry/timeout logic in sync.
    */
   async findProfileByEmail(email: string): Promise<string | null> {
     if (!this.isConfigured()) {
@@ -1766,6 +1767,103 @@ class KlaviyoClient {
     }
 
     return null;
+  }
+
+  /**
+   * Find the E.164 phone number Klaviyo holds for a profile, looked up by email.
+   *
+   * Uses the same profile-search endpoint as `findProfileByEmail` but returns
+   * the `attributes.phone_number` field instead of the profile id. Returns `null`
+   * when the profile does not exist, has no phone, or the request fails.
+   *
+   * @param email - Email address to search for
+   * @returns E.164 phone number if present on the Klaviyo profile, null otherwise
+   * @see findProfileByEmail — sibling sharing this lookup; keep request/retry/timeout logic in sync.
+   */
+  async findProfilePhoneByEmail(email: string): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    if (!email || email.trim() === "") {
+      return null;
+    }
+
+    try {
+      const searchResponse = await Promise.race([
+        this.retryRequest(
+          () => this.makeRequest(`/profiles/?filter=equals(email,"${email}")`, "GET"),
+          2, // Fewer retries for lookup (non-critical)
+          1000 // Shorter delay
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Profile lookup timeout")), 10000)
+        ),
+      ]);
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existingProfile = searchData.data?.[0];
+        const phone = existingProfile?.attributes?.phone_number;
+        if (phone && typeof phone === "string" && phone.trim() !== "") {
+          return phone.trim();
+        }
+      }
+    } catch (error) {
+      // Non-critical — log but don't fail
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage.toLowerCase().includes("timeout");
+      if (!isTimeout && this.mode === "development") {
+        console.warn(`⚠️ Failed to find Klaviyo phone for ${email}:`, errorMessage);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Merge source Klaviyo profile into destination (source is deleted after async task).
+   * @see https://developers.klaviyo.com/en/reference/merge_profiles
+   */
+  async mergeProfiles(destinationProfileId: string, sourceProfileId: string): Promise<KlaviyoProfileResponse> {
+    if (!this.isConfigured()) {
+      return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!destinationProfileId?.trim() || !sourceProfileId?.trim() || destinationProfileId === sourceProfileId) {
+      return { success: false, error: "Invalid profile ids for merge" };
+    }
+
+    try {
+      const payload = {
+        data: {
+          type: "profile-merge",
+          id: destinationProfileId,
+          relationships: {
+            profiles: {
+              data: [{ type: "profile", id: sourceProfileId }],
+            },
+          },
+        },
+      };
+
+      const response = await this.retryRequest(
+        () => this.makeRequest("/profile-merge/", "POST", payload),
+        this.MAX_RETRIES,
+        this.BASE_RETRY_DELAY_MS
+      );
+
+      if (response.status === 201 || response.ok) {
+        return { success: true, profile_id: destinationProfileId };
+      }
+
+      const errBody = (await response.json().catch(() => ({}))) as { errors?: Array<{ detail?: string }> };
+      const detail = errBody.errors?.[0]?.detail || `HTTP ${response.status}`;
+      return { success: false, error: detail };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
   }
 
   /**

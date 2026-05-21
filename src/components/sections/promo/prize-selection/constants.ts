@@ -2,60 +2,71 @@
  * Prize selection constants - toolbox and power toolset image paths and sizing.
  * Modify these to change images or dimensions without touching component logic.
  */
-import { RYOBI_PRIZE_STRICT_NAME } from "@/config/prizes";
-
 export const TOOLBOX_IMAGES = {
   milwaukee: "/images/majordraws/toolbox/milwaukeeTB.webp",
-  sidchrome: "/images/majordraws/toolbox/sidchromeTB.png",
+  kincrome: "/images/majordraws/toolbox/kincromeTB.webp",
+  sidchrome: "/images/majordraws/toolbox/sidchromeTB.webp",
 } as const;
 
 /** Add new toolsets here - slug format: "{toolset}-{toolbox}" (e.g. ryobi-milwaukee) */
 export const POWERSET_IMAGES: Record<string, string> = {
-  milwaukee: "/images/brands/name/milwaukeeSet.png",
-  dewalt: "/images/brands/name/dewaltSet.png",
-  makita: "/images/brands/name/makitaSet.png",
-  ryobi: "/images/brands/name/ryobiSet.png",
+  milwaukee: "/images/majordraws/milwaukee-set/MILWAUKEE.webp",
+  dewalt: "/images/majordraws/dewalt-set/DEWALT.webp",
+  makita: "/images/majordraws/makita-set/MAKITA.webp",
+  ryobi: "/images/majordraws/ryobi-set/RYOBI.webp",
 };
 
 /** Brand name logo images - overlay on power toolset images */
 export const POWERSET_BRAND_TEXT: Record<string, string> = {
-  milwaukee: "/images/brands/name/milwaukeeText.png",
-  dewalt: "/images/brands/name/dewaltText.png",
-  makita: "/images/brands/name/makitaText.png",
-  ryobi: "/images/brands/name/ryobiText.png",
+  milwaukee: "/images/brands/name/milwaukeeText.webp",
+  dewalt: "/images/brands/name/dewaltText.webp",
+  makita: "/images/brands/name/makitaText.webp",
+  ryobi: "/images/brands/name/ryobiText.webp",
 };
 
-/** Toolset display labels - shown as bottom overlay. Add label when adding new toolset. */
+/** Toolset display labels - short pc kit format for carousel badges (all caps). Add label when adding new toolset. */
 export const POWERSET_LABELS: Record<string, string> = {
-  makita: "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
-  dewalt: "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah",
-  milwaukee: "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4",
-  ryobi: RYOBI_PRIZE_STRICT_NAME,
+  makita: "MAKITA 15PC KIT",
+  dewalt: "DEWALT 14PC KIT",
+  milwaukee: "MILWAUKEE 13PC KIT",
+  ryobi: "RYOBI 19PC KIT",
 };
 
 /** Toolbox display labels - shown as bottom overlay */
 export const TOOLBOX_LABELS: Record<string, string> = {
   milwaukee: "Milwaukee Toolbox",
+  kincrome: "Kincrome Toolbox",
   sidchrome: "Sidchrome Toolbox",
 };
 
 /** Toolbox type keys */
-export type ToolboxType = "sidchrome" | "milwaukee" | "cash";
+export type ToolboxType = "sidchrome" | "milwaukee" | "kincrome" | "cash";
 
 /** Power toolset brand keys */
 export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi";
 
-/** Toolbox image size config - modify for responsive scaling */
+/**
+ * Both toolboxes share one frame size so columns align and labels sit on one row (see ToolboxSelector layout).
+ * Per-artwork scale inside the unified frame (Milwaukee asset reads large at equal numeric scale — keep lower).
+ */
+export const TOOLBOX_UNIFIED_FRAME = {
+  mobile: { h: 200, maxW: 320 },
+  desktop: { h: 280, maxW: 400 },
+} as const;
+
+/**
+ * Per-asset scale applied the same way in ToolboxSelector (CSS transform on `<Image />`).
+ * Values are tuned per artwork so each reads well inside TOOLBOX_UNIFIED_FRAME.
+ */
 export const TOOLBOX_SIZES = {
   milwaukee: {
-    mobile: { w: 200, h: 140 },
-    desktop: { w: 320, h: 220 },
-    imageScale: 1.25, // Milwaukee image appears smaller in source, scale up
+    imageScale: 1.0,
+  },
+  kincrome: {
+    imageScale: 1.15,
   },
   sidchrome: {
-    mobile: { w: 180, h: 130 },
-    desktop: { w: 280, h: 200 },
-    imageScale: 1,
+    imageScale: 0.75,
   },
 } as const;
 

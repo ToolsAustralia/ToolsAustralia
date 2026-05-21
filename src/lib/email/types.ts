@@ -3,6 +3,8 @@
  * Centralized types for email functionality
  */
 
+import type { EmailCategory } from './sender-identities';
+
 export interface EmailResult {
   success: boolean;
   messageId?: string;
@@ -17,6 +19,11 @@ export enum EmailErrorCode {
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   TEMPLATE_NOT_FOUND = 'TEMPLATE_NOT_FOUND',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+}
+
+export interface EmailSender {
+  email: string;
+  name: string;
 }
 
 export interface EmailVerificationPayload {
@@ -40,6 +47,8 @@ export interface ContactSubmissionPayload {
   subject: string;
   message: string;
   submittedAt: string; // ISO date string
+  /** Saved submission document id — used for unique subject / Message-ID (avoids Gmail threading) */
+  submissionId: string;
 }
 
 export interface PartnerApplicationPayload {
@@ -62,6 +71,7 @@ export interface CustomEmailPayload {
   templateId?: string;
   templateData?: Record<string, unknown>;
   replyTo?: string;
+  category?: EmailCategory;
 }
 
 export interface RateLimitResult {
@@ -72,31 +82,7 @@ export interface RateLimitResult {
 
 export interface SendGridConfig {
   apiKey: string;
-  fromEmail: string;
-  fromName: string;
   enabled: boolean;
   retryAttempts: number;
   retryDelayMs: number;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

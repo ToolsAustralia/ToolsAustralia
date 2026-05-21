@@ -9,6 +9,7 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
 
@@ -30,9 +31,16 @@ export interface IUser extends Document {
     startDate: Date;
     endDate?: Date;
     cancelledAt?: Date; // Track when user actually triggered the cancellation (not the endDate which is future)
+    /** Set when subscription first enters past_due (failed renewal); used for admin activity log */
+    pastDueAt?: Date;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
+
+    /** Non-canonical Stripe subscription created during initial checkout. */
+    pendingStripeSubscriptionId?: string;
+    pendingStripeSubscriptionRequestId?: string;
+    pendingStripeSubscriptionCreatedAt?: Date;
 
     // NEW: Previous subscription for benefit preservation during downgrades
     // When user downgrades, Stripe subscription updates immediately, but we preserve old benefits until end date
@@ -68,6 +76,11 @@ export interface IUser extends Document {
     // Tracks accumulated entries for next renewal calculation
     // Persists even when subscription is cancelled (for resubscribe continuation)
     lastMonthAccumulatedEntries?: number;
+
+    // Timestamp of the most recent resubscribe event (when the user reactivated
+    // after a cancellation). Drives the carry-over banner on the success page
+    // and the activity-card sub-line. Optional — only set on resubscribe.
+    lastResubscribedAt?: Date;
   };
 
   // One-time packages (can have multiple)
@@ -137,10 +150,18 @@ export interface IUser extends Document {
   emailVerificationExpires?: Date;
   emailVerificationAttempts?: number;
 
+  /** Previous email to merge from in Klaviyo after verified email change (cleared after merge) */
+  pendingKlaviyoMergeFromEmail?: string;
+
   // SMS OTP for passwordless authentication
   smsOtpCode?: string;
   smsOtpExpires?: Date;
   smsOtpAttempts?: number;
+
+  // Login Code (passwordless sign-in via emailed code)
+  loginCode?: string;
+  loginCodeExpires?: Date;
+  loginCodeAttempts?: number;
 
   // Password Reset
   passwordResetToken?: string;
@@ -150,6 +171,12 @@ export interface IUser extends Document {
   lastLogin?: Date;
   isActive: boolean;
 
+  /**
+   * When false, the user should not receive Klaviyo marketing/promotional email.
+   * Omitted/undefined means opted in (legacy users and default). Not synced from Klaviyo unsubscribe links alone.
+   */
+  acceptsPromotionalEmail?: boolean;
+
   // ✅ REMOVED: Old atomic lock arrays - now using event-based idempotency via PaymentEvent model
 
   // Payment Processing Tracking (for additional safety)
@@ -158,6 +185,10 @@ export interface IUser extends Document {
   // Cancellation Upsell Tracking (one-time offer)
   cancellationUpsellRedeemed?: boolean;
   cancellationUpsellRedeemedAt?: Date;
+
+  // Retention Offer Consumption Flags (new cancellation flow one-time offers)
+  // +100 entries offer reuses the legacy cancellationUpsellRedeemed flag above
+  retentionOffersConsumed?: { pause30d?: boolean; discount50_2mo?: boolean };
 
   // Upsell Purchase Tracking
   upsellPurchases?: Array<{
@@ -237,7 +268,7 @@ export interface IUser extends Document {
 
   // Partner Discount Queue System
   // Manages stacking of partner discount access periods from multiple purchases
-  // Follows FIFO (First In, First Out) principle for automatic activation
+  // One-time access: higher partner tier first, then FIFO within tier; subscriptions override one-time
   partnerDiscountQueue?: Array<{
     _id?: mongoose.Types.ObjectId; // Auto-generated ID for queue item
     packageId: string; // Package ID that granted this benefit
@@ -323,9 +354,25 @@ const UserSchema = new Schema<IUser>(
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
     },
+    birthdate: {
+      type: Date,
+      required: false,
+      validate: {
+        validator: function (v: Date) {
+          if (!v) return true; // Optional for backward compatibility
+          const d = new Date(v);
+          return d.getTime() <= Date.now() && !isNaN(d.getTime());
+        },
+        message: "Birthdate cannot be in the future",
+      },
+    },
     profileSetupCompleted: {
       type: Boolean,
       default: false, // New users need to complete setup
+    },
+    acceptsPromotionalEmail: {
+      type: Boolean,
+      required: false,
     },
     role: {
       type: String,
@@ -378,6 +425,10 @@ const UserSchema = new Schema<IUser>(
         type: Date,
         required: false, // Track when user actually triggered the cancellation (not the endDate which is future)
       },
+      pastDueAt: {
+        type: Date,
+        required: false,
+      },
       isActive: {
         type: Boolean,
         default: false,
@@ -389,6 +440,18 @@ const UserSchema = new Schema<IUser>(
       status: {
         type: String,
         default: "incomplete",
+      },
+      pendingStripeSubscriptionId: {
+        type: String,
+        required: false,
+      },
+      pendingStripeSubscriptionRequestId: {
+        type: String,
+        required: false,
+      },
+      pendingStripeSubscriptionCreatedAt: {
+        type: Date,
+        required: false,
       },
 
       // NEW: Previous subscription for benefit preservation during downgrades
@@ -469,6 +532,12 @@ const UserSchema = new Schema<IUser>(
         type: Number,
         required: false,
         min: [0, "Last month accumulated entries cannot be negative"],
+      },
+
+      // Timestamp of most recent resubscribe — see interface comment.
+      lastResubscribedAt: {
+        type: Date,
+        required: false,
       },
     },
 
@@ -684,6 +753,12 @@ const UserSchema = new Schema<IUser>(
       min: [0, "Email verification attempts cannot be negative"],
     },
 
+    pendingKlaviyoMergeFromEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+
     // SMS OTP for passwordless authentication
     smsOtpCode: String,
     smsOtpExpires: Date,
@@ -691,6 +766,15 @@ const UserSchema = new Schema<IUser>(
       type: Number,
       default: 0,
       min: [0, "OTP attempts cannot be negative"],
+    },
+
+    // Login Code (passwordless sign-in via emailed code)
+    loginCode: String,
+    loginCodeExpires: Date,
+    loginCodeAttempts: {
+      type: Number,
+      default: 0,
+      min: [0, "Login code attempts cannot be negative"],
     },
 
     // Password Reset
@@ -717,6 +801,13 @@ const UserSchema = new Schema<IUser>(
     cancellationUpsellRedeemedAt: {
       type: Date,
       required: false,
+    },
+
+    // Retention Offer Consumption Flags (new cancellation flow one-time offers)
+    // +100 entries offer reuses the legacy cancellationUpsellRedeemed flag above
+    retentionOffersConsumed: {
+      pause30d: { type: Boolean, default: false },
+      discount50_2mo: { type: Boolean, default: false },
     },
 
     // Upsell Purchase Tracking
@@ -1018,15 +1109,25 @@ UserSchema.pre("save", function (next) {
     this.redemptionHistory = [];
   }
 
-  // Clean up any null redemptionId entries
+  // Clean up null redemptionId entries in-place to avoid marking the array dirty
+  // when nothing actually changed (which would trigger __v version conflicts)
   if (this.redemptionHistory && Array.isArray(this.redemptionHistory)) {
-    this.redemptionHistory = this.redemptionHistory.map((redemption) => {
-      if (redemption.redemptionId === null || redemption.redemptionId === undefined) {
-        const { redemptionId: _redemptionId, ...rest } = redemption;
-        return rest;
+    let hasNullIds = false;
+    for (const r of this.redemptionHistory) {
+      if (r.redemptionId === null || r.redemptionId === undefined) {
+        hasNullIds = true;
+        break;
       }
-      return redemption;
-    });
+    }
+    if (hasNullIds) {
+      for (let i = 0; i < this.redemptionHistory.length; i++) {
+        const r = this.redemptionHistory[i];
+        if (r.redemptionId === null || r.redemptionId === undefined) {
+          delete r.redemptionId;
+        }
+      }
+      this.markModified("redemptionHistory");
+    }
   }
 
   next();
@@ -1036,7 +1137,7 @@ UserSchema.pre("save", function (next) {
 // Note: email index is automatically created due to unique: true
 UserSchema.index({ role: 1 });
 UserSchema.index({ "subscription.isActive": 1 });
-UserSchema.index({ isActive: 1 });
+// Note: isActive_1 removed - redundant with compound indexes (isActive_1_createdAt_-1, etc.)
 // MongoDB Atlas recommended: compound index for subscription-related queries
 UserSchema.index({
   isActive: 1,
@@ -1044,8 +1145,21 @@ UserSchema.index({
   "subscription.lastDowngradeDate": -1,
   "subscription.cancelledAt": -1,
 });
+UserSchema.index({ isActive: 1, "subscription.pastDueAt": -1 });
 // MongoDB Atlas recommended: compound index for active users sorted by creation date
 UserSchema.index({ isActive: 1, createdAt: -1 });
+// Performance Advisor: mobile lookups (register, update-profile duplicate checks)
+UserSchema.index({ mobile: 1 });
+// Performance Advisor: subscription status/autoRenew/endDate filtering (projected income, renewals, etc.)
+UserSchema.index({
+  isActive: 1,
+  "subscription.isActive": 1,
+  "subscription.status": 1,
+  "subscription.endDate": 1,
+  "subscription.autoRenew": 1,
+});
+// Performance Advisor: createdAt sorting for admin user list/search (when not filtering by isActive)
+UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });

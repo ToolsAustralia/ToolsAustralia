@@ -5,10 +5,16 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet, apiPost } from "@/lib/queries";
 import { useAttribution } from "@/hooks/useAttribution";
-import { upsellPackages } from "@/data/upsellPackages";
+import { freezeRefetchIntervals } from "@/lib/purchaseCooldown";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import {
+  armDashboardEntryHoldFromUserStatsCache,
+  clearDashboardEntryHold,
+} from "@/utils/dashboard-entry-hold";
 
 // Types
 export interface UpsellOffer {
@@ -194,17 +200,20 @@ export const useTrackUpsellEvent = () => {
 export const usePurchaseUpsell = () => {
   const queryClient = useQueryClient();
   const attribution = useAttribution();
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   return useMutation({
     mutationFn: async ({
       offerId,
       useDefaultPayment,
       paymentMethodId,
+      idempotencyKey,
       originalPurchaseContext,
     }: {
       offerId: string;
       useDefaultPayment: boolean;
       paymentMethodId?: string;
+      idempotencyKey?: string;
       userId: string;
       originalPurchaseContext?: {
         paymentIntentId?: string;
@@ -233,129 +242,34 @@ export const usePurchaseUpsell = () => {
         offerId,
         useDefaultPayment,
         paymentMethodId,
+        idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
         ...(originalPurchaseContext && { originalPurchaseContext }),
         ...(attribution && { attribution }),
       });
       return response;
     },
-    onMutate: async ({ offerId, userId }) => {
+    onMutate: async ({ userId }) => {
       const actualUserId = userId;
-      // console.log("🔥 ONMUTATE TRIGGERED: Upsell purchase starting", { offerId });
 
-      // Cancel outgoing refetches and disable refetch intervals temporarily
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.current });
       await queryClient.cancelQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
-      await queryClient.cancelQueries({ queryKey: queryKeys.users.account("current-user") });
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.account(actualUserId) });
 
-      // Temporarily disable refetch intervals to prevent overriding optimistic updates
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: false,
-        refetchIntervalInBackground: false,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats(actualUserId), {
-        refetchInterval: false,
-        refetchIntervalInBackground: false,
-      });
+      // 10s rather than 5s: the async webhook worker writes accumulatedEntries
+      // ~5–15s after Stripe delivery. See useMembershipQueries for full rationale.
+      freezeRefetchIntervals(queryClient, actualUserId, 10000);
 
-      // Snapshot previous values
       const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
       const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
-      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account("current-user"));
+      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account(actualUserId));
 
-      // Get the upsell package data to calculate optimistic updates
-      // Use static data since upsell packages are not loaded in React Query cache
-      const selectedPackage = upsellPackages.find((pkg) => pkg.id === offerId);
-      // console.log("🔍 DEBUG: Upsell packages from static data:", upsellPackages);
-      // console.log("🔍 DEBUG: Looking for offerId:", offerId);
-      // console.log("🔍 DEBUG: Selected package found:", selectedPackage);
-
-      if (selectedPackage) {
-        // Upsells are NOT included in the promo system
-        // Only "one-time-packages" and "mini-packages" have promos
-        const entryCount = selectedPackage.entriesCount || 0;
-        // console.log(`🚀 OPTIMISTIC UPDATE: Adding ${entryCount} entries from upsell`);
-
-        // Optimistically update major draw data (useCurrentMajorDraw expects MajorDraw object)
-        queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
-          if (!old || typeof old !== "object") {
-            // console.log("❌ No existing major draw data for optimistic update");
-            return old;
-          }
-          const oldData = old as Record<string, unknown>;
-
-          // useCurrentMajorDraw expects a MajorDraw object, not the full API response
-          const newData = {
-            ...oldData,
-            totalEntries: ((oldData.totalEntries as number) || 0) + entryCount,
-            isProcessing: true, // Add processing flag
-          };
-
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated major draw data:`, {
-          //   oldTotalEntries: oldData.totalEntries,
-          //   newTotalEntries: newData.totalEntries,
-          //   entryCount,
-          //   isProcessing: true,
-          // });
-
-          return newData;
-        });
-
-        // Optimistically update user stats
-        // console.log(
-        //   "🔍 OPTIMISTIC UPDATE: Updating user stats with query key:",
-        //   queryKeys.majorDraw.userStats(actualUserId)
-        // );
-        queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), (old: unknown) => {
-          if (!old || typeof old !== "object") return old;
-          const oldData = old as Record<string, unknown>;
-          const newData = {
-            ...oldData,
-            totalEntries: ((oldData.totalEntries as number) || 0) + entryCount,
-            currentDrawEntries: ((oldData.currentDrawEntries as number) || 0) + entryCount,
-            oneTimeEntries: ((oldData.oneTimeEntries as number) || 0) + entryCount,
-            isProcessing: true,
-            pendingEntries: entryCount,
-          };
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated user stats:`, {
-          //   oldTotalEntries: oldData.totalEntries,
-          //   newTotalEntries: newData.totalEntries,
-          //   entryCount,
-          // });
-          return newData;
-        });
-
-        // Optimistically update user account data
-        queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
-          if (!old || typeof old !== "object") return old;
-          const oldData = old as Record<string, unknown>;
-          const oldUser = oldData.user as Record<string, unknown>;
-          const newData = {
-            ...oldData,
-            user: {
-              ...oldUser,
-              accumulatedEntries: ((oldUser.accumulatedEntries as number) || 0) + entryCount,
-              entryWallet: ((oldUser.entryWallet as number) || 0) + entryCount,
-              isProcessing: true,
-            },
-          };
-          // console.log(`✅ OPTIMISTIC UPDATE: Updated user account:`, {
-          //   oldAccumulatedEntries: oldUser.accumulatedEntries,
-          //   newAccumulatedEntries: newData.user.accumulatedEntries,
-          //   entryCount,
-          // });
-          return newData;
-        });
-      }
+      armDashboardEntryHoldFromUserStatsCache(previousUserStats);
 
       return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
     },
     onSuccess: (data, variables, context) => {
-      // console.log(`🎉 PAYMENT SUCCESS: Upsell purchase completed`);
+      const actualUserId = context?.actualUserId ?? variables.userId;
 
-      // Get the actual user ID from context
-      const actualUserId = context?.actualUserId || "current-user";
-
-      // Clear processing flags immediately
       queryClient.setQueryData(queryKeys.majorDraw.current, (old: unknown) => {
         if (!old || typeof old !== "object") return old;
         const oldData = old as Record<string, unknown>;
@@ -375,7 +289,7 @@ export const usePurchaseUpsell = () => {
         };
       });
 
-      queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
+      queryClient.setQueryData(queryKeys.users.account(actualUserId), (old: unknown) => {
         if (!old || typeof old !== "object") return old;
         const oldData = old as Record<string, unknown>;
         return {
@@ -387,71 +301,45 @@ export const usePurchaseUpsell = () => {
         };
       });
 
-      // Re-enable refetch intervals after successful payment
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: 2 * 60 * 1000, // 2 minutes
-        refetchIntervalInBackground: true,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats("current-user"), {
-        refetchInterval: 1 * 60 * 1000, // 1 minute
-        refetchIntervalInBackground: true,
-      });
-
-      // HYBRID APPROACH: Set up webhook validation
-      setTimeout(async () => {
-        // console.log(`🔄 HYBRID VALIDATION: Checking server data after 3 seconds`);
+      // Two-pass refetch (3s + 8s) — see useMembershipQueries for rationale.
+      // Catches both fast worker completions and the slower P99 tail.
+      const syncFromServer = async (label: string) => {
         try {
-          // Fetch fresh data from server to validate optimistic updates
           const [majorDrawResponse, userStatsResponse] = await Promise.all([
             fetch("/api/major-draw").then((res) => res.json()),
             fetch(`/api/users/${actualUserId}/my-account`).then((res) => res.json()),
           ]);
 
-          // Update cache with server data if different
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
-            // console.log(`✅ HYBRID VALIDATION: Major draw data synced with server`);
           }
 
           if (userStatsResponse.success) {
-            queryClient.setQueryData(queryKeys.users.account("current-user"), userStatsResponse.data);
-            // console.log(`✅ HYBRID VALIDATION: User account data synced with server`);
+            queryClient.setQueryData(queryKeys.users.account(actualUserId), userStatsResponse.data);
           }
         } catch (error) {
-          console.error(`❌ HYBRID VALIDATION: Failed to sync with server:`, error);
+          console.error(`❌ HYBRID VALIDATION (${label}): Failed to sync with server:`, error);
         }
-      }, 3000); // 3 seconds delay to allow webhook to complete
+      };
+      setTimeout(() => void syncFromServer("3s"), 3000);
+      setTimeout(() => void syncFromServer("8s"), 8000);
 
-      // Invalidate queries to sync with server
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.current });
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(actualUserId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current-user") });
+      invalidatePurchaseCaches(actualUserId);
     },
     onError: (error, variables, context) => {
       console.error("Failed to purchase upsell:", error);
+      clearDashboardEntryHold();
 
-      // Get the actual user ID from context
-      const actualUserId = context?.actualUserId || "current-user";
+      const actualUserId = context?.actualUserId ?? variables.userId;
 
-      // Re-enable refetch intervals on error
-      queryClient.setQueryDefaults(queryKeys.majorDraw.current, {
-        refetchInterval: 2 * 60 * 1000, // 2 minutes
-        refetchIntervalInBackground: true,
-      });
-      queryClient.setQueryDefaults(queryKeys.majorDraw.userStats(actualUserId), {
-        refetchInterval: 1 * 60 * 1000, // 1 minute
-        refetchIntervalInBackground: true,
-      });
-
-      // Rollback optimistic updates
-      if (context?.previousMajorDraw) {
+      if (context?.previousMajorDraw !== undefined) {
         queryClient.setQueryData(queryKeys.majorDraw.current, context.previousMajorDraw);
       }
-      if (context?.previousUserStats) {
+      if (context?.previousUserStats !== undefined) {
         queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), context.previousUserStats);
       }
-      if (context?.previousUserAccount) {
-        queryClient.setQueryData(queryKeys.users.account("current-user"), context.previousUserAccount);
+      if (context?.previousUserAccount !== undefined) {
+        queryClient.setQueryData(queryKeys.users.account(actualUserId), context.previousUserAccount);
       }
     },
   });
@@ -459,6 +347,8 @@ export const usePurchaseUpsell = () => {
 
 export const useAcceptUpsellOffer = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({
@@ -485,7 +375,9 @@ export const useAcceptUpsellOffer = () => {
       // Invalidate user-related queries since they might have changed
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.memberships.packages });
-      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all("current-user") });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.cart.all(userId) });
+      }
     },
   });
 };

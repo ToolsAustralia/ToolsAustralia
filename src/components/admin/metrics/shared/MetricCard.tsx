@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { LucideIcon } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 export interface MetricCardProps {
   title: string | React.ReactNode;
@@ -42,10 +43,12 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 }) {
   if (loading) {
     return (
-      <div className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-3 sm:p-4 lg:p-6 animate-pulse ${className}`}>
-        <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-        <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-        {subtitle && <div className="h-3 bg-gray-200 rounded w-1/2 mt-2"></div>}
+      <div
+        className={cn("bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2.5 sm:p-4 lg:p-6 animate-pulse", className)}
+      >
+        <div className="h-3 sm:h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/2 mb-1.5 sm:mb-2"></div>
+        <div className="h-5 sm:h-7 lg:h-8 bg-gray-200 dark:bg-neutral-700 rounded w-3/4"></div>
+        {subtitle && <div className="h-2.5 sm:h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/2 mt-1.5 sm:mt-2"></div>}
       </div>
     );
   }
@@ -54,25 +57,25 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
   const normalizedColor = color === "green" ? "emerald" : color;
 
   const colorClasses = {
-    red: "border-red-100 bg-red-50",
-    emerald: "border-emerald-100 bg-emerald-50",
-    blue: "border-blue-100 bg-blue-50",
-    purple: "border-purple-100 bg-purple-50",
-    yellow: "border-yellow-100 bg-yellow-50",
-    indigo: "border-indigo-100 bg-indigo-50",
-    orange: "border-orange-100 bg-orange-50",
-    pink: "border-pink-100 bg-pink-50",
+    red: "border-red-100 bg-red-50 dark:border-red-900/45 dark:bg-red-950/25",
+    emerald: "border-emerald-100 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/25",
+    blue: "border-blue-100 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/25",
+    purple: "border-purple-100 bg-purple-50 dark:border-purple-900/40 dark:bg-purple-950/25",
+    yellow: "border-yellow-100 bg-yellow-50 dark:border-yellow-900/35 dark:bg-yellow-950/20",
+    indigo: "border-indigo-100 bg-indigo-50 dark:border-indigo-900/40 dark:bg-indigo-950/25",
+    orange: "border-orange-100 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/25",
+    pink: "border-pink-100 bg-pink-50 dark:border-pink-900/40 dark:bg-pink-950/25",
   };
 
   const iconColorClasses = {
-    red: "text-red-600",
-    emerald: "text-emerald-600",
-    blue: "text-blue-600",
-    purple: "text-purple-600",
-    yellow: "text-yellow-600",
-    indigo: "text-indigo-600",
-    orange: "text-orange-600",
-    pink: "text-pink-600",
+    red: "text-red-600 dark:text-red-400",
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    blue: "text-blue-600 dark:text-blue-400",
+    purple: "text-purple-600 dark:text-purple-400",
+    yellow: "text-yellow-600 dark:text-yellow-400",
+    indigo: "text-indigo-600 dark:text-indigo-400",
+    orange: "text-orange-600 dark:text-orange-400",
+    pink: "text-pink-600 dark:text-pink-400",
   };
 
   // Determine trend direction from either format
@@ -92,8 +95,10 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-lg border-2 ${colorClasses[normalizedColor]} p-3 sm:p-4 lg:p-6 ${
-        isClickable ? "cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" : ""
+      className={`bg-white dark:bg-neutral-900/90 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border ${colorClasses[normalizedColor]} p-2.5 sm:p-4 lg:p-6 ${
+        isClickable
+          ? "cursor-pointer transition-all duration-200 hover:shadow-md hover:border-gray-300 dark:hover:border-neutral-600"
+          : ""
       } ${className}`}
       aria-label={ariaLabel || `${titleString}: ${displayValue}`}
       onClick={onClick}
@@ -106,26 +111,37 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         }
       }}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-start justify-between gap-1.5 mb-1 sm:mb-2">
         {typeof title === "string" ? (
-          <h3 className="text-xs sm:text-sm font-semibold text-gray-600">{title}</h3>
+          <h3 className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+            {title}
+          </h3>
         ) : (
-          <div className="text-xs sm:text-sm font-semibold text-gray-600">{title}</div>
+          <div className="text-2xs leading-tight sm:text-sm font-medium text-gray-500 dark:text-neutral-400 pr-1">
+            {title}
+          </div>
         )}
-        <div className={`p-1.5 sm:p-2 ${colorClasses[normalizedColor]} rounded-lg`}>
-          <Icon className={`w-3 h-3 sm:w-4 sm:h-4 ${iconColorClasses[normalizedColor]}`} aria-hidden="true" />
+        <div className={cn("shrink-0 p-1.5 sm:p-2 rounded-md sm:rounded-lg ring-1 ring-black/5 dark:ring-white/10 shadow-sm", colorClasses[normalizedColor])}>
+          <Icon className={cn("w-4 h-4 sm:w-5 sm:h-5", iconColorClasses[normalizedColor])} aria-hidden="true" />
         </div>
       </div>
-      <div className="flex items-baseline justify-between">
-        <p className={valueClassName ?? "text-xl sm:text-2xl font-bold text-gray-900"}>{displayValue}</p>
+      <div className="flex items-baseline justify-between gap-1.5 min-w-0">
+        <p
+          className={
+            valueClassName ??
+            "text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white tabular-nums tracking-tight break-words"
+          }
+        >
+          {displayValue}
+        </p>
         {trend && trendDirection && (
           <div
-            className={`text-xs font-semibold ${
+            className={`shrink-0 text-2xs sm:text-xs font-semibold ${
               trendDirection === "up"
                 ? "text-emerald-600"
                 : trendDirection === "down"
                 ? "text-red-600"
-                : "text-gray-600"
+                : "text-gray-600 dark:text-neutral-400"
             }`}
           >
             {trendDirection === "up" ? "↑" : trendDirection === "down" ? "↓" : "→"} {Math.abs(trend.value)}%
@@ -133,17 +149,17 @@ export const MetricCard = memo<MetricCardProps>(function MetricCard({
         )}
       </div>
       {count !== undefined && count !== null && (
-        <div className="text-xs font-medium text-gray-600 mt-1">
+        <div className="text-2xs sm:text-xs font-medium text-gray-600 dark:text-neutral-400 mt-0.5 sm:mt-1">
           {count.toLocaleString()} {countLabel || "items"}
         </div>
       )}
       {subtitle && (
-        <div className="text-xs text-gray-500 mt-1" aria-label={`${titleString} subtitle`}>
+        <div
+          className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-0.5 sm:mt-1 leading-snug"
+          aria-label={`${titleString} subtitle`}
+        >
           {subtitle}
         </div>
-      )}
-      {isClickable && (
-        <div className="text-xs text-gray-400 mt-2 italic">Click to view details</div>
       )}
     </div>
   );

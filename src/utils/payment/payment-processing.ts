@@ -21,11 +21,31 @@ import {
   handleSubscriptionQueueUpdate,
 } from "@/utils/partner-discounts/partner-discount-queue";
 import { getPackageById } from "@/data/membershipPackages";
+import { getUpsellPackageById } from "@/data/upsellPackages";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { dispatchPackagePurchase } from "@/utils/tracking/purchase-events";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-experiment-assignment";
 import type { AttributionParams } from "@/types/tracking";
+import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
+import { RedemptionService } from "@/services/redeemables/RedemptionService";
+import { MilestoneService } from "@/services/milestones";
+import { createEmptyGrants, benefitsGrantedEventId } from "@/types/payment-ledger";
+import type { SubscriptionCalculationType } from "@/types/payment-ledger";
+import {
+  addMilestoneIssuanceIds,
+  incLedgerGrants,
+  pushDrawGrant,
+  setLedgerCampaign,
+  setLedgerPromoLink,
+} from "@/utils/payment/ledger-helpers";
+
+/** Optional membership ledger (Stripe invoice path) — lastMonthDelta for refunds. */
+export type SubscriptionLedgerContext = {
+  lastMonthDelta: number;
+  calculationType: SubscriptionCalculationType;
+};
 
 // Global processing lock to prevent concurrent processing of same payment
 const processingLocks = new Map<string, Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }>>();
@@ -38,11 +58,20 @@ type PaymentMetadata = {
   miniDrawId?: string;
   affiliateCode?: string;
   promoLinkCode?: string;
+  campaignCode?: string;
   // ✅ A/B Testing: Experiment assignment stored in payment metadata
   experimentId?: string;
   variantId?: string;
   /** Original purchase PaymentIntent id that triggered this upsell (one purchase per appearance) */
   triggeringPaymentIntentId?: string;
+  /**
+   * Override for the Facebook Purchase event_id (and order_id). Subscription invoices
+   * key storage by `invoice_${invoice.id}`, but the browser-side Purchase pixel fires
+   * with the real PaymentIntent id (`pi_…`). Setting this to that PI id makes browser
+   * and server CAPI share an event_id so Meta deduplicates the pair. Other code paths
+   * (PaymentEvent storage, ledger idempotency, A/B tracking) keep using paymentIntentId.
+   */
+  trackingOrderId?: string;
 };
 interface UserDocument {
   _id: { toString: () => string };
@@ -51,6 +80,7 @@ interface UserDocument {
   lastName?: string;
   mobile?: string;
   state?: string;
+  birthdate?: Date;
   stripeSubscriptionId?: string;
   accumulatedEntries?: number;
   rewardsPoints?: number;
@@ -94,6 +124,7 @@ interface UserDocument {
     packageId: string;
     startDate: Date;
     endDate?: Date;
+    cancelledAt?: Date;
     isActive: boolean;
     autoRenew?: boolean;
     status?: string;
@@ -144,8 +175,14 @@ export async function processPaymentBenefits(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason (e.g., "subscription_create", "subscription_cycle") for accurate renewal tracking
-  sessionAttribution?: AttributionParams // Optional attribution from Stripe metadata (session) - takes priority over signup
-): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
+  sessionAttribution?: AttributionParams, // Optional attribution from Stripe metadata (session) - takes priority over signup
+  /** When true, skip membership-first affiliate row (renewals use membership-recurring from webhook). */
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  /** Membership re-subscribe — forwarded to Meta CAPI as custom_data.content_category for segmentation. */
+  isResubscribe?: boolean,
+  /** Membership invoice payments: contribution to lastMonthAccumulatedEntries (refund ledger). */
+  subscriptionLedgerContext?: SubscriptionLedgerContext
+): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   // ✅ CRITICAL: Validate input parameters
   // console.log(`🔍 processPaymentBenefits called with:`, {
   //   paymentIntentId,
@@ -191,7 +228,10 @@ export async function processPaymentBenefits(
     paymentMetadata,
     requestContext,
     billingReason,
-    sessionAttribution
+    sessionAttribution,
+    affiliateOptions,
+    isResubscribe,
+    subscriptionLedgerContext
   );
   processingLocks.set(lockKey, processingPromise);
 
@@ -224,8 +264,11 @@ async function processPaymentBenefitsInternal(
     event_source_url?: string;
   },
   billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
-  sessionAttribution?: AttributionParams
-): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string }> {
+  sessionAttribution?: AttributionParams,
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  isResubscribe?: boolean,
+  subscriptionLedgerContext?: SubscriptionLedgerContext
+): Promise<{ success: boolean; alreadyProcessed: boolean; error?: string; code?: string }> {
   const maxRetries = 3;
   let retryCount = 0;
 
@@ -241,6 +284,26 @@ async function processPaymentBenefitsInternal(
       let user = await User.findById(userId);
       if (!user) {
         throw new Error(`User ${userId} not found`);
+      }
+
+      const routesToMiniDrawOnly =
+        packageData.packageType === "mini-draw" ||
+        (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId);
+
+      const isSubscriptionRenewal =
+        packageData.packageType === "membership" && billingReason === "subscription_cycle";
+
+      if (!routesToMiniDrawOnly && !isSubscriptionRenewal) {
+        const { checkMajorDrawActiveForNewPurchases } = await import("@/utils/draws/major-draw-helpers");
+        const gate = await checkMajorDrawActiveForNewPurchases();
+        if (!gate.ok) {
+          return {
+            success: false,
+            alreadyProcessed: false,
+            error: gate.message,
+            code: gate.code,
+          };
+        }
       }
 
       const metadataAffiliateCode = paymentMetadata?.affiliateCode?.trim().toUpperCase();
@@ -322,11 +385,22 @@ async function processPaymentBenefitsInternal(
           attributionData.promotionSlug = signupAttr.promotionSlug;
         }
 
-        const paymentEventData = {
+        const paymentEventData: Record<string, unknown> = {
           entries: packageData.entries,
           points: packageData.points,
           price: packageData.price,
+          grants: createEmptyGrants(
+            { entries: packageData.entries, points: packageData.points },
+            packageData.packageType === "membership" && subscriptionLedgerContext
+              ? {
+                  lastMonthDelta: subscriptionLedgerContext.lastMonthDelta,
+                  calculationType: subscriptionLedgerContext.calculationType,
+                }
+              : undefined
+          ),
           ...(billingReason && { billingReason }), // ✅ Store billing_reason for accurate renewal detection in activity log
+          ...(packageData.packageType === "mini-draw" &&
+            paymentMetadata?.miniDrawId && { miniDrawId: paymentMetadata.miniDrawId }), // For activity log: "Entered in [mini draw title]"
           ...(Object.keys(attributionData).length > 0 && attributionData),
         };
 
@@ -435,18 +509,19 @@ async function processPaymentBenefitsInternal(
         await user.save();
       }
 
-      // ✅ CRITICAL: Additional check for invoice payments with different ID formats
-      // Check if any processed payment contains the same invoice ID (handles timestamp variations)
+      // Additional check for invoice payments — exact matching only
+      // to prevent false-positive dedup from substring collisions (e.g. in_1X vs in_1XY)
       if (paymentIntentId.startsWith("invoice_")) {
         const invoiceId = paymentIntentId.replace("invoice_", "");
         const duplicateInvoicePayment = user.processedPayments?.find((processedPayment) => {
           if (!processedPayment) return false;
-          // Direct match
           if (processedPayment === paymentIntentId) return true;
-          // Match with invoice_ prefix
           if (processedPayment === `invoice_${invoiceId}`) return true;
-          // Match if processedPayment is invoice_ prefixed and contains the invoice ID
-          if (processedPayment.startsWith("invoice_") && processedPayment.includes(invoiceId)) return true;
+          // Extract the invoice ID from the stored value and compare exactly
+          if (processedPayment.startsWith("invoice_")) {
+            const storedInvoiceId = processedPayment.replace("invoice_", "").split("_ts_")[0];
+            return storedInvoiceId === invoiceId || storedInvoiceId === invoiceId.split("_ts_")[0];
+          }
           return false;
         });
 
@@ -465,7 +540,18 @@ async function processPaymentBenefitsInternal(
         type: packageData.packageType,
         packageType: packageData.packageType,
       };
-      await grantBenefits(user as UserDocument, packageData, finalPaymentMetadata, paymentIntentId, requestContext, billingReason);
+      const benefitsEventId = benefitsGrantedEventId(paymentIntentId);
+      await grantBenefits(
+        user as UserDocument,
+        packageData,
+        finalPaymentMetadata,
+        paymentIntentId,
+        requestContext,
+        billingReason,
+        affiliateOptions,
+        isResubscribe,
+        benefitsEventId
+      );
 
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
@@ -532,6 +618,15 @@ async function processPaymentBenefitsInternal(
         }
       } catch (_klaviyoError) {
         console.error("Klaviyo profile sync error (non-critical):", _klaviyoError);
+      }
+
+      try {
+        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId);
+        if (milestoneResult.issuanceIds.length > 0) {
+          await addMilestoneIssuanceIds(benefitsGrantedEventId(paymentIntentId), milestoneResult.issuanceIds);
+        }
+      } catch (milestoneError) {
+        console.error("Milestone evaluation failed after payment processing:", milestoneError);
       }
 
       return { success: true, alreadyProcessed: false };
@@ -751,46 +846,15 @@ async function checkAndApplyPromoLink(
   packageType: "one-time" | "membership" | "upsell" | "mini-draw",
   paymentMetadata?: PaymentMetadata,
   packageId?: string
-): Promise<number> {
+): Promise<{ bonusEntries: number; promoLinkId?: string; code?: string }> {
   try {
-    // Get promo link code from payment metadata
     if (!paymentMetadata?.promoLinkCode) {
-      // No promo link code - this is normal, no logging needed
-      return 0;
+      return { bonusEntries: 0 };
     }
 
-    // Normalize the code - handle empty strings and whitespace
     const rawCode = paymentMetadata.promoLinkCode;
     if (!rawCode || typeof rawCode !== "string" || !rawCode.trim()) {
-      return 0;
-    }
-
-    const code = rawCode.trim().toUpperCase();
-
-    // Import PromoLink model dynamically to avoid circular dependencies
-    const PromoLink = (await import("@/models/PromoLink")).default;
-
-    // Find active promo link by code
-    const promoLink = await PromoLink.findActiveByCode(code);
-
-    if (!promoLink) {
-      console.log(`ℹ️ [PROMO LINK] Code not found or inactive: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-      });
-      return 0;
-    }
-
-    // Check if expired
-    if (promoLink.isExpired()) {
-      console.log(`ℹ️ [PROMO LINK] Code expired: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        expiresAt: promoLink.expiresAt,
-      });
-      return 0;
+      return { bonusEntries: 0 };
     }
 
     // Member-only one-time counts as membership for promo link applicability
@@ -803,110 +867,50 @@ async function checkAndApplyPromoLink(
     const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
 
-    // Promo links don't apply to mini-draw or upsell packages
     if (packageType === "mini-draw" || packageType === "upsell") {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to ${packageType} packages: ${code}`, {
+      return { bonusEntries: 0 };
+    }
+
+    const redemption = await PromoRedemptionService.redeem({
+      user: {
+        _id: user._id.toString(),
+        subscription: user.subscription,
+      },
+      promoCode: rawCode,
+      isMembershipPurchase,
+      isOneTimePurchase,
+    });
+
+    if (!redemption.redeemed) {
+      console.log(`ℹ️ [PROMO LINK] Redemption skipped: ${redemption.reason}`, {
         userId: user._id?.toString(),
         userEmail: user.email,
         packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
+        promoLinkCode: rawCode.trim().toUpperCase(),
       });
-      return 0;
+      return { bonusEntries: 0 };
     }
 
-    // Check package type match
-    if (isMembershipPurchase && !promoLink.appliesToMembership) {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to membership packages: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
-      });
-      return 0;
-    }
+    console.log(`🎁 [PROMO LINK] Promo link redeemed successfully:`, {
+      promoLinkId: redemption.promoLink?._id?.toString(),
+      code: redemption.promoLink?.code,
+      bonusEntries: redemption.bonusEntries,
+      packageType,
+      appliesToMembership: redemption.promoLink?.appliesToMembership,
+      appliesToOneTime: redemption.promoLink?.appliesToOneTime,
+      campaignType: redemption.promoLink?.campaignType,
+      eligibilityAudience: redemption.promoLink?.eligibilityAudience,
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      newUsageCount: redemption.promoLink?.usageCount,
+    });
 
-    if (isOneTimePurchase && !promoLink.appliesToOneTime) {
-      console.log(`ℹ️ [PROMO LINK] Code does not apply to one-time packages: ${code}`, {
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-        appliesToMembership: promoLink.appliesToMembership,
-        appliesToOneTime: promoLink.appliesToOneTime,
-      });
-      return 0;
-    }
-
-    // Check if user has already used this code (one-time use enforcement)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (user._id as any).toString();
-    if (promoLink.isUsedByUser(userId)) {
-      console.log(`ℹ️ [PROMO LINK] User already used this code: ${code}`, {
-        userId: userId,
-        userEmail: user.email,
-        packageType,
-        promoLinkCode: code,
-      });
-      return 0;
-    }
-
-    // ✅ CRITICAL: Mark as used IMMEDIATELY to prevent race conditions
-    // Use atomic operation to mark as used and increment count in one operation
-    // This prevents two concurrent payments from both getting bonus entries
-    try {
-      const updatedPromoLink = await PromoLink.findOneAndUpdate(
-        { _id: promoLink._id, usedBy: { $ne: userId } }, // Only update if user not already in usedBy
-        {
-          $addToSet: { usedBy: userId }, // Add user ID to usedBy array (idempotent)
-          $inc: { usageCount: 1 }, // Increment usage count
-        },
-        { new: true } // Return updated document
-      );
-
-      if (!updatedPromoLink) {
-        // Another process already marked this user as used (race condition detected)
-        console.log(`ℹ️ [PROMO LINK] Code already used by this user (race condition detected): ${code}`, {
-          userId: userId,
-          userEmail: user.email,
-          packageType,
-          promoLinkCode: code,
-        });
-        return 0;
-      }
-
-      // Log successful promo link match and usage marking
-      console.log(`🎁 [PROMO LINK] Valid promo link matched, marked as used, and applies to purchase:`, {
-        promoLinkId: updatedPromoLink._id?.toString(),
-        code: updatedPromoLink.code,
-        bonusEntries: updatedPromoLink.bonusEntries,
-        packageType,
-        appliesToMembership: updatedPromoLink.appliesToMembership,
-        appliesToOneTime: updatedPromoLink.appliesToOneTime,
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        newUsageCount: updatedPromoLink.usageCount,
-      });
-
-      // Return the bonus entries amount - will be granted in grantBenefits
-      return updatedPromoLink.bonusEntries;
-    } catch (markUsedError) {
-      // If marking as used fails, log but still grant entries (non-critical)
-      console.error(`❌ [PROMO LINK] Failed to mark promo link as used (non-critical):`, {
-        error: markUsedError instanceof Error ? markUsedError.message : String(markUsedError),
-        promoLinkId: promoLink._id?.toString(),
-        code: promoLink.code,
-        userId: userId,
-        userEmail: user.email,
-      });
-      // Still return bonus entries - marking as used is non-critical
-      return promoLink.bonusEntries;
-    }
+    return {
+      bonusEntries: redemption.bonusEntries,
+      promoLinkId: redemption.promoLink?._id?.toString(),
+      code: redemption.promoLink?.code,
+    };
   } catch (error) {
-    // Log error but don't throw - promo links are non-critical
     console.error("❌ [PROMO LINK] Error checking promo link:", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
@@ -915,26 +919,57 @@ async function checkAndApplyPromoLink(
       packageType,
       paymentMetadata,
     });
-    return 0;
+    return { bonusEntries: 0 };
   }
 }
 
-/**
- * TEMPORARY: Auto-verify email on purchase during SMTP to SendGrid migration
- * This should be removed once email verification is working properly
- * 
- * Automatically marks a user's email as verified when they complete a purchase.
- * This is a temporary workaround to ensure users can access their accounts while
- * email verification emails may not be delivered reliably during the migration.
- * 
- * @param user - The user document to potentially verify (must have isEmailVerified property)
- */
-export function autoVerifyEmailOnPurchase(user: IUser | (UserDocument & { isEmailVerified?: boolean })): void {
-  const isEnabled = process.env.TEMPORARY_AUTO_VERIFY_EMAIL_ON_PURCHASE === "true";
-  if (isEnabled && !user.isEmailVerified) {
-    (user as IUser).isEmailVerified = true;
-    // Optional: Log for monitoring
-    console.log(`[TEMPORARY] Auto-verified email for user ${user.email} via purchase`);
+
+async function checkAndRedeemCampaign(
+  user: UserDocument,
+  paymentMetadata?: PaymentMetadata
+): Promise<{
+  entriesGranted: number;
+  code: string;
+  issuanceId?: string;
+  redemptionKind?: "monthly-coupon" | "milestone";
+} | null> {
+  const code = paymentMetadata?.campaignCode;
+  if (!code) return null;
+
+  try {
+    const result = await RedemptionService.redeem({
+      userId: user._id.toString(),
+      code,
+    });
+
+    if (result.success && result.entriesGranted) {
+      console.log(`✅ [CAMPAIGN] Server-side campaign redemption successful:`, {
+        userId: user._id.toString(),
+        code,
+        entriesGranted: result.entriesGranted,
+      });
+      return {
+        entriesGranted: result.entriesGranted,
+        code,
+        issuanceId: result.issuanceId,
+        redemptionKind: result.redemptionKind,
+      };
+    }
+
+    console.warn(`⚠️ [CAMPAIGN] Campaign redemption did not grant entries:`, {
+      userId: user._id.toString(),
+      code,
+      success: result.success,
+      reason: result.reason,
+    });
+    return null;
+  } catch (error) {
+    console.error(`❌ [CAMPAIGN] Campaign redemption error (non-blocking):`, {
+      error: error instanceof Error ? error.message : String(error),
+      userId: user._id.toString(),
+      code,
+    });
+    return null;
   }
 }
 
@@ -958,8 +993,16 @@ async function grantBenefits(
     fbp?: string;
     event_source_url?: string;
   },
-  billingReason?: string // ✅ Stripe billing_reason for accurate renewal tracking
+  billingReason?: string, // ✅ Stripe billing_reason for accurate renewal tracking
+  affiliateOptions?: { skipMembershipFirstCommission?: boolean },
+  isResubscribe?: boolean,
+  benefitsEventId?: string
 ): Promise<void> {
+  const majorDrawRoutingMode: "renewal" | "new_purchase" =
+    packageData.packageType === "membership" && billingReason === "subscription_cycle"
+      ? "renewal"
+      : "new_purchase";
+
   // ✅ DEBUG: Log function call with all parameters
   // console.log(`🎯 grantBenefits called with:`, {
   //   userId: user._id.toString(),
@@ -1010,15 +1053,15 @@ async function grantBenefits(
   if (packageData.packageType === "mini-draw") {
     // Add to specific MiniDraw instead of MajorDraw
     // addToMiniDraw is the ONLY function that grants entries to MiniDraw model
-    await addToMiniDraw(user, packageData, paymentMetadata);
+    await addToMiniDraw(user, packageData, paymentMetadata, undefined, benefitsEventId);
   } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
     // Upsell for mini-draw: route to mini-draw instead of major draw
     // console.log(`🎲 Routing upsell entries to mini-draw: ${paymentMetadata.miniDrawId}`);
     // addToMiniDraw is the ONLY function that grants entries to MiniDraw model
-    await addToMiniDraw(user, packageData, paymentMetadata);
+    await addToMiniDraw(user, packageData, paymentMetadata, undefined, benefitsEventId);
   } else {
     // Add to major draw entries with payment metadata for freeze period handling
-    await addToMajorDraw(user, packageData, paymentMetadata);
+    await addToMajorDraw(user, packageData, paymentMetadata, undefined, majorDrawRoutingMode, benefitsEventId);
   }
 
   // ✅ BONUS ENTRY PROMO: Check for active bonus entry promos and grant bonus entries
@@ -1033,6 +1076,13 @@ async function grantBenefits(
     );
 
     if (bonusEntries > 0) {
+      if (benefitsEventId) {
+        try {
+          await incLedgerGrants(benefitsEventId, { bonusPromoEntries: bonusEntries });
+        } catch (e) {
+          console.error("incLedgerGrants bonusPromo failed:", e);
+        }
+      }
       console.log(`🎁 [BONUS ENTRY PROMO] Processing bonus entries from date-based promo:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
@@ -1073,13 +1123,20 @@ async function grantBenefits(
       let targetDraw: "mini-draw" | "major-draw";
       if (packageData.packageType === "mini-draw") {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", benefitsEventId);
       } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMiniDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo", benefitsEventId);
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, bonusPackageData, paymentMetadata, "bonus-entry-promo");
+        await addToMajorDraw(
+          user,
+          bonusPackageData,
+          paymentMetadata,
+          "bonus-entry-promo",
+          majorDrawRoutingMode,
+          benefitsEventId
+        );
       }
 
       console.log(`✅ [BONUS ENTRY PROMO] Successfully granted bonus entries:`, {
@@ -1118,14 +1175,28 @@ async function grantBenefits(
   // This happens after regular bonus entry promos
   // Promo links are checked separately and can apply simultaneously with bonus entry promos
   try {
-    const promoLinkEntries = await checkAndApplyPromoLink(
+    const promoLinkResult = await checkAndApplyPromoLink(
       user,
       packageData.packageType,
       paymentMetadata,
       packageData.packageId
     );
+    const promoLinkEntries = promoLinkResult.bonusEntries;
 
     if (promoLinkEntries > 0) {
+      if (benefitsEventId) {
+        try {
+          await incLedgerGrants(benefitsEventId, { promoLinkEntries: promoLinkEntries });
+          if (promoLinkResult.promoLinkId && promoLinkResult.code) {
+            await setLedgerPromoLink(benefitsEventId, {
+              promoLinkId: promoLinkResult.promoLinkId,
+              code: promoLinkResult.code,
+            });
+          }
+        } catch (e) {
+          console.error("promo link ledger failed:", e);
+        }
+      }
       console.log(`🎁 [PROMO LINK] Processing ${promoLinkEntries} bonus entries from promo link:`, {
         userId: user._id?.toString(),
         userEmail: user.email,
@@ -1169,13 +1240,20 @@ async function grantBenefits(
       let targetDraw: "mini-draw" | "major-draw";
       if (packageData.packageType === "mini-draw") {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", benefitsEventId);
       } else if (packageData.packageType === "upsell" && paymentMetadata?.miniDrawId) {
         targetDraw = "mini-draw";
-        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMiniDraw(user, promoLinkPackageData, paymentMetadata, "promo-link", benefitsEventId);
       } else {
         targetDraw = "major-draw";
-        await addToMajorDraw(user, promoLinkPackageData, paymentMetadata, "promo-link");
+        await addToMajorDraw(
+          user,
+          promoLinkPackageData,
+          paymentMetadata,
+          "promo-link",
+          majorDrawRoutingMode,
+          benefitsEventId
+        );
       }
 
       console.log(`✅ [PROMO LINK] Successfully granted bonus entries from promo link:`, {
@@ -1203,6 +1281,57 @@ async function grantBenefits(
     });
   }
 
+  // ✅ Campaign code redemption (MonthlyEntryCampaign bonus entries)
+  try {
+    const campaignResult = await checkAndRedeemCampaign(user, paymentMetadata);
+    if (campaignResult && benefitsEventId) {
+      try {
+        await incLedgerGrants(benefitsEventId, { campaignEntries: campaignResult.entriesGranted });
+        const campaignLedger: {
+          code: string;
+          monthlyIssuanceId?: string;
+          milestoneIssuanceId?: string;
+          redemptionKind?: "monthly-coupon" | "milestone";
+        } = { code: campaignResult.code, redemptionKind: campaignResult.redemptionKind };
+        if (campaignResult.redemptionKind === "monthly-coupon" && campaignResult.issuanceId) {
+          campaignLedger.monthlyIssuanceId = campaignResult.issuanceId;
+        }
+        if (campaignResult.redemptionKind === "milestone" && campaignResult.issuanceId) {
+          campaignLedger.milestoneIssuanceId = campaignResult.issuanceId;
+        }
+        await setLedgerCampaign(benefitsEventId, campaignLedger);
+        const MajorDraw = (await import("@/models/MajorDraw")).default;
+        const activeMdRaw = await MajorDraw.findOne({ status: "active", isActive: true }).select("_id").lean();
+        const activeMd = Array.isArray(activeMdRaw) ? null : activeMdRaw;
+        const majorDrawId = activeMd && "_id" in activeMd && activeMd._id != null ? String(activeMd._id) : undefined;
+        if (majorDrawId) {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "major",
+            drawId: majorDrawId,
+            sourceKey: "bonus-entry-promo",
+            entries: campaignResult.entriesGranted,
+          });
+        }
+      } catch (campLedgerErr) {
+        console.error("campaign ledger update failed:", campLedgerErr);
+      }
+    }
+    if (campaignResult) {
+      console.log(`✅ [CAMPAIGN] Campaign bonus entries granted via webhook:`, {
+        userId: user._id?.toString(),
+        code: campaignResult.code,
+        entriesGranted: campaignResult.entriesGranted,
+        packageType: packageData.packageType,
+      });
+    }
+  } catch (campaignError) {
+    console.error("❌ [CAMPAIGN] Campaign processing error (non-blocking):", {
+      error: campaignError instanceof Error ? campaignError.message : String(campaignError),
+      userId: user._id?.toString(),
+      campaignCode: paymentMetadata?.campaignCode,
+    });
+  }
+
   // Summary log: Total bonus entries from all sources
   const totalRegularEntries = packageData.entries;
   const totalBonusEntries = (user.accumulatedEntries || 0) - (packageData.entries || 0);
@@ -1226,8 +1355,13 @@ async function grantBenefits(
   
   if (!isRenewal) {
     // Only track new purchases to Facebook (not renewals)
-    // ✅ DEFENSIVE LOGGING: Track when Facebook tracking is called
-    const trackingId = paymentIntentId || "unknown";
+    const trackingId = paymentIntentId?.trim() || "unknown";
+    if (!paymentIntentId?.trim()) {
+      console.error(`❌ [Facebook Tracking] CAPI Purchase skipped: missing paymentIntentId`, {
+        userId: user._id.toString(),
+        packageType: packageData.packageType,
+      });
+    } else {
     console.log(`📊 [Facebook Tracking] Calling trackPixelPurchase:`, {
       paymentIntentId: trackingId,
       packageType: packageData.packageType,
@@ -1235,6 +1369,7 @@ async function grantBenefits(
       price: packageData.price,
       isRenewal: isRenewal,
       billingReason: billingReason || "N/A",
+      isResubscribe: !!isResubscribe,
     });
 
     try {
@@ -1272,7 +1407,10 @@ async function grantBenefits(
       const pixelTracked = await trackPixelPurchase({
         value: packageData.price,
         currency: "AUD",
-        orderId: paymentIntentId || `order-${Date.now()}`,
+        // Subscription path uses `invoice_${invoice.id}` for storage but the browser pixel fires
+        // with the real PaymentIntent id. `trackingOrderId` lets the webhook hand the real PI down
+        // so Meta dedups browser↔server. Falls back to paymentIntentId for one-time/upsell flows.
+        orderId: paymentMetadata?.trackingOrderId?.trim() || paymentIntentId.trim(),
         packageType: packageData.packageType,
         packageId: packageData.packageId,
         packageName: packageData.packageName,
@@ -1283,19 +1421,11 @@ async function grantBenefits(
         userLastName: user.lastName,
         userState: user.state,
         userCountry: "AU",
+        userBirthdate: user.birthdate ?? undefined,
         entriesAdded: packageData.entries,
         pointsEarned: packageData.points,
-        paymentIntentId: paymentIntentId,
-        content_type:
-          packageData.packageType === "membership"
-            ? "subscription"
-            : packageData.packageType === "one-time"
-            ? "membership_package"
-            : packageData.packageType === "mini-draw"
-            ? "mini_draw_package"
-            : packageData.packageType === "upsell"
-            ? "upsell_package"
-            : "product",
+        paymentIntentId: paymentIntentId.trim(),
+        content_type: "product",
         content_ids: packageData.packageId ? [packageData.packageId] : [],
         num_items: 1,
         requestContext: requestContext, // Pass request context for improved match quality
@@ -1304,6 +1434,7 @@ async function grantBenefits(
         // The browser Pixel still fires the matching Purchase from PaymentSuccessHandler /
         // PaymentProcessingScreen with action_source=website, and Meta dedupes them via event_id.
         actionSource: "system_generated",
+        ...(isResubscribe && { isResubscribe: true }),
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,
           variantId: experimentAssignment.variantId,
@@ -1335,6 +1466,7 @@ async function grantBenefits(
       console.error(`❌ [Facebook Tracking] Failed to track purchase ${trackingId}:`, _pixelError);
       // Don't throw - pixel tracking should not break purchase flow
     }
+    }
   } else {
     // ✅ DEFENSIVE LOGGING: Log when skipping Facebook tracking for renewal
     const trackingId = paymentIntentId || "unknown";
@@ -1351,8 +1483,15 @@ async function grantBenefits(
   if (paymentIntentId) {
     try {
       // Import commission processing functions dynamically to avoid circular dependencies
-      const { processOneTimePackageCommission, processUpsellCommission, processMembershipFirstCommission } =
-        await import("@/utils/affiliate/commission-processing");
+      const {
+        processOneTimePackageCommission,
+        processUpsellCommission,
+        processMembershipFirstCommission,
+        processMiniDrawPackageCommission,
+      } = await import("@/utils/affiliate/commission-processing");
+
+      const commissionEarnedAt =
+        paymentMetadata?.created != null ? new Date(paymentMetadata.created) : undefined;
 
       if (packageData.packageType === "one-time") {
         await processOneTimePackageCommission({
@@ -1361,6 +1500,7 @@ async function grantBenefits(
           packageName: packageData.packageName || "",
           purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
           paymentIntentId: paymentIntentId,
+          earnedAt: commissionEarnedAt,
         });
       } else if (packageData.packageType === "upsell") {
         await processUpsellCommission({
@@ -1369,17 +1509,30 @@ async function grantBenefits(
           offerName: packageData.packageName || "",
           purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
           paymentIntentId: paymentIntentId,
+          earnedAt: commissionEarnedAt,
         });
       } else if (packageData.packageType === "membership") {
-        // Get subscription ID from user
-        const subscriptionId = user.stripeSubscriptionId || "";
-        await processMembershipFirstCommission({
+        if (!affiliateOptions?.skipMembershipFirstCommission) {
+          // Get subscription ID from user
+          const subscriptionId = user.stripeSubscriptionId || "";
+          await processMembershipFirstCommission({
+            userId: user._id.toString(),
+            packageId: packageData.packageId || "",
+            packageName: packageData.packageName || "",
+            purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+            paymentIntentId: paymentIntentId,
+            subscriptionId,
+            earnedAt: commissionEarnedAt,
+          });
+        }
+      } else if (packageData.packageType === "mini-draw") {
+        await processMiniDrawPackageCommission({
           userId: user._id.toString(),
           packageId: packageData.packageId || "",
           packageName: packageData.packageName || "",
-          purchaseAmount: Math.round(packageData.price * 100), // Convert to cents
+          purchaseAmount: Math.round(packageData.price * 100),
           paymentIntentId: paymentIntentId,
-          subscriptionId,
+          earnedAt: commissionEarnedAt,
         });
       }
     } catch (_commissionError) {
@@ -1388,18 +1541,32 @@ async function grantBenefits(
     }
   }
 
-  // TEMPORARY: Auto-verify email on purchase (SMTP to SendGrid migration workaround)
-  // This should be removed once email verification is working properly
+  // Save remaining in-memory mutations (e.g. partnerDiscountQueue changes).
+  // accumulatedEntries/rewardsPoints already persisted via $inc above.
+  // Subscription core fields persisted atomically in handleSubscriptionPackage.
+  // Commission processing uses atomic updates, so no __v conflict from that path.
+  // The pre-save hook fix ensures redemptionHistory doesn't falsely dirty the array.
   try {
-    autoVerifyEmailOnPurchase(user);
-  } catch (error) {
-    // Non-blocking - don't fail purchase flow if email verification check fails
-    console.error("❌ Error in auto-verify email on purchase (non-blocking):", error);
+    await user.save();
+  } catch (saveErr: unknown) {
+    const errName = saveErr && typeof saveErr === "object" && "name" in saveErr ? (saveErr as { name: string }).name : "";
+    if (errName === "VersionError") {
+      console.warn(`[grantBenefits] VersionError on user.save() — retrying with fresh document`, {
+        userId: user._id?.toString(),
+      });
+      const freshUser = await User.findById(user._id);
+      if (freshUser) {
+        // Re-apply partnerDiscountQueue from the in-memory user
+        if (user.partnerDiscountQueue && user.partnerDiscountQueue.length > 0) {
+          freshUser.partnerDiscountQueue = user.partnerDiscountQueue;
+          freshUser.markModified("partnerDiscountQueue");
+        }
+        await freshUser.save();
+      }
+    } else {
+      throw saveErr;
+    }
   }
-
-  // Save user
-  await user.save();
-  // console.log(`💾 User ${user.email} saved with new benefits`);
 }
 
 /**
@@ -1544,8 +1711,10 @@ async function handleOneTimePackage(
 ): Promise<void> {
   if (!packageData.packageId) return;
 
+  const canonicalPackageId = normalizeMembershipPlanId(packageData.packageId);
+
   const oneTimePackage = {
-    packageId: packageData.packageId, // Already a string, no conversion needed
+    packageId: canonicalPackageId,
     purchaseDate: new Date(),
     startDate: new Date(),
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
@@ -1569,7 +1738,7 @@ async function handleOneTimePackage(
   // console.log(`📦 Added one-time package atomically: ${packageData.packageName}`);
 
   // Add to partner discount queue if package includes partner discount days
-  const packageInfo = getPackageById(packageData.packageId);
+  const packageInfo = getPackageById(canonicalPackageId);
   if (packageInfo && packageInfo.partnerDiscountDays && packageInfo.partnerDiscountDays > 0) {
     // console.log(`🎁 Adding one-time package to partner discount queue: ${packageInfo.partnerDiscountDays} days access`);
 
@@ -1583,7 +1752,7 @@ async function handleOneTimePackage(
     }
 
     await addToPartnerDiscountQueue(user as unknown as IUser, {
-      packageId: packageData.packageId,
+      packageId: canonicalPackageId,
       packageName: packageData.packageName || packageInfo.name,
       packageType: "one-time",
       discountDays: packageInfo.partnerDiscountDays,
@@ -1596,7 +1765,7 @@ async function handleOneTimePackage(
     // console.log(`✅ Partner discount queue updated and marked for save (${user.partnerDiscountQueue?.length} items)`);
 
     // Dispatch purchase event for optimistic updates
-    dispatchPackagePurchase(packageData.packageId, "one-time");
+    dispatchPackagePurchase(canonicalPackageId, "one-time");
   }
 }
 
@@ -1613,64 +1782,62 @@ async function handleSubscriptionPackage(
 ): Promise<void> {
   if (!packageData.packageId) return;
 
-  if (user.subscription) {
-    const wasActive = user.subscription.isActive;
-    const wasStatus = user.subscription.status;
+  // 🚨 CRITICAL FIX: Don't update packageId if there's a pending downgrade
+  const userSub = user.subscription as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const hasPendingDowngrade =
+    userSub?.pendingChange &&
+    userSub.pendingChange.changeType === "downgrade" &&
+    userSub.pendingChange.effectiveDate &&
+    new Date() < new Date(userSub.pendingChange.effectiveDate);
 
-    // ✅ CRITICAL: If benefits are being granted, subscription must be active
-    // This overrides any incorrect Stripe status that might still show "incomplete"
-    user.subscription.isActive = true;
-    user.subscription.status = "active";
+  // Build the atomic $set for subscription fields
+  const subscriptionSet: Record<string, unknown> = {
+    "subscription.isActive": true,
+    "subscription.status": "active",
+  };
+  if (!hasPendingDowngrade) {
+    subscriptionSet["subscription.packageId"] = packageData.packageId;
+  }
+  if (!user.subscription) {
+    subscriptionSet["subscription.startDate"] = new Date();
+    subscriptionSet["subscription.autoRenew"] = true;
+  }
 
-    // ✅ PRESERVE: lastMonthAccumulatedEntries is preserved here and only updated in webhook handler
+  // Persist subscription state atomically (bypasses pre-save hook / __v conflicts)
+  await User.findByIdAndUpdate(user._id, {
+    $set: subscriptionSet,
+    $unset: { "subscription.cancelledAt": 1 },
+  });
 
-    // 🚨 CRITICAL FIX: Don't update packageId if there's a pending downgrade
-    // This prevents scheduled downgrades from being processed immediately
-    const userSub = user.subscription as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const hasPendingDowngrade =
-      userSub.pendingChange &&
-      userSub.pendingChange.changeType === "downgrade" &&
-      userSub.pendingChange.effectiveDate &&
-      new Date() < new Date(userSub.pendingChange.effectiveDate);
-
-    if (hasPendingDowngrade) {
-      // console.log(
-      //   `🚨 SCHEDULED DOWNGRADE PROTECTION: Not updating packageId from ${user.subscription.packageId} to ${packageData.packageId} - downgrade scheduled for ${userSub.pendingChange.effectiveDate}`
-      // );
-    } else {
-      user.subscription.packageId = packageData.packageId; // Use string directly
-      // console.log(`📦 Package ID updated to: ${packageData.packageId}`);
-    }
-
-    // Log status changes for debugging
-    if (!wasActive || wasStatus !== "active") {
-      // console.log(`📊 Subscription activated during benefit processing: ${packageData.packageName}`);
-      // console.log(`📊 Status changed: ${wasStatus} → active, isActive: ${wasActive} → true`);
-    }
-  } else {
+  // Keep local object in sync for downstream code in the same request
+  if (!user.subscription) {
     user.subscription = {
-      packageId: packageData.packageId, // Use string directly
+      packageId: packageData.packageId,
       startDate: new Date(),
       isActive: true,
       autoRenew: true,
       status: "active",
     };
-    // console.log(`📊 New subscription created during benefit processing: ${packageData.packageName}`);
+  } else {
+    user.subscription.isActive = true;
+    user.subscription.status = "active";
+    user.subscription.cancelledAt = undefined;
+    if (!hasPendingDowngrade) {
+      user.subscription.packageId = packageData.packageId;
+    }
   }
 
-  // console.log(`🔄 Updated subscription: ${packageData.packageName} (isActive: true, status: active)`);
-
-  // Add subscription to partner discount queue (subscriptions always have 30 days recurring access)
+  // Add subscription to partner discount queue. Access is lifecycle-gated: the queue row's
+  // endDate tracks subscription.endDate and renews each billing cycle while isActive — there is
+  // no fixed day cap (subscription records carry partnerDiscountDays: 0 by design).
   const packageInfo = getPackageById(packageData.packageId);
-  if (packageInfo && user.subscription.endDate) {
-    // console.log(`🎁 Adding subscription to partner discount queue: 30 days recurring access`);
+  if (packageInfo && user.subscription?.endDate) {
     await handleSubscriptionQueueUpdate(user as unknown as IUser, "start", {
       packageId: packageData.packageId,
       packageName: packageData.packageName || packageInfo.name,
-      endDate: user.subscription.endDate,
+      endDate: user.subscription!.endDate,
     });
 
-    // Dispatch purchase event for optimistic updates
     dispatchPackagePurchase(packageData.packageId, "membership");
   }
 }
@@ -1709,9 +1876,44 @@ async function handleUpsellPackage(
   // ✅ IMPORTANT: Don't push to local user object - we're using atomic operations
   // console.log(`🛒 Added upsell purchase atomically: ${packageData.packageName}`);
 
-  // Note: Upsells typically don't include partner discount access in current implementation
-  // If they do in the future, add logic here similar to one-time packages
-  void paymentIntentId; // Reserved for future use when upsells include partner access
+  // Grant partner discount window for all upsell categories. The window's % comes from the
+  // upsell record's `baseTemplatePackageId` (handled at display time by
+  // getPartnerCatalogAccessPercentForPlanId); duration comes from the upsell record itself.
+  // For mini upsells we also pull hour-granularity from the MiniDrawPackage upsell sub-field.
+  if (paymentIntentId) {
+    const upsellPkg = getUpsellPackageById(packageData.packageId);
+    if (upsellPkg) {
+      const days = upsellPkg.partnerDiscountDays ?? 0;
+
+      // Mini upsells: derive hour granularity from the MiniDrawPackage upsell sub-field if available
+      // (Mini Pack 1–3 use sub-day windows: 1h / 6h / 12h).
+      let hours = days * 24;
+      if (upsellPkg.upsellCategory === "mini") {
+        const miniBase = getMiniDrawPackageById(upsellPkg.baseTemplatePackageId);
+        const miniUpsellDef = miniBase?.upsell;
+        if (miniUpsellDef && miniUpsellDef.partnerDiscountHours > 0) {
+          hours = miniUpsellDef.partnerDiscountHours;
+        }
+      }
+
+      if (days > 0 || hours > 0) {
+        if (!user.partnerDiscountQueue) {
+          user.partnerDiscountQueue = [];
+          user.markModified("partnerDiscountQueue");
+        }
+        await addToPartnerDiscountQueue(user as unknown as IUser, {
+          packageId: packageData.packageId,
+          packageName: upsellPkg.name,
+          packageType: "upsell",
+          discountDays: days,
+          discountHours: hours,
+          stripePaymentIntentId: paymentIntentId,
+        });
+        user.markModified("partnerDiscountQueue");
+        dispatchPackagePurchase(packageData.packageId, "upsell");
+      }
+    }
+  }
 }
 
 /**
@@ -1812,7 +2014,9 @@ async function addToMajorDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
   paymentMetadata?: PaymentMetadata,
-  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
+  sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
+  majorDrawRoutingMode: "renewal" | "new_purchase" = "new_purchase",
+  benefitsEventId?: string
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -1824,19 +2028,22 @@ async function addToMajorDraw(
     // });
 
     // Import helper function dynamically to avoid circular dependencies
-    const { getTargetMajorDraw } = await import("../draws/major-draw-helpers");
+    const { getTargetMajorDraw, getActiveMajorDrawForNewEntryPurchases } = await import(
+      "../draws/major-draw-helpers"
+    );
 
-    // Get target major draw (handles freeze period, gap period, etc.)
-    const majorDrawResult = await getTargetMajorDraw(paymentMetadata);
+    const majorDrawResult =
+      majorDrawRoutingMode === "renewal"
+        ? await getTargetMajorDraw(paymentMetadata)
+        : await getActiveMajorDrawForNewEntryPurchases();
 
     if (!majorDrawResult) {
-      // console.error(`❌ No valid major draw found - skipping major draw entry allocation`);
-      // console.error(`❌ addToMajorDraw context:`, {
-      //   userId: user._id.toString(),
-      //   packageData,
-      //   paymentMetadata,
-      // });
-      return;
+      console.error(`❌ addToMajorDraw: no active major draw for new purchase allocation`, {
+        userId: user._id.toString(),
+        packageData,
+        majorDrawRoutingMode,
+      });
+      throw new Error("GATES_CLOSED: No active major draw for entry allocation");
     }
 
     // Type the major draw properly
@@ -1850,7 +2057,13 @@ async function addToMajorDraw(
 
     // ✅ OPTION 1: Determine source type for major draw entries (single source of truth)
     // Use override if provided (for bonus entries), otherwise determine from package type
-    let sourceType: "membership" | "one-time-package" | "upsell" | "mini-draw" | "bonus-entry-promo";
+    let sourceType:
+      | "membership"
+      | "one-time-package"
+      | "upsell"
+      | "mini-draw"
+      | "bonus-entry-promo"
+      | "promo-link";
     if (sourceTypeOverride) {
       sourceType = sourceTypeOverride as typeof sourceType;
     } else {
@@ -1883,18 +2096,13 @@ async function addToMajorDraw(
       // Each payment gets its own entry in the major draw
 
       // Create new user entry atomically
-      const entriesBySource: {
-        membership?: number;
-        "one-time-package"?: number;
-        upsell?: number;
-        "mini-draw"?: number;
-        "bonus-entry-promo"?: number;
-      } = {
+      const entriesBySource: Record<string, number> = {
         membership: 0,
         "one-time-package": 0,
         upsell: 0,
         "mini-draw": 0,
         "bonus-entry-promo": 0,
+        "promo-link": 0,
       };
       entriesBySource[sourceType] = packageData.entries;
 
@@ -1975,6 +2183,19 @@ async function addToMajorDraw(
           totalEntriesInDraw: totalEntries,
         })
       );
+
+      if (benefitsEventId) {
+        try {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "major",
+            drawId: String(majorDraw._id),
+            sourceKey: sourceType,
+            entries: packageData.entries,
+          });
+        } catch (ledgerErr) {
+          console.error("pushDrawGrant (major) failed:", ledgerErr);
+        }
+      }
     } else {
       // console.log(`🎯 No entries to add to major draw (package has 0 entries)`);
     }
@@ -2020,7 +2241,8 @@ async function addToMiniDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
   paymentMetadata?: PaymentMetadata,
-  sourceTypeOverride?: string // Optional override for source type (e.g., "bonus-entry-promo")
+  sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
+  benefitsEventId?: string
 ): Promise<void> {
   try {
     // ✅ DEBUG: Log function call with all parameters
@@ -2081,16 +2303,14 @@ async function addToMiniDraw(
 
       // Create new user entry atomically
       // Use override source type if provided (for bonus entries), otherwise use "mini-draw-package"
-      const sourceType: "mini-draw-package" | "free-entry" | "bonus-entry-promo" =
-        (sourceTypeOverride as "mini-draw-package" | "free-entry" | "bonus-entry-promo") || "mini-draw-package";
-      const entriesBySource: {
-        "mini-draw-package"?: number;
-        "free-entry"?: number;
-        "bonus-entry-promo"?: number;
-      } = {
+      const sourceType: "mini-draw-package" | "free-entry" | "bonus-entry-promo" | "promo-link" =
+        (sourceTypeOverride as "mini-draw-package" | "free-entry" | "bonus-entry-promo" | "promo-link") ||
+        "mini-draw-package";
+      const entriesBySource: Record<string, number> = {
         "mini-draw-package": 0,
         "free-entry": 0,
         "bonus-entry-promo": 0,
+        "promo-link": 0,
       };
       entriesBySource[sourceType] = packageData.entries;
 
@@ -2163,6 +2383,7 @@ async function addToMiniDraw(
         // console.log(
         //   `🎲 Minimum entries reached (${totalEntries} >= ${updatedMiniDraw.minimumEntries}). Auto-closing mini draw...`
         // );
+        const nowForClose = new Date();
         await MiniDraw.updateOne(
           { _id: miniDraw._id },
           {
@@ -2170,11 +2391,37 @@ async function addToMiniDraw(
               status: "completed",
               isActive: false,
               configurationLocked: true,
-              lockedAt: new Date(),
+              lockedAt: nowForClose,
             },
           }
         );
         // console.log(`✅ Mini draw "${miniDraw.name}" automatically closed due to reaching minimum entries`);
+
+        // Send 100% capacity notification email (idempotent - only once per draw)
+        const { sendMiniDrawFullCapacityNotification } = await import("@/lib/email/");
+        const beforeNotify = await MiniDraw.findOneAndUpdate(
+          { _id: miniDraw._id, fullCapacityNotificationSentAt: { $exists: false } },
+          { $set: { fullCapacityNotificationSentAt: nowForClose } },
+          { new: false }
+        );
+        if (beforeNotify) {
+          const result = await sendMiniDrawFullCapacityNotification({
+            miniDrawName: updatedMiniDraw.name,
+            prizeName: updatedMiniDraw.prize?.name ?? "Prize",
+            totalEntries,
+            minimumEntries: updatedMiniDraw.minimumEntries,
+          });
+          if (!result.success) {
+            console.error(
+              `❌ Failed to send mini draw 100% notification for "${updatedMiniDraw.name}":`,
+              result.error
+            );
+            await MiniDraw.updateOne(
+              { _id: miniDraw._id },
+              { $unset: { fullCapacityNotificationSentAt: "" } }
+            );
+          }
+        }
       }
 
       // ✅ Update User.miniDrawParticipation array
@@ -2225,6 +2472,19 @@ async function addToMiniDraw(
             }
           );
           // console.log(`🎲 Created new user mini draw participation for ${miniDraw.name}`);
+        }
+      }
+
+      if (benefitsEventId) {
+        try {
+          await pushDrawGrant(benefitsEventId, {
+            kind: "mini",
+            drawId: String(miniDraw._id),
+            sourceKey: sourceType,
+            entries: packageData.entries,
+          });
+        } catch (ledgerErr) {
+          console.error("pushDrawGrant (mini) failed:", ledgerErr);
         }
       }
 

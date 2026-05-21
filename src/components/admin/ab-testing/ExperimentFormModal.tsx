@@ -154,8 +154,6 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} size="2xl">
       <ModalHeader
@@ -228,7 +226,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
 
               {!selectAll && (
                 <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Select specific pages:</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Select specific pages:</p>
                   {prizes.map((prize) => (
                     <Checkbox
                       key={prize.slug}
@@ -255,7 +253,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
           {/* Date Range */}
           <FormSection title="Schedule (Optional)" icon={Calendar}>
             <div className="space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 Optionally set start and end dates for the experiment. Leave empty to run indefinitely.
               </p>
               <DateRangeCalendar
@@ -293,7 +291,7 @@ export default function ExperimentFormModal({ isOpen, onClose, onSuccess }: Expe
           {/* Stopping Rules */}
           <FormSection title="Stopping Rules (Optional)" icon={Settings}>
             <div className="space-y-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-neutral-400">
                 Configure automatic stopping rules to end the experiment when certain conditions are met.
               </p>
 

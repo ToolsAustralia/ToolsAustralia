@@ -10,6 +10,7 @@ export type OneTimePackageSlot =
   | "foreman-pack"
   | "boss-pack"
   | "power-pack"
+  | "vip-pack"
   | "black-pack"
   | "mint-pack"
   | "cash-prize";
@@ -20,7 +21,8 @@ export type MembershipPackageSlot =
   | "tradie-pack"
   | "foreman-pack"
   | "boss-pack"
-  | "power-pack";
+  | "power-pack"
+  | "vip-pack";
 
 /**
  * Variant Configuration Interface
@@ -42,7 +44,8 @@ export interface VariantConfig {
     };
   };
   banner?: {
-    badgeText?: string; // Override badge text (default: BONUS ENTRIES)
+    /** Override promo banner left image (full URL, e.g. Cloudinary) */
+    leftImageUrl?: string;
     multiplier?: number; // Override multiplier display (2x, 3x, 5x, 10x)
     showCountdown?: boolean; // Toggle countdown visibility
     countdownMode?: CountdownMode;
@@ -61,6 +64,13 @@ export interface VariantConfig {
   packageColors?: {
     oneTime?: Partial<Record<OneTimePackageSlot, COLOR_KEYS>>;
     membership?: Partial<Record<MembershipPackageSlot, COLOR_KEYS>>;
+  };
+  /**
+   * A/B test: when forceLight is true, the membership section renders in light
+   * mode regardless of the global dark-mode schedule/toggle.
+   */
+  membershipTheme?: {
+    forceLight?: boolean;
   };
 }
 
@@ -114,7 +124,7 @@ const VariantSchema = new Schema<IVariant>(
 );
 
 // Indexes
-VariantSchema.index({ experimentId: 1 });
+// Note: experimentId_1 removed - redundant with compound index experimentId_1_isControl_1
 VariantSchema.index({ isControl: 1 });
 VariantSchema.index({ experimentId: 1, isControl: 1 });
 

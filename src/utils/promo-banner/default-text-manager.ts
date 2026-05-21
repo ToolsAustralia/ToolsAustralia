@@ -2,7 +2,7 @@
  * Default Text Manager Utility
  *
  * Manages alternating default texts when no scheduled text is active.
- * Intentionally uses "BONUS ENTRIES" for both slots (replaced former "FIRST 500 PEOPLE").
+ * Uses "FIRST 100 PEOPLE" as the default (split-test winner).
  * Uses date-based deterministic seed to ensure consistency across all users.
  * All users will see the same text on the same day (AEST).
  */
@@ -12,13 +12,13 @@ import { formatInTimeZone } from "date-fns-tz";
 // AEST/AEDT timezone identifier (matches timezone.ts)
 const AEST_TIMEZONE = "Australia/Sydney";
 
-/** Intentionally both "BONUS ENTRIES" (was "FIRST 500 PEOPLE" | "BONUS ENTRIES" before). */
-const DEFAULT_TEXTS = ["BONUS ENTRIES", "BONUS ENTRIES"];
+/** Default badge text (split-test winner). */
+const DEFAULT_TEXTS = ["FIRST 100 PEOPLE", "FIRST 100 PEOPLE"];
 
 /**
  * Get the alternating default text for the current day (AEST)
  * Uses day-of-year as deterministic seed - all users see the same text on the same day
- * Both slots are "BONUS ENTRIES" (intentional; was "FIRST 500 PEOPLE" | "BONUS ENTRIES")
+ * Both slots are "FIRST 100 PEOPLE" (split-test winner)
  * 
  * Algorithm: Uses day-of-year (1-365/366) for guaranteed alternation
  * - Calculates the day number within the year (Jan 1 = day 1, Dec 31 = day 365/366)
@@ -63,8 +63,8 @@ export function getAlternatingDefaultText(): string {
     
     // Use day-of-year modulo 2 to determine index (0 or 1)
     // This guarantees alternation: day 31 → index 0, day 32 → index 1
-    // Example: Jan 31 = day 31 → (31-1) % 2 = 0 → "BONUS ENTRIES"
-    //          Feb 1 = day 32 → (32-1) % 2 = 1 → "BONUS ENTRIES"
+    // Example: Jan 31 = day 31 → (31-1) % 2 = 0 → "FIRST 100 PEOPLE"
+    //          Feb 1 = day 32 → (32-1) % 2 = 1 → "FIRST 100 PEOPLE"
     const index = (dayOfYear - 1) % 2;
     
     return DEFAULT_TEXTS[index];

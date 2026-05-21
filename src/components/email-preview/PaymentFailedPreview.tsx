@@ -71,7 +71,7 @@ const PaymentFailedPreview: React.FC = () => {
   <div class="wrapper">
     <div class="card">
       <div class="header">
-        <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.png" alt="Tools Australia Logo" class="header-logo" />
+        <img src="https://toolsaustralia.com.au/images/Tools%20Australia%20Logo/White-Text%20Logo.webp" alt="Tools Australia Logo" class="header-logo" />
         <h1>Payment Failed</h1>
         <p>We couldn't process your payment</p>
       </div>
@@ -162,13 +162,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            PLACEHOLDER_ENTRIES_COUNT entries
+            PLACEHOLDER_ENTRIES_COUNT free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -223,13 +223,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            550 entries
+            550 free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -284,13 +284,13 @@ const PaymentFailedPreview: React.FC = () => {
       entries_section: `
         <div style="text-align: center; margin: 24px 0;">
           <div style="font-size: 14px; font-weight: 700; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            Entries You Should Receive
+            Free Entries You Should Receive
           </div>
           <div style="font-size: 32px; font-weight: 800; color: #1e40af; margin: 12px 0;">
-            2,200 entries
+            2,200 free entries
           </div>
           <div style="font-size: 13px; color: #4b5563; line-height: 1.6; margin-top: 8px;">
-            These entries will be added to your account once your payment succeeds. Update your payment method to receive them.
+            These free entries will be added to your account once your payment succeeds. Update your payment method to receive them.
           </div>
         </div>
       `,
@@ -370,14 +370,14 @@ const PaymentFailedPreview: React.FC = () => {
     <div className="space-y-6">
       {/* Scenario Selector */}
       <div className="rounded-lg bg-white p-4 shadow-sm">
-        <label htmlFor="scenario-select" className="mb-2 block text-sm font-semibold text-gray-700">
+        <label htmlFor="scenario-select" className="mb-2 block text-sm font-semibold text-gray-700 dark:text-neutral-200">
           Select Failure Scenario:
         </label>
         <select
           id="scenario-select"
           value={selectedScenario}
           onChange={(e) => setSelectedScenario(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {Object.entries(scenarioLabels).map(([value, label]) => (
             <option key={value} value={value}>
@@ -393,7 +393,7 @@ const PaymentFailedPreview: React.FC = () => {
       {/* Email Preview */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-800">{scenarioLabels[selectedScenario]}</h3>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-neutral-100">{scenarioLabels[selectedScenario]}</h3>
           <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-800">Payment Failed</span>
         </div>
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -415,7 +415,7 @@ const PaymentFailedPreview: React.FC = () => {
           <li>Failure Message: {currentScenario.failure_message}</li>
           <li>Amount: A${currentScenario.amount}</li>
           <li>Payment Intent ID: {currentScenario.payment_intent_id}</li>
-          <li>Expected Entries: {formatNumber(currentScenario.entries)} entries</li>
+          <li>Expected Entries: {formatNumber(currentScenario.entries)} free entries</li>
           <li>
             Next Payment Retry:{" "}
             {currentScenario.next_payment_attempt

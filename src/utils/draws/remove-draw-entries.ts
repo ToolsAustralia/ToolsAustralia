@@ -13,53 +13,102 @@ import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
 
 /**
- * Source types for major draw entries
+ * Source types for major draw entries.
+ * Must match the keys declared in MajorDraw schema `entries.entriesBySource`.
  */
-type MajorDrawSourceType = "membership" | "one-time-package" | "upsell" | "mini-draw";
+type MajorDrawSourceType =
+  | "membership"
+  | "one-time-package"
+  | "upsell"
+  | "mini-draw"
+  | "bonus-entry-promo"
+  | "promo-link"
+  | "cancellation-upsell";
 
 /**
  * Source types for mini draw entries
  */
-type MiniDrawSourceType = "mini-draw-package" | "upsell" | "free-entry";
+type MiniDrawSourceType = "mini-draw-package" | "upsell" | "free-entry" | "bonus-entry-promo" | "promo-link";
 
 /**
- * Remove entries from Major Draw for a specific user
- * 
+ * Remove entries from Major Draw for a specific user.
+ *
+ * **Always pass `drawId` when the caller knows which draw the entries came from**
+ * (e.g. ledger-based refund reversal — `data.grants.drawGrants[].drawId`). When
+ * `drawId` is omitted, the function falls back to walking every draw that
+ * contains an entry for this user and depleting `sourceType` entries from the
+ * oldest forward. That fallback was the root cause of the "refund stole entries
+ * from a previous draw" corruption — only use it when the ledger has no drawId.
+ *
  * @param userId - User ID whose entries should be removed
  * @param entriesToRemove - Number of entries to remove
  * @param sourceType - Source type of the entries being removed
+ * @param drawId - (optional, strongly recommended) Specific major draw to remove from.
+ *                 When provided, only this draw is touched; other draws are left alone.
  * @returns Success status
  */
 export async function removeMajorDrawEntries(
   userId: string,
   entriesToRemove: number,
-  sourceType: MajorDrawSourceType
+  sourceType: MajorDrawSourceType,
+  drawId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  // console.log(`🎯 removeMajorDrawEntries called:`, {
-  //   userId,
-  //   entriesToRemove,
-  //   sourceType,
-  // });
+  console.log(`[refund-reversal] removeMajorDrawEntries called`, {
+    userId,
+    entriesToRemove,
+    sourceType,
+    drawId: drawId ?? null,
+    scoped: Boolean(drawId),
+  });
 
   try {
     await connectDB();
 
     if (entriesToRemove <= 0) {
-      // console.log(`⚠️ No entries to remove (${entriesToRemove})`);
+      console.log(`[refund-reversal] no-op: entriesToRemove=${entriesToRemove}`, { userId, sourceType });
       return { success: true };
     }
 
-    // Find all major draws that have entries for this user
-    const majorDraws = await MajorDraw.find({
-      "entries.userId": new mongoose.Types.ObjectId(userId),
-    });
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    // Build the draw selector. If drawId is supplied (the safe path used by the
+    // ledger-based refund flow), only that draw is considered. Otherwise fall
+    // back to "any draw containing this user" — the legacy multi-draw walk that
+    // exists only for refunds whose original BenefitsGranted event predated the
+    // drawGrants ledger.
+    let drawFilter: Record<string, unknown>;
+    if (drawId) {
+      if (!mongoose.Types.ObjectId.isValid(drawId)) {
+        console.error(`[refund-reversal] invalid drawId`, { userId, drawId });
+        return { success: false, error: "Invalid drawId" };
+      }
+      drawFilter = {
+        _id: new mongoose.Types.ObjectId(drawId),
+        "entries.userId": userObjectId,
+      };
+    } else {
+      drawFilter = { "entries.userId": userObjectId };
+    }
+
+    const majorDraws = await MajorDraw.find(drawFilter);
 
     if (majorDraws.length === 0) {
-      // console.log(`⚠️ No major draws found with entries for user ${userId}`);
+      console.log(`[refund-reversal] no candidate draws`, { userId, sourceType, drawId: drawId ?? null });
       return { success: true };
     }
 
-    // Process each major draw
+    if (!drawId && majorDraws.length > 1) {
+      // This branch is the historical danger zone — flag it loudly so any
+      // surviving caller without a drawId can be audited.
+      console.error(
+        `[refund-reversal] WARNING: legacy multi-draw walk active (no drawId). ` +
+          `Found ${majorDraws.length} draws containing this user; entries will be ` +
+          `consumed from the oldest forward and may decrement an unrelated draw.`,
+        { userId, sourceType, drawIds: majorDraws.map((d) => d._id.toString()) }
+      );
+    }
+
+    // Process each candidate draw (scoped path: exactly 1; legacy path: many).
     for (const majorDraw of majorDraws) {
       const userEntry = majorDraw.entries.find(
         (entry: { userId: mongoose.Types.ObjectId; totalEntries?: number }) =>
@@ -75,77 +124,73 @@ export async function removeMajorDrawEntries(
       const entriesToRemoveFromDraw = Math.min(entriesToRemove, entriesFromSource);
 
       if (entriesToRemoveFromDraw <= 0) {
-        continue; // No entries of this source type in this draw
+        console.log(`[refund-reversal] skip draw — no ${sourceType} entries to remove`, {
+          userId,
+          drawId: majorDraw._id.toString(),
+          drawName: majorDraw.name,
+          sourceType,
+          entriesFromSource,
+        });
+        continue;
       }
 
-      // console.log(`🎯 Removing ${entriesToRemoveFromDraw} entries from ${majorDraw.name} (source: ${sourceType})`);
-
-      // Check if draw is frozen or completed
-      // Policy decision: We'll still allow removal even if frozen/completed
-      // This is for refund processing which should reverse benefits regardless
-      if (majorDraw.status === "frozen" || majorDraw.status === "completed") {
-        // console.log(`⚠️ Draw ${majorDraw.name} is ${majorDraw.status} - proceeding with removal anyway for refund`);
-      }
-
-      // Update the user's entry in this draw atomically
-      const _remainingEntriesFromSource = entriesFromSource - entriesToRemoveFromDraw;
+      // Policy: still allow removal even when the draw is frozen/completed.
+      // Refunds must reverse benefits regardless of draw lifecycle state.
       const newTotalEntries = userEntry.totalEntries - entriesToRemoveFromDraw;
 
       if (newTotalEntries <= 0) {
-        // Remove the entire entry if no entries remain
         await MajorDraw.updateOne(
           { _id: majorDraw._id },
-          {
-            $pull: {
-              entries: {
-                userId: new mongoose.Types.ObjectId(userId),
-              },
-            },
-          }
+          { $pull: { entries: { userId: userObjectId } } }
         );
-        // console.log(`✅ Removed entire user entry from ${majorDraw.name}`);
+        console.log(`[refund-reversal] removed entire user entry`, {
+          userId,
+          drawId: majorDraw._id.toString(),
+          drawName: majorDraw.name,
+          removedFromSource: entriesToRemoveFromDraw,
+          sourceType,
+        });
       } else {
-        // Update the entry with reduced counts
         await MajorDraw.updateOne(
-          {
-            _id: majorDraw._id,
-            "entries.userId": new mongoose.Types.ObjectId(userId),
-          },
+          { _id: majorDraw._id, "entries.userId": userObjectId },
           {
             $inc: {
               "entries.$.totalEntries": -entriesToRemoveFromDraw,
               [`entries.$.entriesBySource.${sourceType}`]: -entriesToRemoveFromDraw,
             },
-            $set: {
-              "entries.$.lastUpdatedDate": new Date(),
-            },
+            $set: { "entries.$.lastUpdatedDate": new Date() },
           }
         );
-        // console.log(`✅ Updated user entry in ${majorDraw.name}: removed ${entriesToRemoveFromDraw} ${sourceType} entries`);
+        console.log(`[refund-reversal] decremented user entry`, {
+          userId,
+          drawId: majorDraw._id.toString(),
+          drawName: majorDraw.name,
+          removedFromSource: entriesToRemoveFromDraw,
+          sourceType,
+          newTotalEntries,
+        });
       }
 
-      // Update totalEntries for the draw
+      // Recompute draw.totalEntries since updateOne bypasses pre-save middleware.
       const updatedDraw = await MajorDraw.findById(majorDraw._id);
       if (updatedDraw) {
         const totalEntries = (updatedDraw.entries as Array<{ totalEntries: number }>).reduce(
           (sum, entry) => sum + entry.totalEntries,
           0
         );
-        await MajorDraw.updateOne(
-          { _id: majorDraw._id },
-          { $set: { totalEntries } }
-        );
-        // console.log(`✅ Updated total entries for ${majorDraw.name}: ${totalEntries}`);
+        await MajorDraw.updateOne({ _id: majorDraw._id }, { $set: { totalEntries } });
       }
 
-      // Reduce remaining entries to remove
       entriesToRemove -= entriesToRemoveFromDraw;
-      if (entriesToRemove <= 0) {
-        break; // All entries removed
-      }
+      if (entriesToRemove <= 0) break;
     }
 
-    // console.log(`✅ Successfully removed major draw entries for user ${userId}`);
+    if (entriesToRemove > 0) {
+      console.error(
+        `[refund-reversal] FAILED to fully remove entries — ${entriesToRemove} remaining after walking all candidate draws`,
+        { userId, sourceType, drawId: drawId ?? null }
+      );
+    }
     return { success: true };
   } catch (error) {
     console.error(`❌ ERROR in removeMajorDrawEntries:`, error);

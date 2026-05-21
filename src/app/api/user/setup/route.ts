@@ -19,10 +19,22 @@ const passwordOnlySchema = z.object({
   savePasswordOnly: z.literal(true),
 });
 
-// Validation schema for state/profession-only save
+// Validation schema for state/profession/birthdate save (step 2)
+const birthdateSchema = z
+  .string()
+  .min(1, "Birthdate is required")
+  .refine(
+    (val) => {
+      const d = new Date(val);
+      return !isNaN(d.getTime()) && d.getTime() <= Date.now();
+    },
+    "Birthdate cannot be in the future"
+  );
+
 const stateProfessionOnlySchema = z.object({
   state: z.string().min(1, "State is required"),
   profession: z.string().min(1, "Profession is required").max(100, "Profession cannot exceed 100 characters"),
+  birthdate: birthdateSchema,
   saveStateProfessionOnly: z.literal(true),
 });
 
@@ -52,8 +64,8 @@ export async function POST(request: NextRequest) {
 
     // Check if this is email verification only (user already has password and state)
     if (body.completeSetupOnly) {
-      // User is just completing email verification - they already have password and state
-      if (!user.password || !user.state) {
+      // User is just completing email verification - they already have password, state, profession, and birthdate
+      if (!user.password || !user.state || !user.profession || !user.birthdate) {
         return NextResponse.json({ error: "User must complete full setup first" }, { status: 400 });
       }
 
@@ -89,7 +101,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid input", details: validationResult.error.issues }, { status: 400 });
       }
 
-      const { state, profession } = validationResult.data;
+      const { state, profession, birthdate } = validationResult.data;
 
       // Validate state code
       const validStates = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
@@ -106,12 +118,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Profession cannot exceed 100 characters" }, { status: 400 });
       }
 
-      // Update only state and profession - don't set profileSetupCompleted
+      // Update state, profession, and birthdate - don't set profileSetupCompleted
       user.state = state.toUpperCase();
       user.profession = trimmedProfession;
+      user.birthdate = new Date(birthdate);
       await user.save();
 
-      console.log(`✅ User state and profession saved for: ${user.email}`);
+      console.log(`✅ User state, profession, and birthdate saved for: ${user.email}`);
     } else {
       // Full setup flow - validate password and state (fallback for backwards compatibility)
       const validationResult = setupSchema.safeParse(body);

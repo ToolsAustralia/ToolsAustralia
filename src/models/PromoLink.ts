@@ -7,19 +7,25 @@ import mongoose, { Document, Schema } from "mongoose";
  * when users make purchases. Similar to affiliate/referral codes but for bonus entries.
  *
  * Features:
- * - Auto-generated unique codes (format: BONUS + 6 alphanumeric)
+ * - Auto-generated or admin-defined unique codes
  * - Expiration dates (optional)
  * - One-time use per user (tracked in usedBy array)
  * - Fixed bonus entries amount (default: 100)
  * - Package type selection (membership and/or one-time packages)
  */
 export interface IPromoLink extends Document {
-  code: string; // Unique promo code (e.g., "BONUS1A2B3C")
+  code: string; // Unique promo code (e.g., "BONUS1A2B3C" or "COMEBACK-2026")
   bonusEntries: number; // Number of bonus entries to grant (default: 100)
   expiresAt?: Date; // Optional expiration date
   isActive: boolean; // Whether the promo link is active
   appliesToMembership: boolean; // Whether this promo applies to membership/subscription packages
   appliesToOneTime: boolean; // Whether this promo applies to one-time packages
+  campaignType: "general" | "cancelled-membership-comeback"; // Campaign intent
+  eligibilityAudience: "all" | "cancelled-members"; // Audience gating
+  eligibilityRules?: {
+    requireInactiveSubscription?: boolean;
+    cancelledWithinDays?: number;
+  };
   description?: string; // Optional admin notes
   createdBy: mongoose.Types.ObjectId; // Admin who created it
   usageCount: number; // Total number of times this code has been used
@@ -40,7 +46,10 @@ const PromoLinkSchema = new Schema<IPromoLink>(
       unique: true,
       uppercase: true,
       trim: true,
-      match: [/^BONUS[A-Z0-9]{6}$/, "Promo code must be in format BONUS followed by 6 alphanumeric characters"],
+      match: [
+        /^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/,
+        "Promo code must be 6-32 chars and contain only A-Z, 0-9, and optional hyphen separators",
+      ],
     },
     bonusEntries: {
       type: Number,
@@ -63,6 +72,29 @@ const PromoLinkSchema = new Schema<IPromoLink>(
     appliesToOneTime: {
       type: Boolean,
       default: false,
+    },
+    campaignType: {
+      type: String,
+      enum: ["general", "cancelled-membership-comeback"],
+      default: "general",
+      required: [true, "Campaign type is required"],
+    },
+    eligibilityAudience: {
+      type: String,
+      enum: ["all", "cancelled-members"],
+      default: "all",
+      required: [true, "Eligibility audience is required"],
+    },
+    eligibilityRules: {
+      requireInactiveSubscription: {
+        type: Boolean,
+        default: false,
+      },
+      cancelledWithinDays: {
+        type: Number,
+        required: false,
+        min: [1, "cancelledWithinDays must be at least 1"],
+      },
     },
     description: {
       type: String,
@@ -96,6 +128,7 @@ const PromoLinkSchema = new Schema<IPromoLink>(
 // PromoLinkSchema.index({ code: 1 }, { unique: true }); // REMOVED - duplicate of unique: true in field definition
 PromoLinkSchema.index({ isActive: 1, expiresAt: 1 }); // For finding active, non-expired links
 PromoLinkSchema.index({ createdBy: 1 }); // For admin queries
+PromoLinkSchema.index({ campaignType: 1, eligibilityAudience: 1, isActive: 1 }); // For campaign filtering
 
 // Validation: At least one package type must be selected when active
 PromoLinkSchema.pre("save", function (next) {

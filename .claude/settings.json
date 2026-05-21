@@ -1,0 +1,93 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node .claude/hooks/no-auto-commit.mjs)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(node -e ' *)",
+      "Bash(cmd /c \"echo %TEMP%\")",
+      "Bash(cmd /c \"dir C:\\\\tmp 2>nul || echo NO_C_TMP\")",
+      "PowerShell($env:TEMP)",
+      "Bash(cygpath -w /tmp)",
+      "Bash(node .claude/hooks/doc-sync.mjs)",
+      "Bash(echo \"src/services/subscription/test-fake.ts\")",
+      "Bash(git add *)",
+      "Bash(git diff *)",
+      "Bash(node --input-type=module)",
+      "Bash(echo \"src/services/subscription/test-fake-doc-sync.ts\")",
+      "Bash(mkdir -p src/services/subscription)",
+      "Bash(echo \"// test fake content for hook smoke test\")",
+      "Bash(git restore *)",
+      "Bash(git rm *)",
+      "Bash(git check-ignore *)",
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit",
+      "Bash(npm install)",
+      "Bash(npm install *)",
+      "Bash(npm i)",
+      "Bash(npm i *)",
+      "Bash(npm ci)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint *)",
+      "Bash(npm run lint:fix)",
+      "Bash(npm run lint:fix *)",
+      "Bash(npx eslint *)",
+      "Bash(cd * && npm run lint)",
+      "Bash(cd * && npm run lint *)",
+      "Bash(cd * && npm run lint:fix)",
+      "Bash(cd * && npx eslint *)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npm run test)",
+      "Bash(npm run test *)",
+      "Bash(npm run test:*)",
+      "Bash(cd * && npm test)",
+      "Bash(cd * && npm test *)",
+      "Bash(cd * && npm run test)",
+      "Bash(cd * && npm run test *)",
+      "Bash(cd * && npm run test:*)",
+      "Bash(npm run type-check)",
+      "Bash(cd * && npm run type-check)"
+    ],
+    "additionalDirectories": [
+      "C:\\Codes\\ToolsAustralia\\.claude",
+      "\\tmp",
+      "c:\\Codes\\ToolsAustralia\\.claude"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/touched-files-track.mjs"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/no-auto-commit.mjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/doc-sync.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

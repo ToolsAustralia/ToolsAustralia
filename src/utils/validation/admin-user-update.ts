@@ -31,11 +31,25 @@ const basicInfoSchema = z
       )
       .optional(),
     profession: z.string().max(100, "Profession cannot exceed 100 characters").optional().or(z.literal("")),
+    birthdate: z
+      .string()
+      .optional()
+      .superRefine((val, ctx) => {
+        if (val === undefined) return;
+        if (val.trim() === "") return;
+        const d = new Date(val);
+        if (Number.isNaN(d.getTime())) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid birthdate" });
+        } else if (d.getTime() > Date.now()) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Birthdate cannot be in the future" });
+        }
+      }),
     role: z.enum(["user", "admin"]).optional(),
     isActive: z.boolean().optional(),
     isEmailVerified: z.boolean().optional(),
     isMobileVerified: z.boolean().optional(),
     profileSetupCompleted: z.boolean().optional(),
+    acceptsPromotionalEmail: z.boolean().optional(),
   })
   .strict()
   .partial();

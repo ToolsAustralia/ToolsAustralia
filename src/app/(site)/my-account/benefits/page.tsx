@@ -11,8 +11,14 @@ import PartnerDiscountQueue from "@/components/features/PartnerDiscountQueue";
 import UnlockDiscounts from "@/components/sections/promo/UnlockDiscounts";
 import { hasActivePartnerDiscountAccess } from "@/utils/membership/benefit-resolution";
 import { derivePlanIdFromPackage, getLandingPageThemeFromPlanId } from "@/utils/package-colors/packageColorScheme";
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import nextDynamic from "next/dynamic";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
-import MembershipModal from "@/components/modals/MembershipModal";
+
+// Lazy-loaded: MembershipModal bundles Stripe + payment forms.
+const MembershipModal = nextDynamic(() => import("@/components/modals/MembershipModal"), {
+  ssr: false,
+});
 
 // Mark page as dynamic to prevent static generation issues
 export const dynamic = "force-dynamic";
@@ -38,7 +44,7 @@ function PartnerBenefitsContent() {
     return (
       <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
         <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-600 font-medium">Loading your benefits...</p>
+        <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
       </div>
     );
   }
@@ -47,7 +53,7 @@ function PartnerBenefitsContent() {
     return (
       <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50 px-4 text-center">
         <p className="text-2xl font-semibold text-gray-900">We couldn&apos;t load your benefits.</p>
-        <p className="text-gray-600">{error instanceof Error ? error.message : "Please try again shortly."}</p>
+        <p className="text-gray-600 dark:text-neutral-400">{error instanceof Error ? error.message : "Please try again shortly."}</p>
         <button
           onClick={() => window.location.reload()}
           className="px-6 py-3 bg-red-600 text-white rounded-lg font-semibold shadow hover:bg-red-700 transition"
@@ -64,12 +70,13 @@ function PartnerBenefitsContent() {
 
   const { user } = accountData;
   const hasAccess = hasActivePartnerDiscountAccess(user as unknown as import("@/models/User").IUser);
+  const activePackage = getActivePackage(user as ActivePackageUserInput);
 
   // Package theme when user has access
   let packageTheme: ReturnType<typeof getLandingPageThemeFromPlanId> | undefined;
   if (hasAccess && user) {
-    if (user.subscription?.isActive && user.subscriptionPackageData) {
-      const planId = derivePlanIdFromPackage(user.subscriptionPackageData, "subscription");
+    if (activePackage.source === "subscription" && activePackage.packageData) {
+      const planId = derivePlanIdFromPackage(activePackage.packageData, "subscription");
       packageTheme = getLandingPageThemeFromPlanId(planId, true);
     } else if (user.enrichedOneTimePackages?.length) {
       const queue = (user as { partnerDiscountQueue?: Array<{ packageId: string; packageType: string; status: string }> }).partnerDiscountQueue ?? [];
@@ -89,7 +96,7 @@ function PartnerBenefitsContent() {
   return (
     <div className="min-h-screen-svh w-full bg-gray-50">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-[#ee0000] via-red-600 to-red-700 text-white pt-[90px] sm:pt-[106px] pb-16 overflow-hidden">
+      <section className="relative bg-gradient-to-br from-red-600 via-red-600 to-red-700 text-white pt-[90px] sm:pt-[var(--app-header-h-lg)] pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-black/10"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-transparent to-black/20"></div>
@@ -168,7 +175,7 @@ export default function PartnerBenefitsPage() {
       fallback={
         <div className="min-h-screen-svh flex flex-col items-center justify-center gap-4 bg-gray-50">
           <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-600 font-medium">Loading your benefits...</p>
+          <p className="text-gray-600 dark:text-neutral-400 font-medium">Loading your benefits...</p>
         </div>
       }
     >

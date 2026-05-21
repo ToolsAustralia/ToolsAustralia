@@ -7,7 +7,9 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
+  // Optional: passwordless (OAuth / SMS-OTP / email-code) accounts have no
+  // existing password to verify, so this is a first-time "set password".
+  currentPassword: z.string().optional(),
   newPassword: z.string().min(6, "New password must be at least 6 characters"),
 });
 
@@ -30,14 +32,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (!user.password) {
-      return NextResponse.json({ error: "Password changes not available for this account" }, { status: 400 });
-    }
-
     const { currentPassword, newPassword } = parsed.data;
-    const isCurrentValid = await bcrypt.compare(currentPassword, user.password);
-    if (!isCurrentValid) {
-      return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
+
+    // Accounts that already have a password must prove ownership of it.
+    // Passwordless accounts (no stored hash — Google OAuth / SMS-OTP /
+    // email-code) are identified by the session alone, so this becomes a
+    // first-time set with no current password to verify.
+    const isFirstTimeSet = !user.password;
+    if (!isFirstTimeSet) {
+      if (!currentPassword) {
+        return NextResponse.json({ error: "Current password is required" }, { status: 400 });
+      }
+      const isCurrentValid = await bcrypt.compare(currentPassword, user.password as string);
+      if (!isCurrentValid) {
+        return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -46,7 +55,10 @@ export async function POST(request: NextRequest) {
     user.passwordResetExpires = undefined;
     await user.save();
 
-    return NextResponse.json({ success: true, message: "Password updated successfully" });
+    return NextResponse.json({
+      success: true,
+      message: isFirstTimeSet ? "Password set successfully" : "Password updated successfully",
+    });
   } catch (error) {
     console.error("Change password error:", error);
     return NextResponse.json(

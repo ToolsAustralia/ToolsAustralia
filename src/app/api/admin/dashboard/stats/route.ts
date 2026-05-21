@@ -3,14 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
-import { getStartOfTodayInAEST, createAESTDateAsUTC, getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
-import { subDays } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
-import { fetchFacebookInsights } from "@/lib/facebook-marketing";
+import { readStatsForRange } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotReader";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
-import { getActiveSubscriptionFilter, getEverPaidUserFilter } from "@/utils/admin/userFilterBuilder";
+import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
+import { parseAdminDashboardDateRange } from "@/utils/admin/dashboardDateRange";
+import {
+  getActiveSubscriptionFilter,
+  getEverPaidUserFilter,
+  SUBSCRIBED_SUBSCRIPTION_STATUSES,
+} from "@/utils/admin/userFilterBuilder";
 import { trendCalculationService } from "@/services/admin/TrendCalculationService";
 
 /**
@@ -40,111 +42,21 @@ export async function GET(request: NextRequest) {
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const dateRange = (searchParams.get("dateRange") as "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw") || "today";
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
 
-    console.log("📊 Fetching admin dashboard stats...", { dateRange });
-
-    // Calculate date range based on selection
-    let startDate: Date;
-    let endDate: Date;
-
-    const startOfToday = getStartOfTodayInAEST();
-    const AEST_TIMEZONE = "Australia/Sydney";
-    
-    // Get end of today in AEST (23:59:59.999) for proper date range
-    const now = new Date();
-    const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-    const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-    const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-    const endOfToday = createAESTDateAsUTC(todayYear, todayMonth, todayDay, 23, 59);
-    endOfToday.setUTCSeconds(59, 999);
-    
-    // Default endDate to end of today
-    endDate = endOfToday;
-
-    switch (dateRange) {
-      case "today":
-        startDate = startOfToday;
-        endDate = endOfToday;
-        break;
-      case "yesterday":
-        // Get yesterday's start (24 hours before today's start)
-        const yesterdayStart = subDays(startOfToday, 1);
-        startDate = yesterdayStart;
-        // End at end of yesterday (one millisecond before today starts)
-        endDate = new Date(startOfToday.getTime() - 1);
-        break;
-      case "current-draw":
-      case "last-draw": {
-        // For draw-based ranges, use the provided startDate and endDate params
-        // These are set by the frontend from the draw dates
-        if (!startDateParam || !endDateParam) {
-          return NextResponse.json(
-            { error: "startDate and endDate are required for draw-based ranges" },
-            { status: 400 }
-          );
-        }
-        // Parse dates and normalize to AEST start/end of day
-        const drawStartDateParsed = new Date(startDateParam);
-        const drawEndDateParsed = new Date(endDateParam);
-        
-        // Get date components in AEST
-        const drawStartYear = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const drawStartMonth = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "M"), 10);
-        const drawStartDay = parseInt(formatInTimeZone(drawStartDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        const drawEndYear = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const drawEndMonth = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "M"), 10);
-        const drawEndDay = parseInt(formatInTimeZone(drawEndDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        // Set startDate to start of day (00:00:00) in AEST
-        startDate = createAESTDateAsUTC(drawStartYear, drawStartMonth, drawStartDay, 0, 0);
-        
-        // Set endDate to end of day (23:59:59.999) in AEST
-        const drawNextDayStart = createAESTDateAsUTC(drawEndYear, drawEndMonth, drawEndDay, 0, 0);
-        const drawNextDay = new Date(drawNextDayStart);
-        drawNextDay.setUTCDate(drawNextDay.getUTCDate() + 1);
-        endDate = new Date(drawNextDay.getTime() - 1);
-        break;
-      }
-      case "all-time":
-        // Website launch date: November 27, 2025 at midnight AEST
-        // End date: End of today (January 6, 2026)
-        startDate = getWebsiteLaunchDateUTC();
-        endDate = endOfToday;
-        break;
-      case "custom":
-        if (!startDateParam || !endDateParam) {
-          return NextResponse.json({ error: "startDate and endDate are required for custom range" }, { status: 400 });
-        }
-        // Parse dates and normalize to AEST start/end of day
-        const startDateParsed = new Date(startDateParam);
-        const endDateParsed = new Date(endDateParam);
-        
-        // Get date components in AEST
-        const startYear = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const startMonth = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "M"), 10);
-        const startDay = parseInt(formatInTimeZone(startDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        const endYear = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "yyyy"), 10);
-        const endMonth = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "M"), 10);
-        const endDay = parseInt(formatInTimeZone(endDateParsed, AEST_TIMEZONE, "d"), 10);
-        
-        // Set startDate to start of day (00:00:00) in AEST
-        startDate = createAESTDateAsUTC(startYear, startMonth, startDay, 0, 0);
-        
-        // Set endDate to end of day (23:59:59.999) in AEST
-        // Calculate by getting start of next day and subtracting 1ms
-        const nextDayStart = createAESTDateAsUTC(endYear, endMonth, endDay, 0, 0);
-        const nextDay = new Date(nextDayStart);
-        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-        endDate = new Date(nextDay.getTime() - 1);
-        break;
-      default:
-        startDate = startOfToday;
+    const parsedRange = parseAdminDashboardDateRange({
+      dateRange: searchParams.get("dateRange"),
+      startDateParam,
+      endDateParam,
+    });
+    if (!parsedRange.ok) {
+      return NextResponse.json({ error: parsedRange.error }, { status: parsedRange.status });
     }
+
+    const { startDate, endDate, dateRange, membershipAsOfMode, asOfDate } = parsedRange.value;
+
+    console.log("📊 Fetching admin dashboard stats...", { dateRange });
 
     // ========================================
     // COMPARISON PERIOD (for trend calculation)
@@ -172,7 +84,7 @@ export async function GET(request: NextRequest) {
         ? {
             "subscription.endDate": { $exists: true, $ne: null },
             "subscription.autoRenew": false,
-            "subscription.status": { $in: ["active", "past_due"] },
+            "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
             isActive: true,
           }
         : {
@@ -184,7 +96,7 @@ export async function GET(request: NextRequest) {
     const totalScheduledCancellationQuery = {
       "subscription.endDate": { $exists: true, $ne: null },
       "subscription.autoRenew": false,
-      "subscription.status": { $in: ["active", "past_due"] },
+      "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
       isActive: true,
     };
 
@@ -204,11 +116,28 @@ export async function GET(request: NextRequest) {
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
 
+    // When the dashboard is in snapshot mode (asOfDate is in the past), override the
+    // *standing* cancellation metrics with the corresponding values from the daily
+    // snapshot. The *delta* values (cancelledMemberships, range counters) stay live.
+    let standingScheduledCancellation = totalScheduledCancellation;
+    let snapshotMissingForStanding = false;
+    if (membershipAsOfMode === "snapshot" && asOfDate) {
+      const snapshot = await new MembershipAnalyticsService().getMembershipByPackageSnapshot(asOfDate);
+      if (snapshot.summary?.snapshotMissing) {
+        snapshotMissingForStanding = true;
+      } else {
+        standingScheduledCancellation = snapshot.packages.reduce(
+          (sum, p) => sum + (p.cancelledCount ?? 0),
+          0
+        );
+      }
+    }
+
     // Drop-off rate: % of membership base (active + scheduled) that has scheduled cancellation
-    const membershipBase = activeSubscriptions + totalScheduledCancellation;
+    const membershipBase = activeSubscriptions + standingScheduledCancellation;
     const dropOffRate =
       membershipBase > 0
-        ? Math.round((totalScheduledCancellation / membershipBase) * 1000) / 10
+        ? Math.round((standingScheduledCancellation / membershipBase) * 1000) / 10
         : 0;
 
     // Period churn rate: % of active subscribers who cancelled in the selected period (only when not all-time)
@@ -221,85 +150,44 @@ export async function GET(request: NextRequest) {
     const profileCompletionRate = totalUsers > 0 ? Math.round((usersWithCompletedProfiles / totalUsers) * 100) : 0;
 
     // ========================================
-    // REVENUE STATISTICS
+    // REVENUE + AD CHANNELS (from snapshot reader)
     // ========================================
-    // Get revenue from PaymentEvent model filtered by date range
-    // Use aggregation for better performance, especially for large date ranges
-    const revenueEvents = await PaymentEvent.find({
-      eventType: "BenefitsGranted", // Only count successful payments
-      timestamp: { $gte: startDate, $lte: endDate },
-    })
-      .select("userId packageType packageId data timestamp")
-      .lean()
-      .limit(10000); // Safety limit to prevent memory issues
-
-    // Initialize detailed revenue breakdown with counts
-    let totalRevenue = 0;
-    
-    // Revenue and count tracking for each category
-    const membershipPurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const membershipRenewalData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const oneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const additionalOneTimePurchaseData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const miniDrawData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-    const upsellData = { revenue: 0, purchaseCount: 0, userIds: new Set<string>() };
-
-    // Categorize revenue by package type and context
-    // Sort events by timestamp to process them chronologically
-    const sortedEvents = [...revenueEvents].sort((a, b) => {
-      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    const snapshotRead = await readStatsForRange({
+      rangeStartUTC: startDate,
+      rangeEndUTC: endDate,
     });
 
-    for (const event of sortedEvents) {
-      const price = event.data?.price || 0;
-      totalRevenue += price;
-      const userId = event.userId?.toString() || "";
-
-      if (event.packageType === "membership") {
-        const billingReason = event.data?.billingReason as string | undefined;
-        if (billingReason === "subscription_cycle") {
-          membershipRenewalData.revenue += price;
-          membershipRenewalData.purchaseCount += 1;
-          if (userId) membershipRenewalData.userIds.add(userId);
-        } else {
-          // subscription_create or undefined (treat as new purchase)
-          membershipPurchaseData.revenue += price;
-          membershipPurchaseData.purchaseCount += 1;
-          if (userId) membershipPurchaseData.userIds.add(userId);
-        }
-      } else if (event.packageType === "mini-draw") {
-        miniDrawData.revenue += price;
-        miniDrawData.purchaseCount += 1;
-        if (userId) miniDrawData.userIds.add(userId);
-      } else if (event.packageType === "upsell") {
-        upsellData.revenue += price;
-        upsellData.purchaseCount += 1;
-        if (userId) upsellData.userIds.add(userId);
-      } else if (event.packageType === "one-time") {
-        // Categorize based on packageId:
-        // - "One-Time Additional" = packages that start with "additional-" (e.g., "additional-apprentice-pack")
-        // - "One-Time First" = packages that end with "-pack" but NOT "additional-*-pack" (e.g., "apprentice-pack", "tradie-pack")
-        const packageId = event.packageId || "";
-        
-        if (packageId.startsWith("additional-")) {
-          // This is an additional package (member-only packages)
-          additionalOneTimePurchaseData.revenue += price;
-          additionalOneTimePurchaseData.purchaseCount += 1;
-          if (userId) additionalOneTimePurchaseData.userIds.add(userId);
-        } else if (packageId.endsWith("-pack")) {
-          // This is a first-time package (regular one-time packages)
-          oneTimePurchaseData.revenue += price;
-          oneTimePurchaseData.purchaseCount += 1;
-          if (userId) oneTimePurchaseData.userIds.add(userId);
-        } else {
-          // Fallback: If packageId doesn't match expected pattern, treat as first-time
-          // This handles edge cases where packageId might be missing or in unexpected format
-          oneTimePurchaseData.revenue += price;
-          oneTimePurchaseData.purchaseCount += 1;
-          if (userId) oneTimePurchaseData.userIds.add(userId);
-        }
-      }
-    }
+    const totalRevenue = snapshotRead.revenue.total;
+    const membershipPurchaseData = {
+      revenue: snapshotRead.revenue.buckets.membershipPurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.membershipPurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.membershipPurchase.userCount,
+    };
+    const membershipRenewalData = {
+      revenue: snapshotRead.revenue.buckets.membershipRenewal.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.membershipRenewal.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.membershipRenewal.userCount,
+    };
+    const oneTimePurchaseData = {
+      revenue: snapshotRead.revenue.buckets.oneTimePurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.oneTimePurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.oneTimePurchase.userCount,
+    };
+    const additionalOneTimePurchaseData = {
+      revenue: snapshotRead.revenue.buckets.additionalOneTimePurchase.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.additionalOneTimePurchase.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.additionalOneTimePurchase.userCount,
+    };
+    const miniDrawData = {
+      revenue: snapshotRead.revenue.buckets.miniDraw.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.miniDraw.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.miniDraw.userCount,
+    };
+    const upsellData = {
+      revenue: snapshotRead.revenue.buckets.upsell.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.upsell.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.upsell.userCount,
+    };
 
     // ========================================
     // MAJOR DRAW STATISTICS
@@ -341,133 +229,10 @@ export async function GET(request: NextRequest) {
     }
 
     // ========================================
-    // FACEBOOK ADS STATISTICS
+    // FACEBOOK ADS (from snapshot reader)
     // ========================================
-    let facebookAdsSpend = 0;
-    let facebookAdsRoas = 0;
-
-    try {
-      // Get environment variables
-      const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-      const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
-
-      if (accessToken && adAccountId) {
-        // Map dashboard date range to Facebook Ads date range
-        let fbDateRange: { since: string; until: string };
-        let fbStartDate: Date;
-        let fbEndDate: Date;
-
-        const AEST_TIMEZONE = "Australia/Sydney";
-
-        if (dateRange === "today") {
-          // Get today's date in AEST timezone for Facebook API
-          const now = new Date();
-          const todayYear = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "yyyy"), 10);
-          const todayMonth = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "M"), 10);
-          const todayDay = parseInt(formatInTimeZone(now, AEST_TIMEZONE, "d"), 10);
-          const todayDateStr = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          fbDateRange = {
-            since: todayDateStr,
-            until: todayDateStr,
-          };
-          fbStartDate = startOfToday;
-          const tomorrowStart = new Date(startOfToday);
-          tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
-          fbEndDate = new Date(tomorrowStart.getTime() - 1);
-        } else if (dateRange === "yesterday") {
-          const yesterdayStart = subDays(startOfToday, 1);
-          fbStartDate = yesterdayStart;
-          fbEndDate = new Date(startOfToday.getTime() - 1);
-
-          const yesterdayYear = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "yyyy"), 10);
-          const yesterdayMonth = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "M"), 10);
-          const yesterdayDay = parseInt(formatInTimeZone(yesterdayStart, AEST_TIMEZONE, "d"), 10);
-          const yesterdayDateStr = `${yesterdayYear}-${String(yesterdayMonth).padStart(2, "0")}-${String(
-            yesterdayDay
-          ).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: yesterdayDateStr,
-            until: yesterdayDateStr,
-          };
-        } else if (dateRange === "all-time") {
-          // For all-time, use website launch date: November 27, 2025 at 8pm AEDT/AEST
-          fbStartDate = getWebsiteLaunchDateUTC();
-          fbEndDate = new Date();
-
-          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
-          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
-          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
-          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
-          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
-          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: startDateStr,
-            until: endDateStr,
-          };
-        } else {
-          // Custom range
-          fbStartDate = startDate;
-          fbEndDate = endDate;
-
-          const startYear = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "yyyy"), 10);
-          const startMonth = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "M"), 10);
-          const startDay = parseInt(formatInTimeZone(fbStartDate, AEST_TIMEZONE, "d"), 10);
-          const startDateStr = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(
-            2,
-            "0"
-          )}`;
-
-          const endYear = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const endMonth = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "M"), 10);
-          const endDay = parseInt(formatInTimeZone(fbEndDate, AEST_TIMEZONE, "d"), 10);
-          const endDateStr = `${endYear}-${String(endMonth).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-
-          fbDateRange = {
-            since: startDateStr,
-            until: endDateStr,
-          };
-        }
-
-        // Fetch directly from Facebook API
-        let metrics: { spend: number; revenue: number; roas: number } | null = null;
-
-        try {
-          const insightsData = await fetchFacebookInsights(adAccountId, accessToken, fbDateRange, "account");
-
-          if (insightsData && insightsData.length > 0) {
-            const firstInsight = insightsData[0];
-            metrics = {
-              spend: firstInsight.metrics.spend / 100, // Convert cents to dollars
-              revenue: firstInsight.metrics.revenue / 100, // Convert cents to dollars
-              roas: firstInsight.metrics.roas,
-            };
-          }
-        } catch (error) {
-          console.error("⚠️ Error fetching Facebook Ads insights:", error);
-          // Return null if API fails - no fallback to stale data
-        }
-
-        if (metrics) {
-          facebookAdsSpend = metrics.spend;
-          facebookAdsRoas = metrics.roas;
-        }
-      }
-    } catch (error) {
-      console.error("⚠️ Error fetching Facebook Ads stats:", error);
-      // Gracefully degrade - return 0 values
-    }
+    const facebookAdsSpend = snapshotRead.adChannels.facebook?.spend ?? 0;
+    const facebookAdsRoas = snapshotRead.adChannels.facebook?.roas ?? 0;
 
     // ========================================
     // COMPARISON PERIOD METRICS (for trends)
@@ -495,7 +260,7 @@ export async function GET(request: NextRequest) {
       const previousTotalScheduledCancellationQuery = {
         "subscription.endDate": { $gt: comparisonEndDate },
         "subscription.autoRenew": false,
-        "subscription.status": { $in: ["active", "past_due"] },
+        "subscription.status": { $in: [...SUBSCRIBED_SUBSCRIPTION_STATUSES] },
         isActive: true,
       };
 
@@ -504,7 +269,7 @@ export async function GET(request: NextRequest) {
         previousNewSignupsInRange,
         previousCancelledMemberships,
         previousTotalScheduledCancellation,
-        previousRevenueEvents,
+        previousSnapshotRead,
       ] = await Promise.all([
         User.countDocuments({ isActive: true, createdAt: { $lte: comparisonEndDate } }),
         User.countDocuments({
@@ -513,47 +278,31 @@ export async function GET(request: NextRequest) {
         }),
         User.countDocuments(cancelledMembershipsComparisonQuery),
         User.countDocuments(previousTotalScheduledCancellationQuery),
-        PaymentEvent.find({
-          eventType: "BenefitsGranted",
-          timestamp: { $gte: comparisonStartDate, $lte: comparisonEndDate },
-        })
-          .select("userId packageType packageId data timestamp")
-          .lean()
-          .limit(10000),
+        readStatsForRange({
+          rangeStartUTC: comparisonStartDate,
+          rangeEndUTC: comparisonEndDate,
+        }),
       ]);
 
-      let previousTotalRevenue = 0;
-      const previousMembershipPurchaseData = { revenue: 0 };
-      const previousMembershipRenewalData = { revenue: 0 };
-      const previousOneTimePurchaseData = { revenue: 0 };
-      const previousAdditionalOneTimePurchaseData = { revenue: 0 };
-      const previousMiniDrawData = { revenue: 0 };
-      const previousUpsellData = { revenue: 0 };
-
-      for (const event of previousRevenueEvents) {
-        const price = event.data?.price || 0;
-        previousTotalRevenue += price;
-
-        if (event.packageType === "membership") {
-          const billingReason = event.data?.billingReason as string | undefined;
-          if (billingReason === "subscription_cycle") {
-            previousMembershipRenewalData.revenue += price;
-          } else {
-            previousMembershipPurchaseData.revenue += price;
-          }
-        } else if (event.packageType === "mini-draw") {
-          previousMiniDrawData.revenue += price;
-        } else if (event.packageType === "upsell") {
-          previousUpsellData.revenue += price;
-        } else if (event.packageType === "one-time") {
-          const packageId = event.packageId || "";
-          if (packageId.startsWith("additional-")) {
-            previousAdditionalOneTimePurchaseData.revenue += price;
-          } else {
-            previousOneTimePurchaseData.revenue += price;
-          }
-        }
-      }
+      const previousTotalRevenue = previousSnapshotRead.revenue.total;
+      const previousMembershipPurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.membershipPurchase.revenue,
+      };
+      const previousMembershipRenewalData = {
+        revenue: previousSnapshotRead.revenue.buckets.membershipRenewal.revenue,
+      };
+      const previousOneTimePurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.oneTimePurchase.revenue,
+      };
+      const previousAdditionalOneTimePurchaseData = {
+        revenue: previousSnapshotRead.revenue.buckets.additionalOneTimePurchase.revenue,
+      };
+      const previousMiniDrawData = {
+        revenue: previousSnapshotRead.revenue.buckets.miniDraw.revenue,
+      };
+      const previousUpsellData = {
+        revenue: previousSnapshotRead.revenue.buckets.upsell.revenue,
+      };
 
       let previousConversionRate = 0;
       const previousConvertedUsersInRange = await User.countDocuments({
@@ -566,44 +315,8 @@ export async function GET(request: NextRequest) {
           ? Math.round((previousConvertedUsersInRange / previousNewSignupsInRange) * 100)
           : 0;
 
-      let previousFacebookAdsSpend = 0;
-      let previousFacebookAdsRoas = 0;
-      try {
-        const accessToken = process.env.FACEBOOK_MARKETING_ACCESS_TOKEN;
-        const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID;
-        if (accessToken && adAccountId) {
-          const compStartYear = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "yyyy"),
-            10
-          );
-          const compStartMonth = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "M"),
-            10
-          );
-          const compStartDay = parseInt(
-            formatInTimeZone(comparisonStartDate, AEST_TIMEZONE, "d"),
-            10
-          );
-          const compEndYear = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "yyyy"), 10);
-          const compEndMonth = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "M"), 10);
-          const compEndDay = parseInt(formatInTimeZone(comparisonEndDate, AEST_TIMEZONE, "d"), 10);
-          const compDateStr = `${compStartYear}-${String(compStartMonth).padStart(2, "0")}-${String(compStartDay).padStart(2, "0")}`;
-          const compEndDateStr = `${compEndYear}-${String(compEndMonth).padStart(2, "0")}-${String(compEndDay).padStart(2, "0")}`;
-
-          const compInsightsData = await fetchFacebookInsights(
-            adAccountId,
-            accessToken,
-            { since: compDateStr, until: compEndDateStr },
-            "account"
-          );
-          if (compInsightsData && compInsightsData.length > 0) {
-            previousFacebookAdsSpend = compInsightsData[0].metrics.spend / 100;
-            previousFacebookAdsRoas = compInsightsData[0].metrics.roas;
-          }
-        }
-      } catch {
-        // Ignore - use 0 for comparison
-      }
+      const previousFacebookAdsSpend = previousSnapshotRead.adChannels.facebook?.spend ?? 0;
+      const previousFacebookAdsRoas = previousSnapshotRead.adChannels.facebook?.roas ?? 0;
 
       totalUsersTrend = trendCalculationService.calculateTrend(totalUsers, previousTotalUsers);
       newInRangeTrend = trendCalculationService.calculateTrend(newSignupsInRange, previousNewSignupsInRange);
@@ -671,6 +384,30 @@ export async function GET(request: NextRequest) {
       // Gracefully degrade - enhanced metrics are optional
     }
 
+    const membershipAnalyticsService = new MembershipAnalyticsService();
+    let membershipAnalytics;
+    try {
+      membershipAnalytics = await membershipAnalyticsService.getAnalyticsBundle(startDate, endDate, dateRange, {
+        membershipAsOfMode,
+        asOfDate,
+        precomputedRenewals: {
+          purchaseCount: membershipRenewalData.purchaseCount,
+          userCount: membershipRenewalData.userCount,
+        },
+      });
+    } catch (maErr) {
+      console.error("⚠️ Error fetching membership analytics bundle:", maErr);
+      membershipAnalytics = {
+        expectedRenewalsInRange: 0,
+        successfulRenewalsInRange: 0,
+        successfulRenewalUserCount: 0,
+        failedRenewalInvoicesInRange: 0,
+        becamePastDueInRange: 0,
+        cancellationsInRange: 0,
+        cancelledMembershipRevenueImpact: 0,
+      };
+    }
+
     // ========================================
     // RESPONSE
     // ========================================
@@ -684,10 +421,21 @@ export async function GET(request: NextRequest) {
         profileCompletion: profileCompletionRate,
         cancelledMemberships,
         ...(cancelledMembershipsTrend && { cancelledMembershipsTrend }),
-        totalScheduledCancellation,
+        totalScheduledCancellation: standingScheduledCancellation,
         dropOffRate,
         ...(periodChurnRate != null && { periodChurnRate }),
         ...(dropOffRateTrend && { dropOffRateTrend }),
+        membershipRenewals: {
+          expectedInRange: membershipAnalytics.expectedRenewalsInRange,
+          succeededInRange: membershipAnalytics.successfulRenewalsInRange,
+          succeededDistinctMembers: membershipAnalytics.successfulRenewalUserCount,
+          failedInvoicesInRange: membershipAnalytics.failedRenewalInvoicesInRange,
+          becamePastDueInRange: membershipAnalytics.becamePastDueInRange,
+        },
+        cancellationImpact: {
+          estimatedMonthlyRevenue: membershipAnalytics.cancelledMembershipRevenueImpact,
+        },
+        ...(snapshotMissingForStanding && { snapshotMissingForStanding: true }),
       },
       revenue: {
         total: totalRevenue,
@@ -699,7 +447,7 @@ export async function GET(request: NextRequest) {
           membershipPurchase: {
             revenue: membershipPurchaseData.revenue,
             purchaseCount: membershipPurchaseData.purchaseCount,
-            userCount: membershipPurchaseData.userIds.size,
+            userCount: membershipPurchaseData.userCount,
             ...(revenueBreakdownTrends.membershipPurchase && {
               trend: revenueBreakdownTrends.membershipPurchase,
             }),
@@ -707,7 +455,7 @@ export async function GET(request: NextRequest) {
           membershipRenewal: {
             revenue: membershipRenewalData.revenue,
             purchaseCount: membershipRenewalData.purchaseCount,
-            userCount: membershipRenewalData.userIds.size,
+            userCount: membershipRenewalData.userCount,
             ...(revenueBreakdownTrends.membershipRenewal && {
               trend: revenueBreakdownTrends.membershipRenewal,
             }),
@@ -715,7 +463,7 @@ export async function GET(request: NextRequest) {
           oneTimePurchase: {
             revenue: oneTimePurchaseData.revenue,
             purchaseCount: oneTimePurchaseData.purchaseCount,
-            userCount: oneTimePurchaseData.userIds.size,
+            userCount: oneTimePurchaseData.userCount,
             ...(revenueBreakdownTrends.oneTimePurchase && {
               trend: revenueBreakdownTrends.oneTimePurchase,
             }),
@@ -723,7 +471,7 @@ export async function GET(request: NextRequest) {
           additionalOneTimePurchase: {
             revenue: additionalOneTimePurchaseData.revenue,
             purchaseCount: additionalOneTimePurchaseData.purchaseCount,
-            userCount: additionalOneTimePurchaseData.userIds.size,
+            userCount: additionalOneTimePurchaseData.userCount,
             ...(revenueBreakdownTrends.additionalOneTimePurchase && {
               trend: revenueBreakdownTrends.additionalOneTimePurchase,
             }),
@@ -731,13 +479,13 @@ export async function GET(request: NextRequest) {
           miniDraw: {
             revenue: miniDrawData.revenue,
             purchaseCount: miniDrawData.purchaseCount,
-            userCount: miniDrawData.userIds.size,
+            userCount: miniDrawData.userCount,
             ...(revenueBreakdownTrends.miniDraw && { trend: revenueBreakdownTrends.miniDraw }),
           },
           upsell: {
             revenue: upsellData.revenue,
             purchaseCount: upsellData.purchaseCount,
-            userCount: upsellData.userIds.size,
+            userCount: upsellData.userCount,
             ...(revenueBreakdownTrends.upsell && { trend: revenueBreakdownTrends.upsell }),
           },
         },

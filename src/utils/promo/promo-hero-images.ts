@@ -3,23 +3,24 @@
  * 
  * Centralized logic for resolving promotional hero image paths based on:
  * - Active promo multiplier (2x, 3x, 5x, 10x, or no-badge)
- * - Draw date status (today/tomorrow)
+ * - Major draw urgency (final-hours / drawn-tomorrow / drawn-tonight from time until min(draw, freeze))
  * - A/B testing variant config overrides
  * 
  * Priority order:
  * 1. Variant config override (A/B testing)
- * 2. Draw date status (today/tomorrow)
+ * 2. Major draw urgency (mar-final-hours / mar-drawn-tonight; drawn-tomorrow uses mar-final-hours)
  * 3. Multiplier-based selection (2x, 3x, 5x, 10x)
  * 4. Default fallback (no-badge)
  * 
  * @module promo-hero-images
  */
 
-import type { 
-  PromoImagePaths, 
-  DrawDateStatus, 
+import type {
+  PromoImagePaths,
+  MajorDrawHeroUrgency,
+  LandingHeroUrgency,
   VariantImageOverride,
-  PromoImageResolutionParams 
+  PromoImageResolutionParams,
 } from "./promo-hero-types";
 
 /**
@@ -74,26 +75,26 @@ export function getMultiplierImageVariant(multiplier: number | null | undefined)
       return "mar-x3";
     case 2:
       return "mar-no-badge"; // No mar-x2; use no-badge fallback
+    case 12:
+    case 15:
+    case 20:
+      return DEFAULT_VARIANT; // Dedicated hero variants can be wired when assets ship
     default:
       return DEFAULT_VARIANT;
   }
 }
 
 /**
- * Maps draw date status to image variant name.
- * Assets used:
- * - Drawn tomorrow: feb-drawn-tomorrow.webp (desktop), feb-drawn-tomorrow-mobile.webp (mobile)
- * - Drawn tonight:  feb-drawn-tonight.webp (desktop), feb-drawn-tonight-mobile.webp (mobile)
- *
- * @param status - Draw date status ("today", "tomorrow", or null)
- * @returns Image variant name (e.g., "feb-drawn-tonight", "feb-drawn-tomorrow")
+ * Maps major-draw countdown tier to root promo image variant (mar-* assets).
  */
-export function getDrawDateImageVariant(status: DrawDateStatus): string | null {
-  switch (status) {
-    case "tomorrow":
-      return "feb-drawn-tomorrow";
-    case "today":
-      return "feb-drawn-tonight";
+export function getMajorDrawUrgencyImageVariant(urgency: MajorDrawHeroUrgency | null | undefined): string | null {
+  switch (urgency) {
+    case "final-hours":
+      return "mar-final-hours";
+    case "drawn-tomorrow":
+      return "mar-final-hours";
+    case "drawn-tonight":
+      return "mar-drawn-tonight";
     default:
       return null;
   }
@@ -117,7 +118,7 @@ export function buildImagePaths(variant: string): PromoImagePaths {
 
 /**
  * Main function to resolve promo hero image paths
- * Implements the priority logic: Variant config > Draw date > Multiplier > Default
+ * Implements the priority logic: Variant config > Major draw urgency > Multiplier > Default
  * 
  * @param params - Parameters for image resolution
  * @returns PromoImagePaths object with desktop and mobile image paths
@@ -128,9 +129,8 @@ export function buildImagePaths(variant: string): PromoImagePaths {
  * const paths = getPromoImagePaths({ multiplier: 10 });
  * // Returns: { desktop: "/images/background/promo/mar-x10.webp", mobile: "/images/background/promo/mar-x10-mobile.webp" }
  * 
- * // Draw date override
- * const paths = getPromoImagePaths({ multiplier: 10, drawDateStatus: "tomorrow" });
- * // Returns: { desktop: "/images/background/promo/feb-drawn-tomorrow.webp", mobile: "/images/background/promo/feb-drawn-tomorrow-mobile.webp" }
+ * // Major draw urgency
+ * const paths = getPromoImagePaths({ multiplier: 10, majorDrawUrgency: "final-hours" });
  * 
  * // Variant config override
  * const paths = getPromoImagePaths({ 
@@ -143,7 +143,7 @@ export function buildImagePaths(variant: string): PromoImagePaths {
 export function getPromoImagePaths(
   params: PromoImageResolutionParams
 ): PromoImagePaths {
-  const { multiplier, drawDateStatus, variantImageOverride } = params;
+  const { multiplier, majorDrawUrgency, variantImageOverride } = params;
 
   // Priority 1: Variant config override (A/B testing)
   // This takes highest priority and overrides everything else
@@ -151,17 +151,86 @@ export function getPromoImagePaths(
     return resolveVariantImageOverride(variantImageOverride);
   }
 
-  // Priority 2: Draw date status (today/tomorrow)
-  // If draw is happening today or tomorrow, use date-based images
-  if (drawDateStatus) {
-    const drawDateVariant = getDrawDateImageVariant(drawDateStatus);
-    if (drawDateVariant) {
-      return buildImagePaths(drawDateVariant);
-    }
+  // Priority 2: Major draw urgency (time until draw)
+  const urgencyVariant = getMajorDrawUrgencyImageVariant(majorDrawUrgency ?? null);
+  if (urgencyVariant) {
+    return buildImagePaths(urgencyVariant);
   }
 
   // Priority 3: Multiplier-based selection
   // Map multiplier to image variant and build paths
   const multiplierVariant = getMultiplierImageVariant(multiplier ?? null);
   return buildImagePaths(multiplierVariant);
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const THREE_DAY_MS = 72 * HOUR_MS;
+
+export type PromoUrgencyDrawLike = {
+  drawDate?: string | Date | null;
+  freezeEntriesAt?: string | Date | null;
+};
+
+/**
+ * Earliest relevant instant: min(drawDate, freezeEntriesAt) among valid values.
+ * Returns null if that instant is missing or not in the future.
+ */
+export function getPromoUrgencyDeadlineMs(draw: PromoUrgencyDrawLike | null | undefined): number | null {
+  if (!draw) return null;
+  const times: number[] = [];
+  if (draw.drawDate != null) {
+    const t = new Date(draw.drawDate).getTime();
+    if (Number.isFinite(t)) times.push(t);
+  }
+  if (draw.freezeEntriesAt != null) {
+    const t = new Date(draw.freezeEntriesAt).getTime();
+    if (Number.isFinite(t)) times.push(t);
+  }
+  if (times.length === 0) return null;
+  const deadline = Math.min(...times);
+  if (deadline <= Date.now()) return null;
+  return deadline;
+}
+
+/**
+ * Milliseconds until deadline; null if no future deadline.
+ */
+export function getMsUntilPromoUrgencyDeadline(draw: PromoUrgencyDrawLike | null | undefined): number | null {
+  const deadline = getPromoUrgencyDeadlineMs(draw);
+  if (deadline == null) return null;
+  return deadline - Date.now();
+}
+
+/**
+ * Landing asset tier from time until deadline:
+ * - &lt; 24h: drawn-tonight
+ * - &lt; 48h: drawn-tomorrow
+ * - &lt; 72h: final-hours
+ * - else: null
+ */
+export function getLandingHeroUrgencyFromMsUntil(msUntil: number | null): LandingHeroUrgency | null {
+  if (msUntil == null || msUntil <= 0) return null;
+  if (msUntil < 24 * HOUR_MS) return "drawn-tonight";
+  if (msUntil < 48 * HOUR_MS) return "drawn-tomorrow";
+  if (msUntil < THREE_DAY_MS) return "final-hours";
+  return null;
+}
+
+/**
+ * Same tier bands as landing; used for mar-* hero selection.
+ */
+export function getMajorDrawHeroUrgencyFromMajorDraw(
+  draw: PromoUrgencyDrawLike | null | undefined
+): MajorDrawHeroUrgency | null {
+  return getLandingHeroUrgencyFromMsUntil(getMsUntilPromoUrgencyDeadline(draw));
+}
+
+/**
+ * @deprecated Prefer {@link getMajorDrawHeroUrgencyFromMajorDraw} with freeze + drawDate.
+ * Uses drawDate only (no freezeEntriesAt).
+ */
+export function getMajorDrawHeroUrgencyFromDrawDate(
+  drawDate: string | Date | null | undefined
+): MajorDrawHeroUrgency | null {
+  return getMajorDrawHeroUrgencyFromMajorDraw({ drawDate });
 }

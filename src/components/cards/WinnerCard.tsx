@@ -2,189 +2,131 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { MapPin, Calendar, Award, Gift } from "lucide-react";
-import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { ArrowRight } from "lucide-react";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prizes";
+import type { WinnerSummary } from "@/types/winner";
+import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { getWinnerDisplayDate } from "@/utils/winners";
+import { cn } from "@/utils/cn";
 
-export interface WinnerCardData {
-  id: string;
-  drawId: string;
-  drawName: string;
-  drawType: "major" | "mini";
-  prize: {
-    name: string;
-    description: string;
-    value: number;
-    images: string[];
-  };
-  winnerFirstName: string;
-  winnerLastName: string;
-  winnerState?: string;
-  imageUrl?: string;
-  selectedDate: string;
-  /** Draw end date – use for "Won on" display when present */
-  wonOnDate?: string;
-  entryNumber?: number;
-  testimony?: string;
-  selectedPrize?: string;
-}
+export type WinnerCardData = WinnerSummary;
 
 interface WinnerCardProps {
   winner: WinnerCardData;
   className?: string;
+  /** When false, matches homepage Latest Winners (no draw link). Default true for /winners. */
+  showDrawLink?: boolean;
 }
 
-/**
- * World-class Winner Card Component
- * Elegant, elevated design with premium aesthetics
- */
-export default function WinnerCard({ winner, className = "" }: WinnerCardProps) {
+function getContrastText(hex: string) {
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.62 ? "#111827" : "#ffffff";
+}
+
+export default function WinnerCard({
+  winner,
+  className = "",
+  showDrawLink = true,
+}: WinnerCardProps) {
+  const theme = usePromoTheme();
+  const themeTextColor = getContrastText(theme.primary);
+
   const displayImage =
-    winner.imageUrl || winner.prize.images[0] || "/images/placeholders/prize-placeholder.png";
+    winner.imageUrl || winner.prize.images[0] || "/images/promotion/PrizeHeader/PrizeHeader.webp";
   const formattedName = formatWinnerName(winner.winnerFirstName, winner.winnerLastName);
-  const wonOnDate = new Date(winner.wonOnDate ?? winner.selectedDate);
+  const prizeLabel = winner.selectedPrize || winner.prize.name;
+  const prizeLine = prizeLabel.length > 34 ? `${prizeLabel.slice(0, 34).trim()}...` : prizeLabel;
+  const drawTypeLabel = winner.drawType === "major" ? "MAJOR DRAW WINNER" : "MINI DRAW WINNER";
+  const badgeLabel = `${getWinnerDisplayDate(winner).toUpperCase()} ${drawTypeLabel}`;
+
+  const destination =
+    winner.drawType === "major"
+      ? `/promotions/${DEFAULT_PRIZE_SLUG}`
+      : "/mini-draws";
 
   return (
-    <div
-      className={`group relative bg-white rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-gray-100/80 hover:shadow-[0_20px_60px_rgba(0,0,0,0.15)] transition-all duration-500 overflow-hidden ${className}`}
+    <Link
+      href={destination}
+      aria-label={`${formattedName} – ${badgeLabel}`}
+      className={cn("group/card block overflow-hidden rounded-[24px] border bg-white shadow-[0_18px_42px_rgba(15,23,42,0.10)] transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.16)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 dark:border-neutral-700 dark:bg-neutral-900", className)}
+      style={{ borderColor: theme.borderRgba }}
     >
-      {/* Premium Glow Effect on Hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-red-500/0 via-red-500/0 to-red-500/0 group-hover:from-red-500/5 group-hover:via-red-500/3 group-hover:to-red-500/5 transition-all duration-500 rounded-3xl pointer-events-none z-0"></div>
-
-      {/* Winner Image Section */}
-      <div className="relative h-72 sm:h-80 lg:h-96 bg-gradient-to-br from-slate-100 via-gray-100 to-slate-200 overflow-hidden">
-        <Image
-          src={displayImage}
-          alt={`${formattedName} - ${winner.drawName}`}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          priority={false}
+      <div className="relative overflow-hidden bg-slate-950 px-4 pb-4 pt-4 text-white lg:px-3 lg:pb-3 lg:pt-3">
+        <div
+          className="absolute inset-0 opacity-90"
+          style={{
+            background: `radial-gradient(circle at top right, ${theme.shadowRgba.replace(/,\s*[\d.]+\)/, ", 0.22)")}, transparent 28%), radial-gradient(circle at bottom left, rgba(238,0,0,0.16), transparent 30%)`,
+          }}
         />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/15 to-transparent" />
 
-        {/* Sophisticated Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/20"></div>
-
-        {/* Draw Type Badge - Premium Design */}
-        <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-20">
-          <div
-            className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-bold shadow-[0_4px_12px_rgba(0,0,0,0.3)] backdrop-blur-sm border ${
-              winner.drawType === "major"
-                ? "bg-gradient-to-r from-[#ee0000] via-red-600 to-[#ee0000] text-white border-red-400/40 shadow-red-500/20"
-                : "bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 text-black border-amber-300/50 shadow-amber-500/20"
-            }`}
-          >
-            {winner.drawType === "major" ? "Major Draw" : "Mini Draw"}
-          </div>
-        </div>
-
-        {/* Selected Prize Badge - Overlayed on Image (Top Right) - Only for major draws */}
-        {winner.drawType === "major" && winner.selectedPrize && (
-          <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-20">
-            <div className="bg-black/80 backdrop-blur-md rounded-xl sm:rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Gift className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
-                <span className="text-[10px] sm:text-xs font-bold text-white font-['Poppins'] max-w-[120px] sm:max-w-[150px] truncate">
-                  {winner.selectedPrize}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Winner Name Overlay - Elevated Design */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 p-3 sm:p-6">
-          <div className="bg-black/75 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 py-2.5 sm:px-5 sm:py-4 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
-            {/* Animated shimmer effect - active on mobile, enhanced on hover */}
-            <div className="absolute inset-0 sm:-translate-x-full sm:group-hover:translate-x-full animate-shimmer-horizontal sm:animate-none transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-            
-            {/* Winner Name and Location - Same Row */}
-            <div className="relative flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1">
-              <p className="text-base sm:text-2xl font-bold font-['Poppins'] tracking-tight relative inline-block">
-                {/* Outer glow layer - animated pulse - always active */}
-                <span 
-                  className="absolute inset-0 bg-gradient-to-r from-yellow-400/30 via-white/40 to-yellow-400/30 bg-clip-text text-transparent blur-md opacity-60 animate-pulse"
-                  aria-hidden="true"
-                >
-                  {formattedName}
-                </span>
-                {/* Main gradient text with multiple layers for depth - enhanced shadow on mobile */}
-                <span className="relative z-10 bg-gradient-to-r from-white via-yellow-50 via-white to-yellow-50 bg-clip-text text-transparent drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] sm:drop-shadow-[0_0_10px_rgba(255,255,255,0.6)] sm:group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.9),0_0_25px_rgba(255,215,0,0.3)] transition-all duration-300">
-                  {formattedName}
-                </span>
-                {/* Text stroke/outline for definition */}
-                <span 
-                  className="absolute inset-0 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent blur-[2px] opacity-40 -z-0"
-                  style={{
-                    WebkitTextStroke: '1px rgba(255, 255, 255, 0.2)',
-                  } as React.CSSProperties}
-                  aria-hidden="true"
-                >
-                  {formattedName}
-                </span>
-                {/* Animated underline accent with glow - visible on mobile, animated on hover */}
-                <span className="absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400 via-white via-yellow-400 to-transparent w-full sm:w-0 sm:group-hover:w-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(255,215,0,0.6)]"></span>
-                {/* Shimmer effect overlay - active on mobile */}
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-horizontal-fast sm:animate-none sm:-translate-x-full sm:group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></span>
-              </p>
-              {winner.winnerState && (
-                <div className="flex items-center gap-1.5 sm:gap-2 relative z-10">
-                  <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-300 sm:text-gray-300 sm:group-hover:text-yellow-300 transition-colors duration-300 flex-shrink-0" />
-                  <span className="text-xs sm:text-sm text-gray-100 sm:text-gray-200 sm:group-hover:text-gray-100 transition-colors duration-300">{winner.winnerState}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content Section */}
-      <div className="relative z-10 p-4 sm:p-7 bg-white">
-        {/* Draw Name and Win Date - Same Row */}
-        <div className="flex items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-5 pb-4 sm:pb-6 border-b border-gray-100">
-          {/* Draw Name */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-[#ee0000] to-red-700 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0">
-              <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <span className="text-sm sm:text-lg font-bold text-gray-900 font-['Poppins'] tracking-tight truncate">
-              {winner.drawName}
+        <div className="relative z-10">
+          <div className="mb-3 text-center lg:mb-2">
+            <span
+              className="inline-flex max-w-full whitespace-nowrap rounded-full border px-2.5 py-1 text-3xs font-bold uppercase leading-none tracking-[0.08em] shadow-sm backdrop-blur sm:px-3 sm:text-2xs sm:tracking-[0.12em] lg:px-2.5 lg:text-3xs lg:tracking-[0.1em]"
+              style={{ borderColor: theme.borderRgba, backgroundColor: "rgba(2,6,23,0.62)" }}
+            >
+              {badgeLabel}
             </span>
           </div>
 
-          {/* Win Date */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            <div className="p-1 sm:p-1.5 bg-gray-50 rounded-lg sm:rounded-xl">
-              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] sm:text-xs text-gray-500 font-['Inter'] font-medium block">Won on</span>
-              <p className="text-xs sm:text-sm text-gray-900 font-['Inter'] font-semibold whitespace-nowrap">
-                {wonOnDate.toLocaleDateString("en-AU", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </p>
+          <div
+            className="rounded-[20px] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]"
+            style={{
+              background: `linear-gradient(135deg, ${theme.primaryDark} 0%, ${theme.primary} 48%, ${theme.primaryLight} 100%)`,
+            }}
+          >
+            <div className="group relative aspect-[4/4.1] overflow-hidden rounded-[16px] bg-slate-900">
+              <Image
+                src={displayImage}
+                alt={`${formattedName} - ${winner.drawName}`}
+                fill
+                className="object-cover transition-transform duration-700 ease-out motion-reduce:transition-none group-hover:scale-[1.03] motion-reduce:group-hover:scale-100"
+                sizes="(max-width: 768px) 88vw, (max-width: 1280px) 46vw, 31vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
             </div>
           </div>
-        </div>
 
-        {/* View Details Link - Premium CTA */}
-        <Link
-          href={
-            winner.drawType === "major"
-              ? `/promotions/${DEFAULT_PRIZE_SLUG}`
-              : `/mini-draws/${winner.drawId}`
-          }
-          className="group/link flex items-center justify-between w-full px-4 py-2.5 sm:px-5 sm:py-3.5 bg-gradient-to-r from-[#ee0000] to-red-700 hover:from-red-700 hover:to-[#ee0000] text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm font-['Poppins'] transition-all duration-300 shadow-md hover:shadow-lg hover:shadow-red-500/30"
-        >
-          <span>{winner.drawType === "major" ? "View Promotions" : "View Draw Details"}</span>
-          <span className="group-hover/link:translate-x-1 transition-transform duration-300">→</span>
-        </Link>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h3 className="min-w-0 flex-1 text-[1.65rem] font-bold leading-tight tracking-tight font-['Poppins'] text-white sm:text-[1.8rem] lg:text-[1.25rem]">
+              {formattedName}
+            </h3>
+            <span
+              className="inline-flex flex-shrink-0 items-center rounded-full px-3 py-1.5 text-2xs font-bold uppercase tracking-[0.16em] shadow-[0_8px_18px_rgba(15,23,42,0.20)] lg:px-2.5 lg:py-1 lg:text-3xs lg:tracking-[0.12em]"
+              style={{ background: theme.gradient, color: themeTextColor }}
+            >
+              <span className="sm:hidden">1st Prize</span>
+              <span className="hidden sm:inline">1st Prize Winner</span>
+            </span>
+          </div>
+          <p className="mt-2 text-sm font-semibold text-slate-200 lg:text-xs">{prizeLine}</p>
+        </div>
       </div>
-    </div>
+
+      <div className="relative bg-white px-5 py-5 text-center dark:bg-neutral-900 lg:px-4 lg:py-4">
+        <div className="absolute inset-x-0 top-0 h-px" style={{ background: theme.gradient }} />
+        <p className="text-sm text-slate-500 dark:text-neutral-400 lg:text-xs">Congratulations to our winner!</p>
+
+        {showDrawLink && (
+          <div
+            className="mt-4 flex items-center justify-between rounded-2xl border px-4 py-3.5 text-sm font-bold uppercase tracking-[0.14em] shadow-[0_14px_30px_rgba(15,23,42,0.14)] dark:border-slate-600 lg:mt-3 lg:px-3 lg:py-3 lg:text-xs lg:tracking-[0.12em]"
+            style={{
+              background: theme.gradient,
+              color: themeTextColor,
+              borderColor: theme.borderRgba,
+            }}
+          >
+            <span>{winner.drawType === "major" ? "Explore this promotion" : "View mini draws"}</span>
+            <ArrowRight className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover/card:translate-x-1" />
+          </div>
+        )}
+      </div>
+    </Link>
   );
 }
-

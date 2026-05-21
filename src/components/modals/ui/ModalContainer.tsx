@@ -1,10 +1,25 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import { Z_INDEX } from "@/constants/z-index";
+import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
+import {
+  backdropVariants,
+  dialogNestedPanelVariants,
+  dialogPanelVariants,
+  MODAL_DURATION_EXIT_S,
+  reducedBackdropVariants,
+  reducedPanelVariants,
+  sheetPanelVariants,
+} from "@/utils/motion/modalPresets";
+import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+import { cn } from "@/utils/cn";
 
-interface ModalContainerProps {
+export type ModalPresentation = "dialog" | "sheet";
+
+export interface ModalContainerProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
@@ -23,6 +38,28 @@ interface ModalContainerProps {
    * Use when opening a modal from within another modal (e.g. View User from Revenue Breakdown).
    */
   nested?: boolean;
+  /**
+   * Highest stacking tier (e.g. confirmations opened on top of nested modals).
+   */
+  nestedSecondary?: boolean;
+  /**
+   * Override the resolved z-index. Use ONLY when this modal must sit in a
+   * non-standard micro-stack outside the Z_INDEX scale (e.g. CancellationUpsellModal
+   * uses `zIndex={80}` to sit above its parent SubscriptionManagementModal).
+   */
+  zIndex?: number;
+  /**
+   * `dialog` = centered scale/fade. `sheet` = slide from bottom (e.g. mobile package picker).
+   */
+  presentation?: ModalPresentation;
+  /**
+   * When true, below the `lg` breakpoint (mobile + tablet) the panel renders
+   * near-fullscreen: full viewport width, flush to the bottom, with only a ~5%
+   * gap at the top (`h-[95dvh]`). At `lg` and up it falls back to the normal
+   * centered dialog at the given `size`. Opt-in; default false leaves every
+   * existing modal byte-for-byte unchanged.
+   */
+  mobileFullBleed?: boolean;
 }
 
 const ModalContainer: React.FC<ModalContainerProps> = ({
@@ -36,23 +73,70 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   className = "",
   preventBackButton = true,
   nested = false,
+  nestedSecondary = false,
+  zIndex,
+  presentation = "dialog",
+  mobileFullBleed = false,
 }) => {
+  const isDarkMode = useHtmlDarkForUi();
+  const reduceMotion = useReducedMotion();
+
+  const [isLocked, setIsLocked] = useState(isOpen);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsLocked(true);
+    }
+  }, [isOpen]);
+
+  const modalBlocking = isOpen || isLocked;
+
+  const handlePanelAnimationComplete = useCallback(() => {
+    if (!isOpen) {
+      setIsLocked(false);
+    }
+  }, [isOpen]);
+
+  // If exit animation never completes (Framer / reduced-motion edge cases), avoid leaving the
+  // portal mounted with body scroll-lock stuck indefinitely.
+  useEffect(() => {
+    if (isOpen || !isLocked) return;
+    const fallbackMs = Math.round(MODAL_DURATION_EXIT_S * 1000) + 150;
+    const id = window.setTimeout(() => setIsLocked(false), fallbackMs);
+    return () => window.clearTimeout(id);
+  }, [isOpen, isLocked]);
+
+  // Mobile keyboard avoidance: while a modal is open, expose the visualViewport height as a CSS
+  // custom property `--ta-vv-height` on <html>. Modal content that needs to keep its bottom
+  // controls visible above the soft keyboard can opt in via:
+  //   style={{ maxHeight: "var(--ta-vv-height, 100vh)" }}
+  // We don't force this on existing modals — only set the var; opt-in keeps current layouts intact.
+  useEffect(() => {
+    if (!isOpen) return;
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const update = () => {
+      document.documentElement.style.setProperty("--ta-vv-height", `${vv.height}px`);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      document.documentElement.style.removeProperty("--ta-vv-height");
+    };
+  }, [isOpen]);
+
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
-  // Track if back button was pressed (to avoid cleanup issues)
   const backButtonPressed = useRef(false);
-  // Track saved scroll position for body scroll prevention
   const savedScrollPosition = useRef<number>(0);
-  // Ref to modal content container for scroll handling
   const modalContentRef = useRef<HTMLDivElement>(null);
-  // Unique identifier for this modal instance to track history state
   const modalId = useRef<string>(`modal-${Date.now()}-${Math.random()}`);
-  // Track if we're currently handling a popstate event to prevent infinite loops
   const isHandlingPopState = useRef(false);
-  // Track if we're in an in-app browser (Facebook, Instagram, etc.)
   const isInAppBrowser = useRef<boolean | null>(null);
 
-  // Size variants
   const sizeStyles = {
     sm: "max-w-sm",
     md: "max-w-md",
@@ -64,25 +148,36 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     full: "max-w-full",
   };
 
-  // Height variants
   const heightStyles = {
-    auto: "max-h-[95dvh]",
+    auto: "max-h-[88dvh] max-xs:max-h-[92dvh]",
     screen: "h-screen-dvh",
     fixed: fixedHeight || "h-[90dvh]",
   };
 
-  /**
-   * Find the scrollable element within the modal
-   * This searches for the element with overflow-y-auto (typically ModalContent)
-   */
+  const isSheet = presentation === "sheet";
+
+  const backdropV = reduceMotion ? reducedBackdropVariants : backdropVariants;
+  const panelV = reduceMotion
+    ? reducedPanelVariants
+    : isSheet
+      ? sheetPanelVariants
+      : nested
+        ? dialogNestedPanelVariants
+        : dialogPanelVariants;
+
+  const resolveZIndex = () => {
+    if (zIndex !== undefined) return zIndex;
+    if (nestedSecondary) return Z_INDEX.MODAL_NESTED_SECONDARY;
+    if (nested) return Z_INDEX.MODAL_NESTED;
+    return Z_INDEX.MODAL_BASE;
+  };
+
   const findScrollableElement = (container: HTMLElement): HTMLElement | null => {
-    // Check if container itself is scrollable
     const style = window.getComputedStyle(container);
     if (style.overflowY === "auto" || style.overflowY === "scroll") {
       return container;
     }
 
-    // Search for scrollable child element
     const scrollableChild = container.querySelector(
       '[class*="overflow-y-auto"], [class*="overflow-y-scroll"]'
     ) as HTMLElement;
@@ -93,74 +188,48 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     }
 
-    // Fallback: return container if no scrollable child found
     return container;
   };
 
-  /**
-   * Handle input focus to ensure smooth scrolling into view
-   * When an input is focused, scroll it into view smoothly
-   */
   useEffect(() => {
-    if (!isOpen || !modalContentRef.current) return;
+    if (!modalBlocking || !modalContentRef.current) return;
 
     const modalContainer = modalContentRef.current;
 
-    /**
-     * Handle focus events on input elements
-     * Scrolls the focused input into view with smooth behavior
-     */
     const handleInputFocus = (event: FocusEvent) => {
       const target = event.target as HTMLElement;
 
-      // Only handle input, textarea, and select elements
       if (!target || !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
         return;
       }
 
-      // Small delay to allow keyboard animation to start
       setTimeout(() => {
-        // Use scrollIntoView with smooth behavior and block: 'center'
-        // This ensures the input is centered in the visible area
         target.scrollIntoView({
           behavior: "smooth",
           block: "center",
           inline: "nearest",
         });
-      }, 100); // Small delay for keyboard animation
+      }, 100);
     };
 
-    // Listen for focus events on all inputs within modal
     modalContainer.addEventListener("focusin", handleInputFocus);
 
     return () => {
       modalContainer.removeEventListener("focusin", handleInputFocus);
     };
-  }, [isOpen]);
+  }, [modalBlocking]);
 
-  /**
-   * Prevent body scroll and handle modal scroll boundaries
-   * This ensures that when modal reaches top/bottom, body doesn't scroll
-   */
   useEffect(() => {
-    if (!isOpen || !modalContentRef.current) return;
+    if (!modalBlocking || !modalContentRef.current) return;
 
     const modalContainer = modalContentRef.current;
     const scrollableElement = findScrollableElement(modalContainer);
 
     if (!scrollableElement) return;
 
-    /**
-     * Check if target is inside a dropdown options list (nested scrollable).
-     * We must NOT prevent default for these so mobile touch/swipe scroll works.
-     */
     const isInsideDropdownList = (el: EventTarget | null) =>
       el && (el as Element).closest?.("[data-dropdown-list]");
 
-    /**
-     * Prevent scroll propagation when modal is at boundaries
-     * This stops the body from scrolling when user tries to scroll past modal limits
-     */
     const handleWheel = (e: WheelEvent) => {
       if (isInsideDropdownList(e.target)) return;
       const { scrollTop, scrollHeight, clientHeight } = scrollableElement;
@@ -173,10 +242,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     };
 
-    /**
-     * Prevent touch scroll propagation when modal is at boundaries.
-     * Skip entirely when touching a dropdown list so mobile swipe-to-scroll works.
-     */
     let touchStartY = 0;
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -201,7 +266,10 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     };
 
-    // Add event listeners to the scrollable element
+    // NOTE: wheel and touchmove are intentionally non-passive — they call e.preventDefault() to
+    // implement modal scroll-lock at the boundaries (so wheel/touch overscroll does not propagate
+    // to the body behind the modal). touchstart is passive (read-only). Do not flip these to
+    // passive without rethinking the boundary-stop behaviour.
     scrollableElement.addEventListener("wheel", handleWheel, { passive: false });
     scrollableElement.addEventListener("touchstart", handleTouchStart, { passive: true });
     scrollableElement.addEventListener("touchmove", handleTouchMove, { passive: false });
@@ -211,12 +279,8 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       scrollableElement.removeEventListener("touchstart", handleTouchStart);
       scrollableElement.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [isOpen]);
+  }, [modalBlocking]);
 
-  /**
-   * Detect if we're in an in-app browser (Facebook, Instagram, etc.)
-   * In-app browsers have different navigation behavior and need special handling
-   */
   const detectInAppBrowser = (): boolean => {
     if (isInAppBrowser.current !== null) {
       return isInAppBrowser.current;
@@ -229,7 +293,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     const userAgent = window.navigator.userAgent || "";
     const isStandalone = (window.navigator as { standalone?: boolean }).standalone;
 
-    // Check for in-app browser indicators
     const isFacebook = userAgent.includes("FBAN") || userAgent.includes("FBAV");
     const isInstagram = userAgent.includes("Instagram");
     const isTwitter = userAgent.includes("Twitter");
@@ -238,7 +301,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     const isWeChat = userAgent.includes("MicroMessenger");
     const isWebView = userAgent.includes("wv");
 
-    // Check if referrer suggests we came from an external app
     const referrer = document.referrer || "";
     const fromExternalApp =
       referrer.includes("facebook.com") ||
@@ -260,64 +322,27 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     return isInAppBrowser.current;
   };
 
-  /**
-   * Handle browser back button press
-   * This prevents accidental navigation when modal is open on mobile devices
-   *
-   * Works in:
-   * - Regular mobile browsers (Chrome, Safari, Firefox, etc.)
-   * - In-app browsers (Facebook, Instagram, Twitter, LinkedIn, etc.)
-   * - WebViews and embedded browsers
-   *
-   * Strategy (Best Practice):
-   * 1. Detect if we're in an in-app browser
-   * 2. When modal opens, push a SINGLE history state with a unique identifier
-   * 3. When back button is pressed, popstate event fires
-   * 4. Immediately push the state back to prevent navigation
-   * 5. Close the modal
-   * 6. Clean up history state when modal closes normally
-   *
-   * Important Limitations:
-   * - Uses standard Web APIs (popstate, pushState, replaceState)
-   * - Cannot prevent cross-origin navigation (e.g., back to Facebook from Facebook browser)
-   * - This is a browser security feature and cannot be bypassed
-   * - Works best when user navigated within your site (not directly from external link)
-   *
-   * Best Practices Applied:
-   * - Single history state push (avoids history stack pollution)
-   * - Preserves Next.js router state
-   * - Proper cleanup on modal close
-   * - Graceful error handling
-   */
   useEffect(() => {
-    if (!isOpen || !preventBackButton) {
-      // Reset flags when modal is closed or preventBackButton is disabled
+    if (!modalBlocking || !preventBackButton) {
       historyStatePushed.current = false;
       backButtonPressed.current = false;
       isHandlingPopState.current = false;
       return;
     }
 
-    // Detect if we're in an in-app browser
     const inAppBrowser = detectInAppBrowser();
 
-    // Generate a unique identifier for this modal instance
     modalId.current = `modal-${Date.now()}-${Math.random()}`;
 
-    // Push a single history state when modal opens
-    // This creates a history entry that we can intercept when back button is pressed
     const currentState = window.history.state || {};
     const historyState = {
-      ...currentState, // Preserve existing state (including Next.js internal state)
+      ...currentState,
       modalOpen: true,
       modalId: modalId.current,
       timestamp: Date.now(),
-      ...(inAppBrowser && { inAppBrowser: true }), // Mark for in-app browser handling
+      ...(inAppBrowser && { inAppBrowser: true }),
     };
 
-    // Use replaceState if we're already on a modal state (prevents history stack buildup)
-    // Otherwise use pushState to create a new entry
-    // Note: We use a single state push - best practice is to avoid polluting history
     if (currentState?.modalOpen) {
       window.history.replaceState(historyState, "");
     } else {
@@ -328,46 +353,29 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     backButtonPressed.current = false;
     isHandlingPopState.current = false;
 
-    /**
-     * Handle popstate event (triggered by back button)
-     * When user presses back button, prevent navigation and close modal instead
-     */
     const handlePopState = (event: PopStateEvent) => {
-      // Prevent infinite loops - if we're already handling a popstate, ignore it
       if (isHandlingPopState.current) {
         return;
       }
 
-      // Check if this popstate is for our modal
-      // For in-app browsers, we intercept any back navigation when modal is open
-      // For regular browsers, we only intercept if it's our modal state
-      const currentState = event.state;
+      const eventState = event.state;
       const isOurModalState =
-        currentState?.modalId === modalId.current ||
-        (historyStatePushed.current && (!currentState || !currentState.modalOpen));
+        eventState?.modalId === modalId.current ||
+        (historyStatePushed.current && (!eventState || !eventState.modalOpen));
 
-      // Determine if we should intercept this navigation
-      // In in-app browsers, intercept any back navigation when modal is open
-      // In regular browsers, only intercept if it's our modal state
       const shouldIntercept = inAppBrowser
-        ? historyStatePushed.current // In-app browser: intercept any back navigation
-        : isOurModalState && historyStatePushed.current; // Regular browser: only our modal
+        ? historyStatePushed.current
+        : isOurModalState && historyStatePushed.current;
 
       if (shouldIntercept) {
-        // Mark that we're handling this popstate to prevent infinite loops
         isHandlingPopState.current = true;
 
-        // Mark that back button was pressed
         backButtonPressed.current = true;
 
         try {
-          // Immediately push the state back to prevent navigation
-          // This must happen synchronously to prevent the browser from navigating away
-          // Preserve Next.js internal state from the event state (the state we're navigating to)
-          // This ensures Next.js router stays in sync
           const targetState = event.state || {};
           const newHistoryState = {
-            ...targetState, // Preserve state from event (including Next.js internal state)
+            ...targetState,
             modalOpen: true,
             modalId: modalId.current,
             timestamp: Date.now(),
@@ -375,21 +383,14 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
             ...(inAppBrowser && { inAppBrowser: true }),
           };
 
-          // Push state back immediately (synchronously) to prevent navigation
-          // Best practice: Use a single pushState, not multiple (avoids history pollution)
           window.history.pushState(newHistoryState, "");
           historyStatePushed.current = true;
 
-          // Close the modal after preventing navigation
-          // Use setTimeout to ensure this happens after the current execution context
-          // This allows the history state to be properly set
           setTimeout(() => {
             isHandlingPopState.current = false;
             onClose();
           }, 0);
         } catch (error) {
-          // If history manipulation fails, just close the modal
-          // Note: In some in-app browsers, cross-origin navigation cannot be prevented
           console.warn("Could not prevent navigation on back button:", error);
           isHandlingPopState.current = false;
           onClose();
@@ -397,44 +398,30 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
       }
     };
 
-    // Listen for back button press
-    // Use capture phase to ensure we handle it before other listeners
     window.addEventListener("popstate", handlePopState, { capture: true });
 
-    // Cleanup: Remove event listener and history state if modal closes normally
     return () => {
       window.removeEventListener("popstate", handlePopState, { capture: true });
 
-      // If modal closes normally (not via back button), remove the history state we added
-      // Only clean up if back button wasn't pressed (which already popped the state)
       if (historyStatePushed.current && !backButtonPressed.current && !isHandlingPopState.current) {
-        // Check if current state is the one we pushed
-        const currentState = window.history.state;
-        if (currentState?.modalId === modalId.current || currentState?.modalOpen) {
-          // Remove our modal properties but preserve Next.js internal state
+        const currentHistoryState = window.history.state;
+        if (currentHistoryState?.modalId === modalId.current || currentHistoryState?.modalOpen) {
           try {
-            // Create a new state without our modal properties
-            // Preserve Next.js internal properties (__NA, __PRIVATE_NEXTJS_INTERNALS_TREE, etc.)
             const cleanedState: Record<string, unknown> = {};
 
-            // Preserve Next.js internal state properties
-            if (currentState?.__NA !== undefined) cleanedState.__NA = currentState.__NA;
-            if (currentState?._N !== undefined) cleanedState._N = currentState._N;
-            if (currentState?.__PRIVATE_NEXTJS_INTERNALS_TREE !== undefined) {
-              cleanedState.__PRIVATE_NEXTJS_INTERNALS_TREE = currentState.__PRIVATE_NEXTJS_INTERNALS_TREE;
+            if (currentHistoryState?.__NA !== undefined) cleanedState.__NA = currentHistoryState.__NA;
+            if (currentHistoryState?._N !== undefined) cleanedState._N = currentHistoryState._N;
+            if (currentHistoryState?.__PRIVATE_NEXTJS_INTERNALS_TREE !== undefined) {
+              cleanedState.__PRIVATE_NEXTJS_INTERNALS_TREE = currentHistoryState.__PRIVATE_NEXTJS_INTERNALS_TREE;
             }
 
-            // Replace state with cleaned version (or null if no Next.js state to preserve)
             const finalState = Object.keys(cleanedState).length > 0 ? cleanedState : null;
             window.history.replaceState(finalState, "");
           } catch (error) {
-            // If history manipulation fails, just replace the state
-            // This can happen in some edge cases with Next.js router
             console.warn("Could not clean up modal history state:", error);
             try {
               window.history.replaceState(null, "");
             } catch (e) {
-              // If even this fails, just log and continue
               console.warn("Failed to replace history state:", e);
             }
           }
@@ -442,102 +429,125 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
         historyStatePushed.current = false;
       }
 
-      // Reset flags for next time
       backButtonPressed.current = false;
       isHandlingPopState.current = false;
     };
-  }, [isOpen, preventBackButton, onClose]);
+  }, [modalBlocking, preventBackButton, onClose]);
 
-  /**
-   * Prevent body scrolling when modal is open
-   * Saves and restores scroll position to prevent visual jump
-   * ✅ FIX: Detects nested modals and preserves parent modal's scroll lock
-   */
   useEffect(() => {
-    if (!isOpen) return;
+    if (!modalBlocking) return;
 
-    // ✅ FIX: Check if body is already locked (nested modal scenario)
-    // If body is already fixed, we're likely inside another modal
-    // In this case, preserve the existing scroll lock and don't modify it
     const isBodyAlreadyLocked = document.body.style.position === "fixed";
-    
+
     if (isBodyAlreadyLocked) {
-      // Nested modal: Don't modify scroll lock, parent modal handles it
-      // Just track that we detected nesting (for cleanup)
-      return () => {
-        // No cleanup needed for nested modals - parent handles scroll restoration
-      };
+      return () => {};
     }
 
-    // Save current scroll position before locking (only for top-level modals)
     savedScrollPosition.current = window.scrollY;
 
-    // Lock body scroll and maintain visual position
+    const html = document.documentElement;
+    const prevHtmlScrollbarGutter = html.style.scrollbarGutter;
+
+    // `scrollbar-gutter: stable` (globals.css) keeps an empty lane when the root scrollbar is
+    // suppressed — looks like content jumped left with a dead strip on the right. Release gutter
+    // while locked, then measure the real scrollbar width before body `fixed` removes it.
+    html.style.scrollbarGutter = "auto";
+    const scrollbarWidth = getViewportScrollbarWidthPx();
+
     document.body.style.overflow = "hidden";
     document.body.style.position = "fixed";
     document.body.style.top = `-${savedScrollPosition.current}px`;
     document.body.style.width = "100%";
 
-    // Cleanup: Restore body scroll and position when modal closes
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+      html.style.setProperty("--scrollbar-width", `${scrollbarWidth}px`);
+      html.setAttribute("data-modal-scroll-lock", "");
+    }
+
     return () => {
-      // Only restore if we're the top-level modal (body is still fixed by us)
-      // If body position changed, another modal took over (nested scenario)
       if (document.body.style.position === "fixed") {
-        // Restore body styles
+        html.style.scrollbarGutter = prevHtmlScrollbarGutter;
         document.body.style.overflow = "";
         document.body.style.position = "";
         document.body.style.top = "";
         document.body.style.width = "";
+        document.body.style.paddingRight = "";
+        html.style.removeProperty("--scrollbar-width");
+        html.removeAttribute("data-modal-scroll-lock");
 
-        // Restore scroll position
         window.scrollTo(0, savedScrollPosition.current);
       }
     };
-  }, [isOpen]);
+  }, [modalBlocking]);
 
-  if (!isOpen) return null;
+  if (!isLocked) return null;
 
-  const modalZIndex = nested ? Z_INDEX.MODAL_NESTED : Z_INDEX.MODAL_BASE;
+  const modalZIndex = resolveZIndex();
+
+  const outerFlex = mobileFullBleed
+    ? "items-end justify-center p-0 lg:items-center lg:justify-center lg:p-2"
+    : isSheet
+      ? "items-end justify-center pt-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-2 sm:pb-2"
+      : "items-center justify-center p-2";
+
+  const panelShape = mobileFullBleed
+    ? `w-full max-w-none rounded-t-2xl rounded-b-none lg:${sizeStyles[size]} lg:rounded-2xl`
+    : isSheet
+      ? `rounded-t-2xl rounded-b-none sm:rounded-2xl sm:rounded-b-2xl w-full ${sizeStyles[size]}`
+      : `rounded-2xl w-full ${sizeStyles[size]}`;
+
+  // Full-bleed below lg = 95dvh (5% top gap, bottom-flush); normal at lg+.
+  const panelHeight = mobileFullBleed
+    ? "h-[95dvh] lg:h-auto lg:max-h-[88dvh]"
+    : heightStyles[height];
 
   const modalContent = (
     <div
-      className="fixed inset-0 flex items-center justify-center p-2"
+      className={cn("fixed inset-0 flex", outerFlex, "pointer-events-none")}
       style={{ zIndex: modalZIndex }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      {/* Backdrop with touch-action to prevent scrolling on mobile */}
-      <div
-        className="absolute inset-0 bg-black/50 touch-none"
-        onClick={closeOnBackdrop ? onClose : undefined}
+      <motion.div
+        className={cn("absolute inset-0 bg-black/85 backdrop-blur-md touch-none", isOpen ? "pointer-events-auto" : "pointer-events-none")}
+        variants={backdropV}
+        initial="closed"
+        animate={isOpen ? "open" : "closed"}
         aria-hidden="true"
         style={{ touchAction: "none" }}
+        onClick={closeOnBackdrop ? onClose : undefined}
       />
 
-      {/* Modal */}
-      <div
+      <motion.div
         ref={modalContentRef}
         className={`
-        relative bg-white rounded-2xl shadow-2xl w-full mx-auto overflow-hidden flex flex-col
-        ${sizeStyles[size]}
-        ${heightStyles[height]}
+        relative overflow-hidden flex flex-col ${isOpen ? "pointer-events-auto" : "pointer-events-none"} mx-auto
+        ${
+          isDarkMode
+            ? "dark bg-neutral-900 border border-neutral-800 shadow-2xl shadow-black/50"
+            : "bg-white border border-gray-200/90 shadow-2xl shadow-gray-900/10"
+        }
+        ${panelShape}
+        ${panelHeight}
         ${className}
       `}
         role="document"
+        variants={panelV}
+        initial="closed"
+        animate={isOpen ? "open" : "closed"}
         onClick={(e) => e.stopPropagation()}
+        onAnimationComplete={handlePanelAnimationComplete}
         style={{
-          // Ensure proper height constraint for flex children
           minHeight: 0,
         }}
       >
         {children}
-      </div>
+      </motion.div>
     </div>
   );
 
-  // Portal to document.body ensures modals always appear above page content
-  // (avoids stacking context issues from parent transforms, overflow, etc.)
   if (typeof document !== "undefined" && document.body) {
     return createPortal(modalContent, document.body);
   }

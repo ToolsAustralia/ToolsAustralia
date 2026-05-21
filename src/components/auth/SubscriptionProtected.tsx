@@ -66,7 +66,7 @@ export default function SubscriptionProtected({
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Subscription Required
             </h1>
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-gray-600 dark:text-neutral-400">
               This page is only available to members with an active subscription. Please subscribe to access this content.
             </p>
           </div>

@@ -21,11 +21,12 @@ export default function FlowChartSection() {
         <div className="w-full flex justify-center items-center">
           <div className="relative w-full max-w-2xl">
             <Image
-              src="/images/charts/flowChart.png"
+              src="/images/charts/flowChart.webp"
               alt="Membership Flow Chart - How entries, major draws, and point redemption work"
               width={600}
               height={600}
               className="object-contain w-full h-auto"
+              sizes="(max-width: 768px) 100vw, 672px"
               priority
             />
           </div>

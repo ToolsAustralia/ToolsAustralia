@@ -13,32 +13,12 @@ import ErrorReport from "@/models/ErrorReport";
 import Winner from "@/models/Winner";
 import ExperimentEvent from "@/models/ab-testing/ExperimentEvent";
 import Experiment from "@/models/ab-testing/Experiment";
+import Variant from "@/models/ab-testing/Variant";
 import VariantAssignment from "@/models/ab-testing/VariantAssignment";
 import connectDB from "@/lib/mongodb";
 
-// ✅ CRITICAL: Singleton pattern - only run index creation once per server instance
-let indexesEnsured = false;
-let ensureIndexesPromise: Promise<void> | null = null;
-
-export async function ensureIndexesOnce(): Promise<void> {
-  // If already ensured, skip
-  if (indexesEnsured) {
-    return;
-  }
-
-  // If already in progress, wait for it to complete
-  if (ensureIndexesPromise) {
-    return ensureIndexesPromise;
-  }
-
-  // Start ensuring indexes
-  ensureIndexesPromise = ensureCriticalIndexes();
-  await ensureIndexesPromise;
-  indexesEnsured = true;
-  ensureIndexesPromise = null;
-}
-
-async function ensureCriticalIndexes(): Promise<void> {
+// Exported for scripts/migrate-ensure-core-indexes.ts — not for request-path use.
+export async function ensureCriticalIndexes(): Promise<void> {
   try {
     await connectDB();
 
@@ -67,6 +47,10 @@ async function dropRedundantIndexes(): Promise<void> {
     { collection: ExperimentEvent.collection, indexName: "experimentId_1" },
     { collection: Experiment.collection, indexName: "status_1" },
     { collection: VariantAssignment.collection, indexName: "experimentId_1" },
+    // Performance Advisor: redundant with isActive_1_createdAt_-1 and subscription compound
+    { collection: User.collection, indexName: "isActive_1" },
+    // Performance Advisor: redundant with experimentId_1_isControl_1
+    { collection: Variant.collection, indexName: "experimentId_1" },
   ];
 
   for (const { collection, indexName } of toDrop) {
@@ -171,6 +155,18 @@ async function ensureUserIndexes(): Promise<void> {
   });
   // MongoDB Atlas recommended: compound index for active users sorted by creation date
   await ensureIndex(User.collection, { isActive: 1, createdAt: -1 });
+  // Performance Advisor: mobile lookups (register, update-profile duplicate checks)
+  await ensureIndex(User.collection, { mobile: 1 });
+  // Performance Advisor: subscription status/autoRenew/endDate filtering
+  await ensureIndex(User.collection, {
+    isActive: 1,
+    "subscription.isActive": 1,
+    "subscription.status": 1,
+    "subscription.endDate": 1,
+    "subscription.autoRenew": 1,
+  });
+  // Performance Advisor: createdAt sorting for admin user list/search
+  await ensureIndex(User.collection, { createdAt: -1 });
   // console.log("✅ User indexes ensured");
 }
 
@@ -205,5 +201,5 @@ async function ensureIndex(
   // console.log(`✅ Created index "${indexName}"`);
 }
 
-// ✅ NOTE: Indexes are now ensured via ensureIndexesOnce() called from webhook handler
-// This ensures indexes are created before any payment processing happens
+// ✅ NOTE: Indexes are ensured out-of-band via scripts/migrate-ensure-core-indexes.ts
+// (no longer on the request path) so payment processing isn't blocked on index builds

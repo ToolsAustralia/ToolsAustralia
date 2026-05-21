@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { X, Upload, AlertCircle, Loader2, Cloud, CheckCircle } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface ImageUploadProps {
   images: (File | string)[];
@@ -287,12 +288,12 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       {/* Label */}
       {label && (
-        <h3 className="text-lg font-semibold text-gray-900">
-          {label} {required && <span className="text-red-500">*</span>}
-          <span className="text-sm font-normal text-gray-500 ml-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">
+          {label} {required && <span className="text-red-500 dark:text-red-400">*</span>}
+          <span className="text-sm font-normal text-gray-500 dark:text-neutral-400 ml-2">
             ({images.length}/{maxImages})
           </span>
           {uploadToCloudinary && (
@@ -331,9 +332,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
           {isUploading ? (
             <Loader2 className="mx-auto h-10 w-10 text-red-500 mb-3 animate-spin" />
           ) : (
-            <Upload className="mx-auto h-10 w-10 text-gray-400 mb-3" />
+            <Upload className="mx-auto h-10 w-10 text-gray-400 dark:text-neutral-500 mb-3" />
           )}
-          <p className="text-base font-medium text-gray-900 mb-2">
+          <p className="text-base font-medium text-gray-900 dark:text-neutral-100 mb-2">
             {isUploading ? (
               "Uploading..."
             ) : (
@@ -342,7 +343,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
               </>
             )}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-neutral-400">
             PNG, JPG, GIF up to {maxFileSize}MB each
             {maxImages > 1 && (
               <>
@@ -358,9 +359,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       {uploadProgress.length > 0 && (
         <div className="space-y-2">
           {uploadProgress.map((progress, index) => (
-            <div key={index} className="bg-gray-50 p-3 rounded-lg">
+            <div key={index} className="bg-gray-50 dark:bg-neutral-800/70 p-3 rounded-lg border border-transparent dark:border-neutral-700">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700 truncate">{progress.file.name}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-neutral-200 truncate">{progress.file.name}</span>
                 <div className="flex items-center gap-2">
                   {progress.status === "uploading" && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
                   {progress.status === "success" && <CheckCircle className="w-4 h-4 text-green-500" />}
@@ -400,6 +401,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                 width={500}
                 height={400}
                 className="w-full h-80 object-contain rounded-lg border border-gray-300 bg-gray-50"
+                sizes="(max-width: 768px) 100vw, 500px"
               />
 
               {/* Overlay for drag and drop replacement */}

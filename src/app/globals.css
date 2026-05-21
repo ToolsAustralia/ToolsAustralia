@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --bg-page: #f9fafb;
+    --bg-surface: #ffffff;
+    --text-primary: #111827;
+    --text-muted: #6b7280;
+    --border-default: #e5e7eb;
+    /* Layout offsets — eliminates ~34 arbitrary pt-[86px]/pt-[106px] literals.
+       Used as `pt-[var(--app-header-h)]` / `lg:pt-[var(--app-header-h-lg)]`. */
+    --app-header-h: 86px;
+    --app-header-h-lg: 106px;
+  }
+
+  .dark {
+    --bg-page: #0a0a0a;
+    --bg-surface: #171717;
+    --text-primary: #f5f5f5;
+    --text-muted: #a3a3a3;
+    --border-default: #404040;
+  }
+
+  html {
+    transition: background-color 0.2s ease, color 0.2s ease;
+    /* Reserves space for the scrollbar so hiding overflow during modals doesn’t narrow/widen the layout */
+    scrollbar-gutter: stable;
+  }
+
+  /*
+   * Body scroll-lock adds padding-right; viewport-fixed chrome (header, bottom nav) still sizes to
+   * the full viewport unless we match that gutter. Do not use transform on body to “fix” this — it
+   * breaks stacking for portaled modals on several browsers.
+   */
+  html[data-modal-scroll-lock] header.fixed,
+  html[data-modal-scroll-lock] nav.fixed.bottom-0 {
+    padding-inline-end: var(--scrollbar-width, 0px);
+  }
+}
+
+/* Semantic surfaces (use for new chrome; migrate incrementally from raw Tailwind) */
+@layer utilities {
+  .bg-page {
+    background-color: var(--bg-page);
+  }
+  .bg-surface {
+    background-color: var(--bg-surface);
+  }
+  .text-primary-token {
+    color: var(--text-primary);
+  }
+  .text-muted-token {
+    color: var(--text-muted);
+  }
+  .border-token {
+    border-color: var(--border-default);
+  }
+}
+
+/* Recharts — readable axes/grid in admin dark mode */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: #404040;
+}
+
+.dark .recharts-text.recharts-cartesian-axis-tick-value {
+  fill: #a3a3a3;
+}
+
+.dark .recharts-legend-item-text {
+  color: #e5e5e5 !important;
+}
+
 /* Acumin Pro Condensed - Ultra Black Italic. Add font file (e.g. AcuminProCondensed-UltraBlackItalic.woff2) to public/fonts/ to load. */
 @font-face {
   font-family: "Acumin Pro Condensed";
@@ -13,28 +84,30 @@
 
 @layer utilities {
   /* Promo Hero Banner - Ellipse clip-path for rounded bottom effect */
-  /* Mobile: 50vh height, 135% ellipse width, min-height 430px */
-  /* Desktop: 83vh height, 126% ellipse width */
+  /* Height controlled by PromoHero section (aspect-ratio + clamp for mobile; 83vh at lg) */
   .main-banner-image {
     background-repeat: no-repeat;
     background-size: cover;
     background-position: 50%;
     width: 100%;
-    /* Mobile styles */
-    height: 50vh;
-    min-height: 430px;
+    /* Mobile: inset-0 fills parent; clip-path for rounded bottom */
     -webkit-clip-path: ellipse(135% 97% at 50% 0); /* Safari < 15.4 support */
     clip-path: ellipse(135% 97% at 50% 0);
   }
 
-  /* Desktop styles - override mobile at lg breakpoint */
+  /* Desktop: wider ellipse at lg breakpoint */
   @media (min-width: 1024px) {
     .main-banner-image {
-      height: 83vh !important;
-      min-height: unset !important;
       -webkit-clip-path: ellipse(126% 97% at 50% 0) !important; /* Safari < 15.4 support */
       clip-path: ellipse(126% 97% at 50% 0) !important;
     }
+  }
+
+  /* PromoHero opt-out: disable bottom arch (ellipse clip) without removing rules above.
+     Toggle via PROMO_HERO_ELLIPSE_CLIP_ENABLED in PromoHero.tsx */
+  .main-banner-image.promo-hero-banner--flat {
+    -webkit-clip-path: none !important;
+    clip-path: none !important;
   }
 
   .pattern-dots-white {
@@ -83,6 +156,7 @@
   }
 }
 
+
 /* Custom Viewport Height Utilities */
 /* Progressive enhancement: vh fallback for older browsers (Safari < 15.4, iOS < 15.4) */
 /* Modern browsers will use svh/dvh, older browsers will use vh fallback */
@@ -108,60 +182,58 @@
   }
 }
 
-/* Metallic modal scrollbar utilities */
-/* Applies only when the element has the .modal-scrollbar class */
-@layer utilities {
-  .modal-scrollbar {
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: #ef4444 #1f2937; /* thumb track */
+/* Brand scrollbars — same as admin sidebar / main (Tools Australia red thumb, light & dark tracks).
+   Use .brand-scrollbar on any overflow-auto / scroll container. Aliases: .admin-scrollbar, .custom-scrollbar, .modal-scrollbar */
+
+/* Modal body: match shop / filter-sidebar dark surfaces (charcoal panel, light type).
+   Plain CSS only — nested selectors must not @apply utilities that appear in the selector
+   (Tailwind reports a circular dependency for e.g. .modal-panel-body .text-gray-900). */
+@layer components {
+  .modal-panel-body {
+    color: rgb(17 24 39);
   }
 
-  .modal-scrollbar::-webkit-scrollbar {
-    width: 10px;
+  .dark .modal-panel-body {
+    color: rgb(245 245 245);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-track {
-    background: linear-gradient(180deg, #111827, #1f2937);
-    border-radius: 8px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  .dark .modal-panel-body .text-gray-900 {
+    color: rgb(255 255 255);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #b91c1c, #ef4444);
-    border-radius: 8px;
-    border: 2px solid #1f2937; /* outlines thumb against dark track */
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  .dark .modal-panel-body .text-gray-800 {
+    color: rgb(245 245 245);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #dc2626, #f87171);
-    box-shadow: 0 0 14px rgba(239, 68, 68, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  .dark .modal-panel-body .text-gray-700 {
+    color: rgb(212 212 212);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-thumb:active {
-    background: linear-gradient(180deg, #991b1b, #ef4444);
-    box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) inset;
+  .dark .modal-panel-body .text-gray-600 {
+    color: rgb(163 163 163);
   }
 
-  .modal-scrollbar::-webkit-scrollbar-corner {
-    background: transparent;
+  .dark .modal-panel-body .text-gray-500 {
+    color: rgb(115 115 115);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .modal-scrollbar::-webkit-scrollbar-thumb,
-    .modal-scrollbar::-webkit-scrollbar-thumb:hover,
-    .modal-scrollbar::-webkit-scrollbar-thumb:active {
-      box-shadow: none;
-    }
+  .dark .modal-panel-body .border-gray-100,
+  .dark .modal-panel-body .border-gray-200 {
+    border-color: rgb(38 38 38);
   }
-}
 
-/* Dropdown lists: ensure native touch/swipe scroll on mobile */
-@layer utilities {
-  [data-dropdown-list] {
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
-    overscroll-behavior-y: contain;
+  .dark .modal-panel-body .border-gray-300 {
+    border-color: rgb(64 64 64);
+  }
+
+  .dark .modal-panel-body .bg-gray-50,
+  .dark .modal-panel-body .bg-gray-100 {
+    background-color: rgb(38 38 38 / 0.6);
+  }
+
+  /* Subtle glass effect for general white chips — use bg-[#ffffff] or dark:!bg-* on popovers or they read as transparent */
+  .dark .modal-panel-body .bg-white {
+    background-color: rgb(38 38 38 / 0.4);
   }
 }
 
@@ -207,31 +279,120 @@
   animation-delay: 1s;
 }
 
-/* Custom Scrollbar for Rewards Page */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #1e293b;
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(to right, #fbbf24, #f59e0b, #fbbf24);
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to right, #fcd34d, #fbbf24, #fcd34d);
-}
-
-/* Custom Scrollbar for Revenue Overview Chart (mobile horizontal scroll) */
-@media (max-width: 640px) {
-  .custom-scrollbar {
+@layer utilities {
+  /* Scrollbar chrome only — do NOT set touch-action: pan-y here: it blocks horizontal pan on overflow-x-auto (tabs, tables). */
+  .admin-scrollbar,
+  .brand-scrollbar,
+  .custom-scrollbar,
+  .modal-scrollbar,
+  [data-dropdown-list] {
     scrollbar-width: thin;
-    scrollbar-color: #fbbf24 #1e293b;
+    scrollbar-color: #ee0000 #fef2f2;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Vertical dropdown lists only: contain vertical scroll without stealing horizontal gestures from parents. */
+  [data-dropdown-list] {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+
+  .admin-scrollbar::-webkit-scrollbar,
+  .brand-scrollbar::-webkit-scrollbar,
+  .custom-scrollbar::-webkit-scrollbar,
+  .modal-scrollbar::-webkit-scrollbar,
+  [data-dropdown-list]::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .admin-scrollbar::-webkit-scrollbar-track,
+  .brand-scrollbar::-webkit-scrollbar-track,
+  .custom-scrollbar::-webkit-scrollbar-track,
+  .modal-scrollbar::-webkit-scrollbar-track,
+  [data-dropdown-list]::-webkit-scrollbar-track {
+    background: #fef2f2;
+    border-radius: 8px;
+  }
+
+  .admin-scrollbar::-webkit-scrollbar-thumb,
+  .brand-scrollbar::-webkit-scrollbar-thumb,
+  .custom-scrollbar::-webkit-scrollbar-thumb,
+  .modal-scrollbar::-webkit-scrollbar-thumb,
+  [data-dropdown-list]::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #dc2626 100%);
+    border-radius: 8px;
+  }
+
+  .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+  .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+  [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+  }
+
+  .admin-scrollbar::-webkit-scrollbar-corner,
+  .brand-scrollbar::-webkit-scrollbar-corner,
+  .custom-scrollbar::-webkit-scrollbar-corner,
+  .modal-scrollbar::-webkit-scrollbar-corner,
+  [data-dropdown-list]::-webkit-scrollbar-corner {
+    background: #fef2f2;
+  }
+
+  .dark .admin-scrollbar,
+  .dark .brand-scrollbar,
+  .dark .custom-scrollbar,
+  .dark .modal-scrollbar,
+  .dark [data-dropdown-list] {
+    scrollbar-color: #ee0000 #262626;
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-track,
+  .dark .brand-scrollbar::-webkit-scrollbar-track,
+  .dark .custom-scrollbar::-webkit-scrollbar-track,
+  .dark .modal-scrollbar::-webkit-scrollbar-track,
+  .dark [data-dropdown-list]::-webkit-scrollbar-track {
+    background: #262626;
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-thumb,
+  .dark .brand-scrollbar::-webkit-scrollbar-thumb,
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb,
+  .dark .modal-scrollbar::-webkit-scrollbar-thumb,
+  .dark [data-dropdown-list]::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #b91c1c 100%);
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+  .dark [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+  }
+
+  .dark .admin-scrollbar::-webkit-scrollbar-corner,
+  .dark .brand-scrollbar::-webkit-scrollbar-corner,
+  .dark .custom-scrollbar::-webkit-scrollbar-corner,
+  .dark .modal-scrollbar::-webkit-scrollbar-corner,
+  .dark [data-dropdown-list]::-webkit-scrollbar-corner {
+    background: #262626;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-scrollbar::-webkit-scrollbar-thumb,
+    .brand-scrollbar::-webkit-scrollbar-thumb,
+    .custom-scrollbar::-webkit-scrollbar-thumb,
+    .modal-scrollbar::-webkit-scrollbar-thumb,
+    [data-dropdown-list]::-webkit-scrollbar-thumb,
+    .admin-scrollbar::-webkit-scrollbar-thumb:hover,
+    .brand-scrollbar::-webkit-scrollbar-thumb:hover,
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+    .modal-scrollbar::-webkit-scrollbar-thumb:hover,
+    [data-dropdown-list]::-webkit-scrollbar-thumb:hover {
+      transition: none;
+    }
   }
 }
 
@@ -241,33 +402,76 @@
   --foreground: #171717;
   /* Fire animation - grainy/noisy background image for glitter effect */
   --glitter: url("https://assets.codepen.io/13471/silver-glitter-background.png");
-  /* Force light mode so Android email/SMS browsers don't invert colors */
-  color-scheme: light;
 }
 
-/* Always stay in light mode even if device prefers dark */
+/* Dark mode theme tokens - only active when .dark class is present */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+/* Respect system preference as fallback when no .dark class */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.dark) {
     --background: #ffffff;
     --foreground: #171717;
-    color-scheme: light;
-  }
-
-  html {
-    color-scheme: light;
-  }
-
-  body {
-    background: #ffffff !important;
-    color: #171717 !important;
   }
 }
 
 @layer base {
+  /* Viewport: only the thumb is visible (track/corner transparent) — read as scroll position, not a full rail */
   html {
     font-family: var(--font-inter), system-ui, sans-serif;
-    /* Lock the document in light mode for consistent branding */
-    color-scheme: light;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #ee0000 transparent;
+  }
+
+  html::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  html::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #dc2626 100%);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+    background-clip: padding-box;
+  }
+
+  html::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  html.dark {
+    scrollbar-color: #ee0000 transparent;
+  }
+
+  html.dark::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html.dark::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ee0000 0%, #b91c1c 100%);
+    background-clip: padding-box;
+  }
+
+  html.dark::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff4444 0%, #ee0000 100%);
+    background-clip: padding-box;
+  }
+
+  html.dark::-webkit-scrollbar-corner {
+    background: transparent;
   }
   
   /* Prevent scroll snapping on mobile during navigation */
@@ -284,9 +488,24 @@
     background: var(--background);
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Ensure body stays light even when browsers try to auto-darken */
-    background-color: #ffffff !important;
-    color: #171717 !important;
+    overflow-x: hidden;
+  }
+
+  /* Display typography: heavier headings + emphatic bold (Tailwind `font-bold` also extended in tailwind.config). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-poppins), "Poppins", system-ui, sans-serif;
+    font-weight: 800;
+    font-synthesis: none;
+  }
+
+  b,
+  strong {
+    font-weight: 800;
   }
 
   /* Comprehensive focus outline removal for all form elements */
@@ -391,7 +610,7 @@
 @layer components {
   /* Form input utility class for consistent styling */
   .form-input {
-    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-[#ee0000] bg-transparent text-black font-['Poppins'] transition-all duration-300;
+    @apply w-full py-3 px-4 pr-10 border-b focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-red-600 bg-transparent text-black dark:text-white font-['Poppins'] transition-all duration-300 placeholder-gray-500 dark:placeholder-gray-400;
   }
 
   .btn-primary {
@@ -637,13 +856,15 @@
     animation-play-state: paused;
   }
 
-  /* Hide scrollbar for membership cards and horizontal scrolling */
-  .scrollbar-hide {
-    -ms-overflow-style: none; /* Internet Explorer 10+ */
-    scrollbar-width: none; /* Firefox */
+  /* Hide scrollbar (carousels / marquees only). Prefer .brand-scrollbar for scroll areas that should show the thumb. */
+  .scrollbar-hide,
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none; /* Safari and Chrome */
+  .scrollbar-hide::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* Hide "View All Products" button in MyAccount page */
@@ -840,6 +1061,15 @@
   animation: topBarReappear 3s ease-in-out infinite;
 }
 
+/* Single cycle — use with rotating top-bar messages so each line gets one full in/out before swap */
+.animate-topbar-reappear-once {
+  animation-name: topBarReappear;
+  animation-duration: 3s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
 /* Pulsing glow effect for call-to-action buttons */
 @keyframes pulseGlow {
   0%,
@@ -967,34 +1197,34 @@
   color: #ca8a04;
 }
 
-/* Makita (Teal/Cyan) */
+/* Makita (cyan / sky blue — BRAND_THEMES.makita) */
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next,
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev {
-  color: #00a0aa;
+  color: #00c2ed;
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-button-prev:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-button-prev:hover {
-  color: #0b7e88;
+  color: #5ca9ec;
 }
 
-/* Ryobi (Lime Green) */
+/* Ryobi (neon chartreuse) */
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next,
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev {
-  color: #b8e000;
+  color: #e0ff00;
 }
 
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-button-prev:hover,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-next:hover,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-button-prev:hover {
-  color: #e0ff00;
+  color: #f5ff4a;
 }
 
 .main-swiper .swiper-button-next:active,
@@ -1031,28 +1261,28 @@
   box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
 }
 
-/* Makita Pagination (Teal/Cyan) */
+/* Makita Pagination */
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(0, 160, 170, 0.3);
+  border: 2px solid rgba(0, 194, 237, 0.35);
 }
 
 .main-swiper[data-brand-slug="makita-sidchrome"] .swiper-pagination-bullet-active,
 .main-swiper[data-brand-slug="makita-milwaukee"] .swiper-pagination-bullet-active {
-  background: #00a0aa;
-  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
+  background: #00c2ed;
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
 }
 
-/* Ryobi Pagination (Lime Green) */
+/* Ryobi pagination */
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet {
-  border: 2px solid rgba(224, 255, 0, 0.3);
+  border: 2px solid rgba(224, 255, 0, 0.45);
 }
 
 .main-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-pagination-bullet-active,
 .main-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-pagination-bullet-active {
-  background: #b8e000;
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+  background: #e0ff00;
+  box-shadow: 0 0 22px rgba(224, 255, 0, 0.85), 0 0 40px rgba(242, 255, 77, 0.35);
 }
 
 /* Thumbnail Swiper - Default/Milwaukee (Red) */
@@ -1068,18 +1298,18 @@
   box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
 }
 
-/* Makita Thumbnails (Teal/Cyan) */
+/* Makita thumbnails */
 .thumbs-swiper[data-brand-slug="makita-sidchrome"] .swiper-slide-thumb-active > div,
 .thumbs-swiper[data-brand-slug="makita-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #00a0aa !important;
-  box-shadow: 0 0 20px rgba(0, 160, 170, 0.6);
+  border-color: #00c2ed !important;
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55);
 }
 
-/* Ryobi Thumbnails (Lime Green) */
+/* Ryobi thumbnails */
 .thumbs-swiper[data-brand-slug="ryobi-sidchrome"] .swiper-slide-thumb-active > div,
 .thumbs-swiper[data-brand-slug="ryobi-milwaukee"] .swiper-slide-thumb-active > div {
-  border-color: #b8e000 !important;
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6);
+  border-color: #e0ff00 !important;
+  box-shadow: 0 0 22px rgba(224, 255, 0, 0.75), 0 0 36px rgba(242, 255, 77, 0.35);
 }
 
 /* Brand-specific glow utilities */
@@ -1092,11 +1322,11 @@
 }
 
 .glow-makita {
-  box-shadow: 0 0 20px rgba(0, 197, 207, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 20px rgba(0, 194, 237, 0.55), 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .glow-ryobi {
-  box-shadow: 0 0 20px rgba(224, 255, 0, 0.6), 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 24px rgba(224, 255, 0, 0.72), 0 0 40px rgba(242, 255, 77, 0.28), 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
 .glow-green {
@@ -1108,15 +1338,20 @@
   overflow: hidden;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+/* Other toolsets carousel - mobile touch scroll fix */
+.other-toolsets-swiper {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pan-x;
+  overflow: hidden;
 }
 
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+/* Other toolsets carousel - we use custom icon (GripVertical), remove Swiper's default ::after arrow */
+.other-toolsets-swiper + button#other-toolsets-prev::after,
+.other-toolsets-swiper + button#other-toolsets-next::after,
+#other-toolsets-prev::after,
+#other-toolsets-next::after {
+  content: none !important;
 }
-
 /* Metallic shimmer animation for promo badges */
 @keyframes shimmer {
   0% {
@@ -1143,6 +1378,55 @@
 
 .animate-shimmer-horizontal-fast {
   animation: shimmer-horizontal 2s ease-in-out infinite;
+}
+
+:root {
+  --winner-motion-quick: 150ms;
+  --winner-motion-base: 300ms;
+  --winner-motion-elevated: 500ms;
+  --winner-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.winner-motion-card {
+  transition-property: transform, box-shadow, border-color, background-color, opacity;
+  transition-duration: var(--winner-motion-elevated);
+  transition-timing-function: var(--winner-motion-ease);
+}
+
+.winner-motion-card:hover {
+  transform: translateY(-4px);
+}
+
+.winner-motion-button {
+  transition-property: transform, box-shadow, background-color, border-color, color, opacity;
+  transition-duration: var(--winner-motion-base);
+  transition-timing-function: var(--winner-motion-ease);
+}
+
+.winner-motion-button:hover {
+  transform: translateY(-1px);
+}
+
+.winner-motion-shimmer {
+  animation: shimmer-horizontal 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winner-motion-card,
+  .winner-motion-button {
+    transition-duration: 0.01ms !important;
+  }
+
+  .winner-motion-card:hover,
+  .winner-motion-button:hover {
+    transform: none !important;
+  }
+
+  .winner-motion-shimmer,
+  .animate-shimmer-horizontal,
+  .animate-shimmer-horizontal-fast {
+    animation: none !important;
+  }
 }
 
 /* Animated glow effect for package icons */
@@ -1328,16 +1612,16 @@
 
 /* Brand-specific border glow animations */
 @keyframes border-glow-ryobi {
-  0%, 100% { box-shadow: 0 0 12px rgba(224, 255, 0, 0.45); }
-  50% { box-shadow: 0 0 22px rgba(224, 255, 0, 0.75); }
+  0%, 100% { box-shadow: 0 0 14px rgba(224, 255, 0, 0.55), 0 0 24px rgba(242, 255, 77, 0.2); }
+  50% { box-shadow: 0 0 28px rgba(224, 255, 0, 0.9), 0 0 42px rgba(242, 255, 77, 0.45); }
 }
 .animate-border-glow-ryobi {
   animation: border-glow-ryobi 2s ease-in-out infinite;
 }
 
 @keyframes border-glow-makita {
-  0%, 100% { box-shadow: 0 0 16px rgba(0, 197, 207, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.4); }
-  50% { box-shadow: 0 0 32px rgba(0, 197, 207, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.7); }
+  0%, 100% { box-shadow: 0 0 16px rgba(0, 194, 237, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 32px rgba(92, 169, 236, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.65); }
 }
 .animate-border-glow-makita {
   animation: border-glow-makita 2s ease-in-out infinite;
@@ -1357,6 +1641,106 @@
 }
 .animate-border-glow-milwaukee {
   animation: border-glow-milwaukee 2s ease-in-out infinite;
+}
+
+@keyframes border-glow-boss-red {
+  /* Pure red glow for Boss badge - Tools Australia brand #ee0000 */
+  0%, 100% { box-shadow: 0 0 14px rgba(238, 0, 0, 0.55); }
+  50% { box-shadow: 0 0 28px rgba(238, 0, 0, 0.95); }
+}
+.animate-border-glow-boss-red {
+  animation: border-glow-boss-red 2s ease-in-out infinite;
+}
+
+/* VIP / black theme — warm gold pulse (replaces animate-border-glow-silver, which is Kincrome blue) */
+@keyframes border-glow-premium-gold {
+  0%,
+  100% {
+    box-shadow:
+      0 0 6px rgba(212, 175, 55, 0.28),
+      0 0 14px rgba(212, 175, 55, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(212, 175, 55, 0.42),
+      0 0 26px rgba(255, 210, 140, 0.12);
+  }
+}
+.animate-border-glow-premium-gold {
+  animation: border-glow-premium-gold 3s ease-in-out infinite;
+}
+
+@keyframes vip-shell-aura {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 14px rgba(212, 175, 55, 0.2)) drop-shadow(0 0 32px rgba(212, 175, 55, 0.06));
+  }
+  50% {
+    filter: drop-shadow(0 0 22px rgba(212, 175, 55, 0.32)) drop-shadow(0 0 48px rgba(212, 175, 55, 0.1));
+  }
+}
+.vip-premium-shell-glow {
+  animation: vip-shell-aura 3.4s ease-in-out infinite;
+}
+
+@keyframes vip-inner-wash {
+  0%,
+  100% {
+    opacity: 0.26;
+  }
+  50% {
+    opacity: 0.48;
+  }
+}
+.vip-premium-inner-luminosity {
+  pointer-events: none;
+  background: radial-gradient(ellipse 88% 60% at 50% 38%, rgba(212, 175, 55, 0.1) 0%, transparent 58%);
+  animation: vip-inner-wash 4s ease-in-out infinite;
+}
+
+@keyframes vip-price-aura {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(212, 175, 55, 0.26),
+      0 0 0 1px rgba(212, 175, 55, 0.22),
+      inset 0 0 10px rgba(212, 175, 55, 0.03);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(232, 200, 120, 0.28),
+      0 0 0 1px rgba(255, 228, 170, 0.26),
+      inset 0 0 16px rgba(212, 175, 55, 0.06);
+  }
+}
+.animate-vip-premium-price-halo {
+  animation: vip-price-aura 2.8s ease-in-out infinite;
+}
+
+@keyframes vip-enter-wrap-aura {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.26)) drop-shadow(0 0 24px rgba(212, 175, 55, 0.08));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(212, 175, 55, 0.36)) drop-shadow(0 0 36px rgba(212, 175, 55, 0.12));
+  }
+}
+.animate-vip-premium-enter-wrap {
+  animation: vip-enter-wrap-aura 3s ease-in-out infinite;
+}
+
+@keyframes vip-icon-halo {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(212, 175, 55, 0.48));
+  }
+}
+.animate-vip-icon-halo {
+  animation: vip-icon-halo 3.2s ease-in-out infinite;
 }
 
 /* Metallic silver Enter Now button - same prominent glow for all packs */
@@ -1435,12 +1819,13 @@
   border: none;
   border-radius: 1000px;
   overflow: hidden;
-  box-shadow: 0 18px 30px rgba(185, 28, 28, 0.4);
+  /* Neutral lift — brand tint comes from `background`; avoid global red shadow on Makita/cyan CTAs */
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.32);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .promo-hero-cta-button:focus-visible {
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 18px 30px rgba(185, 28, 28, 0.45);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 18px 30px rgba(0, 0, 0, 0.38);
 }
 
 .promo-hero-cta-button::before {
@@ -1450,7 +1835,7 @@
   background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
   opacity: 0.7;
   transform: translateX(-130%);
-  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  animation: cta-shimmer-pass 4.5s ease-in-out 3;
   pointer-events: none;
   z-index: 0;
 }
@@ -1468,7 +1853,41 @@
 @media (hover: hover) and (min-width: 1024px) {
   .promo-hero-cta-button:hover {
     transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 22px 34px rgba(185, 28, 28, 0.45);
+    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.38);
+  }
+}
+
+/* Refer a Friend – shimmer effect, clipped to button only */
+.refer-friend-cta {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.refer-friend-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.refer-friend-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  opacity: 0.6;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.refer-friend-cta > *:not([class*="absolute"]):not(.refer-friend-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .refer-friend-cta:hover {
+    transform: translateY(-2px) scale(1.02);
   }
 }
 
@@ -1508,6 +1927,40 @@
   }
 }
 
+/* Refer a Friend – quick action with subtle shimmer */
+.refer-friend-cta {
+  position: relative;
+  overflow: visible;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.refer-friend-shimmer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.refer-friend-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  opacity: 0.6;
+  transform: translateX(-130%);
+  animation: cta-shimmer-pass 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.refer-friend-cta > *:not([class*="absolute"]):not(.refer-friend-shimmer) {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .refer-friend-cta:hover {
+    transform: translateY(-2px) scale(1.02);
+  }
+}
+
 /* Membership package Enter Now – premium solid CTA with strong shimmer */
 .membership-enter-cta-animation {
   position: relative;
@@ -1534,6 +1987,72 @@
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   }
+}
+
+/* ElectricPackageCard "Enter Now" — premium attention animation.
+   Tier-coloured breathing glow + expanding ring + refined shine sweep.
+   Glow colour comes from the inline CSS var --ta-cta-accent. */
+.ta-enter-cta {
+  position: relative;
+  overflow: hidden;
+  animation: ta-enter-glow 2.4s ease-in-out infinite;
+}
+.ta-enter-cta::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  transform: translateX(-130%);
+  animation: ta-enter-shine 3.6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.ta-enter-cta > span {
+  position: relative;
+  z-index: 1;
+}
+@keyframes ta-enter-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 14px var(--ta-cta-accent),
+      0 0 0 0 color-mix(in srgb, var(--ta-cta-accent) 55%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 28px var(--ta-cta-accent),
+      0 0 0 5px color-mix(in srgb, var(--ta-cta-accent) 0%, transparent);
+    transform: scale(1.025);
+  }
+}
+@keyframes ta-enter-shine {
+  0% {
+    transform: translateX(-130%);
+  }
+  55%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ta-enter-cta,
+  .ta-enter-cta::after {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Cancellation CTA shine — same effect as the membership "Enter Now" button (.ta-enter-cta::after, ta-enter-shine keyframe). */
+.cf-cta-shine { position: relative; overflow: hidden; }
+.cf-cta-shine::after {
+  content: ""; position: absolute; inset: -40%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.45) 50%, transparent 100%);
+  transform: translateX(-130%);
+  animation: ta-enter-shine 3.6s ease-in-out infinite;
+  pointer-events: none; z-index: 0;
+}
+.cf-cta-shine > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .cf-cta-shine::after { animation: none !important; transform: none !important; }
 }
 
 /* Hourglass flip animation - rotates 180 degrees in one direction with pause */
@@ -1635,5 +2154,129 @@
   }
   50% {
     transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+/* my-account layout opts out of site chrome (header, footer, newsletter section).
+ * Set via useEffect in src/app/(site)/my-account/layout.tsx so the opt-in is
+ * explicit and reversible (cleanup runs on unmount). The data-attribute scope
+ * is more discoverable than the previous .site-header/.site-footer global hide. */
+body[data-account-layout] .site-header,
+body[data-account-layout] .site-footer,
+body[data-account-layout] .newsletter-section {
+  display: none !important;
+}
+
+/* Account layout hides the newsletter card + footer, so the bottom-padding
+ * reservation that clears the overlapping card is just dead space there. */
+body[data-account-layout] .site-main-content {
+  padding-bottom: 0 !important;
+}
+
+/* ===== Device-tier tokens (added 2026-05-09) ===== */
+:root {
+  --ta-blur:               12px;
+  --ta-shadow-card:        0 16px 48px rgb(0 0 0 / 0.40);
+  --ta-shadow-card-hover:  0 24px 60px rgb(0 0 0 / 0.55);
+  --ta-card-hover-y:       -4px;
+  --ta-transition-dur:     200ms;
+  --ta-marquee-state:      running;
+}
+html[data-tier="mobile"] {
+  --ta-blur:               0px;
+  --ta-shadow-card:        0 4px 12px rgb(0 0 0 / 0.30);
+  --ta-shadow-card-hover:  0 4px 12px rgb(0 0 0 / 0.30);
+  --ta-card-hover-y:       0px;
+  --ta-transition-dur:     150ms;
+}
+html[data-tier="tablet"] {
+  --ta-blur:               4px;
+  --ta-shadow-card:        0 8px 24px rgb(0 0 0 / 0.35);
+  --ta-shadow-card-hover:  0 12px 32px rgb(0 0 0 / 0.45);
+  --ta-card-hover-y:       -2px;
+}
+html[data-save-data="true"] {
+  --ta-marquee-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --ta-transition-dur: 1ms; --ta-marquee-state: paused; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --ta-blur: 0px; }
+}
+
+/* iOS Safari requires -webkit-backdrop-filter alongside backdrop-filter.
+   Tailwind v3 emits only the unprefixed form. Mirror it here. */
+[class*="backdrop-blur"] {
+  -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+}
+
+@media print {
+  [data-print="hide"],
+  header[data-sticky="true"],
+  [data-floating-widget],
+  [data-tracking-pixel] {
+    display: none !important;
+  }
+  html, body { background: #fff !important; color: #000 !important; }
+}
+
+@media (max-width: 767.98px), (prefers-reduced-motion: reduce) {
+  .animate-shimmer, .animate-shimmer-horizontal {
+    animation: none !important;
+  }
+}
+html[data-tier="mobile"] [class*="border-glow-"]:not(:focus-visible),
+html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
+  animation: none !important;
+}
+
+@keyframes scaleIn { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+
+/* Dashboard empty-card nudges (membership + one-time). Respect reduced motion. */
+@keyframes ta-nudge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 currentColor;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent;
+    transform: scale(1.005);
+  }
+}
+
+@keyframes ta-nudge-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ta-nudge-pulse {
+    animation: ta-nudge-pulse 3s ease-in-out infinite;
+    color: rgb(239 68 68 / 0.4); /* tier-red glow tone used by Membership card */
+  }
+  .ta-nudge-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .ta-nudge-shimmer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: ta-nudge-shimmer 4s ease-in-out infinite;
+    pointer-events: none;
   }
 }

@@ -171,7 +171,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const nonce = await getNonce();
 
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950">
       {/* Track ViewContent event for Facebook Pixel */}
       <ProductViewTracking product={serializedProduct} />
       {/* JSON-LD structured data */}
@@ -203,13 +203,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Product Image - Single Main Image */}
           <div className="space-y-4">
-            <div className="aspect-square bg-gray-100 rounded-2xl overflow-hidden">
+            <div className="aspect-square bg-gray-100 dark:bg-neutral-900 rounded-2xl overflow-hidden">
               <Image
                 src={product.images?.[0] || "/images/placeholder-product.jpg"}
                 alt={product.name}
                 width={600}
                 height={600}
                 className="w-full h-full object-cover"
+                sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
             </div>
@@ -254,7 +255,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                         product.brand.toLowerCase().includes("festool")
                         ? "bg-gradient-to-r from-green-700 to-green-800 text-white"
                         : // Default fallback
-                          "bg-gradient-to-r from-[#ee0000] to-red-600 text-white"
+                          "bg-gradient-to-r from-red-600 to-red-600 text-white"
                     }`}
                   >
                     {product.brand}
@@ -268,7 +269,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 </div>
                 <ShareButton name={product.name} brand={product.brand} />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 font-['Poppins']">{product.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-neutral-100 mb-3 font-['Poppins']">{product.name}</h1>
             </div>
 
             {/* Rating & Reviews */}
@@ -278,19 +279,19 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                   <Star
                     key={i}
                     className={`w-5 h-5 ${
-                      i < Math.floor(product.rating) ? "text-yellow-400 fill-current" : "text-gray-300"
+                      i < Math.floor(product.rating) ? "text-yellow-400 fill-current" : "text-gray-300 dark:text-neutral-700"
                     }`}
                   />
                 ))}
-                <span className="ml-2 text-sm font-medium text-gray-700">{product.rating}</span>
+                <span className="ml-2 text-sm font-medium text-gray-700 dark:text-neutral-200">{product.rating}</span>
               </div>
-              <span className="text-sm text-gray-500">({product.reviews} reviews)</span>
+              <span className="text-sm text-gray-500 dark:text-neutral-400">({product.reviews} reviews)</span>
             </div>
 
             {/* Price */}
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-[#ee0000] font-['Poppins']">${product.price}</span>
-              <span className="text-sm text-gray-500 line-through">${(product.price * 1.2).toFixed(2)}</span>
+              <span className="text-3xl font-bold text-red-600 font-['Poppins']">${product.price}</span>
+              <span className="text-sm text-gray-500 dark:text-neutral-500 line-through">${(product.price * 1.2).toFixed(2)}</span>
               <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 rounded-full text-sm font-bold">
                 Save 20%
               </span>
@@ -298,8 +299,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
             {/* Description */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-              <p className="text-gray-600 leading-relaxed">{product.description}</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">Description</h3>
+              <p className="text-gray-600 dark:text-neutral-400 leading-relaxed">{product.description}</p>
             </div>
 
             {/* Interactive Components */}

@@ -5,6 +5,8 @@ import { useToast } from "@/components/ui/Toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { useSession } from "next-auth/react";
+import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { getPartnerAccessDurationLabel } from "@/utils/partner-discounts/partner-access-duration";
 
 /**
  * Component that checks for successful subscription upgrades/downgrades after page reload
@@ -33,11 +35,19 @@ export default function UpgradeSuccessToast() {
       try {
         const {
           packageName,
+          packageId,
           timestamp,
           entriesPerMonth,
           totalEntriesAfterUpgrade,
-          shopDiscountPercent,
-        } = JSON.parse(upgradeData);
+          partnerDiscountDays,
+        } = JSON.parse(upgradeData) as {
+          packageName: string;
+          packageId?: string;
+          timestamp: number;
+          entriesPerMonth?: number;
+          totalEntriesAfterUpgrade?: number;
+          partnerDiscountDays?: number;
+        };
 
         // Only show toast if the upgrade happened within the last 15 seconds
         // This prevents showing the toast on subsequent page loads
@@ -48,10 +58,19 @@ export default function UpgradeSuccessToast() {
           // Otherwise fall back to entriesPerMonth for backward compatibility
           const displayEntries = totalEntriesAfterUpgrade || entriesPerMonth;
 
+          const partnerLine = packageId ? getPartnerDiscountBenefitTextForPackageId(packageId) : null;
+          // Subscription upgrade: partner access is lifecycle-gated (active
+          // while subscribed), never a fixed day count. partnerDiscountDays is
+          // ignored for the duration phrasing here.
+          void partnerDiscountDays;
+          const partnerClause = partnerLine
+            ? ` and ${partnerLine}`
+            : ` and ${getPartnerAccessDurationLabel({ isSubscription: true })!.long.toLowerCase()}`;
+
           showToast({
             type: "success",
             title: "Membership Upgraded Successfully!",
-            message: `Welcome to ${packageName} membership! You now have ${displayEntries} Free Accumulated Entries and ${shopDiscountPercent}% shop discounts. Your new benefits are active immediately!`,
+            message: `Welcome to ${packageName} membership! You now have ${displayEntries} free accumulated entries${partnerClause}. Your new benefits are active immediately!`,
             duration: 25000, // Show for 25 seconds for important upgrade info
             action: {
               label: "View Benefits",

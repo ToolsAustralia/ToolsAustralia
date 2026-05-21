@@ -33,10 +33,12 @@ export function generateCSVResponse(
   // Convert data to CSV rows
   const csvData = data.map((row) => selectedFields.map((fieldKey) => row[fieldKey] ?? ""));
 
-  // Generate CSV string
+  // Generate CSV string with BOM and CRLF for Excel compatibility on Windows
   const csv = stringify([headers, ...csvData], {
     quoted: true,
     quoted_empty: true,
+    bom: true,
+    record_delimiter: "windows",
   });
 
   // Return CSV response with proper headers

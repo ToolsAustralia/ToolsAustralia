@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Save, X, Image, Type, Package, ShoppingCart, Palette } from "lucide-react";
 import { Input, Textarea, Checkbox, Button, FormSection, Select } from "@/components/modals/ui";
+import ImageUpload from "@/components/modals/ui/ImageUpload";
 import { Variant, CreateVariantPayload } from "@/hooks/queries/useABTestingQueries";
 import type { CountdownMode } from "@/utils/promo-banner/countdown-mode";
 import { STATIC_URGENCY_LABEL_PRESETS } from "@/utils/promo-banner/countdown-mode";
@@ -27,6 +28,7 @@ const ONE_TIME_SLOTS: { key: OneTimePackageSlot; label: string }[] = [
   { key: "foreman-pack", label: "Foreman" },
   { key: "boss-pack", label: "Boss" },
   { key: "power-pack", label: "Power" },
+  { key: "vip-pack", label: "VIP" },
   { key: "black-pack", label: "Black" },
   { key: "mint-pack", label: "Mint" },
   { key: "cash-prize", label: "Cash" },
@@ -38,12 +40,34 @@ const MEMBERSHIP_SLOTS: { key: MembershipPackageSlot; label: string }[] = [
   { key: "foreman-pack", label: "Foreman" },
   { key: "boss-pack", label: "Boss" },
   { key: "power-pack", label: "Power" },
+  { key: "vip-pack", label: "VIP" },
 ];
+
+const VARIANT_BANNER_CLOUDINARY_FOLDER = "promo-banner";
+
+async function uploadVariantBannerLeftImage(file: File): Promise<string> {
+  const uploadFormData = new FormData();
+  uploadFormData.append("file", file);
+  uploadFormData.append("folder", VARIANT_BANNER_CLOUDINARY_FOLDER);
+
+  const response = await fetch("/api/upload/cloudinary", {
+    method: "POST",
+    body: uploadFormData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to upload banner image");
+  }
+
+  const data = await response.json();
+  return data.url as string;
+}
 
 interface VariantConfigEditorProps {
   variant?: Variant;
   experimentId: string;
-  onSave: (variant: CreateVariantPayload) => void;
+  onSave: (variant: CreateVariantPayload) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -62,16 +86,26 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       packages: variant?.config?.packages ?? {},
       membershipModal: variant?.config?.membershipModal ?? {},
       packageColors: variant?.config?.packageColors ?? { oneTime: {}, membership: {} },
+      membershipTheme: variant?.config?.membershipTheme ?? {},
     },
   });
 
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [bannerLeftImages, setBannerLeftImages] = useState<(File | string)[]>(() => {
+    const u = variant?.config?.banner?.leftImageUrl?.trim();
+    return u ? [u] : [];
+  });
+
+  useEffect(() => {
+    const u = variant?.config?.banner?.leftImageUrl?.trim();
+    setBannerLeftImages(u ? [u] : []);
+  }, [variant?._id, variant?.config?.banner?.leftImageUrl]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    // Validation
     if (!formData.name.trim()) {
       setErrors({ name: "Variant name is required" });
       return;
@@ -82,7 +116,6 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       return;
     }
 
-    // Require countdownLabel when static_urgency mode is selected
     const countdownMode = formData.config.banner?.countdownMode || "default";
     if (countdownMode === "static_urgency") {
       const label = formData.config.banner?.countdownLabel?.trim();
@@ -96,7 +129,35 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       }
     }
 
-    onSave(formData);
+    try {
+      let leftImageUrl: string | undefined = formData.config.banner?.leftImageUrl?.trim() || undefined;
+      const first = bannerLeftImages[0];
+      if (first instanceof File) {
+        leftImageUrl = await uploadVariantBannerLeftImage(first);
+      } else if (typeof first === "string" && first.trim()) {
+        leftImageUrl = first.trim();
+      }
+
+      const banner = { ...(formData.config.banner ?? {}) };
+      delete (banner as { badgeText?: string }).badgeText;
+
+      const payload: CreateVariantPayload = {
+        ...formData,
+        config: {
+          ...formData.config,
+          banner: {
+            ...banner,
+            leftImageUrl: leftImageUrl || undefined,
+          },
+        },
+      };
+
+      await Promise.resolve(onSave(payload));
+    } catch (err) {
+      setErrors({
+        leftImageUrl: err instanceof Error ? err.message : "Failed to upload banner image",
+      });
+    }
   };
 
   return (
@@ -221,22 +282,70 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
       {/* Banner Config */}
       <FormSection title="Banner Configuration" icon={Type}>
         <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200">Promo banner left image</p>
+            <p className="text-xs text-gray-500">
+              Upload is sent to Cloudinary only when you save the variant. You can also paste an image URL.
+            </p>
+            <ImageUpload
+              images={bannerLeftImages}
+              onImagesChange={(imgs) => {
+                setBannerLeftImages(imgs);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.leftImageUrl;
+                  return next;
+                });
+                const v = imgs[0];
+                if (v == null) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      banner: { ...prev.config.banner, leftImageUrl: undefined },
+                    },
+                  }));
+                  return;
+                }
+                if (typeof v === "string") {
+                  setFormData((prev) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      banner: { ...prev.config.banner, leftImageUrl: v.trim() || undefined },
+                    },
+                  }));
+                }
+              }}
+              maxImages={1}
+              maxFileSize={10}
+              label=""
+              uploadToCloudinary={false}
+            />
+            {errors.leftImageUrl && <p className="text-sm text-red-600">{errors.leftImageUrl}</p>}
+          </div>
           <Input
-            id="bannerBadgeText"
-            name="bannerBadgeText"
+            id="bannerLeftImageUrl"
+            name="bannerLeftImageUrl"
             type="text"
-            value={formData.config.banner?.badgeText || ""}
-            onChange={(e) =>
+            value={formData.config.banner?.leftImageUrl || ""}
+            onChange={(e) => {
+              const v = e.target.value;
               setFormData({
                 ...formData,
                 config: {
                   ...formData.config,
-                  banner: { ...formData.config.banner, badgeText: e.target.value },
+                  banner: { ...formData.config.banner, leftImageUrl: v || undefined },
                 },
-              })
-            }
-            label="Badge Text (Optional)"
-            placeholder="BONUS ENTRIES"
+              });
+              if (v.trim()) {
+                setBannerLeftImages([v.trim()]);
+              } else {
+                setBannerLeftImages([]);
+              }
+            }}
+            label="Left image URL (optional)"
+            placeholder="https://res.cloudinary.com/... or leave empty for default / scheduled / static"
           />
           <Input
             id="bannerMultiplier"
@@ -308,7 +417,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               {
                 value: "default",
                 label: "Draw/midnight countdown",
-                description: "Draw tonight, draw tomorrow, or midnight countdown",
+                description: "Draw tonight or midnight-style countdown when applicable",
               },
               {
                 value: "scheduled_end",
@@ -334,7 +443,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
           />
           {(formData.config.banner?.countdownMode === "static_urgency" && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Urgency label</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">Urgency label</label>
               <div className="flex flex-wrap gap-2">
                 {STATIC_URGENCY_LABEL_PRESETS.map((preset) => (
                   <button
@@ -355,7 +464,7 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                       formData.config.banner?.countdownLabel === preset
                         ? "bg-amber-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        : "bg-gray-200 text-gray-700 dark:text-neutral-200 hover:bg-gray-300"
                     }`}
                   >
                     {preset}
@@ -456,11 +565,11 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">One-time packages</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">One-time packages</h4>
               <div className="space-y-2">
                 {ONE_TIME_SLOTS.map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-2">
-                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <label className="w-24 text-sm text-gray-600 dark:text-neutral-400 shrink-0">{label}</label>
                     <Select
                       id={`oneTime-${key}`}
                       value={formData.config.packageColors?.oneTime?.[key] ?? ""}
@@ -487,11 +596,11 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
               </div>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Membership packages</h4>
+              <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Membership packages</h4>
               <div className="space-y-2">
                 {MEMBERSHIP_SLOTS.map(({ key, label }) => (
                   <div key={key} className="flex items-center gap-2">
-                    <label className="w-24 text-sm text-gray-600 shrink-0">{label}</label>
+                    <label className="w-24 text-sm text-gray-600 dark:text-neutral-400 shrink-0">{label}</label>
                     <Select
                       id={`membership-${key}`}
                       value={formData.config.packageColors?.membership?.[key] ?? ""}
@@ -542,6 +651,31 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
             }
             label="Show Package Selection First"
             description="When enabled, automatically opens package selection modal on step 2 for users coming from promotion/landing pages. This allows users to see all package options before proceeding with payment."
+          />
+        </div>
+      </FormSection>
+
+      {/* Membership Section Theme (A/B dark-mode test) */}
+      <FormSection title="Membership Section Theme" icon={Palette}>
+        <div className="space-y-4">
+          <Checkbox
+            id="membershipForceLight"
+            name="membershipForceLight"
+            checked={formData.config.membershipTheme?.forceLight ?? false}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                config: {
+                  ...formData.config,
+                  membershipTheme: {
+                    ...formData.config.membershipTheme,
+                    forceLight: e.target.checked,
+                  },
+                },
+              })
+            }
+            label="Force light mode on the membership section"
+            description="A/B test: when enabled, the membership section always renders in light mode for this variant, ignoring the site's dark-mode schedule/toggle. Leave OFF for the control variant."
           />
         </div>
       </FormSection>

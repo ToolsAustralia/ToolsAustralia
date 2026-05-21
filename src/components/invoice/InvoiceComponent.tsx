@@ -8,6 +8,8 @@
  */
 
 import React from "react";
+import { formatDisplayName } from "@/utils/display-name";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 interface InvoiceItem {
   description: string;
@@ -63,9 +65,9 @@ export const InvoiceComponent: React.FC<InvoiceComponentProps> = ({
     name: "Tools Australia",
     address: "Australia",
     phone: "+61 2 1234 5678",
-    email: "hello@toolsaustralia.com.au",
+    email: getContactEmail(),
     website: "www.toolsaustralia.com.au",
-    logo: "/images/logo.png",
+    logo: "/images/logo.webp",
   },
 }) => {
   // Parse items from JSON string
@@ -167,7 +169,7 @@ const InvoiceCustomer: React.FC<{ customerData: CustomerData }> = ({ customerDat
     <h3 style={styles.sectionTitle}>Bill To:</h3>
     <div style={styles.customerInfo}>
       <p style={styles.customerName}>
-        {customerData.first_name} {customerData.last_name}
+        {formatDisplayName(customerData.first_name, customerData.last_name)}
       </p>
       <p style={styles.customerDetail}>{customerData.email}</p>
       {customerData.phone_number && <p style={styles.customerDetail}>{customerData.phone_number}</p>}

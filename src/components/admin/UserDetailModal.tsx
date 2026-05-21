@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   XCircle,
@@ -17,13 +17,14 @@ import {
   User,
   Users,
   Shield,
-  AlertTriangle,
-  CheckCircle,
   Clock,
   Send,
   Key,
   Gift,
   Trash2,
+  Cake,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,25 +33,49 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { StaticImageData } from "next/image";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { formatDisplayName } from "@/utils/display-name";
 import { membershipPackages, getPackageById } from "@/data/membershipPackages";
 import { AdminUserUpdatePayload, UserActionType } from "@/types/admin";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useAdminCancelSubscription,
   useAdminUpdateUser,
   useAdminUserActions,
   useAdminUserDetail,
+  useAdminUserPaymentEventsInfinite,
 } from "@/hooks/queries/useAdminQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
+import ChargePastDueUserModal from "@/components/admin/ChargePastDueUserModal";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { Z_INDEX } from "@/constants/z-index";
 import ModalContent from "@/components/modals/ui/ModalContent";
 import Input from "@/components/modals/ui/Input";
 import Select from "@/components/modals/ui/Select";
 import Checkbox from "@/components/modals/ui/Checkbox";
+import DrawSelect, { type DrawSelectOption } from "@/components/admin/DrawSelect";
+import { useAdminMajorDrawsList } from "@/hooks/queries/admin/useAdminMajorDrawsList";
+import { useAdminMiniDrawsList } from "@/hooks/queries/admin/useAdminMiniDrawsList";
 import { getPackageIconByName } from "@/utils/images/package-icons";
 import { getPackageColorScheme } from "@/utils/package-colors/packageColorScheme";
-import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
+import {
+  getAdminPaymentKindLabel,
+  resolveAdminPaymentEventTitle,
+} from "@/utils/admin/adminPaymentEventDisplay";
+import {
+  AccountActiveBadge,
+  ActiveOrInactiveBadge,
+  AdminBadge,
+  DrawParticipationStatusBadge,
+  EntrySourceBadge,
+  MiniDrawParticipationStatusBadge,
+  OrderStatusBadge,
+  renderSubscriptionStateBadge,
+  SubscriptionHistoryStatusBadge,
+  VerificationBadge,
+} from "@/components/admin/ui/AdminBadge";
+import { cn } from "@/utils/cn";
 
 // Proper interfaces for user data structures
 interface SubscriptionHistoryItem {
@@ -59,6 +84,7 @@ interface SubscriptionHistoryItem {
   timestamp?: string;
   status?: string;
   price?: number;
+  billingReason?: string;
 }
 
 interface OrderItem {
@@ -86,20 +112,89 @@ interface MajorDrawParticipationItem {
   drawId?: string;
   title?: string;
   endDate?: string;
-  entries?: number;
+  entries?: Array<{
+    totalEntries?: number;
+    entriesBySource?: {
+      membership?: number;
+      "one-time-package"?: number;
+      upsell?: number;
+      "mini-draw"?: number;
+      referral?: number;
+      "bonus-entry-promo"?: number;
+    };
+  }>;
   totalEntries?: number;
   status?: string;
 }
 
 interface PaymentEventItem {
+  _id?: string;
   eventType?: string;
+  paymentIntentId?: string;
+  hasRefundProcessed?: boolean;
+  refundProcessedAt?: string;
+  /** BenefitsGranted row: Stripe issued a partial refund — ledger not reversed */
+  hasPartialRefundSkipped?: boolean;
+  partialRefundAmountCents?: number;
+  /** Snapshot from matching RefundProcessed (JSON-serializable) */
+  refundReversedSummary?: unknown;
+  refundReversalIssues?: Array<{ step?: string; error?: string }>;
   timestamp?: string;
   price?: number;
   status?: string;
   packageType?: string;
+  packageId?: string;
+  packageName?: string;
   data?: {
     price?: number;
+    [key: string]: unknown;
   };
+}
+
+const SCROLL_CHUNK_SIZE = 8;
+
+/**
+ * Expand a list in chunks when the sentinel scrolls into view (modal body scroll).
+ */
+function useScrollChunk<T>(items: readonly T[] | undefined, resetKey: string | undefined, enabled: boolean) {
+  const total = items?.length ?? 0;
+  const [visible, setVisible] = useState(SCROLL_CHUNK_SIZE);
+
+  useEffect(() => {
+    setVisible(SCROLL_CHUNK_SIZE);
+  }, [resetKey, total]);
+
+  const slice = useMemo(() => (items ?? []).slice(0, visible), [items, visible]);
+  const hasMore = total > visible;
+
+  const loadMore = useCallback(() => {
+    setVisible((v) => Math.min(v + SCROLL_CHUNK_SIZE, total));
+  }, [total]);
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const lastFireRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled || !hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        const now = Date.now();
+        if (now - lastFireRef.current < 180) return;
+        lastFireRef.current = now;
+        loadMore();
+      },
+      { root: null, rootMargin: "160px 0px", threshold: 0 }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [enabled, hasMore, loadMore, total]);
+
+  return { slice, sentinelRef, hasMore, total };
 }
 
 interface UserDetailModalProps {
@@ -108,7 +203,8 @@ interface UserDetailModalProps {
   onCloseAction: () => void;
 }
 
-type TabType = "overview" | "subscription" | "purchases" | "activity";
+type TabType = "overview" | "subscription" | "activity";
+type EditTabType = TabType | "purchases";
 
 const overviewFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -117,11 +213,23 @@ const overviewFormSchema = z.object({
   mobile: z.string().min(8, "Mobile number is too short").optional().or(z.literal("")),
   state: z.string().optional(),
   profession: z.string().max(100, "Profession cannot exceed 100 characters").optional().or(z.literal("")),
+  birthdate: z
+    .union([z.string(), z.literal("")])
+    .optional()
+    .refine(
+      (val) =>
+        val === undefined ||
+        val === "" ||
+        (!Number.isNaN(new Date(val).getTime()) && new Date(val).getTime() <= Date.now()),
+      { message: "Enter a valid date of birth (cannot be in the future)" }
+    ),
   role: z.enum(["user", "admin"]),
   isActive: z.boolean(),
   isEmailVerified: z.boolean(),
   isMobileVerified: z.boolean(),
   profileSetupCompleted: z.boolean(),
+  /** Klaviyo promotional / marketing email (not transactional) */
+  acceptsPromotionalEmail: z.boolean(),
 });
 
 const subscriptionFormSchema = z.object({
@@ -237,40 +345,12 @@ const getPackageIconImage = (packageName?: string | null): StaticImageData | nul
   return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
 };
 
-// Helper function to format activity event with detailed description
-const formatActivityEvent = (event: PaymentEventItem, formatCurrency: (amount: number) => string) => {
-  const eventData = event.data as Record<string, unknown> | undefined;
-  const packageName = (eventData?.packageName as string) || (eventData?.offerTitle as string) || "Package";
-  const packageType = event.packageType || "unknown";
-  const price = (eventData?.price as number) || event.price || 0;
-  const entries = (eventData?.entries as number) || 0;
-
-  let description = "";
-  if (packageType === "membership") {
-    description = `${packageName} Subscription - ${formatCurrency(price)}/month`;
-  } else if (packageType === "one-time") {
-    description = `${packageName} Package - ${formatCurrency(price)}`;
-  } else if (packageType === "mini-draw") {
-    description = `${packageName} Mini Draw Package - ${formatCurrency(price)}`;
-  } else if (packageType === "upsell") {
-    const eventData = event.data as Record<string, unknown> | undefined;
-    description = `${(eventData?.offerTitle as string) || "Upsell"} - ${formatCurrency(price)}`;
-  } else {
-    description = `${event.eventType || "Payment event"}`;
-  }
-
-  if (entries > 0) {
-    description += ` - ${entries} entries granted`;
-  }
-
-  return description;
-};
-
 /**
  * Comprehensive user detail modal with tabbed interface
  * Shows complete user profile, subscription details, purchase history, and activity
  */
 export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserDetailModalProps) {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showActionModal, setShowActionModal] = useState<{
@@ -304,17 +384,90 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const userActions = useAdminUserActions();
   const updateUser = useAdminUpdateUser();
   const cancelSubscriptionMutation = useAdminCancelSubscription();
-  const [activeEditTab, setActiveEditTab] = useState<TabType | null>(null);
+  const [activeEditTab, setActiveEditTab] = useState<EditTabType | null>(null);
+  const isEditing = (tab: EditTabType) => activeEditTab === tab;
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
   const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
   const [showCancelSubscriptionModal, setShowCancelSubscriptionModal] = useState(false);
+  const [showChargePastDueUserModal, setShowChargePastDueUserModal] = useState(false);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [headerEmailCopied, setHeaderEmailCopied] = useState(false);
+  const headerEmailCopyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rewardsFeatureEnabled = rewardsEnabled();
   const rewardsPauseMessage = rewardsDisabledMessage();
   const referralHistory = user?.referral?.history ?? [];
+
+  const paymentEventsInfinite = useAdminUserPaymentEventsInfinite(
+    userId,
+    isOpen && activeTab === "activity"
+  );
+
+  const activityEvents = useMemo(() => {
+    const pages = paymentEventsInfinite.data?.pages;
+    if (pages && pages.length > 0) return pages.flatMap((p) => p.events);
+    return user?.paymentEvents ?? [];
+  }, [paymentEventsInfinite.data, user?.paymentEvents]);
+
+  const activityPaymentTotal =
+    paymentEventsInfinite.data?.pages[0]?.total ?? user?.paymentEventsTotal ?? activityEvents.length;
+
+  const ordersScroll = useScrollChunk(
+    user?.orders,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const oneTimeScroll = useScrollChunk(
+    user?.oneTimePackages,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const miniDrawPackagesScroll = useScrollChunk(
+    user?.miniDrawPackages,
+    userId ?? undefined,
+    !isEditing("purchases") && activeTab === "activity"
+  );
+  const subscriptionHistoryScroll = useScrollChunk(
+    user?.subscriptionHistory,
+    userId ?? undefined,
+    activeTab === "overview"
+  );
+
+  const paymentActivitySentinelRef = useRef<HTMLDivElement>(null);
+  const paymentEventsInfiniteRef = useRef(paymentEventsInfinite);
+  paymentEventsInfiniteRef.current = paymentEventsInfinite;
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== "activity") return;
+    const el = paymentActivitySentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return;
+        const inf = paymentEventsInfiniteRef.current;
+        if (inf.hasNextPage && !inf.isFetchingNextPage) {
+          void inf.fetchNextPage();
+        }
+      },
+      { root: null, rootMargin: "200px 0px", threshold: 0 }
+    );
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [isOpen, activeTab, userId, activityEvents.length, paymentEventsInfinite.hasNextPage]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHeaderEmailCopied(false);
+      if (headerEmailCopyTimeoutRef.current) {
+        clearTimeout(headerEmailCopyTimeoutRef.current);
+        headerEmailCopyTimeoutRef.current = null;
+      }
+    }
+  }, [isOpen]);
 
   const overviewDefaults = useMemo<OverviewFormValues>(
     () => ({
@@ -324,11 +477,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       mobile: user?.mobile ?? "",
       state: user?.state ?? "",
       profession: user?.profession ?? "",
+      birthdate: user?.birthdate ? String(user.birthdate).slice(0, 10) : "",
       role: user?.role ?? "user",
       isActive: user?.isActive ?? false,
       isEmailVerified: user?.isEmailVerified ?? false,
       isMobileVerified: user?.isMobileVerified ?? false,
       profileSetupCompleted: user?.profileSetupCompleted ?? false,
+      acceptsPromotionalEmail: user?.acceptsPromotionalEmail !== false,
     }),
     [user]
   );
@@ -488,7 +643,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   }, [activityDefaults, activityForm]);
 
   useEffect(() => {
-    setActiveEditTab((current) => (current === activeTab ? current : null));
+    setActiveEditTab((current) => {
+      if (!current) return null;
+      if (current === activeTab) return current;
+      // Package grants edit lives on Activity tab (not a main tab id)
+      if (current === "purchases" && activeTab === "activity") return current;
+      return null;
+    });
   }, [activeTab]);
 
   const {
@@ -532,25 +693,63 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   const removedMajorDrawRef = useRef<MajorDrawParticipationFormValue[]>([]);
   const removedMiniDrawRef = useRef<MiniDrawParticipationFormValue[]>([]);
 
+  const activityEditing = activeEditTab === "activity";
+  const majorDrawsQ = useAdminMajorDrawsList(activityEditing);
+  const miniDrawsQ = useAdminMiniDrawsList(activityEditing);
+
+  const majorDrawOptions = useMemo<DrawSelectOption[]>(
+    () =>
+      (majorDrawsQ.data ?? []).map((d) => ({
+        id: d._id,
+        name: d.name,
+        imageUrl: d.prize?.images?.[0],
+        status: d.status,
+      })),
+    [majorDrawsQ.data]
+  );
+
+  const miniDrawOptions = useMemo<DrawSelectOption[]>(
+    () =>
+      (miniDrawsQ.data ?? []).map((d) => ({
+        id: d._id,
+        name: d.name,
+        imageUrl: d.prize?.images?.[0],
+        status: d.status,
+      })),
+    [miniDrawsQ.data]
+  );
+
+  const watchedMajorDraws = activityForm.watch("majorDrawParticipation");
+  const watchedMiniDraws = activityForm.watch("miniDrawParticipation");
+
+  const getOtherSelectedMajorIds = (currentIndex: number): string[] =>
+    (watchedMajorDraws ?? [])
+      .map((row, i) => (i !== currentIndex ? row?.drawId : ""))
+      .filter((id): id is string => !!id);
+
+  const getOtherSelectedMiniIds = (currentIndex: number): string[] =>
+    (watchedMiniDraws ?? [])
+      .map((row, i) => (i !== currentIndex ? row?.miniDrawId : ""))
+      .filter((id): id is string => !!id);
+
   const tabs = [
     { id: "overview" as TabType, label: "Overview", icon: User },
     { id: "subscription" as TabType, label: "Subscription", icon: CreditCard },
-    { id: "purchases" as TabType, label: "Purchases", icon: Package },
     { id: "activity" as TabType, label: "Activity", icon: Activity },
   ];
 
   const inputClasses =
-    "mt-1 w-full rounded-lg border-2 border-gray-300 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#ee0000]";
+    "mt-1 w-full rounded-lg border-2 border-gray-300 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-red-600";
 
   if (!isOpen) return null;
 
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ee0000] mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading user details...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-neutral-400">Loading user details...</p>
           </div>
         </div>
       </div>
@@ -560,14 +759,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
   if (error || !user) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex items-center justify-center">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-4xl w-full h-[90vh] flex items-center justify-center">
           <div className="text-center">
             <div className="text-red-500 text-6xl mb-4">⚠️</div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading User</h3>
-            <p className="text-gray-600 mb-4">{error?.message || "Failed to load user details"}</p>
+            <p className="text-gray-600 dark:text-neutral-400 mb-4">{error?.message || "Failed to load user details"}</p>
             <button
               onClick={onCloseAction}
-              className="px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 transition-all"
             >
               Close
             </button>
@@ -724,9 +923,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
   };
 
-  const isEditing = (tab: TabType) => activeEditTab === tab;
-
-  const handleCancelEdit = (tab: TabType) => {
+  const handleCancelEdit = (tab: EditTabType) => {
     switch (tab) {
       case "overview":
         overviewForm.reset(overviewDefaults);
@@ -827,20 +1024,59 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         mobile: values.mobile?.replace(/\s+/g, "") || undefined,
         state: values.state ? values.state.toUpperCase() : undefined,
         profession: values.profession?.trim() || undefined,
+        birthdate: values.birthdate?.trim() ?? "",
         role: values.role,
         isActive: values.isActive,
         isEmailVerified: values.isEmailVerified,
         isMobileVerified: values.isMobileVerified,
         profileSetupCompleted: values.profileSetupCompleted,
+        acceptsPromotionalEmail: values.acceptsPromotionalEmail,
       },
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("User details updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `User details updated successfully.\n\n${warning}`
+          : "User details updated successfully."
+      );
       setActiveEditTab(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to update user details.");
+    }
+  };
+
+  const handleKlaviyoMarketingPreference = async (acceptsPromotionalEmail: boolean) => {
+    if (!user?.id) return;
+    try {
+      const { warning } = await updateUser.mutateAsync({
+        userId: user.id,
+        payload: { basicInfo: { acceptsPromotionalEmail } },
+      });
+      alert(
+        warning
+          ? `Marketing preference updated.\n\n${warning}`
+          : "Marketing preference updated."
+      );
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to update marketing preference.");
+    }
+  };
+
+  const handleCopyHeaderEmail = async () => {
+    const email = user?.email?.trim();
+    if (!email) return;
+    try {
+      await navigator.clipboard.writeText(email);
+      if (headerEmailCopyTimeoutRef.current) clearTimeout(headerEmailCopyTimeoutRef.current);
+      setHeaderEmailCopied(true);
+      headerEmailCopyTimeoutRef.current = setTimeout(() => {
+        setHeaderEmailCopied(false);
+        headerEmailCopyTimeoutRef.current = null;
+      }, 2000);
+    } catch {
+      alert("Could not copy email. Check clipboard permissions.");
     }
   };
 
@@ -866,8 +1102,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     }
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Subscription details updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Subscription details updated successfully.\n\n${warning}`
+          : "Subscription details updated successfully."
+      );
       setActiveEditTab(null);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to update subscription.");
@@ -933,8 +1173,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Package information updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Package information updated successfully.\n\n${warning}`
+          : "Package information updated successfully."
+      );
       removedOneTimePackagesRef.current = [];
       removedMiniPackagesRef.current = [];
       setActiveEditTab(null);
@@ -952,10 +1196,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             drawId: draw.drawId.trim(),
             totalEntries: draw.totalEntries,
           })),
-        ...removedMajorDrawRef.current.map((draw) => ({
-          drawId: draw.drawId.trim(),
-          totalEntries: 0,
-        })),
+        ...removedMajorDrawRef.current
+          .filter((draw) => draw.drawId.trim().length > 0)
+          .map((draw) => ({
+            drawId: draw.drawId.trim(),
+            totalEntries: 0,
+          })),
       ],
       miniDrawParticipation: [
         ...values.miniDrawParticipation
@@ -965,17 +1211,23 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             totalEntries: entry.totalEntries,
             isActive: entry.isActive,
           })),
-        ...removedMiniDrawRef.current.map((entry) => ({
-          miniDrawId: entry.miniDrawId.trim(),
-          totalEntries: 0,
-          isActive: false,
-        })),
+        ...removedMiniDrawRef.current
+          .filter((entry) => entry.miniDrawId.trim().length > 0)
+          .map((entry) => ({
+            miniDrawId: entry.miniDrawId.trim(),
+            totalEntries: 0,
+            isActive: false,
+          })),
       ],
     };
 
     try {
-      await updateUser.mutateAsync({ userId: user.id, payload });
-      alert("Draw participation updated successfully.");
+      const { warning } = await updateUser.mutateAsync({ userId: user.id, payload });
+      alert(
+        warning
+          ? `Draw participation updated successfully.\n\n${warning}`
+          : "Draw participation updated successfully."
+      );
       removedMajorDrawRef.current = [];
       removedMiniDrawRef.current = [];
       setActiveEditTab(null);
@@ -991,6 +1243,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+    });
+  };
+
+  const formatBirthdateDisplay = (isoDate?: string) => {
+    if (!isoDate || !String(isoDate).trim()) return "Not provided";
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return "Not provided";
+    return d.toLocaleDateString("en-AU", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
@@ -1047,14 +1310,9 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
     <>
       {/* Main Modal */}
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED }}>
-        <div
-          className="bg-white rounded-2xl shadow-2xl border-2 border-slate-200/50 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-          }}
-        >
+        <div className="rounded-2xl shadow-2xl dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-700 max-w-6xl w-full max-h-[90vh] overflow-hidden animate-fade-in bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b-2 border-slate-200/50 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950">
             <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1">
               {/* User Avatar - Logo or Package Icon (matching UsersManagement) */}
               {hasActiveSubscription && packageIcon ? (
@@ -1077,38 +1335,59 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       className="w-7 h-7 sm:w-9 sm:h-9 lg:w-11 lg:h-11 object-contain"
                       width={44}
                       height={44}
+                      sizes="(max-width: 640px) 28px, (max-width: 1024px) 36px, 44px"
                     />
                   </div>
                 </span>
               ) : (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-100 dark:bg-neutral-800 ring-1 ring-gray-200/80 dark:ring-neutral-600">
                   <Image
                     src={defaultLogo}
                     alt="Tools Australia"
                     className="w-full h-full object-cover"
                     width={56}
                     height={56}
+                    sizes="(max-width: 640px) 40px, (max-width: 1024px) 48px, 56px"
                   />
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
-                  {user?.firstName} {user?.lastName}
+                <h2 className="text-[14px] sm:text-lg lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+                  {formatDisplayName(user?.firstName, user?.lastName)}
                 </h2>
-                <p className="text-[10px] sm:text-xs lg:text-base text-gray-600 truncate">{user?.email}</p>
+                <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 mt-0.5">
+                  <p className="text-2xs sm:text-xs lg:text-base text-gray-600 dark:text-neutral-400 truncate min-w-0">
+                    {user?.email}
+                  </p>
+                  {user?.email ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyHeaderEmail()}
+                      className="rounded-lg border border-gray-300 dark:border-neutral-600 p-1 sm:p-1.5 text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 flex-shrink-0 transition-colors"
+                      aria-label={headerEmailCopied ? "Email copied to clipboard" : "Copy email address"}
+                      title={headerEmailCopied ? "Copied" : "Copy email"}
+                    >
+                      {headerEmailCopied ? (
+                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-400" strokeWidth={2.5} />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2} />
+                      )}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
             <button
               onClick={onCloseAction}
-              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1 sm:p-2"
+              className="rounded-lg text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-gray-100/80 dark:hover:bg-neutral-800 transition-colors flex-shrink-0 p-1 sm:p-2"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
             </button>
           </div>
 
           {/* Tabs - Bigger on mobile for easy touching */}
-          <div className="border-b-2 border-slate-200/50 bg-gradient-to-r from-slate-50 to-white sticky top-0 z-20 shadow-sm">
-            <nav className="flex gap-1 sm:gap-2 lg:gap-4 px-2 sm:px-4 lg:px-6 overflow-x-auto">
+          <div className="border-b-2 border-slate-200/50 dark:border-neutral-700 bg-gradient-to-r from-slate-50 to-white dark:from-neutral-900 dark:to-neutral-950 sticky top-0 z-20 shadow-sm dark:shadow-none">
+            <nav className="flex gap-1 sm:gap-2 lg:gap-4 px-2 sm:px-4 lg:px-6 overflow-x-auto brand-scrollbar">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1118,8 +1397,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 sm:gap-2 py-4 sm:py-3 lg:py-4 px-4 sm:px-3 border-b-2 font-semibold text-xs sm:text-xs lg:text-sm transition-all whitespace-nowrap min-h-[48px] ${
                       isActive
-                        ? "border-[#ee0000] text-[#ee0000] bg-red-50/30"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50/50"
+                        ? "border-red-600 text-red-600 bg-red-50/30 dark:bg-red-950/25"
+                        : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50/50 dark:hover:bg-neutral-800/50"
                     }`}
                   >
                     <Icon className="w-4 h-4 sm:w-4 sm:h-4" />
@@ -1183,38 +1462,80 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                        style={{
-                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-                        }}
+                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
                             <div
-                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                              className={cn("w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10", iconConfig.bg, "rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0")}
                             >
-                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                              <Icon className={cn("w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5", iconConfig.icon)} />
                             </div>
                           </div>
-                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
                         </div>
                         <div
-                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                          className={cn("h-1", iconConfig.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}
                         ></div>
                       </div>
                     );
                   })}
                 </div>
 
+                {/* Current Draw Entries by Source - when user has entries */}
+                {user.statistics.currentDrawEntries > 0 && (() => {
+                  const activeDraw = user.majorDrawParticipation?.find((d) => d.status === "active");
+                  const entriesBySource = (activeDraw?.entries ?? []).reduce(
+                    (acc, e) => {
+                      const src = (e as { entriesBySource?: Record<string, number> }).entriesBySource ?? {};
+                      Object.entries(src).forEach(([k, v]) => {
+                        if (typeof v === "number" && v > 0) acc[k] = (acc[k] ?? 0) + v;
+                      });
+                      return acc;
+                    },
+                    {} as Record<string, number>
+                  );
+                  const hasBreakdown = Object.keys(entriesBySource).length > 0;
+                  return hasBreakdown ? (
+                    <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Current draw entries by source</h3>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {entriesBySource.membership != null && entriesBySource.membership > 0 && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Membership: {entriesBySource.membership}</span>
+                        )}
+                        {entriesBySource["one-time-package"] != null && entriesBySource["one-time-package"] > 0 && (
+                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">One-time: {entriesBySource["one-time-package"]}</span>
+                        )}
+                        {entriesBySource.upsell != null && entriesBySource.upsell > 0 && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Upsell: {entriesBySource.upsell}</span>
+                        )}
+                        {entriesBySource["mini-draw"] != null && entriesBySource["mini-draw"] > 0 && (
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">Mini-draw: {entriesBySource["mini-draw"]}</span>
+                        )}
+                        {entriesBySource.referral != null && entriesBySource.referral > 0 && (
+                          <span className="px-2 py-1 bg-pink-100 text-pink-800 rounded text-xs">Referral: {entriesBySource.referral}</span>
+                        )}
+                        {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Campaign/Promo: {entriesBySource["bonus-entry-promo"]}</span>
+                        )}
+                        {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded text-xs">Retention: {entriesBySource["cancellation-upsell"]}</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* Basic Information - Minimized on mobile */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("overview") ? (
                     <form
                       onSubmit={overviewForm.handleSubmit(handleOverviewSubmit)}
@@ -1232,14 +1553,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("overview")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save"}
                           </button>
@@ -1336,6 +1657,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           )}
                         />
                         <Controller
+                          name="birthdate"
+                          control={overviewForm.control}
+                          render={({ field, fieldState }) => (
+                            <Input
+                              label="Date of birth"
+                              type="date"
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                              error={fieldState.error?.message}
+                            />
+                          )}
+                        />
+                        <Controller
                           name="role"
                           control={overviewForm.control}
                           render={({ field }) => (
@@ -1357,7 +1691,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1370,7 +1704,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="profileSetupCompleted"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1383,7 +1717,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isEmailVerified"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
@@ -1396,12 +1730,49 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={overviewForm.control}
                           name="isMobileVerified"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Mobile verified"
                               />
+                            </div>
+                          )}
+                        />
+                        <Controller
+                          control={overviewForm.control}
+                          name="acceptsPromotionalEmail"
+                          render={({ field }) => (
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 col-span-2 space-y-2">
+                              <div>
+                                <p className="text-xs font-medium text-gray-800 dark:text-neutral-200">
+                                  Klaviyo marketing (email & SMS)
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                                  {field.value
+                                    ? "Opted in in the app. Click Save to apply and sync to Klaviyo."
+                                    : "Opted out in the app. Click Save to apply and sync to Klaviyo."}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {field.value ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => field.onChange(false)}
+                                    className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors"
+                                  >
+                                    Unsubscribe from marketing
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => field.onChange(true)}
+                                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                                  >
+                                    Subscribe to marketing
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                         />
@@ -1416,29 +1787,45 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             Review contact details and verification status.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditTab("overview")}
-                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-                        >
-                          Edit Details
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {user.acceptsPromotionalEmail !== false ? (
+                            <button
+                              type="button"
+                              disabled={updateUser.isPending}
+                              onClick={() => void handleKlaviyoMarketingPreference(false)}
+                              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updateUser.isPending ? "Updating..." : "Unsubscribe from marketing"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={updateUser.isPending}
+                              onClick={() => void handleKlaviyoMarketingPreference(true)}
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:border-neutral-600 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {updateUser.isPending ? "Updating..." : "Subscribe to marketing"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setActiveEditTab("overview")}
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
+                          >
+                            Edit Details
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <div className="flex items-start gap-2">
                           <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Email</p>
-                            <p className="font-medium break-words text-sm mb-1">{user.email}</p>
-                            <div className="flex items-center gap-1">
-                              {user.isEmailVerified ? (
-                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
-                              )}
-                              <span className="text-xs text-gray-500">
-                                {user.isEmailVerified ? "Verified" : "Unverified"}
-                              </span>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Email</p>
+                            <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.email}
+                            </p>
+                            <div className="mt-0.5">
+                              <VerificationBadge verified={user.isEmailVerified} />
                             </div>
                           </div>
                         </div>
@@ -1446,17 +1833,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Mobile</p>
-                            <p className="font-medium break-words text-sm mb-1">{user.mobile || "Not provided"}</p>
-                            <div className="flex items-center gap-1">
-                              {user.isMobileVerified ? (
-                                <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />
-                              )}
-                              <span className="text-xs text-gray-500">
-                                {user.isMobileVerified ? "Verified" : "Unverified"}
-                              </span>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Mobile</p>
+                            <p className="font-medium break-words text-xs sm:text-sm mb-1 leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.mobile || "Not provided"}
+                            </p>
+                            <div className="mt-0.5">
+                              <VerificationBadge verified={!!user.isMobileVerified} />
                             </div>
                           </div>
                         </div>
@@ -1464,47 +1846,58 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Role</p>
-                            <p className="font-medium capitalize text-sm">{user.role}</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Role</p>
+                            <p className="font-medium capitalize text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.role}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2">
                           <Shield className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Account Status</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                user.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {user.isActive ? "Active" : "Inactive"}
-                            </span>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Account Status</p>
+                            <AccountActiveBadge isActive={user.isActive} />
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2 col-span-2">
+                          <Send className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">
+                              Klaviyo marketing
+                            </p>
+                            <AdminBadge variant={user.acceptsPromotionalEmail !== false ? "success" : "neutral"}>
+                              {user.acceptsPromotionalEmail !== false ? "Subscribed (app)" : "Unsubscribed (app)"}
+                            </AdminBadge>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2 col-span-2">
                           <CreditCard className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Saved payment methods</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Saved payment methods</p>
                             {user.savedPaymentMethods && user.savedPaymentMethods.length > 0 ? (
                               <div className="flex flex-wrap gap-2">
                                 {user.savedPaymentMethods.map((pm) => (
-                                  <span
+                                  <AdminBadge
                                     key={pm.paymentMethodId}
-                                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-700"
+                                    variant="neutral"
+                                    icon={CreditCard}
+                                    iconClassName="opacity-70 shrink-0"
+                                    className="max-w-[min(100%,280px)] flex-wrap"
                                   >
                                     <span className="truncate max-w-[140px]">{pm.paymentMethodId}</span>
                                     {pm.isDefault && (
-                                      <span className="ml-1 inline-flex items-center rounded-full bg-green-100 px-1 text-[10px] font-semibold text-green-700">
+                                      <AdminBadge variant="success" className="!px-1.5 !py-0 !text-2xs !gap-1">
                                         Default
-                                      </span>
+                                      </AdminBadge>
                                     )}
-                                  </span>
+                                  </AdminBadge>
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-500">No saved payment methods</p>
+                              <p className="text-xs sm:text-sm text-gray-500 leading-snug">No saved payment methods</p>
                             )}
                           </div>
                         </div>
@@ -1512,36 +1905,54 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <div className="flex items-start gap-2">
                           <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">State</p>
-                            <p className="font-medium text-sm">{user.state || "Not provided"}</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">State</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.state || "Not provided"}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2">
                           <User className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Profession</p>
-                            <p className="font-medium text-sm">{user.profession || "Not provided"}</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Profession</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {user.profession || "Not provided"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Cake className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Date of birth</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {formatBirthdateDisplay(user.birthdate)}
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2">
                           <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Member Since</p>
-                            <p className="font-medium text-sm">{formatDate(user.createdAt)}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{user.statistics.accountAge} days ago</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Member Since</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
+                              {formatDate(user.createdAt)}
+                            </p>
+                            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5 leading-snug">
+                              {user.statistics.accountAge} days ago
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-start gap-2">
                           <Clock className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-600 mb-1">Last Login</p>
-                            <p className="font-medium text-sm">
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Last Login</p>
+                            <p className="font-medium text-xs sm:text-sm leading-snug text-gray-900 dark:text-neutral-100">
                               {user.lastLogin ? formatDate(user.lastLogin) : "No login recorded"}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5 leading-snug">
                               {user.statistics.daysSinceLastLogin !== undefined &&
                               user.statistics.daysSinceLastLogin !== null
                                 ? `${user.statistics.daysSinceLastLogin} days ago`
@@ -1555,19 +1966,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 </div>
 
                 {user.referral && (
-                  <div className="bg-white rounded-xl border border-gray-100 p-2 sm:p-4 lg:p-6">
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-700 p-2 sm:p-4 lg:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                       <div>
-                        <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                        <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                           Referral Program
                         </h3>
-                        <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                        <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                           Track referral conversions and rewards earned from {user.firstName}&apos;s invite code.
                         </p>
                       </div>
                       {user.referral.code && (
-                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-gray-700">
-                          <span className="uppercase tracking-wide text-[9px] sm:text-xs text-gray-500">Code</span>
+                        <div className="flex items-center gap-1.5 sm:gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-semibold text-gray-700 dark:text-neutral-200">
+                          <span className="uppercase tracking-wide text-3xs sm:text-xs text-gray-500">Code</span>
                           <span className="text-sm sm:text-lg font-bold text-gray-900">{user.referral.code}</span>
                         </div>
                       )}
@@ -1575,19 +1986,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                     <div className="mt-2 sm:mt-4 grid grid-cols-3 gap-1.5 sm:gap-4">
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Conversions</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Conversions</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.successfulConversions}
                         </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Entries</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Entries</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.totalEntriesAwarded}
                         </p>
                       </div>
                       <div className="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-4">
-                        <p className="text-[8px] sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Pending</p>
+                        <p className="text-3xs sm:text-xs uppercase text-gray-500 mb-0.5 sm:mb-1">Pending</p>
                         <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900">
                           {user.referral.pendingCount}
                         </p>
@@ -1596,31 +2007,31 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                     <div className="mt-6">
                       {referralHistory.length === 0 ? (
-                        <p className="text-sm text-gray-500">No referral activity recorded yet.</p>
+                        <p className="text-sm text-gray-500 dark:text-neutral-400">No referral activity recorded yet.</p>
                       ) : (
                         <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead className="bg-gray-50">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700 text-sm">
+                            <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
                               <tr>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Role</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Friend Email</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Entries Awarded</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Conversion Date</th>
-                                <th className="px-4 py-3 text-left font-semibold text-gray-600">Recorded</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Role</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Status</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Friend Email</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Entries Awarded</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Conversion Date</th>
+                                <th className="px-4 py-3 text-left font-semibold text-gray-800 dark:text-neutral-100">Recorded</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 dark:divide-neutral-800 bg-white dark:bg-neutral-900">
                               {referralHistory.map((event) => (
-                                <tr key={event.id}>
-                                  <td className="px-4 py-3 text-gray-700 capitalize">{event.role}</td>
-                                  <td className="px-4 py-3 text-gray-700">{formatReferralStatus(event.status)}</td>
-                                  <td className="px-4 py-3 text-gray-700">{event.friendEmail || "—"}</td>
-                                  <td className="px-4 py-3 text-gray-700">{event.entriesAwarded}</td>
-                                  <td className="px-4 py-3 text-gray-700">
+                                <tr key={event.id} className="hover:bg-gray-50/80 dark:hover:bg-neutral-800/50">
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200 capitalize">{event.role}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{formatReferralStatus(event.status)}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{event.friendEmail || "—"}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{event.entriesAwarded}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">
                                     {formatReferralDate(event.conversionDate)}
                                   </td>
-                                  <td className="px-4 py-3 text-gray-700">{formatReferralDate(event.createdAt)}</td>
+                                  <td className="px-4 py-3 text-gray-700 dark:text-neutral-200">{formatReferralDate(event.createdAt)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1632,27 +2043,27 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 )}
 
                 {/* Quick Actions - Minimized on mobile */}
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
-                  <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
+                  <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900 mb-2 sm:mb-4">
                     Quick Actions
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-3">
                     <button
                       onClick={() => setShowSendEmailModal(true)}
                       disabled={actionLoading === "send_email"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors disabled:opacity-50"
                     >
                       <Send className="w-5 h-5 text-blue-600" />
-                      <span className="text-xs font-medium text-gray-700">Send Email</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Send Email</span>
                     </button>
 
                     <button
                       onClick={() => setShowAdminPasswordModal(true)}
                       disabled={actionLoading === "admin_set_password"}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:bg-yellow-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors disabled:opacity-50"
                     >
                       <Key className="w-5 h-5 text-yellow-600" />
-                      <span className="text-xs font-medium text-gray-700">Set Password</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Set Password</span>
                     </button>
 
                     <button
@@ -1665,19 +2076,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         )
                       }
                       disabled={actionLoading === "clear_payment_methods" || !user?.savedPaymentMethods || user.savedPaymentMethods.length === 0}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
                     >
                       <CreditCard className="w-5 h-5 text-orange-600" />
-                      <span className="text-xs font-medium text-gray-700">Clear Payment Methods</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Clear Payment Methods</span>
                     </button>
 
                     <button
                       onClick={handleDeleteClick}
                       disabled={isLoadingDeletionSummary || !userId}
-                      className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      className="flex flex-col items-center gap-2 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-red-300 dark:hover:border-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
                     >
                       <Trash2 className="w-5 h-5 text-red-600" />
-                      <span className="text-xs font-medium text-gray-700">Delete User</span>
+                      <span className="text-xs font-medium text-gray-700 dark:text-neutral-200">Delete User</span>
                     </button>
                   </div>
                 </div>
@@ -1686,7 +2097,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
             {activeTab === "subscription" && (
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("subscription") ? (
                     <form
                       onSubmit={subscriptionForm.handleSubmit(handleSubscriptionSubmit)}
@@ -1694,10 +2105,10 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                          <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                             Manage Subscription
                           </h3>
-                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                          <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Assign or update the member&apos;s subscription package and adjust benefit totals.
                           </p>
                         </div>
@@ -1705,14 +2116,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("subscription")}
-                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -1736,7 +2147,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 })),
                               ]}
                               placeholder="Select package"
-                              className="text-[10px] sm:text-xs lg:text-sm"
+                              className="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -1750,12 +2161,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               onChange={field.onChange}
                               placeholder="active | cancelled | past_due"
                               error={fieldState.error?.message}
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                          <label className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             Start Date
                           </label>
                           <input
@@ -1765,7 +2176,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700">
+                          <label className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-700 dark:text-neutral-200">
                             End Date
                           </label>
                           <input
@@ -1778,12 +2189,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={subscriptionForm.control}
                           name="isActive"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Subscription active"
-                                className="text-[10px] sm:text-xs lg:text-sm"
+                                className="text-2xs sm:text-xs lg:text-sm"
                               />
                             </div>
                           )}
@@ -1792,12 +2203,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           control={subscriptionForm.control}
                           name="autoRenew"
                           render={({ field }) => (
-                            <div className="rounded-lg border-2 border-gray-200 bg-white px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
+                            <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 sm:px-3 lg:px-4 py-2 sm:py-2.5 lg:py-3">
                               <Checkbox
                                 checked={field.value}
                                 onChange={(e) => field.onChange(e.target.checked)}
                                 label="Auto renew enabled"
-                                className="text-[10px] sm:text-xs lg:text-sm"
+                                className="text-2xs sm:text-xs lg:text-sm"
                               />
                             </div>
                           )}
@@ -1819,7 +2230,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -1837,7 +2248,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -1855,7 +2266,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               error={
                                 fieldState.error?.message || (!rewardsFeatureEnabled ? rewardsPauseMessage : undefined)
                               }
-                              wrapperClassName="text-[10px] sm:text-xs lg:text-sm"
+                              wrapperClassName="text-2xs sm:text-xs lg:text-sm"
                             />
                           )}
                         />
@@ -1884,10 +2295,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               Cancel Subscription
                             </button>
                           )}
+                          {user.subscription?.status === "past_due" && userId && (
+                            <button
+                              type="button"
+                              onClick={() => setShowChargePastDueUserModal(true)}
+                              className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-amber-900 hover:bg-amber-100 transition-colors"
+                            >
+                              Retry past due charge
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setActiveEditTab("subscription")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Edit Subscription
                           </button>
@@ -1897,54 +2317,48 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                       {user.subscription ? (
                         <div className="grid grid-cols-2 gap-3 sm:gap-4">
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Package</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Package</p>
                             <p className="font-medium text-sm">
                               {user.subscription.packageName || user.subscription.packageId}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Status</p>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                user.subscription.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {user.subscription.status}
-                            </span>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Status</p>
+                            {renderSubscriptionStateBadge(user.subscription)}
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Start Date</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Start Date</p>
                             <p className="font-medium text-sm">{formatDate(user.subscription.startDate)}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">End Date</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">End Date</p>
                             <p className="font-medium text-sm">
                               {user.subscription.endDate ? formatDate(user.subscription.endDate) : "Active"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Auto Renew</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Auto Renew</p>
                             <span className="font-medium text-sm">
                               {user.subscription.autoRenew ? "Enabled" : "Disabled"}
                             </span>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Rewards Points</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Rewards Points</p>
                             <p className="font-medium text-sm">
                               {rewardsFeatureEnabled ? user.rewardsPoints : "Unavailable"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Accumulated Entries</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Accumulated Entries</p>
                             <p className="font-medium text-sm">{user.subscription?.lastMonthAccumulatedEntries ?? 0}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Entry Wallet</p>
+                            <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Entry Wallet</p>
                             <p className="font-medium text-sm">{user.entryWallet}</p>
                           </div>
                         </div>
                       ) : (
-                        <div className="rounded-lg border border-dashed border-gray-300 bg-white px-6 py-8 text-center">
+                        <div className="rounded-lg border border-dashed border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-6 py-8 text-center">
                           <Shield className="mx-auto mb-3 h-12 w-12 text-gray-300" />
                           <h4 className="text-base font-semibold text-gray-900">No subscription assigned</h4>
                           <p className="mt-1 text-sm text-gray-500">
@@ -1959,20 +2373,30 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Subscription History */}
                 {user.subscriptionHistory.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Subscription History
-                    </h3>
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Subscription History</h3>
+                      {subscriptionHistoryScroll.total > 0 && (
+                        <p className="text-xs text-gray-500">
+                          Showing {subscriptionHistoryScroll.slice.length} of {subscriptionHistoryScroll.total}
+                          {subscriptionHistoryScroll.hasMore ? " · scroll for more" : ""}
+                        </p>
+                      )}
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.subscriptionHistory.slice(0, 10).map((sub: SubscriptionHistoryItem, index: number) => {
+                      {subscriptionHistoryScroll.slice.map((sub: SubscriptionHistoryItem, index: number) => {
                         // Resolve package name from packageId if packageName is not available
                         const resolvedPackageName =
                           sub.packageName || (sub.packageId ? getPackageById(sub.packageId)?.name : null);
                         const packageIcon = getPackageIconImage(resolvedPackageName);
+                        const billingKind = getAdminPaymentKindLabel({
+                          packageType: "membership",
+                          data: { billingReason: sub.billingReason },
+                        });
                         return (
                           <div
-                            key={index}
-                            className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white border border-gray-200 p-2 sm:p-3 hover:shadow-sm transition-shadow"
+                            key={`${sub.timestamp ?? ""}-${sub.packageId ?? ""}-${index}`}
+                            className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 p-2 sm:p-3 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {packageIcon ? (
@@ -2004,6 +2428,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
                                           width={28}
                                           height={28}
+                                          sizes="(max-width: 640px) 20px, 28px"
                                         />
                                       </div>
                                     </span>
@@ -2017,6 +2442,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     className="w-full h-full object-cover"
                                     width={40}
                                     height={40}
+                                    sizes="(max-width: 640px) 32px, 40px"
                                   />
                                 </div>
                               )}
@@ -2024,33 +2450,39 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                 <p className="font-medium text-xs sm:text-sm text-gray-900">
                                   {resolvedPackageName || sub.packageId || "Package"}
                                 </p>
+                                <p className="text-2xs sm:text-xs text-slate-600 mt-0.5">{billingKind}</p>
+                                {sub.timestamp && (
+                                  <p className="text-2xs text-gray-500 mt-0.5">
+                                    {formatDate(
+                                      typeof sub.timestamp === "string" ? sub.timestamp : String(sub.timestamp)
+                                    )}
+                                  </p>
+                                )}
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
                               <p className="font-semibold text-xs sm:text-sm text-gray-900">
                                 {formatCurrency(sub.price || 0)}
                               </p>
-                              <span
-                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
-                                  sub.status === "BenefitsGranted"
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
-                                {sub.status || "Status not provided"}
-                              </span>
+                              <div className="mt-1 flex justify-end">
+                                <SubscriptionHistoryStatusBadge status={sub.status} />
+                              </div>
                             </div>
                           </div>
                         );
                       })}
+                      {subscriptionHistoryScroll.hasMore && (
+                        <div ref={subscriptionHistoryScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === "purchases" && (
+            {activeTab === "activity" && (
               <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+                
                 {/* Purchase Summary - Elevated Design with Darker Icon Backgrounds - 3 cards in 1 row on mobile */}
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:gap-4">
                   {(() => {
@@ -2082,37 +2514,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     return (
                       <div
                         key={idx}
-                        className="relative rounded-xl shadow-lg border-2 border-slate-200/50 hover:border-slate-300 hover:shadow-xl transition-all duration-300 overflow-hidden group"
-                        style={{
-                          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #ffffff 100%)",
-                        }}
+                        className="relative rounded-xl shadow-lg dark:shadow-none border-2 border-slate-200/50 dark:border-neutral-600 hover:border-slate-300 dark:hover:border-neutral-500 hover:shadow-xl dark:hover:shadow-none transition-all duration-300 overflow-hidden group bg-gradient-to-br from-white via-slate-50 to-white dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950"
                       >
                         <div className="p-2 sm:p-3 lg:p-4">
                           <div className="flex items-start justify-between mb-1 sm:mb-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-600 font-semibold text-[9px] sm:text-[10px] lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
+                              <p className="text-slate-600 dark:text-neutral-400 font-semibold text-3xs sm:text-2xs lg:text-xs mb-0.5 sm:mb-1 truncate uppercase tracking-wide">
                                 {stat.title}
                               </p>
                             </div>
                             <div
-                              className={`w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 ${iconConfig.bg} rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0`}
+                              className={cn("w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10", iconConfig.bg, "rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg flex-shrink-0")}
                             >
-                              <Icon className={`w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 ${iconConfig.icon}`} />
+                              <Icon className={cn("w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5", iconConfig.icon)} />
                             </div>
                           </div>
-                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 leading-none tracking-tight">
+                          <p className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white leading-none tracking-tight">
                             {typeof stat.value === "number" ? stat.value.toLocaleString() : stat.value}
                           </p>
                         </div>
                         <div
-                          className={`h-1 ${iconConfig.bg} opacity-60 group-hover:opacity-100 transition-opacity duration-300`}
+                          className={cn("h-1", iconConfig.bg, "opacity-60 group-hover:opacity-100 transition-opacity duration-300")}
                         ></div>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-6">
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-6">
                   {isEditing("purchases") ? (
                     <form onSubmit={purchasesForm.handleSubmit(handlePurchasesSubmit)} className="space-y-6">
                       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2127,14 +2556,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("purchases")}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -2147,7 +2576,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddOneTimePackage}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add One-time Package
                           </button>
@@ -2170,7 +2599,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 space-y-4"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-sm font-semibold text-gray-900">
@@ -2179,7 +2608,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveOneTime(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-sm font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
@@ -2218,7 +2647,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     />
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Purchase Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Purchase Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.purchaseDate` as const)}
@@ -2226,7 +2655,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Start Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Start Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.startDate` as const)}
@@ -2237,7 +2666,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">End Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">End Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`oneTimePackages.${index}.endDate` as const)}
@@ -2251,7 +2680,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={purchasesForm.control}
                                       name={`oneTimePackages.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-4 py-3">
+                                        <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3">
                                           <Checkbox
                                             checked={field.value}
                                             onChange={(e) => field.onChange(e.target.checked)}
@@ -2274,7 +2703,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMiniPackage}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Mini Draw Package
                           </button>
@@ -2290,7 +2719,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-4 space-y-4"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 space-y-4"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <h5 className="text-sm font-semibold text-gray-900">
@@ -2299,14 +2728,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniPackage(index)}
-                                      className="text-sm font-medium text-[#ee0000] hover:underline"
+                                      className="text-sm font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Package ID</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Package ID</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.packageId` as const)}
                                         className={inputClasses}
@@ -2317,7 +2746,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Package Name</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Package Name</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.packageName` as const)}
                                         className={inputClasses}
@@ -2328,7 +2757,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Mini Draw ID</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Mini Draw ID</label>
                                       <input
                                         {...purchasesForm.register(`miniDrawPackages.${index}.miniDrawId` as const)}
                                         className={inputClasses}
@@ -2339,7 +2768,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Purchase Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Purchase Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.purchaseDate` as const)}
@@ -2347,7 +2776,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       />
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Start Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Start Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.startDate` as const)}
@@ -2358,7 +2787,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">End Date</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">End Date</label>
                                       <input
                                         type="datetime-local"
                                         {...purchasesForm.register(`miniDrawPackages.${index}.endDate` as const)}
@@ -2369,7 +2798,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Entries Granted</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Entries Granted</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2386,7 +2815,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Price (AUD)</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Price (AUD)</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2401,7 +2830,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
                                         Partner Discount Hours
                                       </label>
                                       <input
@@ -2420,7 +2849,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div>
-                                      <label className="text-sm font-medium text-gray-700">Partner Discount Days</label>
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">Partner Discount Days</label>
                                       <input
                                         type="number"
                                         min={0}
@@ -2437,7 +2866,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       )}
                                     </div>
                                     <div className="md:col-span-2">
-                                      <label className="text-sm font-medium text-gray-700">
+                                      <label className="text-sm font-medium text-gray-700 dark:text-neutral-200">
                                         Stripe Payment Intent ID
                                       </label>
                                       <input
@@ -2457,12 +2886,12 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={purchasesForm.control}
                                       name={`miniDrawPackages.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+                                        <label className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200">
                                           <input
                                             type="checkbox"
                                             checked={field.value}
                                             onChange={(event) => field.onChange(event.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 text-[#ee0000] focus:ring-[#ee0000]"
+                                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-600"
                                           />
                                           <span>Package active</span>
                                         </label>
@@ -2480,17 +2909,17 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     <>
                       <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
                         <div>
-                          <h3 className="text-[11px] sm:text-base lg:text-lg font-semibold text-gray-900">
+                          <h3 className="text-2xs sm:text-base lg:text-lg font-semibold text-gray-900">
                             Packages & Entries
                           </h3>
-                          <p className="text-[9px] sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
+                          <p className="text-3xs sm:text-xs lg:text-sm text-gray-500 hidden sm:block">
                             Review package purchases below or switch to edit mode to grant additional entries.
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("purchases")}
-                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-2xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Packages
                         </button>
@@ -2501,15 +2930,19 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Recent Orders */}
                 {!isEditing("purchases") && user.orders.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Recent Orders
-                    </h3>
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Orders</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {ordersScroll.slice.length} of {ordersScroll.total}
+                        {ordersScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.orders.slice(0, 5).map((order: OrderItem, index: number) => (
+                      {ordersScroll.slice.map((order: OrderItem, index: number) => (
                         <div
                           key={order._id || `order-${index}`}
-                          className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                          className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
                         >
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                             <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
@@ -2517,7 +2950,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               <p className="font-medium text-xs sm:text-sm text-gray-900">
                                 Order #{order.orderNumber || order._id || "--"}
                               </p>
-                              <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+                              <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                 {formatDate(order.createdAt || new Date().toISOString())}
                               </p>
                             </div>
@@ -2526,37 +2959,36 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                             <p className="font-semibold text-xs sm:text-sm text-gray-900">
                               {formatCurrency(order.totalAmount || order.total || 0)}
                             </p>
-                            <span
-                              className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-medium ${
-                                order.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : order.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              {order.status || "Unspecified"}
-                            </span>
+                            <div className="mt-0.5 flex justify-end">
+                              <OrderStatusBadge status={order.status} />
+                            </div>
                           </div>
                         </div>
                       ))}
+                      {ordersScroll.hasMore && (
+                        <div ref={ordersScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
 
                 {/* One-time Packages */}
                 {!isEditing("purchases") && user.oneTimePackages.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      One-time Packages
-                    </h3>
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">One-time Packages</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {oneTimeScroll.slice.length} of {oneTimeScroll.total}
+                        {oneTimeScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
                     <div className="space-y-2 sm:space-y-3">
-                      {user.oneTimePackages.slice(0, 5).map((pkg: OneTimePackageItem, index: number) => {
+                      {oneTimeScroll.slice.map((pkg: OneTimePackageItem, index: number) => {
                         const packageIcon = getPackageIconImage(pkg.packageName);
                         return (
                           <div
-                            key={index}
-                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                            key={`${pkg.packageId ?? ""}-${pkg.purchaseDate ?? ""}-${index}`}
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {packageIcon ? (
@@ -2588,6 +3020,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                           className="w-5 h-5 sm:w-7 sm:h-7 object-contain"
                                           width={28}
                                           height={28}
+                                          sizes="(max-width: 640px) 20px, 28px"
                                         />
                                       </div>
                                     </span>
@@ -2601,6 +3034,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                     className="w-full h-full object-cover"
                                     width={40}
                                     height={40}
+                                    sizes="(max-width: 640px) 32px, 40px"
                                   />
                                 </div>
                               )}
@@ -2609,41 +3043,94 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                   {pkg.packageName || pkg.packageId || "Package"}
                                 </p>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <p className="text-[10px] sm:text-xs text-gray-600">
+                                  <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400">
                                     {formatDate(pkg.purchaseDate || new Date().toISOString())}
                                   </p>
                                 </div>
                               </div>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                              <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
                                 {pkg.entriesGranted || 0} entries
                               </p>
                               {pkg.price && (
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-600 mt-0.5">
+                                <p className="text-3xs sm:text-2xs lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                   {formatCurrency(pkg.price)}
                                 </p>
                               )}
-                              <span
-                                className={`inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium ${
-                                  pkg.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                                }`}
-                              >
-                                {pkg.isActive ? "Active" : "Expired"}
-                              </span>
+                              <div className="mt-0.5 flex justify-end">
+                                <ActiveOrInactiveBadge active={!!pkg.isActive} activeLabel="Active" inactiveLabel="Expired" />
+                              </div>
                             </div>
                           </div>
                         );
                       })}
+                      {oneTimeScroll.hasMore && (
+                        <div ref={oneTimeScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
                     </div>
                   </div>
                 )}
-              </div>
-            )}
 
-            {activeTab === "activity" && (
-              <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-                <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-2 sm:p-4 lg:p-6">
+                {/* Mini Draw Packages (read-only) */}
+                {!isEditing("purchases") && user.miniDrawPackages.length > 0 && (
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mini Draw Packages</h3>
+                      <p className="text-xs text-gray-500">
+                        Showing {miniDrawPackagesScroll.slice.length} of {miniDrawPackagesScroll.total}
+                        {miniDrawPackagesScroll.hasMore ? " · scroll for more" : ""}
+                      </p>
+                    </div>
+                    <div className="space-y-2 sm:space-y-3">
+                      {miniDrawPackagesScroll.slice.map((pkg, index: number) => {
+                        const md = pkg as OneTimePackageItem & {
+                          miniDrawId?: string;
+                          packageName?: string;
+                          stripePaymentIntentId?: string;
+                        };
+                        return (
+                          <div
+                            key={`${md.miniDrawId ?? ""}-${md.stripePaymentIntentId ?? ""}-${index}`}
+                            className="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700 hover:shadow-sm transition-shadow"
+                          >
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 border border-amber-200">
+                                <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-700" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-xs sm:text-sm text-gray-900">
+                                  {md.packageName || md.packageId || "Mini draw package"}
+                                </p>
+                                <p className="text-2xs sm:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                  {formatDate(md.purchaseDate || new Date().toISOString())}
+                                  {md.miniDrawId ? ` · Draw ${md.miniDrawId}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
+                                {md.entriesGranted || 0} entries
+                              </p>
+                              {md.price != null && (
+                                <p className="text-3xs sm:text-2xs lg:text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                  {formatCurrency(Number(md.price))}
+                                </p>
+                              )}
+                              <div className="mt-0.5 flex justify-end">
+                                <ActiveOrInactiveBadge active={!!md.isActive} activeLabel="Active" inactiveLabel="Expired" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {miniDrawPackagesScroll.hasMore && (
+                        <div ref={miniDrawPackagesScroll.sentinelRef} className="h-2 w-full shrink-0" aria-hidden />
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-2 sm:p-4 lg:p-6">
                   {isEditing("activity") ? (
                     <form
                       onSubmit={activityForm.handleSubmit(handleActivitySubmit)}
@@ -2661,14 +3148,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={() => handleCancelEdit("activity")}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={updateUser.isPending}
-                            className="rounded-lg bg-gradient-to-r from-[#ee0000] to-[#ff4444] px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-[#cc0000] hover:to-[#e60000] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-red-600 to-red-400 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:from-red-675 hover:to-red-650 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {updateUser.isPending ? "Saving..." : "Save Changes"}
                           </button>
@@ -2681,7 +3168,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMajorDraw}
-                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Entry
                           </button>
@@ -2696,28 +3183,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-xs font-semibold text-gray-900">Major Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">
+                                      {majorDrawOptions.find((o) => o.id === watchedMajorDraws?.[index]?.drawId)?.name ??
+                                        `Major Draw ${index + 1}`}
+                                    </h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMajorDraw(index)}
-                                      className="text-xs font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <Controller
                                       control={activityForm.control}
                                       name={`majorDrawParticipation.${index}.drawId` as const}
                                       render={({ field, fieldState }) => (
-                                        <Input
-                                          label="Draw ID"
+                                        <DrawSelect
+                                          label="Draw"
+                                          placeholder="Select major draw…"
+                                          options={majorDrawOptions}
                                           value={field.value || ""}
                                           onChange={field.onChange}
-                                          placeholder="Major draw ObjectId"
+                                          disabledIds={getOtherSelectedMajorIds(index)}
+                                          loading={majorDrawsQ.isLoading}
                                           error={fieldState.error?.message}
                                         />
                                       )}
@@ -2753,7 +3246,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                           <button
                             type="button"
                             onClick={handleAddMiniDraw}
-                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                            className="rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                           >
                             Add Entry
                           </button>
@@ -2768,28 +3261,34 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                               return (
                                 <div
                                   key={field.id}
-                                  className="rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                                  className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 space-y-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <h5 className="text-xs font-semibold text-gray-900">Mini Draw {index + 1}</h5>
+                                    <h5 className="text-xs font-semibold text-gray-900">
+                                      {miniDrawOptions.find((o) => o.id === watchedMiniDraws?.[index]?.miniDrawId)?.name ??
+                                        `Mini Draw ${index + 1}`}
+                                    </h5>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveMiniDraw(index)}
-                                      className="text-xs font-medium text-[#ee0000] hover:underline"
+                                      className="text-xs font-medium text-red-600 hover:underline"
                                     >
                                       Remove
                                     </button>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <Controller
                                       control={activityForm.control}
                                       name={`miniDrawParticipation.${index}.miniDrawId` as const}
                                       render={({ field, fieldState }) => (
-                                        <Input
-                                          label="Mini Draw ID"
+                                        <DrawSelect
+                                          label="Mini draw"
+                                          placeholder="Select mini draw…"
+                                          options={miniDrawOptions}
                                           value={field.value || ""}
                                           onChange={field.onChange}
-                                          placeholder="Mini draw ObjectId"
+                                          disabledIds={getOtherSelectedMiniIds(index)}
+                                          loading={miniDrawsQ.isLoading}
                                           error={fieldState.error?.message}
                                         />
                                       )}
@@ -2815,7 +3314,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                                       control={activityForm.control}
                                       name={`miniDrawParticipation.${index}.isActive` as const}
                                       render={({ field }) => (
-                                        <div className="rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5">
+                                        <div className="rounded-lg border-2 border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5">
                                           <Checkbox
                                             checked={field.value ?? true}
                                             onChange={(e) => field.onChange(e.target.checked)}
@@ -2844,7 +3343,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         <button
                           type="button"
                           onClick={() => setActiveEditTab("activity")}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-100 transition-colors"
                         >
                           Edit Entries
                         </button>
@@ -2855,44 +3354,93 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
 
                 {/* Major Draw Participation */}
                 {!isEditing("activity") && user.majorDrawParticipation.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Major Draw Participation</h3>
                     <div className="space-y-2">
-                      {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => (
-                        <div
-                          key={draw.drawId || `draw-${index}`}
-                          className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
-                            <p className="text-xs text-gray-600 mt-0.5">
-                              {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
-                            </p>
+                      {user.majorDrawParticipation.map((draw: MajorDrawParticipationItem, index: number) => {
+                        const entriesBySource = (draw.entries ?? []).reduce(
+                          (acc, e) => {
+                            const src = e.entriesBySource ?? {};
+                            Object.entries(src).forEach(([k, v]) => {
+                              if (typeof v === "number" && v > 0) acc[k] = (acc[k] ?? 0) + v;
+                            });
+                            return acc;
+                          },
+                          {} as Record<string, number>
+                        );
+                        const hasBreakdown = Object.keys(entriesBySource).length > 0;
+                        return (
+                          <div
+                            key={draw.drawId || `draw-${index}`}
+                            className="p-2.5 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm truncate">{draw.title || draw.drawId || "Major draw"}</p>
+                                <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
+                                  {draw.endDate ? formatDate(draw.endDate) : "End date not set"}
+                                </p>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-3">
+                                <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
+                                <p className="text-xs text-gray-500">entries</p>
+                                <div className="mt-1 flex justify-end">
+                                  <DrawParticipationStatusBadge status={draw.status} />
+                                </div>
+                              </div>
+                            </div>
+                            {hasBreakdown && (
+                              <div className="mt-2 pt-2 border-t border-gray-100">
+                                <p className="text-xs font-medium text-gray-500 mb-1.5">Entries by source</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {entriesBySource.membership != null && entriesBySource.membership > 0 && (
+                                    <EntrySourceBadge sourceKey="membership">
+                                      Membership: {entriesBySource.membership}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["one-time-package"] != null && entriesBySource["one-time-package"] > 0 && (
+                                    <EntrySourceBadge sourceKey="one-time-package">
+                                      One-time: {entriesBySource["one-time-package"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource.upsell != null && entriesBySource.upsell > 0 && (
+                                    <EntrySourceBadge sourceKey="upsell">
+                                      Upsell: {entriesBySource.upsell}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["mini-draw"] != null && entriesBySource["mini-draw"] > 0 && (
+                                    <EntrySourceBadge sourceKey="mini-draw">
+                                      Mini-draw: {entriesBySource["mini-draw"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource.referral != null && entriesBySource.referral > 0 && (
+                                    <EntrySourceBadge sourceKey="referral">
+                                      Referral: {entriesBySource.referral}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["bonus-entry-promo"] != null && entriesBySource["bonus-entry-promo"] > 0 && (
+                                    <EntrySourceBadge sourceKey="bonus-entry-promo">
+                                      Campaign/Promo: {entriesBySource["bonus-entry-promo"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                  {entriesBySource["cancellation-upsell"] != null && entriesBySource["cancellation-upsell"] > 0 && (
+                                    <EntrySourceBadge sourceKey="cancellation-upsell">
+                                      Retention: {entriesBySource["cancellation-upsell"]}
+                                    </EntrySourceBadge>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right flex-shrink-0 ml-3">
-                            <p className="font-semibold text-sm sm:text-base">{draw.totalEntries || 0}</p>
-                            <p className="text-xs text-gray-500">entries</p>
-                            <span
-                              className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                draw.status === "completed"
-                                  ? "bg-green-100 text-green-800"
-                                  : draw.status === "active"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-gray-100 text-gray-800"
-                              }`}
-                            >
-                              {draw.status || "Unspecified"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {/* Mini Draw Participation */}
                 {!isEditing("activity") && user.miniDrawParticipation?.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Mini Draw Participation</h3>
                     <div className="space-y-2">
                       {user.miniDrawParticipation.map((entry, index: number) => {
@@ -2907,30 +3455,25 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                         return (
                           <div
                             key={entry.miniDrawId?.toString?.() || `mini-${index}`}
-                            className="flex items-center justify-between p-2.5 sm:p-3 bg-white rounded-lg border border-gray-200"
+                            className="flex items-center justify-between p-2.5 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-700"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-sm truncate">
                                 {miniDrawName || entry.miniDrawId?.toString?.() || "Mini draw"}
                               </p>
-                              <p className="text-xs text-gray-600 mt-0.5">
+                              <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                                 {drawDateValue ? formatDate(drawDateValue) : "Draw date not set"}
                               </p>
                             </div>
                             <div className="text-right flex-shrink-0 ml-3">
                               <p className="font-semibold text-sm sm:text-base">{entry.totalEntries || 0}</p>
                               <p className="text-xs text-gray-500">entries</p>
-                              <span
-                                className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  miniDrawStatus === "completed"
-                                    ? "bg-green-100 text-green-800"
-                                    : entry.isActive
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-gray-100 text-gray-800"
-                                }`}
-                              >
-                                {miniDrawStatus || (entry.isActive ? "Active" : "Inactive")}
-                              </span>
+                              <div className="mt-1 flex justify-end">
+                                <MiniDrawParticipationStatusBadge
+                                  miniDrawStatus={miniDrawStatus}
+                                  isActive={entry.isActive}
+                                />
+                              </div>
                             </div>
                           </div>
                         );
@@ -2939,79 +3482,194 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   </div>
                 )}
 
-                {/* Recent Payment Events */}
-                {user.paymentEvents.length > 0 && (
-                  <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-slate-200/50 shadow-lg p-3 sm:p-4 lg:p-6">
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 lg:mb-4">
-                      Recent Activity
-                    </h3>
-                    <div className="space-y-2 sm:space-y-3">
-                      {user.paymentEvents.slice(0, 10).map((event: PaymentEventItem, index: number) => {
-                        const eventDescription = formatActivityEvent(event, formatCurrency);
-                        const eventIcon =
-                          event.packageType === "membership"
-                            ? CreditCard
-                            : event.packageType === "one-time"
-                            ? Package
-                            : event.packageType === "mini-draw"
-                            ? Trophy
-                            : event.packageType === "upsell"
-                            ? Gift
-                            : Activity;
-                        const Icon = eventIcon;
+                {/* Payment events — paginated via infinite scroll */}
+                {(activityPaymentTotal > 0 || activityEvents.length > 0) && (
+                  <div className="bg-gradient-to-br from-gray-50 to-white dark:from-neutral-900 dark:to-neutral-950 rounded-xl border-2 border-slate-200/50 dark:border-neutral-700 shadow-lg dark:shadow-none p-3 sm:p-4 lg:p-6">
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-2 sm:mb-3 lg:mb-4">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment activity</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Newest first. Scroll down to load older events.
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-500 tabular-nums">
+                        Showing {activityEvents.length} of {activityPaymentTotal}
+                        {paymentEventsInfinite.hasNextPage ? " · more below" : ""}
+                      </p>
+                    </div>
+                    {paymentEventsInfinite.isPending && activityEvents.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-6 text-center">Loading activity…</p>
+                    ) : (
+                      <div className="space-y-2 sm:space-y-3">
+                        {activityEvents.map((event: PaymentEventItem, index: number) => {
+                          const title = resolveAdminPaymentEventTitle(event);
+                          const kind = getAdminPaymentKindLabel(event);
+                          const eventData = event.data as Record<string, unknown> | undefined;
+                          const entries =
+                            typeof eventData?.entries === "number" ? eventData.entries : 0;
+                          const priceRaw = eventData?.price;
+                          const price =
+                            typeof priceRaw === "number"
+                              ? priceRaw
+                              : typeof priceRaw === "string"
+                              ? Number.parseFloat(priceRaw)
+                              : NaN;
+                          const fallbackIcon =
+                            event.eventType === "RefundProcessed" || event.eventType === "RefundPartial"
+                              ? Activity
+                              : event.packageType === "membership"
+                              ? CreditCard
+                              : event.packageType === "one-time"
+                              ? Package
+                              : event.packageType === "mini-draw"
+                              ? Trophy
+                              : event.packageType === "upsell"
+                              ? Gift
+                              : Activity;
+                          const FallbackIcon = fallbackIcon;
+                          const packageImg =
+                            event.packageType === "upsell"
+                              ? null
+                              : getPackageIconImage(title);
 
-                        return (
-                          <div
-                            key={index}
-                            className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white rounded-lg border-2 border-slate-200/50 hover:shadow-md hover:border-slate-300 transition-all"
-                          >
-                            <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
-                              <div className="flex-shrink-0 mt-0.5">
-                                <div
-                                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center ${
-                                    event.packageType === "membership"
-                                      ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
-                                      : event.packageType === "one-time"
-                                      ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"
-                                      : event.packageType === "mini-draw"
-                                      ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600"
-                                      : event.packageType === "upsell"
-                                      ? "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600"
-                                      : "bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700"
-                                  } shadow-md`}
-                                >
-                                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                          return (
+                            <div
+                              key={event._id ?? `${event.timestamp ?? ""}-${index}`}
+                              className="flex items-start justify-between gap-2 sm:gap-3 p-2 sm:p-3 bg-white dark:bg-neutral-900 rounded-lg border-2 border-slate-200/50 dark:border-neutral-700 hover:shadow-md hover:border-slate-300 dark:hover:border-neutral-600 transition-all"
+                            >
+                              <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {packageImg ? (
+                                    <span
+                                      className="inline-flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-slate-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 shadow-sm overflow-hidden"
+                                    >
+                                      <Image
+                                        src={packageImg}
+                                        alt={title}
+                                        className="h-6 w-6 sm:h-7 sm:w-7 object-contain"
+                                        width={28}
+                                        height={28}
+                                        sizes="(max-width: 640px) 24px, 28px"
+                                      />
+                                    </span>
+                                  ) : (
+                                    <div
+                                      className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-md ${
+                                        event.packageType === "membership"
+                                          ? "bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600"
+                                          : event.packageType === "one-time"
+                                          ? "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600"
+                                          : event.packageType === "mini-draw"
+                                          ? "bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600"
+                                          : event.packageType === "upsell"
+                                          ? "bg-gradient-to-br from-purple-500 via-purple-600 to-violet-600"
+                                          : "bg-gradient-to-br from-gray-500 via-gray-600 to-gray-700"
+                                      }`}
+                                    >
+                                      <FallbackIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-xs sm:text-sm text-gray-900 break-words">
+                                    {title}
+                                  </p>
+                                  <p className="text-3xs sm:text-2xs text-slate-600 mt-0.5">{kind}</p>
+                                  {event.eventType === "BenefitsGranted" &&
+                                    event.hasRefundProcessed &&
+                                    (event.refundProcessedAt ? (
+                                      <p className="text-3xs sm:text-2xs mt-0.5">
+                                        <span className="font-semibold text-amber-800 dark:text-amber-200">
+                                          Refunded
+                                        </span>
+                                        <span className="text-gray-600 dark:text-neutral-400 ml-1">
+                                          {formatDate(event.refundProcessedAt)}
+                                        </span>
+                                      </p>
+                                    ) : (
+                                      <p className="text-3xs sm:text-2xs font-semibold text-amber-800 dark:text-amber-200 mt-0.5">
+                                        Refunded
+                                      </p>
+                                    ))}
+                                  {event.eventType === "BenefitsGranted" &&
+                                    event.hasPartialRefundSkipped &&
+                                    typeof event.partialRefundAmountCents === "number" && (
+                                      <p className="text-3xs sm:text-2xs mt-0.5">
+                                        <span className="font-semibold text-amber-700 dark:text-amber-300">
+                                          Partial refund — no benefits reversed ($
+                                          {(event.partialRefundAmountCents / 100).toFixed(2)})
+                                        </span>
+                                      </p>
+                                    )}
+                                  {event.eventType === "BenefitsGranted" &&
+                                    Array.isArray(event.refundReversalIssues) &&
+                                    event.refundReversalIssues.length > 0 && (
+                                      <p className="text-3xs sm:text-2xs text-amber-900 dark:text-amber-100 mt-0.5">
+                                        {event.refundReversalIssues.length} reversal follow-up(s) — check
+                                        RefundProcessed row
+                                      </p>
+                                    )}
+                                  {event.eventType === "RefundProcessed" &&
+                                    event.data &&
+                                    typeof (event.data as { reversed?: unknown }).reversed === "object" &&
+                                    (event.data as { reversed?: unknown }).reversed != null && (
+                                      <p className="text-3xs sm:text-2xs text-gray-600 dark:text-neutral-400 mt-0.5 break-words max-w-full">
+                                        Ledger:{" "}
+                                        {JSON.stringify((event.data as { reversed: unknown }).reversed)}
+                                      </p>
+                                    )}
+                                  {event.eventType === "RefundProcessed" &&
+                                    Array.isArray((event.data as { reversalIssues?: unknown[] })?.reversalIssues) &&
+                                    ((event.data as { reversalIssues: { step?: string; error?: string }[] })
+                                      .reversalIssues?.length ?? 0) > 0 && (
+                                      <p className="text-3xs sm:text-2xs text-amber-900 dark:text-amber-100 mt-0.5">
+                                        {
+                                          (event.data as { reversalIssues: unknown[] }).reversalIssues
+                                            ?.length
+                                        }{" "}
+                                        non-fatal issue(s)
+                                      </p>
+                                    )}
+                                  <p className="text-3xs sm:text-2xs lg:text-xs text-gray-500 mt-0.5">
+                                    {formatDate(event.timestamp || new Date().toISOString())}
+                                  </p>
+                                  {entries > 0 && (
+                                    <p className="text-3xs sm:text-2xs text-gray-500 mt-0.5">
+                                      +{entries} entries
+                                    </p>
+                                  )}
                                 </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-[10px] sm:text-xs lg:text-sm text-gray-900 break-words">
-                                  {eventDescription}
-                                </p>
-                                <p className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 mt-0.5">
-                                  {formatDate(event.timestamp || new Date().toISOString())}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              {(() => {
-                                const eventData = event.data as Record<string, unknown> | undefined;
-                                const price = eventData?.price;
-                                return price != null && typeof price === "number" ? (
-                                  <p className="font-semibold text-[10px] sm:text-xs lg:text-sm text-gray-900">
+                              <div className="text-right flex-shrink-0 max-w-[40%]">
+                                {!Number.isNaN(price) && (
+                                  <p className="font-semibold text-2xs sm:text-xs lg:text-sm text-gray-900">
                                     {formatCurrency(price)}
                                   </p>
-                                ) : null;
-                              })()}
-                              {event.packageType && (
-                                <span className="inline-block mt-0.5 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] lg:text-xs font-medium bg-gray-100 text-gray-600 capitalize">
-                                  {event.packageType.replace("-", " ")}
-                                </span>
-                              )}
+                                )}
+                                <div className="mt-0.5 flex justify-end">
+                                  <AdminBadge variant="neutral" className="!text-3xs sm:!text-3xs lg:!text-xs">
+                                    {kind}
+                                  </AdminBadge>
+                                </div>
+                              </div>
                             </div>
+                          );
+                        })}
+                        {paymentEventsInfinite.hasNextPage && (
+                          <div
+                            ref={paymentActivitySentinelRef}
+                            className="flex min-h-[48px] items-center justify-center py-2"
+                            aria-hidden
+                          >
+                            {paymentEventsInfinite.isFetchingNextPage ? (
+                              <span className="text-xs text-gray-500">Loading more…</span>
+                            ) : (
+                              <span className="text-2xs text-gray-400">Scroll for more</span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3023,20 +3681,20 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Action Confirmation Modal */}
       {showActionModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">{showActionModal.title}</h3>
-            <p className="text-gray-600 mb-6">{showActionModal.description}</p>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{showActionModal.title}</h3>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">{showActionModal.description}</p>
 
             {showActionModal.requiresInput && (
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">
                   {showActionModal.action === "toggle_status" ? "Reason (optional)" : "Note"}
                 </label>
                 <textarea
                   value={actionInput}
                   onChange={(e) => setActionInput(e.target.value)}
                   placeholder={showActionModal.inputPlaceholder}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ee0000] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-600 focus:border-transparent"
                   rows={3}
                 />
               </div>
@@ -3048,14 +3706,14 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                   setShowActionModal(null);
                   setActionInput("");
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={executeAction}
                 disabled={actionLoading === showActionModal.action}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#ee0000] to-[#ff4444] text-white rounded-lg hover:from-[#cc0000] hover:to-[#e60000] disabled:opacity-50 transition-all"
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-400 text-white rounded-lg hover:from-red-675 hover:to-red-650 disabled:opacity-50 transition-all"
               >
                 {actionLoading === showActionModal.action ? "Processing..." : "Confirm"}
               </button>
@@ -3067,13 +3725,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Send Email Modal */}
       {showSendEmailModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 animate-fade-in">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Send Email</h3>
-            <p className="text-gray-600 mb-6">Compose and send an email directly to the user.</p>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-lg w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Send Email</h3>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">Compose and send an email directly to the user.</p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Subject</label>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   value={emailSubject}
@@ -3082,7 +3740,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">Message</label>
                 <textarea
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   rows={5}
@@ -3097,7 +3755,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowSendEmailModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -3117,15 +3775,15 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
       {/* Admin Set Password Modal */}
       {showAdminPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: Z_INDEX.MODAL_NESTED_SECONDARY }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Set New Password</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl dark:shadow-none max-w-md w-full p-6 animate-fade-in border border-gray-200 dark:border-neutral-700">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Set New Password</h3>
+            <p className="text-gray-600 dark:text-neutral-400 mb-6">
               Set a new password for this user. Minimum length is enforced; no verification email is sent.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1">New password</label>
                 <input
                   type="password"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none"
@@ -3140,7 +3798,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowAdminPasswordModal(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 dark:text-neutral-200 hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -3157,6 +3815,33 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
         </div>
       )}
 
+      {showChargePastDueUserModal && userId && (
+        <ChargePastDueUserModal
+          isOpen={showChargePastDueUserModal}
+          onClose={() => setShowChargePastDueUserModal(false)}
+          targetUserId={userId}
+          memberLabel={
+            user
+              ? `${formatDisplayName(user.firstName, user.lastName) || user.email} · ${user.email}`
+              : undefined
+          }
+          onConfirm={async () => {
+            const response = await fetch(`/api/admin/users/${userId}/charge-past-due`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmation: "CHARGE" }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.message || data.error || "Failed to charge invoice");
+            }
+            await queryClient.invalidateQueries({ queryKey: ["admin", "users", "detail", userId] });
+            await queryClient.invalidateQueries({ queryKey: ["admin", "users", "list"] });
+            return data;
+          }}
+        />
+      )}
+
       {/* Cancel Subscription Modal */}
       {showCancelSubscriptionModal && user?.id && (
         <div
@@ -3167,25 +3852,25 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
             className="absolute inset-0 bg-black/50"
             onClick={() => setShowCancelSubscriptionModal(false)}
           />
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto">
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="relative bg-white dark:bg-neutral-900 rounded-xl shadow-2xl dark:shadow-none w-full max-w-md mx-auto border border-gray-200 dark:border-neutral-700">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-neutral-700">
               <div className="flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-red-600" />
-                <h3 className="text-lg font-bold text-gray-900">Cancel Subscription</h3>
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Cancel Subscription</h3>
               </div>
               <button
                 onClick={() => setShowCancelSubscriptionModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                className="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 transition-colors p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
-              <p className="text-sm text-gray-700">
+              <p className="text-sm text-gray-700 dark:text-neutral-200">
                 How would you like to cancel this user&apos;s subscription?
               </p>
               <div className="space-y-3">
-                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 cursor-pointer has-[:checked]:border-red-300 dark:has-[:checked]:border-red-700 has-[:checked]:bg-red-50/50 dark:has-[:checked]:bg-red-950/30">
                   <input
                     type="radio"
                     name="cancelOption"
@@ -3194,13 +3879,13 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     className="mt-1 text-red-600"
                   />
                   <div>
-                    <span className="font-medium text-gray-900">Cancel at end of billing period</span>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <span className="font-medium text-gray-900 dark:text-white">Cancel at end of billing period</span>
+                    <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                       User keeps access until the current period ends.
                     </p>
                   </div>
                 </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 cursor-pointer has-[:checked]:border-red-300 has-[:checked]:bg-red-50/50">
+                <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-gray-200 dark:border-neutral-600 hover:border-gray-300 dark:hover:border-neutral-500 cursor-pointer has-[:checked]:border-red-300 dark:has-[:checked]:border-red-700 has-[:checked]:bg-red-50/50 dark:has-[:checked]:bg-red-950/30">
                   <input
                     type="radio"
                     name="cancelOption"
@@ -3209,8 +3894,8 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
                     className="mt-1 text-red-600"
                   />
                   <div>
-                    <span className="font-medium text-gray-900">Cancel immediately</span>
-                    <p className="text-xs text-gray-600 mt-0.5">
+                    <span className="font-medium text-gray-900 dark:text-white">Cancel immediately</span>
+                    <p className="text-xs text-gray-600 dark:text-neutral-400 mt-0.5">
                       Access revoked now. No refund for unused time.
                     </p>
                   </div>
@@ -3221,7 +3906,7 @@ export default function UserDetailModal({ userId, isOpen, onCloseAction }: UserD
               <button
                 type="button"
                 onClick={() => setShowCancelSubscriptionModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-60"
                 disabled={cancelSubscriptionMutation.isPending}
               >
                 Cancel

@@ -1,21 +1,14 @@
 import connectDB from "@/lib/mongodb";
-import Affiliate from "@/models/Affiliate";
 import AffiliateCommission from "@/models/AffiliateCommission";
 import User from "@/models/User";
-import { calculateCommission, COMMISSION_RATE } from "@/lib/affiliate";
 import mongoose from "mongoose";
+import {
+  recordAffiliateCommission,
+  resolveReferralAffiliateId,
+} from "@/utils/affiliate/affiliate-attribution";
 
 /**
- * Get affiliate's commission rate, with fallback to default
- */
-async function getAffiliateCommissionRate(affiliateId: mongoose.Types.ObjectId): Promise<number> {
-  const affiliate = await Affiliate.findById(affiliateId).select("commissionRate").lean();
-  return affiliate?.commissionRate ?? COMMISSION_RATE; // Fallback to default if not set
-}
-
-/**
- * Process commission for one-time package purchase
- * Only grants commission on first-time one-time package purchase
+ * Process commission for one-time package purchases (every successful payment for referred users).
  */
 export async function processOneTimePackageCommission({
   userId,
@@ -23,96 +16,50 @@ export async function processOneTimePackageCommission({
   packageName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   packageId: string;
   packageName: string;
-  purchaseAmount: number; // Amount in cents
+  purchaseAmount: number;
   paymentIntentId: string;
+  /** When the payment happened (Stripe / webhook time); defaults to now */
+  earnedAt?: Date;
 }) {
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
-    return null; // No affiliate referral, no commission
-  }
+  const affiliateId = resolveReferralAffiliateId(user);
+  if (!affiliateId) return null;
 
-  const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if this is the first one-time package purchase
-  // Since the webhook processes AFTER the package is added, we check if there's already
-  // a commission record for a different payment intent (indicating a previous purchase)
-  const existingPreviousCommission = await AffiliateCommission.findOne({
+  const commission = await recordAffiliateCommission({
     affiliateId,
     referredUserId,
     commissionType: "one-time-package",
-    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
-  });
-
-  if (existingPreviousCommission) {
-    // Not first purchase, no commission
-    return null;
-  }
-
-  // Check if commission already exists for this payment
-  const existingCommission = await AffiliateCommission.findOne({
-    affiliateId,
-    referredUserId,
-    stripePaymentIntentId: paymentIntentId,
-    commissionType: "one-time-package",
-  });
-
-  if (existingCommission) {
-    return existingCommission; // Already processed
-  }
-
-  // Get affiliate's commission rate
-  const commissionRate = await getAffiliateCommissionRate(affiliateId);
-
-  // Calculate commission
-  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
-
-  // Create commission record
-  const commission = new AffiliateCommission({
-    affiliateId,
-    referredUserId,
-    commissionType: "one-time-package",
-    status: "pending",
     purchaseType: "one-time",
     packageId,
     packageName,
     purchaseAmount,
-    commissionRate: commissionRate,
-    commissionAmount,
     stripePaymentIntentId: paymentIntentId,
-    isFirstTimePurchase: true,
+    isFirstTimePurchase: false,
     isRecurringPayment: false,
-    earnedAt: new Date(),
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
-  await commission.save();
-
-  // Update affiliate totals
-  await Affiliate.findByIdAndUpdate(affiliateId, {
-    $inc: {
-      totalSales: purchaseAmount,
-      totalCommissions: commissionAmount,
-    },
-  });
-
-  // Mark first purchase as completed
-  if (user.affiliateReferral) {
-    user.affiliateReferral.firstPurchaseCompleted = true;
-    await user.save();
+  if (commission) {
+    await User.updateOne(
+      { _id: userId, "affiliateReferral.firstPurchaseCompleted": { $ne: true } },
+      { $set: { "affiliateReferral.firstPurchaseCompleted": true } }
+    );
   }
 
   return commission;
 }
 
 /**
- * Process commission for upsell purchase
- * Only grants commission on first-time upsell purchase
+ * Process commission for upsell purchases (every successful payment for referred users).
  */
 export async function processUpsellCommission({
   userId,
@@ -120,86 +67,92 @@ export async function processUpsellCommission({
   offerName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   offerId: string;
   offerName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  earnedAt?: Date;
 }) {
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
-    return null;
-  }
+  const affiliateId = resolveReferralAffiliateId(user);
+  if (!affiliateId) return null;
 
-  const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if this is the first upsell purchase
-  // Since the webhook processes AFTER the upsell is added, we check if there's already
-  // a commission record for a different payment intent (indicating a previous purchase)
-  const existingPreviousCommission = await AffiliateCommission.findOne({
+  return recordAffiliateCommission({
     affiliateId,
     referredUserId,
     commissionType: "upsell",
-    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
-  });
-
-  if (existingPreviousCommission) {
-    return null; // Not first upsell, no commission
-  }
-
-  // Check if commission already exists for this payment
-  const existingCommission = await AffiliateCommission.findOne({
-    affiliateId,
-    referredUserId,
-    stripePaymentIntentId: paymentIntentId,
-    commissionType: "upsell",
-  });
-
-  if (existingCommission) {
-    return existingCommission;
-  }
-
-  // Get affiliate's commission rate
-  const commissionRate = await getAffiliateCommissionRate(affiliateId);
-
-  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
-
-  const commission = new AffiliateCommission({
-    affiliateId,
-    referredUserId,
-    commissionType: "upsell",
-    status: "pending",
     purchaseType: "upsell",
     packageId: offerId,
     packageName: offerName,
     purchaseAmount,
-    commissionRate: commissionRate,
-    commissionAmount,
     stripePaymentIntentId: paymentIntentId,
-    isFirstTimePurchase: true,
+    isFirstTimePurchase: false,
     isRecurringPayment: false,
-    earnedAt: new Date(),
+    ...(earnedAt ? { earnedAt } : {}),
+  });
+}
+
+/**
+ * Process commission for mini-draw package purchases (every successful payment for referred users).
+ */
+export async function processMiniDrawPackageCommission({
+  userId,
+  packageId,
+  packageName,
+  purchaseAmount,
+  paymentIntentId,
+  earnedAt,
+}: {
+  userId: string;
+  packageId: string;
+  packageName: string;
+  purchaseAmount: number;
+  paymentIntentId: string;
+  earnedAt?: Date;
+}) {
+  await connectDB();
+
+  const user = await User.findById(userId);
+  const affiliateId = resolveReferralAffiliateId(user);
+  if (!affiliateId) return null;
+
+  const referredUserId = new mongoose.Types.ObjectId(userId);
+
+  const commission = await recordAffiliateCommission({
+    affiliateId,
+    referredUserId,
+    commissionType: "mini-draw-package",
+    purchaseType: "mini-draw",
+    packageId,
+    packageName,
+    purchaseAmount,
+    stripePaymentIntentId: paymentIntentId,
+    isFirstTimePurchase: false,
+    isRecurringPayment: false,
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
-  await commission.save();
-
-  await Affiliate.findByIdAndUpdate(affiliateId, {
-    $inc: {
-      totalSales: purchaseAmount,
-      totalCommissions: commissionAmount,
-    },
-  });
+  if (commission) {
+    await User.updateOne(
+      { _id: userId, "affiliateReferral.firstPurchaseCompleted": { $ne: true } },
+      { $set: { "affiliateReferral.firstPurchaseCompleted": true } }
+    );
+  }
 
   return commission;
 }
 
 /**
- * Process commission for first-time membership subscription
- * Also ties the membership permanently to the affiliate for recurring commissions
+ * Process commission for membership subscription initial / checkout invoice (grantBenefits path).
+ * Re-subscription after cancel earns a new row (idempotent per payment intent).
+ * Also ties membership to the affiliate for recurring commissions.
  */
 export async function processMembershipFirstCommission({
   userId,
@@ -208,6 +161,7 @@ export async function processMembershipFirstCommission({
   purchaseAmount,
   paymentIntentId,
   subscriptionId,
+  earnedAt,
 }: {
   userId: string;
   packageId: string;
@@ -215,87 +169,45 @@ export async function processMembershipFirstCommission({
   purchaseAmount: number;
   paymentIntentId: string;
   subscriptionId: string;
+  earnedAt?: Date;
 }) {
   await connectDB();
 
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
-    return null;
-  }
+  const affiliateId = resolveReferralAffiliateId(user);
+  if (!affiliateId) return null;
 
-  const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if this is the first membership purchase
-  // Check if there's already a commission record for membership-first (indicating previous membership)
-  const existingPreviousCommission = await AffiliateCommission.findOne({
+  const commission = await recordAffiliateCommission({
     affiliateId,
     referredUserId,
     commissionType: "membership-first",
-    stripePaymentIntentId: { $ne: paymentIntentId }, // Different payment intent
-  });
-
-  if (existingPreviousCommission) {
-    return null; // Not first membership, no commission
-  }
-
-  // Check if commission already exists for this payment
-  const existingCommission = await AffiliateCommission.findOne({
-    affiliateId,
-    referredUserId,
-    stripePaymentIntentId: paymentIntentId,
-    commissionType: "membership-first",
-  });
-
-  if (existingCommission) {
-    return existingCommission;
-  }
-
-  // Get affiliate's commission rate
-  const commissionRate = await getAffiliateCommissionRate(affiliateId);
-
-  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
-
-  const commission = new AffiliateCommission({
-    affiliateId,
-    referredUserId,
-    commissionType: "membership-first",
-    status: "pending",
     purchaseType: "membership",
     packageId,
     packageName,
     purchaseAmount,
-    commissionRate: commissionRate,
-    commissionAmount,
     stripePaymentIntentId: paymentIntentId,
     stripeSubscriptionId: subscriptionId,
     isFirstTimePurchase: true,
     isRecurringPayment: false,
-    earnedAt: new Date(),
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
-  await commission.save();
-
-  await Affiliate.findByIdAndUpdate(affiliateId, {
-    $inc: {
-      totalSales: purchaseAmount,
-      totalCommissions: commissionAmount,
-    },
-  });
-
-  // Mark membership as permanently tied to affiliate
-  if (user.affiliateReferral) {
-    user.affiliateReferral.membershipTied = true;
-    user.affiliateReferral.firstPurchaseCompleted = true;
-    await user.save();
+  if (commission) {
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        "affiliateReferral.membershipTied": true,
+        "affiliateReferral.firstPurchaseCompleted": true,
+      },
+    });
   }
 
   return commission;
 }
 
 /**
- * Process commission for membership upsell (first-time only)
- * This is the upsell that comes after a membership purchase
+ * Process commission for membership upsell (uses same rules as regular upsell — every payment).
  */
 export async function processMembershipUpsellCommission({
   userId,
@@ -303,95 +215,136 @@ export async function processMembershipUpsellCommission({
   offerName,
   purchaseAmount,
   paymentIntentId,
+  earnedAt,
 }: {
   userId: string;
   offerId: string;
   offerName: string;
   purchaseAmount: number;
   paymentIntentId: string;
+  earnedAt?: Date;
 }) {
-  // Same logic as regular upsell, but tied to membership
-  // Only first-time upsell counts
   return await processUpsellCommission({
     userId,
     offerId,
     offerName,
     purchaseAmount,
     paymentIntentId,
+    earnedAt,
   });
 }
 
 /**
- * Process commission for recurring membership payment
- * Only processes if membership is tied to affiliate
+ * Process commission for recurring membership payment.
+ * Uses the affiliate on the existing `membership-first` row as canonical (same referred user).
+ * Self-heal previously required `user.affiliateReferral.affiliateId` to match that row; if it drifted,
+ * the lookup missed and recurring was skipped — we now resolve affiliate from membership-first first.
  */
 export async function processMembershipRecurringCommission({
   userId,
   invoiceId,
   subscriptionId,
   purchaseAmount,
+  packageId,
+  packageName,
+  earnedAt,
 }: {
   userId: string;
   invoiceId: string;
   subscriptionId: string;
   purchaseAmount: number;
+  packageId?: string;
+  packageName?: string;
+  /** Invoice paid time (Stripe); defaults to now if omitted */
+  earnedAt?: Date;
 }) {
   await connectDB();
 
+  if (purchaseAmount <= 0) {
+    console.error(
+      `[AffiliateCommission] skip recurring: zero_amount`,
+      JSON.stringify({ invoiceId, userId, subscriptionId })
+    );
+    return null;
+  }
+
   const user = await User.findById(userId);
-  if (!user || !user.affiliateReferral || !user.affiliateReferral.affiliateId) {
+  if (!user) {
+    console.error(`[AffiliateCommission] skip recurring: no_user`, JSON.stringify({ invoiceId, userId }));
     return null;
   }
 
-  // Only process if membership is tied to affiliate
-  if (!user.affiliateReferral.membershipTied) {
-    return null;
-  }
-
-  const affiliateId = user.affiliateReferral.affiliateId;
   const referredUserId = new mongoose.Types.ObjectId(userId);
 
-  // Check if commission already exists for this invoice
-  const existingCommission = await AffiliateCommission.findOne({
-    affiliateId,
+  const membershipFirstRow = await AffiliateCommission.findOne({
     referredUserId,
-    stripeInvoiceId: invoiceId,
-    commissionType: "membership-recurring",
-  });
+    commissionType: "membership-first",
+  })
+    .select("affiliateId")
+    .lean();
 
-  if (existingCommission) {
-    return existingCommission;
+  let affiliateId: mongoose.Types.ObjectId | undefined;
+
+  if (membershipFirstRow?.affiliateId) {
+    affiliateId = new mongoose.Types.ObjectId(String(membershipFirstRow.affiliateId));
+    const userAffStr = user.affiliateReferral?.affiliateId
+      ? String(user.affiliateReferral.affiliateId)
+      : "";
+    const needsSync = !user.affiliateReferral?.membershipTied || userAffStr !== affiliateId.toString();
+    if (needsSync) {
+      await User.findByIdAndUpdate(userId, {
+        $set: {
+          "affiliateReferral.affiliateId": affiliateId,
+          "affiliateReferral.membershipTied": true,
+        },
+      });
+      console.log(
+        `[AffiliateCommission] recurring: aligned affiliate from membership-first`,
+        JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
+      );
+    }
+  } else {
+    if (!user.affiliateReferral?.affiliateId) {
+      console.error(`[AffiliateCommission] skip recurring: no_affiliate`, JSON.stringify({ invoiceId, userId }));
+      return null;
+    }
+    affiliateId = new mongoose.Types.ObjectId(String(user.affiliateReferral.affiliateId));
+    if (!user.affiliateReferral.membershipTied) {
+      console.error(
+        `[AffiliateCommission] skip recurring: not_membership_tied`,
+        JSON.stringify({ invoiceId, userId, affiliateId: affiliateId.toString() })
+      );
+      return null;
+    }
   }
 
-  // Get affiliate's commission rate
-  const commissionRate = await getAffiliateCommissionRate(affiliateId);
-
-  const commissionAmount = calculateCommission(purchaseAmount, commissionRate);
-
-  const commission = new AffiliateCommission({
-    affiliateId,
+  const commission = await recordAffiliateCommission({
+    affiliateId: affiliateId!,
     referredUserId,
     commissionType: "membership-recurring",
-    status: "pending",
     purchaseType: "membership",
+    packageId,
+    packageName,
     purchaseAmount,
-    commissionRate: commissionRate,
-    commissionAmount,
     stripeInvoiceId: invoiceId,
     stripeSubscriptionId: subscriptionId,
     isFirstTimePurchase: false,
     isRecurringPayment: true,
-    earnedAt: new Date(),
+    ...(earnedAt ? { earnedAt } : {}),
   });
 
-  await commission.save();
+  if (!commission) {
+    console.error(
+      `[AffiliateCommission] skip recurring: record_failed`,
+      JSON.stringify({ invoiceId, userId, affiliateId: affiliateId!.toString() })
+    );
+    return null;
+  }
 
-  await Affiliate.findByIdAndUpdate(affiliateId, {
-    $inc: {
-      totalSales: purchaseAmount,
-      totalCommissions: commissionAmount,
-    },
-  });
+  console.log(
+    `[AffiliateCommission] recurring commission`,
+    JSON.stringify({ invoiceId, userId, commissionId: commission._id?.toString() })
+  );
 
   return commission;
 }

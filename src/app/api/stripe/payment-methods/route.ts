@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { stripe } from "@/lib/stripe";
+import type Stripe from "stripe";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { savePaymentMethodToUser, deduplicatePaymentMethods } from "@/utils/payment/payment-method-manager";
+import {
+  savePaymentMethodToUser,
+  deduplicatePaymentMethods,
+  getStripeSubscriptionDefaultPaymentMethodId,
+} from "@/utils/payment/payment-method-manager";
 
 const savePaymentMethodSchema = z.object({
   paymentMethodId: z.string().min(1, "Payment method ID is required"),
@@ -26,24 +31,11 @@ export async function GET() {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    let user = await User.findById(session.user.id);
+    const user = await User.findById(session.user.id);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // ✅ SAFETY NET: Deduplicate payment methods before processing
-    // This ensures API always returns unique payment methods even if database has duplicates
-    const dedupeResult = await deduplicatePaymentMethods(user);
-    if (dedupeResult.success && dedupeResult.duplicatesRemoved > 0) {
-      // Refresh user to get deduplicated payment methods
-      const refreshedUser = await User.findById(user._id);
-      if (refreshedUser) {
-        user = refreshedUser;
-      }
-    }
-
-    // ✅ Additional client-side deduplication as final safety net
-    // Use Map to ensure unique paymentMethodIds before fetching Stripe details
     const uniquePaymentMethodsMap = new Map<string, Record<string, unknown>>();
     for (const pm of user.savedPaymentMethods || []) {
       const pmId = pm.paymentMethodId as string;
@@ -53,61 +45,79 @@ export async function GET() {
     }
     const uniquePaymentMethods = Array.from(uniquePaymentMethodsMap.values());
 
-    // PCI-COMPLIANT: Fetch card details from Stripe when needed for display
-    // We only store payment method IDs in our database, card details come from Stripe
-    const paymentMethodsWithDetails = await Promise.all(
-      uniquePaymentMethods.map(async (pm: Record<string, unknown>) => {
-        try {
-          // For test payment methods, return mock data
-          if (typeof pm.paymentMethodId === "string" && pm.paymentMethodId.startsWith("pm_test_")) {
-            return {
-              paymentMethodId: pm.paymentMethodId,
-              isDefault: pm.isDefault,
-              createdAt: pm.createdAt,
-              lastUsed: pm.lastUsed,
-              card: {
-                brand: "visa",
-                last4: "4242",
-                expMonth: 12,
-                expYear: 2025,
-              },
-            };
-          }
+    const stripeCards = user.stripeCustomerId
+      ? await stripe.paymentMethods.list({
+          customer: user.stripeCustomerId,
+          type: "card",
+          limit: 20,
+        })
+      : { data: [] as Stripe.PaymentMethod[] };
 
-          // For real payment methods, fetch details from Stripe
-          const stripePaymentMethod = await stripe.paymentMethods.retrieve(pm.paymentMethodId as string);
+    const cardById = new Map(stripeCards.data.map((c) => [c.id, c]));
+
+    const paymentMethodsWithDetails = uniquePaymentMethods.map((pm: Record<string, unknown>) => {
+      const pmId = pm.paymentMethodId as string;
+      try {
+        if (typeof pmId === "string" && pmId.startsWith("pm_test_")) {
           return {
-            paymentMethodId: pm.paymentMethodId,
+            paymentMethodId: pmId,
             isDefault: pm.isDefault,
             createdAt: pm.createdAt,
             lastUsed: pm.lastUsed,
-            card:
-              stripePaymentMethod.type === "card"
-                ? {
-                    brand: stripePaymentMethod.card?.brand || "",
-                    last4: stripePaymentMethod.card?.last4 || "",
-                    expMonth: stripePaymentMethod.card?.exp_month || 0,
-                    expYear: stripePaymentMethod.card?.exp_year || 0,
-                  }
-                : undefined,
-          };
-        } catch {
-          // console.warn(`Could not fetch payment method details for ${pm.paymentMethodId}:`, _error);
-          // Return basic info without card details if Stripe fetch fails
-          return {
-            paymentMethodId: pm.paymentMethodId,
-            isDefault: pm.isDefault,
-            createdAt: pm.createdAt,
-            lastUsed: pm.lastUsed,
+            card: {
+              brand: "visa",
+              last4: "4242",
+              expMonth: 12,
+              expYear: 2025,
+            },
           };
         }
-      })
-    );
 
-    return NextResponse.json({
-      success: true,
-      paymentMethods: paymentMethodsWithDetails,
+        const stripePm = cardById.get(pmId);
+        return {
+          paymentMethodId: pmId,
+          isDefault: pm.isDefault,
+          createdAt: pm.createdAt,
+          lastUsed: pm.lastUsed,
+          card:
+            stripePm?.type === "card" && stripePm.card
+              ? {
+                  brand: stripePm.card.brand || "",
+                  last4: stripePm.card.last4 || "",
+                  expMonth: stripePm.card.exp_month || 0,
+                  expYear: stripePm.card.exp_year || 0,
+                }
+              : undefined,
+        };
+      } catch {
+        return {
+          paymentMethodId: pmId,
+          isDefault: pm.isDefault,
+          createdAt: pm.createdAt,
+          lastUsed: pm.lastUsed,
+        };
+      }
     });
+
+    let subscriptionDefaultPaymentMethodId: string | null = null;
+    if (user.subscription?.isActive && user.stripeSubscriptionId) {
+      subscriptionDefaultPaymentMethodId = await getStripeSubscriptionDefaultPaymentMethodId(
+        user.stripeSubscriptionId
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        paymentMethods: paymentMethodsWithDetails,
+        subscriptionDefaultPaymentMethodId,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=10",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching payment methods:", error);
     return NextResponse.json({ success: false, error: "Failed to fetch payment methods" }, { status: 500 });
@@ -180,6 +190,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await deduplicatePaymentMethods(updatedUser);
 
     // Fetch card details from Stripe for response
     let cardDetails;

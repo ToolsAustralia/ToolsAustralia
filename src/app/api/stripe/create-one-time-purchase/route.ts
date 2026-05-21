@@ -9,6 +9,7 @@ import { trackAffiliateSignup } from "@/lib/affiliate";
 import Stripe from "stripe";
 import { z } from "zod";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 // ✅ REMOVED: processPaymentBenefits and isPaymentProcessed imports
 // Fallback processing removed to prevent duplicate Facebook tracking
 // Webhook is now the single source of truth for payment processing
@@ -24,6 +25,7 @@ import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 const createOneTimePurchaseSchema = z.object({
   userEmail: z.string().email("Invalid email address"),
@@ -38,6 +40,7 @@ const createOneTimePurchaseSchema = z.object({
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -96,9 +99,10 @@ export async function POST(request: NextRequest) {
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     // Store in payment metadata so webhook can use it for improved match quality
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     const body = await request.json();
     requestBody = body; // Store for error logging
@@ -149,6 +153,11 @@ export async function POST(request: NextRequest) {
 
     if (membershipPackage.type !== "one-time") {
       return NextResponse.json({ error: "Package must be a one-time type" }, { status: 400 });
+    }
+
+    if (!isMiniDrawPackage) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
     }
 
     // Check if user already exists (from registration)
@@ -498,6 +507,7 @@ export async function POST(request: NextRequest) {
         ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+        ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
         // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,
@@ -630,6 +640,7 @@ export async function POST(request: NextRequest) {
           ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
           ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
           ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+          ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
           // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
           ...(experimentAssignment && {
             experimentId: experimentAssignment.experimentId,

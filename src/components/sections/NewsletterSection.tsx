@@ -8,23 +8,36 @@ export default function NewsletterSection() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [error, setError] = useState("");
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
 
     setIsLoading(true);
+    setError("");
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubscribed(true);
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setIsSubscribed(true);
+        setEmail("");
+        setTimeout(() => setIsSubscribed(false), 4000);
+      } else {
+        setError(data.error || "Failed to subscribe. Please try again.");
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
       setIsLoading(false);
-      setEmail("");
-
-      // Reset success state after 3 seconds
-      setTimeout(() => {
-        setIsSubscribed(false);
-      }, 3000);
-    }, 1000);
+    }
   };
 
   return (
@@ -38,7 +51,7 @@ export default function NewsletterSection() {
             <div className="flex flex-row items-center justify-between gap-2 sm:gap-4 lg:gap-8">
               {/* Left Content - Text Section */}
               <div className="text-white text-left flex-1 min-w-0">
-                <h3 className="text-base sm:text-lg md:text-xl lg:text-[40px] font-bold leading-tight mb-1 sm:mb-2 lg:mb-4 font-['Poppins']">
+                <h3 className="text-base sm:text-lg md:text-xl lg:text-[40px] font-bold leading-tight mb-1 sm:mb-2 lg:mb-4 font-sans">
                   Stay Up to Date About Our <span className="text-yellow-300">Latest Offers</span>
                 </h3>
                 <p className="hidden lg:block text-[16px] text-white/90 leading-relaxed">
@@ -82,6 +95,13 @@ export default function NewsletterSection() {
                 </button>
               </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <p className="text-yellow-200 text-xs sm:text-sm mt-2 text-center lg:text-right">
+                {error}
+              </p>
+            )}
 
             {/* Success Message */}
             {isSubscribed && (

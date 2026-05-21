@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { getPackageIconByName, type PackageIconData } from "@/utils/images/package-icons";
+import { getPackageIconByName, getPackageIconWrapperScaleClass, type PackageIconData } from "@/utils/images/package-icons";
 import {
   getMembershipSectionColorScheme,
   derivePlanIdFromPackage,
 } from "@/utils/package-colors/packageColorScheme";
+import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
 type StaticImageData = PackageIconData;
@@ -16,29 +17,30 @@ const getPackageIcon = (packageName: string, membershipType?: "subscription" | "
   return getPackageIconByName(packageName, membershipType);
 };
 
-// Helper function to get badge text from package name
-const getBadgeText = (packageName: string, membershipType?: "subscription" | "one-time"): string => {
+// Short tier label only (no "Pack", "Additional", etc.) — matches package icon tiers
+const getBadgeText = (packageName: string): string => {
   const lowerName = packageName.toLowerCase();
-  const isSubscription = membershipType === "subscription";
 
-  // For subscriptions
-  if (isSubscription) {
-    if (lowerName.includes("boss")) return "BOSS";
-    if (lowerName.includes("foreman")) return "FOREMAN";
-    if (lowerName.includes("tradie")) return "TRADIE";
-  }
+  if (lowerName.includes("vip")) return "VIP";
+  if (lowerName.includes("power")) return "Power";
+  if (lowerName.includes("boss")) return "Boss";
+  if (lowerName.includes("foreman")) return "Foreman";
+  if (lowerName.includes("tradie")) return "Tradie";
+  if (lowerName.includes("apprentice")) return "Apprentice";
 
-  // For one-time packages
-  if (!isSubscription) {
-    if (lowerName.includes("power pack") || lowerName.includes("power")) return "POWER";
-    if (lowerName.includes("boss pack") || lowerName.includes("boss")) return "BOSS";
-    if (lowerName.includes("foreman pack") || lowerName.includes("foreman")) return "FOREMAN";
-    if (lowerName.includes("tradie pack") || lowerName.includes("tradie")) return "TRADIE";
-    if (lowerName.includes("apprentice pack") || lowerName.includes("apprentice")) return "APPRENTICE";
-  }
-
-  // Fallback: return uppercase version of name
-  return packageName.toUpperCase();
+  const stripped = packageName
+    .replace(/\badditional\b/gi, "")
+    .replace(/\bpack\b/gi, "")
+    .replace(/\bmember\b/gi, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) return packageName;
+  return stripped
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => (word.toUpperCase() === "VIP" ? "VIP" : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
+    .join(" ");
 };
 
 interface MembershipBadgeProps {
@@ -56,9 +58,9 @@ interface MembershipBadgeProps {
    */
   membershipType?: "subscription" | "one-time";
   /**
-   * When true, only the package icon is shown (no text). Used e.g. on my-account one-time card.
+   * When true, only the tier label is shown (no icon). Used in the site header/nav.
    */
-  iconOnly?: boolean;
+  textOnly?: boolean;
   /**
    * Optional className to add to the badge
    */
@@ -93,7 +95,7 @@ export default function MembershipBadge({
   packageData,
   isActive,
   membershipType,
-  iconOnly = false,
+  textOnly = false,
   className = "",
   onClick,
 }: MembershipBadgeProps) {
@@ -117,50 +119,13 @@ export default function MembershipBadge({
 
   // Derive planId for package-themed styling
   const planId = derivePlanIdFromPackage(packageData, finalMembershipType);
+  const iconScaleClass = getPackageIconWrapperScaleClass(planId, "badge");
   const isMembershipTab = finalMembershipType === "subscription";
   const colorScheme = getMembershipSectionColorScheme(planId, isMembershipTab);
   const badgeStyle = colorScheme.badgeStyle ?? {};
 
-  // Icon-only: render icon with package-themed background and border
-  if (iconOnly) {
-    if (!packageIcon) return null;
-    const Wrapper = onClick ? "button" : "span";
-    const iconStyle = badgeStyle.background
-      ? {
-          ...badgeStyle,
-          border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
-          padding: "2px",
-        }
-      : {
-          background: colorScheme.accentHex,
-          border: `2px solid ${colorScheme.accentHex}`,
-          boxShadow: `0 0 8px ${colorScheme.accentHex}66`,
-          padding: "2px",
-        };
-    return (
-      <Wrapper
-        type={onClick ? "button" : undefined}
-        onClick={handleClick}
-        className={`inline-flex items-center justify-center flex-shrink-0 rounded-full p-1 ${className} ${
-          onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
-        }`}
-        style={iconStyle}
-        title={packageData.name}
-        aria-label={onClick ? `View details for ${packageData.name}` : undefined}
-      >
-        <Image
-          src={packageIcon}
-          alt={`${packageData.name} icon`}
-          className="w-5 h-5 object-contain"
-          width={20}
-          height={20}
-        />
-      </Wrapper>
-    );
-  }
-
   // Get badge text
-  const badgeText = getBadgeText(packageData.name, finalMembershipType);
+  const badgeText = getBadgeText(packageData.name);
 
   // Check if this is a boss or power package (for special animation)
   const isPremiumPackage =
@@ -181,21 +146,22 @@ export default function MembershipBadge({
     <Wrapper
       type={onClick ? "button" : undefined}
       onClick={handleClick}
-      className={`inline-flex items-center gap-1 font-bold text-xs px-2 py-1 rounded-full shadow-lg relative overflow-hidden ${colorScheme.text} ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
+      className={`inline-flex items-center ${textOnly ? "gap-0 px-2.5" : "gap-1 px-2"} font-bold text-xs py-1 rounded-full shadow-lg relative overflow-hidden ${colorScheme.text} ${className} ${isPremiumPackage ? "animate-pulse" : ""} ${
         onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1" : ""
       }`}
       style={fullBadgeStyle}
       aria-label={onClick ? `View details for ${packageData.name}` : undefined}
     >
       {/* Package Icon */}
-      {packageIcon && (
-        <div className="relative w-5 h-5 flex-shrink-0">
+      {!textOnly && packageIcon && (
+        <div className={cn("relative w-5 h-5 flex-shrink-0", iconScaleClass)}>
           <Image
             src={packageIcon}
             alt={`${packageData.name} icon`}
             className="w-full h-full object-contain"
             width={20}
             height={20}
+            sizes="20px"
           />
         </div>
       )}

@@ -20,6 +20,14 @@ const updatePromoLinkSchema = z
     isActive: z.boolean().optional(),
     appliesToMembership: z.boolean().optional(),
     appliesToOneTime: z.boolean().optional(),
+    campaignType: z.enum(["general", "cancelled-membership-comeback"]).optional(),
+    eligibilityAudience: z.enum(["all", "cancelled-members"]).optional(),
+    eligibilityRules: z
+      .object({
+        requireInactiveSubscription: z.boolean().optional(),
+        cancelledWithinDays: z.number().int().min(1, "cancelledWithinDays must be at least 1").optional(),
+      })
+      .optional(),
   })
   .refine(
     (data) => {
@@ -114,6 +122,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       promoLink.isActive = validatedData.isActive;
     }
 
+    if (validatedData.campaignType !== undefined) {
+      promoLink.campaignType = validatedData.campaignType;
+    }
+
+    if (validatedData.eligibilityAudience !== undefined) {
+      promoLink.eligibilityAudience = validatedData.eligibilityAudience;
+    }
+
+    if (validatedData.eligibilityRules !== undefined) {
+      promoLink.eligibilityRules = validatedData.eligibilityRules;
+    }
+
     // Validate that if active, at least one package type is selected
     const finalIsActive = validatedData.isActive !== undefined ? validatedData.isActive : promoLink.isActive;
     const finalAppliesToMembership =
@@ -133,12 +153,27 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const finalCampaignType = validatedData.campaignType !== undefined ? validatedData.campaignType : promoLink.campaignType;
+    const finalEligibilityAudience =
+      validatedData.eligibilityAudience !== undefined ? validatedData.eligibilityAudience : promoLink.eligibilityAudience;
+    if (finalCampaignType === "cancelled-membership-comeback" && finalEligibilityAudience !== "cancelled-members") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Comeback campaign must target cancelled-members audience",
+        },
+        { status: 400 }
+      );
+    }
+
     await promoLink.save();
 
     console.log(`✅ Updated promo link ${id}`, {
       updatedBy: user.email,
       appliesToMembership: promoLink.appliesToMembership,
       appliesToOneTime: promoLink.appliesToOneTime,
+      campaignType: promoLink.campaignType,
+      eligibilityAudience: promoLink.eligibilityAudience,
     });
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
@@ -156,6 +191,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         isActive: promoLink.isActive,
         appliesToMembership: promoLink.appliesToMembership,
         appliesToOneTime: promoLink.appliesToOneTime,
+        campaignType: promoLink.campaignType,
+        eligibilityAudience: promoLink.eligibilityAudience,
+        eligibilityRules: promoLink.eligibilityRules,
         description: promoLink.description,
         usageCount: promoLink.usageCount,
         promoUrl,

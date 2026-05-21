@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function NotFound() {
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <div className="relative min-h-svh w-full overflow-hidden">
       {/* Background Image with Dark Overlay */}
       <div className="absolute inset-0 z-0">
         <Image
@@ -15,31 +15,32 @@ export default function NotFound() {
           fill
           className="object-cover"
           priority
-          unoptimized
+          sizes="100vw"
         />
         {/* Dark gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/30" />
       </div>
 
       {/* Content Container */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-12">
+      <div className="relative z-10 min-h-svh flex items-center justify-center px-4 py-12">
         <div className="max-w-2xl w-full text-center">
           {/* Glass-morphism Content Card */}
           <div
             className="relative backdrop-blur-md bg-black/40 rounded-2xl p-8 md:p-12
-            border border-[#ee0000]/30 shadow-2xl shadow-[#ee0000]/20
+            border border-red-600/30 shadow-2xl shadow-red-600/20
             before:absolute before:inset-0 before:rounded-2xl 
-            before:bg-gradient-to-br before:from-[#ee0000]/10 before:to-transparent before:pointer-events-none"
+            before:bg-gradient-to-br before:from-red-600/10 before:to-transparent before:pointer-events-none"
           >
             {/* Logo with Metallic Effect */}
             <div className="mb-6 relative">
               <div className="inline-block  ">
                 <Image
-                  src="/images/Tools Australia Logo/White-Text Logo.png"
+                  src="/images/Tools Australia Logo/White-Text Logo.webp"
                   alt="Tools Australia"
                   width={180}
                   height={60}
                   className="h-12 w-auto object-contain drop-shadow-[0_0_10px_rgba(238,0,0,0.3)]"
+                  sizes="180px"
                   priority
                 />
               </div>
@@ -77,8 +78,8 @@ export default function NotFound() {
             Need assistance?{" "}
             <Link
               href="/contact"
-              className="text-[#ee0000] hover:text-[#ff4444] font-semibold 
-                transition-colors underline decoration-[#ee0000]/50 hover:decoration-[#ee0000]"
+              className="text-red-600 hover:text-red-400 font-semibold 
+                transition-colors underline decoration-red-600/50 hover:decoration-red-600"
             >
               Contact our support team
             </Link>
@@ -88,8 +89,8 @@ export default function NotFound() {
 
       {/* Animated Glow Effects */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-[5]">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#ee0000]/10 rounded-full blur-[100px] animate-pulse-slow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#ee0000]/10 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-[100px] animate-pulse-slow" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
       </div>
     </div>
   );

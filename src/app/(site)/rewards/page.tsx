@@ -17,7 +17,7 @@ export default function RewardsPage() {
       <div className="min-h-screen-svh flex items-center justify-center bg-white px-6 py-16">
         <div className="max-w-2xl text-center">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">Rewards Are Temporarily Paused</h1>
-          <p className="text-gray-600 leading-relaxed mb-6">{rewardsDisabledMessage()}</p>
+          <p className="text-gray-600 dark:text-neutral-400 leading-relaxed mb-6">{rewardsDisabledMessage()}</p>
           <p className="text-sm text-gray-500">
             Need assistance with a past redemption or your account balance? Contact our support team and we will be
             happy to help while we upgrade the rewards experience.
@@ -32,8 +32,8 @@ export default function RewardsPage() {
     return (
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ee0000]" />
-          <p className="text-gray-600">Loading your rewards...</p>
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-red-600" />
+          <p className="text-gray-600 dark:text-neutral-400">Loading your rewards...</p>
         </div>
       </div>
     );
@@ -45,7 +45,7 @@ export default function RewardsPage() {
       <div className="min-h-screen-svh flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Authentication Required</h1>
-          <p className="text-gray-600">Please log in to view your rewards.</p>
+          <p className="text-gray-600 dark:text-neutral-400">Please log in to view your rewards.</p>
         </div>
       </div>
     );

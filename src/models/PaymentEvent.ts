@@ -10,6 +10,7 @@ export interface IPaymentEvent extends Document {
     | "UpsellProcessed"
     | "MiniDrawProcessed"
     | "RefundProcessed"
+    | "RefundPartial"
     | "BenefitsReversed";
   userId: mongoose.Types.ObjectId;
   packageType: "one-time" | "membership" | "upsell" | "mini-draw";
@@ -21,7 +22,7 @@ export interface IPaymentEvent extends Document {
     price?: number;
     [key: string]: string | number | boolean | undefined;
   };
-  processedBy: "api" | "webhook";
+  processedBy: "api" | "webhook" | "admin";
   timestamp: Date;
   // A/B Testing fields (optional)
   experimentId?: string;
@@ -51,6 +52,7 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
         "UpsellProcessed",
         "MiniDrawProcessed",
         "RefundProcessed",
+        "RefundPartial",
         "BenefitsReversed",
       ],
     },
@@ -81,7 +83,7 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     processedBy: {
       type: String,
       required: true,
-      enum: ["api", "webhook"],
+      enum: ["api", "webhook", "admin"],
     },
     timestamp: {
       type: Date,

@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import mongoose from "mongoose";
+import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 
 /**
  * POST /api/cancellation-upsell/redeem
@@ -34,11 +35,7 @@ export async function POST() {
       return NextResponse.json({ error: "You have already redeemed this offer" }, { status: 400 });
     }
 
-    // Check if user has an active subscription (required for this offer)
-    const hasActiveSubscription = user.subscription?.isActive;
-    const hasActiveOneTimePackages = user.oneTimePackages?.some((pkg: { isActive: boolean }) => pkg.isActive);
-
-    if (!hasActiveSubscription && !hasActiveOneTimePackages) {
+    if (!canOfferCancellationUpsellRedeem(user)) {
       return NextResponse.json(
         { error: "No active membership found. This offer is only available to active members." },
         { status: 400 }
@@ -106,7 +103,10 @@ async function addToMajorDraw(
     // Find the active major draw
     const activeMajorDraw = await MajorDraw.findOne({ isActive: true });
     if (!activeMajorDraw) {
-      // console.log("No active major draw found - skipping major draw entry addition");
+      console.log(`[cancellation-upsell] no active major draw — skipping major-draw entry add`, {
+        userId,
+        entries: packageData.entries,
+      });
       return;
     }
 
@@ -118,6 +118,14 @@ async function addToMajorDraw(
       | "upsell"
       | "mini-draw"
       | "cancellation-upsell";
+
+    console.log(`[cancellation-upsell] adding entries to major draw`, {
+      userId,
+      drawId: activeMajorDraw._id.toString(),
+      drawName: activeMajorDraw.name,
+      sourceType,
+      entries: packageData.entries,
+    });
 
     // Create entries by source object
     const entriesBySource: {

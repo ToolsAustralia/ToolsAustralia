@@ -31,9 +31,9 @@ export const metadata: Metadata = {
 
 export default function ShopPage() {
   return (
-    <div className="min-h-screen-svh bg-white">
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950">
       {/* Page Header - Metallic Industrial Design */}
-      <div className="relative pt-[86px] sm:pt-[106px] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
+      <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
           <Image
@@ -42,7 +42,7 @@ export default function ShopPage() {
             fill
             className="object-cover "
             priority
-            unoptimized
+            sizes="100vw"
           />
           <div className="absolute inset-0 " />
         </div>
@@ -53,7 +53,7 @@ export default function ShopPage() {
             <div className="text-center lg:text-left">
               <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-['Poppins'] mb-4">
                 <span className="text-white">S</span>
-                <span className="bg-gradient-to-r from-[#ee0000] to-[#cc0000] bg-clip-text text-transparent">h</span>
+                <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">h</span>
                 <span className="text-white">op</span>
               </h1>
             </div>
@@ -70,13 +70,19 @@ export default function ShopPage() {
       </div>
 
       {/* Main Shop Content - Client Component for Interactivity */}
-      <Suspense fallback={<div className=" text-center">Loading shop...</div>}>
+      <Suspense
+        fallback={
+          <div className="py-12 text-center text-gray-600 dark:text-neutral-400 bg-white dark:bg-neutral-950">
+            Loading shop...
+          </div>
+        }
+      >
         <ShopContent initialProducts={[]} totalProducts={0} />
       </Suspense>
 
       {/* Membership Section */}
-      <div className="bg-gradient-to-b from-black via-slate-900 to-black">
-        <MembershipSection title="UPGRADE YOUR TOOL GAME" padding="pt-8 pb-32" titleColor="text-white" />
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0">
+        <MembershipSection title="UPGRADE YOUR TOOL GAME" padding="pt-8 pb-32" titleColor="" />
       </div>
     </div>
   );

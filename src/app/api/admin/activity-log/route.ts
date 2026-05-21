@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
 import ReferralEvent from "@/models/ReferralEvent";
 import mongoose from "mongoose";
@@ -18,7 +19,8 @@ export interface ActivityLogItem {
     | "draw_complete"
     | "high_value_order"
     | "system_alert"
-    | "membership_upgrade";
+    | "membership_upgrade"
+    | "subscription_past_due";
   user: string;
   userId?: string;
   action: string;
@@ -26,6 +28,8 @@ export interface ActivityLogItem {
   status: "success" | "info" | "warning" | "error";
   amount?: number;
   timestamp: Date;
+  /** For mini-draw purchases: link to /mini-draws/[id] */
+  miniDrawId?: string;
 }
 
 /**
@@ -139,6 +143,27 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(paymentUsers.map((u) => [u._id.toString(), u]));
 
+    // Batch fetch MiniDraw titles for mini-draw payments (for "Entered in [title] with X entries")
+    const rawMiniDrawIds = [
+      ...new Set(
+        payments
+          .filter((p) => p.packageType === "mini-draw")
+          .map((p) => (p.data as Record<string, unknown>)?.miniDrawId as string)
+          .filter(Boolean)
+      ),
+    ];
+    const validMiniDrawIds = rawMiniDrawIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const miniDraws =
+      validMiniDrawIds.length > 0
+        ? await MiniDraw.find({ _id: { $in: validMiniDrawIds } })
+            .select("_id name")
+            .lean()
+        : [];
+    type MiniDrawLean = { _id: mongoose.Types.ObjectId; name: string };
+    const miniDrawMap = new Map<string, string>(
+      (miniDraws as unknown as MiniDrawLean[]).map((d) => [d._id.toString(), d.name])
+    );
+
     console.log(`📊 Activity Log - Found ${payments.length} payment events`);
 
     payments.forEach((payment) => {
@@ -231,7 +256,15 @@ export async function GET(request: NextRequest) {
         action = `Purchased ${packageName}`;
         type = "one_time_purchase";
       } else if (payment.packageType === "mini-draw") {
-        action = `Purchased ${packageName}`;
+        const miniDrawId = paymentData?.miniDrawId as string | undefined;
+        const entries = (paymentData?.entries as number | undefined) ?? 0;
+        const miniDrawTitle = miniDrawId ? miniDrawMap.get(miniDrawId) : null;
+        if (miniDrawId && miniDrawTitle) {
+          action = `Entered in "${miniDrawTitle}" with ${entries} ${entries === 1 ? "entry" : "entries"}`;
+          type = "one_time_purchase";
+        } else {
+          action = `Purchased ${packageName}`;
+        }
         type = "one_time_purchase";
       }
 
@@ -240,7 +273,7 @@ export async function GET(request: NextRequest) {
         action = `High-value purchase: ${action} - $${amount}`;
       }
 
-      activities.push({
+      const activityPayload: ActivityLogItem = {
         id: `payment-${payment._id}`,
         type,
         user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
@@ -250,7 +283,14 @@ export async function GET(request: NextRequest) {
         status: "success",
         amount,
         timestamp: payment.timestamp,
-      });
+      };
+      if (payment.packageType === "mini-draw") {
+        const miniDrawId = (payment.data as Record<string, unknown>)?.miniDrawId as string | undefined;
+        if (miniDrawId && miniDrawMap.has(miniDrawId)) {
+          activityPayload.miniDrawId = miniDrawId;
+        }
+      }
+      activities.push(activityPayload);
     });
 
     // ========================================
@@ -261,10 +301,16 @@ export async function GET(request: NextRequest) {
         { "subscription.lastUpgradeDate": { $gte: startDate } },
         { "subscription.lastDowngradeDate": { $gte: startDate } },
         { "subscription.cancelledAt": { $gte: startDate } },
+        { "subscription.pastDueAt": { $gte: startDate } },
       ],
       isActive: true,
     })
-      .sort({ "subscription.lastUpgradeDate": -1, "subscription.lastDowngradeDate": -1, "subscription.cancelledAt": -1 })
+      .sort({
+        "subscription.lastUpgradeDate": -1,
+        "subscription.lastDowngradeDate": -1,
+        "subscription.cancelledAt": -1,
+        "subscription.pastDueAt": -1,
+      })
       .select("firstName lastName email subscription");
 
     usersWithChanges.forEach((user) => {
@@ -329,6 +375,23 @@ export async function GET(request: NextRequest) {
           time: timeAgo,
           status: "warning",
           timestamp: user.subscription.cancelledAt,
+        });
+      }
+
+      // Past due — failed renewal (subscription.status past_due); pastDueAt set on first transition into past_due
+      if (user.subscription.pastDueAt && user.subscription.pastDueAt >= startDate) {
+        const timeAgo = getTimeAgo(user.subscription.pastDueAt);
+        const packageName = getPackageName(user.subscription.packageId || "Unknown");
+
+        activities.push({
+          id: `past-due-${user._id}-${user.subscription.pastDueAt.getTime()}`,
+          type: "subscription_past_due",
+          user: `${user.firstName} ${user.lastName}`,
+          userId: user._id.toString(),
+          action: `Membership renewal failed — ${packageName}`,
+          time: timeAgo,
+          status: "error",
+          timestamp: user.subscription.pastDueAt,
         });
       }
     });

@@ -59,6 +59,11 @@ export interface OriginalPurchaseContext {
   promoMultiplier?: number; // Promo multiplier that was actually applied during the original purchase
   miniDrawId?: string; // For mini-draw package purchases, link to the specific mini-draw
   miniDrawName?: string; // Optional mini-draw name for display in upsell modal
+  /** Stripe PM id from confirmPayment — avoids upsell modal waiting on webhook → DB */
+  paymentMethodId?: string;
+  /** Card last4 from confirmPayment (optional; avoids extra PI fetch for CTA label) */
+  cardLast4?: string;
+  cardBrand?: string;
 }
 
 export interface UpsellManagerProps {
@@ -103,14 +108,14 @@ export interface UpsellPurchaseResponse {
 export const SAMPLE_UPSELL_OFFERS: UpsellOffer[] = [
   {
     id: "major-draw-special",
-    title: "Double Your Chances - Major Draw Special!",
-    description: "You just got entries! Want to double your winning chances?",
+    title: "Double Your Value - Major Draw Special!",
+    description: "You just got entries! Want twice the entries at this special rate?",
     category: "major-draw",
     originalPrice: 100,
     discountedPrice: 50,
     discountPercentage: 50,
     entriesCount: 300,
-    buttonText: "Double My Chances - $50",
+    buttonText: "Double My Entries - $50",
     conditions: [
       "300 Major Draw Entries (3x normal value!)",
       "4 Days Partner Discount Access",
@@ -120,7 +125,7 @@ export const SAMPLE_UPSELL_OFFERS: UpsellOffer[] = [
     urgencyText: "Only 24 hours left!",
     validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     priority: 10,
-    imageUrl: "/images/upsell-major-draw.png",
+    imageUrl: "/images/promotion/PrizeHeader/PrizeHeader.webp",
     isActive: true,
     targetAudience: ["all-users"],
     userSegments: ["new-user", "returning-user"],
@@ -130,18 +135,18 @@ export const SAMPLE_UPSELL_OFFERS: UpsellOffer[] = [
   {
     id: "mini-draw-bonus",
     title: "Mini Draw Bonus Pack",
-    description: "Add more entries to your mini draw for better chances!",
+    description: "Add more entries to your mini draw for better value!",
     category: "mini-draw",
     originalPrice: 75,
     discountedPrice: 45,
     discountPercentage: 40,
     entriesCount: 150,
     buttonText: "Add Bonus Entries - $45",
-    conditions: ["150 Mini Draw Entries", "2x better winning odds", "Instant activation", "No recurring charges"],
+    conditions: ["150 Mini Draw Entries", "2x better value", "Instant activation", "No recurring charges"],
     urgencyText: "Limited time offer!",
     validUntil: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
     priority: 8,
-    imageUrl: "/images/upsell-mini-draw.png",
+    imageUrl: "/images/upsells/mini-pack/mini-pack-1.webp",
     isActive: true,
     targetAudience: ["all-users"],
     userSegments: ["new-user", "returning-user"],
@@ -167,7 +172,7 @@ export const SAMPLE_UPSELL_OFFERS: UpsellOffer[] = [
     urgencyText: "Special launch offer!",
     validUntil: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     priority: 9,
-    imageUrl: "/images/upsell-membership.png",
+    imageUrl: "/images/upsells/membership-pack/foreman-package.webp",
     isActive: true,
     targetAudience: ["all-users"],
     userSegments: ["returning-user"],

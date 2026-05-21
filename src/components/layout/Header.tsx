@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,14 +8,19 @@ import { signOut } from "next-auth/react";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
+import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
+import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { environmentFlags } from "@/lib/environment";
 import { rewardsEnabled } from "@/config/featureFlags";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
+import { ThemeToggleButton } from "@/components/ui/ThemeToggle";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import PackageDetailModal, {
   type PackageDetailModalPackageData,
@@ -45,6 +50,63 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
+import { cn } from "@/utils/cn";
+
+/** Full wordmark: light UI uses default PNG; dark UI uses high-contrast white artwork */
+const HEADER_LOGO_LIGHT_SRC = "/images/logo.webp";
+const HEADER_LOGO_DARK_SRC = "/images/Tools Australia Logo/White-Text Logo.webp";
+
+/**
+ * Leaf component owning the 3s alternation between the membership CTA and the
+ * promotional/giveaway CTA in the top bar. Only this small component re-renders
+ * on the toggle — the entire Header used to re-render every 3 seconds.
+ */
+function TopBarPromoLeaf({
+  topBarActivePromoMultiplier,
+}: {
+  topBarActivePromoMultiplier: number | null | undefined;
+}) {
+  const [slide, setSlide] = useState<0 | 1>(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSlide((s) => (s === 0 ? 1 : 0));
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex-1 min-h-[1.25rem] flex items-center justify-center text-center" aria-live="polite">
+      {slide === 0 ? (
+        <p
+          key="topbar-membership"
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
+          <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
+            Join Now
+          </Link>
+        </p>
+      ) : (
+        <p
+          key={`topbar-giveaway-${topBarActivePromoMultiplier ?? "none"}`}
+          className="text-white text-3xs sm:text-2xs font-normal leading-tight animate-topbar-reappear-once"
+        >
+          {topBarActivePromoMultiplier != null ? (
+            <>
+              <span className="font-semibold">{topBarActivePromoMultiplier}x bonus entries</span>
+              <span className="font-normal"> are live now — monthly tool giveaway. </span>
+            </>
+          ) : (
+            <span className="font-normal">Monthly tool giveaway. </span>
+          )}
+          <Link href="/promotion" className="font-medium underline hover:text-gray-200 transition-colors">
+            View giveaway
+          </Link>
+        </p>
+      )}
+    </div>
+  );
+}
 
 type HeaderProps = {
   /**
@@ -85,7 +147,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
+
+  const resolvedActivePackage = useMemo(
+    () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
+    [userData]
+  );
   const { requestModal } = useModalPriorityStore();
+  const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const router = useRouter();
   const { isAuthenticated: isAffiliateAuthenticated, affiliateData, loading: affiliateLoading } = useAffiliateAuth();
 
@@ -112,9 +180,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
     },
     [userData?.subscription]
   );
-  // Setup requirement check now handled through user data
-  const checkSetupRequired = (userData: unknown) =>
-    !(userData as { profileSetupCompleted?: boolean })?.profileSetupCompleted;
+  // Setup requirement check - includes birthdate for existing users who haven't set it
+  const checkSetupRequired = (userData: unknown) => {
+    const u = userData as { profileSetupCompleted?: boolean; birthdate?: string | Date } | null;
+    if (!u) return true;
+    if (!u.profileSetupCompleted) return true;
+    const hasBirthdate = !!(u.birthdate && String(u.birthdate).trim().length > 0);
+    return !hasBirthdate;
+  };
 
   // Check if user needs setup
   const isSetupRequired = checkSetupRequired(userData);
@@ -149,6 +222,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
   // });
   const pathname = usePathname();
   const isRewardsFeatureEnabled = rewardsEnabled();
+
+  const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+  /** Same pick as PrizeShowcase hero: membership multiplier if >1, else one-time. */
+  const topBarActivePromoMultiplier = useMemo(() => {
+    if (resolvedMembershipMultiplier != null && resolvedMembershipMultiplier > 1) {
+      return resolvedMembershipMultiplier;
+    }
+    if (resolvedOneTimeMultiplier != null && resolvedOneTimeMultiplier > 1) {
+      return resolvedOneTimeMultiplier;
+    }
+    return null;
+  }, [resolvedMembershipMultiplier, resolvedOneTimeMultiplier]);
 
   // Check if we're on an affiliate page or login page (hide top bar on these pages)
   const isAffiliatePage = pathname?.startsWith("/affiliate");
@@ -203,6 +289,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isMobileMenuOpen, isCartOpen, handleCloseMobileMenu, handleCloseCart]);
+
+  // Note: the 3s top-bar promo alternation is now owned by <TopBarPromoLeaf>
+  // so the entire Header no longer re-renders every 3 seconds.
 
   // Initialize localStorage values on mount for better UX
   useEffect(() => {
@@ -393,9 +482,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   return (
     <header
-      className={`bg-white ${
+      data-sticky="true"
+      className={`bg-white dark:bg-neutral-900 ${
         isFixed ? "fixed top-0 left-0 right-0 z-40" : "relative"
-      } shadow-sm w-full overflow-visible`}
+      } shadow-sm dark:shadow-none dark:border-b dark:border-neutral-800 w-full overflow-visible`}
     >
       {/* Top Bar - Promotional or Setup Reminder - Only show when authentication state is fully resolved */}
       {/* Hidden by default, only shows after auth state is confirmed (userData exists OR confirmed not authenticated) */}
@@ -403,15 +493,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {!isTopBarHidden && authStateResolved && !shouldHideTopBar && (
         <div
           data-top-bar
-          className={`h-[24px] sm:h-[28px] w-full flex items-center justify-center relative animate-slideDown ${
+          className={`w-full flex items-center justify-center relative z-[1] animate-slideDown shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${
             isAuthenticated && isSetupRequired
-              ? "bg-blue-600" // Blue for setup reminder
-              : "bg-[#ee0000]" // Red for promotional
+              ? "bg-blue-600 h-[24px] sm:h-[28px]" // Blue for setup reminder
+              : "bg-red-600 h-[24px] sm:h-[28px]" // Red for promotional — single line, rotating CTAs
           }`}
         >
-          <div className="flex items-center justify-center w-full px-2 sm:px-3 overflow-hidden">
+          <div
+            className={`flex w-full px-2 sm:px-3 overflow-hidden items-center justify-center ${
+              isAuthenticated && isSetupRequired ? "" : "pr-7 sm:pr-8"
+            }`}
+          >
             {isAuthenticated && isSetupRequired ? (
-              <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
+              <p className="text-white text-3xs sm:text-2xs font-normal leading-tight text-center flex-1 animate-topbar-reappear">
                 <span className="font-normal">Complete your profile to set up email/password login. </span>
                 <button
                   onClick={forceShowSetupModal}
@@ -421,12 +515,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
               </p>
             ) : (
-              <p className="text-white text-[8px] sm:text-[10px] font-normal leading-tight text-center flex-1 animate-topbar-reappear">
-                <span className="font-normal">Join Tools Australia for exclusive benefits and prize draws! </span>
-                <Link href="/membership" className="font-medium underline hover:text-gray-200 transition-colors">
-                  Join Now
-                </Link>
-              </p>
+              <TopBarPromoLeaf topBarActivePromoMultiplier={topBarActivePromoMultiplier} />
             )}
           </div>
           <button
@@ -441,13 +530,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
       )}
 
       {/* Main Navigation - Viewport Width Only */}
-      <nav className="bg-white flex items-center justify-between py-0 h-[60px] sm:h-[72px] border-b border-gray-100 w-full relative">
+      <nav className="bg-white dark:bg-neutral-900 flex items-center justify-between py-0 h-[60px] sm:h-[72px] border-b border-gray-100 dark:border-neutral-800 w-full relative">
         <div className="w-full px-2 sm:px-3  xl:px-20 flex items-center justify-between relative">
           {/* Left Side - Hamburger Menu (Mobile/Tablet) */}
           <div className="flex items-center">
             {/* Mobile Menu Button - Left Side with Animation */}
             <button
-              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 hover:text-white transition-all duration-300 rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
+              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 dark:text-white hover:text-white transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
               onClick={() => (isMobileMenuOpen ? handleCloseMobileMenu() : setIsMobileMenuOpen(true))}
               aria-label="Toggle mobile menu"
               suppressHydrationWarning
@@ -455,14 +544,14 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="relative w-5 h-5 sm:w-6 sm:h-6">
                 {/* Animated Hamburger/X Icon */}
                 <div
-                  className={`absolute inset-0 transition-all duration-300 ${
+                  className={`absolute inset-0 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] ${
                     isMobileMenuOpen ? "rotate-180 opacity-0" : "rotate-0 opacity-100"
                   }`}
                 >
                   <Menu className="h-full w-full group-hover:scale-110 transition-transform duration-200" />
                 </div>
                 <div
-                  className={`absolute inset-0 transition-all duration-300 ${
+                  className={`absolute inset-0 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] ${
                     isMobileMenuOpen ? "rotate-0 opacity-100" : "rotate-180 opacity-0"
                   }`}
                 >
@@ -473,13 +562,23 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
             {/* Logo - Optimized for Viewport Width */}
             <Link href="/" className="flex-shrink-0 touch-manipulation">
-              <div className="h-[36px] w-[110px] sm:h-[44px] sm:w-[130px] lg:h-[48px] lg:w-[150px] flex items-center justify-center">
+              <div className="relative h-[30px] w-[92px] sm:h-[40px] sm:w-[122px] lg:h-[48px] lg:w-[150px] flex items-center justify-center">
                 <Image
-                  src="/images/logo.png"
+                  src={HEADER_LOGO_LIGHT_SRC}
                   alt="Tools Australia"
                   width={160}
                   height={52}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-contain dark:hidden"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
+                  priority
+                />
+                <Image
+                  src={HEADER_LOGO_DARK_SRC}
+                  alt="Tools Australia"
+                  width={160}
+                  height={52}
+                  className="hidden h-full w-full object-contain dark:block"
+                  sizes="(max-width: 640px) 92px, (max-width: 1024px) 122px, 150px"
                   priority
                 />
               </div>
@@ -492,8 +591,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/") ? "page" : undefined}
             >
@@ -503,8 +602,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/shop"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/shop")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/shop") ? "page" : undefined}
             >
@@ -514,8 +613,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/mini-draws"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/mini-draws")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/mini-draws") ? "page" : undefined}
             >
@@ -525,20 +624,20 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/membership"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/membership")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/membership") ? "page" : undefined}
             >
-              Membership
+              Membership Package
             </Link>
             {isAuthenticated && isRewardsFeatureEnabled && (
               <Link
                 href="/rewards"
                 className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isActiveLink("/rewards")
-                    ? "text-white bg-[#ee0000]"
-                    : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                    ? "text-white bg-red-600"
+                    : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                 }`}
                 aria-current={isActiveLink("/rewards") ? "page" : undefined}
               >
@@ -552,21 +651,21 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 suppressHydrationWarning
                 className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isResultsActive()
-                    ? "text-white bg-[#ee0000]"
-                    : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                    ? "text-white bg-red-600"
+                    : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                 }`}
               >
                 Results
                 <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${isResultsMenuOpen ? "rotate-180" : ""}`}
+                  className={cn("w-4 h-4 transition-transform duration-200", isResultsMenuOpen ? "rotate-180" : "")}
                 />
               </button>
 
               {isResultsMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-[75] animate-fade-in">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
                   <Link
                     href="/draw-results"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                     onClick={() => setIsResultsMenuOpen(false)}
                   >
                     <BarChart3 className="w-4 h-4" />
@@ -574,7 +673,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   </Link>
                   <Link
                     href="/winners"
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                     onClick={() => setIsResultsMenuOpen(false)}
                   >
                     <Trophy className="w-4 h-4" />
@@ -587,8 +686,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/partner"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/partner")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/partner") ? "page" : undefined}
             >
@@ -598,8 +697,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/faq"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/faq")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/faq") ? "page" : undefined}
             >
@@ -609,8 +708,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
               href="/contact"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                 isActiveLink("/contact")
-                  ? "text-white bg-[#ee0000]"
-                  : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
               aria-current={isActiveLink("/contact") ? "page" : undefined}
             >
@@ -627,18 +726,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   href="/affiliate"
                   className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                     pathname.startsWith("/affiliate")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-black hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                      ? "text-white bg-red-600"
+                      : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
                   }`}
                 >
                   Dashboard
                 </Link>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
+                <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-neutral-200">
                   <span className="font-medium">{affiliateData.name}</span>
                 </div>
                 <button
                   onClick={handleAffiliateLogout}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors duration-200"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 transition-colors duration-200"
                 >
                   <LogOut className="w-4 h-4" />
                   Logout
@@ -660,25 +759,30 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         setIsDesktopUserMenuOpen(!isDesktopUserMenuOpen);
                       }
                     }}
-                    className="flex items-center gap-3 text-right hover:bg-gray-50 rounded-lg px-3 py-2 transition-all duration-200 hover:scale-105 cursor-pointer"
+                    className="flex items-center gap-3 text-right rounded-full border border-gray-200 bg-white/90 px-4 py-2 shadow-sm backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-105 hover:shadow-md cursor-pointer dark:border-gray-700 dark:bg-black/90"
                   >
                     <div>
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900 hover:text-red-600 transition-colors">
-                            {userData?.firstName} {userData?.lastName}
+                          <span className="font-medium text-gray-900 dark:text-white hover:text-red-600 dark:hover:text-red-400 transition-colors">
+                            {formatNamePart(userData?.firstName)}
                           </span>
                           {(() => {
                             // Prioritize subscription over one-time packages
-                            if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                            if (
+                              resolvedActivePackage?.source === "subscription" &&
+                              resolvedActivePackage.packageData &&
+                              userData?.subscription?.isActive
+                            ) {
+                              const pkg = resolvedActivePackage.packageData;
                               return (
                                 <MembershipBadge
-                                  packageData={userData.subscriptionPackageData}
+                                  packageData={pkg}
                                   isActive={userData.subscription.isActive}
                                   membershipType="subscription"
                                   onClick={() => {
                                     setIsDesktopUserMenuOpen(false);
-                                    openPackageDetailModal(userData.subscriptionPackageData!, "subscription");
+                                    openPackageDetailModal(pkg, "subscription");
                                   }}
                                 />
                               );
@@ -741,18 +845,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                   {/* User Menu Dropdown */}
                   {isDesktopUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-[75] animate-fade-in">
-                      <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">
-                          {userData?.firstName} {userData?.lastName}
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                      <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          {formatDisplayName(userData?.firstName, userData?.lastName)}
                         </p>
-                        <p className="text-xs text-gray-500">{userData?.email}</p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                       </div>
                       {userData?.role === "admin" ? (
                         <>
                           <Link
                             href="/admin"
-                            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            className="block px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
                             Admin Dashboard
@@ -786,7 +890,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           )}
                           <Link
                             href="/my-account"
-                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
                             <UserCircle className="w-4 h-4 text-red-500" />
@@ -794,7 +898,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           </Link>
                           <Link
                             href="/my-account/benefits"
-                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
                             <Handshake className="w-4 h-4 text-red-500" />
@@ -802,7 +906,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           </Link>
                           <Link
                             href="/draw-results"
-                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                             onClick={() => setIsDesktopUserMenuOpen(false)}
                           >
                             <Trophy className="w-4 h-4 text-red-500" />
@@ -810,10 +914,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                           </Link>
                         </>
                       )}
-                      <hr className="my-2 border-gray-100" />
+                      <hr className="my-2 border-gray-100 dark:border-neutral-700" />
                       <button
                         onClick={handleSignOut}
-                        className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                        className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                       >
                         <LogOut className="w-4 h-4 text-red-500" />
                         Sign Out
@@ -829,13 +933,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="lg:hidden flex items-center gap-2">
                 <Link
                   href="/affiliate"
-                  className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 transition-colors"
                 >
                   Dashboard
                 </Link>
                 <button
                   onClick={handleAffiliateLogout}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors"
+                  className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -845,14 +949,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
               <div className="lg:hidden flex items-center">
                 {(() => {
-                  // Prioritize subscription over one-time packages
-                  if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                  if (
+                    resolvedActivePackage?.source === "subscription" &&
+                    resolvedActivePackage.packageData &&
+                    userData?.subscription?.isActive
+                  ) {
+                    const pkg = resolvedActivePackage.packageData;
                     return (
                       <MembershipBadge
-                        packageData={userData.subscriptionPackageData}
+                        packageData={pkg}
                         isActive={userData.subscription.isActive}
                         membershipType="subscription"
-                        onClick={() => openPackageDetailModal(userData.subscriptionPackageData!, "subscription")}
+                        onClick={() => openPackageDetailModal(pkg, "subscription")}
                       />
                     );
                   } else if (userData.enrichedOneTimePackages && userData.enrichedOneTimePackages.length > 0) {
@@ -890,24 +998,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
-            {/* Cart Button - With Item Count and Animation */}
-            <button
-              onClick={() => (isCartOpen ? handleCloseCart() : setIsCartOpen(true))}
-              className="relative w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 text-gray-700 hover:text-red-600 transition-all duration-200 rounded-full hover:bg-gray-50 hover:scale-105 flex items-center justify-center touch-manipulation bg-gray-100 group z-10"
-              suppressHydrationWarning
-            >
-              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center min-w-[16px] text-[10px] animate-bounce">
-                  {cartItemCount > 99 ? "99+" : cartItemCount}
-                </span>
-              )}
-            </button>
+            {/* Theme (replaces cart until shop is live) */}
+            <div className="relative z-10 flex items-center justify-center">
+              <ThemeToggleButton
+                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
+              />
+            </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
-                className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_8px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_12px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                className="lg:hidden inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-bold text-white rounded-lg bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_8px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_12px_rgba(238,0,0,0.5)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                 aria-label="Login to your account"
               >
                 <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -923,7 +1024,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     // console.log("🖱️ Setting isMobileUserMenuOpen to:", !isMobileUserMenuOpen);
                     setIsMobileUserMenuOpen(!isMobileUserMenuOpen);
                   }}
-                  className="w-8 h-8 sm:w-10 sm:h-10 text-gray-700 hover:text-red-600 transition-colors duration-200 rounded-full hover:bg-gray-50 flex items-center justify-center touch-manipulation relative z-50"
+                  className="relative z-50 flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-105 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 text-gray-700 dark:text-neutral-200 hover:text-red-600"
                   aria-label="User menu"
                   type="button"
                 >
@@ -931,18 +1032,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
 
                 {isMobileUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-[75] animate-fade-in">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900">
-                        {userData?.firstName} {userData?.lastName}
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                    <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
-                      <p className="text-xs text-gray-500">{userData?.email}</p>
+                      <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                     </div>
                     {userData?.role === "admin" ? (
                       <>
                         <Link
                           href="/admin"
-                          className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          className="block px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
                           Admin Dashboard
@@ -982,7 +1083,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         )}
                         <Link
                           href="/my-account"
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
                           <UserCircle className="w-4 h-4 text-red-500" />
@@ -990,7 +1091,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         </Link>
                         <Link
                           href="/my-account/benefits"
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
                           <Handshake className="w-4 h-4 text-red-500" />
@@ -998,7 +1099,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         </Link>
                         <Link
                           href="/draw-results"
-                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                           onClick={() => setIsMobileUserMenuOpen(false)}
                         >
                           <Trophy className="w-4 h-4 text-red-500" />
@@ -1006,10 +1107,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         </Link>
                       </>
                     )}
-                    <hr className="my-2 border-gray-100" />
+                    <hr className="my-2 border-gray-100 dark:border-neutral-700" />
                     <button
                       onClick={handleSignOut}
-                      className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-150"
+                      className="flex items-center gap-2 w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
                     >
                       <LogOut className="w-4 h-4 text-red-500" />
                       Sign Out
@@ -1023,7 +1124,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
               <Link
                 href="/login"
-                className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_12px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_16px_rgba(238,0,0,0.5)] transition-all duration-200 border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-red-600 to-red-700 shadow-[0_0_12px_rgba(238,0,0,0.35)] hover:from-red-700 hover:to-red-800 hover:shadow-[0_0_16px_rgba(238,0,0,0.5)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] border border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                 aria-label="Login to your account"
               >
                 <LogIn className="w-4 h-4" />
@@ -1036,8 +1137,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
       {/* Mobile Search Overlay - Viewport Width Only */}
       {isSearchOpen && (
-        <div className="lg:hidden fixed inset-0 bg-white z-[55] animate-fade-in overflow-hidden w-full">
-          <div className="flex items-center justify-between p-2 sm:p-3 border-b border-gray-200 w-full">
+        <div className="lg:hidden fixed inset-0 bg-white dark:bg-neutral-900 z-[55] animate-fade-in overflow-hidden w-full">
+          <div className="flex items-center justify-between p-2 sm:p-3 border-b border-gray-200 dark:border-neutral-700 w-full">
             <form onSubmit={handleSearchSubmit} className="flex-1 mr-3">
               <div className="relative">
                 <input
@@ -1045,21 +1146,21 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search products..."
-                  className="w-full px-3 py-2.5 pl-10 pr-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full px-3 py-2.5 pl-10 pr-3 text-sm sm:text-base border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-neutral-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   autoFocus
                 />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-neutral-500" />
               </div>
             </form>
             <button
               onClick={() => setIsSearchOpen(false)}
-              className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors"
+              className="w-9 h-9 flex items-center justify-center text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="p-2 sm:p-3 overflow-y-auto w-full">
-            <p className="text-sm text-gray-500 mb-2">Popular searches:</p>
+          <div className="p-2 sm:p-3 overflow-y-auto w-full brand-scrollbar">
+            <p className="text-sm text-gray-500 dark:text-neutral-400 mb-2">Popular searches:</p>
             <div className="flex flex-wrap gap-2">
               {["Power Tools", "Hand Tools", "Safety Equipment", "Cordless Drills"].map((term) => (
                 <button
@@ -1072,7 +1173,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     }) as unknown as React.FormEvent<HTMLFormElement>;
                     handleSearchSubmit(formEvent);
                   }}
-                  className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 rounded-full hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors"
                 >
                   {term}
                 </button>
@@ -1090,7 +1191,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
           {/* Sidebar */}
           <div
-            className={`mobile-menu-container absolute top-0 left-0 h-full w-80 max-w-[85vw] bg-white z-10 shadow-2xl ${
+            className={`mobile-menu-container absolute top-0 left-0 h-full w-80 max-w-[85vw] bg-white dark:bg-neutral-900 z-10 shadow-2xl ${
               isClosingMobileMenu ? "sidebar-slide-out" : "sidebar-slide-in"
             } flex flex-col`}
             role="navigation"
@@ -1102,11 +1203,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 flex items-center justify-center">
                   <Image
-                    src="/Social Media Profile_Primary.png"
+                    src="/images/Tools Australia Logo/Social Media Profile_Primary.webp"
                     alt="Tools Australia"
                     width={40}
                     height={40}
                     className="object-contain rounded-full"
+                    sizes="40px"
                   />
                 </div>
                 <div>
@@ -1124,36 +1226,40 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
             {/* Affiliate Profile Section */}
             {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (
-              <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="p-4 bg-gray-50 dark:bg-neutral-800/50 border-b border-gray-200 dark:border-neutral-700 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
                     <User className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{affiliateData.name}</p>
-                    <p className="text-sm text-gray-600">{affiliateData.email}</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">{affiliateData.name}</p>
+                    <p className="text-sm text-gray-600 dark:text-neutral-400">{affiliateData.email}</p>
                   </div>
                 </div>
               </div>
             )}
             {/* User Profile Section */}
             {!affiliateLoading && !isAffiliateAuthenticated && isAuthenticated && userData && (
-              <div className="p-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="p-4 bg-gray-50 dark:bg-neutral-800/50 border-b border-gray-200 dark:border-neutral-700 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
                     <User className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900">
-                        {userData?.firstName} {userData?.lastName}
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       {(() => {
-                        // Prioritize subscription over one-time packages using enriched data
-                        if (userData?.subscription?.isActive && userData.subscriptionPackageData) {
+                        if (
+                          resolvedActivePackage?.source === "subscription" &&
+                          resolvedActivePackage.packageData &&
+                          userData?.subscription?.isActive
+                        ) {
+                          const pkg = resolvedActivePackage.packageData;
                           return (
                             <MembershipBadge
-                              packageData={userData.subscriptionPackageData}
+                              packageData={pkg}
                               isActive={userData.subscription.isActive}
                               membershipType="subscription"
                             />
@@ -1191,7 +1297,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       })()}
                     </div>
                     <div className="flex items-center gap-4 mt-1">
-                      <span className="text-sm text-gray-600">Major Draw Active</span>
+                      <span className="text-sm text-gray-600 dark:text-neutral-400">Major Draw Active</span>
                     </div>
                   </div>
                 </div>
@@ -1199,12 +1305,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
             )}
 
             {/* Navigation Links - Scrollable Area */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto brand-scrollbar">
               <nav className="p-4 space-y-2">
                 <Link
                   href="/"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
-                    isActiveLink("/") ? "text-white bg-[#ee0000]" : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
+                    isActiveLink("/") ? "text-white bg-red-600" : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1214,10 +1320,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/shop"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/shop")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1227,10 +1333,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/mini-draws"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/mini-draws")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                   aria-current={isActiveLink("/mini-draws") ? "page" : undefined}
@@ -1241,25 +1347,25 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/membership"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/membership")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                   aria-current={isActiveLink("/membership") ? "page" : undefined}
                 >
                   <Crown className="w-5 h-5" />
-                  Membership
+                  Membership Package
                 </Link>
 
                 {isAuthenticated && isRewardsFeatureEnabled && (
                   <Link
                     href="/rewards"
-                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                       isActiveLink("/rewards")
-                        ? "text-white bg-[#ee0000]"
-                        : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                        ? "text-white bg-red-600"
+                        : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     }`}
                     onClick={handleCloseMobileMenu}
                   >
@@ -1272,10 +1378,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 <div>
                   <button
                     onClick={() => setIsMobileResultsOpen(!isMobileResultsOpen)}
-                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium w-full ${
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium w-full ${
                       isResultsActive()
-                        ? "text-white bg-[#ee0000]"
-                        : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                        ? "text-white bg-red-600"
+                        : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                     }`}
                   >
                     <Trophy className="w-5 h-5" />
@@ -1291,10 +1397,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="ml-8 mt-2 space-y-1">
                       <Link
                         href="/draw-results"
-                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
                           isActiveLink("/draw-results")
-                            ? "text-white bg-[#ee0000]"
-                            : "text-gray-600 hover:text-red-600 hover:bg-gray-50"
+                            ? "text-white bg-red-600"
+                            : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
                         }`}
                         onClick={handleCloseMobileMenu}
                       >
@@ -1303,10 +1409,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       </Link>
                       <Link
                         href="/winners"
-                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-all duration-200 rounded-xl text-sm font-medium ${
+                        className={`sidebar-item flex items-center gap-3 py-2 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-sm font-medium ${
                           isActiveLink("/winners")
-                            ? "text-white bg-[#ee0000]"
-                            : "text-gray-600 hover:text-red-600 hover:bg-gray-50"
+                            ? "text-white bg-red-600"
+                            : "text-gray-600 dark:text-neutral-400 hover:text-red-600 hover:bg-gray-50"
                         }`}
                         onClick={handleCloseMobileMenu}
                       >
@@ -1319,10 +1425,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/partner"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/partner")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1332,10 +1438,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/faq"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/faq")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1345,10 +1451,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                 <Link
                   href="/contact"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium ${
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
                     isActiveLink("/contact")
-                      ? "text-white bg-[#ee0000]"
-                      : "text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
@@ -1362,7 +1468,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="border-t border-gray-200 my-4"></div>
                     <Link
                       href="/affiliate"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      className="flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                       onClick={handleCloseMobileMenu}
                     >
                       <UserCircle className="w-5 h-5" />
@@ -1376,20 +1482,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <div className="border-t border-gray-200 my-4"></div>
                     <Link
                       href="/my-account"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"
+                      className="flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                       onClick={handleCloseMobileMenu}
                     >
                       <UserCircle className="w-5 h-5" />
                       My Account
-                    </Link>
-
-                    <Link
-                      href="/membership"
-                      className="flex items-center gap-3 py-3 px-3 transition-all duration-200 rounded-xl text-base font-medium text-gray-700 hover:text-red-600 hover:bg-gray-50"
-                      onClick={handleCloseMobileMenu}
-                    >
-                      <Crown className="w-5 h-5" />
-                      My Membership
                     </Link>
                   </>
                 )}
@@ -1397,7 +1494,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
             </div>
 
             {/* Sidebar Footer - Always at Bottom */}
-            <div className="border-t border-gray-200 bg-white flex-shrink-0">
+            <div className="border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex-shrink-0">
               <div className="p-4">
                 {!affiliateLoading && isAffiliateAuthenticated ? (
                   <button
@@ -1445,31 +1542,31 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
           {/* Cart Sidebar */}
           <div
-            className={`cart-sidebar-container absolute top-0 right-0 h-full w-96 max-w-[90vw] bg-white z-10 shadow-2xl ${
+            className={`cart-sidebar-container absolute top-0 right-0 h-full w-96 max-w-[90vw] bg-white dark:bg-neutral-900 z-10 shadow-2xl ${
               isClosingCart ? "sidebar-slide-out-right" : "sidebar-slide-in-right"
             } flex flex-col`}
           >
             {/* Cart Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex-shrink-0">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <ShoppingCart className="h-6 w-6 text-gray-700" />
+                <ShoppingCart className="h-6 w-6 text-gray-700 dark:text-neutral-200" />
                 <div>
-                  <h2 className="text-gray-900 font-bold text-lg">Shopping Cart</h2>
-                  <p className="text-gray-600 text-sm">
+                  <h2 className="text-gray-900 dark:text-white font-bold text-lg">Shopping Cart</h2>
+                  <p className="text-gray-600 dark:text-neutral-400 text-sm">
                     {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleCloseCart}
-                className="w-8 h-8 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors flex items-center justify-center"
+                className="w-8 h-8 text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-neutral-700 rounded-full transition-colors flex items-center justify-center"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Cart Items - Scrollable Area */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto brand-scrollbar">
               {cartItems.length > 0 ? (
                 <div className="p-4 space-y-4">
                   {cartItems.map((item) => {
@@ -1500,34 +1597,37 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     return (
                       <div
                         key={`${cartItem.type}-${cartItem.productId}`}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-neutral-800/80 rounded-lg"
                       >
-                        <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
+                        <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-lg overflow-hidden flex-shrink-0">
                           <Image
                             src={itemImage}
                             alt={itemName}
                             width={64}
                             height={64}
                             className="w-full h-full object-cover"
+                            sizes="64px"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-gray-900 text-sm truncate">{itemName}</h3>
+                          <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{itemName}</h3>
                           <p className="text-red-600 font-semibold">
                             ${itemPrice.toFixed(2)}
-                            {cartItem.type === "ticket" && <span className="text-xs text-gray-500 ml-1">/ ticket</span>}
+                            {cartItem.type === "ticket" && (
+                              <span className="text-xs text-gray-500 dark:text-neutral-400 ml-1">/ ticket</span>
+                            )}
                           </p>
                           <div className="flex items-center gap-2 mt-2">
                             <button
                               onClick={() => handleQuantityChange(cartItem.quantity - 1)}
-                              className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
+                              className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 hover:bg-gray-300 dark:hover:bg-neutral-600 rounded-full flex items-center justify-center transition-colors"
                             >
                               <Minus className="h-3 w-3" />
                             </button>
                             <span className="text-sm font-medium w-8 text-center">{cartItem.quantity}</span>
                             <button
                               onClick={() => handleQuantityChange(cartItem.quantity + 1)}
-                              className="w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
+                              className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 hover:bg-gray-300 dark:hover:bg-neutral-600 rounded-full flex items-center justify-center transition-colors"
                             >
                               <Plus className="h-3 w-3" />
                             </button>
@@ -1548,8 +1648,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   <div className="text-gray-400 mb-6">
                     <Clock className="w-20 h-20 mx-auto text-gray-300" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 font-['Poppins']">Coming Soon</h3>
-                  <p className="text-sm sm:text-base text-gray-600 mb-6 max-w-sm mx-auto font-['Inter']">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 font-['Poppins']">
+                    Coming Soon
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-300 mb-6 max-w-sm mx-auto font-['Inter']">
                     Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can
                     win amazing tools!
                   </p>
@@ -1567,12 +1669,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
             </div>
 
             {/* Cart Footer - Always at Bottom */}
-            <div className="border-t border-gray-200 bg-white flex-shrink-0">
+            <div className="border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex-shrink-0">
               {cartItems.length > 0 ? (
                 <div className="p-4">
                   {/* Subtotal */}
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-semibold text-gray-900">Subtotal:</span>
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Subtotal:</span>
                     <span className="text-xl font-bold text-red-600">
                       $
                       {cartItems
@@ -1592,7 +1694,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                   {/* Checkout Button */}
                   <Link
-                    href="/checkout"
+                    href="/shop"
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 mb-2"
                     onClick={handleCloseCart}
                   >
@@ -1603,7 +1705,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   {/* Continue Shopping */}
                   <button
                     onClick={handleCloseCart}
-                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-xl transition-colors duration-200"
+                    className="w-full bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 font-medium py-2 px-4 rounded-xl transition-colors duration-200"
                   >
                     Continue Shopping
                   </button>
@@ -1612,7 +1714,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 <div className="p-4">
                   <button
                     onClick={handleCloseCart}
-                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-xl transition-colors duration-200"
+                    className="w-full bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 font-medium py-2 px-4 rounded-xl transition-colors duration-200"
                   >
                     Continue Shopping
                   </button>
@@ -1638,7 +1740,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
           hasAccessToAdditionalPackages={userData?.subscription?.isActive === true}
           onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
-          onOpenSpecialPackages={() => requestModal("special-packages", true)}
+          onOpenSpecialPackages={() =>
+            whenGatesOpenElseGateModal(() => requestModal("special-packages", true))
+          }
         />
       )}
     </header>

@@ -1,0 +1,62 @@
+# Draws — Frontend
+
+## Pages
+
+| Path | Purpose |
+|---|---|
+| `src/app/(site)/major-draw/page.tsx` | Current major draw landing — hero, countdown, entry CTA |
+| `src/app/(site)/mini-draws/[id]/` | Individual mini-draw detail page |
+| `src/app/(site)/mini-draw-success/` | Post-purchase success for mini-draw entry |
+| `src/app/(site)/draw-results/` | Past major draws |
+| `src/app/(site)/winners/` | Winner gallery |
+
+## Key components
+
+| Component | Purpose |
+|---|---|
+| `src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx` | Countdown timer to mini-draw end |
+| `src/app/(site)/mini-draws/[id]/components/ShareButton.tsx` | Social-share for mini-draw |
+| `src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx` | Prize-image carousel: main slide + thumbnail strip + pagination dots + nav chevrons + image counter, with click-to-fullscreen via `FullscreenImageViewer`. |
+| _other major-draw components_ | _TODO: enumerate from src/components/ that map to draws (per the manifest, draws-domain components are not pulled out separately — they live near pages)._ |
+
+### MiniDrawImageGallery
+
+[src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx](../../src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx) is the prize-image gallery on the mini-draw detail page. As of Phase 3 of the [Site-wide Interaction Smoothness plan](../superpowers/plans/2026-05-09-site-smoothness.md) (2026-05-10) it uses two inline `useEmblaCarousel` instances (replacing the previous Swiper `[Navigation, Pagination, Thumbs]` + `[FreeMode, Thumbs]` pair) so the rounded main card can carry absolutely-positioned overlay UI — see [shared-ui/patterns.md `Inline two-Embla pattern`](../shared-ui/patterns.md#embla-wrappers) for the rationale. Behaviour: the main viewport drives `activeIndex`; clicking a thumbnail calls `mainApi.scrollTo(i)`; the thumbs strip scrolls into the active slide via `thumbsApi.scrollTo(i)` whenever `mainApi` selects. Tap-vs-drag detection uses `pointerStartRef` with an 8px deadzone — taps open `FullscreenImageViewer` at the clicked index, drags scroll the carousel without opening fullscreen.
+
+## Hooks
+
+| Hook | Purpose | Source |
+|---|---|---|
+| `useMajorDrawEntryCta()` | CTA state for the major-draw entry button | [src/hooks/useMajorDrawEntryCta.ts](../../src/hooks/useMajorDrawEntryCta.ts) |
+| `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? `gatesClosed = currentMajorDraw?.status !== "active"`, which is true during both the **30-min freeze (8:00–8:30 PM)** and the **3h 30min gap (8:30 PM → 12:00 AM)**. Surfaces [`GateClosedModal`](../../src/components/modals/GateClosedModal.tsx) with the next draw's name and activation date. Mirrors the server gate in [backend.md](./backend.md) `major-draw-gate-http.ts`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
+| `useMiniDrawTrigger()` | Trigger / opening mini-draw modals or flows | [src/hooks/useMiniDrawTrigger.ts](../../src/hooks/useMiniDrawTrigger.ts) |
+| `usePastDrawsData()` | Fetch list of past draws for results page | [src/hooks/usePastDrawsData.ts](../../src/hooks/usePastDrawsData.ts) |
+
+> _TODO: verify each hook's contract by reading source._
+
+## Client state
+
+- All draw reads via TanStack Query.
+- Countdown components compute their own `now()` ticks — server-rendered draw end-dates are the source of truth.
+- No Zustand for draws.
+
+## Display formatting
+
+- Winner names are rendered via [src/utils/winner-name-formatter.ts](../../src/utils/winner-name-formatter.ts) — privacy convention (first name + last initial).
+- Eligibility messaging via [src/utils/giveaway-eligibility.ts](../../src/utils/giveaway-eligibility.ts).
+
+## Cross-domain notes
+
+### Winner testimony display
+
+The cinematic Hear From Our Winners section + Read Full Story modal live under [src/components/sections/winner-testimony/](../../src/components/sections/winner-testimony/) — owned by the **shared-ui** domain (see [docs/shared-ui/frontend.md](../shared-ui/frontend.md#sectionswinner-testimony--hear-from-our-winners)). Draws-domain code (the `Winner` model, `WinnerSummary` type, [src/utils/winners.ts](../../src/utils/winners.ts) helpers) feeds it; the visual layout is owned by shared-ui.
+
+Refactored 2026-05-04: the photo is now used as a full-bleed cinematic background (not a centered display image) and the modal uses a magazine-article layout. No data-shape, API, or business-logic changes.
+
+## className conventions (2026-05-08)
+
+Draw components use `cn()` from `@/utils/cn` for conditional class composition. The `sweep-classname-template-literals` codemod (Plan 5 Phase 2) converted template-literal `className={`...`}` patterns to `className={cn(...)}`. Use `cn()` rather than template literals when adding new conditional classes.
+
+## Interaction smoothness (Phase 1, 2026-05-09)
+
+[`MiniDrawCountdown`](../../src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx) is now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) so the mini-draw detail page does not re-render on every tick of the countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.

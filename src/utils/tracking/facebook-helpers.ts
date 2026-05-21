@@ -74,16 +74,20 @@ export function getFBCFromURL(): string | undefined {
   if (typeof window === "undefined") return undefined;
 
   try {
-    // Prefer Meta's own _fbc cookie — has correct click-capture timestamp baked in.
+    // 1. Prefer Meta's own _fbc cookie — has correct click-capture timestamp baked in.
+    // SDK does not URL-encode the value; decode defensively only when there is a percent sign.
     const metaFbc = readBrowserCookie("_fbc");
-    if (metaFbc) return metaFbc;
+    if (metaFbc) {
+      return metaFbc.includes("%") ? decodeURIComponent(metaFbc) : metaFbc;
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Pre-formatted fbc parameter wins over fbclid construction
+    // 2. Pre-formatted fbc parameter wins over fbclid construction
     const fbc = urlParams.get("fbc");
     if (fbc) return fbc;
 
+    // 3. fbclid → construct with persisted timestamp (or stamp now + persist)
     const fbclid = urlParams.get("fbclid");
     if (fbclid) {
       return buildFbcFromFbclid(fbclid, /* persist */ true);
@@ -135,6 +139,33 @@ export function generateEventID(eventType: string, identifier: string, timestamp
 }
 
 /**
+ * Normalize birthdate to YYYYMMDD for Meta CAPI (db parameter).
+ * Meta requires date of birth hashed as YYYYMMDD (e.g. 19900615).
+ */
+export function toYYYYMMDD(birthdate: string | Date): string | null {
+  let d: Date;
+  if (birthdate instanceof Date) {
+    if (Number.isNaN(birthdate.getTime())) return null;
+    d = birthdate;
+  } else {
+    const trimmed = String(birthdate).trim();
+    if (!trimmed) return null;
+    // Already YYYYMMDD (8 digits)
+    if (/^\d{8}$/.test(trimmed)) return trimmed;
+    d = new Date(trimmed);
+    if (Number.isNaN(d.getTime())) return null;
+  }
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return null;
+  const yy = String(y);
+  const mm = String(m).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${yy}${mm}${dd}`;
+}
+
+/**
  * Prepare user data for Facebook Conversions API
  * Hashes PII data according to Facebook requirements
  *
@@ -151,6 +182,7 @@ export function prepareUserData(userData?: {
   zipCode?: string;
   country?: string;
   externalId?: string;
+  birthdate?: string | Date;
 }): Record<string, string> {
   const hashedData: Record<string, string> = {};
 
@@ -206,6 +238,14 @@ export function prepareUserData(userData?: {
     if (countryCode) hashedData.country = hashData(countryCode.toLowerCase());
   }
 
+  // Date of birth (Meta db parameter - YYYYMMDD, hashed for Event Match Quality)
+  if (userData.birthdate) {
+    const yyyymmdd = toYYYYMMDD(userData.birthdate);
+    if (yyyymmdd) {
+      hashedData.db = hashData(yyyymmdd);
+    }
+  }
+
   return hashedData;
 }
 
@@ -222,10 +262,11 @@ export function getEventSourceURL(): string | undefined {
  * Extract Facebook Click ID (fbc) from a NextRequest.
  *
  * Resolution order (mirrors the client-side `getFBCFromURL`):
- *   1. `_fbc` cookie (set by Meta's Pixel — has correct format and capture time)
+ *   1. `_fbc` cookie (set by Meta's Pixel — has correct format and capture time;
+ *      stable across server retries — safe for Stripe-idempotent request bodies).
  *   2. `?fbc=` URL param (pre-formatted)
  *   3. `?fbclid=` URL param → constructed using `_fbc_ts` cookie's capture timestamp
- *      if present, otherwise "now" (less accurate but better than no fbc at all)
+ *      if present, otherwise "now" (less accurate but better than no fbc at all).
  *
  * @param request - NextRequest-like object with `url`, `headers`, and `cookies`
  * @returns Facebook Click ID if found, undefined otherwise
@@ -236,7 +277,7 @@ export function extractFBCFromRequest(request: {
   cookies?: { get: (name: string) => { value: string } | undefined };
 }): string | undefined {
   try {
-    // Prefer Meta's own _fbc cookie when present
+    // Prefer Meta's own _fbc cookie when present (stable across retries).
     const metaFbc = request.cookies?.get("_fbc")?.value;
     if (metaFbc) return metaFbc;
 

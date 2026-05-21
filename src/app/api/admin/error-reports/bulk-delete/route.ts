@@ -11,9 +11,17 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import User from "@/models/User";
+import mongoose from "mongoose";
 
 const bulkDeleteSchema = z.object({
   reportIds: z.array(z.string().min(1)).min(1, "At least one report ID is required"),
+  reason: z.string().max(500).optional(),
+});
+
+const bulkStatusSchema = z.object({
+  reportIds: z.array(z.string().min(1)).min(1, "At least one report ID is required"),
+  status: z.enum(["new", "investigating", "resolved", "dismissed"]),
+  adminNotes: z.string().max(2000).optional(),
 });
 
 /**
@@ -40,15 +48,28 @@ export async function DELETE(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const validatedData = bulkDeleteSchema.parse(body);
 
-    // Delete reports
-    const deleteResult = await ErrorReport.deleteMany({
-      _id: { $in: validatedData.reportIds },
+    const objectIds = validatedData.reportIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (objectIds.length !== validatedData.reportIds.length) {
+      return NextResponse.json({ error: "One or more report IDs are invalid" }, { status: 400 });
+    }
+
+    // Soft archive reports instead of hard-deleting diagnostic history.
+    const archiveResult = await ErrorReport.updateMany({
+      _id: { $in: objectIds },
+    }, {
+      $set: {
+        status: "dismissed",
+        archivedAt: new Date(),
+        archivedBy: new mongoose.Types.ObjectId(session.user.id),
+        archiveReason: validatedData.reason || "Archived from admin bulk action",
+      },
     });
 
     return NextResponse.json({
       success: true,
-      deletedCount: deleteResult.deletedCount,
-      message: `Successfully deleted ${deleteResult.deletedCount} error report(s)`,
+      deletedCount: archiveResult.modifiedCount,
+      archivedCount: archiveResult.modifiedCount,
+      message: `Archived ${archiveResult.modifiedCount} error report(s)`,
     });
   } catch (error) {
     console.error("Error bulk deleting error reports:", error);
@@ -66,6 +87,88 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to delete error reports",
+        message: error instanceof Error ? error.message : "An unknown error occurred",
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/admin/error-reports/bulk-delete
+ * Bulk update report workflow status.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await User.findById(session.user.id).lean();
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const validatedData = bulkStatusSchema.parse(body);
+    const objectIds = validatedData.reportIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (objectIds.length !== validatedData.reportIds.length) {
+      return NextResponse.json({ error: "One or more report IDs are invalid" }, { status: 400 });
+    }
+
+    const updateData: Record<string, unknown> = {
+      status: validatedData.status,
+      updatedAt: new Date(),
+    };
+
+    if (validatedData.adminNotes !== undefined) {
+      updateData.adminNotes = validatedData.adminNotes;
+    }
+
+    if (validatedData.status === "resolved") {
+      updateData.resolvedAt = new Date();
+      updateData.resolvedBy = new mongoose.Types.ObjectId(session.user.id);
+    } else {
+      updateData.$unset = { resolvedAt: "", resolvedBy: "" };
+    }
+
+    if (validatedData.status !== "dismissed") {
+      updateData.$unset = {
+        ...((updateData.$unset as Record<string, string> | undefined) || {}),
+        archivedAt: "",
+        archivedBy: "",
+        archiveReason: "",
+      };
+    }
+
+    const { $unset, ...setData } = updateData;
+    const update = $unset ? { $set: setData, $unset } : { $set: setData };
+    const updateResult = await ErrorReport.updateMany({ _id: { $in: objectIds } }, update);
+
+    return NextResponse.json({
+      success: true,
+      updatedCount: updateResult.modifiedCount,
+      message: `Updated ${updateResult.modifiedCount} error report(s)`,
+    });
+  } catch (error) {
+    console.error("Error bulk updating error reports:", error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "Validation error",
+          details: error.issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: "Failed to update error reports",
         message: error instanceof Error ? error.message : "An unknown error occurred",
       },
       { status: 500 }

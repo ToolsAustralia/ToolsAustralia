@@ -17,6 +17,8 @@ const selectWinnerSchema = z.object({
   selectionMethod: z.string().optional(),
   selectedBy: z.string().min(1, "Admin user ID is required"),
   imageUrl: z.string().url("Winner image must be a valid URL").optional(),
+  /** Rich HTML from admin modal; optional */
+  testimony: z.string().optional(),
 });
 
 /**
@@ -42,6 +44,8 @@ export async function POST(request: NextRequest) {
     const selectionMethodValue = formData.get("selectionMethod");
     const selectedByValue = formData.get("selectedBy");
     const existingImageUrlValue = formData.get("imageUrl");
+    const drawResultUrlValue = formData.get("drawResultUrl");
+    const testimonyValue = formData.get("testimony");
     const imageFileEntry = formData.get("winnerImage");
 
     if (
@@ -76,6 +80,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let drawResultUrl: string | undefined;
+    if (typeof drawResultUrlValue === "string") {
+      const t = drawResultUrlValue.trim();
+      if (t) {
+        const urlCheck = z.string().url().safeParse(t);
+        if (!urlCheck.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Draw result URL must be a valid http(s) link",
+            },
+            { status: 400 }
+          );
+        }
+        drawResultUrl = urlCheck.data;
+      }
+    }
+
+    const testimony =
+      typeof testimonyValue === "string" && testimonyValue.trim().length > 0 ? testimonyValue : undefined;
+
     const baseData = {
       miniDrawId: miniDrawIdValue,
       winnerUserId: winnerUserIdValue,
@@ -86,6 +111,7 @@ export async function POST(request: NextRequest) {
         typeof existingImageUrlValue === "string" && existingImageUrlValue.trim().length > 0
           ? existingImageUrlValue.trim()
           : undefined,
+      testimony,
     };
 
     const validatedData = selectWinnerSchema.parse(baseData);
@@ -229,6 +255,8 @@ export async function POST(request: NextRequest) {
               category: miniDraw.prize.category,
             },
             imageUrl: imageUrlToSave,
+            drawResultUrl,
+            testimony: validatedData.testimony || undefined,
             cycle: currentCycle,
           },
         ],
@@ -292,6 +320,7 @@ export async function POST(request: NextRequest) {
             selectedDate: winnerDoc.selectedDate,
             selectionMethod: winnerDoc.selectionMethod,
             imageUrl: winnerDoc.imageUrl,
+            drawResultUrl: winnerDoc.drawResultUrl,
           },
         },
         message: "Winner recorded and draw reopened successfully",

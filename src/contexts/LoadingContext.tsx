@@ -6,7 +6,8 @@ import SuccessScreen from "@/components/loading/SuccessScreen";
 
 interface Benefit {
   text: string;
-  icon?: "gift" | "star" | "zap";
+  icon?: "gift" | "star" | "zap" | "ticket" | "tag";
+  highlight?: boolean;
 }
 
 interface LoadingState {
@@ -29,6 +30,8 @@ interface LoadingContextType {
   hideLoading: () => void;
   showSuccess: (title: string, subtitle: string, benefits: Benefit[], autoCloseDelay?: number) => void;
   hideSuccess: () => void;
+  /** True while the full-screen success overlay is visible (purchase celebration). */
+  isSuccessScreenVisible: boolean;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
@@ -58,7 +61,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
     title: "",
     subtitle: "",
     benefits: [],
-    autoCloseDelay: 3000,
+    autoCloseDelay: 4500,
   });
 
   const showLoading = (title: string, subtitle: string, steps: string[]) => {
@@ -71,10 +74,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
   };
 
   const hideLoading = () => {
-    setLoadingState((prev) => ({
-      ...prev,
-      isVisible: false,
-    }));
+    setLoadingState((prev) => ({ ...prev, isVisible: false }));
   };
 
   const showSuccess = (title: string, subtitle: string, benefits: Benefit[], autoCloseDelay?: number) => {
@@ -83,7 +83,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
       title,
       subtitle,
       benefits,
-      autoCloseDelay: autoCloseDelay || 3000,
+      autoCloseDelay: autoCloseDelay ?? 4500,
     });
   };
 
@@ -101,6 +101,7 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
         hideLoading,
         showSuccess,
         hideSuccess,
+        isSuccessScreenVisible: successState.isVisible,
       }}
     >
       {children}

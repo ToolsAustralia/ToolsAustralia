@@ -1,0 +1,118 @@
+"use client";
+
+import React from "react";
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
+import { Settings, ArrowLeft, AlertTriangle, Home, User, Ticket, MessageCircle, CreditCard } from "lucide-react";
+import { HeaderThemeToggle } from "@/components/ui/HeaderThemeToggle";
+import { cn } from "@/utils/cn";
+
+interface DashboardHeaderProps {
+  title?: string;
+  showBackButton?: boolean;
+  showRenewalAlert?: boolean;
+  /** When provided, called instead of router.back() when back button is clicked */
+  onBackClick?: () => void;
+  /** Optional second row inside the same header shell (e.g. major draw line on `/my-account/draws`) */
+  subHeader?: React.ReactNode;
+}
+
+const NAV_ITEMS = [
+  { id: "home", label: "Home", icon: Home, href: "/", isActive: (path: string | null) => path === "/" || path === "" },
+  { id: "profile", label: "Profile", icon: User, href: "/my-account", isActive: (path: string | null) => path === "/my-account" || path === "/my-account/" },
+  { id: "draws", label: "Draws", icon: Ticket, href: "/my-account/draws", isActive: (path: string | null) => path?.startsWith("/my-account/draws") },
+  { id: "membership", label: "Membership", icon: CreditCard, href: "/my-account/membership", isActive: (path: string | null) => path?.startsWith("/my-account/membership") },
+  { id: "support", label: "Support", icon: MessageCircle, href: "/my-account/support", isActive: (path: string | null) => path === "/my-account/support" || path?.startsWith("/my-account/support") },
+] as const;
+
+export default function DashboardHeader({
+  title = "Profile",
+  showBackButton = false,
+  showRenewalAlert = false,
+  onBackClick,
+  subHeader,
+}: DashboardHeaderProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isSettingsPage = pathname?.includes("/settings");
+
+  const handleBack = () => {
+    if (onBackClick) {
+      onBackClick();
+    } else {
+      router.back();
+    }
+  };
+
+  return (
+    <>
+      <header className="fixed top-0 left-0 right-0 z-50">
+        <div className="border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 pb-3 sm:pb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                {showBackButton && (
+                  <button
+                    onClick={handleBack}
+                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors shrink-0"
+                    aria-label="Go back"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                  </button>
+                )}
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{title}</h1>
+              </div>
+
+              <nav className="hidden lg:flex items-center gap-1" aria-label="Account navigation">
+                {NAV_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.isActive(pathname ?? null);
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-black text-white dark:bg-neutral-950 dark:text-white"
+                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-neutral-800"
+                      }`}
+                    >
+                      <Icon className={cn("w-4 h-4 shrink-0", isActive ? "fill-current" : "")} strokeWidth={1.5} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <HeaderThemeToggle />
+
+                {!isSettingsPage && (
+                  <button
+                    onClick={() => router.push("/my-account/settings")}
+                    className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                    aria-label="Open settings"
+                  >
+                    <Settings className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                    {showRenewalAlert && (
+                      <div className="absolute -top-1 -right-1">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" strokeWidth={2.5} />
+                      </div>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        {subHeader ? (
+          <div className="">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-2 pt-1 sm:pb-2.5 sm:pt-1.5">{subHeader}</div>
+          </div>
+        ) : null}
+      </header>
+      {/* Spacer to prevent content from scrolling under fixed header */}
+      <div className={subHeader ? "h-[9.25rem] sm:h-[10rem]" : "h-14 sm:h-16"} aria-hidden="true" />
+    </>
+  );
+}

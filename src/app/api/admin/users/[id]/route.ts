@@ -17,6 +17,7 @@ import type { AdminUserUpdatePayload } from "@/types/admin";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { rewardsDisabledMessage } from "@/config/rewardsSettings";
 import { stripe } from "@/lib/stripe";
+import { syncKlaviyoEmailMarketingFromAdminPreference } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -129,6 +130,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const dbSession = await mongoose.startSession();
     let userMissing = false;
     let transactionError: unknown;
+    /** When set after the transaction, sync this preference to Klaviyo */
+    let klaviyoPromotionalTarget: boolean | undefined;
+    /** When admin changes email, merge old Klaviyo profile into new */
+    let adminEmailBeforeForKlaviyo: string | undefined;
 
     try {
       await dbSession.withTransaction(async () => {
@@ -139,8 +144,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           throw new Error("User not found");
         }
 
-        // Apply each optional update block only when provided
-        applyBasicInfoUpdate(user, payload.basicInfo);
+        if (payload.basicInfo) {
+          if (payload.basicInfo.email !== undefined) {
+            adminEmailBeforeForKlaviyo = user.email?.toLowerCase();
+          }
+          if (payload.basicInfo.acceptsPromotionalEmail !== undefined) {
+            const beforeOptIn = user.acceptsPromotionalEmail !== false;
+            applyBasicInfoUpdate(user, payload.basicInfo);
+            const afterOptIn = user.acceptsPromotionalEmail !== false;
+            if (beforeOptIn !== afterOptIn) {
+              klaviyoPromotionalTarget = afterOptIn;
+            }
+          } else {
+            applyBasicInfoUpdate(user, payload.basicInfo);
+          }
+        }
         applySubscriptionUpdate(user, payload.subscription);
         applyRewardsUpdate(user, payload.rewards);
 
@@ -186,9 +204,46 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    let warning: string | undefined;
+    const userDocAfterPatch = await User.findById(userId);
+    if (klaviyoPromotionalTarget !== undefined && userDocAfterPatch) {
+      const kSync = await syncKlaviyoEmailMarketingFromAdminPreference(userDocAfterPatch, klaviyoPromotionalTarget);
+      if (!kSync.success) {
+        warning = `Saved in database, but Klaviyo could not update marketing preferences: ${kSync.error ?? "unknown error"}. Verify email/SMS consent in Klaviyo if needed.`;
+        console.error("❌ Klaviyo marketing sync after admin PATCH:", kSync.error);
+      }
+    }
+
+    if (userDocAfterPatch && adminEmailBeforeForKlaviyo !== undefined && payload.basicInfo?.email !== undefined) {
+      const emailAfter = userDocAfterPatch.email?.toLowerCase();
+      if (emailAfter && adminEmailBeforeForKlaviyo !== emailAfter) {
+        try {
+          const { mergeKlaviyoProfilesAfterEmailChange } = await import(
+            "@/utils/integrations/klaviyo/klaviyo-profile-sync"
+          );
+          const mergeRes = await mergeKlaviyoProfilesAfterEmailChange(userDocAfterPatch, adminEmailBeforeForKlaviyo);
+          if (!mergeRes.merged && mergeRes.error) {
+            console.warn("Klaviyo profile merge after admin email change (non-critical):", mergeRes.error);
+          }
+        } catch (mergeErr) {
+          console.error("Klaviyo merge after admin email change:", mergeErr);
+        }
+      }
+    }
+
+    if (userDocAfterPatch && payload.basicInfo) {
+      try {
+        const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+        ensureUserProfileSynced(userDocAfterPatch);
+      } catch (kErr) {
+        console.error("Klaviyo profile sync after admin PATCH (non-critical):", kErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: updatedProfile,
+      ...(warning ? { warning } : {}),
     });
   } catch (error) {
     console.error("❌ Error updating user detail:", error);
@@ -315,6 +370,17 @@ async function buildAdminUserProfile(userId: string) {
       .filter((e) => e.eventType === "RefundProcessed")
       .map((e) => e.paymentIntentId)
   );
+
+  const refundProcessedAtByPaymentIntentId = new Map<string, string>();
+  for (const e of paymentEvents) {
+    if (e.eventType !== "RefundProcessed" || typeof e.paymentIntentId !== "string" || !e.timestamp) continue;
+    const iso =
+      e.timestamp instanceof Date ? e.timestamp.toISOString() : new Date(e.timestamp).toISOString();
+    const prev = refundProcessedAtByPaymentIntentId.get(e.paymentIntentId);
+    if (!prev || new Date(iso) > new Date(prev)) {
+      refundProcessedAtByPaymentIntentId.set(e.paymentIntentId, iso);
+    }
+  }
   const totalSpent = paymentEvents
     .filter(
       (event) =>
@@ -374,24 +440,33 @@ async function buildAdminUserProfile(userId: string) {
   const subscriptionHistory = paymentEvents
     .filter((event) => event.packageType === "membership")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
+      const billingReason =
+        typeof event.data?.billingReason === "string" ? event.data.billingReason : undefined;
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         status: event.eventType,
+        billingReason,
       };
     });
 
   const oneTimePackageHistory = paymentEvents
     .filter((event) => event.packageType === "one-time")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMembershipPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMembershipPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -410,11 +485,14 @@ async function buildAdminUserProfile(userId: string) {
   const miniDrawHistory = paymentEvents
     .filter((event) => event.packageType === "mini-draw")
     .map((event) => {
-      const packageNameFallback = typeof event.data?.packageName === "string" ? event.data.packageName : null;
+      const pkgId = event.packageId ?? event.data?.packageId;
+      const packageNameFallback =
+        (typeof event.packageName === "string" && event.packageName) ||
+        (typeof event.data?.packageName === "string" ? event.data.packageName : null);
       return {
         timestamp: event.timestamp,
-        packageId: event.data?.packageId,
-        packageName: resolveMiniPackageName(event.data?.packageId, packageNameFallback),
+        packageId: pkgId != null ? String(pkgId) : undefined,
+        packageName: resolveMiniPackageName(pkgId, packageNameFallback),
         price: event.data?.price,
         entries: event.data?.entries,
       };
@@ -501,6 +579,14 @@ async function buildAdminUserProfile(userId: string) {
     savedPaymentMethodsSummary = summaries;
   }
 
+  const birthdateIso = (() => {
+    if (!user.birthdate) return undefined;
+    const d =
+      user.birthdate instanceof Date ? user.birthdate : new Date(user.birthdate as string | number);
+    if (Number.isNaN(d.getTime())) return undefined;
+    return d.toISOString().split("T")[0];
+  })();
+
   return {
     id: user._id,
     firstName: user.firstName,
@@ -509,11 +595,13 @@ async function buildAdminUserProfile(userId: string) {
     mobile: user.mobile,
     state: user.state,
     profession: user.profession,
+    birthdate: birthdateIso,
     role: user.role,
     isActive: user.isActive,
     isEmailVerified: user.isEmailVerified,
     isMobileVerified: user.isMobileVerified,
     profileSetupCompleted: user.profileSetupCompleted,
+    acceptsPromotionalEmail: user.acceptsPromotionalEmail !== false,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     lastLogin: user.lastLogin,
@@ -578,7 +666,24 @@ async function buildAdminUserProfile(userId: string) {
       };
     }),
     orders,
-    paymentEvents: paymentEvents.slice(0, 50),
+    paymentEventsTotal: paymentEvents.length,
+    paymentEvents: paymentEvents.slice(0, 25).map((event) => {
+      const pi = typeof event.paymentIntentId === "string" ? event.paymentIntentId : undefined;
+      const isRefundedBenefits =
+        event.eventType === "BenefitsGranted" && pi != null && refundedPaymentIntentIds.has(pi);
+      return {
+        _id: event._id,
+        eventType: event.eventType,
+        paymentIntentId: pi,
+        hasRefundProcessed: isRefundedBenefits,
+        refundProcessedAt: isRefundedBenefits ? refundProcessedAtByPaymentIntentId.get(pi) : undefined,
+        timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
+        packageType: event.packageType,
+        packageId: event.packageId != null ? String(event.packageId) : undefined,
+        packageName: typeof event.packageName === "string" ? event.packageName : undefined,
+        data: event.data,
+      };
+    }),
     referral: referralSummary,
     savedPaymentMethods: savedPaymentMethodsSummary,
   };
@@ -616,6 +721,22 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
     user.profession = trimmedProfession || undefined;
   }
 
+  if (basicInfo.birthdate !== undefined) {
+    const trimmed = (basicInfo.birthdate || "").trim();
+    if (!trimmed) {
+      user.birthdate = undefined;
+    } else {
+      const d = new Date(trimmed);
+      if (Number.isNaN(d.getTime())) {
+        throw new Error("Invalid birthdate");
+      }
+      if (d.getTime() > Date.now()) {
+        throw new Error("Birthdate cannot be in the future");
+      }
+      user.birthdate = d;
+    }
+  }
+
   if (basicInfo.role !== undefined) {
     user.role = basicInfo.role;
   }
@@ -634,6 +755,10 @@ function applyBasicInfoUpdate(user: IUser, basicInfo?: AdminUserUpdatePayload["b
 
   if (basicInfo.profileSetupCompleted !== undefined) {
     user.profileSetupCompleted = basicInfo.profileSetupCompleted;
+  }
+
+  if (basicInfo.acceptsPromotionalEmail !== undefined) {
+    user.acceptsPromotionalEmail = basicInfo.acceptsPromotionalEmail;
   }
 }
 

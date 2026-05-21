@@ -7,6 +7,8 @@ import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 // Extended Stripe subscription interface with period fields
 interface StripeSubscriptionWithPeriods extends Stripe.Subscription {
@@ -70,6 +72,9 @@ export async function POST(request: NextRequest) {
       // console.log(`❌ No active subscription found for user: ${user.email}`);
       return NextResponse.json({ error: "No active subscription found to upgrade" }, { status: 400 });
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // ✅ FIX: Get current package from Stripe subscription metadata (source of truth)
     let currentStripeSubscription;
@@ -197,8 +202,8 @@ export async function POST(request: NextRequest) {
     // ✅ STRIPE BEST PRACTICE: For immediate upgrade with payment collection
     // Use 'always_invoice' to create invoice and attempt immediate payment
     // Use 'unchanged' billing cycle to maintain consistent billing dates and accurate proration
-    // Format description: (UPGRADE) PreviousPackage(Previous) to NewPackage(New)
-    const upgradeDescription = `(UPGRADE) ${currentPackage.name} to ${newPackage.name}`;
+    // Format description for Stripe transactions tab: "Tradie to Foreman Upgrade"
+    const upgradeDescription = `${currentPackage.name} to ${newPackage.name} Upgrade`;
 
     const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
       items: [
@@ -321,7 +326,7 @@ export async function POST(request: NextRequest) {
       // Track Meta CAPI Custom Event `MembershipUpgrade` (server-side — no live Pixel call).
       try {
         const { trackPixelSubscriptionUpgrade } = await import("@/utils/tracking/pixel-purchase-tracking");
-        const { extractRequestContext } = await import("@/utils/tracking/facebook-helpers");
+        const requestContext = extractRequestContext(request);
         await trackPixelSubscriptionUpgrade({
           oldValue: currentPackage.price,
           newValue: newPackage.price,
@@ -336,10 +341,12 @@ export async function POST(request: NextRequest) {
           userPhone: user.mobile,
           userFirstName: user.firstName,
           userLastName: user.lastName,
+          userState: user.state,
+          userBirthdate: user.birthdate,
           paymentIntentId: paymentIntent?.id,
           prorationAmount: prorationAmount / 100,
           entriesAdded: (newPackage.entriesPerMonth || 0) - (currentPackage.entriesPerMonth || 0),
-          requestContext: extractRequestContext(request),
+          requestContext,
         });
       } catch (pixelError) {
         console.error("❌ Pixel upgrade tracking failed (non-blocking):", pixelError);

@@ -14,6 +14,9 @@
 
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
+import { pickOpenInvoiceForFailedRenewal } from "@/utils/payment/failed-invoice-selection";
+
+export { pickOpenInvoiceForFailedRenewal } from "@/utils/payment/failed-invoice-selection";
 
 /**
  * Result type for failed invoice payment data retrieval
@@ -24,6 +27,27 @@ export interface FailedInvoicePaymentData {
   paymentIntent?: Stripe.PaymentIntent;
   hasDefaultPaymentMethod: boolean;
   error?: string;
+}
+
+/**
+ * List all open invoices for a subscription (paginated).
+ * Used to prefer a real `open` failed invoice over `latest_invoice` when that points at a draft from paused collection.
+ */
+export async function listOpenSubscriptionInvoices(subscriptionId: string): Promise<Stripe.Invoice[]> {
+  const all: Stripe.Invoice[] = [];
+  let startingAfter: string | undefined;
+  for (;;) {
+    const page = await stripe.invoices.list({
+      subscription: subscriptionId,
+      status: "open",
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    all.push(...page.data);
+    if (!page.has_more || page.data.length === 0) break;
+    startingAfter = page.data[page.data.length - 1]?.id;
+  }
+  return all;
 }
 
 /**
@@ -39,16 +63,15 @@ export async function getFailedInvoicePaymentData(
   subscriptionId: string
 ): Promise<FailedInvoicePaymentData> {
   try {
-    // Retrieve subscription from Stripe with latest invoice expansion
-    // Note: Cannot expand nested properties like "latest_invoice.latest_payment_intent"
-    // Instead, expand latest_invoice, then expand payment intents from the invoice
+    const openInvoices = await listOpenSubscriptionInvoices(subscriptionId);
+    const preferredOpen = pickOpenInvoiceForFailedRenewal(openInvoices);
+
     const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
       expand: ["latest_invoice"],
     });
 
-    // Get latest invoice
     const latestInvoice = subscription.latest_invoice;
-    if (!latestInvoice) {
+    if (!latestInvoice && !preferredOpen) {
       return {
         success: false,
         hasDefaultPaymentMethod: false,
@@ -58,39 +81,50 @@ export async function getFailedInvoicePaymentData(
 
     // Handle invoice (may be string or expanded object)
     let invoice: Stripe.Invoice;
-    if (typeof latestInvoice === "string") {
-      // Retrieve invoice if only ID is provided
-      invoice = await stripe.invoices.retrieve(latestInvoice, {
+
+    if (preferredOpen?.id) {
+      // `latest_payment_intent` is not expandable on Invoice (Stripe 2025+); use `payment_intent` and retrieve PI by id if needed.
+      invoice = await stripe.invoices.retrieve(preferredOpen.id, {
         expand: ["payment_intent"],
       });
     } else {
-      // If invoice is expanded but payment intents might not be, try to expand them
-      const invoiceId = latestInvoice.id;
-      // Check if payment_intent or latest_payment_intent are already expanded
-      const invoiceWithPI = latestInvoice as Stripe.Invoice & {
-        payment_intent?: string | Stripe.PaymentIntent;
-        latest_payment_intent?: string | Stripe.PaymentIntent;
-      };
-      
-          // If payment intents are strings (not expanded), retrieve the invoice with expansion
-          if (
-            typeof invoiceWithPI.payment_intent === "string" ||
-            typeof invoiceWithPI.latest_payment_intent === "string"
-          ) {
-            if (!invoiceId) {
-              return {
-                success: false,
-                hasDefaultPaymentMethod: false,
-                error: "Invoice ID is required but not found",
-              };
-            }
-            invoice = await stripe.invoices.retrieve(invoiceId, {
-              expand: ["payment_intent"],
-            });
-          } else {
-            invoice = latestInvoice;
+      if (!latestInvoice) {
+        return {
+          success: false,
+          hasDefaultPaymentMethod: false,
+          error: "No invoice found for subscription",
+        };
+      }
+      if (typeof latestInvoice === "string") {
+        invoice = await stripe.invoices.retrieve(latestInvoice, {
+          expand: ["payment_intent"],
+        });
+      } else {
+        const invoiceId = latestInvoice.id;
+        const invoiceWithPI = latestInvoice as Stripe.Invoice & {
+          payment_intent?: string | Stripe.PaymentIntent;
+          latest_payment_intent?: string | Stripe.PaymentIntent;
+        };
+
+        if (
+          typeof invoiceWithPI.payment_intent === "string" ||
+          typeof invoiceWithPI.latest_payment_intent === "string"
+        ) {
+          if (!invoiceId) {
+            return {
+              success: false,
+              hasDefaultPaymentMethod: false,
+              error: "Invoice ID is required but not found",
+            };
           }
+          invoice = await stripe.invoices.retrieve(invoiceId, {
+            expand: ["payment_intent"],
+          });
+        } else {
+          invoice = latestInvoice;
         }
+      }
+    }
 
     // Check invoice status - should be "open" or "draft" for failed payments
     // "open" = invoice created and awaiting payment

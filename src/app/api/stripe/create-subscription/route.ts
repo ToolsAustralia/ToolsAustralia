@@ -5,6 +5,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { stripe } from "@/lib/stripe";
 // Referral processing moved to webhook - no longer needed here
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import Stripe from "stripe";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -13,15 +14,22 @@ import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 import {
   attachPaymentMethodToCustomer,
 } from "@/utils/payment/stripe/payment-method-utils";
+import { createSubscriptionWithIdempotencyRetry } from "@/utils/payment/stripe/createSubscriptionWithIdempotencyRetry";
 import { ensureCustomerExists, updateCustomerPaymentMethod } from "@/utils/payment/stripe/customer-utils";
 import { getExperimentAssignmentForSubscription } from "@/utils/ab-testing/subscription-assignment";
 // Klaviyo integration handled by webhook for best practices
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
-import { checkCanCreateSubscription } from "@/utils/payment/subscription-creation-guard";
+import {
+  checkCanCreateSubscription,
+  EXISTING_SUBSCRIPTION_CODE,
+  EXISTING_SUBSCRIPTION_MESSAGE,
+} from "@/utils/payment/subscription-creation-guard";
+import { shouldWriteCanonicalStripeSubscriptionId, stripeCustomerHasManageableSubscription } from "@/services/subscription";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 // Rate limit: 20 create-subscription requests per minute per IP
 const createSubscriptionRateLimiter = createRateLimiter("create-subscription", {
@@ -49,6 +57,7 @@ const createSubscriptionSchema = z.object({
   cancelPreviousSubscriptionId: z.string().optional(), // When user switches package: cancel this incomplete subscription before creating new one (guest: must match request email)
   referralCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -97,9 +106,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
     // console.log("📋 Request body received:", { ...body, password: "[HIDDEN]" });
 
     // console.log("✅ Validating request data...");
@@ -128,6 +138,13 @@ export async function POST(request: NextRequest) {
             const requestEmail = validatedData.userEmail.toLowerCase();
             if (custEmail === requestEmail) {
               await stripe.subscriptions.cancel(validatedData.cancelPreviousSubscriptionId);
+              if (existingUser?.subscription?.pendingStripeSubscriptionId === validatedData.cancelPreviousSubscriptionId) {
+                existingUser.subscription.pendingStripeSubscriptionId = undefined;
+                existingUser.subscription.pendingStripeSubscriptionRequestId = undefined;
+                existingUser.subscription.pendingStripeSubscriptionCreatedAt = undefined;
+                existingUser.markModified("subscription");
+                await existingUser.save();
+              }
               if (correlationId) {
                 console.log("[create-subscription] cancelled previous incomplete subscription (plan switch)", {
                   correlationId,
@@ -170,6 +187,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Check if user already exists (from registration)
     // console.log("👤 Checking if user already exists...");
@@ -433,6 +453,7 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+      ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
       ...(experimentAssignment && {
         experimentId: experimentAssignment.experimentId,
         variantId: experimentAssignment.variantId,
@@ -479,14 +500,29 @@ export async function POST(request: NextRequest) {
       throw new Error("Anchor billing requires charge_automatically");
     }
 
+    const hasLiveStripeSubscription = await stripeCustomerHasManageableSubscription(customer.id);
+    if (hasLiveStripeSubscription) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: EXISTING_SUBSCRIPTION_MESSAGE,
+          code: EXISTING_SUBSCRIPTION_CODE,
+          ...(correlationId && { correlationId }),
+        },
+        { status: 409 }
+      );
+    }
+
     let subscription;
     try {
-      subscription = await stripe.subscriptions.create(
-        createPayload,
-        {
-          idempotencyKey: idempotencyKey,
-        }
-      );
+      subscription = await createSubscriptionWithIdempotencyRetry({
+        stripe,
+        payload: createPayload,
+        idempotencyKey,
+        customerId: customer.id,
+        packageId: validatedData.packageId,
+        correlationId,
+      });
 
       if (correlationId) {
         console.log("[create-subscription] subscription created", {
@@ -495,7 +531,6 @@ export async function POST(request: NextRequest) {
           subscriptionStatus: subscription.status,
         });
       }
-      // console.log(`📊 Subscription status: ${subscription.status}`);
     } catch (stripeError) {
       console.error("❌ Stripe subscription creation failed:", stripeError, correlationId ? { correlationId } : {});
       throw new Error(
@@ -557,22 +592,29 @@ export async function POST(request: NextRequest) {
       //   `🔄 Updating existing user with Stripe customer ID: ${customer.id} and subscription ID: ${subscription.id}`
       // );
 
-      // Update existing user with Stripe customer ID and subscription ID (NO payment method saved yet)
+      // Update existing user with Stripe customer ID; canonical subscription ID only when manageable (not incomplete)
+      const registeredUserSet: Record<string, unknown> = {
+        stripeCustomerId: customer.id,
+        subscription: {
+          packageId: String(membershipPackage._id), // Force string conversion
+          startDate: new Date(),
+          endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
+          isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
+          autoRenew: true,
+          status: subscription.status, // Track subscription status
+          pendingStripeSubscriptionId: subscription.id,
+          pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+          pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
+        },
+      };
+      if (shouldWriteCanonicalStripeSubscriptionId(subscription.status)) {
+        registeredUserSet.stripeSubscriptionId = subscription.id;
+      }
+
       user = await User.findByIdAndUpdate(
         registeredUser._id,
         {
-          $set: {
-            stripeCustomerId: customer.id,
-            stripeSubscriptionId: subscription.id,
-            subscription: {
-              packageId: String(membershipPackage._id), // Force string conversion
-              startDate: new Date(),
-              endDate: subscriptionEndDate, // End of current billing period (next renewal) from Stripe
-              isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
-              autoRenew: true,
-              status: subscription.status, // Track subscription status
-            },
-          },
+          $set: registeredUserSet,
           // ✅ REMOVED: $push: { savedPaymentMethods: savedPaymentMethodData }
           // Payment method will be saved by webhook after payment succeeds
         },
@@ -612,7 +654,9 @@ export async function POST(request: NextRequest) {
         mobile: cleanedMobile,
         role: "user",
         stripeCustomerId: customer.id,
-        stripeSubscriptionId: subscription.id,
+        stripeSubscriptionId: shouldWriteCanonicalStripeSubscriptionId(subscription.status)
+          ? subscription.id
+          : undefined,
         subscription: {
           packageId: String(membershipPackage._id), // Force string conversion
           startDate: new Date(),
@@ -620,7 +664,9 @@ export async function POST(request: NextRequest) {
           isActive: subscription.status === "active" || subscription.status === "trialing", // trialing = paid, access until trial_end
           autoRenew: true,
           status: subscription.status, // Track subscription status
-          pendingChange: undefined, // Initialize pendingChange field for subscription management
+          pendingStripeSubscriptionId: subscription.id,
+          pendingStripeSubscriptionRequestId: validatedData.subscriptionRequestId ?? idempotencyKey,
+          pendingStripeSubscriptionCreatedAt: new Date(subscription.created * 1000),
           lastDowngradeDate: undefined, // Initialize lastDowngradeDate field for security
         },
         oneTimePackages: [], // Initialize empty array

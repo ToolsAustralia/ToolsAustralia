@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Input from "./Input";
+import { cn } from "@/utils/cn";
 
 export interface DropdownOption {
   value: string;
@@ -55,6 +56,7 @@ const Dropdown: React.FC<DropdownProps> = ({
   compact = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
 
@@ -93,27 +95,24 @@ const Dropdown: React.FC<DropdownProps> = ({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
-  // Calculate available space and constrain dropdown height
-  useEffect(() => {
+  // Calculate available space, open direction (up/down), and constrain dropdown height
+  useLayoutEffect(() => {
     if (!isOpen || !dropdownRef.current || !optionsRef.current) return;
 
-    const calculateMaxHeight = () => {
+    const calculatePositionAndHeight = () => {
       const dropdownElement = dropdownRef.current;
       if (!dropdownElement) return;
 
       const rect = dropdownElement.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
       
-      // Find the modal container and footer to calculate available space
-      let modalContentBottom = viewportHeight;
+      let contentBottom = window.innerHeight;
+      let contentTop = 0;
       
-      // Find the modal container (look for flex container with modal structure)
       let parent = dropdownElement.parentElement;
       let modalContainer: HTMLElement | null = null;
       
       while (parent && parent !== document.body) {
         const styles = window.getComputedStyle(parent);
-        // Check if this is a flex container (modal structure)
         if (styles.display === "flex" && styles.flexDirection === "column") {
           modalContainer = parent;
           break;
@@ -121,72 +120,72 @@ const Dropdown: React.FC<DropdownProps> = ({
         parent = parent.parentElement;
       }
       
-      // If we found the modal container, look for the footer within it
+      const isInsideModal = !!modalContainer;
+      
       if (modalContainer) {
-        // Find footer - look for element with border-t (footer border) in the same container
         const footer = Array.from(modalContainer.children).find((child) => {
           const childStyles = window.getComputedStyle(child);
           return childStyles.borderTopWidth !== "0px" || 
                  child.classList.toString().includes("border-t") ||
-                 child.querySelector('button, [role="button"]'); // Has buttons (action buttons)
+                 child.querySelector('button, [role="button"]');
         }) as HTMLElement | undefined;
         
         if (footer) {
-          const footerRect = footer.getBoundingClientRect();
-          // Use footer top as the bottom boundary (with some padding)
-          modalContentBottom = footerRect.top - 10; // 10px padding above footer
+          contentBottom = footer.getBoundingClientRect().top - 10;
         } else {
-          // Fallback: use modal container bottom
-          const containerRect = modalContainer.getBoundingClientRect();
-          modalContentBottom = containerRect.bottom;
+          contentBottom = modalContainer.getBoundingClientRect().bottom;
         }
+        contentTop = modalContainer.getBoundingClientRect().top;
       }
       
-      const spaceBelow = modalContentBottom - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceBelow = contentBottom - rect.bottom - 20;
+      const spaceAbove = rect.top - contentTop - 20;
       
-      // Reserve space for padding and ensure dropdown doesn't exceed modal content or footer
-      // Use same max-height as Select (400px) for longer dropdown
-      const maxHeight = Math.min(
-        spaceBelow - 20, // 20px padding from bottom/footer
-        spaceAbove - 20, // 20px padding from top (if we need to open upward)
-        400
-      );
+      // Only open upward when NOT inside a modal (e.g. on a page). Inside modals, always open downward
+      // so the modal height/layout stays predictable and we don't draw into the header.
+      const shouldOpenUpward = !isInsideModal && spaceBelow < spaceAbove;
+      setOpenUpward(shouldOpenUpward);
+      
+      const availableSpace = shouldOpenUpward ? Math.min(spaceAbove, 400) : spaceBelow;
+      const maxHeight = Math.min(Math.max(availableSpace, 180), 400);
 
       if (optionsRef.current) {
-        optionsRef.current.style.maxHeight = `${Math.max(maxHeight, 180)}px`; // Minimum 180px
+        optionsRef.current.style.maxHeight = `${maxHeight}px`;
       }
     };
 
-    // Calculate on open
-    calculateMaxHeight();
+    calculatePositionAndHeight();
 
-    // Use a more efficient scroll handler with throttling
-    let scrollTimeout: NodeJS.Timeout;
+    // rAF-coalesced, passive, capture-phase scroll listener: capture is required so that
+    // scroll events from any nested scrollable ancestor (e.g. a modal body) reposition the dropdown.
+    let scrollRaf = 0;
     const handleScroll = () => {
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(calculateMaxHeight, 50);
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
+        calculatePositionAndHeight();
+      });
     };
-    
-    // Listen to scroll on document and modal containers
-    document.addEventListener("scroll", handleScroll, true);
-    window.addEventListener("resize", calculateMaxHeight);
 
-    // Ensure wheel events work for desktop scrolling
+    document.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    window.addEventListener("resize", calculatePositionAndHeight);
+
+    // NOTE: non-passive wheel listener — we call e.stopPropagation() so wheel-scrolling inside the
+    // open option list does not also scroll the page behind. Capture-phase intercepts the event
+    // before any ancestor handlers.
     const handleWheel = (e: WheelEvent) => {
       if (optionsRef.current && optionsRef.current.contains(e.target as Node)) {
-        // Allow scrolling within dropdown, prevent modal scroll
         e.stopPropagation();
       }
     };
-    
+
     document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
 
     return () => {
-      window.removeEventListener("resize", calculateMaxHeight);
-      document.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", calculatePositionAndHeight);
+      document.removeEventListener("scroll", handleScroll, { capture: true });
       document.removeEventListener("wheel", handleWheel, { capture: true });
-      if (scrollTimeout) clearTimeout(scrollTimeout);
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
     };
   }, [isOpen]);
 
@@ -207,12 +206,12 @@ const Dropdown: React.FC<DropdownProps> = ({
   };
 
   return (
-    <div className={`relative ${isOpen ? "z-[100]" : ""} ${className}`} ref={dropdownRef}>
+    <div className={cn("relative", isOpen ? "z-[100]" : "", className)} ref={dropdownRef}>
       {/* Label */}
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-neutral-300 mb-2">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 dark:text-red-400 ml-1">*</span>}
         </label>
       )}
 
@@ -223,7 +222,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         onKeyDown={handleKeyDown}
         disabled={disabled}
         className={`
-          w-full border rounded-lg text-left transition-all duration-200
+          w-full border rounded-xl text-left transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
           ${
             compact
@@ -232,13 +231,13 @@ const Dropdown: React.FC<DropdownProps> = ({
           }
           ${
             error
-              ? "border-red-300 bg-red-50"
+              ? "border-red-300 dark:border-red-500 bg-red-50 dark:bg-red-950/40"
               : active
-              ? "border-red-500 bg-red-50/50 shadow-md"
-              : "border-gray-300 bg-white hover:border-gray-400"
+              ? "border-red-500 dark:border-red-500 bg-red-50/80 dark:bg-red-950/40 shadow-md"
+              : "border-gray-300 dark:border-neutral-600 bg-[#ffffff] dark:!bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500 dark:hover:!bg-neutral-900"
           }
-          ${disabled ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "cursor-pointer"}
-          ${isOpen ? "ring-2 ring-red-500 border-transparent" : ""}
+          ${disabled ? "bg-gray-100 dark:!bg-neutral-900 text-gray-400 dark:text-neutral-500 cursor-not-allowed" : "cursor-pointer"}
+          ${isOpen ? "ring-2 ring-red-500 border-transparent dark:border-transparent" : ""}
         `}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -248,7 +247,7 @@ const Dropdown: React.FC<DropdownProps> = ({
         <div className="flex items-center justify-between gap-1 sm:gap-2">
           <span
             className={`truncate flex-1 flex items-center gap-1 sm:gap-1.5 ${
-              selectedOption ? "text-gray-900" : "text-gray-500"
+              selectedOption ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-neutral-400"
             }`}
           >
             {selectedOption?.icon && (
@@ -261,7 +260,7 @@ const Dropdown: React.FC<DropdownProps> = ({
             <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
           </span>
           <ChevronDown
-            className="flex-shrink-0 w-4 h-4 text-gray-400 transition-transform duration-200"
+            className="flex-shrink-0 w-4 h-4 text-gray-400 dark:text-neutral-500 transition-transform duration-200"
             style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}
           />
         </div>
@@ -273,7 +272,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           id="dropdown-options"
           ref={optionsRef}
           data-dropdown-list
-          className="absolute z-50 w-full min-w-[220px] mt-1 bg-white border border-gray-300 rounded-lg shadow-lg overflow-y-scroll overflow-x-hidden"
+          className={cn("absolute z-50 w-full min-w-[220px] isolate", openUpward ? "bottom-full mb-1" : "top-full mt-1", "bg-[#ffffff] dark:!bg-neutral-950 border border-gray-200 dark:border-neutral-600 rounded-xl shadow-lg dark:shadow-2xl dark:shadow-black/50 overflow-y-auto overflow-x-hidden")}
           style={{
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
@@ -284,7 +283,9 @@ const Dropdown: React.FC<DropdownProps> = ({
           onWheel={(e) => e.stopPropagation()}
         >
           {options.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-500 text-center">No options available</div>
+            <div className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 text-center bg-[#ffffff] dark:!bg-neutral-950">
+              No options available
+            </div>
           ) : (
             options.map((option) => {
               const IconComponent = option.icon;
@@ -300,10 +301,10 @@ const Dropdown: React.FC<DropdownProps> = ({
                     flex items-center justify-between gap-2
                     ${
                       option.disabled
-                        ? "text-gray-400 cursor-not-allowed bg-gray-50"
-                        : "text-gray-900 hover:bg-red-50 cursor-pointer"
+                        ? "text-gray-400 dark:text-neutral-500 cursor-not-allowed bg-gray-50 dark:bg-neutral-900"
+                        : "text-gray-900 dark:text-neutral-100 hover:bg-red-50 dark:hover:bg-neutral-800 cursor-pointer"
                     }
-                    ${option.value === value ? "bg-red-50 text-red-700" : ""}
+                    ${option.value === value ? "bg-red-50 dark:bg-neutral-800 text-red-700 dark:text-red-300" : ""}
                     first:rounded-t-lg last:rounded-b-lg
                   `}
                   role="option"
@@ -313,7 +314,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                     {IconComponent && <IconComponent className="w-4 h-4 flex-shrink-0" />}
                     <span className="whitespace-nowrap">{option.label}</span>
                   </span>
-                  {option.value === value && <Check className="w-4 h-4 text-red-600 flex-shrink-0" />}
+                  {option.value === value && <Check className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />}
                 </button>
               );
             })
@@ -337,7 +338,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       )}
 
       {/* Error Message */}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 };

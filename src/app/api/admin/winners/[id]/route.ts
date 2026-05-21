@@ -3,6 +3,7 @@
  *
  * GET /api/admin/winners/[id] - Get winner details
  * PATCH /api/admin/winners/[id] - Update winner testimony and selected prize
+ * DELETE /api/admin/winners/[id] - Remove a major draw winner (deletes record; draw stays completed; use Select Winner to record a new winner)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -23,6 +24,7 @@ const updateWinnerSchema = z.object({
   // Legacy field - kept for backward compatibility
   selectedPrizeSlug: z.string().optional().nullable(),
   imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+  drawResultUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
 });
 
 /**
@@ -100,6 +102,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         entryNumber: winner.entryNumber,
         selectedDate: winner.selectedDate,
         imageUrl: winner.imageUrl,
+        drawResultUrl: winner.drawResultUrl ?? null,
         testimony: winner.testimony || null,
         selectedPrize: (winner.selectedPrize || winner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
         selectedPrizeSlug: winner.selectedPrizeSlug || null, // Legacy field
@@ -189,6 +192,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       winner.imageUrl = validatedData.imageUrl && validatedData.imageUrl.trim() !== "" ? validatedData.imageUrl : undefined;
     }
 
+    if (validatedData.drawResultUrl !== undefined) {
+      winner.drawResultUrl =
+        validatedData.drawResultUrl && validatedData.drawResultUrl !== "" ? validatedData.drawResultUrl : undefined;
+    }
+
     await winner.save();
 
     // Fetch updated winner with populated data
@@ -236,6 +244,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         selectedPrize: (updatedWinner.selectedPrize || updatedWinner.selectedPrizeSlug) || null, // Prefer new field, fallback to legacy
         selectedPrizeSlug: updatedWinner.selectedPrizeSlug || null, // Legacy field
         imageUrl: updatedWinner.imageUrl ?? null,
+        drawResultUrl: updatedWinner.drawResultUrl ?? null,
       },
     });
   } catch (error) {
@@ -264,3 +273,73 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
+/**
+ * DELETE /api/admin/winners/[id]
+ * Remove major draw winner only: deletes Winner document and clears legacy fields on MajorDraw.
+ */
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id: winnerId } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(winnerId)) {
+      return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
+    }
+
+    const winner = await Winner.findById(winnerId);
+    if (!winner) {
+      return NextResponse.json({ error: "Winner not found" }, { status: 404 });
+    }
+
+    if (winner.drawType !== "major") {
+      return NextResponse.json(
+        { error: "Only major draw winners can be removed with this action" },
+        { status: 400 }
+      );
+    }
+
+    const majorDrawId = winner.drawId;
+
+    const trx = await mongoose.startSession();
+    trx.startTransaction();
+
+    try {
+      await Winner.deleteOne({ _id: winner._id }, { session: trx });
+
+      await MajorDraw.updateOne(
+        { _id: majorDrawId },
+        { $unset: { winner: 1, latestWinnerId: 1 } },
+        { session: trx }
+      );
+
+      await trx.commitTransaction();
+
+      return NextResponse.json({
+        success: true,
+        message: "Major draw winner removed. You can select a new winner from Draw Results.",
+        majorDrawId: majorDrawId.toString(),
+      });
+    } catch (err) {
+      await trx.abortTransaction();
+      throw err;
+    } finally {
+      trx.endSession();
+    }
+  } catch (error) {
+    console.error("Error removing winner:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to remove winner",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}

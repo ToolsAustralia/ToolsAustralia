@@ -26,6 +26,86 @@ interface FacebookApiError {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Meta returns 429, or 400/403 with code 4/17/32 or "Application request limit reached" in the body. */
+function isInsightsRateLimit(response: Response, errorData: FacebookApiError): boolean {
+  if (response.status === 429) return true;
+  const code = errorData.error?.code;
+  if (code === 4 || code === 17 || code === 32) return true;
+  const msg = (errorData.error?.message || "").toLowerCase();
+  return (
+    msg.includes("request limit") ||
+    msg.includes("rate limit") ||
+    msg.includes("too many calls") ||
+    msg.includes("reduce the amount")
+  );
+}
+
+const INSIGHTS_PAGE_MAX_RETRIES = 10;
+/** Small pause between pagination `next` requests to reduce burst rate-limit hits on large syncs. */
+const INSIGHTS_PAGE_DELAY_MS = 250;
+/**
+ * Meta defaults Insights GET to 25 rows/page, which is very slow for large syncs.
+ * Higher = fewer HTTP round-trips (subject to Meta caps / timeouts).
+ */
+const INSIGHTS_FETCH_PAGE_LIMIT = 500;
+
+/**
+ * GET one insights URL with retries when Meta applies app/user rate limits during pagination.
+ */
+async function fetchInsightsPageResilient(
+  url: string,
+  options?: { onRateLimitWait?: (info: { attempt: number; waitMs: number }) => void }
+): Promise<Response> {
+  let lastMessage = "";
+  for (let attempt = 0; attempt < INSIGHTS_PAGE_MAX_RETRIES; attempt++) {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (response.ok) {
+      return response;
+    }
+
+    const errorData: FacebookApiError = await response.json().catch(() => ({
+      error: {
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        type: "HTTPError",
+        code: response.status,
+      },
+    }));
+
+    if (response.status === 401) {
+      throw new Error("Facebook access token expired or invalid. Please update the token.");
+    }
+
+    lastMessage = errorData.error?.message || `Facebook API error: ${response.statusText}`;
+
+    if (isInsightsRateLimit(response, errorData)) {
+      const retryAfter = response.headers.get("Retry-After");
+      const parsedRetry = retryAfter ? parseFloat(retryAfter) * 1000 : NaN;
+      const baseWait = !Number.isNaN(parsedRetry) && parsedRetry > 0
+        ? parsedRetry
+        : Math.min(120_000, 2000 * Math.pow(2, attempt));
+      const jitter = Math.floor(Math.random() * 500);
+      const waitMs = baseWait + jitter;
+      options?.onRateLimitWait?.({ attempt: attempt + 1, waitMs });
+      await sleep(waitMs);
+      continue;
+    }
+
+    throw new Error(lastMessage);
+  }
+
+  throw new Error(
+    `${lastMessage || "Facebook API rate limit"} — gave up after ${INSIGHTS_PAGE_MAX_RETRIES} retries. Try a shorter date range or sync again in a few minutes.`
+  );
+}
+
 /**
  * Result type for Facebook insights with breakdown information
  */
@@ -156,7 +236,7 @@ export async function fetchFacebookInsights(
  * @param insight - Raw insight data from Facebook API
  * @returns Processed metrics
  */
-function processInsightData(insight: FacebookInsightData): ProcessedInsightMetrics {
+export function processInsightData(insight: FacebookInsightData): ProcessedInsightMetrics {
   // Parse spend (Facebook returns as string, in dollars)
   // We convert to cents for consistent storage (matching PaymentEvent model)
   const spend = parseFloat(insight.spend || "0") * 100; // Convert dollars to cents
@@ -268,6 +348,70 @@ export function getTodayDateRange(): { since: string; until: string } {
     since: dateStr,
     until: dateStr,
   };
+}
+
+/** Optional progress for long paginated Insights downloads (CLI / verbose sync). */
+export interface FetchFacebookAdInsightsDailyOptions {
+  /** Fires after each Insights API page (includes rate-limit retries completing a page). */
+  onPage?: (info: { page: number; rowsThisPage: number; totalRows: number }) => void;
+  /** Fires before sleeping due to Meta app/user rate limits (so long silent waits are explained). */
+  onRateLimitWait?: (info: { attempt: number; waitMs: number }) => void;
+}
+
+/**
+ * Fetch ad-level insights with one row per ad per calendar day (time_increment=1).
+ * Used for spend-by-destination-URL attribution (sync to Mongo).
+ */
+export async function fetchFacebookAdInsightsDaily(
+  adAccountId: string,
+  accessToken: string,
+  dateRange: { since: string; until: string },
+  options?: FetchFacebookAdInsightsDailyOptions
+): Promise<FacebookInsightData[]> {
+  const apiVersion = "v21.0";
+  const baseUrl = `https://graph.facebook.com/${apiVersion}/${adAccountId}/insights`;
+
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    fields:
+      "spend,impressions,clicks,actions,action_values,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,date_start,date_stop",
+    time_range: JSON.stringify({
+      since: dateRange.since,
+      until: dateRange.until,
+    }),
+    level: "ad",
+    time_increment: "1",
+    action_attribution_windows: JSON.stringify(["7d_click"]),
+    limit: String(INSIGHTS_FETCH_PAGE_LIMIT),
+  });
+
+  const url = `${baseUrl}?${params.toString()}`;
+  const allInsights: FacebookInsightData[] = [];
+  let nextUrl: string | null = url;
+  let pageIndex = 0;
+
+  while (nextUrl) {
+    if (pageIndex > 0) {
+      await sleep(INSIGHTS_PAGE_DELAY_MS);
+    }
+    const response = await fetchInsightsPageResilient(nextUrl, {
+      onRateLimitWait: options?.onRateLimitWait,
+    });
+    const data: FacebookInsightsResponse = await response.json();
+    const rowsThisPage = data.data?.length ?? 0;
+    if (data.data?.length) {
+      allInsights.push(...data.data);
+    }
+    options?.onPage?.({
+      page: pageIndex + 1,
+      rowsThisPage,
+      totalRows: allInsights.length,
+    });
+    nextUrl = data.paging?.next ?? null;
+    pageIndex++;
+  }
+
+  return allInsights;
 }
 
 /**

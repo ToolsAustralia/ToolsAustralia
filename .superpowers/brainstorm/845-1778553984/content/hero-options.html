@@ -1,0 +1,200 @@
+<h2>Hero treatment — pick the direction</h2>
+<p class="subtitle">The hero is the first 25% of the modal. It sets the tone for everything below. Three directions:</p>
+
+<style>
+  .hero-card {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    margin-bottom: 1.5rem;
+    background: #0a0a0a;
+    cursor: pointer;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .hero-card:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(238,0,0,0.18); }
+  .hero-card.selected { outline: 2px solid #d4af37; outline-offset: 2px; }
+  .hero-card .label {
+    padding: 0.5rem 0.85rem;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    font-weight: 700;
+    background: rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .hero-card .letter {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #ee0000, #b30000);
+    color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+
+  /* OPTION A — Cinematic photo hero */
+  .opt-a .visual {
+    height: 220px;
+    background:
+      linear-gradient(180deg, rgba(10,10,10,0.0) 35%, rgba(10,10,10,0.85) 75%, #0a0a0a 100%),
+      radial-gradient(800px 300px at 30% 0%, rgba(238,0,0,0.35), transparent 60%),
+      linear-gradient(135deg, #2a0a0a 0%, #1a1a1a 100%);
+      position: relative;
+      display: flex; flex-direction: column; justify-content: flex-end;
+      padding: 1rem 1.25rem;
+  }
+  .opt-a .photo-stub {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), transparent 50%),
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.6) 80%);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.18); font-size: 13px; letter-spacing: 0.18em;
+  }
+  .opt-a .eyebrow {
+    font-size: 10px; letter-spacing: 0.22em; color: #ff6b6b; text-transform: uppercase; font-weight: 800;
+    margin-bottom: 0.5rem; position: relative; z-index: 2;
+  }
+  .opt-a .title {
+    font-family: 'Georgia', serif;
+    font-size: 26px; line-height: 1.0; color: white;
+    text-transform: uppercase; font-weight: 900; letter-spacing: 0.01em;
+    position: relative; z-index: 2;
+  }
+  .opt-a .title em { color: #ff6b6b; font-style: normal; }
+  .opt-a .value-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    margin-top: 0.65rem;
+    padding: 0.3rem 0.7rem;
+    background: linear-gradient(135deg, #f4cf6b, #d4af37);
+    color: #1a1a1a; border-radius: 999px;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+    position: relative; z-index: 2;
+    border: 1.5px solid white;
+  }
+
+  /* OPTION B — Split hero */
+  .opt-b .visual {
+    display: grid; grid-template-columns: 1.2fr 1fr;
+    background: linear-gradient(180deg, #0a0a0a 0%, #141416 100%);
+    min-height: 200px;
+  }
+  .opt-b .left { padding: 1rem 1.25rem; color: white; }
+  .opt-b .eyebrow {
+    font-size: 9px; letter-spacing: 0.22em; color: #d4af37; font-weight: 800; text-transform: uppercase;
+    display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem;
+  }
+  .opt-b .eyebrow::before, .opt-b .eyebrow::after {
+    content: ''; height: 1px; background: linear-gradient(90deg, transparent, #d4af37); flex: 1;
+  }
+  .opt-b .title {
+    font-size: 22px; line-height: 1.05; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 0.005em;
+  }
+  .opt-b .sub {
+    font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 0.5rem; line-height: 1.45;
+  }
+  .opt-b .value-line {
+    display: flex; align-items: baseline; gap: 0.4rem; margin-top: 0.7rem;
+    padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .opt-b .value-num {
+    font-size: 22px; font-weight: 900; color: #d4af37; line-height: 1;
+  }
+  .opt-b .value-label {
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.55);
+  }
+  .opt-b .photo-stub {
+    background:
+      radial-gradient(circle at 50% 50%, rgba(238,0,0,0.18), transparent 60%),
+      linear-gradient(135deg, #1a1a1a, #0a0a0a);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.2); font-size: 11px; letter-spacing: 0.15em;
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* OPTION C — Editorial */
+  .opt-c .visual {
+    background:
+      radial-gradient(700px 280px at 50% -50px, rgba(238,0,0,0.28), transparent 60%),
+      radial-gradient(500px 250px at 50% 120%, rgba(212,175,55,0.16), transparent 60%),
+      linear-gradient(180deg, #0a0a0a 0%, #141416 60%, #0a0a0a 100%);
+    padding: 1rem 1.25rem;
+    text-align: center;
+    color: white;
+  }
+  .opt-c .eyebrow {
+    font-size: 10px; letter-spacing: 0.22em; color: #d4af37; font-weight: 800;
+    display: inline-flex; align-items: center; gap: 0.4rem; margin: 0 auto 0.6rem;
+  }
+  .opt-c .title {
+    font-family: 'Georgia', serif;
+    font-size: 24px; line-height: 1.0; font-weight: 900; text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+  .opt-c .title em { color: #ff6b6b; font-style: normal; }
+  .opt-c .sub {
+    font-size: 11px; color: rgba(255,255,255,0.65); max-width: 360px; margin: 0 auto 0.85rem;
+    line-height: 1.45;
+  }
+  .opt-c .highlights {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+    margin-top: 0.85rem;
+  }
+  .opt-c .h-cell {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 0.55rem 0.4rem;
+    text-align: center;
+  }
+  .opt-c .h-cell .ic { font-size: 14px; color: #ff6b6b; margin-bottom: 0.2rem; }
+  .opt-c .h-cell .t { font-size: 10px; font-weight: 800; line-height: 1.2; }
+  .opt-c .h-cell .d { font-size: 8.5px; color: rgba(255,255,255,0.55); margin-top: 0.15rem; letter-spacing: 0.04em; }
+</style>
+
+<div class="hero-card opt-a" data-choice="cinematic" onclick="toggleSelect(this)">
+  <div class="label"><span class="letter">A</span>Cinematic photo hero — prize photo dominates</div>
+  <div class="visual">
+    <div class="photo-stub">PRIZE PHOTO (full-bleed)</div>
+    <div class="eyebrow">◆ Featured prize</div>
+    <div class="title">Milwaukee Combo + <em>$5k cash</em></div>
+    <div class="value-badge">$48,000+ in tools</div>
+  </div>
+</div>
+
+<div class="hero-card opt-b" data-choice="split" onclick="toggleSelect(this)">
+  <div class="label"><span class="letter" style="background:linear-gradient(180deg,#d4af37,#a8881e);">B</span>Split hero — copy left, photo right</div>
+  <div class="visual">
+    <div class="left">
+      <div class="eyebrow">◆ Major draw prize ◆</div>
+      <div class="title">Milwaukee Combo<br/>+ Sidchrome Kit</div>
+      <div class="sub">A full-trade arsenal of 18V FUEL power tools paired with a 356-piece Sidchrome cabinet.</div>
+      <div class="value-line">
+        <span class="value-num">$48k+</span>
+        <span class="value-label">total prize value</span>
+      </div>
+    </div>
+    <div class="photo-stub">PRIZE PHOTO</div>
+  </div>
+</div>
+
+<div class="hero-card opt-c" data-choice="editorial" onclick="toggleSelect(this)">
+  <div class="label"><span class="letter" style="background:linear-gradient(180deg,#4ade80,#16a34a);">C</span>Editorial — centered text + highlights row (no photo above the fold)</div>
+  <div class="visual">
+    <div class="eyebrow">━ ◆ Featured prize ◆ ━</div>
+    <div class="title">Milwaukee Combo<br/><em>+ $5k Cash</em></div>
+    <div class="sub">18V FUEL power tools, 356-piece Sidchrome cabinet, and $5,000 cash. Everything you need for any trade.</div>
+    <div class="highlights">
+      <div class="h-cell"><div class="ic">⚡</div><div class="t">18V FUEL Brushless</div><div class="d">7 TOOLS</div></div>
+      <div class="h-cell"><div class="ic">🧰</div><div class="t">Sidchrome Cabinet</div><div class="d">356 PCS</div></div>
+      <div class="h-cell"><div class="ic">💰</div><div class="t">Plus Cash</div><div class="d">$5,000</div></div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:1.5rem;">Click the option that matches your vibe — or describe in terminal what you want to mix/match.</p>

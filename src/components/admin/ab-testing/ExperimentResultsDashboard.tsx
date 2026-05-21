@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { BarChart3, Target, Award, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { cn } from "@/utils/cn";
 
 interface ExperimentResultsDashboardProps {
   experimentId: string;
@@ -157,7 +158,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">P-Value</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-1">P-Value</p>
             <p className="text-2xl font-bold text-gray-900">
               {significance.pValue != null ? significance.pValue.toFixed(4) : "N/A"}
             </p>
@@ -171,7 +172,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Confidence Level</p>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-1">Confidence Level</p>
             <p className="text-2xl font-bold text-gray-900">
               {significance.confidence != null ? `${significance.confidence.toFixed(2)}%` : "N/A"}
             </p>
@@ -185,8 +186,8 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Lift</p>
-            <p className={`text-2xl font-bold ${significance.lift != null && significance.lift > 0 ? "text-green-600" : "text-red-600"}`}>
+            <p className="text-sm text-gray-600 dark:text-neutral-400 mb-1">Lift</p>
+            <p className={cn("text-2xl font-bold", significance.lift != null && significance.lift > 0 ? "text-green-600" : "text-red-600")}>
               {significance.lift != null
                 ? `${significance.lift > 0 ? "+" : ""}${significance.lift.toFixed(2)}%`
                 : "N/A"}
@@ -205,16 +206,16 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         {/* Confidence Intervals */}
         {significance.controlInterval && significance.variantInterval && (
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm font-medium text-gray-700 mb-2">Confidence Intervals (95%)</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-2">Confidence Intervals (95%)</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-gray-600 mb-1">Control Variant</p>
+                <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Control Variant</p>
                 <p className="text-sm text-gray-900">
                   {significance.controlInterval.lower.toFixed(2)}% - {significance.controlInterval.upper.toFixed(2)}%
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-600 mb-1">Test Variant</p>
+                <p className="text-xs text-gray-600 dark:text-neutral-400 mb-1">Test Variant</p>
                 <p className="text-sm text-gray-900">
                   {significance.variantInterval.lower.toFixed(2)}% - {significance.variantInterval.upper.toFixed(2)}%
                 </p>
@@ -238,7 +239,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-600">{winner.reason}</p>
+          <p className="text-sm text-gray-600 dark:text-neutral-400">{winner.reason}</p>
         </div>
       )}
 
@@ -252,26 +253,26 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {comparison.variants.map((variant, index) => (
             <div key={variant.variantId} className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">{variant.variantName || `Variant ${index + 1}`}</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">{variant.variantName || `Variant ${index + 1}`}</p>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Visitors:</span>
+                  <span className="text-gray-600 dark:text-neutral-400">Visitors:</span>
                   <span className="font-medium">{variant.metrics.uniqueVisitors.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Conversions:</span>
+                  <span className="text-gray-600 dark:text-neutral-400">Conversions:</span>
                   <span className="font-medium">{variant.metrics.conversions.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Conversion Rate:</span>
+                  <span className="text-gray-600 dark:text-neutral-400">Conversion Rate:</span>
                   <span className="font-medium">{variant.metrics.conversionRate.toFixed(2)}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Revenue:</span>
+                  <span className="text-gray-600 dark:text-neutral-400">Revenue:</span>
                   <span className="font-medium">${variant.metrics.revenue.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Revenue/User:</span>
+                  <span className="text-gray-600 dark:text-neutral-400">Revenue/User:</span>
                   <span className="font-medium">${variant.metrics.revenuePerUser.toFixed(2)}</span>
                 </div>
               </div>
@@ -283,7 +284,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Conversion Rate Chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Conversion Rate & CTR</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">Conversion Rate & CTR</h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={conversionRateData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -299,7 +300,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
 
           {/* Revenue Chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Revenue Metrics</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">Revenue Metrics</h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -316,7 +317,7 @@ export default function ExperimentResultsDashboard({ experimentId }: ExperimentR
 
         {/* Traffic Distribution */}
         <div className="mt-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Traffic Distribution</h4>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">Traffic Distribution</h4>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie

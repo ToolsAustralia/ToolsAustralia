@@ -10,6 +10,11 @@ import Stripe from "stripe";
 import { getValidPaymentMethod } from "@/utils/payment/stripe/stripe-helpers";
 import { getSubscriptionCreateParamsForAnchor, getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
+import {
+  analyzePaymentIntentForExcessiveRetry,
+  analyzeStripePayErrorForExcessiveRetry,
+} from "@/utils/payment/stripe/stripe-excessive-retry";
+import { resumeAfterSuccessfulRenewalPayment } from "@/services/subscription/SubscriptionCollectionPauseService";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -183,6 +188,7 @@ export async function POST(request: NextRequest) {
             success: true,
             message: `Your ${targetPackage.name} subscription is already active!`,
             data: {
+              grantEntryRewardToast: false,
               subscription: {
                 id: existingSubscription.id,
                 packageId: targetPackage._id,
@@ -232,6 +238,17 @@ export async function POST(request: NextRequest) {
           payment_method: paymentMethod.id,
         });
 
+        if (paidInvoice.status === "paid") {
+          try {
+            await resumeAfterSuccessfulRenewalPayment(existingSubscription.id);
+          } catch (resumeErr) {
+            console.error(
+              `[renew-subscription] Invoice paid but could not clear pause_collection for ${existingSubscription.id}:`,
+              resumeErr
+            );
+          }
+        }
+
         // console.log(`✅ Payment successful:`, {
         //   invoiceId: paidInvoice.id,
         //   status: paidInvoice.status,
@@ -252,6 +269,8 @@ export async function POST(request: NextRequest) {
           success: true,
           message: `Payment successful! Your ${targetPackage.name} subscription is now active.`,
           data: {
+            /** Invoice paid — webhook grants cycle entries; client may celebrate approximate monthly grant */
+            grantEntryRewardToast: true,
             subscription: {
               id: existingSubscription.id,
               packageId: targetPackage._id,
@@ -277,11 +296,27 @@ export async function POST(request: NextRequest) {
         const paymentIntent = (invoice as Stripe.Invoice & { payment_intent?: Stripe.PaymentIntent }).payment_intent;
 
         if (paymentIntent && paymentIntent.client_secret) {
+          const excessiveRetry = await analyzePaymentIntentForExcessiveRetry(stripe, paymentIntent.id);
+          if (excessiveRetry.requiresDifferentPaymentMethod) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: "Payment failed",
+                details:
+                  "This card cannot be charged right now due to repeated declines. Please use a different payment method.",
+                requiresDifferentPaymentMethod: true,
+                ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
+              },
+              { status: 400 }
+            );
+          }
+
           return NextResponse.json({
             success: false,
             requiresPaymentConfirmation: true,
             message: "Payment requires confirmation",
             data: {
+              grantEntryRewardToast: false,
               paymentIntent: {
                 id: paymentIntent.id,
                 clientSecret: paymentIntent.client_secret,
@@ -295,6 +330,21 @@ export async function POST(request: NextRequest) {
               },
             },
           });
+        }
+
+        const payErrRetry = await analyzeStripePayErrorForExcessiveRetry(stripe, paymentError);
+        if (payErrRetry.requiresDifferentPaymentMethod) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Payment failed",
+              details:
+                "This card cannot be charged right now due to repeated declines. Please use a different payment method.",
+              requiresDifferentPaymentMethod: true,
+              ...(payErrRetry.failureReason && { failureReason: payErrRetry.failureReason }),
+            },
+            { status: 400 }
+          );
         }
 
         throw paymentError;
@@ -348,6 +398,8 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Subscription reactivated! Your ${targetPackage.name} membership is now active.`,
         data: {
+          /** Uncancel only — same billing period, no new charge, no new entry grant from this action */
+          grantEntryRewardToast: false,
           subscription: {
             id: reactivatedSubscription.id,
             packageId: targetPackage._id,
@@ -389,6 +441,8 @@ export async function POST(request: NextRequest) {
       payment_settings: { save_default_payment_method: "on_subscription" },
       expand: ["latest_invoice.payment_intent"],
       collection_method: "charge_automatically",
+      // Stripe transactions tab: "Tradie Renewal" / "Foreman Renewal" / "Boss Renewal"
+      description: `${targetPackage.name} Renewal`,
       metadata: baseMetadata as Stripe.MetadataParam,
       ...restAnchorParams,
       ...(hasAnchor &&
@@ -454,6 +508,8 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Welcome back! Your ${targetPackage.name} subscription is now active.`,
         data: {
+          /** New subscription first invoice paid — entries granted via webhook */
+          grantEntryRewardToast: true,
           subscription: {
             id: newSubscription.id,
             packageId: targetPackage._id,
@@ -491,6 +547,7 @@ export async function POST(request: NextRequest) {
       requiresPaymentConfirmation: true,
       message: "Complete payment to renew your subscription",
       data: {
+        grantEntryRewardToast: false,
         paymentIntent: {
           id: paymentIntent.id,
           clientSecret: paymentIntent.client_secret,

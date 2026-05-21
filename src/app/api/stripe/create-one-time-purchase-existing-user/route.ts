@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
+import { normalizeMembershipPlanId } from "@/utils/membership/member-package-mapping";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
@@ -19,6 +20,7 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
+import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { executeBackgroundJob } from "@/utils/webhook/background-jobs";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
 import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
@@ -26,6 +28,7 @@ import VariantAssignmentService from "@/services/ab-testing/VariantAssignmentSer
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import mongoose from "mongoose";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -34,6 +37,7 @@ const createOneTimePurchaseExistingUserSchema = z.object({
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   promoLinkCode: z.string().optional(),
+  campaignCode: z.string().optional(),
   attribution: attributionSchema,
 });
 
@@ -90,9 +94,10 @@ export async function POST(request: NextRequest) {
 
     // Extract request context for Facebook CAPI (webhook will use for match quality)
     const requestContext = extractRequestContext(request);
-    const capiEventSourceUrl =
+    const capiEventSourceUrl = safeEventSourceUrl(
       request.headers.get("referer") ??
-      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined);
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
 
     // console.log(`🛒 Creating one-time purchase for existing user: ${session.user.id}`);
 
@@ -116,12 +121,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the package (check both regular membership packages and mini draw packages)
-    let membershipPackage = getPackageById(validatedData.packageId);
+    const canonicalPackageId = normalizeMembershipPlanId(validatedData.packageId);
+    let membershipPackage = getPackageById(canonicalPackageId);
+    if (!membershipPackage && validatedData.packageId !== canonicalPackageId) {
+      membershipPackage = getPackageById(validatedData.packageId);
+    }
     let isMiniDrawPackage = false;
 
     // If not found in regular packages, check mini draw packages
     if (!membershipPackage) {
-      const miniDrawPackage = getMiniDrawPackageById(validatedData.packageId);
+      const miniDrawPackage =
+        getMiniDrawPackageById(validatedData.packageId) ?? getMiniDrawPackageById(canonicalPackageId);
       if (miniDrawPackage && miniDrawPackage.isActive) {
         // Convert mini draw package to membership package format for compatibility
         membershipPackage = {
@@ -146,6 +156,11 @@ export async function POST(request: NextRequest) {
 
     if (!membershipPackage || !membershipPackage.isActive) {
       return NextResponse.json({ error: "Invalid or inactive package" }, { status: 400 });
+    }
+
+    if (!isMiniDrawPackage) {
+      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+      if (gateResponse) return gateResponse;
     }
 
     // Create or retrieve Stripe customer
@@ -393,6 +408,7 @@ export async function POST(request: NextRequest) {
           : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
+        ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
         // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,

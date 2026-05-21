@@ -4,12 +4,15 @@ import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import mongoose from "mongoose";
-// Note: Email and SMS functions need to be implemented
-// import { sendEmail } from "@/lib/email";
-// import { sendSMS } from "@/lib/sms";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import { sendCustomEmail } from "@/lib/email";
+import {
+  emailService,
+  EmailCategory,
+  escapeHtmlPreserveNewlines,
+  getPasswordResetExpiry,
+  getPasswordResetExpiryMinutes,
+} from "@/lib/email/";
 import { stripe } from "@/lib/stripe";
 
 /**
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           error: "Invalid action",
           validActions,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!newPassword || newPassword.length < 6) {
           return NextResponse.json(
             { error: "New password is required and must be at least 6 characters" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         result = await handleAdminSetPassword(user, newPassword);
@@ -121,7 +124,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             {
               error: "Note is required",
             },
-            { status: 400 }
+            { status: 400 },
           );
         }
         result = await handleAddNote(user, note, session.user.id);
@@ -140,7 +143,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           {
             error: "Unknown action",
           },
-          { status: 400 }
+          { status: 400 },
         );
     }
 
@@ -165,7 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         error: "Failed to perform action",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -176,34 +179,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleResendVerification(user: any) {
   try {
-    // Generate new verification code
     const verificationCode = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Update user with new verification code
     user.emailVerificationCode = verificationCode;
     user.emailVerificationExpires = expiresAt;
     user.emailVerificationAttempts = 0;
     await user.save();
 
-    // Send verification email
-    // TODO: Implement email sending functionality
-    // console.log(`Would send verification email to ${user.email} with code: ${verificationCode}`);
-    // await sendEmail({
-    //   to: user.email,
-    //   subject: "Verify Your Email - Tools Australia",
-    //   template: "email-verification",
-    //   data: {
-    //     firstName: user.firstName,
-    //     verificationCode,
-    //   },
-    // });
+    const emailResult = await emailService.sendVerificationEmail(user.email, {
+      userName: user.firstName,
+      verificationCode,
+    });
+
+    if (!emailResult.success) {
+      return {
+        success: false,
+        action: "resend_verification",
+        error: emailResult.error || "Failed to send verification email",
+      };
+    }
 
     return {
       success: true,
       action: "resend_verification",
       message: "Verification email sent successfully",
-      verificationCode, // Include for admin reference
+      verificationCode,
     };
   } catch (error) {
     console.error("Error sending verification email:", error);
@@ -221,35 +222,35 @@ async function handleResendVerification(user: any) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleResetPassword(user: any) {
   try {
-    // Generate password reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const expiresAt = getPasswordResetExpiry();
 
-    // Update user with reset token
     user.passwordResetToken = resetToken;
     user.passwordResetExpires = expiresAt;
     await user.save();
 
-    // Send password reset email
-    const _resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
+    const baseUrl = (process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+    const resetUrl = `${baseUrl || "https://toolsaustralia.com.au"}/reset-password?token=${resetToken}`;
 
-    // TODO: Implement email sending functionality
-    // console.log(`Would send password reset email to ${user.email} with URL: ${resetUrl}`);
-    // await sendEmail({
-    //   to: user.email,
-    //   subject: "Password Reset Request - Tools Australia",
-    //   template: "password-reset",
-    //   data: {
-    //     firstName: user.firstName,
-    //     resetUrl,
-    //   },
-    // });
+    const emailResult = await emailService.sendPasswordResetEmail(user.email, {
+      userName: user.firstName,
+      resetUrl,
+      expiryMinutes: getPasswordResetExpiryMinutes(),
+    });
+
+    if (!emailResult.success) {
+      return {
+        success: false,
+        action: "reset_password",
+        error: emailResult.error || "Failed to send password reset email",
+      };
+    }
 
     return {
       success: true,
       action: "reset_password",
       message: "Password reset email sent successfully",
-      resetToken, // Include for admin reference
+      resetToken,
     };
   } catch (error) {
     console.error("Error sending password reset email:", error);
@@ -294,11 +295,12 @@ async function handleAdminSetPassword(user: any, newPassword: string) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleSendEmail(user: any, subject: string, message: string) {
   try {
-    const emailResult = await sendCustomEmail({
+    const emailResult = await emailService.sendCustomEmail({
       to: user.email,
       subject,
-      html: `<p>${message.replace(/\n/g, "<br>")}</p>`,
+      html: `<p>${escapeHtmlPreserveNewlines(message)}</p>`,
       text: message,
+      category: EmailCategory.ADMIN_SUPPORT,
     });
 
     if (!emailResult.success) {
@@ -495,8 +497,7 @@ async function handleClearPaymentMethods(user: any) {
       } catch (stripeError) {
         // Continue even if some detachments fail (payment method might already be detached)
         failedDetachments++;
-        const errorMessage =
-          stripeError instanceof Error ? stripeError.message : "Unknown Stripe error";
+        const errorMessage = stripeError instanceof Error ? stripeError.message : "Unknown Stripe error";
         errors.push(`Failed to detach ${paymentMethod.paymentMethodId}: ${errorMessage}`);
         console.warn(`Warning: Could not detach payment method ${paymentMethod.paymentMethodId}:`, stripeError);
       }
@@ -514,7 +515,7 @@ async function handleClearPaymentMethods(user: any) {
         // Log but don't fail - customer might not exist or already have no default
         console.warn(
           `Warning: Could not clear default payment method for customer ${user.stripeCustomerId}:`,
-          stripeError
+          stripeError,
         );
       }
     }

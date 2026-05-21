@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
+import { getContactEmail } from "@/lib/email/sender-identities";
 
 export const metadata: Metadata = {
   title: "Terms and Conditions | Tools Australia",
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 
 export default async function TermsPage() {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+  const contactEmail = getContactEmail();
 
   // Get CSP nonce from request headers (set by middleware in production)
   const nonce = await getNonce();
@@ -44,6 +46,8 @@ export default async function TermsPage() {
             <div className="grid gap-2 text-gray-300 sm:grid-cols-[max-content,1fr]">
               <span className="font-semibold text-white">Name:</span>
               <span>Tools Australia Pty Ltd</span>
+              <span className="font-semibold text-white">Registered Address:</span>
+              <span>6A Aylesbury Crescent, Gladstone Park, VIC 3043</span>
               <span className="font-semibold text-white">ABN:</span>
               <span>54690397061</span>
               <span className="font-semibold text-white">ACN:</span>
@@ -64,7 +68,7 @@ export default async function TermsPage() {
                 </a>
               </span>
               <span className="font-semibold text-white">Last Updated:</span>
-              <span>25/11/2025</span>
+              <span>15/05/2026</span>
             </div>
           </section>
 
@@ -93,17 +97,17 @@ export default async function TermsPage() {
           <section id="membership-types" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
             <h2 className="text-2xl font-semibold text-white">3. Membership Types and Packages</h2>
             <p className="text-gray-300">
-              Tools Australia offers two types of packages that provide entries into trade promotions and giveaways:
+              Tools Australia offers three distinct product categories that provide entries into trade promotions and
+              giveaways:
             </p>
             <div className="space-y-4 text-gray-300">
               <div>
                 <h3 className="text-xl font-semibold text-white">a. One-Time Packages:</h3>
                 <ul className="list-inside list-disc space-y-2">
+                  <li>Single purchase providing entries into Major Giveaway Competitions only</li>
                   <li>
-                    Single purchase providing entries into both Major Giveaway Competitions and Mini Draw Competitions
-                  </li>
-                  <li>
-                    Available in five tiers: Apprentice Pack, Tradie Pack, Foreman Pack, Boss Pack, and Power Pack
+                    Available in six tiers: Apprentice Pack, Tradie Pack, Foreman Pack, Boss Pack, Power Pack, and VIP
+                    Pack
                   </li>
                   <li>Access to member discounts for specified period</li>
                   <li>Entries credited immediately upon payment</li>
@@ -115,11 +119,35 @@ export default async function TermsPage() {
                 <h3 className="text-xl font-semibold text-white">b. Membership Packages (Monthly Subscription):</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Recurring monthly billing available in three tiers: Tradie, Foreman, and Boss</li>
-                  <li>
-                    Provide monthly accumulated entries into Major Giveaway Competitions
-                  </li>
+                  <li>Provide monthly accumulated entries into Major Giveaway Competitions</li>
                   <li>Ongoing access to member discounts and benefits</li>
                   <li>&quot;Per giveaway&quot; means per calendar month</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">c. Mini Packs:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Single purchase providing entries exclusively to selected Mini Draw competitions only
+                  </li>
+                  <li>
+                    Tiers and pricing are displayed on the website at time of purchase. Customers who do not currently
+                    hold entries in the active Major Giveaway see Mini Pack 1, Mini Pack 2, and Mini Pack 3
+                  </li>
+                  <li>
+                    Customers who already hold entries in the active Major Giveaway — whether through an active
+                    Membership Package or a One-Time Package — see additional Mini Draw tiers (Tradie Pack, Foreman
+                    Pack, Boss Pack, Power Pack, and VIP Pack), each scoped to the selected Mini Draw
+                  </li>
+                  <li>Temporary access to partner discounts for specified period</li>
+                  <li>
+                    Entries credited immediately upon payment and apply only to the specific Mini Draw selected at time
+                    of purchase
+                  </li>
+                  <li>Mini Pack entries do NOT provide entries to Major Giveaway competitions</li>
+                  <li>
+                    Valid only for the specific Mini Draw competition period selected at time of purchase
+                  </li>
                 </ul>
               </div>
             </div>
@@ -128,10 +156,10 @@ export default async function TermsPage() {
               on the website at time of purchase and confirmed via email.
             </p>
             <p className="text-gray-300">
-              <strong>Important:</strong> One-Time Packages provide entries to both Major Giveaway and Mini Draw
-              competitions for the specified period. Membership Packages provide ongoing monthly entries that apply to
-              only Major Giveaway competitions. Purchase confirmations clearly specify the number of entries and
-              applicable competition periods.
+              <strong>Important:</strong> One-Time Packages provide entries to Major Giveaway competitions only. Mini
+              Packs provide entries exclusively to the specific Mini Draw competition selected at time of purchase.
+              Membership Packages provide ongoing monthly entries that apply to Major Giveaway competitions only.
+              Purchase confirmations clearly specify the number of entries and applicable competition periods.
             </p>
           </section>
 
@@ -148,9 +176,11 @@ export default async function TermsPage() {
                 notice provided to members
               </li>
               <li>
-                <strong>Billing Exception:</strong> If your billing cycle falls on the 25th, 26th, or 27th of any given
-                month, you will be charged on the 24th instead. This is to give you sufficient time to sort out your
-                payment and ensure eligibility for the upcoming monthly giveaway.
+                <strong>Billing Exception:</strong> Your initial payment is taken at the time of purchase. If your
+                recurring monthly billing date would otherwise fall on the 25th, 26th, or 27th of a month, your ongoing
+                monthly billing date will instead be set to the 24th. This adjustment applies to subsequent monthly
+                renewals only and is intended to give you sufficient time to sort out your payment and ensure
+                eligibility for the upcoming monthly giveaway.
               </li>
             </ul>
           </section>
@@ -165,26 +195,29 @@ export default async function TermsPage() {
               <div>
                 <h3 className="text-xl font-semibold text-white">5.1 Entry Allocation:</h3>
                 <ul className="list-inside list-disc space-y-2">
+                  <li>One-Time Packages: Entries for Major Giveaway competitions only for the specified period</li>
+                  <li>Membership Packages: Monthly accumulated entries apply to Major Giveaway competitions</li>
+                  <li>Additional entries may be offered via promotions, referrals, or free entry methods</li>
                   <li>
-                    One-Time Packages: Entries for both Major Giveaway and Mini Draw competitions for the specified
-                    period
-                  </li>
-                  <li>
-                    Membership Packages: Monthly accumulated entries apply to Major Giveaway competitions
-                  </li>
-                  <li>
-                    Additional entries may be offered via promotions, referrals, or free entry methods
+                    Mini Packs: Entries exclusively to the specific Mini Draw competition selected at time of purchase
+                    only
                   </li>
                 </ul>
+                <p className="mt-2">
+                  <strong>Partner Discount Hierarchy:</strong> If a user holding a Membership Package purchases a
+                  One-Time Package or Mini Pack with a higher partner discount percentage, the higher discount
+                  percentage shall apply only for the duration of the One-Time Package or Mini Pack access period, after
+                  which the discount percentage will revert to the Membership Package level.
+                </p>
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-white">5.2 Entry Limits:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
                   <li>
-                    Mini Draws have a threshold based on One-Time Package entries sold. Once the specified number of
-                    One-Time Package entries are sold, the Mini Draw closes to new One-Time Package purchases and the
-                    draw is conducted.
+                    Mini Draws have a capped entry threshold based solely on Mini Pack entries sold. Once the maximum
+                    entry threshold for a Mini Draw is reached, Mini Pack purchases for that specific Mini Draw are
+                    disabled and the draw is conducted
                   </li>
                   <li>Maximum entries per member may apply as specified in competition-specific terms.</li>
                 </ul>
@@ -248,9 +281,7 @@ export default async function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Each competition has separate terms and conditions</li>
                   <li>Review competition-specific terms in addition to these general terms</li>
-                  <li>
-                    Mini Draws have specific One-Time Package entry thresholds and closure conditions.
-                  </li>
+                  <li>Mini Draws have specific entry thresholds and closure conditions.</li>
                 </ul>
               </div>
               <div>
@@ -274,9 +305,9 @@ export default async function TermsPage() {
                   basis to ensure fairness. Members affected by such technical issues should contact{" "}
                   <a
                     className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                    href="mailto:hello@toolsaustralia.com.au"
+                    href="mailto:support@toolsaustralia.com.au"
                   >
-                    hello@toolsaustralia.com.au
+                    support@toolsaustralia.com.au
                   </a>{" "}
                   for assistance.
                 </p>
@@ -284,34 +315,30 @@ export default async function TermsPage() {
               <div>
                 <h3 className="text-xl font-semibold text-white">5.10 Entry Restoration for Re-activated Memberships:</h3>
                 <p>
-                  If a Membership Package subscription is suspended due to payment failure and subsequently re-activated
-                  within 90 days:
+                  If a Membership Package subscription is suspended due to payment failure and subsequently
+                  re-activated, monthly accumulated entries that would have been credited during the suspension period
+                  may be restored at Tools Australia&apos;s discretion. The following applies:
                 </p>
                 <ul className="list-inside list-disc space-y-2 ml-4">
-                  <li>
-                    Monthly accumulated entries that would have been credited during the suspension period may be
-                    restored at Tools Australia&apos;s discretion
-                  </li>
                   <li>Restoration is subject to verification of payment and account standing</li>
                   <li>
-                    Requests for entry restoration must be made within 7 days of re-activation via{" "}
+                    Restoration applies only to standard monthly accumulated entries for Major Giveaway competitions,
+                    and specifically excludes Mini Draw entries, promotional entries, or bonus entries
+                  </li>
+                  <li>One-Time Package and Mini Pack entries are not eligible for restoration</li>
+                  <li>
+                    To request restoration, contact{" "}
                     <a
                       className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                      href="mailto:info@toolsaustralia.com.au"
+                      href={`mailto:${contactEmail}`}
                     >
-                      info@toolsaustralia.com.au
+                      {contactEmail}
                     </a>
                   </li>
-                  <li>
-                    Restoration applies only to standard monthly accumulated entries for Major Giveaway competitions,
-                    and specifically excludes Mini Draw entries, promotional entries, or bonus entries.
-                  </li>
-                  <li>One-Time Package entries are not eligible for restoration</li>
-                  <li>Entry restoration is processed within 48 hours of approval</li>
                 </ul>
                 <p className="mt-2">
-                  Tools Australia reserves the right to decline restoration in cases of repeated payment failures (more
-                  than two suspensions within 12 months), suspected fraud, or abuse of this policy.
+                  Tools Australia reserves the right to decline restoration in cases of repeated payment failures,
+                  suspected fraud, or abuse of this policy.
                 </p>
               </div>
             </div>
@@ -325,7 +352,10 @@ export default async function TermsPage() {
                 <h3 className="text-xl font-semibold text-white">Membership Package Cancellation by You:</h3>
                 <ul className="list-inside list-disc space-y-2">
                   <li>Cancel anytime via account settings on the website</li>
-                  <li>Takes effect end of current billing period</li>
+                  <li>Takes effect at the end of the current billing period</li>
+                  <li>
+                    If your account is past due at the time of cancellation, cancellation takes effect immediately
+                  </li>
                   <li>No refunds for unused portion</li>
                   <li>Entries for current competition period remain valid</li>
                 </ul>
@@ -392,9 +422,9 @@ export default async function TermsPage() {
                 Your rights: access, correct, or request deletion via{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href="mailto:support@toolsaustralia.com.au"
                 >
-                  hello@toolsaustralia.com.au
+                  support@toolsaustralia.com.au
                 </a>
               </li>
               <li>
@@ -454,9 +484,9 @@ export default async function TermsPage() {
                 Assistance available: Gambling Help 1800 858 858 or{" "}
                 <a
                   className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                  href="mailto:hello@toolsaustralia.com.au"
+                  href="mailto:support@toolsaustralia.com.au"
                 >
-                  hello@toolsaustralia.com.au
+                  support@toolsaustralia.com.au
                 </a>{" "}
                 for self-exclusion options
               </li>
@@ -519,12 +549,13 @@ export default async function TermsPage() {
               <li>You have read and agree to these terms</li>
               <li>You meet eligibility requirements</li>
               <li>
-                You understand One-Time Packages provide entries to both Major Giveaway and Mini Draw competitions for
-                the specified period
+                You understand One-Time Packages provide entries to Major Giveaway competitions only, Mini Packs provide
+                entries to the specific Mini Draw competition purchased only, and Membership Packages provide ongoing
+                monthly entries to Major Giveaway competitions only
               </li>
               <li>
-                You understand Membership Package entries are accumulated monthly and apply exclusively to Major
-                Giveaway competitions.
+                You understand Membership Package entries are accumulated monthly and apply to Major Giveaway
+                competitions only, and specifically exclude all Mini Draw entries.
               </li>
               <li>You are responsible for maintaining accurate contact details</li>
             </ul>
@@ -532,9 +563,9 @@ export default async function TermsPage() {
               For questions:{" "}
               <a
                 className="text-red-400 underline-offset-2 hover:text-red-300 hover:underline"
-                href="mailto:hello@toolsaustralia.com.au"
+                href="mailto:support@toolsaustralia.com.au"
               >
-                hello@toolsaustralia.com.au
+                support@toolsaustralia.com.au
               </a>
             </p>
           </section>

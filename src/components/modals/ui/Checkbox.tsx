@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Check } from "lucide-react";
+import { cn } from "@/utils/cn";
 
 interface CheckboxProps {
   id?: string;
@@ -27,7 +28,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
   // Ensure checked is always a boolean to prevent controlled/uncontrolled switching
   const isChecked = Boolean(checked);
   return (
-    <div className={`flex items-start gap-2.5 sm:gap-3 ${className}`}>
+    <div className={cn("flex items-start gap-2.5 sm:gap-3", className)}>
       {/* Custom Checkbox */}
       <div className="relative flex items-center">
         <input
@@ -41,7 +42,9 @@ const Checkbox: React.FC<CheckboxProps> = ({
         />
         <div
           className={`w-4 h-4 sm:w-4 sm:h-4 lg:w-5 lg:h-5 border-2 rounded transition-all duration-200 flex items-center justify-center cursor-pointer focus-within:ring-2 focus-within:ring-red-500/20 ${
-            isChecked ? "bg-red-600 border-red-600" : "border-gray-300 hover:border-red-400"
+            isChecked
+              ? "bg-red-600 border-red-600"
+              : "border-gray-300 dark:border-neutral-600 bg-white/80 dark:bg-neutral-800/50 hover:border-red-400 dark:hover:border-neutral-500"
           } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={() =>
             !disabled &&
@@ -58,14 +61,14 @@ const Checkbox: React.FC<CheckboxProps> = ({
           {label && (
             <label
               htmlFor={id}
-              className={`font-medium text-gray-700 cursor-pointer ${className ? "" : "text-xs sm:text-sm"} ${
+              className={`font-medium text-gray-700 dark:text-neutral-300 cursor-pointer ${className ? "" : "text-xs sm:text-sm"} ${
                 disabled ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
               {label}
             </label>
           )}
-          {description && <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{description}</p>}
+          {description && <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5 sm:mt-1">{description}</p>}
         </div>
       )}
     </div>

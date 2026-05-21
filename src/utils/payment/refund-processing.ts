@@ -8,16 +8,23 @@
  * We listen to webhook events and sync our database accordingly.
  */
 
+import mongoose from "mongoose";
 import PaymentEvent, { IPaymentEvent } from "@/models/PaymentEvent";
 import User, { IUser } from "@/models/User";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
-import { removeMajorDrawEntries } from "../draws/remove-draw-entries";
-import { removeMiniDrawEntries } from "../draws/remove-draw-entries";
 import { reverseAffiliateCommissions } from "../affiliate/reverse-commission";
-import { getPackageById } from "@/data/membershipPackages";
 import { trackRefundedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import { extractOrderIdFromPaymentIntent, type PackageType } from "@/utils/integrations/klaviyo/klaviyo-order-helpers";
+import {
+  cancelQueueItem,
+  handleSubscriptionQueueUpdate,
+} from "@/utils/partner-discounts/partner-discount-queue";
+import { reverseLedgerBenefits } from "@/utils/payment/refund-ledger-reversal";
+import { isFullRefundByAmounts, sumSucceededRefundAmountCents } from "@/utils/payment/stripe-refund-amount";
+import { paymentIntentIdsOnStripeInvoice } from "@/utils/payment/stripe-invoice-payment-intents";
+
+export { paymentIntentIdsOnStripeInvoice };
 
 /**
  * Result of refund processing
@@ -33,6 +40,79 @@ export interface RefundProcessingResult {
   };
 }
 
+export interface ProcessRefundReversalOptions {
+  invoiceId?: string;
+}
+
+/**
+ * Manual replay (admin): find a `BenefitsGranted` row by `_id`, resolve the Stripe charge,
+ * and run `processRefundReversal` when Stripe shows at least one succeeded refund.
+ * Idempotent via `RefundProcessed` (safe to retry).
+ */
+export async function replayRefundReversalForBenefitsGrantedEvent(params: {
+  targetUserId: string;
+  benefitsGrantedEventId: string;
+}): Promise<RefundProcessingResult> {
+  const { targetUserId, benefitsGrantedEventId } = params;
+  await connectDB();
+
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    return { success: false, alreadyProcessed: false, error: "Invalid user id" };
+  }
+
+  const original = await PaymentEvent.findOne({
+    _id: benefitsGrantedEventId,
+    userId: new mongoose.Types.ObjectId(targetUserId),
+    eventType: "BenefitsGranted",
+  });
+
+  if (!original) {
+    return { success: false, alreadyProcessed: false, error: "BenefitsGranted event not found for this user" };
+  }
+
+  const storedPid = original.paymentIntentId;
+  let invoiceId: string | undefined;
+  let stripePaymentIntentId: string;
+
+  if (storedPid.startsWith("invoice_")) {
+    invoiceId = storedPid.slice("invoice_".length);
+    const inv = await stripe.invoices.retrieve(invoiceId, {
+      expand: ["payments.data.payment", "payment_intent"],
+    });
+    const ids = paymentIntentIdsOnStripeInvoice(inv);
+    if (!ids.length) {
+      return { success: false, alreadyProcessed: false, error: "Could not resolve payment intent from invoice" };
+    }
+    stripePaymentIntentId = ids[0];
+  } else {
+    stripePaymentIntentId = storedPid;
+  }
+
+  const pi = await stripe.paymentIntents.retrieve(stripePaymentIntentId, { expand: ["latest_charge"] });
+  const lc = pi.latest_charge;
+  if (!lc) {
+    return { success: false, alreadyProcessed: false, error: "Payment intent has no latest_charge" };
+  }
+  const chargeId = typeof lc === "string" ? lc : lc.id;
+  const charge = await stripe.charges.retrieve(chargeId, { expand: ["refunds"] });
+  const refundList = charge.refunds?.data ?? [];
+  const succeededCents = sumSucceededRefundAmountCents(refundList);
+  if (succeededCents <= 0) {
+    return {
+      success: false,
+      alreadyProcessed: false,
+      error:
+        "Stripe charge has no succeeded refunds yet — refund in Stripe Dashboard first, then retry (idempotent).",
+    };
+  }
+  const chargeAmount = charge.amount ?? 0;
+  const isFullRefund = isFullRefundByAmounts(succeededCents, chargeAmount);
+
+  return processRefundReversal(stripePaymentIntentId, targetUserId, succeededCents, isFullRefund, {
+    invoiceId,
+  });
+}
+
 /**
  * Process refund reversal for all purchase types
  *
@@ -46,6 +126,7 @@ export interface RefundProcessingResult {
  * @param userId - User ID who received the original payment
  * @param refundAmount - Amount refunded (in cents)
  * @param isFullRefund - Whether this is a full refund
+ * @param options - Optional invoiceId for subscription refunds (invoice-keyed BenefitsGranted rows)
  * @returns Processing result with success status
  */
 export async function processRefundReversal(
@@ -53,8 +134,9 @@ export async function processRefundReversal(
   userId: string,
   refundAmount: number,
   isFullRefund: boolean = true,
-  invoiceId?: string // Optional invoice ID for subscription refunds
+  options?: ProcessRefundReversalOptions
 ): Promise<RefundProcessingResult> {
+  const invoiceId = options?.invoiceId;
   // console.log(`🔄 processRefundReversal called with:`, {
   //   paymentIntentId,
   //   userId,
@@ -73,18 +155,49 @@ export async function processRefundReversal(
     };
   }
 
-  // Only process full refunds (as per requirements)
-  if (!isFullRefund) {
-    // console.log(`⚠️ Partial refund detected - skipping reversal (only full refunds are processed)`);
-    return {
-      success: false,
-      alreadyProcessed: false,
-      error: "Partial refunds are not supported - only full refunds are processed",
-    };
-  }
-
   try {
     await connectDB();
+
+    // Partial refund: record only (no benefit reversal) — unique eventType RefundPartial per payment id
+    if (!isFullRefund && refundAmount > 0) {
+      const partialPid = invoiceId ? `invoice_${invoiceId}` : paymentIntentId;
+      const partialId = `RefundPartial-${partialPid}`;
+      const existingPartial = await PaymentEvent.findById(partialId);
+      if (existingPartial) {
+        return { success: true, alreadyProcessed: true };
+      }
+      const bg = await PaymentEvent.findOne({
+        eventType: "BenefitsGranted",
+        $or: [{ paymentIntentId: partialPid }, { paymentIntentId }],
+      })
+        .select("packageType packageId packageName userId")
+        .lean();
+      try {
+        await PaymentEvent.create({
+          _id: partialId,
+          paymentIntentId: partialPid,
+          eventType: "RefundPartial",
+          userId: bg?.userId ?? new mongoose.Types.ObjectId(userId),
+          packageType: bg?.packageType ?? "one-time",
+          packageId: bg?.packageId,
+          packageName: bg?.packageName,
+          data: {
+            status: "partial-skipped",
+            refundAmount,
+            isFullRefund: false,
+          },
+          processedBy: "webhook",
+          timestamp: new Date(),
+        });
+      } catch (pe: unknown) {
+        const mongoError = pe as { code?: number; message?: string };
+        if (mongoError?.code === 11000 || mongoError?.message?.includes("duplicate")) {
+          return { success: true, alreadyProcessed: true };
+        }
+        throw pe;
+      }
+      return { success: true, alreadyProcessed: false };
+    }
     // console.log(`🔗 Database connected for refund processing: ${paymentIntentId}`);
 
     // ✅ EARLY IDEMPOTENCY CHECK: Check if refund already processed before doing any lookups
@@ -131,7 +244,7 @@ export async function processRefundReversal(
       }
     }
 
-    // Step 2: Try payment intent ID (for one-time payments)
+    // Step 2: Try payment intent ID (for one-time payments and PI-keyed records)
     if (!originalPaymentEvent) {
       attemptedLookups.push(`payment intent: ${paymentIntentId}`);
       originalPaymentEvent = await PaymentEvent.findOne({
@@ -144,31 +257,54 @@ export async function processRefundReversal(
       }
     }
 
-    // Step 3: Fallback - if payment intent starts with pi_ and not found, search user's subscription events
-    if (!originalPaymentEvent && paymentIntentId.startsWith("pi_")) {
-      // console.log(`⚠️ Not found by ID lookup, searching user's subscription PaymentEvents as fallback...`);
-      const user = await User.findById(userId);
+    // Step 3: Subscription rows use paymentIntentId invoice_in_…; if Stripe did not give us invoiceId,
+    // match this user's recent invoice-keyed BenefitsGranted to this pi_ via Stripe (bounded).
+    if (!originalPaymentEvent && paymentIntentId.startsWith("pi_") && mongoose.Types.ObjectId.isValid(userId)) {
+      attemptedLookups.push("invoice-keyed events for user vs Stripe payment_intent (fallback)");
+      const candidates = await PaymentEvent.find({
+        userId: new mongoose.Types.ObjectId(userId),
+        eventType: "BenefitsGranted",
+        paymentIntentId: { $regex: "^invoice_" },
+      })
+        .sort({ timestamp: -1 })
+        .limit(25)
+        .select("_id paymentIntentId")
+        .lean();
 
-      if (user) {
-        attemptedLookups.push(`user subscription events fallback`);
-        const subscriptionEvents = await PaymentEvent.find({
-          userId: user._id,
-          packageType: "membership",
-          eventType: "BenefitsGranted",
-        })
-          .sort({ timestamp: -1 })
-          .limit(10);
-
-        // console.log(`Found ${subscriptionEvents.length} subscription PaymentEvents for user`);
-
-        // Use the most recent subscription event as fallback
-        // Note: This is a best-effort match and may not be 100% accurate
-        if (subscriptionEvents.length > 0) {
-          // console.log(`⚠️ Using most recent subscription PaymentEvent as fallback (may not be exact match)`);
-          originalPaymentEvent = subscriptionEvents[0];
+      for (const doc of candidates) {
+        const stored = doc.paymentIntentId;
+        if (!stored?.startsWith("invoice_")) continue;
+        const invStripeId = stored.slice("invoice_".length);
+        try {
+          // Expand payments + payment_intent so the new Billing Invoice model surfaces the PI
+          // under invoice.payments.data[].payment.payment_intent (string id, no extra expand needed).
+          // Note: `latest_payment_intent` is NOT expandable on Invoice (it lives on Subscription).
+          const inv = await stripe.invoices.retrieve(invStripeId, {
+            expand: ["payments.data.payment", "payment_intent"],
+          });
+          if (paymentIntentIdsOnStripeInvoice(inv).includes(paymentIntentId)) {
+            originalPaymentEvent = await PaymentEvent.findOne({
+              _id: doc._id,
+              eventType: "BenefitsGranted",
+            });
+            if (originalPaymentEvent) {
+              console.log(
+                `✅ Refund lookup matched BenefitsGranted ${stored} to ${paymentIntentId} via Stripe invoice`
+              );
+            }
+            break;
+          }
+        } catch (invErr) {
+          console.warn(
+            `⚠️ Refund DB fallback: failed to retrieve Stripe invoice ${invStripeId}: ${invErr}`
+          );
+          continue;
         }
       }
     }
+
+    // Fail closed: do not guess "most recent membership" — wrong invoice could reverse the wrong month.
+    // Webhooks pass invoiceId from Stripe when available; fix data or reconcile manually if lookup fails.
 
     if (!originalPaymentEvent) {
       const lookupAttempts = attemptedLookups.join(", ");
@@ -272,54 +408,28 @@ export async function processRefundReversal(
       };
     }
 
-    // console.log(`🔄 Processing refund reversal:`, {
-    //   entries: originalEntries,
-    //   points: originalPoints,
-    //   packageType,
-    // });
+    const reversalIssues: Array<{ step: string; error: string }> = [];
 
-    // Process reversal based on package type
-    const isMembership = packageType === "membership";
-
-    switch (packageType) {
-      case "one-time":
-        await reverseOneTimePackage(user, originalPaymentEvent);
-        break;
-      case "membership":
-        await reverseSubscriptionPackage(user, originalPaymentEvent);
-        break;
-      case "upsell":
-        await reverseUpsellPurchase(user, originalPaymentEvent, paymentIntentId);
-        break;
-      case "mini-draw":
-        await reverseMiniDrawPackage(user, originalPaymentEvent, paymentIntentId);
-        break;
-      default:
-        console.error(`❌ Unknown package type: ${packageType}`);
-        // Remove the refund event since we failed
-        await PaymentEvent.deleteOne({ _id: refundEventId });
-        return {
-          success: false,
-          alreadyProcessed: false,
-          error: `Unknown package type: ${packageType}`,
-        };
+    try {
+      await reverseLedgerBenefits({
+        userId,
+        originalEvent: originalPaymentEvent,
+        paymentIntentId,
+        refundEventId,
+        reversalIssues,
+      });
+    } catch (ledgerErr) {
+      console.error("❌ Ledger reversal failed:", ledgerErr);
+      await PaymentEvent.deleteOne({ _id: refundEventId });
+      throw ledgerErr;
     }
 
-    // Reverse user benefits (entries and points) - common for all types EXCEPT memberships
-    // Memberships handle their own reversal in reverseSubscriptionPackage() with correct entriesToRemove calculation
-    if (!isMembership) {
-      await User.findByIdAndUpdate(
-        user._id,
-        {
-          $inc: {
-            accumulatedEntries: -originalEntries,
-            rewardsPoints: -originalPoints,
-          },
-        },
-        { new: false }
-      );
-
-      // console.log(`✅ Reversed ${originalEntries} entries and ${originalPoints} points from user`);
+    // Partner discount catalog access (queue): revoke periods tied to this payment
+    try {
+      await reversePartnerDiscountQueueOnRefund(user._id, packageType, paymentIntentId);
+    } catch (pdErr) {
+      console.error("❌ Partner discount queue reversal failed (refund):", pdErr);
+      throw pdErr;
     }
 
     // Reverse affiliate commissions (non-blocking)
@@ -355,12 +465,25 @@ export async function processRefundReversal(
         refundReason: "customer_request",
         packageType: packageType as PackageType,
       });
+
+      await new Promise((r) => setTimeout(r, 500));
+      const freshUser = await User.findById(userId);
+      if (freshUser) {
+        const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+        await ensureUserProfileSynced(freshUser as never);
+      }
     } catch (refundTrackingError) {
       // Non-blocking - log but don't fail refund processing
       console.error("❌ Klaviyo refund event tracking error (non-blocking):", refundTrackingError);
+      reversalIssues.push({
+        step: "klaviyo-sync",
+        error: refundTrackingError instanceof Error ? refundTrackingError.message : String(refundTrackingError),
+      });
+      await PaymentEvent.updateOne(
+        { _id: refundEventId },
+        { $set: { "data.reversalIssues": reversalIssues } }
+      );
     }
-
-    // console.log(`✅ Refund reversal completed successfully for payment: ${paymentIntentId}`);
 
     return {
       success: true,
@@ -386,324 +509,26 @@ export async function processRefundReversal(
 }
 
 /**
- * Reverse one-time package benefits
+ * Revoke partner discount catalog access granted with this payment.
+ * - Membership: same as subscription ended (expire membership queue rows, activate next eligible).
+ * - One-time / mini-draw / upsell: cancel the queue row keyed by Stripe payment intent (if present).
  */
-async function reverseOneTimePackage(user: IUser, originalEvent: IPaymentEvent): Promise<void> {
-  // console.log(`🔄 Reversing one-time package benefits`);
-
-  const packageId = originalEvent.packageId;
-  if (!packageId) {
-    // console.log(`⚠️ No packageId in original event, skipping package removal`);
-    return;
-  }
-
-  // Get user document with packages to find the specific package
-  const userDoc = await User.findById(user._id);
-  if (!userDoc || !userDoc.oneTimePackages) {
-    // console.log(`⚠️ User or one-time packages not found`);
-    return;
-  }
-
-  // Find the package to remove - match by packageId and purchase date closest to payment event timestamp
-  // Since one-time packages don't store paymentIntentId, we match by packageId and timestamp
-  const purchaseTimestamp = originalEvent.timestamp;
-  const packagesToMatch = userDoc.oneTimePackages.filter((pkg) => pkg.packageId === packageId && pkg.isActive);
-
-  if (packagesToMatch.length === 0) {
-    // console.log(`⚠️ No active one-time package found for packageId: ${packageId}`);
-    return;
-  }
-
-  // If multiple packages with same ID, find the one with purchase date closest to the payment event timestamp
-  const packageToRemove = packagesToMatch.reduce((closest, current) => {
-    const closestDiff = Math.abs(closest.purchaseDate.getTime() - purchaseTimestamp.getTime());
-    const currentDiff = Math.abs(current.purchaseDate.getTime() - purchaseTimestamp.getTime());
-    return currentDiff < closestDiff ? current : closest;
-  });
-
-  // Remove the specific package by matching packageId and purchaseDate (within 2 hour window)
-  // This ensures we remove the correct package even if user has multiple of the same type
-  const purchaseDate = new Date(packageToRemove.purchaseDate);
-  const dateRangeStart = new Date(purchaseDate.getTime() - 2 * 60 * 60 * 1000); // 2 hours before
-  const dateRangeEnd = new Date(purchaseDate.getTime() + 2 * 60 * 60 * 1000); // 2 hours after
-
-  await User.updateOne(
-    {
-      _id: user._id,
-      oneTimePackages: {
-        $elemMatch: {
-          packageId,
-          purchaseDate: {
-            $gte: dateRangeStart,
-            $lte: dateRangeEnd,
-          },
-        },
-      },
-    },
-    {
-      $pull: {
-        oneTimePackages: {
-          packageId,
-          purchaseDate: {
-            $gte: dateRangeStart,
-            $lte: dateRangeEnd,
-          },
-        },
-      },
-    }
-  );
-
-  // console.log(`✅ Removed one-time package from user`);
-
-  // Remove entries from Major Draw
-  const entriesToRemove = originalEvent.data.entries || 0;
-  if (entriesToRemove > 0) {
-    await removeMajorDrawEntries(user._id.toString(), entriesToRemove, "one-time-package");
-  }
-}
-
-/**
- * Reverse subscription package benefits
- */
-async function reverseSubscriptionPackage(user: IUser, originalEvent: IPaymentEvent): Promise<void> {
-  console.log(`🔄 [REFUND] Reversing subscription package benefits for user ${user.email}`);
-
-  // ✅ Identify which month is being refunded
-  const originalBillingReason = originalEvent.data.billingReason as string | undefined; // "subscription_create" or "subscription_cycle"
-  const originalInvoiceId = originalEvent.data.invoiceId as string | undefined;
-
-  console.log(`📊 [REFUND] Billing reason: ${originalBillingReason}, Invoice: ${originalInvoiceId}`);
-
-  // ✅ Calculate entries to remove based on the specific month being refunded
-  let entriesToRemove = 0;
-
-  if (originalBillingReason === "subscription_create") {
-    // Initial subscription - remove base * promo multiplier (full initial amount)
-    entriesToRemove = originalEvent.data.entries || 0;
-    console.log(`📊 [REFUND] Initial subscription refund - removing ${entriesToRemove} entries`);
-  } else if (originalBillingReason === "subscription_cycle") {
-    // Renewal - remove the exact entries granted for this invoice (from PaymentEvent)
-    // Prefer originalEvent.data.entries so we reverse exactly what was granted (handles promos correctly).
-    // Fallback to package entriesPerMonth only when data.entries is missing (e.g. legacy events).
-    const entriesFromEvent = originalEvent.data.entries ?? 0;
-    if (entriesFromEvent > 0) {
-      entriesToRemove = entriesFromEvent;
-      console.log(`📊 [REFUND] Renewal refund - removing ${entriesToRemove} entries from draw (from PaymentEvent)`);
-    } else {
-      const packageId = originalEvent.packageId || user.subscription?.packageId;
-      const membershipPackage = packageId ? getPackageById(packageId) : undefined;
-      entriesToRemove = membershipPackage?.entriesPerMonth || 0;
-      console.log(
-        `📊 [REFUND] Renewal refund - no data.entries in event, using package entriesPerMonth: ${entriesToRemove}`
-      );
-    }
-  } else {
-    // Fallback: use original event entries
-    entriesToRemove = originalEvent.data.entries || 0;
-    console.warn(`⚠️ [REFUND] Unknown billing reason, using original event entries: ${entriesToRemove}`);
-  }
-
-  // Cancel subscription in Stripe if active
-  if (user.stripeSubscriptionId) {
-    try {
-      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-      if (subscription.status === "active" || subscription.status === "trialing") {
-        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
-        console.log(`✅ [REFUND] Canceled active subscription in Stripe`);
-      }
-    } catch (stripeError) {
-      console.error(`❌ [REFUND] Error canceling subscription in Stripe:`, stripeError);
-      // Continue processing - we'll update database regardless
-    }
-  }
-
-  // Update subscription status in database
-  if (user.subscription) {
-    user.subscription.isActive = false;
-    user.subscription.autoRenew = false;
-    user.subscription.endDate = new Date();
-    user.subscription.status = "canceled";
-
-    // ✅ CRITICAL FIX: Mark subscription as modified so Mongoose detects the changes
-    user.markModified("subscription");
-  }
-
-  // ✅ Only decrement accumulated entries by the specific month's entries
-  // Use atomic $inc operation to prevent race conditions if multiple webhooks process simultaneously
-  if (entriesToRemove > 0) {
-    // Atomic operation: Use $inc to prevent race conditions
-    // This ensures that even if two webhooks process simultaneously, entries are only deducted once
-    await User.findByIdAndUpdate(
-      user._id,
-      {
-        $inc: {
-          accumulatedEntries: -entriesToRemove,
-        },
-      },
-      { new: false }
-    );
-
-    // Update lastMonthAccumulatedEntries if this was the most recent payment
-    // Reload user to get updated accumulatedEntries value after atomic operation
-    const updatedUser = await User.findById(user._id);
-    if (updatedUser?.subscription?.lastMonthAccumulatedEntries) {
-      const currentLastMonth = updatedUser.subscription.lastMonthAccumulatedEntries;
-      const newLastMonth = Math.max(0, currentLastMonth - entriesToRemove);
-      updatedUser.subscription.lastMonthAccumulatedEntries = newLastMonth;
-      await updatedUser.save();
-      console.log(`📊 [REFUND] Updated lastMonthAccumulatedEntries: ${currentLastMonth} → ${newLastMonth}`);
-    }
-
-    console.log(`📊 [REFUND] Updated accumulated entries using atomic operation: -${entriesToRemove} entries`);
-  }
-
-  // Save subscription status changes (accumulatedEntries already updated atomically above)
-  await user.save();
-
-  // ✅ Verify save worked
-  const savedUser = await User.findById(user._id);
-  console.log(
-    `✅ [REFUND] Verified - isActive: ${savedUser?.subscription?.isActive}, accumulatedEntries: ${savedUser?.accumulatedEntries}`
-  );
-
-  // Update partner discount queue (if needed)
-  // Note: This will be handled by the partner discount queue system
-  // when subscription ends, but we should mark it as canceled
-
-  // Remove entries from Major Draw (only the specific month's entries)
-  if (entriesToRemove > 0) {
-    await removeMajorDrawEntries(user._id.toString(), entriesToRemove, "membership");
-    console.log(`✅ [REFUND] Removed ${entriesToRemove} entries from Major Draw`);
-  }
-
-  console.log(`✅ [REFUND] Reversed subscription package benefits - removed ${entriesToRemove} entries`);
-}
-
-/**
- * Reverse upsell purchase benefits
- */
-async function reverseUpsellPurchase(
-  user: IUser,
-  originalEvent: IPaymentEvent,
+async function reversePartnerDiscountQueueOnRefund(
+  userId: string | mongoose.Types.ObjectId,
+  packageType: string,
   paymentIntentId: string
 ): Promise<void> {
-  // console.log(`🔄 Reversing upsell purchase benefits`);
+  const user = await User.findById(userId);
+  if (!user) return;
 
-  const offerId = originalEvent.packageId;
-  if (!offerId) {
-    // console.log(`⚠️ No offerId in original event, skipping upsell removal`);
+  if (packageType === "membership") {
+    await handleSubscriptionQueueUpdate(user as unknown as IUser, "end");
+    user.markModified("partnerDiscountQueue");
+    await user.save();
     return;
   }
 
-  // Remove from user's upsellPurchases array
-  await User.updateOne(
-    { _id: user._id },
-    {
-      $pull: {
-        upsellPurchases: {
-          offerId,
-        },
-      },
-    }
-  );
-
-  // console.log(`✅ Removed upsell purchase from user`);
-
-  // Determine which draw to remove entries from based on metadata
-  // Check if there's a miniDrawId in the original payment metadata
-  // For now, we'll check the payment intent metadata if available
-  const entriesToRemove = originalEvent.data.entries || 0;
-
-  if (entriesToRemove > 0) {
-    // Try to retrieve payment intent to check metadata
-    try {
-      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-      const miniDrawId = paymentIntent.metadata?.miniDrawId;
-
-      if (miniDrawId) {
-        // Remove from Mini Draw
-        await removeMiniDrawEntries(user._id.toString(), miniDrawId, entriesToRemove, "upsell");
-      } else {
-        // Remove from Major Draw (default)
-        await removeMajorDrawEntries(user._id.toString(), entriesToRemove, "upsell");
-      }
-    } catch (error) {
-      console.error(`❌ Error retrieving payment intent metadata:`, error);
-      // Default to Major Draw if we can't determine
-      await removeMajorDrawEntries(user._id.toString(), entriesToRemove, "upsell");
-    }
+  if (packageType === "one-time" || packageType === "mini-draw" || packageType === "upsell") {
+    await cancelQueueItem(user as unknown as IUser, paymentIntentId);
   }
-}
-
-/**
- * Reverse mini-draw package benefits
- */
-async function reverseMiniDrawPackage(
-  user: IUser,
-  originalEvent: IPaymentEvent,
-  paymentIntentId: string
-): Promise<void> {
-  // console.log(`🔄 Reversing mini-draw package benefits`);
-
-  const packageId = originalEvent.packageId;
-  if (!packageId) {
-    // console.log(`⚠️ No packageId in original event, skipping mini-draw package removal`);
-    return;
-  }
-
-  // Find the mini-draw package in user's array
-  const userDoc = await User.findById(user._id);
-  if (!userDoc || !userDoc.miniDrawPackages) {
-    // console.log(`⚠️ User or mini-draw packages not found`);
-    return;
-  }
-
-  const miniDrawPackage = userDoc.miniDrawPackages.find((pkg) => pkg.stripePaymentIntentId === paymentIntentId);
-
-  if (!miniDrawPackage) {
-    // console.log(`⚠️ Mini-draw package not found for payment intent: ${paymentIntentId}`);
-    return;
-  }
-
-  // Get miniDrawId from the package
-  const miniDrawId = miniDrawPackage.miniDrawId;
-  if (!miniDrawId) {
-    // console.log(`⚠️ No miniDrawId in package, skipping mini-draw entry removal`);
-  } else {
-    // Remove entries from Mini Draw
-    const entriesToRemove = originalEvent.data.entries || 0;
-    if (entriesToRemove > 0) {
-      await removeMiniDrawEntries(user._id.toString(), miniDrawId.toString(), entriesToRemove, "mini-draw-package");
-    }
-  }
-
-  // Remove package from user's miniDrawPackages array
-  await User.updateOne(
-    { _id: user._id },
-    {
-      $pull: {
-        miniDrawPackages: {
-          stripePaymentIntentId: paymentIntentId,
-        },
-      },
-    }
-  );
-
-  // Update mini draw participation tracking
-  if (miniDrawId) {
-    await User.updateOne(
-      {
-        _id: user._id,
-        "miniDrawParticipation.miniDrawId": miniDrawId,
-      },
-      {
-        $inc: {
-          "miniDrawParticipation.$.totalEntries": -(originalEvent.data.entries || 0),
-          "miniDrawParticipation.$.entriesBySource.mini-draw-package": -(originalEvent.data.entries || 0),
-        },
-      }
-    );
-  }
-
-  // console.log(`✅ Removed mini-draw package and reversed entries`);
 }

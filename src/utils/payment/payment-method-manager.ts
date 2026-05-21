@@ -244,6 +244,178 @@ export async function removePaymentMethodFromUser(
   }
 }
 
+/** Resolves the subscription's default payment method id from Stripe (source of truth for billing). */
+export async function getStripeSubscriptionDefaultPaymentMethodId(
+  stripeSubscriptionId: string | undefined
+): Promise<string | null> {
+  if (!stripeSubscriptionId) {
+    return null;
+  }
+  try {
+    const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+      expand: ["default_payment_method"],
+    });
+    const dpm = sub.default_payment_method;
+    return typeof dpm === "string"
+      ? dpm
+      : dpm && typeof dpm === "object" && "id" in dpm
+        ? (dpm as { id: string }).id
+        : null;
+  } catch (e) {
+    console.error("getStripeSubscriptionDefaultPaymentMethodId:", e);
+    return null;
+  }
+}
+
+export type DetachPaymentMethodResult =
+  | { success: true; user: IUser }
+  | {
+      success: false;
+      user: IUser;
+      error: string;
+      code?: "REQUIRES_BILLING_RISK_CONFIRMATION";
+    };
+
+/**
+ * Detaches a payment method in Stripe and removes it from the user record,
+ * keeping subscription and customer default_payment_method consistent when possible.
+ */
+export async function detachAndRemoveSavedPaymentMethod(
+  user: IUser,
+  paymentMethodId: string,
+  options: { confirmBillingRisk?: boolean } = {}
+): Promise<DetachPaymentMethodResult> {
+  const freshUser = await User.findById(user._id);
+  if (!freshUser) {
+    return { success: false, user, error: "User not found" };
+  }
+  user = freshUser;
+
+  if (!user.savedPaymentMethods?.length) {
+    return { success: true, user };
+  }
+
+  const paymentMethodIndex = user.savedPaymentMethods.findIndex(
+    (pm) => pm.paymentMethodId === paymentMethodId
+  );
+  if (paymentMethodIndex === -1) {
+    return { success: true, user };
+  }
+
+  const remainingAfter = user.savedPaymentMethods.filter((pm) => pm.paymentMethodId !== paymentMethodId);
+
+  const hasActiveSubscription =
+    Boolean(user.subscription?.isActive) && Boolean(user.stripeSubscriptionId);
+
+  const subscriptionDefaultPmId = await getStripeSubscriptionDefaultPaymentMethodId(user.stripeSubscriptionId);
+
+  const isBillingPaymentMethod = subscriptionDefaultPmId === paymentMethodId;
+
+  if (
+    hasActiveSubscription &&
+    isBillingPaymentMethod &&
+    remainingAfter.length === 0 &&
+    !options.confirmBillingRisk
+  ) {
+    return {
+      success: false,
+      user,
+      error:
+        "Removing your only payment method will stop automatic subscription renewals until you add a new card. Confirm to continue, or add another payment method first.",
+      code: "REQUIRES_BILLING_RISK_CONFIRMATION",
+    };
+  }
+
+  try {
+    if (hasActiveSubscription && isBillingPaymentMethod && remainingAfter.length > 0) {
+      const replacementPm = remainingAfter.find((pm) => pm.isDefault) ?? remainingAfter[0];
+      const replacementId = replacementPm.paymentMethodId;
+
+      await stripe.subscriptions.update(user.stripeSubscriptionId!, {
+        default_payment_method: replacementId,
+      });
+      if (user.stripeCustomerId) {
+        await stripe.customers.update(user.stripeCustomerId, {
+          invoice_settings: {
+            default_payment_method: replacementId,
+          },
+        });
+      }
+      user.savedPaymentMethods.forEach((pm) => {
+        pm.isDefault = pm.paymentMethodId === replacementId;
+      });
+    } else if (
+      hasActiveSubscription &&
+      isBillingPaymentMethod &&
+      remainingAfter.length === 0 &&
+      options.confirmBillingRisk
+    ) {
+      try {
+        await stripe.subscriptions.update(user.stripeSubscriptionId!, {
+          default_payment_method: "",
+        });
+      } catch (clearSubErr) {
+        console.warn("detachAndRemoveSavedPaymentMethod: could not clear subscription default PM", clearSubErr);
+      }
+      if (user.stripeCustomerId) {
+        try {
+          await stripe.customers.update(user.stripeCustomerId, {
+            invoice_settings: {
+              default_payment_method: undefined,
+            },
+          });
+        } catch (clearCustErr) {
+          console.warn("detachAndRemoveSavedPaymentMethod: could not clear customer default PM", clearCustErr);
+        }
+      }
+    }
+
+    try {
+      await stripe.paymentMethods.detach(paymentMethodId);
+    } catch (detachErr) {
+      console.warn("detachAndRemoveSavedPaymentMethod: detach warning", detachErr);
+    }
+
+    user.savedPaymentMethods.splice(paymentMethodIndex, 1);
+
+    if (user.savedPaymentMethods.length > 0) {
+      if (!user.savedPaymentMethods.some((pm) => pm.isDefault)) {
+        user.savedPaymentMethods.forEach((pm) => {
+          pm.isDefault = false;
+        });
+        user.savedPaymentMethods[0].isDefault = true;
+      }
+      const defaultPm = user.savedPaymentMethods.find((pm) => pm.isDefault);
+      if (defaultPm && user.stripeCustomerId) {
+        if (!(hasActiveSubscription && isBillingPaymentMethod && remainingAfter.length > 0)) {
+          await setDefaultPaymentMethod(user.stripeCustomerId, defaultPm.paymentMethodId);
+        }
+      }
+    } else if (user.stripeCustomerId) {
+      try {
+        await stripe.customers.update(user.stripeCustomerId, {
+          invoice_settings: {
+            default_payment_method: undefined,
+          },
+        });
+      } catch (e) {
+        console.error("Error clearing customer default payment method:", e);
+      }
+    }
+
+    await user.save();
+
+    return { success: true, user };
+  } catch (error) {
+    console.error("detachAndRemoveSavedPaymentMethod:", error);
+    return {
+      success: false,
+      user,
+      error: error instanceof Error ? error.message : "Failed to remove payment method",
+    };
+  }
+}
+
 /**
  * Ensures a payment method is attached to a Stripe customer
  * 

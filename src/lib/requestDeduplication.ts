@@ -4,7 +4,7 @@
  * This file provides utilities to prevent duplicate API requests and improve caching efficiency.
  */
 
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, keepPreviousData } from "@tanstack/react-query";
 
 // Track ongoing requests to prevent duplicates
 const ongoingRequests = new Map<string, Promise<unknown>>();
@@ -104,6 +104,7 @@ export const paymentMethodQueryOptions = {
   refetchOnReconnect: true,
   retry: 1,
   retryDelay: 2000, // 2 second delay
+  placeholderData: keepPreviousData,
 };
 
 /**

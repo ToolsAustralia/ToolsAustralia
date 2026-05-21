@@ -10,8 +10,12 @@
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { apiPost, apiPatch } from "@/lib/queries";
 import { queryKeys } from "@/lib/queryKeys";
+import { getPackageById } from "@/data/membershipPackages";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
 
 // ====================================
 // Types
@@ -73,6 +77,8 @@ export interface RenewSubscriptionResponse {
   requiresSetupIntent?: boolean;
   message: string;
   data?: {
+    /** When true, client may show monthly-entry celebration (invoice paid / new cycle). Never for reactivate-only. */
+    grantEntryRewardToast?: boolean;
     paymentIntent?: {
       id: string;
       clientSecret: string;
@@ -164,10 +170,19 @@ export interface UpdateSubscriptionPaymentMethodResponse {
   };
 }
 
+export type PayFailedInvoiceFailureCode = "invoice_not_payable" | "payment_intent_not_payable";
+
 export interface PayFailedInvoiceResponse {
   success: boolean;
   requiresPaymentConfirmation?: boolean;
-  message: string;
+  /** Customer has no default PM (e.g. cards removed); client should collect a card then retry pay-failed-invoice */
+  requiresNewCardPreflight?: boolean;
+  message?: string;
+  error?: string;
+  details?: string;
+  requiresDifferentPaymentMethod?: boolean;
+  failureReason?: "stripe_excessive_retry";
+  failureCode?: PayFailedInvoiceFailureCode;
   data?: {
     invoiceId?: string;
     status?: string;
@@ -192,6 +207,9 @@ export interface PayFailedInvoiceResponse {
  */
 export const useUpgradeSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   return useMutation({
     mutationFn: async ({ newPackageId, paymentMethodId }: UpgradeSubscriptionData) => {
@@ -201,11 +219,30 @@ export const useUpgradeSubscription = () => {
       });
       return response;
     },
-    onSuccess: (_data) => {
-      // Invalidate user and membership queries to reflect new subscription
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.memberships.packages });
-      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
+      if (userId) {
+        invalidatePurchaseCaches(userId);
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
+
+        // The upgrade-payment route writes `isActive: true` synchronously,
+        // but the new entries grant happens via the `invoice.payment_succeeded`
+        // webhook — now async, landing 5–15s after the API returns. Without
+        // these deferred passes the immediate invalidations above refetch
+        // stale data (pre-grant entry count) and the user sees the correct
+        // entries only on the next manual refresh.
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account(userId) });
+          queryClient.refetchQueries({ queryKey: queryKeys.users.detail(userId) });
+        }, 3000);
+        setTimeout(() => {
+          queryClient.refetchQueries({ queryKey: queryKeys.users.account(userId) });
+          queryClient.refetchQueries({ queryKey: queryKeys.users.detail(userId) });
+        }, 8000);
+      }
+
     },
   });
 };
@@ -219,6 +256,10 @@ export const useUpgradeSubscription = () => {
  */
 export const useRenewSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
+  const showEntryReward = useEntryRewardToast();
 
   return useMutation({
     mutationFn: async ({ packageId, paymentMethodId }: RenewSubscriptionData) => {
@@ -229,13 +270,33 @@ export const useRenewSubscription = () => {
       return response;
     },
     onSuccess: (data) => {
-      // Invalidate user and membership queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
       queryClient.invalidateQueries({ queryKey: queryKeys.memberships.packages });
+      if (userId) {
+        invalidatePurchaseCaches(userId);
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+      }
 
-      // If payment was successful immediately, invalidate payment methods too
-      if (data.success && !data.requiresPaymentConfirmation) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
+      if (data.success && !data.requiresPaymentConfirmation && userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
+      }
+
+      const resolvedPackageId = data.data?.subscription?.packageId;
+      if (
+        data.success &&
+        !data.requiresPaymentConfirmation &&
+        data.data?.grantEntryRewardToast === true &&
+        resolvedPackageId
+      ) {
+        const pkg = getPackageById(resolvedPackageId);
+        const monthly = pkg?.entriesPerMonth ?? 0;
+        if (monthly > 0) {
+          showEntryReward({
+            entries: monthly,
+            drawType: "major",
+            source: "useRenewSubscription",
+          });
+        }
       }
     },
   });
@@ -247,6 +308,8 @@ export const useRenewSubscription = () => {
  */
 export const useDowngradeSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({ newPackageId }: DowngradeSubscriptionData) => {
@@ -256,8 +319,9 @@ export const useDowngradeSubscription = () => {
       return response;
     },
     onSuccess: () => {
-      // Invalidate user query to show pending downgrade
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
     },
   });
 };
@@ -268,6 +332,9 @@ export const useDowngradeSubscription = () => {
  */
 export const useCancelSubscription = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   return useMutation({
     mutationFn: async ({ cancelAtPeriodEnd = true }: CancelSubscriptionData) => {
@@ -277,8 +344,10 @@ export const useCancelSubscription = () => {
       return response;
     },
     onSuccess: () => {
-      // Invalidate user query to reflect cancellation
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+      if (!userId) return;
+      invalidatePurchaseCaches(userId);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
     },
   });
 };
@@ -289,6 +358,8 @@ export const useCancelSubscription = () => {
  */
 export const useUpdateAutoRenew = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async ({ autoRenew }: UpdateAutoRenewData) => {
@@ -298,14 +369,12 @@ export const useUpdateAutoRenew = () => {
       return response;
     },
     onMutate: async ({ autoRenew }) => {
-      // Cancel outgoing refetches
-      const userQueryKey = queryKeys.users.detail("current");
+      if (!userId) return { previousUser: undefined };
+      const userQueryKey = queryKeys.users.detail(userId);
       await queryClient.cancelQueries({ queryKey: userQueryKey });
 
-      // Snapshot previous value
       const previousUser = queryClient.getQueryData(userQueryKey);
 
-      // Optimistically update
       queryClient.setQueryData(userQueryKey, (old: unknown) => {
         if (!old) return old;
         const userData = old as { subscription?: { autoRenew?: boolean } };
@@ -321,14 +390,14 @@ export const useUpdateAutoRenew = () => {
       return { previousUser };
     },
     onError: (err, variables, context) => {
-      // Rollback on error
-      if (context?.previousUser) {
-        queryClient.setQueryData(queryKeys.users.detail("current"), context.previousUser);
+      if (userId && context?.previousUser) {
+        queryClient.setQueryData(queryKeys.users.detail(userId), context.previousUser);
       }
     },
     onSettled: () => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+      }
     },
   });
 };
@@ -339,6 +408,8 @@ export const useUpdateAutoRenew = () => {
  */
 export const useUpdateSubscriptionPaymentMethod = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async (paymentMethodId: string) => {
@@ -351,10 +422,10 @@ export const useUpdateSubscriptionPaymentMethod = () => {
       return response;
     },
     onSuccess: () => {
-      // Invalidate user and payment method queries to reflect changes
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
     },
   });
 };
@@ -366,6 +437,8 @@ export const useUpdateSubscriptionPaymentMethod = () => {
  */
 export const usePayFailedInvoice = () => {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const userId = session?.user?.id ?? "";
 
   return useMutation({
     mutationFn: async () => {
@@ -373,10 +446,10 @@ export const usePayFailedInvoice = () => {
       return response;
     },
     onSuccess: () => {
-      // Invalidate user queries to reflect subscription status changes
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail("current") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current") });
-      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all("current-user") });
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.paymentMethods.all(userId) });
     },
   });
 };

@@ -1,31 +1,42 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 // Individual modal stores removed - using unified modal priority system
 import { useUserContext } from "@/contexts/UserContext";
 
-// Import modal components
-import UserSetupModal from "./UserSetupModal";
-import UpsellModal from "./UpsellModal";
-import SpecialPackagesModal from "./SpecialPackagesModal";
-import PixelConsentModal from "./PixelConsentModal";
-import GateClosedModal from "./GateClosedModal";
-import SubscriptionExplainerModal from "./SubscriptionExplainerModal";
+// Modal components are lazy-loaded — they are large (Stripe/forms) and only
+// one is rendered at a time, so we avoid shipping their JS until the priority
+// store actually flips `activeModal` to that branch.
+const UserSetupModal = dynamic(() => import("./UserSetupModal"), { ssr: false });
+const UpsellModal = dynamic(() => import("./UpsellModal"), { ssr: false });
+const SpecialPackagesModal = dynamic(() => import("./SpecialPackagesModal"), { ssr: false });
+const PixelConsentModal = dynamic(() => import("./PixelConsentModal"), { ssr: false });
+const GateClosedModal = dynamic(() => import("./GateClosedModal"), { ssr: false });
+const SubscriptionExplainerModal = dynamic(() => import("./SubscriptionExplainerModal"), {
+  ssr: false,
+});
+const RenewalFailedModal = dynamic(() => import("./RenewalFailedModal"), { ssr: false });
 import { markExplainerSeen } from "@/utils/subscription-explainer-storage";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
+import { hasFailedRenewal } from "@/utils/subscription/subscription-helpers";
+import type { IUser } from "@/models/User";
 
 // Import data
 import { getMemberOnlyPackages } from "@/data/membershipPackages";
+import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 /**
  * Unified Modal Manager
  *
  * This component manages all modals with proper priority handling:
  * 1. Upsell (highest priority, triggered after purchase)
- * 2. User Setup (second priority, once per session)
- * 3. Special Packages (lower priority, once per session)
- * 4. Pixel Consent (lowest priority)
+ * 2. Failed renewal (high priority, dashboard routes)
+ * 3. User Setup (second priority, once per session)
+ * 4. Special Packages / subscription explainer (lower)
+ * 5. Pixel Consent (lowest priority)
  *
  * Features:
  * - Prevents modal conflicts
@@ -36,6 +47,11 @@ import { getMemberOnlyPackages } from "@/data/membershipPackages";
 const UnifiedModalManager: React.FC = () => {
   const { activeModal, activeModalData, closeModal, markModalShown, requestModal } = useModalPriorityStore();
   const { isAuthenticated, userData, loading } = useUserContext();
+  const pathname = usePathname();
+  const renewalFailedRequestedRef = useRef(false);
+  const { data: currentMajorDraw } = useCurrentMajorDraw();
+  const { data: nextDraw } = useNextDraw();
+  const interceptedSpecialPackagesRef = useRef(false);
 
   // Modal store states
   // Modal states are now managed by the priority system
@@ -44,6 +60,7 @@ const UnifiedModalManager: React.FC = () => {
   const isSpecialPackagesOpen = activeModal === "special-packages";
   const isGateClosedOpen = activeModal === "gate-closed";
   const isSubscriptionExplainerOpen = activeModal === "subscription-explainer";
+  const isRenewalFailedOpen = activeModal === "renewal-failed";
 
   // Get exclusive member-only packages for SpecialPackagesModal
   const specialPackages = useMemo(() => {
@@ -60,6 +77,43 @@ const UnifiedModalManager: React.FC = () => {
   }, []);
 
   /**
+   * Auto-open renewal failed modal when user is on dashboard routes with past_due subscription.
+   * Renders via this manager's renewal-failed branch (store alone is not enough).
+   */
+  useEffect(() => {
+    if (loading || !isAuthenticated || !userData) return;
+    const path = pathname ?? "";
+    if (!path.startsWith("/my-account")) return;
+
+    if (!hasFailedRenewal(userData as unknown as IUser)) {
+      renewalFailedRequestedRef.current = false;
+      return;
+    }
+    if (renewalFailedRequestedRef.current) return;
+    renewalFailedRequestedRef.current = true;
+    requestModal("renewal-failed", true);
+  }, [isAuthenticated, userData, loading, pathname, requestModal]);
+
+  useEffect(() => {
+    if (activeModal !== "special-packages") {
+      if (activeModal !== "gate-closed") {
+        interceptedSpecialPackagesRef.current = false;
+      }
+      return;
+    }
+    if (currentMajorDraw?.status === "active") {
+      interceptedSpecialPackagesRef.current = false;
+      return;
+    }
+    if (interceptedSpecialPackagesRef.current) return;
+    interceptedSpecialPackagesRef.current = true;
+    requestModal("gate-closed", true, {
+      nextActivationDate: nextDraw?.activationDate ?? null,
+      nextDrawName: nextDraw?.name,
+    });
+  }, [activeModal, currentMajorDraw?.status, nextDraw?.activationDate, nextDraw?.name, requestModal]);
+
+  /**
    * Handle modal close with proper cleanup and queue progression
    */
   const handleModalClose = (
@@ -70,11 +124,12 @@ const UnifiedModalManager: React.FC = () => {
       | "pixel-consent"
       | "gate-closed"
       | "subscription-explainer"
+      | "renewal-failed"
   ) => {
     if (modalType === "subscription-explainer") {
       const data = activeModalData as { userId?: string } | null;
       if (data?.userId) markExplainerSeen(data.userId);
-    } else {
+    } else if (modalType !== "renewal-failed") {
       markModalShown(modalType);
     }
     closeModal();
@@ -141,11 +196,13 @@ const UnifiedModalManager: React.FC = () => {
         );
 
       case "special-packages":
+        const specialPackagesData = activeModalData as { initialCouponCode?: string } | null;
         return (
           <SpecialPackagesModal
             isOpen={isSpecialPackagesOpen}
             onClose={() => handleModalClose("special-packages")}
             packages={specialPackages}
+            initialCouponCode={specialPackagesData?.initialCouponCode}
             onPackageSelect={(_pkg) => {
               // Handle package selection - this would typically trigger purchase flow
               // console.log("Special package selected:", pkg);
@@ -200,6 +257,14 @@ const UnifiedModalManager: React.FC = () => {
             packageName={explainerData.packageName}
             lastMonthAccumulatedEntries={explainerData.lastMonthAccumulatedEntries ?? 0}
             selectedPackageId={explainerData.selectedPackageId}
+          />
+        );
+
+      case "renewal-failed":
+        return (
+          <RenewalFailedModal
+            isOpen={isRenewalFailedOpen}
+            onClose={() => handleModalClose("renewal-failed")}
           />
         );
 

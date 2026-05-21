@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Search,
@@ -29,6 +29,8 @@ import {
   ChevronUp,
   ChevronDown,
   Download,
+  MapPin,
+  BarChart3,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -41,10 +43,136 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { UserMetricsView } from "./metrics/UserMetricsView";
 import { membershipPackages } from "@/data/membershipPackages";
-import { getPackageIconByName } from "@/utils/images/package-icons";
+import { getPackageIconByName, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 import { getPackageColorScheme, getGradientColor } from "@/features/admin/users/utils/userHelpers";
-import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.png";
+import { formatDisplayName } from "@/utils/display-name";
+import defaultLogo from "../../../public/images/Tools Australia Logo/Social Media Profile_Black Background.webp";
 import Dropdown from "@/components/modals/ui/Dropdown";
+import Checkbox from "@/components/modals/ui/Checkbox";
+import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { renderAdminSubscriptionBadge } from "@/components/admin/ui/AdminBadge";
+import { cn } from "@/utils/cn";
+
+function AdminStatesMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[] | undefined;
+  onChange: (codes: string[] | undefined) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const codes = selected ?? [];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const toggleCode = (code: string) => {
+    const set = new Set(codes);
+    if (set.has(code)) set.delete(code);
+    else set.add(code);
+    const next = Array.from(set).sort();
+    onChange(next.length ? next : undefined);
+  };
+
+  const active = codes.length > 0;
+  const summary =
+    codes.length === 0 ? "State" : codes.length === 1 ? codes[0]! : `${codes.length} states`;
+
+  return (
+    <div
+      className={cn("relative w-full min-w-[220px]", open ? "z-[100]" : "")}
+      ref={ref}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={active ? codes.join(", ") : "Filter by state / territory"}
+        className={`
+          w-full min-w-[220px] border rounded-xl text-left transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
+          px-3 py-2 sm:px-4 sm:text-sm text-sm
+          ${
+            active
+              ? "border-red-500 dark:border-red-500 bg-red-50/80 dark:bg-red-950/40 shadow-md"
+              : "border-gray-300 dark:border-neutral-600 bg-[#ffffff] dark:!bg-neutral-900 hover:border-gray-400 dark:hover:border-neutral-500"
+          }
+          ${open ? "ring-2 ring-red-500 border-transparent dark:border-transparent" : ""}
+        `}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={`flex min-w-0 flex-1 items-center gap-2 ${
+              active ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-neutral-400"
+            }`}
+          >
+            <MapPin className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-neutral-400" />
+            <span className="truncate whitespace-nowrap">{summary}</span>
+          </span>
+          <ChevronDown
+            className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-neutral-500 transition-transform duration-200"
+            style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          />
+        </div>
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-[100] mt-1 w-full min-w-[220px] max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-gray-200 bg-[#ffffff] shadow-lg dark:border-neutral-600 dark:!bg-neutral-950 dark:shadow-2xl dark:shadow-black/50"
+          role="listbox"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {codes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(undefined);
+                setOpen(false);
+              }}
+              className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
+            >
+              Clear states
+            </button>
+          )}
+          {AUSTRALIAN_STATES.map((s) => {
+            const checked = codes.includes(s.code);
+            const id = `admin-users-filter-state-${s.code}`;
+            return (
+              <div
+                key={s.code}
+                className="transition-colors hover:bg-red-50 dark:hover:bg-neutral-800"
+              >
+                <Checkbox
+                  id={id}
+                  checked={checked}
+                  onChange={() => toggleCode(s.code)}
+                  label={`${s.code} · ${s.name}`}
+                  className="!m-0 w-full !items-center px-4 py-3 !gap-3 !text-sm text-gray-900 dark:text-neutral-100 [&_label]:cursor-pointer [&_label]:whitespace-nowrap [&_label]:font-normal"
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * World-class Users Management component
@@ -64,6 +192,8 @@ export default function UsersManagement() {
     autoRenew: undefined,
     membershipPackage: undefined,
     role: undefined,
+    states: undefined,
+    inActiveMajorDraw: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
@@ -168,6 +298,8 @@ export default function UsersManagement() {
       autoRenew: undefined,
       membershipPackage: undefined,
       role: undefined,
+      states: undefined,
+      inActiveMajorDraw: undefined,
       sortBy: "createdAt",
       sortOrder: "desc",
     });
@@ -180,7 +312,9 @@ export default function UsersManagement() {
       filters.subscriptionStatus ||
       filters.autoRenew ||
       filters.membershipPackage ||
-      filters.role
+      filters.role ||
+      (filters.states?.length ?? 0) > 0 ||
+      filters.inActiveMajorDraw
     );
   }, [filters]);
 
@@ -215,9 +349,9 @@ export default function UsersManagement() {
       return null;
     }
     return filters.sortOrder === "asc" ? (
-      <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+      <ArrowUp className="w-3 h-3 sm:w-4 sm:h-4 text-red-600 dark:text-red-400 shrink-0" />
     ) : (
-      <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+      <ArrowDown className="w-3 h-3 sm:w-4 sm:h-4 text-red-600 dark:text-red-400 shrink-0" />
     );
   };
 
@@ -250,78 +384,38 @@ export default function UsersManagement() {
     return getPackageIconByName(packageName, "subscription") || getPackageIconByName(packageName, "one-time");
   };
 
-  // Get subscription status badge
-  const getSubscriptionBadge = (user: AdminUserListItem) => {
-    if (!user.subscription) {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-          No Subscription
-        </span>
-      );
-    }
-
-    // Check if status is incomplete or cancelled - show "No Subscription"
-    const status = user.subscription.status?.toLowerCase();
-    if (status === "incomplete" || status === "cancelled" || status === "canceled") {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-          No Subscription
-        </span>
-      );
-    }
-
-    if (user.subscription.isActive) {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
-          Active
-        </span>
-      );
-    }
-
-    // Check for past_due status
-    if (status === "past_due") {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
-          Past Due
-        </span>
-      );
-    }
-
-    return (
-      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-        Inactive
-      </span>
-    );
-  };
-
-  // Get user status badge
-  const getUserStatusBadge = (user: AdminUserListItem) => {
-    if (user.isActive) {
-      return (
-        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
-          Active
-        </span>
-      );
-    }
-
-    return (
-      <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
-        Inactive
-      </span>
-    );
-  };
-
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header - Simplified */}
       <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 flex-1 min-w-0 truncate">
+        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
           User Management
         </h2>
         {/* Actions - Export button and View Mode Toggle */}
         <div className="flex items-center gap-2">
-          {/* Klaviyo Sync Button */}
-          <KlaviyoSyncButton />
+          {/* Mobile-only: switch between users / metrics view (replaces sync button on small screens) */}
+          <button
+            onClick={() => handleViewModeChange(viewMode === "metrics" ? "users" : "metrics")}
+            className="sm:hidden px-3 py-1.5 rounded-lg bg-gradient-to-r from-slate-800 to-slate-900 text-white text-xs font-medium hover:from-slate-900 hover:to-black transition-all duration-200 flex items-center gap-1.5 shadow-sm"
+            aria-label={viewMode === "metrics" ? "Switch to users list" : "Switch to metrics"}
+            title={viewMode === "metrics" ? "Switch to users list" : "Switch to metrics"}
+          >
+            {viewMode === "metrics" ? (
+              <>
+                <Users className="w-3.5 h-3.5" />
+                Users
+              </>
+            ) : (
+              <>
+                <BarChart3 className="w-3.5 h-3.5" />
+                Metrics
+              </>
+            )}
+          </button>
+          {/* Klaviyo Sync Button — desktop only */}
+          <div className="hidden sm:block">
+            <KlaviyoSyncButton />
+          </div>
           {/* Charge Past Due Button */}
           <button
             onClick={() => setIsChargeModalOpen(true)}
@@ -343,13 +437,13 @@ export default function UsersManagement() {
             <span className="hidden sm:inline">Export</span>
           </button>
           {/* View Mode Toggle - Hidden on mobile, shown on desktop */}
-          <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          <div className="hidden sm:flex items-center gap-2 bg-gray-100 dark:bg-neutral-800 rounded-lg p-1">
             <button
               onClick={() => handleViewModeChange("users")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 viewMode === "users"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200/80 dark:ring-neutral-600"
+                  : "text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
               }`}
             >
               Users
@@ -358,8 +452,8 @@ export default function UsersManagement() {
               onClick={() => handleViewModeChange("metrics")}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 viewMode === "metrics"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-white dark:bg-neutral-900 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200/80 dark:ring-neutral-600"
+                  : "text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white"
               }`}
             >
               Metrics
@@ -401,30 +495,30 @@ export default function UsersManagement() {
       </div>
 
       {/* Search and Filters - Elevated Design - z-20 so dropdowns appear above the sticky table header */}
-      <div className="relative z-20 bg-gradient-to-br from-white via-gray-50 to-white rounded-xl shadow-lg border-2 border-gray-200/50 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
+      <div className="relative z-20 bg-gradient-to-br from-white via-gray-50 to-white dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-2 sm:p-4 lg:p-6 backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 lg:gap-4">
           {/* Search Bar - Same row as filters, min-width prevents compression on laptop */}
           <div className="relative flex-1 min-w-[200px] sm:min-w-[280px] group flex items-center gap-2">
-            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-neutral-500 group-focus-within:text-red-600 dark:group-focus-within:text-red-400 transition-colors w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
             <input
               type="text"
               placeholder="Search users..."
               value={filters.search || ""}
               onChange={(e) => updateFilter("search", e.target.value)}
-              className="w-full min-w-0 pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400"
+              className="w-full min-w-0 pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
             />
             {/* Mobile Filter Toggle Button */}
             <button
               onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 rounded-lg bg-white hover:border-red-500 hover:bg-red-50 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
+              className="sm:hidden px-2.5 py-1.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-950 text-gray-900 dark:text-neutral-100 hover:border-red-500 hover:bg-red-50 dark:hover:bg-neutral-800 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-md"
               aria-label="Toggle filters"
             >
-              <Filter className={`w-4 h-4 ${hasActiveFilters ? "text-red-600" : "text-gray-600"}`} />
+              <Filter className={cn("w-4 h-4", hasActiveFilters ? "text-red-600" : "text-gray-600 dark:text-neutral-400")} />
               {hasActiveFilters && <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>}
               {isFiltersOpen ? (
-                <ChevronUp className="w-4 h-4 text-gray-600" />
+                <ChevronUp className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
               ) : (
-                <ChevronDown className="w-4 h-4 text-gray-600" />
+                <ChevronDown className="w-4 h-4 text-gray-600 dark:text-neutral-400" />
               )}
             </button>
           </div>
@@ -496,6 +590,35 @@ export default function UsersManagement() {
               />
             </div>
 
+            {/* States (multi-select) — width matches Dropdown (min-w-[220px] list) */}
+            <div className="min-w-[100px] sm:min-w-[130px] lg:min-w-[150px]">
+              <AdminStatesMultiSelect
+                selected={filters.states}
+                onChange={(codes) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    states: codes,
+                    page: 1,
+                  }))
+                }
+              />
+            </div>
+
+            {/* Active major draw participation */}
+            <div className="min-w-[100px] sm:min-w-[140px] lg:min-w-[160px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Major draw", icon: Trophy },
+                  { value: "yes", label: "In active draw", icon: CheckCircle },
+                  { value: "no", label: "Not in draw", icon: Ban },
+                ]}
+                value={filters.inActiveMajorDraw || ""}
+                onChange={(value) => updateFilter("inActiveMajorDraw", value)}
+                placeholder="Major draw"
+                active={!!filters.inActiveMajorDraw}
+              />
+            </div>
+
             {/* Items Per Page */}
             <div className="min-w-[70px] sm:min-w-[80px] lg:min-w-[90px]">
               <Dropdown
@@ -516,7 +639,7 @@ export default function UsersManagement() {
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-red-500/30 bg-gradient-to-r from-red-50 to-red-100/50 text-red-700 rounded-lg hover:from-red-100 hover:to-red-200 hover:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1 sm:gap-1.5 whitespace-nowrap shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-red-500/30 dark:border-red-500/40 bg-gradient-to-r from-red-50 to-red-100/50 dark:from-red-950/40 dark:to-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:from-red-100 hover:to-red-200 dark:hover:from-red-950/60 dark:hover:to-red-900/50 hover:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1 sm:gap-1.5 whitespace-nowrap shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
                 title="Clear all filters"
               >
                 <X className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -529,7 +652,7 @@ export default function UsersManagement() {
 
       {/* Results Summary */}
       {usersData && (
-        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 dark:text-neutral-400">
           <p>
             Showing {(usersData.pagination.currentPage - 1) * usersData.pagination.limit + 1} to{" "}
             {Math.min(usersData.pagination.currentPage * usersData.pagination.limit, usersData.pagination.totalCount)}{" "}
@@ -539,22 +662,22 @@ export default function UsersManagement() {
       )}
 
       {/* Users Table - z-10 so it stays below the filter bar (z-20) when dropdowns are open */}
-      <div className="relative z-10 bg-white rounded-xl shadow-lg border border-gray-100">
+      <div className="relative z-10 bg-white dark:bg-neutral-900 rounded-xl shadow-lg border border-gray-100 dark:border-neutral-800">
         {isLoading ? (
           // Enhanced Loading skeleton
           <div className="p-4 sm:p-6">
             <div className="space-y-3 sm:space-y-4">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="flex items-center space-x-3 sm:space-x-4 animate-pulse">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-full flex-shrink-0"></div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 dark:bg-neutral-700 rounded-full flex-shrink-0"></div>
                   <div className="flex-1 space-y-2 min-w-0">
-                    <div className="h-4 bg-gray-200 rounded w-1/3 sm:w-1/4"></div>
-                    <div className="h-3 bg-gray-200 rounded w-1/2 sm:w-1/3"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-1/3 sm:w-1/4"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/2 sm:w-1/3"></div>
                   </div>
-                  <div className="h-6 bg-gray-200 rounded w-16 sm:w-20 hidden sm:block"></div>
-                  <div className="h-6 bg-gray-200 rounded w-20 sm:w-24 hidden md:block"></div>
-                  <div className="h-6 bg-gray-200 rounded w-16 sm:w-20"></div>
-                  <div className="h-8 bg-gray-200 rounded w-20 sm:w-24"></div>
+                  <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-16 sm:w-20 hidden sm:block"></div>
+                  <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-20 sm:w-24 hidden md:block"></div>
+                  <div className="h-6 bg-gray-200 dark:bg-neutral-700 rounded w-16 sm:w-20"></div>
+                  <div className="h-8 bg-gray-200 dark:bg-neutral-700 rounded w-20 sm:w-24"></div>
                 </div>
               ))}
             </div>
@@ -563,8 +686,8 @@ export default function UsersManagement() {
           // Enhanced Error state
           <div className="p-6 sm:p-8 text-center">
             <AlertTriangle className="w-12 h-12 sm:w-16 sm:h-16 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Error Loading Users</h3>
-            <p className="text-sm sm:text-base text-gray-600 mb-4">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-2">Error Loading Users</h3>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400 mb-4">
               {error instanceof Error ? error.message : "Failed to load users"}
             </p>
             <button
@@ -578,9 +701,9 @@ export default function UsersManagement() {
           // Enhanced Empty state
           <div className="p-6 sm:p-8 text-center">
             <Users className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Users Found</h3>
-            <p className="text-sm sm:text-base text-gray-600">
-              {filters.search || filters.subscriptionStatus || filters.role
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-2">No Users Found</h3>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-400">
+              {filters.search || filters.subscriptionStatus || filters.role || (filters.states?.length ?? 0) > 0
                 ? "Try adjusting your search criteria"
                 : "No users have been registered yet"}
             </p>
@@ -593,7 +716,7 @@ export default function UsersManagement() {
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     <th
-                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
                       onClick={() => handleSort("createdAt")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -601,11 +724,11 @@ export default function UsersManagement() {
                         {getSortIcon("createdAt")}
                       </div>
                     </th>
-                    <th className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider">
+                    <th className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider">
                       Subscription
                     </th>
                     <th
-                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
                       onClick={() => handleSort("totalSpent")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -614,7 +737,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors hidden md:table-cell"
+                      className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors hidden md:table-cell"
                       onClick={() => handleSort("majorDrawEntries")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -623,7 +746,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
                       onClick={() => handleSort("miniDrawCount")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -632,7 +755,7 @@ export default function UsersManagement() {
                       </div>
                     </th>
                     <th
-                      className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      className="sticky top-0 z-[1] bg-gray-50 dark:bg-neutral-800 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-2xs sm:text-xs lg:text-sm font-semibold text-gray-600 dark:text-neutral-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
                       onClick={() => handleSort("lastLogin")}
                     >
                       <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
@@ -640,14 +763,18 @@ export default function UsersManagement() {
                         {getSortIcon("lastLogin")}
                       </div>
                     </th>
-                    <th className="sticky top-0 z-[1] bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.05)] px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-3 text-left text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-700 uppercase tracking-wider hidden sm:table-cell">
-                      Status
-                    </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
+                <tbody className="bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
                   {usersData.users.map((user) => {
                     const packageIcon = getPackageIconImage(user.subscription?.packageName);
+                    const packageIconScaleClass = getPackageIconWrapperScaleClass(
+                      derivePlanIdFromPackage(
+                        { name: user.subscription?.packageName ?? "", type: "subscription" },
+                        "subscription"
+                      ),
+                      "badge"
+                    );
                     const colorScheme = getPackageColorScheme(user.subscription?.packageName);
                     const hasActiveSubscription = user.subscription?.isActive;
                     const borderGradientColor = colorScheme ? getGradientColor(colorScheme.gradient) : "#6b7280";
@@ -658,7 +785,7 @@ export default function UsersManagement() {
                     return (
                       <tr
                         key={user.id}
-                        className="hover:bg-gray-50 cursor-pointer transition-colors even:bg-gray-50/30"
+                        className="hover:bg-gray-50 dark:hover:bg-neutral-800/80 cursor-pointer transition-colors even:bg-gray-50/30 dark:even:bg-neutral-800/40"
                         onClick={() => handleUserClick(user)}
                       >
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
@@ -677,13 +804,16 @@ export default function UsersManagement() {
                                   padding: "2px",
                                 }}
                               >
-                                <div className="relative w-full h-full flex-shrink-0 flex items-center justify-center">
+                                <div
+                                  className={cn("relative w-full h-full flex-shrink-0 flex items-center justify-center", packageIconScaleClass)}
+                                >
                                   <Image
                                     src={packageIcon}
                                     alt={user.subscription?.packageName || "Package"}
                                     className="w-5 h-5 sm:w-7 sm:h-7 lg:w-9 lg:h-9 object-contain"
                                     width={36}
                                     height={36}
+                                    sizes="(max-width: 640px) 20px, (max-width: 1024px) 28px, 36px"
                                   />
                                 </div>
                               </span>
@@ -695,14 +825,15 @@ export default function UsersManagement() {
                                   className="w-full h-full object-cover"
                                   width={48}
                                   height={48}
+                                  sizes="(max-width: 640px) 32px, (max-width: 1024px) 40px, 48px"
                                 />
                               </div>
                             )}
                             <div className="ml-2 sm:ml-3 lg:ml-4 min-w-0 flex-1">
-                              <div className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900 truncate">
-                                {user.firstName} {user.lastName}
+                              <div className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                {formatDisplayName(user.firstName, user.lastName)}
                               </div>
-                              <div className="text-[9px] sm:text-xs lg:text-sm text-gray-500 truncate">
+                              <div className="text-3xs sm:text-xs lg:text-sm text-gray-500 dark:text-neutral-400 truncate">
                                 {user.email}
                               </div>
                               <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 mt-0.5 sm:mt-1">
@@ -712,7 +843,7 @@ export default function UsersManagement() {
                                   <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
                                 )}
                                 {user.role === "admin" && (
-                                  <span className="text-[9px] sm:text-[10px] lg:text-xs text-gray-500 font-medium">
+                                  <span className="text-3xs sm:text-2xs lg:text-xs text-gray-500 font-medium">
                                     Admin
                                   </span>
                                 )}
@@ -721,15 +852,15 @@ export default function UsersManagement() {
                           </div>
                         </td>
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
-                          {getSubscriptionBadge(user)}
+                          {renderAdminSubscriptionBadge(user)}
                         </td>
-                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm font-medium text-gray-900">
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-2xs sm:text-xs lg:text-sm font-medium text-gray-900 dark:text-white tabular-nums">
                           {formatCurrency(user.totalSpent)}
                         </td>
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden md:table-cell">
                           <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
                             <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-yellow-500 flex-shrink-0" />
-                            <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">
+                            <span className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
                               {user.majorDrawEntries}
                             </span>
                           </div>
@@ -737,23 +868,20 @@ export default function UsersManagement() {
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
                           <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
                             <Gift className="w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 text-purple-500 flex-shrink-0" />
-                            <span className="text-[10px] sm:text-xs lg:text-sm font-semibold text-gray-900">
+                            <span className="text-2xs sm:text-xs lg:text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
                               {user.miniDrawCount || 0}
                             </span>
                           </div>
                         </td>
-                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-[10px] sm:text-xs lg:text-sm text-gray-500">
+                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap text-2xs sm:text-xs lg:text-sm text-gray-500 dark:text-neutral-400">
                           {user.lastLogin ? (
                             <div className="flex items-center gap-0.5 sm:gap-1 lg:gap-2">
-                              <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 flex-shrink-0" />
+                              <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 flex-shrink-0 text-gray-400 dark:text-neutral-500" />
                               <span className="truncate">{formatDate(user.lastLogin)}</span>
                             </div>
                           ) : (
-                            <span className="text-gray-400">Never</span>
+                            <span className="text-gray-400 dark:text-neutral-500">Never</span>
                           )}
-                        </td>
-                        <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap hidden sm:table-cell">
-                          {getUserStatusBadge(user)}
                         </td>
                       </tr>
                     );
@@ -764,13 +892,13 @@ export default function UsersManagement() {
 
             {/* Enhanced Pagination */}
             {usersData.pagination.totalPages > 1 && (
-              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200">
+              <div className="bg-gray-50 dark:bg-neutral-800/50 px-4 sm:px-6 py-3 sm:py-4 border-t-2 border-gray-200 dark:border-neutral-700">
                 <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
                   <div className="flex items-center gap-1 sm:gap-2">
                     <button
                       onClick={() => goToPage(1)}
                       disabled={!usersData.pagination.hasPrevPage}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="First page"
                     >
                       <ChevronsLeft className="w-4 h-4" />
@@ -778,7 +906,7 @@ export default function UsersManagement() {
                     <button
                       onClick={() => goToPage(usersData.pagination.currentPage - 1)}
                       disabled={!usersData.pagination.hasPrevPage}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -786,7 +914,7 @@ export default function UsersManagement() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm text-gray-700 font-medium">
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-300 font-medium">
                       Page {usersData.pagination.currentPage} of {usersData.pagination.totalPages}
                     </span>
                   </div>
@@ -795,7 +923,7 @@ export default function UsersManagement() {
                     <button
                       onClick={() => goToPage(usersData.pagination.currentPage + 1)}
                       disabled={!usersData.pagination.hasNextPage}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Next page"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -803,7 +931,7 @@ export default function UsersManagement() {
                     <button
                       onClick={() => goToPage(usersData.pagination.totalPages)}
                       disabled={!usersData.pagination.hasNextPage}
-                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-neutral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       aria-label="Last page"
                     >
                       <ChevronsRight className="w-4 h-4" />

@@ -25,6 +25,7 @@ type MajorDrawEntry = {
     upsell?: number;
     "mini-draw"?: number;
     referral?: number;
+    "bonus-entry-promo"?: number;
   };
   firstAddedDate: Date;
   lastUpdatedDate: Date;

@@ -14,6 +14,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getPackageById } from "@/data/membershipPackages";
 import { getEffectiveBenefits } from "@/utils/membership/benefit-resolution";
+import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -129,25 +130,46 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         try {
           const packageIdStr = String(oneTimePackage.packageId);
           const packageData = getPackageById(packageIdStr);
-          if (packageData) {
-            oneTimePackageData.push({
-              ...oneTimePackage,
-              packageData: packageData, // Include full package details
-            });
-          } else {
-            // console.log(`⚠️ One-time package ID not found in static data: ${packageIdStr}`);
-          }
+          // Include package even when not found in static data - show minimal info so user sees their data
+          oneTimePackageData.push({
+            ...oneTimePackage,
+            packageId: packageIdStr,
+            packageData: packageData ?? {
+              _id: packageIdStr,
+              name: "One-Time Package",
+              type: "one-time",
+              price: 0,
+              description: "",
+              features: [],
+              isActive: true,
+            },
+          });
         } catch (error) {
           console.log(
             `⚠️ Could not find one-time package ${oneTimePackage.packageId} (${typeof oneTimePackage.packageId}):`,
             error
           );
+          // Still include package so user can see their data
+          const packageIdStr = String(oneTimePackage?.packageId ?? "unknown");
+          oneTimePackageData.push({
+            ...oneTimePackage,
+            packageId: packageIdStr,
+            packageData: {
+              _id: packageIdStr,
+              name: "One-Time Package",
+              type: "one-time",
+              price: 0,
+              description: "",
+              features: [],
+              isActive: true,
+            },
+          });
         }
       }
     }
 
     // Get related data from database
-    const [activeMiniDraws, recentOrders] = await Promise.all([
+    const [activeMiniDraws, recentOrders, hasCurrentDrawMembershipGrant] = await Promise.all([
       MiniDraw.find({
         isActive: true,
         endDate: { $gt: new Date() },
@@ -160,6 +182,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .sort({ createdAt: -1 })
         .limit(10)
         .lean(),
+      hasMembershipGrantInCurrentDrawPeriod(userData._id),
     ]);
 
     // Calculate insights
@@ -202,6 +225,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           ...userData,
           subscriptionPackageData,
           enrichedOneTimePackages: oneTimePackageData,
+          hasCurrentDrawMembershipGrant,
         },
         activeMiniDraws,
         recentOrders,

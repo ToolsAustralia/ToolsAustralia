@@ -1,11 +1,19 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Image from "next/image";
+import { clsx } from "clsx";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { PromoLandingTheme } from "@/stores/usePromoThemeStore";
+import { useUserContext } from "@/contexts/UserContext";
+import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
+import {
+  getPartnerCatalogVisibleSliceLength,
+  resolvePartnerCatalogPlanId,
+} from "@/utils/partner-discounts/partner-catalog-visibility";
+import { cn } from "@/utils/cn";
 
 /**
  * Highlights key parts of discount messages (codes and amounts) with gradient text
@@ -114,73 +122,7 @@ function highlightDiscountMessage(message: string, gradientStyle?: React.CSSProp
   return <>{parts}</>;
 }
 
-const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.png";
-
-const partnerDiscounts = [
-  {
-    id: "zjwraps",
-    name: "ZJWRAPS",
-    logo: "/images/partnerBrandLogos/ZJWRAPS.webp",
-    discount: "250 OFF",
-    discountMessage: "$250 off a wrap when you mention Tools Australia",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.zjwraps.com/",
-  },
-  {
-    id: "superbad",
-    name: "Super Bad",
-    logo: "/images/partnerBrandLogos/SuperBad.png",
-    discount: "90% OFF",
-    discountMessage: "Mention Tools Australia for 90% off your trial shoot",
-    gradient: "from-red-900 via-red-800 to-amber-100",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "multihub",
-    name: "Multi Hub",
-    logo: "/images/partnerBrandLogos/multiHub.png",
-    discount: "VIP PROMOS",
-    discountMessage: "Mention Tools Australia for VIP promos",
-    gradient: "from-pink-500 via-pink-600 to-fuchsia-600",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "artc",
-    name: "All Round Trade Constructions",
-    logo: "/images/partnerBrandLogos/ARTC.png",
-    discount: "10% OFF",
-    discountMessage: "Mention Tools Australia for 10% off quote",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.facebook.com/share/16kRKXkcVa/?mibextid=wwXIfr",
-  },
-  {
-    id: "sealmotors",
-    name: "Seal Motors",
-    logo: "/images/partnerBrandLogos/sealMotors.png",
-    discount: "10% OFF",
-    discountMessage: "Mention Tools Australia for 10% off car services",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.sealmotors.com.au/",
-  },
-  {
-    id: "toolmanlane",
-    name: "Toolman Lane",
-    logo: "/images/partnerBrandLogos/ToolmanLane.jpg",
-    discount: "10% OFF",
-    discountMessage: "10% off all purchases when you mention Tools Australia",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "#", // Link to be provided later
-  },
-  {
-    id: "bal",
-    name: "BAL Building Services",
-    logo: "/images/partnerBrandLogos/BAL.jpg",
-    discount: "FREE QUOTE",
-    discountMessage: "Free quote when you mention Tools Australia.",
-    gradient: "from-gray-900 via-gray-800 to-black",
-    businessLink: "https://www.facebook.com/BALbuilding/",
-  },
-];
+const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.webp";
 
 interface UnlockDiscountsProps {
   showUnlockButton?: boolean;
@@ -189,6 +131,8 @@ interface UnlockDiscountsProps {
   hasAccess?: boolean; // Whether user has access to partner discounts
   /** Optional package theme to use when user has active package (Partner Discounts section on my-account) */
   packageTheme?: PromoLandingTheme;
+  /** Optional className for the section wrapper (padding, margin, etc.) */
+  className?: string;
 }
 
 export default function UnlockDiscounts({
@@ -197,28 +141,53 @@ export default function UnlockDiscounts({
   description = "Get instant access to exclusive discounts from Australia's top tool brands",
   hasAccess = false, // Default to false for public pages
   packageTheme,
+  className,
 }: UnlockDiscountsProps = {}) {
   const discountsRef = useScrollAnimation();
   const { openEntryFlow } = useMajorDrawEntryCta();
+  const { userData } = useUserContext();
   const storeTheme = usePromoTheme();
   const theme = packageTheme ?? storeTheme;
   const preferDark = theme.preferDarkBackground ?? false;
 
+  const { visiblePartners, totalPartnerOffers, showPartialCatalogNote } = useMemo(() => {
+    const total = PARTNER_BRAND_OFFERS.length;
+    if (!hasAccess) {
+      return { visiblePartners: [] as typeof PARTNER_BRAND_OFFERS, totalPartnerOffers: total, showPartialCatalogNote: false };
+    }
+    const planId = resolvePartnerCatalogPlanId(userData ?? undefined);
+    const k = getPartnerCatalogVisibleSliceLength(total, planId);
+    const showPartialCatalogNote = k < total;
+    return {
+      visiblePartners: PARTNER_BRAND_OFFERS.slice(0, k),
+      totalPartnerOffers: total,
+      showPartialCatalogNote,
+    };
+  }, [hasAccess, userData]);
+
   return (
-    <section ref={discountsRef} className="py-8 sm:py-12 lg:py-16 mb-12 relative">
+    <section ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-['Poppins'] mb-3 sm:mb-4 drop-shadow-lg">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-sans mb-3 sm:mb-4 drop-shadow-lg">
             {title}
           </h2>
           <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{description}</p>
+          {hasAccess && showPartialCatalogNote && (
+            <p
+              className="text-sm sm:text-base font-medium mt-3 font-['Inter'] max-w-2xl mx-auto"
+              style={{ color: theme.primaryDark }}
+            >
+              Showing {visiblePartners.length} of {totalPartnerOffers} partner offers for your current plan.
+            </p>
+          )}
         </div>
 
         {/* Partner Discounts Grid - Only show when user has access */}
         {hasAccess && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-8 sm:mb-12 stagger-animation">
-            {partnerDiscounts.map((partner) => (
+            {visiblePartners.map((partner) => (
               <a
                 key={partner.id}
                 href={partner.businessLink}
@@ -246,7 +215,7 @@ export default function UnlockDiscounts({
                     partner.id === "toolmanlane" ||
                     partner.id === "bal"
                       ? {
-                          backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.png')",
+                          backgroundImage: "url('/images/partnerBrandLogos/partnerlogoBg.webp')",
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           backgroundRepeat: "no-repeat",
@@ -269,7 +238,7 @@ export default function UnlockDiscounts({
                         ? { transform: "scale(1.5)" }
                         : undefined
                     }
-                    unoptimized
+                    sizes="(max-width: 640px) 80px, 120px"
                   />
                 </div>
 
@@ -277,13 +246,13 @@ export default function UnlockDiscounts({
                 <div className="h-[50%] bg-white dark:bg-neutral-800 flex flex-col items-center justify-between p-3 sm:p-4 lg:p-5 overflow-hidden">
                   {/* Brand Name Title - Fixed max height with line clamping */}
                   <div className="w-full flex-shrink-0 max-h-[3em] overflow-hidden">
-                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white font-['Poppins'] text-center line-clamp-2 leading-tight">
+                    <h3 className="text-xs sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white font-sans text-center line-clamp-2 leading-tight">
                       {partner.name}
                     </h3>
                   </div>
                   {/* Discount Message - Flexible middle section */}
                   <div className="w-full flex-1 min-h-0 flex items-center justify-center py-1">
-                    <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
+                    <p className="text-2xs sm:text-xs lg:text-sm font-medium text-gray-800 dark:text-neutral-300 font-['Inter'] text-center leading-tight line-clamp-2">
                       {highlightDiscountMessage(partner.discountMessage, {
                         backgroundImage: theme.gradientSolid,
                         WebkitBackgroundClip: "text",
@@ -299,14 +268,14 @@ export default function UnlockDiscounts({
                       width={48}
                       height={48}
                       className="h-4 w-auto object-contain drop-shadow sm:h-6 lg:h-7"
-                      unoptimized
+                      sizes="48px"
                     />
                   </div>
                 </div>
 
                 {/* Hover Glow Effect */}
                 <div
-                  className={`absolute inset-0 bg-gradient-to-r ${partner.gradient} opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none`}
+                  className={cn("absolute inset-0 bg-gradient-to-r", partner.gradient, "opacity-0 group-hover:opacity-5 rounded-xl sm:rounded-2xl transition-opacity duration-300 pointer-events-none")}
                 ></div>
               </a>
             ))}
@@ -322,7 +291,7 @@ export default function UnlockDiscounts({
                 openEntryFlow({ openLocalModal: false });
               }}
               suppressHydrationWarning
-              className={`relative ${preferDark ? "text-black" : "text-white"} px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group`}
+              className={cn("relative", preferDark ? "text-black" : "text-white", "px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group")}
               style={{
                 background: theme.gradientSolid,
                 boxShadow: `0 8px 32px ${theme.shadowRgba}`,

@@ -20,7 +20,7 @@ export default function Footer() {
               <div className="mb-6 sm:mb-8">
                 <div className="relative h-12 sm:h-14 lg:h-16 w-36 sm:w-44 lg:w-48 mb-4 sm:mb-6 mx-auto md:mx-0">
                   <Image
-                    src="/images/Tools Australia Logo/White-Black Logo.png"
+                    src="/images/Tools Australia Logo/White-Black Logo.webp"
                     alt="Tools Australia Logo"
                     fill
                     className="object-contain"
@@ -31,11 +31,11 @@ export default function Footer() {
                   Equipping professionals with premium tools and exclusive member benefits. Your trusted partner for
                   quality, reliability, and exceptional service.
                 </p>
-                <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px] mb-3 sm:mb-4">
+                <p className="text-gray-500 text-2xs sm:text-2xs lg:text-[12px] mb-3 sm:mb-4">
                   ABN:54 690 397 061 | ACN: 690 397 061 | License: TP/04720
                 </p>
-                <p className="text-gray-500 text-[10px] sm:text-[11px] lg:text-[12px]">
-                  Notification Number: NTP/15640 (Major Giveaway)
+                <p className="text-gray-500 text-2xs sm:text-2xs lg:text-[12px]">
+                  Notification Number: NTP/16579 (Major Giveaway)
                 </p>
               </div>
             </div>
@@ -154,7 +154,7 @@ export default function Footer() {
                   {/* MasterCard Logo */}
                   <div className="relative w-10 h-6 sm:w-12 sm:h-8 lg:w-14 lg:h-9 rounded overflow-hidden flex items-center justify-center">
                     <Image
-                      src="/paymentGateway/MasterCard-logo.png"
+                      src="/paymentGateway/MasterCard-logo.webp"
                       alt="MasterCard"
                       fill
                       className="object-contain p-0.5"
@@ -165,7 +165,7 @@ export default function Footer() {
                   {/* AMEX Logo */}
                   <div className="relative w-12 h-8 sm:w-14 sm:h-10 lg:w-16 lg:h-12 rounded overflow-hidden flex items-center justify-center">
                     <Image
-                      src="/paymentGateway/Amex-logo.png"
+                      src="/paymentGateway/Amex-logo.webp"
                       alt="American Express"
                       fill
                       className="object-contain p-0.5"
@@ -176,7 +176,7 @@ export default function Footer() {
                   {/* Apple Pay Logo */}
                   <div className="relative w-12 h-8 sm:w-14 sm:h-10 lg:w-16 lg:h-12 rounded overflow-hidden flex items-center justify-center">
                     <Image
-                      src="/paymentGateway/ApplePay-logo-white.png"
+                      src="/paymentGateway/ApplePay-logo-white.webp"
                       alt="Apple Pay"
                       fill
                       className="object-contain p-0.5"
@@ -214,7 +214,7 @@ export default function Footer() {
               {/* Copyright */}
               <div className="text-center lg:text-right">
                 <p className="text-gray-400 text-xs sm:text-sm lg:text-[14px]">
-                  © 2025 Tools Australia Pty Ltd. All Rights Reserved
+                  © {new Date().getFullYear()} Tools Australia Pty Ltd. All Rights Reserved
                 </p>
               </div>
             </div>
