@@ -624,6 +624,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChargeJobLock.ts",
         "src/models/ChargeJobRun.ts",
         "src/models/StaffActivity.ts",
+        "src/lib/audit-log.ts",
+        "src/lib/__tests__/staff-activity.test.ts",
         "src/server/admin/**",
         "src/services/admin/**",
         "src/services/admin/chargePastDueHistory.ts",

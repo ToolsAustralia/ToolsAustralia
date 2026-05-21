@@ -167,7 +167,8 @@
     "test:permissions": "tsx src/lib/__tests__/permissions.test.ts",
     "test:api-auth-permissions": "tsx src/lib/__tests__/api-auth-permissions.test.ts",
     "migrate:seed-staff-roles": "tsx scripts/migrate-seed-staff-roles.ts",
-    "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run"
+    "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run",
+    "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.10.0",
