@@ -57,17 +57,23 @@ async function fetchPage(
   return r.json();
 }
 
+const EMPTY_FILTERS: StaffActivityFilters = {};
+
 /**
  * Infinite-scroll list of audit-log rows. Used by both the top-level
  * /admin/staff-activity page and the embedded Activity tab inside
  * UserDetailModal (which passes resourceType:"User" + resourceId).
  */
-export function useStaffActivity(filters: StaffActivityFilters = {}) {
+export function useStaffActivity(
+  filters: StaffActivityFilters = EMPTY_FILTERS,
+  options?: { enabled?: boolean }
+) {
   return useInfiniteQuery<Page, Error>({
     queryKey: ["admin", "staff-activity", filters],
     queryFn: ({ pageParam }) =>
       fetchPage(filters, (pageParam as string | null) ?? null),
     initialPageParam: null,
     getNextPageParam: (last) => last.data.nextCursor,
+    enabled: options?.enabled ?? true,
   });
 }
