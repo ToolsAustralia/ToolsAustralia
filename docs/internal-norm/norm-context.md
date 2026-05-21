@@ -3646,7 +3646,7 @@ Every error response has shape:
 | 401 | `bad-signature` | HMAC mismatch | Signing-secret drift OR signing-string format bug. Stop. Report to operator. |
 | 401 | `stale-timestamp` | Clock skew > 30s or timestamp non-numeric | Sync local clock (NTP). Retry once after sync. |
 | 401 | `replay` | Nonce already seen within 5-min window | Generate a fresh nonce per request. Retry once. |
-| 403 | `permission_denied` | Norm role does not grant the endpoint's `requiredPermission` | Stop calling this endpoint until the operator grants the permission in Settings → Roles → Norm. |
+| 403 | `permission_denied` | Norm role does not grant the endpoint's `requiredPermission`. **Only emitted for `write_safe` / `trigger_*` tiers — read endpoints bypass the per-permission grant.** | Stop calling this endpoint until the operator grants the permission in Settings → Roles → Norm. |
 | 404 | `not_found` | Resource lookup failed (e.g. unknown pending-action id) | Do not retry same id |
 | 429 | `rate_limited` | Per-minute or per-day cap exceeded | Honor `Retry-After` response header, then retry |
 | 503 | `disabled` | Endpoint killed via admin UI kill-switch | Stop calling until re-enabled. Report to operator if unexpected. |

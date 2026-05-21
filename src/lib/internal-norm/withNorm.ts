@@ -80,41 +80,48 @@ export function withNorm(options: WithNormOptions, handler: NormHandler) {
       );
     }
 
-    // 2. Permission check (Norm's Role must grant requiredPermission)
+    // 2. Permission check.
+    // Read-tier endpoints bypass the per-permission grant — reads are inherently safe
+    // (no mutation, no money movement, no external comms) and the PII boundary lives
+    // in each endpoint's responseSchema projection, not in the role grant. Sole-operator
+    // governance: kill switch + registry omission + rate limits remain as control levers.
+    // Write/trigger tiers still require an explicit grant on the Norm Role.
     await connectDB();
-    const permissionGranted = await hasNormPermission(options.requiredPermission);
-    if (!permissionGranted) {
-      // Audit the rejection too — useful for "why is Norm getting 403?" debugging
-      await beginAudit({
-        requestId,
-        registryKey: options.registryKey,
-        tier: options.tier,
-        method,
-        path,
-        queryHash: sha256(query),
-        bodyHash: sha256(rawBody),
-        ip: clientKeyFor(request),
-        userAgent: request.headers.get("user-agent") || "",
-        signatureValid: true,
-        rateLimitState: { remaining: 0, limit: 0, windowMs: 0 },
-        permissionChecked: options.requiredPermission,
-        permissionGranted: false,
-      });
-      await endAudit(requestId, {
-        responseStatus: 403,
-        durationMs: Date.now() - started,
-        responseHash: "",
-        errorCode: "permission_denied",
-      });
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Norm role missing permission: ${options.requiredPermission}`,
-          code: "permission_denied",
+    let permissionGranted = true;
+    if (options.tier !== "read") {
+      permissionGranted = await hasNormPermission(options.requiredPermission);
+      if (!permissionGranted) {
+        await beginAudit({
           requestId,
-        },
-        { status: 403 },
-      );
+          registryKey: options.registryKey,
+          tier: options.tier,
+          method,
+          path,
+          queryHash: sha256(query),
+          bodyHash: sha256(rawBody),
+          ip: clientKeyFor(request),
+          userAgent: request.headers.get("user-agent") || "",
+          signatureValid: true,
+          rateLimitState: { remaining: 0, limit: 0, windowMs: 0 },
+          permissionChecked: options.requiredPermission,
+          permissionGranted: false,
+        });
+        await endAudit(requestId, {
+          responseStatus: 403,
+          durationMs: Date.now() - started,
+          responseHash: "",
+          errorCode: "permission_denied",
+        });
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Norm role missing permission: ${options.requiredPermission}`,
+            code: "permission_denied",
+            requestId,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     // 3. Kill switch

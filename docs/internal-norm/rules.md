@@ -45,9 +45,14 @@ For request bodies / query strings, validate with a separate Zod schema declared
 
 `NormCallLog` stores `queryHash`, `bodyHash`, `responseHash` — never the bodies themselves. The 90-day TTL is by design. If a future tier ever needs to capture full bodies (e.g. `read_pii` for auditor access), it must be opt-in per-registry-key and gated by a separate permission, not enabled globally.
 
-## R7. Norm is governed by explicit permissions, not super-admin bypass
+## R7. Norm permission model: reads open, writes/triggers explicitly granted
 
-Norm's `User.userType` is `"staff"`, not `"admin"`. The super-admin bypass in `requirePermission` does NOT apply to Norm — every Norm capability is an explicit grant on the Norm Role. The seeding migration grants the minimal set (`facebookAds.view`, `overview.view`); everything else is owner-controlled.
+Norm's `User.userType` is `"staff"`, not `"admin"`. The super-admin bypass in `requirePermission` does NOT apply to Norm.
+
+- **Read-tier endpoints** (`tier: "read"`) bypass the per-permission grant. Reads are inherently safe (no mutation, no money movement, no external comms), and the PII boundary lives in each endpoint's `responseSchema` projection (e.g. user reads strip email/lastName/mobile at the schema level — gating them by role would be defense-in-depth, not the primary guard). Operator control over reads still comes from three independent mechanisms: (a) registry omission — an endpoint not in `NORM_ENDPOINTS` is unreachable; (b) per-endpoint kill switch in the admin Endpoints tab; (c) tier + per-endpoint rate limits. `requiredPermission` stays in the registry as documentation and is validated against the catalog at boot, but is NOT checked at request time for reads.
+- **Write/trigger tiers** (`write_safe`, `trigger_norm_confirm`, `trigger_human_approve`) still require an explicit grant on the Norm Role. Every mutating capability is an owner decision in Settings → Roles → Norm.
+
+The seeding migration grants `facebookAds.view` + `overview.view`. Those grants no longer affect read endpoints (reads are always allowed) but remain the baseline for any future write/trigger endpoints that reference those permissions.
 
 ## R8. Two-secret rotation
 

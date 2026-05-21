@@ -70,10 +70,12 @@ async function run() {
       },
     );
 
-    // Also build a handler that requires a permission Norm does NOT have, to verify 403
+    // Also build a handler that requires a permission Norm does NOT have, to verify 403.
+    // Reads bypass the per-permission grant (see withNorm.ts), so we use a write_safe
+    // tier here — the 403 path still applies to writes/triggers.
     const handlerForbidden = withNorm(
       {
-        tier: "read",
+        tier: "write_safe",
         registryKey: "test.forbidden",
         requiredPermission: "users.delete",
         responseSchema: TestSchema,
