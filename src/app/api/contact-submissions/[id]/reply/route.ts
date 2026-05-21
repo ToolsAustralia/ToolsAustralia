@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { emailService } from "@/lib/email/";
 import mongoose from "mongoose";
 
@@ -26,11 +26,14 @@ export async function POST(
   try {
     await connectDB();
 
-    const guard = await requirePermission("submissions.edit");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.edit", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid submission ID" }, { status: 400 });
     }
@@ -81,6 +84,7 @@ export async function POST(
       .populate({ path: "replies.sentBy", select: "name email", strictPopulate: false })
       .lean();
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Reply sent successfully",

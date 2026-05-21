@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import PartnerApplication from "@/models/PartnerApplication";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 
 /**
@@ -67,13 +68,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("users.edit");
+    const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("users.edit", request, {
+      resourceType: "PartnerApplication",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
-    const { id } = paramsSchema.parse(await params);
     const body = await request.json();
     const validatedData = updatePartnerApplicationSchema.parse(body);
 
@@ -102,6 +106,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }).populate("reviewedBy", "name email")
       .populate({ path: "replies.sentBy", select: "name email", strictPopulate: false });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Partner application updated successfully",
@@ -163,12 +168,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("users.edit");
+    const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("users.edit", request, {
+      resourceType: "PartnerApplication",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = paramsSchema.parse(await params);
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -180,6 +188,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Partner application not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Partner application deleted successfully",

@@ -6,6 +6,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import Role from "@/models/Role";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { sendStaffInviteEmail } from "@/lib/email/staff-invite";
 
 const InviteSchema = z.object({
@@ -70,9 +71,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   await connectDB();
-  const guard = await requirePermission("settings.edit");
+  const guard = await requirePermissionWithAudit("settings.edit", req, {
+    resourceType: "User",
+  });
   if (guard instanceof NextResponse) return guard;
-  const { session } = guard;
+  const { session, log } = guard;
 
   let body: unknown;
   try {
@@ -153,5 +156,6 @@ export async function POST(req: NextRequest) {
     inviterName,
   });
 
+  await log(201);
   return NextResponse.json({ success: true }, { status: 201 });
 }

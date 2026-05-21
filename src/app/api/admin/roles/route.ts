@@ -4,6 +4,7 @@ import connectDB from "@/lib/mongodb";
 import Role from "@/models/Role";
 import User from "@/models/User";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { PERMISSIONS, isValidPermission } from "@/lib/permissions";
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -57,9 +58,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   await connectDB();
-  const guard = await requirePermission("settings.edit");
+  const guard = await requirePermissionWithAudit("settings.edit", req, {
+    resourceType: "Role",
+  });
   if (guard instanceof NextResponse) return guard;
-  const { session } = guard;
+  const { session, log } = guard;
 
   let body: unknown;
   try {
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
       isSystem: false,
       createdBy: session.user.id,
     });
+    await log(201);
     return NextResponse.json(
       { success: true, data: { id: role._id.toString() } },
       { status: 201 }

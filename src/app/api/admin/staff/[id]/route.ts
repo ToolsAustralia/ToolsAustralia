@@ -5,7 +5,7 @@ import { isValidObjectId } from "mongoose";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import Role from "@/models/Role";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { sendStaffInviteEmail } from "@/lib/email/staff-invite";
 
 const PatchSchema = z.object({
@@ -25,9 +25,12 @@ export async function PATCH(
   }
 
   await connectDB();
-  const guard = await requirePermission("settings.edit");
+  const guard = await requirePermissionWithAudit("settings.edit", req, {
+    resourceType: "User",
+    resourceId: id,
+  });
   if (guard instanceof NextResponse) return guard;
-  const { session } = guard;
+  const { session, log } = guard;
 
   let body: unknown;
   try {
@@ -97,15 +100,17 @@ export async function PATCH(
       inviteLink,
       inviterName,
     });
+    await log(200);
     return NextResponse.json({ success: true });
   }
 
   await user.save();
+  await log(200);
   return NextResponse.json({ success: true });
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
@@ -114,9 +119,12 @@ export async function DELETE(
   }
 
   await connectDB();
-  const guard = await requirePermission("settings.delete");
+  const guard = await requirePermissionWithAudit("settings.delete", req, {
+    resourceType: "User",
+    resourceId: id,
+  });
   if (guard instanceof NextResponse) return guard;
-  const { session } = guard;
+  const { session, log } = guard;
 
   if (id === session.user.id) {
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 403 });
@@ -138,5 +146,6 @@ export async function DELETE(
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
   await user.save({ validateBeforeSave: false });
 
+  await log(200);
   return NextResponse.json({ success: true });
 }

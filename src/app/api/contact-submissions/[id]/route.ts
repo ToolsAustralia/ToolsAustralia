@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import ContactSubmission from "@/models/ContactSubmission";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 
 /**
@@ -73,11 +74,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     await connectDB();
 
-    const guard = await requirePermission("submissions.edit");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.edit", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
+
     const body = await request.json();
     const validatedData = updateContactSubmissionSchema.parse(body);
 
@@ -113,6 +117,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
      .populate('respondedBy', 'name email')
      .populate({ path: 'replies.sentBy', select: 'name email', strictPopulate: false });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission updated successfully",
@@ -135,10 +140,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     await connectDB();
 
-    const guard = await requirePermission("submissions.edit");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.edit", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid submission ID" }, { status: 400 });
@@ -154,6 +162,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Contact submission not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission marked as read",
@@ -176,10 +185,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     await connectDB();
 
-    const guard = await requirePermission("submissions.delete");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = paramsSchema.parse(await params);
+    const guard = await requirePermissionWithAudit("submissions.delete", request, {
+      resourceType: "ContactSubmission",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -191,6 +203,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Contact submission not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Contact submission deleted successfully",

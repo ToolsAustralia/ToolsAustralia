@@ -4,7 +4,7 @@ import { isValidObjectId } from "mongoose";
 import connectDB from "@/lib/mongodb";
 import Role from "@/models/Role";
 import User from "@/models/User";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { isValidPermission } from "@/lib/permissions";
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -33,8 +33,12 @@ export async function PATCH(
   }
 
   await connectDB();
-  const guard = await requirePermission("settings.edit");
+  const guard = await requirePermissionWithAudit("settings.edit", req, {
+    resourceType: "Role",
+    resourceId: id,
+  });
   if (guard instanceof NextResponse) return guard;
+  const { log } = guard;
 
   let body: unknown;
   try {
@@ -89,6 +93,7 @@ export async function PATCH(
         { $inc: { tokenVersion: 1 } }
       );
     }
+    await log(200);
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     if (
@@ -106,7 +111,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
@@ -115,8 +120,12 @@ export async function DELETE(
   }
 
   await connectDB();
-  const guard = await requirePermission("settings.delete");
+  const guard = await requirePermissionWithAudit("settings.delete", req, {
+    resourceType: "Role",
+    resourceId: id,
+  });
   if (guard instanceof NextResponse) return guard;
+  const { log } = guard;
 
   const role = await Role.findById(id);
   if (!role) {
@@ -138,6 +147,7 @@ export async function DELETE(
   }
 
   await Role.deleteOne({ _id: role._id });
+  await log(200);
   return NextResponse.json({ success: true });
 }
 
