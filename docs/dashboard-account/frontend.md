@@ -172,3 +172,67 @@ Dashboard/account components use `cn()` from `@/utils/cn` for conditional class 
 ## Interaction smoothness (Phase 1, 2026-05-09)
 
 `MajorDrawHeaderStrip` and `MajorDrawOverview` (in [src/app/(site)/my-account/components/](../../src/app/(site)/my-account/components/)) are now leaf-isolated via [`<CountdownLeaf>`](../../src/components/ui/CountdownLeaf.tsx) / [`useLeafTimer`](../../src/hooks/useLeafTimer.ts) — the surrounding account dashboard does not re-render on every tick of the embedded countdown. See [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09) for the pattern.
+
+## Resubscribe carry-over sub-line on `MajorDrawOverview` (Phase 3, 2026-05-20 — REVERTED 2026-05-21)
+
+> **Deprecated / reverted 2026-05-21 (Phase 5 of the tier-picker polish round).** The activity-tab sub-line ("Includes resubscribe + carry-over from previous membership…") was removed from [`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) along with its `activationDate` prop, the `lastResubscribedAt` entry on the nested `userSubscription` prop type, and the `drawIncludesResubscribe` derivation. `src/app/(site)/my-account/page.tsx` no longer forwards `activationDate` or `lastResubscribedAt` to the component. The success-page "Welcome back!" banner (10-minute `wasRecentResubscribe` window keyed off `User.subscription.lastResubscribedAt`) remains the canonical carry-over surface for returning users — the schema field and the resubscribe write site in `/api/stripe/create-subscription-existing-user` are unchanged. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §3.
+
+## Empty-state nudge animations on `MajorDrawOverview` (Phase 4, 2026-05-21)
+
+The Membership and One-time entry cards on [`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) now animate when empty, inviting the user to click. Once clicked in a given tab, the nudge stops for the rest of that tab session.
+
+### New helper — [`src/utils/dashboard-empty-card-nudge.ts`](../../src/utils/dashboard-empty-card-nudge.ts)
+
+Tiny `sessionStorage`-backed gate. Exports:
+
+- `type NudgeCardType = "membership" | "onetime"`
+- `hasClickedNudge(cardType: NudgeCardType): boolean`
+- `markNudgeClicked(cardType: NudgeCardType): void`
+
+Storage key shape: `ta:dashboard-card-nudge-clicked:v1:<cardType>` (one key per card). Per-tab semantics fall out of `sessionStorage`: a fresh tab re-shows the nudge, a refresh within the same tab keeps the cleared state. **Fails open**: both functions are wrapped in `try { … } catch {}` and additionally guard `typeof window !== "undefined"`, so SSR and private-browsing edge cases never throw — `hasClickedNudge` returns `false` and `markNudgeClicked` no-ops. Worst case the animation always shows.
+
+### New keyframes + utility classes in [`src/app/globals.css`](../../src/app/globals.css)
+
+Two animations appended:
+
+- `@keyframes ta-nudge-pulse` → `.ta-nudge-pulse` (3s `ease-in-out` infinite `box-shadow` glow tinted to the tier-red Membership card)
+- `@keyframes ta-nudge-shimmer` → `.ta-nudge-shimmer` (4s `ease-in-out` infinite background-position sweep applied via `::before` overlay; container gets `position: relative; overflow: hidden;`)
+
+Both utility classes are wrapped in `@media (prefers-reduced-motion: no-preference)`, so users with the OS-level reduced-motion preference see fully static cards — there is no JS capability check; the OS signal is the only guard.
+
+### `MajorDrawOverview` wiring
+
+`MajorDrawOverview.tsx` imports the helper and tracks two local React states (`membershipNudge`, `oneTimeNudge`) seeded from `hasClickedNudge` in an effect that re-runs when the corresponding empty flag flips.
+
+- **Membership card** (previously a non-clickable `<div>` with no `onClick`): when `!hasActiveSubscription && displayMembershipEntries === 0` AND `!hasClickedNudge("membership")`, the card renders as a `<button type="button">` with the `ta-nudge-pulse` class. Clicking it calls `markNudgeClicked("membership")` and then `router.push("/my-account/settings?tab=subscription")`. Otherwise it falls back to the original `<div>` markup — no animation, no click target, byte-identical to pre-Phase-4 behaviour.
+- **One-time card** (already an existing `<button>` with `onOneTimeCardClick`): when `oneTimeEntries === 0` AND `!hasClickedNudge("onetime")`, the button gains the `ta-nudge-shimmer` class and its `onClick` is extended to first call `markNudgeClicked("onetime")` and then invoke the existing `onOneTimeCardClick?.()`. The button shape, focus ring, and downstream handler are unchanged.
+
+No new props, no new API, no service or model change — the nudge is purely a client-side presentational layer on top of the existing empty-state detection. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §4.
+
+## Member-badge scoping fixes (2026-05-21)
+
+Two related fixes ensure the "Member" label is **subscription-only** — a user holding only a one-time pack is no longer surfaced as a Member.
+
+### `settings/page.tsx` — `deriveSettingsUserState`
+
+[`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) `deriveSettingsUserState` no longer returns `state: "member"` for one-time-pack-only holders. The fallthrough branch (when `!hasFailed` and `!user.subscription?.isActive`) now always returns `{ state: "guest" }`, regardless of any active one-time pack. Active subscribers (`user.subscription?.isActive === true`) and `past_due` users are unchanged. User-visible effect: the identity-card badge on the settings index shows "Guest" for one-time-only users instead of "Member", and the guest CTA card appears.
+
+### `my-account/page.tsx` — Membership-badge source gating
+
+[`my-account/page.tsx`](../../src/app/(site)/my-account/page.tsx) now scopes `membershipPackage` and `showMembershipBadge` to `activePackage.source === "subscription"`:
+
+```ts
+const membershipPackage =
+  activePackage?.source === "subscription" ? activePackage.packageData : null;
+const showMembershipBadge = Boolean(
+  activePackage?.isActive && activePackage.source === "subscription" && membershipPackage,
+);
+```
+
+Previously `getActivePackage` returned the one-time pack as the "effective" package (with `packageData` set, `source: "one-time"`) for one-time-only users, which caused the pack to render under the Membership badge slot. Now the Membership badge only shows when a real subscription is active; the separate One-time badge continues to surface owned one-time packs independently. No API or hook change.
+
+## Settings page back-button hard-route (Phase 5, 2026-05-21)
+
+[`settings/page.tsx`](../../src/app/(site)/my-account/settings/page.tsx) passes an explicit `onBackClick={() => router.push("/my-account")}` to `DashboardHeader` (alongside the existing `showBackButton` flag). The chevron now always routes to `/my-account` rather than relying on browser-history previous or stepping through the settings index from a sub-tab. The previously-defined `handleBackClick` callback that routed sub-tabs back to the settings index has been removed — `?tab=` deep links still work via `searchParams`, but the back button itself is a single hard route.
+
+This mirrors the user's intent: "clicking the back button should navigate him to /my-account, not in the previous page." Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §6.

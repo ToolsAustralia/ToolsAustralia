@@ -76,6 +76,11 @@ export interface IUser extends Document {
     // Tracks accumulated entries for next renewal calculation
     // Persists even when subscription is cancelled (for resubscribe continuation)
     lastMonthAccumulatedEntries?: number;
+
+    // Timestamp of the most recent resubscribe event (when the user reactivated
+    // after a cancellation). Drives the carry-over banner on the success page
+    // and the activity-card sub-line. Optional — only set on resubscribe.
+    lastResubscribedAt?: Date;
   };
 
   // One-time packages (can have multiple)
@@ -527,6 +532,12 @@ const UserSchema = new Schema<IUser>(
         type: Number,
         required: false,
         min: [0, "Last month accumulated entries cannot be negative"],
+      },
+
+      // Timestamp of most recent resubscribe — see interface comment.
+      lastResubscribedAt: {
+        type: Date,
+        required: false,
       },
     },
 

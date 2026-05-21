@@ -2238,3 +2238,45 @@ html[data-save-data="true"] [class*="border-glow-"]:not(:focus-visible) {
 }
 
 @keyframes scaleIn { from { transform: scale(.6); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+
+/* Dashboard empty-card nudges (membership + one-time). Respect reduced motion. */
+@keyframes ta-nudge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 currentColor;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent;
+    transform: scale(1.005);
+  }
+}
+
+@keyframes ta-nudge-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ta-nudge-pulse {
+    animation: ta-nudge-pulse 3s ease-in-out infinite;
+    color: rgb(239 68 68 / 0.4); /* tier-red glow tone used by Membership card */
+  }
+  .ta-nudge-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .ta-nudge-shimmer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: ta-nudge-shimmer 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+}

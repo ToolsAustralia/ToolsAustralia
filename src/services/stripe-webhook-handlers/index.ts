@@ -25,6 +25,7 @@ import { normalizeMembershipPlanId } from "@/utils/membership/member-package-map
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { processPaymentBenefits, isPaymentProcessed } from "@/utils/payment/payment-processing";
 import { calculateSubscriptionEntries } from "@/utils/payment/subscription-entries-calculator";
+import { hasMembershipGrantInCurrentDrawPeriod } from "@/utils/draws/has-membership-grant-this-draw";
 import { createUserFromPaymentMetadata, shouldCreateAccountFromMetadata } from "@/utils/payment/account-manager";
 import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager";
 import { handlePaymentCancellation } from "@/utils/payment/payment-cleanup";
@@ -3580,6 +3581,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // ✅ NOTE: For downgrades, lastMonthAccumulatedEntries is preserved during downgrade
     // Renewals after downgrade will correctly use: lastMonthAccumulatedEntries + newBaseEntries
     // (e.g., if user had 500 accumulated, downgrades to package with 40 base, next renewal = 500 + 40 = 540)
+    const hasGrantThisDraw = isUpgrade
+      ? await hasMembershipGrantInCurrentDrawPeriod(user._id)
+      : false;
+
     const entryCalculation = calculateSubscriptionEntries({
       billingReason: billingReasonForEntries,
       baseEntries,
@@ -3588,6 +3593,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       promoMultiplier,
       isUpgrade,
       currentAccumulatedEntries,
+      hasMembershipGrantInCurrentDrawPeriod: hasGrantThisDraw,
     });
 
     const entriesToGrant = entryCalculation.entriesToGrant;
@@ -3615,6 +3621,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       newLastMonthAccumulatedEntries,
       isResubscribe,
       isUpgrade,
+      hasMembershipGrantInCurrentDrawPeriod: hasGrantThisDraw,
       promoMultiplier:
         expandedInvoice.billing_reason === "subscription_create" || isResubscribe ? promoMultiplier : "N/A (renewal)",
       previousAccumulated: user.subscription?.lastMonthAccumulatedEntries,
@@ -3629,6 +3636,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog(
         "info",
         `🎯 UPGRADE: Granting full ${membershipPackage.name} benefits (${entriesToGrant} entries, ${pointsToGrant} points)`
+      );
+      webhookLog(
+        "info",
+        `🎯 UPGRADE MODE: ${hasGrantThisDraw ? "B (legacy — grant already this draw period)" : "A (stack — no prior membership grant this draw)"}`
       );
     } else if (expandedInvoice.billing_reason === "subscription_cycle") {
       webhookLog("info", `Processing renewal for package ${packageId} - granting full benefits`);

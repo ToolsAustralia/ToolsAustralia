@@ -57,9 +57,9 @@ function deriveSettingsUserState(
       tierPrice: user.subscriptionPackageData?.price,
     };
   }
-  if (user.enrichedOneTimePackages?.some((p) => p.isActive)) {
-    return { state: "member" };
-  }
+  // "Member" is a subscription-only label. One-time-pack holders without an
+  // active subscription fall through to "guest" — they keep their one-time
+  // benefits but are not classified as a Member here.
   return { state: "guest" };
 }
 
@@ -120,14 +120,6 @@ export default function SettingsPage() {
     localStorage.removeItem("topBarHidden");
     signOut({ callbackUrl: "/" });
   }, []);
-
-  const handleBackClick = useCallback(() => {
-    if (activeSection) {
-      router.push("/my-account/settings", { scroll: false });
-    } else {
-      router.back();
-    }
-  }, [activeSection, router]);
 
   // ---------------------------------------------------------------------------
   // Loading / error states
@@ -261,7 +253,7 @@ export default function SettingsPage() {
         title={headerTitle}
         showBackButton
         showRenewalAlert={hasFailed}
-        onBackClick={handleBackClick}
+        onBackClick={() => router.push("/my-account")}
       />
 
       {activeSection === null ? (

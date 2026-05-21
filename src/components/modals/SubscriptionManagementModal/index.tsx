@@ -56,7 +56,8 @@ import PendingChangeBanner from "./PendingChangeBanner";
 import UpgradeList from "./UpgradeList";
 import DowngradeList from "./DowngradeList";
 import CancelResumeRow from "./CancelResumeRow";
-import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import { InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import SettingsRedesignSubscription from "./SettingsRedesignSubscription";
 
 interface SubscriptionManagementModalProps {
@@ -313,10 +314,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     if (!selectedUpgrade || !membershipPackage) return null;
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
     const currentEntries = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+    const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
     const { entriesToGrant } = calculateUpgradeEntries(
       selectedUpgrade.entriesPerMonth,
       currentEntries,
-      membershipPromoMultiplier
+      membershipPromoMultiplier,
+      hasGrantThisDraw
     );
     return { currentEntries, upgradeEntriesGrant: entriesToGrant };
   }, [selectedUpgrade, membershipPackage, user.subscription, membershipPromoMultiplier]);
@@ -344,10 +348,13 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         newAccumulated = calculateRenewalEntries(targetPkg.entriesPerMonth, lastAccumulated)
           .newLastMonthAccumulatedEntries;
       } else {
+        const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+        const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
         newAccumulated = calculateUpgradeEntries(
           targetPkg.entriesPerMonth,
           lastAccumulated,
-          membershipPromoMultiplier
+          membershipPromoMultiplier,
+          hasGrantThisDraw
         ).newLastMonthAccumulatedEntries;
       }
     }
@@ -662,6 +669,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
     const upgrade = selectedUpgrade;
     const subscriptionWithEntries = user.subscription as { lastMonthAccumulatedEntries?: number } | undefined;
     const lastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries ?? 0;
+    const userWithDrawFlag = user as { hasCurrentDrawMembershipGrant?: boolean };
+    const hasGrantThisDraw = userWithDrawFlag.hasCurrentDrawMembershipGrant ?? false;
 
     let totalEntriesAfterUpgrade = upgrade?.entriesPerMonth ?? 0;
     let entriesFromUpgrade = 0;
@@ -669,7 +678,8 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
       const upgradeCalculation = calculateUpgradeEntries(
         upgrade.entriesPerMonth,
         lastMonthAccumulated,
-        membershipPromoMultiplier
+        membershipPromoMultiplier,
+        hasGrantThisDraw
       );
       totalEntriesAfterUpgrade = upgradeCalculation.newLastMonthAccumulatedEntries;
       entriesFromUpgrade = upgradeCalculation.entriesToGrant;
@@ -839,28 +849,67 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
   };
 
   // Shared subscribe handler (close panel/modal then open membership selection).
-  const handleSubscribeClick = () => {
+  // When a `packageId` is provided (resubscribe tier picker), open the
+  // membership modal with that plan pre-selected — otherwise fall back to the
+  // legacy "show all packages" flow.
+  const handleSubscribeClick = (packageId?: string) => {
     onClose();
-    whenGatesOpenElseGateModal(() => membershipModal.openModalWithPackageSelectionFirst());
+    whenGatesOpenElseGateModal(() => {
+      if (packageId) {
+        const apiPlan = subscriptionPackages.find(
+          (p) => p._id === packageId || p.id === packageId
+        );
+        if (apiPlan) {
+          membershipModal.openModal(convertToLocalPlan(apiPlan));
+          return;
+        }
+      }
+      membershipModal.openModalWithPackageSelectionFirst();
+    });
   };
+
+  // Resubscribe tier picker: route the chosen packageId through the existing
+  // subscribe flow with the package pre-selected.
+  const handlePickResubscribeTier = (packageId: string) => {
+    handleSubscribeClick(packageId);
+  };
+
+  // Build the resubscribe tier picker options from the same `subscriptionPackages`
+  // source UpgradeList/DowngradeList use. We filter by entriesPerMonth being a
+  // number — subscriptionPackages from useMemberships() is already the active
+  // subscription set; the entriesPerMonth check guards the type narrowing.
+  const resubscribePackages: ResubscribeTierOption[] = subscriptionPackages
+    .filter((p): p is typeof p & { entriesPerMonth: number } => typeof p.entriesPerMonth === "number")
+    .map((p) => ({
+      packageId: p._id,
+      name: p.name,
+      price: p.price,
+      entriesPerMonth: p.entriesPerMonth,
+    }));
+
+  const previousPackageId =
+    typeof user.subscription?.packageId === "string"
+      ? user.subscription.packageId
+      : (user.subscription?.packageId as { _id?: string } | undefined)?._id;
+
+  const lastMonthAccumulated =
+    (user.subscription as { lastMonthAccumulatedEntries?: number } | undefined)
+      ?.lastMonthAccumulatedEntries ?? 0;
 
   // Legacy 4-way state selector (modal mode + SettingsModal panel use this verbatim).
   const legacyStateBody =
     membershipPackage && activeSubscription ? (
       renderActiveSubscriptionContent()
-    ) : activeOneTimePackage ? (
-      <OneTimeOnlyState
-        packageDisplayName={
-          typeof activeOneTimePackage.packageId === "string"
-            ? (activeOneTimePackage as { packageData?: { name?: string } }).packageData?.name ?? "One-Time Package"
-            : (activeOneTimePackage.packageId as { name: string }).name
-        }
-        onSubscribeClick={handleSubscribeClick}
-      />
-    ) : user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due" ? (
+    ) : activeOneTimePackage ||
+      (user.subscription && !user.subscription.isActive && user.subscription.status !== "past_due") ? (
       <InactiveSubscriptionState
-        status={user.subscription.status}
-        onSubscribeClick={handleSubscribeClick}
+        status={user.subscription?.status ?? "none"}
+        onSubscribeClick={() => handleSubscribeClick(undefined)}
+        packages={resubscribePackages}
+        previousPackageId={previousPackageId}
+        promoMultiplier={membershipPromoMultiplier}
+        lastMonthAccumulatedEntries={lastMonthAccumulated}
+        onPickTier={handlePickResubscribeTier}
       />
     ) : (
       <NoSubscriptionState onSubscribeClick={handleSubscribeClick} />
@@ -902,6 +951,11 @@ const SubscriptionManagementModal: React.FC<SubscriptionManagementModalProps> = 
         onSubscriptionUpdate?.();
       }}
       onSubscribeClick={handleSubscribeClick}
+      packages={resubscribePackages}
+      previousPackageId={previousPackageId}
+      promoMultiplier={membershipPromoMultiplier}
+      lastMonthAccumulatedEntries={lastMonthAccumulated}
+      onPickTier={handlePickResubscribeTier}
     />
   );
 

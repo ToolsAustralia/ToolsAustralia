@@ -8,7 +8,7 @@ Owns the full lifecycle of a member's subscription:
 2. **Renewal** — Stripe `invoice.payment_succeeded` (`billing_reason: subscription_cycle`) → benefits applied for next month.
 3. **Failure recovery** — `invoice.payment_failed` → `subscription.status = past_due`, optionally Stripe `pause_collection`.
 4. **Cancellation** — user or admin → `cancel_at_period_end` (default) or immediate; partner-discount queue, Klaviyo, analytics rows updated.
-5. **Resubscribe** — cancelled user resigns; `lastMonthAccumulatedEntries` is preserved for continuity.
+5. **Resubscribe** — cancelled user resigns; `lastMonthAccumulatedEntries` is preserved for continuity. The cancelled empty state in `SubscriptionManagementModal` renders a tier-picker grid (`ResubscribeTierPicker`), so members can pick any tier (not only their previous one) — the entry-carry-over math is unchanged. See [frontend.md → Resubscribe tier picker](./frontend.md#resubscribe-tier-picker-phase-1-2026-05-20).
 
 ## Data flow (signup → renewal → cancel)
 

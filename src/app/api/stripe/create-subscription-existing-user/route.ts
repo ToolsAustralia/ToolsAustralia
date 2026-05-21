@@ -371,6 +371,11 @@ export async function POST(request: NextRequest) {
       existingUser.stripeSubscriptionId = subscription.id;
     }
 
+    if (isResubscribeForMetadata && existingUser.subscription) {
+      existingUser.subscription.lastResubscribedAt = new Date();
+      existingUser.markModified("subscription");
+    }
+
     // ✅ OPTIMIZED: Make user save fire-and-forget (webhook handles final updates)
     // Subscription status updates are handled by webhook after payment succeeds
     existingUser.save().catch((error) => {

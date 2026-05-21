@@ -38,7 +38,8 @@ import {
 } from "@/app/(site)/my-account/components/settings/ui/primitives";
 import PastDueAlert from "./PastDueAlert";
 import PendingChangeBanner from "./PendingChangeBanner";
-import { OneTimeOnlyState, InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import { InactiveSubscriptionState, NoSubscriptionState } from "./EmptyStates";
+import type { ResubscribeTierOption } from "./ResubscribeTierPicker";
 import type {
   SubMgmtUser,
   ActiveSubscription,
@@ -74,6 +75,14 @@ export interface SettingsRedesignSubscriptionProps {
   onSelectDowngrade: (downgrade: UpgradeOption) => void;
   onPendingExpired: () => void;
   onSubscribeClick: () => void;
+  // Resubscribe tier picker — threaded through from the parent orchestrator so
+  // cancelled users on the settings redesign body see the tier picker instead
+  // of the legacy "Subscribe to Membership Packages" fallback CTA.
+  packages?: ResubscribeTierOption[];
+  previousPackageId?: string;
+  promoMultiplier?: number;
+  lastMonthAccumulatedEntries?: number;
+  onPickTier?: (packageId: string) => void;
 }
 
 const planIdOf = (pkg: ResolvedMembershipPackage): string =>
@@ -169,6 +178,11 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
   onSelectDowngrade,
   onPendingExpired,
   onSubscribeClick,
+  packages,
+  previousPackageId,
+  promoMultiplier,
+  lastMonthAccumulatedEntries,
+  onPickTier,
 }) => {
   // ── Active (or past-due-with-autorenew) subscription ──────────────────────
   if (membershipPackage && activeSubscription) {
@@ -211,6 +225,17 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
     const lastMonthAccumulated =
       (user.subscription as { lastMonthAccumulatedEntries?: number } | undefined)
         ?.lastMonthAccumulatedEntries ?? baseEntries;
+
+    // Projected next-renewal entry count — mirrors calculateRenewalEntries:
+    // entriesToGrant = (lastMonthAccumulatedEntries ?? baseEntries) + baseEntries.
+    const subscriptionWithEntries = user.subscription as
+      | { lastMonthAccumulatedEntries?: number }
+      | undefined;
+    const rawLastMonthAccumulated = subscriptionWithEntries?.lastMonthAccumulatedEntries;
+    const nextRenewalEntries =
+      typeof baseEntries === "number" && baseEntries > 0
+        ? (rawLastMonthAccumulated ?? baseEntries) + baseEntries
+        : null;
     const renderFeature = (feature: unknown, index: number): string => {
       const text = featureToText(feature);
       const isFirst = index === 0;
@@ -320,6 +345,12 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
                     <span className="sm:hidden">{endShort}</span>
                     <span className="hidden sm:inline">{endLong}</span>
                   </p>
+                </div>
+              )}
+              {nextRenewalEntries !== null && (
+                <div className="rounded-2xl bg-white/10 border border-white/15 px-3 py-2.5">
+                  <p className="text-[10px] font-bold tracking-[0.14em] uppercase opacity-70">Next renewal entries</p>
+                  <p className="text-sm font-semibold mt-0.5">{nextRenewalEntries.toLocaleString()}</p>
                 </div>
               )}
             </div>
@@ -534,33 +565,25 @@ const SettingsRedesignSubscription: React.FC<SettingsRedesignSubscriptionProps> 
     );
   }
 
-  // ── One-time package only ─────────────────────────────────────────────────
-  if (activeOneTimePackage) {
-    return (
-      <div className="space-y-6">
-        <OneTimeOnlyState
-          packageDisplayName={
-            typeof activeOneTimePackage.packageId === "string"
-              ? activeOneTimePackage.packageData?.name ?? "One-Time Package"
-              : activeOneTimePackage.packageId.name
-          }
-          onSubscribeClick={onSubscribeClick}
-        />
-      </div>
-    );
-  }
-
-  // ── Inactive (non-past-due) subscription ──────────────────────────────────
+  // ── One-time-only OR inactive (non-past-due) subscription ─────────────────
+  // Both states route through the universal tier picker — one-time-only users
+  // no longer see a dedicated "Subscribe to Membership Packages" CTA card.
   if (
-    user.subscription &&
-    !user.subscription.isActive &&
-    user.subscription.status !== "past_due"
+    activeOneTimePackage ||
+    (user.subscription &&
+      !user.subscription.isActive &&
+      user.subscription.status !== "past_due")
   ) {
     return (
       <div className="space-y-6">
         <InactiveSubscriptionState
-          status={user.subscription.status}
+          status={user.subscription?.status ?? "none"}
           onSubscribeClick={onSubscribeClick}
+          packages={packages}
+          previousPackageId={previousPackageId}
+          promoMultiplier={promoMultiplier}
+          lastMonthAccumulatedEntries={lastMonthAccumulatedEntries}
+          onPickTier={onPickTier}
         />
       </div>
     );

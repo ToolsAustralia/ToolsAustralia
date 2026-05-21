@@ -86,6 +86,27 @@ The ledger is the **single source of truth** for "what benefits were granted." R
 
 After DB writes + 500ms barrier, `trackRefundedOrder` and `ensureUserProfileSynced` run; failures → `reversalIssues` entry `klaviyo-sync`.
 
+## Upgrade entries — Mode A / Mode B
+
+The `invoice.payment_succeeded` handler ([src/services/stripe-webhook-handlers/index.ts](../../src/services/stripe-webhook-handlers/index.ts) — `handleInvoicePaymentSucceeded`) routes upgrade events to one of two entry-calculation modes:
+
+```
+isUpgrade branch (handleInvoicePaymentSucceeded)
+        │
+        ▼
+hasGrantThisDraw = await hasMembershipGrantInCurrentDrawPeriod(user._id)
+        │
+        ▼
+calculateSubscriptionEntries({ ..., hasMembershipGrantInCurrentDrawPeriod: hasGrantThisDraw })
+        │
+        ├── false → Mode A: grant = lastAccum + (newBase × promo); newAccum = grant   ← default
+        └── true  → Mode B: grant = newBase × promo;               newAccum = lastAccum + grant
+```
+
+`hasMembershipGrantInCurrentDrawPeriod` is the helper from the [draws](../draws/) domain at [src/utils/draws/has-membership-grant-this-draw.ts](../../src/utils/draws/has-membership-grant-this-draw.ts) — it checks `entriesBySource.membership` on the user's row in the active `MajorDraw`. The helper fails open to `false` (Mode A). The flag is also serialised into the structured `webhookLog` payload (`hasMembershipGrantInCurrentDrawPeriod`) and emitted as a focused `🎯 UPGRADE MODE: A / B` log line inside the `isUpgrade` branch for staging diagnostics.
+
+Full math and worked examples live in [subscription/backend.md](../subscription/backend.md#entry-calculation-dispatcher--calculatesubscriptionentries). Tests: `npm run test:subscription-entries-calculator`.
+
 ## Anchor billing — 24th of month
 
 (Detail in [subscription/architecture.md](../subscription/architecture.md#anchor-billing-day) and [subscription/rules.md](../subscription/rules.md#billing-anchor-24th).)

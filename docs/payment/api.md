@@ -5,9 +5,21 @@
 | Method | Path | Purpose |
 |---|---|---|
 | _TODO: enumerate_ | `/api/payment-intent/**` | Read PI status / metadata |
-| _TODO: enumerate_ | `/api/payment-status/**` | Higher-level "did this payment succeed for purpose X?" |
+| GET | `/api/payment-status/[paymentIntentId]` | Polled by `usePaymentStatus` after a confirm. Returns `{ success, processed, status: "completed" \| "pending", data }`. On the completed branch the handler also calls `loadResubscribeContext()` to enrich `data` with the resubscribe carry-over banner context — see below. |
 
-> _TODO: read [src/app/api/payment-intent/](../../src/app/api/payment-intent/) and [src/app/api/payment-status/](../../src/app/api/payment-status/) and document each handler's auth/req/res._
+### `GET /api/payment-status/[paymentIntentId]` — completed-branch fields
+
+In addition to the standard fields (`paymentIntentId`, `eventType`, `packageType`, `packageId`, `packageName`, `entries`, `points`, `price`, …), the completed `data` payload includes three resubscribe-banner fields read by [`PurchaseSuccessClient`](../cart-shop-products/frontend.md) to render the "Welcome back!" banner:
+
+| Field | Type | Source |
+|---|---|---|
+| `wasRecentResubscribe` | `boolean` | `true` iff `user.subscription.lastResubscribedAt` is within `RESUBSCRIBE_BANNER_WINDOW_MS` (`10 * 60 * 1000`, named constant in the handler). |
+| `lastMonthAccumulatedEntries` | `number` | Post-resubscribe accumulator from the user document. |
+| `entriesGranted` | `number` | Reads `paymentEvent.data?.entries` from the already-loaded `BenefitsGranted` `PaymentEvent` (no extra Mongo round-trip). Client computes `previousAccum = lastMonthAccumulatedEntries − entriesGranted`. |
+
+The handler's `loadResubscribeContext()` helper fetches the user with a narrow `.select("subscription.lastResubscribedAt subscription.lastMonthAccumulatedEntries").lean()` and is wrapped in try/catch with `console.warn` — failures degrade gracefully (banner just doesn't show). `findBenefitsGrantedEvent` now also includes `userId` in its `Pick<>` projection so `loadResubscribeContext()` can be called from the same code path.
+
+> _TODO: enumerate [src/app/api/payment-intent/](../../src/app/api/payment-intent/) handlers (auth/req/res)._
 
 ## Cross-domain routes used by payment
 

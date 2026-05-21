@@ -66,6 +66,120 @@ The cancel flow is a two-step modal sequence inside `SubscriptionManagementModal
 
 `CancelSubscriptionModal` accepts `fromPackageName` (drives tier theming + "Keep {name}" label), `accumulatedEntries` (shown in loss grid cell 1), and `billingEndDateLabel` (shown in hero sub-copy). It does **not** display pricing or charge anything — it is purely a confirmation gate.
 
+## Resubscribe tier picker (Phase 1, 2026-05-20)
+
+Cancelled users (`subscription.status === "canceled"`) no longer see a single "Reactivate" CTA in `SubscriptionManagementModal`. They see a **tier-picker grid** rendered by [`ResubscribeTierPicker.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierPicker.tsx), letting them pick *any* tier on the way back (not just their previous one).
+
+**Three exports from `ResubscribeTierPicker.tsx`:**
+
+| Export | Purpose |
+|---|---|
+| `ResubscribeTierOption` (interface) | `{ packageId, name, price, entriesPerMonth }` — minimal shape consumed by the picker. |
+| `ResubscribeTierPicker` | The grid itself: carry-over header + one card per tier. Each card shows tier name (with a `(previously)` badge when `packageId === previousPackageId`), monthly price, **sign-up grant** computed as `entriesPerMonth × promoMultiplier` (with a `{N}× promo` badge when `promoMultiplier > 1`), the **carry-over** count, and the **projected next-renewal total** (`lastMonthAccumulatedEntries + grant + entriesPerMonth`). |
+| `ResubscribeEmptyState` | Wraps the picker in the styled empty-state card (gradient bg, border). Rendered as the cancelled-state body when packages are available. |
+| `ResubscribeEmptyStateFallback` | Legacy single-CTA fallback ("Reactivate Subscription" button) shown when no packages are loaded. |
+
+**Branching in `InactiveSubscriptionState`** ([`EmptyStates.tsx`](../../src/components/modals/SubscriptionManagementModal/EmptyStates.tsx)) — _superseded by Phase 2 (2026-05-21); see "Inactive-state simplification" below for the current branching rules._
+
+- ~~`status === "canceled"` + `packages.length > 0` + `onPickTier` → `ResubscribeEmptyState` (tier picker).~~
+- ~~`status === "canceled"` without packages → `ResubscribeEmptyStateFallback` (legacy CTA).~~
+- ~~Other inactive statuses → unchanged legacy "Subscription Inactive" card.~~ (Legacy card removed in Phase 2.)
+
+**Parent wiring** ([`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx)):
+
+- `resubscribePackages` — built from `subscriptionPackages` (same source `UpgradeList` / `DowngradeList` use), filtered to entries with a numeric `entriesPerMonth`.
+- `previousPackageId` — resolved from `user.subscription?.packageId` (string or `{ _id }` shape).
+- `lastMonthAccumulated` — `user.subscription.lastMonthAccumulatedEntries ?? 0`.
+- `handlePickResubscribeTier(packageId)` → `handleSubscribeClick(packageId)`.
+- `handleSubscribeClick(packageId?)` was extended to optionally pre-select a plan: when a `packageId` is passed it finds the matching `subscriptionPackages` entry and calls `membershipModal.openModal(convertToLocalPlan(apiPlan))` instead of `openModalWithPackageSelectionFirst()`. Confirmation in `MembershipModal` is one extra click — matches existing modal flow patterns.
+
+These five props (`packages`, `previousPackageId`, `promoMultiplier`, `lastMonthAccumulatedEntries`, `onPickTier`) are passed to **both** render sites of `InactiveSubscriptionState`: the direct render inside `legacyStateBody`, and through [`SettingsRedesignSubscription`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) (which threads them down to its embedded `<InactiveSubscriptionState>`). The settings-redesign body therefore renders the same tier picker for cancelled users.
+
+**Math is unchanged.** The picker UI only *displays* a preview of `entriesPerMonth × promoMultiplier`. The actual sign-up grant + carry-over preservation is still handled server-side by `calculateResubscribeEntries` (`src/utils/payment/subscription-entries-calculator.ts`) on `invoice.payment_succeeded` — see [docs/SUBSCRIPTION_RESUBSCRIBE_ENTRIES.md](../SUBSCRIPTION_RESUBSCRIBE_ENTRIES.md) for the resubscribe detection (metadata `isResubscribe: "true"`) and entry math.
+
+The reference spec is [`docs/superpowers/specs/2026-05-20-resubscribe-tier-choice-ux-design.md`](../superpowers/specs/2026-05-20-resubscribe-tier-choice-ux-design.md).
+
+### Visual refresh — `ResubscribeTierCard` (Phase 1, 2026-05-21)
+
+The picker's inline soft-pastel `<button>` mapping was replaced with a dedicated card component, [`ResubscribeTierCard.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierCard.tsx), that visually mirrors `ElectricPackageCard` (tier-gradient background via `getMembershipSectionColorScheme`, package icon via `getPackageIcon`, bundled multiplier badge via `PromoBadgeImage`, and a glowing big sign-up-grant number with `textShadow` driven by `scheme.accentHex`).
+
+**Card prop surface:**
+
+```ts
+interface ResubscribeTierCardProps {
+  plan: ResubscribeTierOption;            // packageId, name, price, entriesPerMonth
+  promoMultiplier: number;                // active promo multiplier; >1 → bundled badge
+  lastMonthAccumulatedEntries: number;    // carry-over count, shown in body
+  isPrevious: boolean;                    // appends "(previously)" label next to tier name
+  theme?: "light" | "dark";               // defaults to "dark"
+  onSelect: (packageId: string) => void;
+}
+```
+
+**Picker rendering** ([`ResubscribeTierPicker.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierPicker.tsx)) now maps each entry in `packages` to one `<ResubscribeTierCard>` inside a `grid-cols-1 sm:grid-cols-2 gap-3` grid — no inline tier markup remains.
+
+**Two-state subheader copy** (driven by `lastMonthAccumulatedEntries > 0`):
+
+- Has accumulated → `"You have N accumulated entries."`
+- No accumulated → `"Pick a tier to come back."`
+
+**Per-card copy refresh.** The previous per-row "Your carry-over: N" wording is replaced with **"Accumulated entries: N"**. The "Sign-up grant: N" and "Next renewal: N" lines are retained. Underlying entry math (display-only `entriesPerMonth × promoMultiplier`, `lastMonthAccumulatedEntries + grant + entriesPerMonth`) is unchanged.
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 1.
+
+### Inactive-state simplification — universal picker (Phase 2, 2026-05-21)
+
+The legacy yellow "Subscription Inactive" CTA card (with the `AlertTriangle` icon and "Reactivate Subscription" button) has been deleted from [`EmptyStates.tsx`](../../src/components/modals/SubscriptionManagementModal/EmptyStates.tsx). `InactiveSubscriptionState` no longer branches on `subscription.status` — every non-active state (`canceled`, `unpaid`, `incomplete`, `incomplete_expired`, never-subscribed) now renders the tier picker via `ResubscribeEmptyState` whenever `packages.length > 0` and `onPickTier` is provided. The only remaining branch is the defensive `ResubscribeEmptyStateFallback` (legacy single CTA) used when no packages are loaded.
+
+**Past-due is intentionally excluded.** Past-due users must continue to route through the failed-renewal recovery flow upstream — `InactiveSubscriptionState` is never reached for them. This guard is **caller responsibility**: the direct render inside `legacyStateBody` in [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) and the [`SettingsRedesignSubscription`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) wrapper both filter past-due before mounting this component.
+
+**One-time-only users also route through the picker.** The legacy `OneTimeOnlyState` empty state (green-gradient "You have an active one-time package: …" card with a "Subscribe to Membership Packages" CTA) has been deleted from `EmptyStates.tsx`. Both call sites now collapse the `activeOneTimePackage` branch into the same `InactiveSubscriptionState` render as the cancelled/inactive branch — the `status` prop falls back to `"none"` when `user.subscription` is undefined (never-subscribed one-time buyers). The picker's `showCancelledFooter={Boolean(previousPackageId)}` gate keeps the cancelled-framing copy off for these users.
+
+**Cancelled-footer gating.** `ResubscribeEmptyState` now accepts an optional `showCancelledFooter?: boolean` (default `true`) which hides the "Your subscription was cancelled. Pick any tier to come back — your entries history is preserved." footer when `false`. `InactiveSubscriptionState` passes `showCancelledFooter={Boolean(previousPackageId)}` so the cancelled framing only renders for users with subscription history — never-subscribed users picking a tier for the first time don't see that copy.
+
+**Picker subheader.** Still context-aware (driven by `lastMonthAccumulatedEntries > 0`):
+- Has accumulated → `"You have N accumulated entries."`
+- No accumulated → `"Pick a tier to come back."`
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 2 (§7 Inactive-state simplification).
+
+#### Never-subscribed copy fix (2026-05-21)
+
+[`ResubscribeTierPicker.tsx`](../../src/components/modals/SubscriptionManagementModal/ResubscribeTierPicker.tsx) now discriminates a never-subscribed user from a returning one via `hasPreviousMembership = Boolean(previousPackageId)`. The picker header/subheader collapses to three states:
+
+- Has accumulated entries → header `"Welcome back — pick a tier"`, subheader `"You have N accumulated entries."`.
+- Past member, 0 accumulated → header `"Welcome back — pick a tier"`, subheader `"Pick a tier to come back."`.
+- Never subscribed (no `previousPackageId`) → header `"Pick a tier to get started"`, **no subheader**.
+
+This pairs with the Phase 2 universal-picker change: one-time-only and never-subscribed users now reach the same picker but no longer see returning-user framing. The `ResubscribeEmptyState` cancelled-footer gate (`showCancelledFooter={Boolean(previousPackageId)}`) remains the other half of this guard.
+
+### Active-member hero — "Next renewal entries" tile (Phase 3, 2026-05-21)
+
+The active-member "Current plan" hero in [`SettingsRedesignSubscription.tsx`](../../src/components/modals/SubscriptionManagementModal/SettingsRedesignSubscription.tsx) now renders a third fact tile in the `grid-cols-2` block alongside `Started` and `Next billing` (or `Subscription ends` / `Failed on`): **`Next renewal entries: N`**. The value mirrors `calculateRenewalEntries` ([`src/utils/payment/subscription-entries-calculator.ts`](../../src/utils/payment/subscription-entries-calculator.ts)) — computed inline as `(user.subscription.lastMonthAccumulatedEntries ?? baseEntries) + baseEntries`, where `baseEntries` is the package's `entriesPerMonth` (with the same `metadata.entriesCount` / `metadata.originalEntries` / `15` fallback chain used by the plan-benefits text).
+
+The tile is **hidden** when `baseEntries` is missing or `0` (the inline computation evaluates `nextRenewalEntries` to `null` and the JSX skips the tile).
+
+`past_due` users still see the tile — the past-due gate (`hasFailed`) only swaps the second tile's label to `"Failed on"` and adds the `PastDueAlert`; it does not affect the projection. The projection is useful while payment is failing because it reflects what they would receive once recovered.
+
+Math is unchanged — no new endpoint, no schema change. Display-only.
+
+Reference spec: [`docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md`](../superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md) — Phase 3 (§5).
+
+## Upgrade preview parity with the webhook (Phase 2, 2026-05-20)
+
+The upgrade-modal preview numbers must match what the webhook will eventually grant — the calculator behind both is `calculateUpgradeEntries` ([src/utils/payment/subscription-entries-calculator.ts](../../src/utils/payment/subscription-entries-calculator.ts)), which has two modes (see [rules.md → R3a](./rules.md#r3a-upgrade-entries-stack-lastmonthaccumulated-unless-a-membership-grant-already-landed-this-draw) and [backend.md → calculateUpgradeEntries — two modes](./backend.md#calculateupgradeentries--two-modes)).
+
+The flag that selects Mode A vs Mode B is `hasMembershipGrantInCurrentDrawPeriod`. It's served to the client as `user.hasCurrentDrawMembershipGrant` by `GET /api/users/[id]/my-account` (see [dashboard-account/api.md](../dashboard-account/api.md#get-apiusersidmy-account)). All four upgrade-preview call sites read it and pass it as the 4th argument to `calculateUpgradeEntries`:
+
+| Call site | File |
+|---|---|
+| Per-row preview in the upgrade list | [`UpgradeList.tsx`](../../src/components/modals/SubscriptionManagementModal/UpgradeList.tsx) |
+| `upgradeModalData` memo | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+| Pending-change banner — upgrade branch | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+| `totalEntriesAfterUpgrade` block | [`SubscriptionManagementModal/index.tsx`](../../src/components/modals/SubscriptionManagementModal/index.tsx) |
+
+**Stale-payload caveat.** The flag is captured on the my-account fetch; if a renewal lands between page load and the user clicking "Upgrade," the preview can drift by one mode (Mode A shown when the webhook will pick Mode B, or vice versa). The webhook is always the source of truth — refreshing the dashboard re-fetches the flag and brings the preview back in line.
+
 ## StripePaymentModal
 
 `src/components/modals/StripePaymentModal/` (folder/index.tsx pattern) — the "Complete Payment" modal shown during upgrade flows that require a PaymentIntent confirmation. Decomposed in Plan 6 Phase 4 from a 725-LOC monolith.

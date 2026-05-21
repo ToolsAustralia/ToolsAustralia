@@ -36,6 +36,7 @@ Top-level subscription-related fields on `IUser`:
 | `lastDowngradeDate` | `Date?` | downgrade | Anti-gaming throttle. |
 | `lastUpgradeDate` | `Date?` | upgrade | Webhook interference guard. |
 | `lastMonthAccumulatedEntries` | `number?` | renewal cycle | Persists across cancel for resubscribe continuity. See [rules R3](./rules.md#r3). |
+| `lastResubscribedAt` | `Date?` | `/api/stripe/create-subscription-existing-user` | **UX-only timestamp** — set when a resubscribe is detected (same `isResubscribeForMetadata` heuristic that drives `calculateResubscribeEntries`). Not used by entries math; drives the "Welcome back!" carry-over banner on `/purchase-success` (10-minute window) and the activity-card sub-line. Never set on initial subscribe, upgrade, downgrade, or renewal. |
 
 #### `previousSubscription` (downgrade benefit-preservation)
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { History, Info, Shield, Gift, Clock } from "lucide-react";
 import MembershipBadge from "@/components/ui/MembershipBadge";
 import MonthProjectionTooltip from "@/components/ui/MonthProjectionTooltip";
@@ -9,6 +10,7 @@ import { formatRenewalDate } from "@/utils/dates/month-helpers";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { useLeafTimer } from "@/hooks/useLeafTimer";
 import { cn } from "@/utils/cn";
+import { hasClickedNudge, markNudgeClicked } from "@/utils/dashboard-empty-card-nudge";
 
 interface MajorDrawOverviewProps {
   drawName: string;
@@ -43,7 +45,9 @@ interface MajorDrawOverviewProps {
   } | null;
   onResolvePayment?: () => void;
   onOneTimeCardClick?: () => void;
-  userSubscription?: { lastMonthAccumulatedEntries?: number };
+  userSubscription?: {
+    lastMonthAccumulatedEntries?: number;
+  };
   activeOneTimePackageIds?: Set<string>;
   className?: string;
 }
@@ -144,6 +148,44 @@ export default function MajorDrawOverview({
   const _isQueued = drawStatus === "queued";
 
   const displayMembershipEntries = pendingEntriesData ? pendingEntriesData.expectedEntries : membershipEntries;
+
+  const router = useRouter();
+
+  // Membership card nudge — fires when the user has no active subscription.
+  const membershipEmpty = !hasActiveSubscription && displayMembershipEntries === 0;
+  const [membershipNudge, setMembershipNudge] = React.useState(false);
+
+  React.useEffect(() => {
+    if (membershipEmpty && !hasClickedNudge("membership")) {
+      setMembershipNudge(true);
+    } else {
+      setMembershipNudge(false);
+    }
+  }, [membershipEmpty]);
+
+  const handleMembershipNudgeClick = React.useCallback(() => {
+    markNudgeClicked("membership");
+    setMembershipNudge(false);
+    router.push("/my-account/settings?tab=subscription");
+  }, [router]);
+
+  // One-time card nudge — fires when oneTimeEntries === 0.
+  const oneTimeEmpty = oneTimeEntries === 0;
+  const [oneTimeNudge, setOneTimeNudge] = React.useState(false);
+
+  React.useEffect(() => {
+    if (oneTimeEmpty && !hasClickedNudge("onetime")) {
+      setOneTimeNudge(true);
+    } else {
+      setOneTimeNudge(false);
+    }
+  }, [oneTimeEmpty]);
+
+  const handleOneTimeNudgeClick = React.useCallback(() => {
+    markNudgeClicked("onetime");
+    setOneTimeNudge(false);
+    onOneTimeCardClick?.();
+  }, [onOneTimeCardClick]);
 
   const projectedTotalEntries = pendingEntriesData
     ? pendingEntriesData.expectedEntries + oneTimeEntries
@@ -269,6 +311,115 @@ export default function MajorDrawOverview({
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
 
                     {/* Membership entries card */}
+                    {membershipNudge ? (
+                      <button
+                        type="button"
+                        onClick={handleMembershipNudgeClick}
+                        aria-label="Subscribe to a membership tier"
+                        className={cn(
+                          "group relative flex flex-col items-center justify-between rounded-xl py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] shadow-lg min-h-[theme(spacing.28)] w-full text-left cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-transparent select-none",
+                          pendingEntriesData?.isFailedRenewal
+                            ? "bg-gradient-to-br from-amber-600/40 via-orange-500/30 to-amber-700/40"
+                            : pendingEntriesData
+                              ? "bg-gradient-to-br from-red-900/45 via-red-700/35 to-red-900/45"
+                              : "bg-gradient-to-br from-red-900/50 via-red-700/40 to-red-900/50",
+                          "ta-nudge-pulse"
+                        )}
+                      >
+                        <div className="absolute inset-0 rounded-xl border border-white/[0.12] group-hover:border-white/[0.2] transition-colors duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03]" />
+
+                        {/* Info button - direct child of card, anchored to top-right corner */}
+                        {hasActiveSubscription && membershipPackage && projectionData && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const container = e.currentTarget.closest(".space-y-4") as HTMLElement;
+                              if (container) {
+                                const containerRect = container.getBoundingClientRect();
+                                setTooltipPosition({
+                                  top: rect.top - containerRect.top - 8,
+                                  left: rect.left - containerRect.left + rect.width / 2,
+                                });
+                                setShowAccumulationTooltip(true);
+                              }
+                            }}
+                            className="absolute -top-2 -right-2 left-auto z-20 w-6 h-6 flex items-center justify-center bg-sky-600 hover:bg-sky-500 rounded-full text-white shadow-md border border-sky-500/50 transition-all duration-200 hover:scale-110"
+                            aria-label="View accumulation info"
+                          >
+                            <Info className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        <div className="relative flex flex-col items-center flex-1 justify-center w-full">
+                          <div className="relative flex items-center justify-center gap-1.5 text-red-200/80 text-2xs sm:text-xs font-bold uppercase tracking-[0.15em] mb-1.5">
+                            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-300/70" />
+                            <span>Membership</span>
+                          </div>
+                          <div className="relative flex items-center justify-center gap-1.5">
+                            <div
+                              className={`text-2xl xs:text-3xl sm:text-4xl font-bold tabular-nums ${
+                                pendingEntriesData?.isFailedRenewal
+                                  ? "text-amber-100"
+                                  : pendingEntriesData
+                                    ? "text-red-50"
+                                    : "text-white"
+                              }`}
+                            >
+                              <AnimatedNumber value={displayMembershipEntries} className="tabular-nums" />
+                            </div>
+                            {pendingEntriesData?.isFailedRenewal && (
+                              <Clock
+                                className="w-5 h-5 sm:w-6 sm:h-6 text-amber-200/90 flex-shrink-0"
+                                aria-label="Entries pending until payment resolved"
+                              />
+                            )}
+                          </div>
+                          {displayMembershipEntries === 0 && (
+                            <div className="absolute inset-0 bg-slate-900/20 rounded-xl pointer-events-none" />
+                          )}
+                        </div>
+
+                        {/* Pending renewal notice - bottom of membership card only */}
+                        {pendingEntriesData && (
+                          <div className="relative w-full text-center mt-2 pt-2 border-t border-white/10">
+                            <span
+                              className={`text-2xs sm:text-xs font-semibold ${
+                                pendingEntriesData.isFailedRenewal ? "text-amber-300/80" : "text-red-300/70"
+                              }`}
+                            >
+                              {pendingEntriesData.isFailedRenewal ? (
+                                <>
+
+                                  {onResolvePayment && (
+                                    <>
+                                      {" "}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onResolvePayment();
+                                        }}
+                                        className="underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-1 focus:ring-offset-transparent rounded"
+                                        aria-label="Resolve payment – open Settings subscription tab"
+                                      >
+                                        Resolve payment issue
+                                      </button>
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  Added on renewal
+                                  {pendingEntriesData.renewalDate && ` — ${formatRenewalDate(pendingEntriesData.renewalDate)}`}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    ) : (
                     <div
                       className={`group relative flex flex-col items-center justify-between rounded-xl py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] shadow-lg min-h-[theme(spacing.28)] ${
                         pendingEntriesData?.isFailedRenewal
@@ -368,13 +519,23 @@ export default function MajorDrawOverview({
                         </div>
                       )}
                     </div>
+                    )}
 
                     {/* One-time entries card */}
                     {onOneTimeCardClick ? (
                       <button
                         type="button"
-                        onClick={() => onOneTimeCardClick()}
-                        className="group relative flex flex-col items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-emerald-600/30 via-teal-500/25 to-emerald-700/30 py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] w-full min-w-0 text-left cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-transparent select-none"
+                        onClick={() => {
+                          if (oneTimeNudge) {
+                            handleOneTimeNudgeClick();
+                          } else {
+                            onOneTimeCardClick();
+                          }
+                        }}
+                        className={cn(
+                          "group relative flex flex-col items-center justify-center rounded-xl overflow-hidden bg-gradient-to-br from-emerald-600/30 via-teal-500/25 to-emerald-700/30 py-4 sm:py-5 px-3 transition-all duration-300 hover:scale-[1.02] w-full min-w-0 text-left cursor-pointer border-0 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-transparent select-none",
+                          oneTimeNudge && "ta-nudge-shimmer",
+                        )}
                       >
                         <div className="absolute inset-0 rounded-xl border border-white/[0.08] group-hover:border-white/[0.14] transition-colors duration-300 pointer-events-none" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/15 via-transparent to-white/[0.03] pointer-events-none" />

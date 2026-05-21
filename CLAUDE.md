@@ -64,6 +64,35 @@ Both files include a "Coming soon" section — when something ships, **move the 
 
 This rule is not hook-enforced. You're expected to apply it on your own. `/review` should also flag it.
 
+### 6. Verify before claiming
+
+Never state a fact about the code, this codebase's runtime behavior, or a third-party API/service without first checking. "Checking" means a Read, Grep, Bash command, doc lookup, or runtime probe — not recall.
+
+- If you cannot reach high confidence, say "I haven't verified X" explicitly. Do not phrase guesses as facts.
+- After a fix, verify the *end-to-end* behavior, not just the first symptom. The Stripe Basil API issue and the MongoDB index collision were both missed by stopping at the first plausible cause.
+- If the user pushes back on a claim, treat that as a signal to re-verify from scratch, not to defend the original claim.
+
+This rule is not hook-enforced. You're expected to apply it on your own.
+
+### 7. Subagent scope discipline
+
+When dispatching subagents (Agent / Task tool), the dispatching prompt must include:
+- An **explicit list of files or paths** the subagent may modify.
+- An **explicit forbidden list** when the task is scoped to one layer (e.g. frontend-only tasks must list `src/app/api/**` as off-limits).
+- A verification step the subagent must run before reporting done.
+
+If a subagent report is truncated or ambiguous, do not mark the task complete — re-read the changed files yourself and finish verification directly. Subagents have twice scope-crept into backend route changes during frontend-only work; the cost of an extra sentence in the prompt is much smaller than the cost of that cleanup.
+
+### 8. Just do the thing on small fixes
+
+For one-line tweaks, color/style changes, copy edits, or single-file bug fixes: make the edit. Do not produce a verbose audit, design rationale, or "here's what I'm about to do" preamble before a 3-line change. If the user asks "why," explain *then*.
+
+Verbose audits belong in `/plan`, `/review`, and `/debug`. Outside those skills, prefer action.
+
+### 9. Worktree convention
+
+Worktrees for this repo live at `<repo-root>/.worktrees/<kebab-branch-name>/`, not under `.claude/worktrees/` or any other location. Use the existing `wt-new.sh` script when present — it handles env file copy and `npm install`. If you're using an EnterWorktree-style tool with a different default, override it.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
@@ -188,7 +217,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useActivePackage.ts",
         "src/hooks/useMembershipModal.ts"
       ],
-      "lastVerified": "2026-05-14"
+      "lastVerified": "2026-05-21"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -605,7 +634,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useDashboardEntryDisplay.ts",
         "src/hooks/useDashboardLandingOrchestration.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-21"
     },
     "security-csp": {
       "docs": "docs/security-csp/",

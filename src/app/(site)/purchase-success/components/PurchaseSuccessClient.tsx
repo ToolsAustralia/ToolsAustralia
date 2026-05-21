@@ -21,6 +21,11 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
   const { data: status } = usePaymentStatus(paymentIntentId, { enabled: !!paymentIntentId });
   const firedRef = useRef(false);
 
+  const wasResubscribe = status?.data?.wasRecentResubscribe === true;
+  const newAccum = status?.data?.lastMonthAccumulatedEntries ?? 0;
+  const thisGrant = status?.data?.entriesGranted ?? 0;
+  const previousAccum = Math.max(0, newAccum - thisGrant);
+
   // Fire Purchase pixel once on mount when the server confirms benefits were granted.
   // eventId === paymentIntentId so it dedups with server-side CAPI which uses the same id.
   // The /api/payment-status/[id] route only includes price/currency when processed === true
@@ -64,6 +69,24 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
             Thank you for your purchase. Your order has been confirmed and is being processed.
           </p>
         </div>
+        {wasResubscribe && (
+          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-5 mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Welcome back!
+            </h2>
+            <p className="text-sm text-gray-700 dark:text-neutral-300 mb-3">
+              Your <strong>{previousAccum.toLocaleString()}</strong> accumulated entries carried over.
+            </p>
+            <ul className="text-sm text-gray-700 dark:text-neutral-300 space-y-1">
+              <li>
+                This month&apos;s draw: <strong>{thisGrant.toLocaleString()}</strong> entries.
+              </li>
+              <li>
+                Next month&apos;s renewal: <strong>{newAccum.toLocaleString()} + base</strong> entries.
+              </li>
+            </ul>
+          </div>
+        )}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
           <PaymentSuccessHandler paymentType="one-time" successMessage="Your purchase was successful!">
             <div className="mt-4 space-y-4">

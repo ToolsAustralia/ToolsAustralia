@@ -331,8 +331,15 @@ export default function MyAccountPage() {
   const hasActiveMembership = user?.subscription?.isActive === true;
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(accountData?.user || null, majorDrawStats);
 
-  const membershipPackage = activePackage?.packageData ?? null;
-  const showMembershipBadge = Boolean(activePackage?.isActive && membershipPackage);
+  // Membership-section badge is subscription-only. A user with only a one-time
+  // pack still has activePackage.packageData set (source: "one-time"), so we
+  // must scope by source to avoid the one-time pack showing up under the
+  // Membership badge in addition to the One-time badge.
+  const membershipPackage =
+    activePackage?.source === "subscription" ? activePackage.packageData : null;
+  const showMembershipBadge = Boolean(
+    activePackage?.isActive && activePackage.source === "subscription" && membershipPackage,
+  );
 
   const isCompleted = currentMajorDraw?.status === "completed";
   const _isFrozen = currentMajorDraw?.status === "frozen";
