@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { hasPixelConsent } from "@/components/PixelTracker";
 import { extractPageMetadata } from "@/utils/tracking/page-metadata-helpers";
 import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
+import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 
 /**
  * Klaviyo Page View Tracker Component
@@ -36,6 +37,11 @@ export default function KlaviyoPageTracker() {
     // but wiring Klaviyo to the same helper means a future consent modal will
     // automatically apply to Klaviyo events as well.
     if (!hasPixelConsent()) {
+      return;
+    }
+
+    // Skip "Viewed Page" on internal/staff routes — see should-track-route.ts
+    if (!shouldTrackRoute(pathname)) {
       return;
     }
 

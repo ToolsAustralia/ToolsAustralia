@@ -237,9 +237,10 @@ export async function POST(request: NextRequest) {
 
     await user.save();
 
-    // ✅ NEW: Track pixel subscription downgrade event
+    // Track Meta CAPI Custom Event `MembershipDowngrade` (server-side — no live Pixel call).
     try {
       const { trackPixelSubscriptionDowngrade } = await import("@/utils/tracking/pixel-purchase-tracking");
+      const { extractRequestContext } = await import("@/utils/tracking/facebook-helpers");
       await trackPixelSubscriptionDowngrade({
         oldValue: currentPackage.price,
         newValue: newPackage.price,
@@ -251,10 +252,13 @@ export async function POST(request: NextRequest) {
         subscriptionId: user.stripeSubscriptionId,
         userId: user._id.toString(),
         userEmail: user.email,
+        userPhone: user.mobile,
+        userFirstName: user.firstName,
+        userLastName: user.lastName,
         prorationAmount: 0, // No immediate charge for downgrade
         entriesRemoved: (currentPackage.entriesPerMonth || 0) - (newPackage.entriesPerMonth || 0),
+        requestContext: extractRequestContext(request),
       });
-      // console.log(`📊 Pixel subscription downgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
     } catch (pixelError) {
       console.error("❌ Pixel downgrade tracking failed (non-blocking):", pixelError);
     }

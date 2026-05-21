@@ -15,74 +15,71 @@
 export type PackageType = "membership" | "one-time" | "mini-draw" | "upsell";
 
 /**
- * Generate a unique order ID for Klaviyo events
+ * Generate a deterministic order ID for Klaviyo events.
  *
- * Order ID format ensures:
- * - Uniqueness across all purchase types
- * - Traceability back to original payment
- * - Consistency for refund linking
+ * **Critical:** Klaviyo links `Refunded Order` to `Placed Order` only when the
+ * `Order ID` matches exactly. The previous version of this helper included
+ * `Date.now()`, which guaranteed that the refund flow (called weeks later) would
+ * never reproduce the same ID — silently breaking refund-to-order linking and
+ * inflating customer lifetime value in Klaviyo.
+ *
+ * The fix: use `paymentIntentId` (always unique per Stripe payment) as the
+ * uniqueness key. No timestamps. The same `(packageType, packageId, paymentIntentId)`
+ * tuple always produces the same Order ID, so the refund flow recovers it cleanly.
  *
  * Format:
- * - Memberships: `sub_{paymentIntentId}_{timestamp}`
- * - One-time: `onetime_{packageId}_{timestamp}`
- * - Mini-draw: `minidraw_{packageId}_{timestamp}`
- * - Upsell: `upsell_{packageId}_{timestamp}`
+ * - Memberships: `sub_{paymentIntentId}`
+ * - One-time:    `onetime_{packageId}_{paymentIntentId}`
+ * - Mini-draw:   `minidraw_{packageId}_{paymentIntentId}`
+ * - Upsell:      `upsell_{packageId}_{paymentIntentId}`
  *
  * @param packageType - Type of package being purchased
  * @param packageId - Package identifier (required for non-membership types)
- * @param paymentIntentId - Stripe payment intent ID (required for memberships)
- * @param timestamp - Optional timestamp (defaults to current time)
- * @returns Unique order ID string
+ * @param paymentIntentId - Stripe payment intent ID (required for all types)
+ * @returns Deterministic order ID string
  */
 export function generateOrderId(
   packageType: PackageType,
   packageId: string,
-  paymentIntentId: string,
-  timestamp?: number
+  paymentIntentId: string
 ): string {
-  const ts = timestamp || Date.now();
-
   switch (packageType) {
     case "membership":
-      // Memberships use payment intent ID as primary identifier
-      return `sub_${paymentIntentId}_${ts}`;
+      // paymentIntentId alone is unique per payment — no need for packageId
+      return `sub_${paymentIntentId}`;
 
     case "one-time":
-      return `onetime_${packageId}_${ts}`;
+      return `onetime_${packageId}_${paymentIntentId}`;
 
     case "mini-draw":
-      return `minidraw_${packageId}_${ts}`;
+      return `minidraw_${packageId}_${paymentIntentId}`;
 
     case "upsell":
-      return `upsell_${packageId}_${ts}`;
+      return `upsell_${packageId}_${paymentIntentId}`;
 
     default:
       // Fallback format
-      return `order_${paymentIntentId}_${ts}`;
+      return `order_${paymentIntentId}`;
   }
 }
 
 /**
- * Extract order ID from payment intent ID
- *
- * For memberships, we may need to reconstruct the order ID
- * from the payment intent. This helper ensures consistency.
+ * Reconstruct the original Order ID from payment data for refund linking.
+ * Same inputs → same output as the original `generateOrderId` call at purchase time.
  *
  * @param paymentIntentId - Stripe payment intent ID
  * @param packageType - Type of package
  * @param packageId - Package identifier (for non-membership types)
- * @param purchaseTimestamp - Original purchase timestamp (if available)
- * @returns Order ID string
+ * @returns Order ID string matching the original Placed Order event
  */
 export function extractOrderIdFromPaymentIntent(
   paymentIntentId: string,
   packageType: PackageType,
-  packageId?: string,
-  purchaseTimestamp?: number
+  packageId?: string
 ): string {
-  // For memberships, use payment intent directly
+  // For memberships, packageId is not used by generateOrderId
   if (packageType === "membership") {
-    return generateOrderId(packageType, "", paymentIntentId, purchaseTimestamp);
+    return generateOrderId(packageType, "", paymentIntentId);
   }
 
   // For other types, require package ID
@@ -90,7 +87,7 @@ export function extractOrderIdFromPaymentIntent(
     throw new Error(`Package ID required for ${packageType} order ID extraction`);
   }
 
-  return generateOrderId(packageType, packageId, paymentIntentId, purchaseTimestamp);
+  return generateOrderId(packageType, packageId, paymentIntentId);
 }
 
 /**
@@ -125,10 +122,11 @@ export function isValidOrderId(orderId: string): boolean {
 }
 
 /**
- * Parse order ID to extract components
+ * Parse order ID to extract components.
  *
- * Extracts package type and identifier from order ID.
- * Useful for refund processing and order lookup.
+ * Order IDs no longer contain timestamps (see `generateOrderId`). This parser
+ * supports the current format AND legacy timestamped IDs (so historical events
+ * can still be queried during the transition period).
  *
  * @param orderId - Order ID to parse
  * @returns Object with package type and identifier, or null if invalid
@@ -136,20 +134,34 @@ export function isValidOrderId(orderId: string): boolean {
 export function parseOrderId(orderId: string): {
   packageType: PackageType | "unknown";
   identifier: string;
+  /** Legacy timestamped IDs only — null for new deterministic IDs */
   timestamp: number | null;
 } | null {
   const normalized = normalizeOrderId(orderId);
 
-  // Match order ID pattern: prefix_identifier_timestamp
-  const match = normalized.match(/^(sub|onetime|minidraw|upsell|order)_(.+?)_(\d+)$/);
-
-  if (!match) {
-    return null;
+  // Try legacy format first: prefix_identifier_timestamp (purely numeric trailing segment)
+  const legacyMatch = normalized.match(/^(sub|onetime|minidraw|upsell|order)_(.+)_(\d+)$/);
+  if (legacyMatch) {
+    const [, prefix, identifier, timestampStr] = legacyMatch;
+    const packageTypeMap: Record<string, PackageType | "unknown"> = {
+      sub: "membership",
+      onetime: "one-time",
+      minidraw: "mini-draw",
+      upsell: "upsell",
+      order: "unknown",
+    };
+    return {
+      packageType: packageTypeMap[prefix] || "unknown",
+      identifier,
+      timestamp: parseInt(timestampStr, 10) || null,
+    };
   }
 
-  const [, prefix, identifier, timestampStr] = match;
+  // Current format: prefix_identifier (no trailing timestamp)
+  const currentMatch = normalized.match(/^(sub|onetime|minidraw|upsell|order)_(.+)$/);
+  if (!currentMatch) return null;
 
-  // Map prefix to package type
+  const [, prefix, identifier] = currentMatch;
   const packageTypeMap: Record<string, PackageType | "unknown"> = {
     sub: "membership",
     onetime: "one-time",
@@ -157,10 +169,9 @@ export function parseOrderId(orderId: string): {
     upsell: "upsell",
     order: "unknown",
   };
-
   return {
     packageType: packageTypeMap[prefix] || "unknown",
     identifier,
-    timestamp: parseInt(timestampStr, 10) || null,
+    timestamp: null,
   };
 }

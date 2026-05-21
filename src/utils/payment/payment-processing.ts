@@ -1299,6 +1299,11 @@ async function grantBenefits(
         content_ids: packageData.packageId ? [packageData.packageId] : [],
         num_items: 1,
         requestContext: requestContext, // Pass request context for improved match quality
+        // grantBenefits is only invoked from the Stripe webhook handler — there is no
+        // live browser session at this point, so action_source must be system_generated.
+        // The browser Pixel still fires the matching Purchase from PaymentSuccessHandler /
+        // PaymentProcessingScreen with action_source=website, and Meta dedupes them via event_id.
+        actionSource: "system_generated",
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,
           variantId: experimentAssignment.variantId,

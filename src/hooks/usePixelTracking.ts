@@ -4,14 +4,9 @@ import { useCallback } from "react";
 import {
   trackFacebookEvent,
   trackPurchase as fbTrackPurchase,
-  trackAddToCart as fbTrackAddToCart,
-  trackInitiateCheckout as fbTrackInitiateCheckout,
-  trackViewContent as fbTrackViewContent,
   trackSearch as fbTrackSearch,
   trackCompleteRegistration as fbTrackCompleteRegistration,
-  trackLead as fbTrackLead,
   trackSubscribe as fbTrackSubscribe,
-  trackAddPaymentInfo as fbTrackAddPaymentInfo,
   trackRemoveFromCart as fbTrackRemoveFromCart,
 } from "@/components/FacebookPixel";
 import {
@@ -26,6 +21,7 @@ import {
   trackTikTokSubscribe,
   trackTikTokContact,
 } from "@/components/TikTokPixel";
+import { fireMetaHybridEvent } from "@/utils/tracking/meta-hybrid";
 
 export interface PixelEventParams {
   value?: number;
@@ -73,53 +69,73 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Add to cart tracking
+  // Normalize PixelEventParams into Meta-format custom_data.
+  // Handles both camelCase convenience fields (productId, contentName, contentIds, numItems)
+  // AND callers that pass snake_case Meta-native keys directly (content_ids, content_type,
+  // num_items, etc.) through the index signature. Snake-case keys win when both are present.
+  const buildMetaCustomData = (params: PixelEventParams, defaults: Record<string, unknown> = {}): Record<string, unknown> => {
+    const { productId, contentName, contentIds, numItems, method: _method, orderId: _orderId, ...rest } = params;
+    const fromCamel: Record<string, unknown> = {
+      ...(productId && { content_ids: [productId] }),
+      ...(contentName && { content_name: contentName }),
+      ...(contentIds && { content_ids: contentIds }),
+      ...(numItems != null && { num_items: numItems }),
+    };
+    return {
+      currency: "AUD",
+      ...defaults,
+      ...fromCamel,
+      ...rest, // snake_case + extras override (caller's explicit values win)
+    };
+  };
+
+  // Add to cart tracking — Meta side fires hybrid Pixel + CAPI for ad-blocker recovery
   const trackAddToCart = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackAddToCart(params.value || 0, params.currency || "AUD", params.productId);
+        fireMetaHybridEvent({
+          eventName: "AddToCart",
+          customData: buildMetaCustomData(params, { content_type: "product" }),
+        });
       } else if (platform === "tiktok") {
         trackTikTokAddToCart(params.value || 0, params.currency || "AUD", params.productId);
       }
     });
   }, []);
 
-  // Initiate checkout tracking
+  // Initiate checkout tracking — hybrid Pixel + CAPI on Meta side
   const trackInitiateCheckout = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
+        fireMetaHybridEvent({
+          eventName: "InitiateCheckout",
+          customData: buildMetaCustomData(params, { content_type: "product" }),
+        });
       } else if (platform === "tiktok") {
         trackTikTokInitiateCheckout(params.value || 0, params.currency || "AUD", params.numItems);
       }
     });
   }, []);
 
-  // View content tracking
+  // View content tracking — hybrid Pixel + CAPI on Meta side. Custom params
+  // (content_category, content_name, brand, page_type, user_type) flow through
+  // unchanged to support catalog matching and dynamic product ads.
   const trackViewContent = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        // Pass all parameters including custom ones (content_category, content_name, brand, page_type, user_type)
-        fbTrackViewContent(
-          params.value || 0,
-          params.currency || "AUD",
-          params.productId,
-          params as {
-            content_category?: string;
-            content_name?: string;
-            brand?: string;
-            page_type?: string;
-            user_type?: "guest" | "member";
-            platform?: string;
-            [key: string]: unknown;
-          }
-        );
+        fireMetaHybridEvent({
+          eventName: "ViewContent",
+          customData: buildMetaCustomData(params, {
+            content_type: "product",
+            platform: "tools-australia-website",
+          }),
+        });
       } else if (platform === "tiktok") {
         trackTikTokViewContent(params.value || 0, params.currency || "AUD", params.productId);
       }
@@ -167,13 +183,18 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Lead tracking
+  // Lead tracking — hybrid Pixel + CAPI on Meta side. Lead conversions don't
+  // have a natural primary key (no orderId/paymentIntentId), so the helper
+  // generates a per-fire UUID — both Pixel and CAPI use the same value for dedup.
   const trackLead = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackLead(params.value, params.currency || "AUD");
+        fireMetaHybridEvent({
+          eventName: "Lead",
+          customData: buildMetaCustomData(params, { content_type: "lead" }),
+        });
       } else if (platform === "tiktok") {
         trackTikTokLead(params.value, params.currency || "AUD");
       }
@@ -206,13 +227,19 @@ export function usePixelTracking() {
     });
   }, []);
 
-  // Add payment info tracking
+  // Add payment info tracking — hybrid Pixel + CAPI on Meta side.
+  // Currently no caller (mock /checkout was removed in Phase 4). When the real
+  // shop ships, fire this once on the Pay button hover/focus or on payment
+  // form completion.
   const trackAddPaymentInfo = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[]) => {
     const platformsToTrack = platforms || ["facebook", "tiktok"];
 
     platformsToTrack.forEach((platform) => {
       if (platform === "facebook") {
-        fbTrackAddPaymentInfo(params.value || 0, params.currency || "AUD", params.contentIds, params.numItems);
+        fireMetaHybridEvent({
+          eventName: "AddPaymentInfo",
+          customData: buildMetaCustomData(params, { content_type: "product" }),
+        });
       } else if (platform === "tiktok") {
         // TikTok doesn't have a specific AddPaymentInfo event, use custom event
         trackTikTokEvent("AddPaymentInfo", {

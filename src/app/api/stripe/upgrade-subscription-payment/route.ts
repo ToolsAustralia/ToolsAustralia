@@ -318,9 +318,10 @@ export async function POST(request: NextRequest) {
 
       await user.save();
 
-      // ✅ NEW: Track pixel subscription upgrade event
+      // Track Meta CAPI Custom Event `MembershipUpgrade` (server-side — no live Pixel call).
       try {
         const { trackPixelSubscriptionUpgrade } = await import("@/utils/tracking/pixel-purchase-tracking");
+        const { extractRequestContext } = await import("@/utils/tracking/facebook-helpers");
         await trackPixelSubscriptionUpgrade({
           oldValue: currentPackage.price,
           newValue: newPackage.price,
@@ -332,11 +333,14 @@ export async function POST(request: NextRequest) {
           subscriptionId: updatedSubscription.id,
           userId: user._id.toString(),
           userEmail: user.email,
+          userPhone: user.mobile,
+          userFirstName: user.firstName,
+          userLastName: user.lastName,
           paymentIntentId: paymentIntent?.id,
           prorationAmount: prorationAmount / 100,
           entriesAdded: (newPackage.entriesPerMonth || 0) - (currentPackage.entriesPerMonth || 0),
+          requestContext: extractRequestContext(request),
         });
-        // console.log(`📊 Pixel subscription upgrade tracked: ${currentPackage.name} → ${newPackage.name}`);
       } catch (pixelError) {
         console.error("❌ Pixel upgrade tracking failed (non-blocking):", pixelError);
       }

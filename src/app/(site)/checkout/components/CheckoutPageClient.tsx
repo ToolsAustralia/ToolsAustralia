@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Truck, Lock, CheckCircle, AlertCircle } from "lucide-react";
-import { usePixelTracking } from "@/hooks/usePixelTracking";
 import OrderSummary from "./OrderSummary";
 import ShippingForm from "./ShippingForm";
 import PaymentMethod from "./PaymentMethod";
@@ -94,10 +93,8 @@ interface PaymentInfo {
 
 export default function CheckoutPageClient() {
   const router = useRouter();
-  const { trackInitiateCheckout, trackAddPaymentInfo } = usePixelTracking();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [hasTrackedPaymentInfo, setHasTrackedPaymentInfo] = useState(false);
   const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
     firstName: "",
     lastName: "",
@@ -125,38 +122,11 @@ export default function CheckoutPageClient() {
   const tax = discountedSubtotal * 0.1; // 10% GST
   const total = discountedSubtotal + shippingCost + tax;
 
-  // Track initiate checkout when component mounts
-  useEffect(() => {
-    trackInitiateCheckout({
-      value: total,
-      currency: "AUD",
-      content_type: "product",
-      content_ids: mockCartItems.map((item) => item.id),
-      num_items: mockCartItems.reduce((sum, item) => sum + item.quantity, 0),
-    });
-  }, [trackInitiateCheckout, total]);
-
-  // Track AddPaymentInfo when payment information is entered
-  useEffect(() => {
-    // Check if payment info is complete (all required fields filled)
-    const isPaymentInfoComplete =
-      paymentInfo.method === "card" &&
-      paymentInfo.cardNumber?.trim() &&
-      paymentInfo.expiryDate?.trim() &&
-      paymentInfo.cvv?.trim() &&
-      paymentInfo.nameOnCard?.trim();
-
-    // Track only once when payment info becomes complete
-    if (isPaymentInfoComplete && !hasTrackedPaymentInfo && currentStep >= 2) {
-      trackAddPaymentInfo({
-        value: total,
-        currency: "AUD",
-        content_ids: mockCartItems.map((item) => item.id),
-        num_items: mockCartItems.reduce((sum, item) => sum + item.quantity, 0),
-      });
-      setHasTrackedPaymentInfo(true);
-    }
-  }, [paymentInfo, total, hasTrackedPaymentInfo, currentStep, trackAddPaymentInfo]);
+  // NOTE: Pixel InitiateCheckout / AddPaymentInfo intentionally NOT fired here.
+  // This page renders against mockCartItems (sample data), so firing events would
+  // send fake values to Meta and pollute the checkout funnel signal. When the real
+  // shop ships and this page reads a real cart, add the events back with real values
+  // and the user's actual content_ids.
 
   // Handle form validation
   const validateStep = (step: number): boolean => {

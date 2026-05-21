@@ -331,29 +331,23 @@ export async function processRefundReversal(
     }
 
     // ✅ Track "Refunded Order" event in Klaviyo (non-blocking)
-    // This ensures revenue metrics correctly subtract refunds from total revenue
+    // This ensures revenue metrics correctly subtract refunds from total revenue.
+    // Order IDs are now deterministic (no timestamp), so the refund flow reproduces
+    // the exact same ID as the original Placed Order — Klaviyo links them and
+    // refunds properly subtract from customer LTV.
     try {
-      // Reconstruct original order ID from payment event data
-      // For subscriptions, paymentIntentId might be in invoice format (invoice_xxx)
-      // Extract actual payment intent ID if needed
+      // For subscriptions, paymentIntentId might be in invoice format (invoice_xxx).
+      // Extract actual payment intent ID — must match what was used at purchase time.
       const actualPaymentIntentId = originalPaymentEvent.paymentIntentId.startsWith("invoice_")
-        ? paymentIntentId // Use the paymentIntentId parameter (actual pi_xxx)
+        ? paymentIntentId
         : originalPaymentEvent.paymentIntentId;
 
-      // Get purchase timestamp from original payment event
-      const purchaseTimestamp = originalPaymentEvent.timestamp
-        ? new Date(originalPaymentEvent.timestamp).getTime()
-        : undefined;
-
-      // Generate original order ID using same logic as purchase
       const originalOrderId = extractOrderIdFromPaymentIntent(
         actualPaymentIntentId,
         packageType as PackageType,
-        originalPaymentEvent.packageId || "unknown",
-        purchaseTimestamp
+        originalPaymentEvent.packageId || "unknown"
       );
 
-      // Track refund event
       await trackRefundedOrder(user, {
         originalOrderId,
         refundAmount: refundAmount / 100, // Convert cents to dollars

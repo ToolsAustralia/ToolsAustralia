@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useState, useEffect } from "react";
 import { hasPixelConsent } from "@/components/PixelTracker";
@@ -477,6 +478,11 @@ function TestPixelsContent() {
 }
 
 export default function TestPixelsPage() {
+  // Dev-only test harness. Returning 404 in production prevents the page from
+  // firing live Pixel events on real visitor traffic if anyone discovers the URL.
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
