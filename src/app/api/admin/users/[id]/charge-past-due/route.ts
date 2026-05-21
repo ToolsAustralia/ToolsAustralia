@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
@@ -89,12 +89,14 @@ async function listOpenInvoicesForCustomer(customerId: string): Promise<Stripe.I
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("users.view");
+    const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.view", _request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();
-
-    const { id: userId } = await params;
     const loaded = await loadPastDueUserForCharge(userId);
 
     if (!loaded.ok) {
@@ -243,9 +245,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("users.charge");
+    const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.charge", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -261,7 +267,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { id: userId } = await params;
     const loaded = await loadPastDueUserForCharge(userId);
 
     if (!loaded.ok) {
@@ -372,6 +377,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       summary: {

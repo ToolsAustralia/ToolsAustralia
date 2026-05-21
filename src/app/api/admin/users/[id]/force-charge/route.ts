@@ -1,6 +1,6 @@
 // src/app/api/admin/users/[id]/force-charge/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -32,12 +32,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const guard = await requirePermission("users.charge");
+    const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.charge", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
-    const { id: userId } = await params;
 
     const body = await request.json();
     const parsed = bodySchema.safeParse(body);
@@ -64,6 +67,7 @@ export async function POST(
       );
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       chargedInvoiceId: result.chargedInvoiceId,

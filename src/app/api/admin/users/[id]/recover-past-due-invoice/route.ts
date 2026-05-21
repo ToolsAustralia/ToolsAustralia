@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -16,11 +16,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requirePermission("users.charge");
+  const { id: userId } = await params;
+  const guard = await requirePermissionWithAudit("users.charge", request, {
+    resourceType: "User",
+    resourceId: userId,
+  });
   if (guard instanceof NextResponse) return guard;
 
   await connectDB();
-  const { id: userId } = await params;
   const url = new URL(request.url);
   const originalInvoiceId = url.searchParams.get("invoiceId");
   if (!originalInvoiceId) {
@@ -43,13 +46,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const guard = await requirePermission("users.charge");
+    const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.charge", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
-
-    const { id: userId } = await params;
 
     const body = await request.json();
     const parsed = bodySchema.safeParse(body);
@@ -96,6 +101,7 @@ export async function POST(
       );
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       newInvoiceId: result.newInvoiceId,

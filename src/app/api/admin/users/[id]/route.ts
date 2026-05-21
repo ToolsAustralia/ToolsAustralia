@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
@@ -37,10 +37,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     await connectDB();
 
-    const guard = await requirePermission("users.view");
-    if (guard instanceof NextResponse) return guard;
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.view", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
@@ -80,10 +82,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     await connectDB();
 
-    const guard = await requirePermission("users.edit");
-    if (guard instanceof NextResponse) return guard;
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.edit", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
@@ -234,6 +239,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: updatedProfile,

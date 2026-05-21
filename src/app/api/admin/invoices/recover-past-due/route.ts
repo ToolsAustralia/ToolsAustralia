@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
 import {
@@ -21,10 +21,10 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("users.charge");
+    const guard = await requirePermissionWithAudit("users.charge", request);
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
     await connectDB();
     const adminId = session.user.id;
 
@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       await new Promise((r) => setTimeout(r, 300));
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       summary: { total: parsed.data.items.length, succeeded, failed },

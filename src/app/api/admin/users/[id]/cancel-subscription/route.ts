@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import mongoose from "mongoose";
@@ -26,11 +26,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await connectDB();
 
-    const guard = await requirePermission("users.cancelSubscription");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.cancelSubscription", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         : "Subscription canceled successfully."
       : "Subscription will be canceled at the end of the current billing period.";
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import mongoose from "mongoose";
@@ -32,11 +32,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     await connectDB();
 
-    const guard = await requirePermission("users.edit");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id: userId } = await params;
+    const guard = await requirePermissionWithAudit("users.edit", request, {
+      resourceType: "User",
+      resourceId: userId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
     const body = (await request.json()) as {
       action: string;
       note?: string;
@@ -152,6 +154,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     //   result: result.success,
     // });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: result,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
@@ -36,7 +36,7 @@ type PastDueUserLean = {
  */
 export async function GET(_request: NextRequest) {
   try {
-    const _guard = await requirePermission("users.view");
+    const _guard = await requirePermissionWithAudit("users.view", _request);
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();
@@ -250,10 +250,10 @@ export async function GET(_request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("users.charge");
+    const guard = await requirePermissionWithAudit("users.charge", request);
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
     await connectDB();
 
     const adminId = session.user.id;
@@ -357,6 +357,7 @@ export async function POST(request: NextRequest) {
           isLocked: false,
         });
 
+        await log(200);
         return NextResponse.json({
           success: true,
           summary: {
@@ -610,6 +611,7 @@ export async function POST(request: NextRequest) {
         isLocked: false,
       });
 
+      await log(200);
       return NextResponse.json({
         success: true,
         summary: {
