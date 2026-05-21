@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Winner from "@/models/Winner";
 import MajorDraw from "@/models/MajorDraw";
@@ -133,12 +134,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const { id: winnerId } = await params;
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "Winner",
+      resourceId: winnerId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id: winnerId } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(winnerId)) {
       return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
@@ -217,6 +221,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const winnerUser = updatedWinner.userId as unknown as { firstName?: string; lastName?: string; email?: string; state?: string };
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Winner updated successfully",
@@ -272,12 +277,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const { id: winnerId } = await params;
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "Winner",
+      resourceId: winnerId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id: winnerId } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(winnerId)) {
       return NextResponse.json({ error: "Invalid winner ID" }, { status: 400 });
@@ -311,6 +319,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
       await trx.commitTransaction();
 
+      await log(200);
       return NextResponse.json({
         success: true,
         message: "Major draw winner removed. You can select a new winner from Draw Results.",

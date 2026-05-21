@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
@@ -29,17 +30,21 @@ const majorDrawUpdateSchema = z.object({
 
 export async function PUT(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
-    if (_guard instanceof NextResponse) return _guard;
-
-    await connectDB();
-
     const { searchParams } = new URL(request.url);
     const majorDrawId = searchParams.get("id");
+
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "MajorDraw",
+      ...(majorDrawId ? { resourceId: majorDrawId } : {}),
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!majorDrawId) {
       return NextResponse.json({ error: "Major draw ID is required" }, { status: 400 });
     }
+
+    await connectDB();
 
     // Parse and validate request body
     const body = await request.json();
@@ -145,6 +150,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Failed to update major draw" }, { status: 500 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

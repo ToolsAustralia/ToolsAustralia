@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
@@ -33,14 +34,18 @@ const selectWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("majorDraw.selectWinner");
-    if (guard instanceof NextResponse) return guard;
+    // Parse body early so we can pass majorDrawId to the audit guard
+    const body = await request.json();
+    const auditGuard = await requirePermissionWithAudit("majorDraw.selectWinner", request, {
+      resourceType: "MajorDraw",
+      ...(body?.majorDrawId ? { resourceId: String(body.majorDrawId) } : {}),
+    });
+    if (auditGuard instanceof NextResponse) return auditGuard;
 
-    const { session } = guard;
+    const { session, log } = auditGuard;
     await connectDB();
 
-    // Parse JSON request (image is uploaded to /api/upload/cloudinary first, then URL is sent here)
-    const body = await request.json();
+    // Validate the already-parsed body
     const validatedData = selectWinnerSchema.parse(body);
 
     // Get major draw
@@ -133,6 +138,7 @@ export async function POST(request: NextRequest) {
       // Get updated winner user details
       const updatedWinnerUser = await User.findById(validatedData.winnerUserId).select("firstName lastName email");
 
+      await log(200);
       return NextResponse.json(
         {
           success: true,
@@ -223,6 +229,7 @@ export async function POST(request: NextRequest) {
 
       await trx.commitTransaction();
 
+      await log(200);
       return NextResponse.json(
         {
           success: true,

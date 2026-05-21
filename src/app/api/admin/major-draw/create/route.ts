@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import { z } from "zod";
@@ -33,8 +33,11 @@ const createMajorDrawSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("majorDraw.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("majorDraw.edit", request, {
+      resourceType: "MajorDraw",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -150,7 +153,8 @@ export async function POST(request: NextRequest) {
 
     await newMajorDraw.save();
 
-    // console.log(`✅ Major draw created successfully: ${newMajorDraw.name} (ID: ${newMajorDraw._id})`);
+    // console.log(`✅ Major draw created successfully: ${newMajorDraw.name} (ID: ${newMajorDraw._id})`)
+    await log(200);;
 
     return NextResponse.json({
       success: true,

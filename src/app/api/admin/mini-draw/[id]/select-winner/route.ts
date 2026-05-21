@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import mongoose, { Types } from "mongoose";
 import MiniDraw from "@/models/MiniDraw";
@@ -24,10 +24,15 @@ const selectWinnerSchema = z.object({
  * POST /api/admin/mini-draw/[id]/select-winner
  * Select winner for a mini draw, persist a Winner document, and reset the draw for the next cycle.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("miniDraws.selectWinner");
-    if (_guard instanceof NextResponse) return _guard;
+    const { id } = await params;
+    const guard = await requirePermissionWithAudit("miniDraws.selectWinner", request, {
+      resourceType: "MiniDraw",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -298,7 +303,7 @@ export async function POST(request: NextRequest) {
       trx.endSession();
 
       console.log(`✅ Winner selected and draw reset for mini draw: ${miniDraw.name} (ID: ${miniDraw._id})`);
-
+      await log(200);
       return NextResponse.json({
         success: true,
         data: {

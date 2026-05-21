@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import mongoose from "mongoose";
@@ -11,8 +11,9 @@ const orderSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("miniDraws.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("miniDraws.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
 
     await MiniDraw.bulkWrite(operations);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Mini draw order updated",

@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import User from "@/models/User";
 import Winner from "@/models/Winner";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { klaviyo } from "@/lib/klaviyo";
 import { createMajorDrawWonEvent } from "@/utils/integrations/klaviyo/klaviyo-events";
 import mongoose, { Types } from "mongoose";
@@ -12,14 +12,16 @@ import mongoose, { Types } from "mongoose";
  * POST /api/major-draw/select-winner
  * Select a random winner for the major draw
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     console.log("🎯 Selecting major draw winner...");
 
     // Verify staff permission before hitting the database
-    const guard = await requirePermission("majorDraw.selectWinner");
+    const guard = await requirePermissionWithAudit("majorDraw.selectWinner", request, {
+      resourceType: "MajorDraw",
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -123,6 +125,7 @@ export async function POST() {
       const winner = await User.findById(winningEntry.userId).select("firstName lastName email");
 
       console.log(`✅ Winner selected: ${winner?.firstName} ${winner?.lastName} (Entry #${winningEntryNumber})`);
+      await log(200);
 
       // Track winner notification in Klaviyo (non-blocking)
       if (winner) {

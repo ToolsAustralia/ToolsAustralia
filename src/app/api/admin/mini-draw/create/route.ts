@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
@@ -84,8 +84,11 @@ async function uploadImageToCloudinary(file: File, folder: string = "mini-draws"
  */
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("miniDraws.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("miniDraws.edit", request, {
+      resourceType: "MiniDraw",
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
     await newMiniDraw.save();
 
     // console.log(`✅ Mini draw created successfully: ${newMiniDraw.name} (ID: ${newMiniDraw._id})`);
-
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

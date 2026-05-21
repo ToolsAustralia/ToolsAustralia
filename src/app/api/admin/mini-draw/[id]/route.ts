@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
 import { Types } from "mongoose";
@@ -67,12 +68,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("miniDraws.delete");
-    if (_guard instanceof NextResponse) return _guard;
+    const { id } = await params;
+    const guard = await requirePermissionWithAudit("miniDraws.delete", request, {
+      resourceType: "MiniDraw",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     if (!Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid mini draw ID" }, { status: 400 });
@@ -84,6 +88,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Mini draw not found" }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("❌ Error deleting mini draw:", error);

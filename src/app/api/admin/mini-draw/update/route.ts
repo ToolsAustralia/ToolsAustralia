@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import MiniDraw from "@/models/MiniDraw";
 import { z } from "zod";
@@ -36,13 +36,18 @@ const miniDrawUpdateSchema = z.object({
  */
 export async function PUT(request: NextRequest) {
   try {
-    const _guard = await requirePermission("miniDraws.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    // Parse body early to extract id for audit context
+    const body = await request.json();
+    const guard = await requirePermissionWithAudit("miniDraws.edit", request, {
+      resourceType: "MiniDraw",
+      ...(body?.id ? { resourceId: String(body.id) } : {}),
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
-    // Parse and validate request body
-    const body = await request.json();
+    // Validate request body
     const validatedData = miniDrawUpdateSchema.parse(body);
 
     // Find the mini draw
@@ -107,7 +112,7 @@ export async function PUT(request: NextRequest) {
     await miniDraw.save();
 
     console.log(`✅ Mini draw updated successfully: ${miniDraw.name} (ID: ${miniDraw._id})`);
-
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {
