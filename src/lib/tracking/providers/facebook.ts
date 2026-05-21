@@ -129,11 +129,18 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     }),
   };
 
+  // Default to "website". Webhook-originated events (no live browser session) should
+  // pass `actionSource: "system_generated"` via the canonical event so Meta's spec is
+  // honored — `event_source_url` becomes optional for system_generated and we omit it
+  // so we don't claim a stale URL is the source of a backend event.
+  const actionSource: FacebookEvent["action_source"] = event.actionSource ?? "website";
+  const resolvedEventSourceUrl = event.eventSourceUrl ?? ctx.eventSourceUrl;
+
   const fbEvent: FacebookEvent = {
     event_name: event.eventName,
     event_time: event.eventTime,
     event_id: event.eventId,
-    action_source: "website",
+    action_source: actionSource,
     user_data: userData,
     custom_data: {
       ...(event.value !== undefined && { value: event.value }),
@@ -148,7 +155,9 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
       ...(event.customData?.searchString && { search_string: event.customData.searchString }),
       ...fbCustomFields,
     },
-    event_source_url: event.eventSourceUrl ?? ctx.eventSourceUrl,
+    // Only include event_source_url for website events — Meta's spec makes it
+    // required for "website" but expects it omitted for "system_generated".
+    ...(actionSource === "website" && resolvedEventSourceUrl && { event_source_url: resolvedEventSourceUrl }),
   };
 
   return sendFacebookEvent(fbEvent);

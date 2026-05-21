@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
 
       await user.save();
 
-      // ✅ NEW: Track pixel subscription upgrade event
+      // Track Meta CAPI Custom Event `MembershipUpgrade` (server-side — no live Pixel call).
       try {
         const { trackPixelSubscriptionUpgrade } = await import("@/utils/tracking/pixel-purchase-tracking");
         const requestContext = extractRequestContext(request);

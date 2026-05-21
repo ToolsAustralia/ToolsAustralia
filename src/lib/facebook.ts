@@ -73,6 +73,15 @@ export interface FacebookPixelEvent {
 }
 
 /**
+ * Graph API version used for Conversions API calls.
+ * Why: v18.0 expired Jan 26, 2026 — Meta auto-routes expired versions to the
+ * next available one, which is unstable. v23.0 is the goldilocks pick: released
+ * mid-2025, supported through ~2027, well past its early-bug shakeout window.
+ * Bump in one place when Meta's stable recommendation changes.
+ */
+const FB_GRAPH_API_VERSION = "v23.0";
+
+/**
  * Test event code for Meta "Test events" tab. Non-production environments should always
  * send CAPI traffic with this code when set; `sendFacebookEvent` refuses non-prod without it.
  */
@@ -138,6 +147,13 @@ export interface BuildFacebookPurchaseEventParams {
     country?: string;
   };
   eventSourceUrl?: string;
+  /**
+   * "website" (default) for browser-initiated checkouts. "system_generated" for
+   * server-initiated events with no live browser session (e.g. Stripe webhooks).
+   * Per Meta's server-event spec, `event_source_url` is required for "website"
+   * but optional for "system_generated".
+   */
+  actionSource?: "website" | "system_generated";
   customData?: {
     value: number;
     currency: string;
@@ -157,6 +173,7 @@ export interface BuildFacebookPurchaseEventParams {
  */
 export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEventParams): FacebookEvent | null {
   const { value, currency, eventId, userData, eventSourceUrl, customData } = params;
+  const actionSource = params.actionSource ?? "website";
 
   // Validate value (number, > 0)
   const numValue = typeof value === "number" ? value : Number(value);
@@ -172,12 +189,17 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
 
   const eventTime = Math.floor(Date.now() / 1000);
 
-  // event_source_url: required for action_source=website. Use fallback on localhost.
+  // event_source_url is required for action_source=website but optional for
+  // system_generated. On localhost or when we don't have a real URL, fall back
+  // to the dev URL only for website events so Meta accepts them.
   let resolvedEventSourceUrl = eventSourceUrl?.trim();
   if (!resolvedEventSourceUrl || resolvedEventSourceUrl.length === 0) {
-    resolvedEventSourceUrl = isLocalhostOrMissingUrl() ? DEV_CHECKOUT_FALLBACK_URL : undefined;
+    resolvedEventSourceUrl =
+      actionSource === "website" && isLocalhostOrMissingUrl()
+        ? DEV_CHECKOUT_FALLBACK_URL
+        : undefined;
   }
-  if (!resolvedEventSourceUrl) return null;
+  if (actionSource === "website" && !resolvedEventSourceUrl) return null;
 
   // user_data: must have at least client_user_agent for website events; ensure not empty
   const u: FacebookEvent["user_data"] = {
@@ -203,9 +225,11 @@ export function buildFacebookPurchaseEventDev(params: BuildFacebookPurchaseEvent
   return {
     event_name: "Purchase",
     event_time: eventTime,
-    action_source: "website",
+    action_source: actionSource,
     event_id: eventId,
-    event_source_url: resolvedEventSourceUrl,
+    // event_source_url is only meaningful for website events; omit for system_generated
+    // so we don't claim a stale URL is the source of a webhook-initiated event.
+    ...(resolvedEventSourceUrl && { event_source_url: resolvedEventSourceUrl }),
     user_data: u,
     custom_data: {
       value: numValue,
@@ -273,7 +297,7 @@ export async function sendFacebookPurchaseEventDev(event: FacebookEvent): Promis
     content_category: cd?.content_category,
   });
 
-  const url = `https://graph.facebook.com/v18.0/${pixelId}/events`;
+  const url = `https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${pixelId}/events`;
 
   try {
     if (isDev) {
@@ -404,7 +428,7 @@ export async function sendFacebookEvent(event: FacebookEvent, testEventCode?: st
       });
     }
 
-    const response = await fetch(`https://graph.facebook.com/v18.0/${pixelId}/events`, {
+    const response = await fetch(`https://graph.facebook.com/${FB_GRAPH_API_VERSION}/${pixelId}/events`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
