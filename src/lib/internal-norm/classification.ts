@@ -105,6 +105,16 @@ import {
   NormMonthlyCouponTargetUsersFilterSchema,
 } from "./schemas/monthly-coupon";
 import { NormActivityLogSchema } from "./schemas/activity-log";
+import {
+  NormUsersChargePastDuePreviewSchema,
+  NormUsersDeletionSummarySchema,
+  NormUsersExportAggregateSchema,
+  NormUsersGetSchema,
+  NormUsersListSchema,
+  NormUsersPaymentEventsListSchema,
+  NormUsersRecoverPastDueInvoicePreviewSchema,
+  NormUsersSearchSchema,
+} from "./schemas/users";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -1284,28 +1294,32 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.view",
     path: "/v1/users",
     method: "GET",
-    summary: "List users",
+    summary: "Paged + filtered users list with per-row computed stats and headline counts (PII-safe: firstName + opaque userId; email/lastName/mobile/address omitted)",
+    responseSchema: NormUsersListSchema,
   },
   "users.search": {
     tier: "read",
     requiredPermission: "users.view",
     path: "/v1/users/search",
     method: "GET",
-    summary: "Search users",
+    summary: "Fuzzy user search by name / email / mobile / opaque userId — operator must supply the lookup string (PII-safe: firstName + opaque userId on each row)",
+    responseSchema: NormUsersSearchSchema,
   },
   "users.export": {
     tier: "read",
     requiredPermission: "users.export",
     path: "/v1/users/export",
     method: "GET",
-    summary: "Export users (PII export, audit-worthy)",
+    summary: "Aggregate-only users export: total + breakdown by state / package / subscription status (admin returns CSV/Excel rows; Norm projection collapses to counts — no per-user PII)",
+    responseSchema: NormUsersExportAggregateSchema,
   },
   "users.get": {
     tier: "read",
     requiredPermission: "users.view",
     path: "/v1/users/:id",
     method: "GET",
-    summary: "Get a single user",
+    summary: "Single-user detail with statistics counts (PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped)",
+    responseSchema: NormUsersGetSchema,
   },
   "users.update": {
     tier: "write_safe",
@@ -1326,7 +1340,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.view",
     path: "/v1/users/:id/deletion-summary",
     method: "GET",
-    summary: "Preview the impact of deleting a user",
+    summary: "Counts-only preview of what would be deleted with a user (entry counts, payment-event count, winner-draw names) — no per-row PII",
+    responseSchema: NormUsersDeletionSummarySchema,
   },
   "users.actions": {
     tier: "trigger_norm_confirm",
@@ -1347,7 +1362,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.view",
     path: "/v1/users/:id/charge-past-due",
     method: "GET",
-    summary: "Preview past-due charge for a single user",
+    summary: "Preview eligible past-due Stripe invoices for a single user (same eligibility rules as the bulk past-due job; no per-invoice email)",
+    responseSchema: NormUsersChargePastDuePreviewSchema,
   },
   "users.charge-past-due.run": {
     tier: "trigger_norm_confirm",
@@ -1368,7 +1384,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.charge",
     path: "/v1/users/:id/recover-past-due-invoice",
     method: "GET",
-    summary: "Preview past-due invoice recovery for a user",
+    summary: "Preview Stripe collection-pause invoice recovery for a single user (eligibility verdict + invoice metadata; no email)",
+    responseSchema: NormUsersRecoverPastDueInvoicePreviewSchema,
   },
   "users.recover-past-due-invoice.run": {
     tier: "trigger_norm_confirm",
@@ -1382,7 +1399,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "users.view",
     path: "/v1/users/:id/payment-events",
     method: "GET",
-    summary: "List payment events for a user",
+    summary: "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)",
+    responseSchema: NormUsersPaymentEventsListSchema,
   },
   "users.payment-events.reverse": {
     tier: "trigger_human_approve",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T09:23:11.899Z",
+  "generatedAt": "2026-05-21T10:29:07.326Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -519,6 +519,62 @@
       "path": "/v1/upsell-multipliers",
       "method": "GET",
       "summary": "List upsell multipliers"
+    },
+    {
+      "registryKey": "users.list",
+      "tier": "read",
+      "path": "/v1/users",
+      "method": "GET",
+      "summary": "Paged + filtered users list with per-row computed stats and headline counts (PII-safe: firstName + opaque userId; email/lastName/mobile/address omitted)"
+    },
+    {
+      "registryKey": "users.search",
+      "tier": "read",
+      "path": "/v1/users/search",
+      "method": "GET",
+      "summary": "Fuzzy user search by name / email / mobile / opaque userId — operator must supply the lookup string (PII-safe: firstName + opaque userId on each row)"
+    },
+    {
+      "registryKey": "users.export",
+      "tier": "read",
+      "path": "/v1/users/export",
+      "method": "GET",
+      "summary": "Aggregate-only users export: total + breakdown by state / package / subscription status (admin returns CSV/Excel rows; Norm projection collapses to counts — no per-user PII)"
+    },
+    {
+      "registryKey": "users.get",
+      "tier": "read",
+      "path": "/v1/users/:id",
+      "method": "GET",
+      "summary": "Single-user detail with statistics counts (PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped)"
+    },
+    {
+      "registryKey": "users.deletion-summary",
+      "tier": "read",
+      "path": "/v1/users/:id/deletion-summary",
+      "method": "GET",
+      "summary": "Counts-only preview of what would be deleted with a user (entry counts, payment-event count, winner-draw names) — no per-row PII"
+    },
+    {
+      "registryKey": "users.charge-past-due.preview",
+      "tier": "read",
+      "path": "/v1/users/:id/charge-past-due",
+      "method": "GET",
+      "summary": "Preview eligible past-due Stripe invoices for a single user (same eligibility rules as the bulk past-due job; no per-invoice email)"
+    },
+    {
+      "registryKey": "users.recover-past-due-invoice.preview",
+      "tier": "read",
+      "path": "/v1/users/:id/recover-past-due-invoice",
+      "method": "GET",
+      "summary": "Preview Stripe collection-pause invoice recovery for a single user (eligibility verdict + invoice metadata; no email)"
+    },
+    {
+      "registryKey": "users.payment-events.list",
+      "tier": "read",
+      "path": "/v1/users/:id/payment-events",
+      "method": "GET",
+      "summary": "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)"
     },
     {
       "registryKey": "winners.get",
