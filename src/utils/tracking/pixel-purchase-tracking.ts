@@ -13,7 +13,6 @@
 
 import { trackFacebookEvent } from "@/components/FacebookPixel";
 import { trackTikTokEvent } from "@/components/TikTokPixel";
-import { trackKlaviyoEvent } from "@/utils/tracking/klaviyo-helpers";
 import {
   sendFacebookEvent,
   FacebookEvent,
@@ -180,11 +179,16 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
         numItems: num_items ?? 1,
         packageType,
       },
+      // For system_generated events, the facebookProvider intentionally drops
+      // event_source_url (Meta spec: only meaningful for "website" events). Skip
+      // building the synthetic fallback so we don't fabricate a misleading URL.
       eventSourceUrl:
-        requestContext?.event_source_url ??
-        eventSourceUrl ??
-        (typeof window !== "undefined" ? getEventSourceURL() : undefined) ??
-        getServerEventSourceUrlFallback(),
+        actionSource === "system_generated"
+          ? requestContext?.event_source_url ?? eventSourceUrl
+          : requestContext?.event_source_url ??
+            eventSourceUrl ??
+            (typeof window !== "undefined" ? getEventSourceURL() : undefined) ??
+            getServerEventSourceUrlFallback(),
     });
 
     const results = await sendConversion(event, {
@@ -279,29 +283,13 @@ export async function trackPixelPurchase(params: PixelPurchaseParams): Promise<b
       }
     }
 
-    // Klaviyo (marketing automation, NOT a CAPI provider — stays as a direct client-side call).
-    if (typeof window !== "undefined") {
-      try {
-        trackKlaviyoEvent("Placed Order", {
-          value,
-          currency,
-          order_id: orderId,
-          item_count: num_items ?? 1,
-          items: packageId
-            ? [{ product_id: packageId, product_name: packageName, value, quantity: num_items ?? 1 }]
-            : [],
-          package_type: packageType,
-          package_id: packageId,
-          package_name: packageName,
-          user_id: userId,
-          user_email: userEmail,
-        });
-      } catch (err) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("Klaviyo tracking error (non-fatal):", err);
-        }
-      }
-    }
+    // Klaviyo "Placed Order" is fired authoritatively from the Stripe webhook via
+    // `trackPlacedOrder` in `src/utils/integrations/klaviyo/klaviyo-revenue-service.ts`
+    // — which uses the strict revenue schema ($value / Currency / Order ID) and a
+    // deterministic Order ID for refund linking. The previous browser-side fire here
+    // used the WRONG field names ("value", "order_id") which Klaviyo ignores for
+    // revenue, and would double-fire if any client caller of trackPixelPurchase is
+    // ever added. Removed deliberately.
 
     // Reference unused params to satisfy noUnusedLocals (renewal-specific fields kept on PixelPurchaseParams type).
     void paymentIntentId;

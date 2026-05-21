@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import connectDB from "@/lib/mongodb";
+import User from "@/models/User";
 import { sendConversion } from "@/lib/tracking/dispatch";
 import type { CanonicalEvent, RequestContext } from "@/lib/tracking/types";
 import { eventTimeNow } from "@/lib/tracking/canonical-event";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 
 const userDataSchema = z
   .object({
@@ -76,13 +81,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // Enrich userData from the authenticated session so the browser doesn't have
+  // to ship raw PII. Server-injected fields (email/phone/firstName/lastName/state/
+  // country/externalId/birthdate) take priority over client-supplied values; the
+  // client retains authority for browser-only signals (fbc/fbp/clientUserAgent).
+  // Without this enrichment, funnel CAPI events would arrive with low EMQ when
+  // the user is logged in but the browser snippet doesn't have the profile data.
+  const sessionUserData: NonNullable<CanonicalEvent["userData"]> = {};
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    if (userId) {
+      await connectDB();
+      const user = await User.findById(userId)
+        .select("email mobile firstName lastName state country birthdate _id")
+        .lean<{
+          _id: { toString(): string };
+          email?: string;
+          mobile?: string;
+          firstName?: string;
+          lastName?: string;
+          state?: string;
+          country?: string;
+          birthdate?: Date;
+        }>();
+      if (user) {
+        if (user.email) sessionUserData.email = user.email;
+        if (user.mobile) sessionUserData.phone = user.mobile;
+        if (user.firstName) sessionUserData.firstName = user.firstName;
+        if (user.lastName) sessionUserData.lastName = user.lastName;
+        if (user.state) sessionUserData.state = user.state;
+        sessionUserData.country = user.country ?? "AU";
+        sessionUserData.externalId = user._id.toString();
+        if (user.birthdate) sessionUserData.birthdate = user.birthdate;
+      }
+    }
+  } catch (sessionErr) {
+    // Non-blocking — anonymous funnel events are still useful (fbc/fbp/IP/UA only).
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[/api/tracking/conversion] Session lookup failed:", sessionErr);
+    }
+  }
+
+  // Extract fbc/fbp from request cookies and IP/UA from headers — without this,
+  // funnel CAPI mirror events arrive with empty fbc/fbp and EMQ tanks. The browser
+  // mirror deliberately omits these from the POST body (they're same-origin cookies
+  // the server reads more reliably). See:
+  // https://developers.facebook.com/docs/marketing-api/conversions-api/parameters/fbp-and-fbc
+  const reqCtx = extractRequestContext(request);
+
+  const userData: CanonicalEvent["userData"] = {
+    ...sessionUserData,
+    // Server-derived browser identifiers (fbc/fbp/IP/UA) are authoritative — they
+    // come from the same-origin request the client cannot tamper with as easily.
+    ...(reqCtx.fbc && { fbc: reqCtx.fbc }),
+    ...(reqCtx.fbp && { fbp: reqCtx.fbp }),
+    ...(reqCtx.client_ip_address && { clientIpAddress: reqCtx.client_ip_address }),
+    ...(reqCtx.client_user_agent && { clientUserAgent: reqCtx.client_user_agent }),
+    ...parsed.userData, // client-supplied overrides last (e.g. a deliberate override in tests)
+  };
+
   const event: CanonicalEvent = {
     eventName: parsed.eventName,
     eventId: parsed.eventId,
     eventTime: parsed.eventTime ?? eventTimeNow(),
     value: parsed.value,
     currency: parsed.currency,
-    userData: parsed.userData,
+    userData,
     customData: parsed.customData,
     eventSourceUrl: parsed.eventSourceUrl,
     providerData: parsed.providerData,
