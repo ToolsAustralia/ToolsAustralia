@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentAnalyticsService from "@/services/ab-testing/ExperimentAnalyticsService";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
@@ -37,11 +38,13 @@ const declareWinnerSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("abTesting.selectWinner");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id: experimentId } = await params;
+    const guard = await requirePermissionWithAudit("abTesting.selectWinner", request, {
+      resourceType: "Experiment",
+      resourceId: experimentId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
     const body = await request.json();
     const validatedData = declareWinnerSchema.parse(body);
 
@@ -120,6 +123,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     );
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {

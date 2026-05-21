@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import { runMetaSpendByUrlSync } from "@/services/meta/runMetaSpendByUrlSync";
 import { z } from "zod";
@@ -18,8 +18,9 @@ const bodySchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("facebookAds.edit");
+    const guard = await requirePermissionWithAudit("facebookAds.edit", request);
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       until: endDate,
     });
 
+    await log(200);
     return NextResponse.json({ success: true, data: result });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";

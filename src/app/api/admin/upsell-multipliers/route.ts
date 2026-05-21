@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import UpsellMultiplierConfig from "@/models/UpsellMultiplierConfig";
 import { zPromoMultiplier } from "@/lib/zod/promo-multiplier-schema";
@@ -45,10 +46,10 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const guard = await requirePermission("overview.edit");
+    const guard = await requirePermissionWithAudit("overview.edit", request);
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
 
     const body = await request.json();
     const parsed = updateSchema.safeParse(body);
@@ -67,6 +68,7 @@ export async function PUT(request: NextRequest) {
     config.updatedBy = new mongoose.Types.ObjectId(session.user.id);
     await config.save();
 
+    await log(200);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Error updating upsell multiplier config:", error);

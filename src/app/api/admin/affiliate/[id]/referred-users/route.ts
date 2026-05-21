@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 import {
   attachReferredUserForAdmin,
@@ -13,10 +13,13 @@ import {
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("affiliates.edit");
-    if (_guard instanceof NextResponse) return _guard;
-
     const { id: affiliateId } = await params;
+    const guard = await requirePermissionWithAudit("affiliates.edit", request, {
+      resourceType: "Affiliate",
+      resourceId: affiliateId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     if (!mongoose.Types.ObjectId.isValid(affiliateId)) {
       return NextResponse.json({ error: "Invalid affiliate ID" }, { status: 400 });
     }
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ success: false, error: result.message }, { status: 404 });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {
@@ -69,10 +73,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("affiliates.edit");
-    if (_guard instanceof NextResponse) return _guard;
-
     const { id: affiliateId } = await params;
+    const guard = await requirePermissionWithAudit("affiliates.edit", request, {
+      resourceType: "Affiliate",
+      resourceId: affiliateId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     if (!mongoose.Types.ObjectId.isValid(affiliateId)) {
       return NextResponse.json({ error: "Invalid affiliate ID" }, { status: 400 });
     }
@@ -91,6 +98,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: result.message }, { status });
     }
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: { cancelledPending: result.cancelledPending },

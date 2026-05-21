@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 
 const previewRequestSchema = z.object({
   experimentId: z.string().min(1, "Experiment ID is required"),
@@ -13,8 +13,9 @@ const previewRequestSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("abTesting.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("abTesting.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     const body = await request.json();
     const validatedData = previewRequestSchema.parse(body);
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       path: "/",
     });
 
+    await log(200);
     return response;
   } catch (error) {
     console.error("Error setting preview:", error);
@@ -56,8 +58,9 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const _guard = await requirePermission("abTesting.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("abTesting.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     const { searchParams } = new URL(request.url);
     const experimentId = searchParams.get("experimentId");
@@ -75,6 +78,7 @@ export async function DELETE(request: NextRequest) {
     // Clear cookie
     response.cookies.delete(cookieName);
 
+    await log(200);
     return response;
   } catch (error) {
     console.error("Error clearing preview:", error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import StripeWebhookQueue, { type StripeWebhookQueueStatus } from "@/models/StripeWebhookQueue";
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const _guard = await requirePermission("errorReports.edit");
-  if (_guard instanceof NextResponse) return _guard;
+  const guard = await requirePermissionWithAudit("errorReports.edit", request);
+  if (guard instanceof NextResponse) return guard;
+  const { log } = guard;
 
   let body: { _id?: string };
   try {
@@ -69,5 +71,6 @@ export async function POST(request: NextRequest) {
   // Process immediately in-process so the admin sees the result now.
   const result = await processQueuedEvent(row.eventId);
 
+  await log(200);
   return NextResponse.json({ replayed: true, eventId: row.eventId, result });
 }

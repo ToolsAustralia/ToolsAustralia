@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ErrorReport from "@/models/ErrorReport";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import mongoose from "mongoose";
 
@@ -28,10 +28,10 @@ const bulkStatusSchema = z.object({
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const guard = await requirePermission("errorReports.delete");
+    const guard = await requirePermissionWithAudit("errorReports.delete", request);
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
     await connectDB();
 
     // Parse and validate request body
@@ -55,6 +55,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       deletedCount: archiveResult.modifiedCount,
@@ -90,10 +91,10 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const guard = await requirePermission("errorReports.edit");
+    const guard = await requirePermissionWithAudit("errorReports.edit", request);
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
     await connectDB();
 
     const body = await request.json().catch(() => ({}));
@@ -132,6 +133,7 @@ export async function PATCH(request: NextRequest) {
     const update = $unset ? { $set: setData, $unset } : { $set: setData };
     const updateResult = await ErrorReport.updateMany({ _id: { $in: objectIds } }, update);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       updatedCount: updateResult.modifiedCount,

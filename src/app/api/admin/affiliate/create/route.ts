@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
@@ -23,8 +23,11 @@ const createAffiliateSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("affiliates.edit");
+    const guard = await requirePermissionWithAudit("affiliates.edit", request, {
+      resourceType: "Affiliate",
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     const body = await request.json();
     const validatedData = createAffiliateSchema.parse(body);
@@ -72,6 +75,7 @@ export async function POST(request: NextRequest) {
     await affiliate.save();
     const affiliateId = (affiliate._id as mongoose.Types.ObjectId).toString();
 
+    await log(201);
     return NextResponse.json({
       success: true,
       data: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import VariantRepository from "@/repositories/ab-testing/VariantRepository";
@@ -59,12 +60,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   let experimentId: string | undefined;
 
   try {
-    const guard = await requirePermission("abTesting.edit");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id } = await params;
     experimentId = id; // ✅ Store id outside try block for error handling
+    const guard = await requirePermissionWithAudit("abTesting.edit", request, {
+      resourceType: "Experiment",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
     const body = await request.json();
     
     await connectDB();
@@ -79,6 +82,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.status === "active") {
       // ✅ If already active, return success (idempotent)
       if (currentExperiment.status === "active") {
+        await log(200);
         return NextResponse.json({
           success: true,
           data: currentExperiment,
@@ -89,6 +93,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     } else if (body.status === "paused") {
       // ✅ If already paused, return success (idempotent)
       if (currentExperiment.status === "paused") {
+        await log(200);
         return NextResponse.json({
           success: true,
           data: currentExperiment,
@@ -99,6 +104,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     } else if (body.status === "ended") {
       // ✅ If already ended, return success (idempotent)
       if (currentExperiment.status === "ended") {
+        await log(200);
         return NextResponse.json({
           success: true,
           data: currentExperiment,
@@ -144,6 +150,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const updatedExperiment = await ExperimentRepository.findById(id);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: updatedExperiment,
@@ -179,10 +186,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("abTesting.delete");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+    const guard = await requirePermissionWithAudit("abTesting.delete", request, {
+      resourceType: "Experiment",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     const experiment = await ExperimentRepository.findById(id);
 
     if (!experiment) {
@@ -200,6 +210,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Soft delete (set status to ended)
     await ExperimentRepository.delete(id);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Experiment deleted successfully",

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import ErrorReport from "@/models/ErrorReport";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import { ErrorReportStatus } from "@/types/error-reporting";
 import mongoose from "mongoose";
@@ -104,13 +105,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("errorReports.edit");
+    const { id } = await params;
+    const guard = await requirePermissionWithAudit("errorReports.edit", request, {
+      resourceType: "ErrorReport",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
 
-    const { session } = guard;
+    const { session, log } = guard;
     await connectDB();
-
-    const { id } = await params;
 
     // Validate ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -195,6 +198,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       [key: string]: unknown;
     };
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Error report updated successfully",

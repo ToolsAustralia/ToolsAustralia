@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
 import ExperimentService from "@/services/ab-testing/ExperimentService";
 import ExperimentHistoryRepository from "@/repositories/ab-testing/ExperimentHistoryRepository";
@@ -65,9 +66,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("abTesting.edit");
+    const guard = await requirePermissionWithAudit("abTesting.edit", request, {
+      resourceType: "Experiment",
+    });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     const body = await request.json();
     const validatedData = createExperimentSchema.parse(body);
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    await log(201);
     return NextResponse.json({
       success: true,
       data: experiment,

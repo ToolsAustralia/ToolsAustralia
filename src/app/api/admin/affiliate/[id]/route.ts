@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
@@ -342,10 +343,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("affiliates.edit");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+    const guard = await requirePermissionWithAudit("affiliates.edit", request, {
+      resourceType: "Affiliate",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
     const body = await request.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -414,6 +419,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await affiliate.save();
     const affiliateId = (affiliate._id as mongoose.Types.ObjectId).toString();
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {
@@ -441,10 +447,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("affiliates.delete");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+    const guard = await requirePermissionWithAudit("affiliates.delete", request, {
+      resourceType: "Affiliate",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid affiliate ID" }, { status: 400 });
@@ -465,6 +474,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // await AffiliateCommission.deleteMany({ affiliateId: new mongoose.Types.ObjectId(id) });
     // await AffiliatePayout.deleteMany({ affiliateId: new mongoose.Types.ObjectId(id) });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Affiliate deleted successfully",

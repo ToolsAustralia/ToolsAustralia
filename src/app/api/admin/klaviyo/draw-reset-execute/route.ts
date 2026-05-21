@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { resetDrawPropertiesForAllUsers } from "@/utils/integrations/klaviyo/klaviyo-draw-reset";
 
 export const dynamic = 'force-dynamic';
@@ -17,10 +17,11 @@ export const runtime = 'nodejs';
 // In-memory lock to prevent concurrent manual syncs
 let isManualSyncInProgress = false;
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const _guard = await requirePermission("overview.edit");
-    if (_guard instanceof NextResponse) return _guard;
+    const guard = await requirePermissionWithAudit("overview.edit", request);
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Check if sync is already in progress
     if (isManualSyncInProgress) {
@@ -61,6 +62,7 @@ export async function POST(_request: NextRequest) {
 
     // Return immediately - sync continues in background
     // UI will poll /api/admin/klaviyo/draw-reset-progress to track completion
+    await log(200);
     return NextResponse.json(
       {
         success: true,

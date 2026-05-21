@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import Affiliate from "@/models/Affiliate";
@@ -17,11 +17,13 @@ const processPayoutSchema = z.object({
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("affiliates.processPayout");
-    if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
-
     const { id } = await params;
+    const guard = await requirePermissionWithAudit("affiliates.processPayout", request, {
+      resourceType: "Affiliate",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { session, log } = guard;
     const body = await request.json();
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       notes: validatedData.notes,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       data: {
