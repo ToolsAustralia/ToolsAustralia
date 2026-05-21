@@ -192,3 +192,35 @@ i.e. the user's `subscription.lastResubscribedAt` timestamp must fall inside the
 - `userSubscription={{ …, lastResubscribedAt }}` (extended inline cast)
 
 **No new API** — detection is purely client-side from the existing user payload. The `lastResubscribedAt` field is the same UX-only timestamp set by `/api/stripe/create-subscription-existing-user`; see [subscription/models.md → `lastResubscribedAt`](../subscription/models.md) for how it's populated. Entries math is unaffected — this is a label/clarification only.
+
+## Empty-state nudge animations on `MajorDrawOverview` (Phase 4, 2026-05-21)
+
+The Membership and One-time entry cards on [`MajorDrawOverview`](../../src/app/(site)/my-account/components/MajorDrawOverview.tsx) now animate when empty, inviting the user to click. Once clicked in a given tab, the nudge stops for the rest of that tab session.
+
+### New helper — [`src/utils/dashboard-empty-card-nudge.ts`](../../src/utils/dashboard-empty-card-nudge.ts)
+
+Tiny `sessionStorage`-backed gate. Exports:
+
+- `type NudgeCardType = "membership" | "onetime"`
+- `hasClickedNudge(cardType: NudgeCardType): boolean`
+- `markNudgeClicked(cardType: NudgeCardType): void`
+
+Storage key shape: `ta:dashboard-card-nudge-clicked:v1:<cardType>` (one key per card). Per-tab semantics fall out of `sessionStorage`: a fresh tab re-shows the nudge, a refresh within the same tab keeps the cleared state. **Fails open**: both functions are wrapped in `try { … } catch {}` and additionally guard `typeof window !== "undefined"`, so SSR and private-browsing edge cases never throw — `hasClickedNudge` returns `false` and `markNudgeClicked` no-ops. Worst case the animation always shows.
+
+### New keyframes + utility classes in [`src/app/globals.css`](../../src/app/globals.css)
+
+Two animations appended:
+
+- `@keyframes ta-nudge-pulse` → `.ta-nudge-pulse` (3s `ease-in-out` infinite `box-shadow` glow tinted to the tier-red Membership card)
+- `@keyframes ta-nudge-shimmer` → `.ta-nudge-shimmer` (4s `ease-in-out` infinite background-position sweep applied via `::before` overlay; container gets `position: relative; overflow: hidden;`)
+
+Both utility classes are wrapped in `@media (prefers-reduced-motion: no-preference)`, so users with the OS-level reduced-motion preference see fully static cards — there is no JS capability check; the OS signal is the only guard.
+
+### `MajorDrawOverview` wiring
+
+`MajorDrawOverview.tsx` imports the helper and tracks two local React states (`membershipNudge`, `oneTimeNudge`) seeded from `hasClickedNudge` in an effect that re-runs when the corresponding empty flag flips.
+
+- **Membership card** (previously a non-clickable `<div>` with no `onClick`): when `!hasActiveSubscription && displayMembershipEntries === 0` AND `!hasClickedNudge("membership")`, the card renders as a `<button type="button">` with the `ta-nudge-pulse` class. Clicking it calls `markNudgeClicked("membership")` and then `router.push("/my-account/settings?tab=subscription")`. Otherwise it falls back to the original `<div>` markup — no animation, no click target, byte-identical to pre-Phase-4 behaviour.
+- **One-time card** (already an existing `<button>` with `onOneTimeCardClick`): when `oneTimeEntries === 0` AND `!hasClickedNudge("onetime")`, the button gains the `ta-nudge-shimmer` class and its `onClick` is extended to first call `markNudgeClicked("onetime")` and then invoke the existing `onOneTimeCardClick?.()`. The button shape, focus ring, and downstream handler are unchanged.
+
+No new props, no new API, no service or model change — the nudge is purely a client-side presentational layer on top of the existing empty-state detection. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §4.
