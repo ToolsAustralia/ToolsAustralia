@@ -4,6 +4,7 @@
 import type { CanonicalEvent, ConversionProvider } from "../types";
 import { hashPII } from "../canonical-event";
 import { getAllowedHostnames } from "../hostname-gate";
+import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 
 interface SnapchatGlobal {
   (command: string, eventNameOrParams?: string | Record<string, unknown>, params?: Record<string, unknown>): void;
@@ -31,6 +32,10 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
   if (!pixelId) return;
   if (!getAllowedHostnames().includes(window.location.hostname)) return;
 
+  // Skip initial PAGE_VIEW on excluded routes (admin / my-account / affiliate / etc.)
+  const firePageView = shouldTrackRoute(window.location.pathname);
+  const pageViewLine = firePageView ? `window.snaptr('track', 'PAGE_VIEW');` : "";
+
   // Snapchat's standard inline pixel init (see snap.com/business/snap-pixel docs).
   const script = document.createElement("script");
   if (opts.nonce) script.setAttribute("nonce", opts.nonce);
@@ -40,7 +45,7 @@ function loadPixel(opts: { nonce?: string; advancedMatching?: Record<string, str
     r=t.createElement(s);r.async=!0;r.src=n;var u=t.getElementsByTagName(s)[0];
     u.parentNode.insertBefore(r,u);})(window,document,'https://sc-static.net/scevent.min.js');
     window.snaptr('init', '${pixelId}');
-    window.snaptr('track', 'PAGE_VIEW');
+    ${pageViewLine}
   `;
   document.head.appendChild(script);
   window._snaptrInit = true;

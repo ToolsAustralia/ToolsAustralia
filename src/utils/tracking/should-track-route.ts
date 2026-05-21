@@ -8,8 +8,12 @@
  * PageView" loop, which on internal/staff routes pollutes remarketing audiences and
  * drags Event Match Quality down with low-signal sessions.
  *
- * Mirrored in `src/components/FacebookPixel.tsx`'s inline init script for the initial
- * page load — if you edit this list, edit that too.
+ * Mirrored in `src/lib/tracking/providers/{facebook,tiktok,snapchat}.ts` `loadPixel()`
+ * functions, which check `shouldTrackRoute(window.location.pathname)` before emitting
+ * the initial PageView line in their inline init scripts. The route-change effect in
+ * `src/components/tracking/ConversionPixels.tsx` also gates against this list.
+ * (Note: `src/components/FacebookPixel.tsx` is legacy dead code — its default export
+ * is no longer mounted in the root layout. Only its named helper exports are used.)
  */
 export const EXCLUDED_TRACKING_PREFIXES = [
   "/admin",       // Staff dashboard. Admins repeatedly entering remarketing audiences distorts ad targeting and EMQ.
