@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import BonusEntryPromo from "@/models/BonusEntryPromo";
 import { z } from "zod";
@@ -26,12 +26,16 @@ const updateBonusEntryPromoSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "BonusEntryPromo",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo ID" }, { status: 400 });
@@ -87,6 +91,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     console.log(`✅ Updated bonus entry promo ${id}`);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Bonus entry promo updated successfully",
@@ -136,12 +141,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.delete");
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "BonusEntryPromo",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo ID" }, { status: 400 });
@@ -155,6 +164,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     console.log(`🗑️ Deleted bonus entry promo ${id}`);
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Bonus entry promo deleted successfully",

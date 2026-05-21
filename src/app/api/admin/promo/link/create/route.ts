@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import PromoLink from "@/models/PromoLink";
 import { z } from "zod";
@@ -55,9 +55,9 @@ const createPromoLinkSchema = z
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "PromoLink" });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
       eligibilityAudience: newPromoLink.eligibilityAudience,
     });
 
+    await log(201);
     return NextResponse.json(
       {
         success: true,

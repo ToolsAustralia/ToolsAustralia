@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import PromoLink from "@/models/PromoLink";
 import { z } from "zod";
@@ -56,12 +56,16 @@ const updatePromoLinkSchema = z
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "PromoLink",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo link ID" }, { status: 400 });
@@ -167,6 +171,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au";
     const promoUrl = `${baseUrl}/promotions/${DEFAULT_PRIZE_SLUG}?promo=${promoLink.code}`;
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Promo link updated successfully",
@@ -222,12 +227,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.delete");
+    const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "PromoLink",
+      resourceId: id,
+    });
     if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
-
-    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: "Invalid promo link ID" }, { status: 400 });
@@ -243,6 +252,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       code: promoLink.code,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: "Promo link deleted successfully",

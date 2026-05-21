@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { PromoBannerTextService } from "@/services/admin/PromoBannerTextService";
 import { convertUTCToAEST } from "@/utils/common/timezone";
 import { z } from "zod";
@@ -81,9 +82,9 @@ export async function GET(_request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "PromoBannerText" });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     const body = (await request.json()) as CreatePromoBannerTextPayload;
 
@@ -166,6 +167,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
+    await log(201);
     return NextResponse.json(
       {
         success: true,

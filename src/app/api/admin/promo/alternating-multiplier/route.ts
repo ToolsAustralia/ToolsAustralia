@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { z } from "zod";
@@ -136,9 +137,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "AlternatingPromoMultiplier" });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     const body = (await request.json()) as CreateAlternatingPromoMultiplierPayload;
 
@@ -205,13 +206,15 @@ export async function POST(request: NextRequest) {
           : null,
     };
 
+    const responseStatus = existingConfig ? 200 : 201;
+    await log(responseStatus);
     return NextResponse.json(
       {
         success: true,
         data: response,
         message: existingConfig ? "Configuration updated successfully" : "Configuration created successfully",
       },
-      { status: existingConfig ? 200 : 201 }
+      { status: responseStatus }
     );
   } catch (error) {
     console.error("Error creating/updating alternating multiplier config:", error);

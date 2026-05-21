@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Promo from "@/models/Promo";
 import { z } from "zod";
@@ -17,9 +17,9 @@ const createPromoSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "Promo" });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       endDate: newPromo.endDate,
     });
 
+    await log(201);
     return NextResponse.json(
       {
         success: true,

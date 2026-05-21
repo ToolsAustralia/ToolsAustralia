@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Promo from "@/models/Promo";
 import { z } from "zod";
@@ -12,14 +12,18 @@ const endPromoSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.end");
-    if (guard instanceof NextResponse) return guard;
-
-    await connectDB();
-
-    // Parse and validate request body
+    // Parse body first so we can pass promoId as resourceId to the guard (Option A)
     const body = await request.json();
     const { promoId } = endPromoSchema.parse(body);
+
+    const guard = await requirePermissionWithAudit("promos.end", request, {
+      resourceType: "Promo",
+      resourceId: promoId,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
+
+    await connectDB();
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(promoId)) {
@@ -46,6 +50,7 @@ export async function POST(request: NextRequest) {
       endedAt: new Date(),
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: `Successfully ended ${promo.multiplier}x promo for ${promo.type}`,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import AlternatingPromoMultiplier from "@/models/AlternatingPromoMultiplier";
 import { z } from "zod";
@@ -29,10 +29,14 @@ const updateAlternatingMultiplierSchema = z.object({
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.edit");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "AlternatingPromoMultiplier",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
     const body = (await request.json()) as UpdateAlternatingPromoMultiplierPayload;
 
     // Validate input
@@ -98,6 +102,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           : null,
     };
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,
@@ -124,10 +129,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.delete");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "AlternatingPromoMultiplier",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     await connectDB();
 
@@ -144,6 +153,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,

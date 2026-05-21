@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import { PromoBannerTextService } from "@/services/admin/PromoBannerTextService";
 import { convertUTCToAEST } from "@/utils/common/timezone";
 import { z } from "zod";
@@ -28,10 +28,14 @@ type RouteParams = { params: Promise<{ id: string }> };
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.edit");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.edit", request, {
+      resourceType: "PromoBannerText",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -109,6 +113,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       },
     };
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,
@@ -134,10 +139,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("promos.delete");
-    if (guard instanceof NextResponse) return guard;
-
     const { id } = await params;
+
+    const guard = await requirePermissionWithAudit("promos.delete", request, {
+      resourceType: "PromoBannerText",
+      resourceId: id,
+    });
+    if (guard instanceof NextResponse) return guard;
+    const { log } = guard;
 
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -163,6 +172,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    await log(200);
     return NextResponse.json(
       {
         success: true,

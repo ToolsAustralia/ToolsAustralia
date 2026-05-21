@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import Promo from "@/models/Promo";
 import { z } from "zod";
@@ -18,9 +18,9 @@ const togglePromoSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request, { resourceType: "Promo" });
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
         console.log(`🗑️ Deleted promo ${currentActivePromo._id} (${type}) - Toggled OFF`);
       }
 
+      await log(200);
       return NextResponse.json({
         success: true,
         message: `Promo for ${type} has been turned OFF`,
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
     // Check if there's already an active promo with the same multiplier
     if (currentActivePromo && currentActivePromo.multiplier === multiplier) {
       // Already active with this multiplier, no change needed
+      await log(200);
       return NextResponse.json({
         success: true,
         message: `Promo for ${type} is already set to ${multiplier}x`,
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
       id: newPromo._id,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       message: `${multiplier}x promo for ${type} has been activated`,

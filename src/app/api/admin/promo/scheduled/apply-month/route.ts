@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/api-auth-permissions";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { z } from "zod";
@@ -46,9 +46,9 @@ function daysBelongToMonth(year: number, month: number, days: z.infer<typeof bod
  */
 export async function POST(request: NextRequest) {
   try {
-    const guard = await requirePermission("promos.edit");
+    const guard = await requirePermissionWithAudit("promos.edit", request);
     if (guard instanceof NextResponse) return guard;
-    const { session } = guard;
+    const { session, log } = guard;
 
     await connectDB();
 
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       description: body.description,
     });
 
+    await log(200);
     return NextResponse.json({
       success: true,
       createdPromoIds: result.createdPromoIds,
