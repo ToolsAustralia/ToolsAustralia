@@ -88,6 +88,7 @@ import {
   NormPromoLinkListSchema,
   NormPromoScheduledListSchema,
 } from "./schemas/promo-sub-domains";
+import { NormMilestoneRewardsListSchema } from "./schemas/milestone-rewards";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -760,7 +761,8 @@ export const NORM_ENDPOINTS = {
     legacyAdminCheck: true,
     path: "/v1/milestone-rewards",
     method: "GET",
-    summary: "List milestone rewards",
+    summary: "List milestone rewards with per-reward issuance performance aggregates",
+    responseSchema: NormMilestoneRewardsListSchema,
   },
   "milestone-rewards.create": {
     tier: "write_safe",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T08:45:52.825Z",
+  "generatedAt": "2026-05-21T08:52:05.471Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -288,6 +288,13 @@
       "path": "/v1/metrics/users/major-draw-comparison",
       "method": "GET",
       "summary": "Per-draw user/revenue totals + percent comparison between two major draws"
+    },
+    {
+      "registryKey": "milestone-rewards.list",
+      "tier": "read",
+      "path": "/v1/milestone-rewards",
+      "method": "GET",
+      "summary": "List milestone rewards with per-reward issuance performance aggregates"
     },
     {
       "registryKey": "mini-draw.full-capacity-count",
