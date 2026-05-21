@@ -95,19 +95,31 @@ export default function StaffActivityManagement() {
         <FilterChip
           label="All"
           active={filters.status === undefined}
-          onClick={() => setFilters({ ...filters, status: undefined })}
+          onClick={() => {
+            if (filters.status !== undefined) setFilters({ ...filters, status: undefined });
+          }}
         />
         <FilterChip
           label="Successful"
           active={filters.status === 200}
-          onClick={() => setFilters({ ...filters, status: 200 })}
+          onClick={() => {
+            if (filters.status !== 200) setFilters({ ...filters, status: 200 });
+          }}
         />
         <FilterChip
           label="Forbidden"
           active={filters.status === 403}
-          onClick={() => setFilters({ ...filters, status: 403 })}
+          onClick={() => {
+            if (filters.status !== 403) setFilters({ ...filters, status: 403 });
+          }}
         />
       </div>
+
+      {search.trim() && hasNextPage && (
+        <div className="px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300">
+          Searching loaded rows only. Scroll to the bottom to load more rows before retrying your search.
+        </div>
+      )}
 
       {error && (
         <div className="px-4 py-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-300">
@@ -165,6 +177,11 @@ function FilterChip({
   );
 }
 
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? format(d, "MMM d HH:mm:ss") : iso;
+}
+
 function ActivityRow({ row }: { row: StaffActivityRow }) {
   const isForbidden = row.status === 403;
   return (
@@ -174,7 +191,7 @@ function ActivityRow({ row }: { row: StaffActivityRow }) {
       }`}
     >
       <div className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap font-mono">
-        {format(new Date(row.timestamp), "MMM d HH:mm:ss")}
+        {formatTimestamp(row.timestamp)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -189,7 +206,7 @@ function ActivityRow({ row }: { row: StaffActivityRow }) {
         <div className="text-xs text-gray-500 dark:text-gray-400 truncate font-mono mt-0.5">
           {row.method} {row.path}
           {row.resourceType && row.resourceId && (
-            <span className="ml-2">
+            <span className="ml-2" title={row.resourceId}>
               · {row.resourceType} {row.resourceId.slice(0, 8)}…
             </span>
           )}
