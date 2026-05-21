@@ -352,12 +352,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/affiliate.ts",
         "src/lib/affiliate-auth.ts",
         "src/utils/affiliate/**",
+        "src/services/affiliate/**",
         "src/app/api/affiliate/**",
         "src/app/(site)/affiliate/**",
         "src/hooks/useAffiliateAuth.ts",
         "src/hooks/useAffiliateLink.ts"
       ],
-      "lastVerified": "2026-05-10"
+      "lastVerified": "2026-05-21"
     },
     "referrals": {
       "docs": "docs/referrals/",

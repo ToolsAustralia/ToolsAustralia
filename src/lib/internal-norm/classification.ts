@@ -41,6 +41,7 @@ import {
 } from "./schemas/health";
 import { NormStripeWebhookQueueListSchema } from "./schemas/stripe-webhook-queue";
 import { NormChargePastDuePreviewSchema } from "./schemas/invoices";
+import { NormAffiliateListSchema, NormAffiliateDetailSchema } from "./schemas/affiliate";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -287,7 +288,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "affiliates.view",
     path: "/v1/affiliate",
     method: "GET",
-    summary: "List affiliates",
+    summary: "List affiliates (PII-safe projection: omits email/phone/bank details)",
+    responseSchema: NormAffiliateListSchema,
   },
   "affiliate.create": {
     tier: "write_safe",
@@ -301,7 +303,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "affiliates.view",
     path: "/v1/affiliate/:id",
     method: "GET",
-    summary: "Get a single affiliate",
+    summary: "Get a single affiliate with commissions, payouts, and referred users (PII-safe projection)",
+    responseSchema: NormAffiliateDetailSchema,
   },
   "affiliate.update": {
     tier: "write_safe",

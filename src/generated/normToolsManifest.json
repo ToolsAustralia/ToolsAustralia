@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T07:03:47.361Z",
+  "generatedAt": "2026-05-21T07:25:40.997Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -29,6 +29,20 @@
       "path": "/v1/dashboard/revenue-breakdown",
       "method": "GET",
       "summary": "Revenue total + per-category breakdown for a date range"
+    },
+    {
+      "registryKey": "affiliate.list",
+      "tier": "read",
+      "path": "/v1/affiliate",
+      "method": "GET",
+      "summary": "List affiliates (PII-safe projection: omits email/phone/bank details)"
+    },
+    {
+      "registryKey": "affiliate.get",
+      "tier": "read",
+      "path": "/v1/affiliate/:id",
+      "method": "GET",
+      "summary": "Get a single affiliate with commissions, payouts, and referred users (PII-safe projection)"
     },
     {
       "registryKey": "allowlist.actions.list",
