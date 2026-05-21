@@ -45,3 +45,11 @@ Save semantics:
 `src/app/admin/component/SettingsTab.tsx` is the small wrapper rendered for `selectedTab === "team"` inside `AdminPage.tsx`. It owns the Staff / Roles sub-nav (Staff is default) and delegates to the two management components. The component is named `SettingsTab` for historical reasons (the tab was originally called "Settings"); the file can be renamed in a follow-up if anyone trips on it.
 
 Sidebar already gates the tab on `settings.view`, so this component does not duplicate the permission check.
+
+## Staff Activity (Audit)
+
+`src/app/admin/component/StaffActivityManagement.tsx` is the top-level audit viewer rendered at `/admin/staff-activity`. It lists every row from the `StaffActivity` collection (see [staff-activity-log.md](./staff-activity-log.md)) newest-first with cursor-paginated infinite scroll. Filter chips toggle between all rows, 200 successes, and 403 forbidden attempts. The free-text search filters client-side across actor email, role name, and request path — server-side full-text is deferred per the spec.
+
+Forbidden (403) rows are highlighted with a faint red background and a "403 Forbidden" badge so privilege drift is easy to spot at a glance.
+
+The page is gated by `usePermissions().has("audit.view")` and re-checks server-side via the GET endpoint.
