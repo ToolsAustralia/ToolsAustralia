@@ -43,12 +43,10 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
       };
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(plan.packageId)}
+    <div
       className={cn(
         "relative w-full text-left rounded-3xl overflow-visible p-5",
-        "transition-[transform,box-shadow] duration-200 hover:scale-[1.02]",
+        "transition-[box-shadow] duration-200",
         scheme.bgGradient,
       )}
       style={{
@@ -72,7 +70,11 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
           <div className="w-12 h-12" aria-hidden="true" />
         )}
         {showBundledBadge ? (
-          <PromoBadgeImage multiplier={promoMultiplier as PromoMultiplier} size="small" />
+          <PromoBadgeImage
+            multiplier={promoMultiplier as PromoMultiplier}
+            size="large"
+            className="!h-16 sm:!h-18 md:!h-20"
+          />
         ) : null}
       </div>
 
@@ -130,7 +132,26 @@ const ResubscribeTierCard: React.FC<ResubscribeTierCardProps> = ({
           Next renewal: <strong>{nextRenewal.toLocaleString()}</strong>
         </p>
       </div>
-    </button>
+
+      {/* Join CTA — mirrors ElectricPackageCard CTA: black bg, tier-coloured text & border */}
+      <button
+        type="button"
+        onClick={() => onSelect(plan.packageId)}
+        className={cn(
+          "mt-4 flex h-[50px] w-full items-center justify-center rounded-2xl px-5",
+          "font-sans font-black uppercase tracking-wide text-[16px]",
+          "transition-[transform,box-shadow,filter] duration-200 hover:scale-[1.02] hover:brightness-125",
+        )}
+        style={{
+          backgroundColor: "#000000",
+          border: `1.5px solid ${accent}`,
+          color: accent,
+          boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
+        }}
+      >
+        Join {plan.name}
+      </button>
+    </div>
   );
 };
 
