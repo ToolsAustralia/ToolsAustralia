@@ -390,7 +390,9 @@ export async function searchAdminUsers(args: SearchUsersArgs): Promise<SearchUse
   let targetMiniDraw: DrawLike | null = null;
 
   if (args.majorDrawId) {
-    const draw = await MajorDraw.findById(args.majorDrawId);
+    // .lean() so subdoc entries[].entriesBySource resolves to a plain JS object
+    // rather than a Mongoose Map (the Zod `record` schema in the Norm wrapper rejects Maps).
+    const draw = await MajorDraw.findById(args.majorDrawId).lean();
     if (draw?.entries) {
       participantUserIds = draw.entries.map((e: { userId: { toString: () => string } }) =>
         e.userId.toString(),
@@ -398,7 +400,7 @@ export async function searchAdminUsers(args: SearchUsersArgs): Promise<SearchUse
       targetMajorDraw = draw as unknown as DrawLike;
     }
   } else if (args.miniDrawId) {
-    const draw = await MiniDraw.findById(args.miniDrawId);
+    const draw = await MiniDraw.findById(args.miniDrawId).lean();
     if (draw?.entries) {
       participantUserIds = draw.entries
         .filter((e: { totalEntries: number }) => e.totalEntries > 0)
@@ -451,7 +453,9 @@ export async function searchAdminUsers(args: SearchUsersArgs): Promise<SearchUse
   if (!targetMajorDraw && !targetMiniDraw) {
     const activeMajor = await MajorDraw.findOne({
       status: { $in: ["active", "frozen"] },
-    }).sort({ activationDate: -1 });
+    })
+      .sort({ activationDate: -1 })
+      .lean();
     targetMajorDraw = activeMajor as unknown as DrawLike | null;
   }
 
