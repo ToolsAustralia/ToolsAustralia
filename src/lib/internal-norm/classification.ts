@@ -10,6 +10,12 @@ import {
   NormKlaviyoDrawResetPreviewSchema,
   NormKlaviyoDrawResetProgressSchema,
 } from "./schemas/klaviyo";
+import {
+  NormChargePastDueDeclineSummarySchema,
+  NormChargePastDueManualRetriesListSchema,
+  NormChargePastDueRunDetailSchema,
+  NormChargePastDueRunsListSchema,
+} from "./schemas/charge-past-due";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -383,13 +389,14 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormCancellationFlowAnalyticsSchema,
   },
 
-  // ─── Charge past-due (roadmap) ────────────────────────────────────────
+  // ─── Charge past-due (wired) ──────────────────────────────────────────
   "charge-past-due.decline-summary": {
     tier: "read",
     requiredPermission: "users.view",
     path: "/v1/charge-past-due/decline-summary",
     method: "GET",
     summary: "Summary of recent past-due decline reasons",
+    responseSchema: NormChargePastDueDeclineSummarySchema,
   },
   "charge-past-due.manual-retries.list": {
     tier: "read",
@@ -397,6 +404,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/charge-past-due/manual-retries",
     method: "GET",
     summary: "List manual past-due retry attempts",
+    responseSchema: NormChargePastDueManualRetriesListSchema,
   },
   "charge-past-due.runs.list": {
     tier: "read",
@@ -404,6 +412,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/charge-past-due/runs",
     method: "GET",
     summary: "List past-due charge job runs",
+    responseSchema: NormChargePastDueRunsListSchema,
   },
   "charge-past-due.run.get": {
     tier: "read",
@@ -411,6 +420,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/charge-past-due/runs/:runId",
     method: "GET",
     summary: "Get details for a single past-due charge run",
+    responseSchema: NormChargePastDueRunDetailSchema,
   },
 
   // ─── Error reports (roadmap) ──────────────────────────────────────────

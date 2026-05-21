@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-21T05:55:22.970Z",
+  "generatedAt": "2026-05-21T06:00:37.383Z",
   "endpoints": [
     {
       "registryKey": "roas.summary",
@@ -36,6 +36,34 @@
       "path": "/v1/cancellation-flow-analytics",
       "method": "GET",
       "summary": "Cancellation funnel analytics"
+    },
+    {
+      "registryKey": "charge-past-due.decline-summary",
+      "tier": "read",
+      "path": "/v1/charge-past-due/decline-summary",
+      "method": "GET",
+      "summary": "Summary of recent past-due decline reasons"
+    },
+    {
+      "registryKey": "charge-past-due.manual-retries.list",
+      "tier": "read",
+      "path": "/v1/charge-past-due/manual-retries",
+      "method": "GET",
+      "summary": "List manual past-due retry attempts"
+    },
+    {
+      "registryKey": "charge-past-due.runs.list",
+      "tier": "read",
+      "path": "/v1/charge-past-due/runs",
+      "method": "GET",
+      "summary": "List past-due charge job runs"
+    },
+    {
+      "registryKey": "charge-past-due.run.get",
+      "tier": "read",
+      "path": "/v1/charge-past-due/runs/:runId",
+      "method": "GET",
+      "summary": "Get details for a single past-due charge run"
     },
     {
       "registryKey": "klaviyo.draw-reset.preview",
