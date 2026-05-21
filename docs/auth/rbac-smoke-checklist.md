@@ -47,6 +47,15 @@ All four must pass with no errors. The permission tests double as the catalog in
 - Delete the temp role(s) you created.
 - Confirm the `roles` collection is back to the seeded set + any production roles you intend to keep.
 
+## Staff Activity (audit log)
+
+20. Sign in as Admin. Open `/admin/staff-activity`. Empty filter, no search. Expect to see recent mutation rows from your own actions in the previous tasks (Users edits, Promos toggles, etc.) — newest first.
+21. Filter chip: "Forbidden". Expect any 403 attempts logged earlier to surface with the red badge.
+22. Open a user's detail modal → "Staff actions" tab. Expect rows scoped to that user (`resourceType: "User"`, matching `resourceId`).
+23. Sign in as Customer Support (no `audit.view`). Confirm the Audit sidebar group is hidden, the Staff actions tab inside UserDetailModal is hidden, and a direct GET to `/api/admin/staff-activity` returns 403.
+24. As Customer Support, attempt `DELETE /api/admin/users/<id>/delete` via curl. Confirm a 403 row lands in the log (visible to admin) with `resourceType: "User"`.
+25. As Admin, change a role's permissions in Team → Roles. Confirm a `settings.edit` row appears immediately (force-restart still applies separately to affected staff).
+
 ## Phase 5 (out of scope here)
 
 The legacy `User.role: "user" | "admin"` field and the legacy admin bridge in `src/lib/api-auth-permissions.ts` stay in place for one deploy cycle. After this branch has been stable in production, a follow-up PR drops both.

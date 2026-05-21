@@ -1,6 +1,6 @@
 # Staff Activity Log
 
-> **Status:** Design approved 2026-05-20 — see [docs/superpowers/specs/2026-05-20-staff-activity-logging-design.md](../superpowers/specs/2026-05-20-staff-activity-logging-design.md). Implementation pending. This document is the living reference and will be filled in section-by-section as code lands.
+> **Status:** Shipped 2026-05-20. Living reference. Held-back items tracked in the [spec's future-work checklist](../superpowers/specs/2026-05-20-staff-activity-logging-design.md#future-work-checklist).
 
 The Staff Activity Log is the audit trail of every mutation made by staff or admin users in the admin panel. It's the answer to "who changed this?" and "is anyone trying to do things they shouldn't?".
 
